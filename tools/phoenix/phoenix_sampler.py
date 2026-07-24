@@ -225,7 +225,7 @@ def _draw_offset(rng: np.random.Generator, scale: float, heavy_tail_p: float) ->
 def _draw_z_m1(rng: np.random.Generator, scale: float, excursion_p: float) -> complex:
     """z_{-1} as small complex offsets from 0, with an occasional larger excursion. A
     non-zero (esp. non-real) z_{-1} breaks the slice symmetry (see the render-side guard
-    docs/findings/phoenix_z_m1_symmetry.md) — the single largest per-(c,p) variety lever."""
+    docs/design/phoenix_seed_sampler_spec.md §7.1) — the single largest per-(c,p) variety lever."""
     s = scale * 8.0 if float(rng.uniform(0.0, 1.0)) < excursion_p else scale
     return complex(float(rng.normal(0.0, s)), float(rng.normal(0.0, s)))
 

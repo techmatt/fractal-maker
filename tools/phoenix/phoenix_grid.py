@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 r"""Phoenix Phase B — the seed grid (variance-decomposition run + intake-ready admissions
 ledger). Governing docs: prompts/phoenix_phase_b.md, docs/design/phoenix_seed_sampler_spec.md
-§5.1 (step 0), docs/findings/phoenix_z_m1_symmetry.md.
+§5.1 (step 0), docs/design/phoenix_seed_sampler_spec.md §7.1.
 
 One backgrounded, resume-safe GPU run: ~N seeds (stratified draw over the proposal axes) x
 K descents each (distinct descent RNG per repeat), scored through the EXACT production reward
@@ -86,7 +86,7 @@ SCORER_PATH, SCORER_VERSION = ps.SCORER_PATH, ps.SCORER_VERSION
 
 # Phoenix q3 operating point. Source it from the production table so the grid always runs at
 # whatever the seeder is currently calibrated to (label-derived, now 0.45 — see production_seeder
-# T_GOOD_OVERRIDES / docs/findings/phoenix_grid_labels.md §2). The original grid ran at a hardcoded
+# T_GOOD_OVERRIDES / docs/design/phoenix_seed_sampler_spec.md §8). The original grid ran at a hardcoded
 # 0.18 that was NEVER a production value — a stale copy of the retired v6-era provisional that
 # nobody ordered; it admitted ~everything (in-batch precision 0.19). Raw p_good is stored per
 # outcome, so any t_good re-decodes for free (tools/phoenix/redecode_grid.py). --t-good overrides.

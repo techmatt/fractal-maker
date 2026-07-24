@@ -296,7 +296,7 @@ def main():
           f"{tj['steered']['n']}**.\n")
         w(f"- Deliberate, family-specific admission tightening (precedent: phoenix 0.18→0.50); the "
           f"julia families keep their F2 cuts. Full derivation: "
-          f"`docs/findings/mandelbrot_tgood_steered.md`.\n")
+          f"`docs/design/classifier_retrain_protocol.md §4`.\n")
     else:
         w("*(mandelbrot t_good json missing — run tools/atlas/mandelbrot_tgood_steered.py.)*\n")
 

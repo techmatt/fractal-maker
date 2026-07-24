@@ -33,7 +33,7 @@
 //! field recolored in Python reproduces the beautiful look and **cannot** reproduce the
 //! location-profile banding. To get the banded UF `default` look, render full-frame via
 //! bare `render`/`sheet`, not by recoloring a dumped field. Full audit + the density
-//! defaults (0.025 CLI vs 0.004 corpus) in `docs/findings/render_config_report.md`.
+//! defaults (0.025 CLI vs 0.004 corpus) in `docs/design/render_coloring_surface.md`.
 //!
 //! ## Architecture (doc §2)
 //!
@@ -3522,7 +3522,7 @@ mod tests {
     /// are all real (the recurrence has real coefficients, so `orbit(conj z0) =
     /// conj(orbit z0)` bit-for-bit). This test guards THAT, plus the load-bearing
     /// property the spec actually wants: `z_{-1}` is not a no-op.
-    /// See `docs/findings/phoenix_z_m1_symmetry.md`.
+    /// See `docs/design/phoenix_seed_sampler_spec.md §7.1`.
     #[test]
     fn phoenix_z_m1_symmetry_guard() {
         let cp = ColoringParams::beautiful(Field::Smooth);

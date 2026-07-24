@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 r"""redecode_grid.py — re-decode the Phase-B phoenix grid ledger at the CURRENT production
 phoenix t_good (production_seeder.t_good_for("phoenix"), now 0.45 — the label-derived F2
-value; docs/findings/phoenix_grid_labels.md §2).
+value; docs/design/phoenix_seed_sampler_spec.md §8).
 
 The grid ran at a hardcoded provisional t_good=0.18 that nobody ordered (a stale copy of the
 retired v6-era value; see phoenix_grid.py's T_GOOD_DEFAULT, now sourced from the production

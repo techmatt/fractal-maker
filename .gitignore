@@ -72,8 +72,7 @@ __pycache__/
 # through tools/corpus/artifacts.py. No .gitignore lines were dead: those families
 # were only ever ignored by the blanket `/data/*` and `/data/discovery/**/scratch/`
 # rules below, which remain load-bearing for OTHER in-tree paths and also serve as a
-# backstop (any accidental in-tree rebuild stays un-committable). See
-# docs/findings/storage_restructure.md.
+# backstop (any accidental in-tree rebuild stays un-committable).
 /data/*
 !/data/palettes/
 /data/palettes/*

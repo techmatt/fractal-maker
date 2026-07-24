@@ -51,8 +51,7 @@ STORE = qr.batch_dir(BATCH_ID)
 # Chosen so: (a) 0 human `accept`s are dropped (hard guardrail, with margin);
 # (b) as many `filter_leak` (+ clean `reject`) as possible are caught.
 # --------------------------------------------------------------------------- #
-# Calibrated on the 107 (labels/q4_stage1_windows.json); see
-# docs/findings/q4_stage1_filter_v2.md for the sweep + gap analysis.
+# Calibrated on the 107 (labels/q4_stage1_windows.json).
 # AS-FRAMED: plain ceilings, no corner-sparing — a dead-cornered window drops.
 C_INTERIOR = 0.10     # too-large dead-black interior ("eats >=10% of the frame").
                       # accepts/rejects are interior-free (acc max 0.001, rej max

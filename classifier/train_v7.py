@@ -9,7 +9,7 @@ and scoring helpers unchanged — the only deltas are:
   * output dir   -> data/classifier/v7/ (never touches v1..v6)
   * eval compare -> v7 vs **v6** on the (frozen v6 + census) eval split, sliced by
                     fractal_type, PLUS the census-144 slice (Option A — the primary
-                    julia:mb instrument; see docs/findings/v7_build_gate_stop.md).
+                    julia:mb instrument; see docs/design/classifier_retrain_protocol.md).
   * eval freeze  -> eval_scores_v7.jsonl carries v6_* AND v7_* per-location columns so
                     the paired-DeLong eval (tools/v7/eval_delong.py) re-scores nothing.
 

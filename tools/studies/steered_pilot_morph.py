@@ -286,7 +286,7 @@ def main():
     w("Read-only companion to `out/steered_pilot_report.md`. Morph_clip recipe imported "
       "byte-identical from the library audit (`vit_base_patch16_clip_224.openai`, timm eval "
       "transform, robust-z tanh grayscale render at 640x360 ss2). Yardsticks from "
-      "`docs/findings/prospect_run1_morph_composition_audit.md`: library-wide median pairwise "
+      "`docs/design/morphology_dedup.md`: library-wide median pairwise "
       f"cos **{LIB_MEDIAN}**, intra-phoenix **{LIB_PHOENIX}**, strict near-dup cut **cos>{STRICT_CUT}**.\n")
 
     # ============================ Q1 ============================

@@ -91,7 +91,7 @@ JULIA_HOOK_SPACING = 0.20   # item 3: hard 1-neighbour spacing (in the c/paramet
                             # collision scale: genuine near-c dups sat <0.20, distinct-c over-kills
                             # sat >=1.0, so 0.20 spaces out redundant near-c hooks while leaving
                             # every genuinely distinct-c hook free to fire. Config knob
-                            # (--julia-hook-spacing). See docs/findings/julia_dup_metric_audit.md.
+                            # (--julia-hook-spacing). See docs/design/morphology_dedup.md §5.
 B_DEFAULT = 32            # nodes popped + expanded per batch
 T_GUMBEL = 0.08          # priority exploration temperature (Gumbel scale)
 M_CAP = 40               # hard cap on expansions per root_id
@@ -1519,7 +1519,7 @@ def main():
                     help="ENABLE the cross-run coordinate freshness prior: seed this run's DEDUP "
                          "clouds (pre-canonical + admission near-dup + steering) from prior-library "
                          "admitted coords. DEFAULT OFF — prior-ON sterilized the native-seed "
-                         "rejection sampler (see docs/findings/invariant_audit.md, part 0).")
+                         "rejection sampler.")
     ap.add_argument("--budget", type=float, default=45.0, help="active-time budget (minutes)")
     ap.add_argument("--batch", type=int, default=0, help="nodes per batch (0 = default 32)")
     ap.add_argument("--seed", type=int, default=0)

@@ -66,7 +66,7 @@ def scan_ledger(path: Path) -> dict:
         # v6-SPECIFIC by intent: this is a historical v5-vs-v6 migration audit whose
         # "v6"/"v5" columns mean exactly those versions, so it pins the explicit
         # version rather than tracking the active checkpoint (which would relabel every
-        # v6 row as "v5" after a v7 flip). See docs/findings/v7_promote_report.md.
+        # v6 row as "v5" after a v7 flip).
         v6 = cc.is_decoded_by(r, "v6")
         dc = r.get("decoded_class")
         if "decoded_class" not in r:

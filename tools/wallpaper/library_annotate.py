@@ -60,7 +60,7 @@ MORPH_PRODUCER = "robustz_tanh_k2_v1"
 # curated morph_clip rows (self-cos median 0.915 vs an inter-location p95 of 0.948 — a location
 # failed to match ITSELF across producers). The original was a deterministic robust-z tanh, and
 # the exact form was recovered by a formula sweep against the stored embeddings
-# (see docs/findings/morph_parity.md): it reproduces all 62 at cosine 1.0000.
+# It reproduces all 62 at cosine 1.0000.
 #
 #   z = (v - median) / (1.4826 * MAD)          # MAD = median(|v - median|), super-res exterior
 #   t = 0.5 * (1 + tanh(z / MORPH_K))          # MORPH_K = 2  ("median/MAD tanh, K=2")

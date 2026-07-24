@@ -198,7 +198,7 @@ def main(argv=None):
     md = []
     md.append("# Phoenix Phase B — seed-grid readout\n")
     md.append("> **ADJUDICATED (2026-07-21).** The 500-item batch is labeled and these provisional "
-              "verdicts are SETTLED in **`docs/findings/phoenix_grid_labels.md`**: between-seed "
+              "verdicts are SETTLED in **`docs/design/phoenix_seed_sampler_spec.md §8`**: between-seed "
               "dominance CONFIRMED (human ICC 0.72–0.82 vs machine 0.90–0.965); v7 *ranks* varied "
               "phoenix well (AUC 0.86), so the zero-training-coverage caveat holds only for the "
               "absolute operating point — proposed t_good **0.45 ≈ production 0.50**, as-run **0.18 "
@@ -275,7 +275,7 @@ def main(argv=None):
     md.append("## Next — DONE\n")
     md.append("The batch is labeled and joined. The t_good re-derivation, decomposition "
               "adjudication, and spec §5.2 surrogate go/no-go are settled in "
-              "**`docs/findings/phoenix_grid_labels.md`** (surrogate = **GO**; build the §5.2 "
+              "**`docs/design/phoenix_seed_sampler_spec.md §8`** (surrogate = **GO**; build the §5.2 "
               "surrogate-ranked, memory-backed proposer — draw cardioid+period2 at mid-|p|, skip "
               "root; z-symmetry is a morphology lever, not a fertility lever).\n")
 

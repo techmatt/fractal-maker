@@ -50,7 +50,7 @@ def test_is_distinct_against_cloud():
 
 # --------------------------------------------------------------------------- #
 # seed-c-aware dup key (the julia over-kill fix). A julia row's dup identity keys on
-# BOTH its z-viewport AND its seed c; see docs/findings/julia_dup_metric_audit.md.
+# BOTH its z-viewport AND its seed c; see docs/design/morphology_dedup.md §5.
 # --------------------------------------------------------------------------- #
 def test_distinct_c_julias_at_same_view_do_not_collide():
     # (a) two DISTINCT-c julia views at the IDENTICAL shared root z-viewport are distinct

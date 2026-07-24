@@ -6,7 +6,7 @@ straight into the proven perturbation render tier (bare `render` / `sheet`,
 `iterate_location` auto-selects perturbation at spacing ≤ 1e-13).
 
 This is the sourcing component the deep probe proved missing
-(`docs/findings/deep_mandelbrot_visual_probe.md`): the guided-descend walker is
+(`docs/design/deep_zoom_sourcing.md`): the guided-descend walker is
 f64-bound (`Frame.center: Complex<f64>`) and structurally cannot localize a
 center below ~f64 resolution, so deep q4 harvesting needs a component that
 *tracks ∂M at high precision*. This does exactly that, two ways:

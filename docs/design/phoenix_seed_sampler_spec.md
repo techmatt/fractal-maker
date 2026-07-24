@@ -133,12 +133,17 @@ multi-spiral band" is the symptom of pinning them.
   including complex values. Each `p` gives a *different* skeleton to sample near.
 - **`c` (complex).** The classic plane also pins `c` real. The closed forms above are
   fully complex; use them that way.
-- **`z₋₁` (the slice coordinate) — load-bearing.** With `z₋₁ = 0`, orbits from `z₀` and
-  `−z₀` coincide from step 1, so **the rendered image is exactly 180°-symmetric** — a
-  slice artifact that halves the effective variety. **Setting `z₋₁ ≠ 0` breaks the
-  symmetry and yields a visibly different set from the same `(c, p)`.** Treat `z₋₁` as a
-  first-class proposal axis (small complex offsets from 0, plus larger excursions),
-  not a constant.
+- **`z₋₁` (the slice coordinate) — load-bearing.** *(Corrected — the earlier "180°
+  point symmetry" claim is false; see §7.1.)* In this engine's kernel (`z₀ = pixel`,
+  `z₋₁ = z_m1`, recurrence `z² + c + p·z₋₁`) there is **no** 180° symmetry under
+  `z₀ → −z₀`: the `p·z₋₁` term reintroduces `z₀` with odd parity at the next step, so
+  escape differs (~4.3% of pixels disagree). The exact symmetry this convention actually
+  has is **real-axis reflection `Im → −Im`**, and only when `c, p, z₋₁` are all real
+  (then `orbit(conj z₀) = conj(orbit z₀)`, bit-for-bit). So `z₋₁` is genuinely
+  load-bearing — any non-zero value moves pixels — and a **non-real `z₋₁` yields the
+  largest visual departure** because it breaks the reflection that all-real parameters
+  preserve. Treat `z₋₁` as a first-class proposal axis (small complex offsets from 0,
+  plus larger excursions), not a constant.
 
 A full proposal is therefore parametrized by `(p, branch, θ, offset, z₋₁)` →
 deterministic `(c, p, z₋₁)` via the closed forms. Keep the classic real-`c`, real-`p`,
@@ -249,14 +254,52 @@ Batch-propose, surrogate-rank, descend the top few, update `memory` and refit
   equals `e^{iθ}/4 − 1`. (Match M to ~1e-12.)
 - `p = −0.5`: cardioid cusp `c = 9/16 = 0.5625` exactly; classic Ushiki seed
   `c ≈ 0.5667` lies just outside it (`offset ≈ +0.0042` along the real axis).
-- `z₋₁ = 0` render is 180°-symmetric; `z₋₁ ≠ 0` is not — regression-guard the
-  symmetry break so nobody silently re-pins `z₋₁`.
+- **Symmetry (corrected — see §7.1):** the render has **real-axis reflection symmetry
+  `Im → −Im`** iff `c, p, z₋₁` are all real (0 mismatches); `z₀ → −z₀` is **not** a
+  symmetry (~4.3% mismatch even at `z₋₁ = 0`). Non-real `z₋₁` maximizes the departure.
+  Regression-guard the reflection so nobody silently re-pins `z₋₁` or reintroduces a
+  180°-symmetry assumption.
 - Multiplier product check: numerically, `λ₁λ₂ = −p` at any fixed point;
   cycle-multiplier product `= p²` for the period-2 orbit.
 
+### 7.1 Symmetry correction (settled)
+
+An earlier draft asserted a **180° point symmetry** at `z₋₁ = 0`. **This is false for
+this engine's pixel-injection convention.** With `z₀ = pixel` and recurrence
+`z_{n+1} = z_n² + c + p·z_{n-1}`, mapping `z₀ → −z₀` leaves `z₁` unchanged but the
+`p·z_{n-1}` term feeds `z₀` back into `z₂` with odd parity, so escape times differ
+(~4.3% pixel disagreement). The symmetry that **does** hold is **real-axis reflection
+`Im → −Im`**, and only when `c, p, z₋₁ ∈ ℝ` (then `orbit(conj z₀) = conj(orbit z₀)`
+bit-for-bit, 0 mismatches). The 180°-rotation framing assumed a different injection
+convention and must not be reintroduced.
+
 ---
 
-## 8. One-line summary
+## 8. Fertility & skeleton — human-label verdicts (settled)
+
+The §5 fertility-loop hypotheses were tested against a labeled phoenix grid; the
+verdicts below are settled and supersede the "prior expectation" hedges above.
+
+- **Fertility is a structural, cacheable seed property** (human ICC 0.66–0.82;
+  between-seed variance dominates) → §5.2's surrogate + memory loop is the right build,
+  **not** blind resampling. It is predictable out-of-sample from cheap logged seed
+  geometry (LOSO Spearman ~0.62 continuous / AUC 0.83 binary), justifying a
+  surrogate-ranked, memory-backed proposer.
+- **Skeleton map:** the **root branch is dead** to humans (0 good) — draw only cardioid
+  and period-2 (period-2 mildly richer); **mid-`|p|` is the sweet band**.
+- **`z₋₁` real-vs-non-real is a *morphology* lever, not a fertility/quality lever** —
+  extra non-real admissions rank no better to humans (it changes the look, not the hit
+  rate).
+- **Phoenix is a narrow-motif vein.** Good output is overwhelmingly one log-spiral
+  (double-scroll whorl) theme re-framed — treat it as a depth/quantity source, never a
+  morphological-breadth source (see `morphology_dedup.md` §4).
+- **Operating point:** the classifier ranks varied phoenix well (AUC ~0.86) but its
+  absolute cut must **not** sit near 0.18 (precision collapses to ~0.19); **~0.45–0.50
+  is the correct `t_good`** (consistent with `production_seeder.T_GOOD_OVERRIDES`).
+
+---
+
+## 9. One-line summary
 
 The ∂M-for-Julia move has no literal analog (phoenix is an invertible Hénon map with
 no critical point), but the **fixed-point / period-2 neutral-stability skeleton is an

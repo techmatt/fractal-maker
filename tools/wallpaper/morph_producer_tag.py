@@ -1,7 +1,6 @@
 """Re-run through the FIXED morph producer + non-destructive base-store producer tag.
 
-1. Re-embed the 47-location fixture through the production morph_gray_image (now robust-z;
-   see docs/findings/morph_parity.md) and assert self-cos == 1.0 vs the stored morph_clip.
+1. Re-embed the 47-location fixture through the production morph_gray_image (now robust-z) and assert self-cos == 1.0 vs the stored morph_clip.
 2. Add a `morph_producer` array to the base store (additive; morph_clip/uids untouched),
    since parity proves the base rows ARE this producer's output.
 

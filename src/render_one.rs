@@ -235,7 +235,7 @@ pub fn run_render_one(args: &RenderOneArgs) -> Result<(), String> {
     // (blue→white→orange→black) lives ONLY in the registry — it is absent from every
     // colormap-library JSON — so without this fallback `render-one --palette default`
     // errored while bare `render`/`sheet` accept it. Removing that foot-gun is P1 of
-    // docs/findings/render_config_report.md. Purely additive: former errors become
+    // docs/design/render_coloring_surface.md. Purely additive: former errors become
     // renders; no name that already resolved changes output.
     let palette = match library.iter().find(|c| c.name == args.palette) {
         Some(cm) => Palette::from_srgb8_stops_mirrored(

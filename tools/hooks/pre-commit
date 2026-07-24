@@ -30,7 +30,7 @@ offenders=$(
 if [ -n "$offenders" ]; then
   echo "pre-commit: refusing to commit blob(s) larger than ${LIMIT} bytes." >&2
   echo "  (regenerable bulk belongs under ARTIFACTS_ROOT, not in git; see" >&2
-  echo "   tools/corpus/artifacts.py and docs/findings/storage_restructure.md)" >&2
+  echo "   tools/corpus/artifacts.py)" >&2
   echo "$offenders" | while IFS='	' read -r size path; do
     printf '  %10s bytes  %s\n' "$size" "$path" >&2
   done

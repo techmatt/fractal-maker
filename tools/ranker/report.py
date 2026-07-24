@@ -167,7 +167,7 @@ def main():
     w("# Location preference ranker v0 — report\n")
     w("Ranks locations by human quality on steered/dive output — the missing third leg beside "
       "canonical p_good (a *badness* filter, not a goodness ranker; see "
-      "`docs/findings/steered_run2_keeper_calibration.md`). **Scope: ranks the not-bad; never "
+      "`docs/design/aesthetic_scoring.md §2`). **Scope: ranks the not-bad; never "
       "steers.** Consumers = keeper ranking, emission feed, dive-result sorting ONLY — never "
       "frontier priority, dive-start selection, or any discovery-side decision.\n")
     w(f"- Labeled admissions: **{m['n_labeled']}** (run2 60 + dive 21), 96 decoded total.")

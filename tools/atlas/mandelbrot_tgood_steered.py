@@ -145,7 +145,7 @@ The shipped mandelbrot discovery `t_good = {old_t}` is the v7 **F2** (recall-wei
 over the v7 eval slice (`tools/v7/derive_t_good.py`; n={n_e}, pos={pos_e}). The steered_run2
 blind human read scored **{pos_s}/{n_s}** mandelbrot admissions good — the human uniformly
 rejects what the 0.14 bar admits on steered mandelbrot output (see
-`docs/findings/steered_run2_keeper_calibration.md` §E). That is direct evidence the bar
+`docs/design/aesthetic_scoring.md` §2). That is direct evidence the bar
 **over-admits on this family**, so — unlike the julia families, whose blind slices were tiny
 and not similarly one-sided — mandelbrot is re-derived here **precision-weighted (F0.5)** with
 the {n_s} newly-committed steered labels folded in. Same precedent as phoenix 0.18→0.50: a

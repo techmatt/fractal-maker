@@ -18,7 +18,7 @@ pass → a smooth gradient). That is a DIFFERENT coloring from the *location-pro
 `--dump-field` field here CANNOT reproduce that banding (e.g. the UF `default`
 montage look): render full-frame via bare `render`/`sheet` and crop instead. This
 exact mismatch flattened the q4 stage-1 crops — see
-`docs/findings/render_config_report.md`.
+`docs/design/render_coloring_surface.md`.
 
 Pipeline order — **pinned to the Rust `render_modes.rs` smooth path**, NOT the order
 listed in the build prompt (Step 0 reads the code and pins it):

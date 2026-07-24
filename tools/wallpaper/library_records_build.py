@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 """Build the worked-instance library_records.jsonl for the 47 curated locations.
 
-Design-first validation: populate the proposed location-library record schema
-(see docs/findings/library_record_schema.md) entirely from existing artifacts. No new
+Design-first validation: populate the proposed location-library record schema, entirely from existing artifacts. No new
 producers. Every field is sourced from one of:
 
   emit/curated/manifest.jsonl   identity, emitted coloring + gate, wallpaper qual

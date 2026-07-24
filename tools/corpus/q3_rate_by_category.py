@@ -230,8 +230,7 @@ def main():
       "marked UNLABELED and the pooled julia rate omitted the entire 1000-location "
       "J0 ladder. It now routes through the shared canonical resolver "
       "`tools/corpus/label_store.resolve_score` (the training reader's own path); "
-      "location totals reconcile exactly to the v6 coverage audit's 5713. See "
-      "`docs/findings/sidecar_label_resolution_and_jm_band_crosscheck.md`._\n")
+      "location totals reconcile exactly to the v6 coverage audit's 5713._\n")
     A("**Label source: the shared canonical resolver "
       "`tools/corpus/label_store.resolve_score` — merged human `label.score` in "
       "`images.jsonl` ELSE the registered `labels/*.json` sidecar joined by "

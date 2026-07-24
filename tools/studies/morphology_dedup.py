@@ -4,7 +4,7 @@ A conservative, NON-DESTRUCTIVE curation pass over an emission corpus. The coord
 `same_fractal` identity (emission_selector) already collapses same-location recolors; it
 CANNOT see two coordinate-distinct emissions that render the same skeleton (the
 "good morphology is intrinsically narrow" mode measured in
-`docs/findings/visual_dup.md`). This pass catches only the tightest tier of that:
+`docs/design/morphology_dedup.md`). This pass catches only the tightest tier of that:
 palette-blind CLIP morphology similarity on the canonical grayscale renders, thresholded
 so ONLY the ~0.978 tier trips.
 

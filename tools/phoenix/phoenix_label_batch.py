@@ -17,7 +17,7 @@ reject) into a registered label_corpus batch of ~500 items, stratified TWO ways 
 
 **The render block stamps the COMPLETE parameter identity** — fractal_type AND (c,p,z_-1) —
 because any absent axis silently round-trips to the Ushiki default and Guard B alone can't
-catch it (the baserate_v1 lesson with three axes, docs/findings/invariant_audit.md). So before
+catch it (the baserate_v1 lesson with three axes). So before
 rendering, every row is asserted to round-trip through `location.from_render_block` with its
 c/p/z_-1 present and equal to the source seed; then Guard B (`verify_render_path.check_batch`)
 confirms byte-reproducibility.

@@ -16,7 +16,7 @@ Reuse, don't rebuild:
   * field dump        render-one --dump-field (auto perturbation for deep frames)
   * coloring tail     tools/colormap.py (field⊗colormap — ONE render per minibrot)
 
-CAVEAT (recorded in docs/findings/q4_stage1_labelset.md): windows are crops of ONE
+CAVEAT: windows are crops of ONE
 medium render, so small-window frequency stats are SCALE-BIASED. A true-scale
 per-window re-render is a stage-2 refinement, not now.
 
@@ -65,7 +65,7 @@ W, H = 2176, 1224
 ASPECT = "16:9"
 # Vivid blue->white->orange->near-black. The fair re-render proved the old
 # twilight_shifted purple-on-black ramp crushed the mid-tone filigree to invisible
-# noise ("30 useless" was a palette artifact — docs/findings/fair_rerender_richness.md);
+# noise ("30 useless" was a palette artifact — docs/design/aesthetic_scoring.md §1);
 # labeling under it teaches garbage. This is the Rust built-in `default` (Ultra Fractal)
 # palette — the SAME vivid, iteration-CYCLED banding that made the fair montage pop.
 #

@@ -115,7 +115,7 @@ JULIA_SAME_C_EPS = 1e-6  # same-Julia identity epsilon in the c (parameter) plan
                          # collidable (the campaign-1 over-kill: z-only keying in a shared per-
                          # base-family cloud annihilated 191 distinct-c hooks), and a julia never
                          # collides with a base-family c-plane row (one side has no c).
-                         # See docs/findings/julia_dup_metric_audit.md.
+                         # See docs/design/morphology_dedup.md §5.
 
 # --- Phoenix parameter-point identity (the julia seed-c fix, lifted to three axes) ---
 # A phoenix location's dup identity keys on the FULL parameter point (c, p, z_{-1})
@@ -283,7 +283,7 @@ def julia_partition(fam: str) -> str:
 # the mixed-threshold eras.
 #
 # Provenance: ALL values below are the v7 F2-argmax sweep, derived in
-# docs/findings/v7_t_good.md (tools/v7/derive_t_good.py, v7 labeled eval slice; F2 =
+# docs/design/classifier_retrain_protocol.md §4 (tools/v7/derive_t_good.py, v7 labeled eval slice; F2 =
 # recall-weighted, the prospecting loop wants to stop discarding good locations). These
 # REPLACE the v6 table wholesale — v7's p_good distribution is markedly more compressed,
 # so every v6 cut (0.24 / 0.30) sat far up v7's tail and starved recall. Each value sits
@@ -291,7 +291,7 @@ def julia_partition(fam: str) -> str:
 # in-sample vs leave-one-out F2, and the eval-set leak the julia:multibrot cuts carry.
 #
 # EXCEPTION — mandelbrot is 0.51, re-derived F0.5 (precision-weighted) with the steered_run2
-# blind labels folded in (docs/findings/mandelbrot_tgood_steered.md). The blind read scored
+# blind labels folded in (docs/design/classifier_retrain_protocol.md §4). The blind read scored
 # 0/16 mandelbrot admissions good, so the F2 0.14 bar demonstrably over-admits on this family;
 # 0.51 admits 0/16 of those human-rejected tiles. Family-specific tightening (precedent:
 # phoenix 0.18->0.50); the julia families keep their F2 cuts (blind slices too small to move).
@@ -301,7 +301,7 @@ def julia_partition(fam: str) -> str:
 #                                invented value.
 #
 # phoenix — 0.45, the v7 F2-argmax derived from the 500-label Phase-B grid batch
-# (docs/findings/phoenix_grid_labels.md §2, tools/phoenix/phoenix_label_analysis.py:
+# (docs/design/phoenix_seed_sampler_spec.md §8, tools/phoenix/phoenix_label_analysis.py:
 # t*=0.45, F2_in 0.724 / F2_oof 0.689, n_pos=77 >= 15 sufficiency floor). This SUPERSEDES
 # the earlier "undecidable -> baseline" call: the grid batch closed the zero-coverage gap
 # (v7 ranks varied phoenix AUC 0.86). t*=0.45 is on an F2 plateau (0.724 vs baseline-0.50's
@@ -312,12 +312,12 @@ def julia_partition(fam: str) -> str:
 # =========================================================================== #
 T_GOOD_BASELINE = 0.50    # conservative default for every unswept / undecidable partition
 T_GOOD_OVERRIDES = {
-    "mandelbrot": 0.51,        # F0.5 re-derive w/ steered_run2 labels (was 0.14 F2; see docs/findings/mandelbrot_tgood_steered.md)
+    "mandelbrot": 0.51,        # F0.5 re-derive w/ steered_run2 labels (was 0.14 F2; see docs/design/classifier_retrain_protocol.md §4)
     "julia:mandelbrot": 0.22,  # v7 F2 sweep (n=178, pos=25)
     "julia:multibrot3": 0.25,  # v7 F2 sweep, census-144 slice (n=54, pos=21)
     "julia:multibrot4": 0.17,  # v7 F2 sweep, census-144 slice (n=51, pos=24)
     "julia:multibrot5": 0.10,  # v7 F2 sweep, census-144 slice (n=39, pos=22)
-    "phoenix": 0.45,           # v7 F2-argmax on the 500-label Phase-B grid (docs/findings/phoenix_grid_labels.md §2)
+    "phoenix": 0.45,           # v7 F2-argmax on the 500-label Phase-B grid (docs/design/phoenix_seed_sampler_spec.md §8)
 }
 
 

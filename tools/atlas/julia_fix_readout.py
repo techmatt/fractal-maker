@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 r"""Mini-readout for a julia-dup-fix steered breadth run — the verification report for the
 seed-c-aware dup metric + hook spacing + pre-canonical filter + freshness prior package
-(docs/findings/julia_dup_metric_audit.md). Reads only the durable run artifacts (summary.json,
+(docs/design/morphology_dedup.md §5). Reads only the durable run artifacts (summary.json,
 harvest_log.jsonl, outcome_ledger.jsonl, julia_hooks.jsonl); no render, no GPU.
 
 Reports, for the julia dup-fix acceptance:

@@ -8,7 +8,7 @@ product identities (λ₁λ₂=-p at a fixed point; period-2 cycle-multiplier pr
 outward-normal direction, and that a seeded batch explores the axes rather than pinning
 them. The z_{-1} symmetry guard is a RENDER-level property and lives in the Rust suite
 (`render_modes::tests::phoenix_z_m1_symmetry_guard`); a binary-backed check here mirrors it
-when the release binary is present (see docs/findings/phoenix_z_m1_symmetry.md).
+when the release binary is present (see docs/design/phoenix_seed_sampler_spec.md §7.1).
 """
 from __future__ import annotations
 
@@ -163,7 +163,7 @@ def test_batch_explores_the_axes():
 # z_{-1} symmetry guard — RENDER-backed, mirrors the Rust unit test. Skipped when the
 # release binary is absent (like the corpus phoenix acceptance gate). z_{-1}=0 (real c,p)
 # renders with EXACT real-axis reflection; a non-real z_{-1} breaks it. This is what stops
-# anyone silently re-pinning z_{-1}. See docs/findings/phoenix_z_m1_symmetry.md.
+# anyone silently re-pinning z_{-1}. See docs/design/phoenix_seed_sampler_spec.md §7.1.
 # --------------------------------------------------------------------------- #
 def _bin():
     exe = ROOT / "target" / "release" / ("fractal-generator.exe" if os.name == "nt"

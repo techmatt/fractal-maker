@@ -2,7 +2,7 @@
 """Location preference ranker — scorer entry point.
 
 Deployed head: **pref_loc_v1** (v7+colored:logi, refit on run2+dive+campaign1 = 379 labels,
-3-batch LOBO meanSp +0.436, certified; see docs/findings/campaign1_blind_read.md). v1 has the
+3-batch LOBO meanSp +0.436, certified). v1 has the
 same feature blocks (v7+colored) and affine shape as v0, so every consumer is unchanged by the
 flip. pref_loc_v0/model.npz remains on disk for rollback.
 
@@ -20,7 +20,7 @@ This head ranks the NOT-BAD; it must NEVER steer discovery. Do NOT wire RankerSc
 frontier priority (steered_frontier.py), dive-start selection (--dive selection), production
 seeding, or any generation-side decision. A model that both selects and ranks degrades on its own
 selections — that is exactly how canonical p_good became a badness filter rather than a goodness
-ranker (docs/findings/steered_run2_keeper_calibration.md). Legitimate consumers ONLY: keeper
+ranker (docs/design/aesthetic_scoring.md §2). Legitimate consumers ONLY: keeper
 ranking, emission feed ordering, and dive-result sorting — all of which rank an already-produced
 set without feeding back into what gets produced.
 ========================================================================================

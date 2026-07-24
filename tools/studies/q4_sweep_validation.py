@@ -3,7 +3,7 @@
 Matt's hand-drawn (magenta-boxed) picks in its top-K?
 
 Measurement only (NO net / training / production; no config or data/ changes).
-See prompts/q4_sweep_validation.md and docs/findings/q4_sweep_validation.md.
+See docs/design/deep_zoom_sourcing.md §5.
 
 Ground truth = Matt's magenta rectangles burned on subframe 0 of three deep-center
 contact sheets (out/deep_centers/{preview_p58.png, ladder_mis/fw_1e_8.png,

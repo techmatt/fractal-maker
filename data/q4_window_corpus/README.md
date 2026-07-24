@@ -54,7 +54,7 @@ data/q4_window_corpus/batches/<batch_id>/
 `label.klass: null → value` is the ONLY allowed mutation. A merge that would change a
 non-null class must warn and refuse (same contract as the v7 corpus `label.score`).
 
-## Caveats (see `docs/findings/q4_stage1_labelset.md`)
+## Caveats
 
 1. Windows are crops of **one medium render**, so small-window frequency stats are
    **scale-biased**. A true-scale per-window re-render is a stage-2 refinement.

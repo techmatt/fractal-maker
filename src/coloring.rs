@@ -11,7 +11,7 @@
 //! coloring** from the *beautiful* path ([`crate::render_modes`], and its Python twin
 //! `tools/colormap.py`), which percentile-stretches the field into a single palette
 //! pass — they diverge in appearance at their defaults, and a `--dump-field` recolor
-//! goes through the beautiful path only. See `docs/findings/render_config_report.md`.
+//! goes through the beautiful path only. See `docs/design/render_coloring_surface.md`.
 
 use crate::backend::PixelSample;
 use crate::palette::Palette;

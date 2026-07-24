@@ -1,12 +1,11 @@
 """colored_clip producer — per-candidate color-appearance CLIP descriptor.
 
 Fills the one remaining schema gap in the location-library record
-(`descriptors.colored_clip`, `docs/findings/library_record_schema.md` §B.3): a CLIP
+(`descriptors.colored_clip`): a CLIP
 embedding of each palette candidate's *delivered colored appearance*, the soft substrate
 a within-cell spread selection would run on. This is the palette-ON twin of the
 palette-BLIND grayscale morphology descriptor (the wiped `visual_dup/embed.py`; its
-canonical robust-z transfer was recovered into `library_annotate.morph_gray_image`, see
-`docs/findings/morph_parity.md`):
+canonical robust-z transfer was recovered into `library_annotate.morph_gray_image`):
 
   * SAME CLIP model (`vit_base_patch16_clip_224.openai`), SAME timm eval transform,
     SAME 640x360 source resolution as the morphology canon renders — the only change
@@ -22,7 +21,7 @@ canonical robust-z transfer was recovered into `library_annotate.morph_gray_imag
     box filter, normal_map off), never wallpaper res.
 
 Storage — LOAD-BEARING, out of scratch (fixes the dangling-reference risk flagged in
-`docs/findings/library_gap_report.md` §C5 and `docs/findings/visual_dup.md`). Writes a
+`docs/design/morphology_dedup.md`). Writes a
 single `data/library_embeddings/embeddings.npz`:
 
     morph_uids  (62,)      str    corpus uid == curated_from

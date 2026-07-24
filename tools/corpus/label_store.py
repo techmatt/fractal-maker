@@ -47,13 +47,13 @@ SIDECAR_LABELS = {
     # Phoenix Phase-B seed-grid batch (500 items, labeled 2026-07-21; empty scores.json,
     # never merged in-row). Stratified FROM grid output (biased) -> train-side only for any
     # future CORN manifest; the varied-phoenix v7 calibration read lives in its own
-    # stratification. See docs/findings/phoenix_grid_labels.md.
+    # stratification. See docs/design/phoenix_seed_sampler_spec.md §8.
     "2026-07-21_phoenix_grid": "phoenix_grid.json",
     # Native multibrot band batch (300 items, labeled 2026-07-22; empty scores.json,
     # never merged in-row). Stratified across v7 p_good bands incl. sub-threshold/rejects
     # -> train-side only for any future CORN manifest, never an unbiased base-rate source.
     # Sidecar name is the labeling export (2026-07-22_*), NOT the empty placeholder the
-    # batch builder pre-created. See docs/findings/native_multibrot_band_v1_labels.md.
+    # batch builder pre-created.
     "2026-07-22_native_multibrot_band_v1": "2026-07-22_native_multibrot_band_v1.json",
 }
 

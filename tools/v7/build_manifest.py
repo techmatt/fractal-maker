@@ -15,7 +15,7 @@ and the 536 NEW post-freeze locations are appended with FORCED, rule-based split
 Post-freeze = a labeled location (canonical resolver, crops->location, label=max) whose
 identity (fractal_type,cx,cy,fw,c_re,c_im) is NOT in the frozen v6 manifest.
 
-GATE STOP recorded in docs/findings/v7_build_gate_stop.md: the frozen v6 eval already
+GATE STOP context in docs/design/classifier_retrain_protocol.md: the frozen v6 eval already
 carries 17 UNBIASED julia:multibrot eval locations (1 q3). We proceed under **Option A**:
 keep the frozen prefix byte-identical, accept the 17 as a pre-existing unbiased remnant,
 and slice the reported julia:mb metric to the census-144 only. Consequences vs the plan's
@@ -381,7 +381,7 @@ def main():
                        "Adding split to the partition enforces gate 3; splits are unchanged.",
         "gate_stop_resolution": {
             "finding": "v6 frozen eval contains 17 UNBIASED julia:multibrot eval "
-                       "locations (1 q3); see docs/findings/v7_build_gate_stop.md",
+                       "locations (1 q3); see docs/design/classifier_retrain_protocol.md",
             "decision": "Option A — keep frozen prefix byte-identical; accept the 17 as a "
                         "pre-existing unbiased remnant; report the julia:mb metric on the "
                         "census-144 slice only, never the 161-union.",
