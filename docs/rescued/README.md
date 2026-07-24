@@ -33,3 +33,12 @@ commit) or drop (delete from here — the trash copy goes with the trash).
 The regenerable/hand-authored split is a heuristic (grep for the output path in
 `tools/`); when unsure the file was kept on the rescue side. Nothing here has been
 committed — `git add` only what you want to keep.
+
+## `prompts/` — rescued hand-authored task specs (2026-07-24)
+
+`prompts/*.md` are 4 hand-authored task specs that lived in the old tree's **gitignored**
+`prompts/` dir (never committed there) — surfaced by the carry-completeness audit
+(`docs/findings/carry_completeness.md`, Part B) as the one uncarried irreplaceable class.
+They describe already-executed migrations (history-rewrite, repo-size-guard,
+storage-restructure, weights-lfs); outcomes are committed as `docs/findings/*`. Kept here
+as durable provenance rather than force-added into maker's still-ignored `prompts/`.
