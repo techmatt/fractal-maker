@@ -1,0 +1,859 @@
+"""Tests for the Phase-1 prospecting tail — record shape, per-family identity, crash-safe
+embedding append, LRU field-cache eviction, resume idempotence.
+
+GPU-free: exercises only the pure record-building + store I/O (no torch, no render). The CLIP
+embed / grayscale render are validated end-to-end by the orchestrator smoke run, not here.
+
+Run either way:
+  uv run pytest tools/wallpaper/test_prospect.py
+  uv run python tools/wallpaper/test_prospect.py     # prints PASS/FAIL summary
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+import numpy as np
+
+_HERE = Path(__file__).resolve().parent
+_ROOT = _HERE.parents[1]
+sys.path.insert(0, str(_ROOT))
+sys.path.insert(0, str(_HERE))
+import library_store as store          # noqa: E402
+import library_annotate as ann         # noqa: E402
+from tools.corpus import location as loc_mod  # noqa: E402
+from tools.corpus.corpus_common import active_scorer_version  # noqa: E402
+
+# The real seeder stamps each outcome row with the ACTIVE checkpoint's version, so fixtures
+# must use it too — a hardcoded stamp would read as stale (fresh-q3 harvest gates on
+# is_current_decoded) the moment ACTIVE_CKPT is flipped, which is exactly what happened at
+# the v6->v7 promotion.
+_CUR_SCORER_VERSION = active_scorer_version()
+
+
+# --------------------------------------------------------------------------- #
+# Fixtures — synthetic pool rows + ledger, one per family kind.
+# --------------------------------------------------------------------------- #
+def _pool_row(oid, family, fractal_type, cx="0.1", cy="0.2", fw="0.01",
+              c_re=None, c_im=None):
+    render = {"cx": cx, "cy": cy, "fw": fw, "maxiter": 1500, "fractal_type": fractal_type}
+    if c_re is not None:
+        render["c_re"], render["c_im"] = c_re, c_im
+    return {
+        "image_id": f"{oid}_00",
+        "render": render,
+        "provenance": {"family": family, "source_oid": oid,
+                       "seeder_decoded_class": 3, "seeder_p_good": 0.7,
+                       "source_ledger": "data/discovery/fresh_runs/RUN/outcome_ledger.jsonl"},
+        "label": {"score": None},
+    }
+
+
+def _ledger_row(oid, family):
+    return {"id": oid, "family": family, "scorer_version": _CUR_SCORER_VERSION, "k3": 0.31,
+            "raw_top3": [0.3, 0.31, 0.32], "decoded_class": 3, "p_good": 0.42,
+            "p_notbad": 0.8, "t_good": 0.24, "reached_depth": 9, "guard_pass": True}
+
+
+def _record(oid, family, fractal_type, **kw):
+    row = _pool_row(oid, family, fractal_type, **kw)
+    led = {oid: _ledger_row(oid, family)}
+    return ann.build_record(oid, row["render"], row["provenance"], led,
+                            run_id="RUN", cycle=3, source_ledger="LED")
+
+
+# --------------------------------------------------------------------------- #
+# Record shape + per-family identity.
+# --------------------------------------------------------------------------- #
+def test_record_shape_dense_and_reserved():
+    r = _record("m_1", "mandelbrot", "mandelbrot")
+    # dense blocks present
+    assert r["record_version"] == "0.1"
+    assert r["location_id"] == "m_1"
+    assert r["run_id"] == "RUN" and r["cycle"] == 3
+    assert r["identity"]["family"] == "mandelbrot"
+    assert r["location_potential"]["k3"] == 0.31          # JOINED from ledger, not recomputed
+    assert r["location_potential"]["decoded_class"] == 3
+    assert r["descriptors"]["uid"] == "m_1"
+    assert r["descriptors"]["morph_producer"] == ann.MORPH_PRODUCER   # seam marker present
+    assert r["descriptors"]["morph_v6"] is None            # skipped (not free)
+    assert r["descriptors"]["thumbnail"] == "thumbs/m_1.jpg"
+    # reserved null/empty — demand-driven at Phase 2, NOT filled here
+    assert r["palette_candidates"] == []
+    assert r["mode_candidacy"] is None
+    assert r["descriptors"]["colored_clip"] is None
+    assert r["wallpaper_quality"]["predicted_p_ge3"] is None
+    assert r["wallpaper_quality"]["actual_p_ge3"] is None
+
+
+def test_identity_mandelbrot():
+    idn = _record("m_1", "mandelbrot", "mandelbrot")["identity"]
+    assert idn["c"] is None and idn["p"] is None
+    assert idn["coord_kind"] == "c_plane"
+    assert idn["source_oid"] == "m_1"
+
+
+def test_identity_julia_carries_c():
+    idn = _record("j_1", "julia", "julia", c_re="0.233", c_im="0.538")["identity"]
+    assert idn["c"] == {"re": "0.233", "im": "0.538"}
+    assert idn["p"] is None
+    assert idn["coord_kind"] == "julia_c_fixed"
+
+
+def test_identity_julia_multibrot_carries_c():
+    idn = _record("jm3_1", "julia_multibrot3", "julia_multibrot3",
+                  c_re="-0.387", c_im="-0.629")["identity"]
+    assert idn["c"] == {"re": "-0.387", "im": "-0.629"}
+    assert idn["coord_kind"] == "julia_c_fixed"
+    assert idn["family"] == "julia_multibrot3"
+
+
+def test_identity_phoenix_stamps_ushiki():
+    # phoenix pool render block leaves c/p NULL — identity must STAMP the fixed Ushiki c/p.
+    idn = _record("ph_1", "phoenix", "phoenix")["identity"]
+    assert idn["c"] == ann.PHOENIX_C
+    assert idn["p"] == ann.PHOENIX_P
+    assert idn["coord_kind"] == "z_viewport"
+
+
+def test_render_location_phoenix_flags():
+    # the Location built for the field dump must recover c + p so render-one gets --c AND --p.
+    row = _pool_row("ph_2", "phoenix", "phoenix")
+    loc = ann.render_location(row["render"])
+    flags = loc_mod.render_one_flags(loc)
+    assert "--family" in flags and "phoenix" in flags
+    assert "--c" in flags and "--p" in flags
+    ci = flags.index("--c"); pi = flags.index("--p")
+    assert flags[ci + 1:ci + 3] == [ann.PHOENIX_C["re"], ann.PHOENIX_C["im"]]
+    assert flags[pi + 1:pi + 3] == [ann.PHOENIX_P["re"], ann.PHOENIX_P["im"]]
+
+
+def test_render_location_julia_multibrot_degree_survives():
+    row = _pool_row("jm4_1", "julia_multibrot4", "julia_multibrot4",
+                    c_re="0.45", c_im="0.65")
+    loc = ann.render_location(row["render"])
+    flags = loc_mod.render_one_flags(loc)
+    assert flags[:2] == ["--family", "multibrot4"]        # degree kept, flipped to dynamical twin
+    assert "--julia" in flags and "--c" in flags
+
+
+# --------------------------------------------------------------------------- #
+# unique_locations — one row per source_oid.
+# --------------------------------------------------------------------------- #
+def test_unique_locations_dedup(tmp_path):
+    p = tmp_path / "images.jsonl"
+    with open(p, "w") as f:
+        for r in [_pool_row("a", "mandelbrot", "mandelbrot"),
+                  {**_pool_row("a", "mandelbrot", "mandelbrot"), "image_id": "a_01"},
+                  _pool_row("b", "julia", "julia", c_re="0", c_im="0")]:
+            f.write(json.dumps(r) + "\n")
+    rows = ann.unique_locations(p)
+    assert [r["provenance"]["source_oid"] for r in rows] == ["a", "b"]
+
+
+# --------------------------------------------------------------------------- #
+# Crash-safe embedding append + dim assert + concatenating loader.
+# --------------------------------------------------------------------------- #
+def _tmp_base(tmp_path, dim=768):
+    base = tmp_path / "embeddings.npz"
+    np.savez(base, morph_uids=np.asarray(["base_0"]),
+             morph_clip=np.zeros((1, dim), np.float32))
+    return base
+
+
+def test_embedding_shard_roundtrip_and_dim_source_of_truth(tmp_path):
+    base = _tmp_base(tmp_path, dim=768)
+    shards = tmp_path / "shards"
+    assert store.base_morph_dim(base) == 768               # read from base, not assumed
+    clip = np.random.rand(3, 768).astype(np.float32)
+    shard = store.write_embedding_shard("RUN", 1, ["x", "y", "z"], clip,
+                                        shards_dir=shards, emb_base=base)
+    assert shard.exists()
+    emb = store.load_library_embeddings(emb_base=base, shards_dir=shards)
+    assert set(emb) == {"base_0", "x", "y", "z"}
+    assert np.allclose(emb["y"], clip[1])
+
+
+def test_embedding_dim_assert_rejects_mismatch(tmp_path):
+    base = _tmp_base(tmp_path, dim=768)
+    shards = tmp_path / "shards"
+    bad = np.zeros((2, 512), np.float32)                   # wrong width
+    try:
+        store.write_embedding_shard("RUN", 1, ["a", "b"], bad,
+                                    shards_dir=shards, emb_base=base)
+        assert False, "expected dim assert to fire"
+    except AssertionError as e:
+        assert "512" in str(e) or "dim" in str(e)
+
+
+def test_embedding_append_crash_safe(tmp_path):
+    # a stray leftover .tmp (interrupted write) must NOT be loaded; the atomic .npz must.
+    base = _tmp_base(tmp_path)
+    shards = tmp_path / "shards"
+    store.write_embedding_shard("RUN", 1, ["ok"], np.ones((1, 768), np.float32),
+                                shards_dir=shards, emb_base=base)
+    (shards / ".RUN__cycle_002.npz.tmp").write_bytes(b"garbage partial write")
+    emb = store.load_library_embeddings(emb_base=base, shards_dir=shards)
+    assert set(emb) == {"base_0", "ok"}                    # tmp ignored, no crash
+
+
+def test_embedding_shard_rewrite_idempotent(tmp_path):
+    base = _tmp_base(tmp_path)
+    shards = tmp_path / "shards"
+    v1 = np.ones((1, 768), np.float32)
+    store.write_embedding_shard("RUN", 1, ["k"], v1, shards_dir=shards, emb_base=base)
+    v2 = np.full((1, 768), 2.0, np.float32)                # a resumed cycle recomputes same key
+    store.write_embedding_shard("RUN", 1, ["k"], v2, shards_dir=shards, emb_base=base)
+    emb = store.load_library_embeddings(emb_base=base, shards_dir=shards)
+    assert len(list(shards.glob("*.npz"))) == 1            # overwrote, not duplicated
+    assert np.allclose(emb["k"], 2.0)
+
+
+# --------------------------------------------------------------------------- #
+# LRU field-cache eviction.
+# --------------------------------------------------------------------------- #
+def test_lru_eviction_under_cap(tmp_path):
+    cache = tmp_path / "field_cache"
+    cache.mkdir()
+    # 4 fields x 1 MiB each = 4 MiB; cap at ~2.5 MiB -> evict the 2 oldest.
+    stems = ["f0", "f1", "f2", "f3"]
+    for i, s in enumerate(stems):
+        (cache / f"{s}.bin").write_bytes(b"\0" * (1024 * 1024))
+        (cache / f"{s}.json").write_text("{}")
+        t = 1000.0 + i                                     # f0 oldest ... f3 newest
+        os.utime(cache / f"{s}.bin", (t, t))
+        os.utime(cache / f"{s}.json", (t, t))
+    evicted, freed = store.evict_field_cache_lru(2.5 / 1024, cache_dir=cache)
+    assert evicted == 2
+    remaining = {f.stem for f in cache.glob("*.bin")}
+    assert remaining == {"f2", "f3"}                       # oldest two gone, pair evicted together
+    assert not (cache / "f0.json").exists()
+
+
+def test_lru_noop_under_cap(tmp_path):
+    cache = tmp_path / "field_cache"
+    cache.mkdir()
+    (cache / "f.bin").write_bytes(b"\0" * 1024)
+    (cache / "f.json").write_text("{}")
+    evicted, freed = store.evict_field_cache_lru(10.0, cache_dir=cache)
+    assert evicted == 0 and freed == 0
+
+
+# --------------------------------------------------------------------------- #
+# Resume idempotence — re-appending a cycle's records adds 0 duplicates.
+# --------------------------------------------------------------------------- #
+def test_append_records_idempotent(tmp_path):
+    rp = tmp_path / "records.jsonl"
+    recs = [_record("m_1", "mandelbrot", "mandelbrot"),
+            _record("j_1", "julia", "julia", c_re="0", c_im="0")]
+    w1 = store.append_records(recs, rp)
+    assert len(w1) == 2
+    w2 = store.append_records(recs, rp)                    # re-run same cycle
+    assert len(w2) == 0                                    # 0 duplicates
+    assert store.existing_location_ids(rp) == {"m_1", "j_1"}
+    # one extra new location appends cleanly alongside
+    w3 = store.append_records([_record("m_2", "mandelbrot", "mandelbrot")] + recs, rp)
+    assert len(w3) == 1 and w3[0]["location_id"] == "m_2"
+
+
+def test_field_stem_smooth_token_empty():
+    loc = loc_mod.Location(family="mandelbrot", cx="0", cy="0", fw="1", maxiter=100)
+    stem = store.field_stem(loc, "smooth", 640, 360, 2)
+    assert stem.endswith("640x360ss2__smooth")
+    assert loc_mod.field_mode_token("smooth") == ""        # smooth token empty (no collision key)
+
+
+# --------------------------------------------------------------------------- #
+# Grayscale morphology transfer — locks the RECOVERED robust-z tanh (K=2) formula.
+# Any drift in MORPH_K / MORPH_MAD_SCALE / the tanh form / the linear box-downsample
+# breaks the 62 curated morph_clip rows' parity (cosine 1.0), so pin it here (GPU-free).
+# --------------------------------------------------------------------------- #
+def _synthetic_field(ss=2):
+    from tools import colormap as cm
+    # 4x4 super-res (ss2 -> 2x2 out); one interior (NaN) pixel, skewed exterior for a real MAD.
+    v = np.array([[0.0, 1.0, 2.0, 3.0],
+                  [1.0, np.nan, 4.0, 2.0],
+                  [2.0, 3.0, 10.0, 1.0],
+                  [0.0, 2.0, 3.0, 4.0]], dtype=np.float64)
+    loc = cm.LocationRef(kind="mandelbrot", cx="0", cy="0", fw="1", maxiter=100)
+    return cm.FieldData(values=v, supersample=ss, location=loc)
+
+
+def test_morph_gray_transfer_robustz():
+    field = _synthetic_field()
+    out = np.asarray(ann.morph_gray_image(field))          # (2,2,3) uint8, RGB-replicated
+
+    # reference: the documented transform, computed independently
+    v = field.values
+    fin = np.isfinite(v)
+    m = np.median(v[fin])
+    mad = np.median(np.abs(v[fin] - m)) * ann.MORPH_MAD_SCALE + 1e-12
+    t = 0.5 * (1.0 + np.tanh((v - m) / (ann.MORPH_K * mad)))
+    t = np.where(fin, t, 0.0)
+    g = t.reshape(2, 2, 2, 2).mean(axis=(1, 3))            # linear ss2 block-mean
+    ref = np.clip(g * 255.0 + 0.5, 0, 255).astype(np.uint8)
+
+    assert out.shape == (2, 2, 3)
+    assert np.array_equal(out[..., 0], out[..., 1]) and np.array_equal(out[..., 1], out[..., 2])
+    assert np.array_equal(out[..., 0], ref)                # exact match to the formula
+    # constants are the recovered original (median/MAD tanh, K=2)
+    assert ann.MORPH_K == 2.0 and abs(ann.MORPH_MAD_SCALE - 1.4826) < 1e-9
+
+
+def test_morph_gray_interior_is_black_and_deterministic():
+    field = _synthetic_field()
+    a = np.asarray(ann.morph_gray_image(field))
+    b = np.asarray(ann.morph_gray_image(field))
+    assert np.array_equal(a, b)                            # deterministic
+    # a fully-interior (all-NaN) block downsamples to pure black
+    field2 = _synthetic_field()
+    field2.values[:2, :2] = np.nan
+    out = np.asarray(ann.morph_gray_image(field2))
+    assert out[0, 0, 0] == 0
+
+
+# --------------------------------------------------------------------------- #
+# --rerun-failed — a deferred cycle drains, records land, a second drain adds zero.
+# GPU-free: the annotate subprocess is replaced with a store-append stub that reuses the REAL
+# library_store dedup, so the idempotence under test is the production dedup, not a mock.
+# --------------------------------------------------------------------------- #
+import argparse  # noqa: E402
+import prospect_orchestrator as po  # noqa: E402
+import overnight_orchestrator as oo  # noqa: E402
+
+
+def _fake_annotate_pool(batch_dir, ledger, watermark, run_id, cycle, sinks, field_cache_gb,
+                        retain_fields, est_annotate_s, log, baseline_gpu, tag):
+    """Store-side of library_annotate WITHOUT the GPU embed/thumbnail: dedup the pool against the
+    store, append the survivors, write a schema-faithful annotate_report. Real store dedup -> a
+    re-drain over the same pool appends 0 (the whole idempotence claim)."""
+    rows = ann.unique_locations(Path(batch_dir) / "images.jsonl")
+    led = ann.load_ledger(Path(ledger))
+    have = store.existing_location_ids(sinks.records)
+    records, n_dup = [], 0
+    for r in rows:
+        oid = r["provenance"]["source_oid"]
+        if oid in have:
+            n_dup += 1
+            continue
+        records.append(ann.build_record(oid, r["render"], r["provenance"], led,
+                                         run_id, cycle, str(ledger)))
+    written = store.append_records(records, sinks.records)
+    (Path(batch_dir) / "annotate_report.json").write_text(json.dumps(
+        {"cycle": cycle, "pool_unique_locations": len(rows), "dropped_coord_dup": n_dup,
+         "dropped_field_fail": 0, "records_written": len(written)}), encoding="utf-8")
+    return True, {"ok": True}
+
+
+def _setup_deferred_run(tmp_path, oids=("c1_a", "c1_b")):
+    """A run tree with ONE deferred failed cycle: retained pool + ledger + state.failed_cycles."""
+    run_dir = tmp_path / "out" / "RUN"
+    disc_dir = tmp_path / "disc" / "RUN"
+    (run_dir / "pools" / "cycle_001").mkdir(parents=True)
+    disc_dir.mkdir(parents=True)
+    ledger = disc_dir / "outcome_ledger.jsonl"
+    with open(ledger, "w", encoding="utf-8") as f:
+        for oid in oids:
+            f.write(json.dumps(_ledger_row(oid, "mandelbrot")) + "\n")
+    with open(run_dir / "pools" / "cycle_001" / "images.jsonl", "w", encoding="utf-8") as f:
+        for oid in oids:
+            f.write(json.dumps(_pool_row(oid, "mandelbrot", "mandelbrot")) + "\n")
+    oo.save_state(run_dir / "state.json", {
+        "run_id": "RUN", "deadline_epoch": 0, "cycles_done": 1,
+        "failed_cycles": [{"cycle": 1, "q3_deferred": len(oids), "records_salvaged": 0,
+                           "reason": "annotate failed twice (test)", "ledger_watermark": 0}]})
+    args = argparse.Namespace(
+        run_id="RUN", out_root=str(tmp_path / "out"), discovery_root=str(tmp_path / "disc"),
+        field_cache_gb=20.0, retain_fields=True, est_loc_s=6.0,
+        store_records=str(tmp_path / "store" / "records.jsonl"),
+        store_thumbs=str(tmp_path / "store" / "thumbs"),
+        store_emb_shards=str(tmp_path / "store" / "shards"),
+        store_field_cache=str(tmp_path / "store" / "field_cache"))
+    return run_dir, args
+
+
+class _patch_annotate:
+    """Manual patch of po._annotate_pool (works under both pytest AND the tmp_path-only standalone
+    runner, which doesn't provide the monkeypatch fixture)."""
+    def __enter__(self):
+        self._orig = po._annotate_pool
+        po._annotate_pool = _fake_annotate_pool
+        return self
+
+    def __exit__(self, *exc):
+        po._annotate_pool = self._orig
+
+
+def test_rerun_failed_drains_then_idempotent(tmp_path):
+    with _patch_annotate():
+        run_dir, args = _setup_deferred_run(tmp_path)
+        rp = Path(args.store_records)
+
+        # First drain: the 2 deferred q3 land as records; reconcile balances (unexplained==0).
+        r1 = po.rerun_failed(args)
+        assert r1["records_added"] == 2
+        assert store.existing_location_ids(rp) == {"c1_a", "c1_b"}
+        assert r1["drained"][0]["records_written"] == 2
+        assert r1["drained"][0]["unexplained"] == 0
+        assert r1["still_failed"] == []
+        # state drained: the failed cycle is gone from the resume ledger.
+        assert oo.load_state(run_dir / "state.json")["failed_cycles"] == []
+
+        # Re-inject the same failed cycle (operator re-run / crash before state saved) and drain
+        # AGAIN: store-dedup makes it a no-op — 0 records added, reconcile still balances.
+        st = oo.load_state(run_dir / "state.json")
+        st["failed_cycles"] = [{"cycle": 1, "q3_deferred": 2, "records_salvaged": 2,
+                                "reason": "re-injected", "ledger_watermark": 0}]
+        oo.save_state(run_dir / "state.json", st)
+
+        r2 = po.rerun_failed(args)
+        assert r2["records_added"] == 0                       # store-dedup: nothing new lands
+        assert store.existing_location_ids(rp) == {"c1_a", "c1_b"}   # store unchanged
+        d2 = r2["drained"][0]
+        assert d2["records_written"] == 0 and d2["dropped_coord_dup"] == 2
+        assert d2["unexplained"] == 0                         # reconciles clean on the second pass
+
+
+def test_rerun_failed_no_deferred_cycles_is_noop(tmp_path):
+    run_dir, args = _setup_deferred_run(tmp_path)
+    st = oo.load_state(run_dir / "state.json")
+    st["failed_cycles"] = []
+    oo.save_state(run_dir / "state.json", st)
+    r = po.rerun_failed(args)
+    assert r["records_added"] == 0 and r["drained"] == [] and r["still_failed"] == []
+
+
+def test_rerun_failed_missing_pool_stays_deferred(tmp_path):
+    with _patch_annotate():
+        run_dir, args = _setup_deferred_run(tmp_path)
+        # A cycle whose retained pool was (wrongly) purged cannot be re-derived — left deferred,
+        # never rebuilt from the watermark (the pool builder reads watermark..EOF, spanning later
+        # cycles).
+        import shutil
+        shutil.rmtree(run_dir / "pools" / "cycle_001")
+        r = po.rerun_failed(args)
+        assert r["records_added"] == 0
+        assert len(r["still_failed"]) == 1 and r["drained"] == []
+        assert oo.load_state(run_dir / "state.json")["failed_cycles"][0]["cycle"] == 1
+
+
+def test_embedding_shard_carries_producer(tmp_path):
+    dim = store.base_morph_dim()
+    shard = store.write_embedding_shard("RUN", 1, ["u0", "u1"],
+                                        np.ones((2, dim), np.float32),
+                                        shards_dir=tmp_path, emb_base=tmp_path / "none.npz",
+                                        producer=ann.MORPH_PRODUCER)
+    z = np.load(shard, allow_pickle=True)
+    assert "morph_producer" in z.files
+    assert list(z["morph_producer"]) == [ann.MORPH_PRODUCER, ann.MORPH_PRODUCER]
+
+
+# --------------------------------------------------------------------------- #
+# Loop-level annotate-retry wiring — the ONLY integration test that drives the retry
+# through the REAL orchestrate() loop (not annotate_with_retry in isolation). Only the
+# GPU + subprocess phases are patched: run_phase is replaced by a stub that simulates
+# discovery (appends fresh ledger rows), pool (writes images.jsonl from them), and
+# annotate (store-append + report on success; run_phase-not-ok / raised-exception on the
+# injected-failure attempts). Everything else — the retry decision, the reconcile, the
+# state save, the deferral/continue, the run summary — is the real orchestrator. The
+# annotate SUCCESS path replays the real store side (ann.build_record -> store.append_records
+# dedup), so what recovers/defers is the production wiring, not a mock of it.
+# --------------------------------------------------------------------------- #
+def _flag(cmd, name):
+    """The value following `name` in a run_phase cmd (the stub only sees what the subprocess
+    would see — it reacts to the command the loop actually built, not to test-side state)."""
+    s = [str(x) for x in cmd]
+    return s[s.index(name) + 1] if name in s else None
+
+
+class _LoopHarness:
+    """Drives po.orchestrate by standing in for its GPU/subprocess phases. `fresh_plan`
+    maps cycle -> number of fresh q3 discovery yields (0 -> saturation once MAX_EMPTY_CYCLES
+    empties accrue, which bounds the run); `annotate_plan` maps cycle -> one of
+    ok | fail_once | fail_twice | raise_twice (default ok)."""
+    _OK = {"ok": True, "rc": 0, "elapsed_s": 0.0, "killed": False,
+           "start_epoch": 0.0, "end_epoch": 0.0}
+    _NOTOK = {**_OK, "ok": False, "rc": 1}
+
+    def __init__(self, fresh_plan, annotate_plan, run_tag="", stop_after=None):
+        self.fresh_plan = fresh_plan
+        self.annotate_plan = annotate_plan
+        self.run_tag = run_tag          # oid prefix -> distinct locations per session (store exactness)
+        self.stop_after = stop_after    # drop the STOP sentinel once this cycle's annotate completes
+        self.disc_cycle = 0             # one family, no phoenix -> one discovery call per cycle
+        self.attempts = {}             # cycle -> annotate invocation count (retry visibility)
+        self.annotate_names = []       # every annotate phase name seen (proves the retry fired)
+
+    # -- the single seam: replaces oo.run_phase (the child-process runner) --
+    def run_phase(self, log, name, cmd, expected_s):
+        if name.startswith("discovery:"):
+            self._discovery(cmd)
+        elif name.startswith("pool:"):
+            self._pool(cmd)
+        elif name.startswith("annotate:"):
+            return self._annotate(name, cmd)
+        return dict(self._OK)
+
+    def _discovery(self, cmd):
+        self.disc_cycle += 1
+        n = self.fresh_plan.get(self.disc_cycle, 0)
+        ledger = Path(_flag(cmd, "--discovery-dir")) / "outcome_ledger.jsonl"
+        with open(ledger, "a", encoding="utf-8") as f:
+            for i in range(n):
+                oid = f"{self.run_tag}c{self.disc_cycle}_{i}"
+                f.write(json.dumps(_ledger_row(oid, "mandelbrot")) + "\n")
+
+    def _pool(self, cmd):
+        ledger = Path(_flag(cmd, "--ledger"))
+        start = int(_flag(cmd, "--ledger-start-line"))
+        batch_dir = Path(_flag(cmd, "--batch-dir"))
+        batch_dir.mkdir(parents=True, exist_ok=True)
+        fresh = oo.new_fresh_q3(ledger, start)              # the REAL admission filter
+        with open(batch_dir / "images.jsonl", "w", encoding="utf-8") as f:
+            for d in fresh:
+                f.write(json.dumps(_pool_row(d["id"], d["family"], "mandelbrot")) + "\n")
+        (batch_dir / "selection_report.json").write_text(json.dumps(
+            {"within_set_dups_dropped": 0, "excluded_head_corpus_by_key": 0,
+             "excluded_head_corpus_by_proximity": 0, "unrenderable_dropped": 0}),
+            encoding="utf-8")
+
+    def _annotate(self, name, cmd):
+        self.annotate_names.append(name)
+        cycle = int(_flag(cmd, "--cycle"))
+        self.attempts[cycle] = self.attempts.get(cycle, 0) + 1
+        attempt = self.attempts[cycle]                       # 1-based
+        plan = self.annotate_plan.get(cycle, "ok")
+        if plan == "raise_twice":
+            # exercises _attempt_annotate's except-isolation: a phase that RAISES is caught
+            # inside the loop, treated as not-ok, and (twice) deferred — never propagates.
+            raise RuntimeError(f"annotate crashed (injected) cycle {cycle} attempt {attempt}")
+        succeed = plan == "ok" or (plan == "fail_once" and attempt >= 2)
+        if not succeed:
+            return dict(self._NOTOK)                         # run_phase not ok, NO report written
+        self._annotate_store_side(cmd)                       # replay the real annotate store side
+        if self.stop_after is not None and cycle == self.stop_after:
+            # simulate an operator `touch <run_dir>/STOP` mid-run: the loop honors it at the NEXT
+            # cycle boundary (this cycle completes fully first). run_dir = <pool>/../.. .
+            run_dir = Path(_flag(cmd, "--pool")).parent.parent
+            (run_dir / "STOP").write_text("", encoding="utf-8")
+        return dict(self._OK)
+
+    def _annotate_store_side(self, cmd):
+        """The store-facing half of a real annotate WITHOUT GPU/embed/thumbnail: dedup the pool
+        against the store, append survivors, write a schema-faithful annotate_report. Uses the
+        production store.append_records dedup, so a retry over the same pool is genuinely
+        idempotent (partial first attempt reappears as coord-dups, not double-writes)."""
+        batch_dir = Path(_flag(cmd, "--pool"))
+        ledger = Path(_flag(cmd, "--ledger"))
+        run_id = _flag(cmd, "--run-id")
+        cycle = int(_flag(cmd, "--cycle"))
+        records_path = Path(_flag(cmd, "--records"))
+        rows = ann.unique_locations(batch_dir / "images.jsonl")
+        led = ann.load_ledger(ledger)
+        have = store.existing_location_ids(records_path)
+        records, n_dup = [], 0
+        for r in rows:
+            oid = r["provenance"]["source_oid"]
+            if oid in have:
+                n_dup += 1
+                continue
+            records.append(ann.build_record(oid, r["render"], r["provenance"], led,
+                                            run_id, cycle, str(ledger)))
+        written = store.append_records(records, records_path)
+        (batch_dir / "annotate_report.json").write_text(json.dumps(
+            {"cycle": cycle, "pool_unique_locations": len(rows), "dropped_coord_dup": n_dup,
+             "dropped_field_fail": 0, "records_written": len(written)}), encoding="utf-8")
+
+
+class _patch_orchestrate_phases:
+    """Patch ONLY the GPU/subprocess/real-disk-cleanup seams of the overnight-helpers module the
+    prospect loop reuses: run_phase (child processes), gpu_used_mib (nvidia-smi), and the three
+    seeder-scratch/cycle purges (they touch the real repo scratch root, not the tmp tree). The
+    retry/reconcile/deferral logic under test is left entirely real. Manual (works under the
+    standalone runner too, which has no monkeypatch fixture)."""
+    def __init__(self, harness):
+        self.h = harness
+        self._saved = {}
+
+    def __enter__(self):
+        for attr, repl in [
+            ("run_phase", self.h.run_phase),
+            ("gpu_used_mib", lambda: None),
+            ("sweep_orphan_seeder_scratch", lambda log: None),
+            ("purge_cycle_intermediates", lambda *a, **k: 0),
+            ("_reclaim_seeder_scratch", lambda *a, **k: (0, 0)),
+        ]:
+            self._saved[attr] = getattr(oo, attr)
+            setattr(oo, attr, repl)
+        return self
+
+    def __exit__(self, *exc):
+        for attr, orig in self._saved.items():
+            setattr(oo, attr, orig)
+
+
+def _orchestrate_args(tmp_path, annotate_plan, total_cap_hours=1.0, session_cap_hours=None):
+    args = argparse.Namespace(
+        run_id="RUN", out_root=str(tmp_path / "out"), discovery_root=str(tmp_path / "disc"),
+        families=["mandelbrot"], per_family_min=2.0,
+        total_cap_hours=total_cap_hours, session_cap_hours=session_cap_hours,  # default: never binds
+        retain_fields=True, field_cache_gb=20.0, seed=0,
+        mb_cplane_min=None, disc_batch=6,
+        phoenix_min=0.0, phoenix_walks=0, est_loc_s=6.0,
+        store_records=str(tmp_path / "store" / "records.jsonl"),
+        store_thumbs=str(tmp_path / "store" / "thumbs"),
+        store_emb_shards=str(tmp_path / "store" / "shards"),
+        store_field_cache=str(tmp_path / "store" / "field_cache"))
+    return args
+
+
+def _run_orchestrate(tmp_path, fresh_plan, annotate_plan, *, run_tag="", stop_after=None,
+                     total_cap_hours=1.0, session_cap_hours=None, seed_state=None):
+    harness = _LoopHarness(fresh_plan, annotate_plan, run_tag=run_tag, stop_after=stop_after)
+    args = _orchestrate_args(tmp_path, annotate_plan, total_cap_hours=total_cap_hours,
+                             session_cap_hours=session_cap_hours)
+    if seed_state is not None:      # pre-seed state.json (resume / injected accumulated budget)
+        run_dir = Path(args.out_root) / args.run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        oo.save_state(run_dir / "state.json", seed_state)
+    with _patch_orchestrate_phases(harness):
+        summary = po.orchestrate(args)
+    return summary, harness, Path(args.store_records)
+
+
+def test_loop_annotate_fail_twice_defers_and_continues(tmp_path):
+    # cycle 1: 2 fresh q3, annotate fails BOTH attempts -> the cycle is deferred (not lost) and
+    # the loop continues to saturation. The failure is raised from INSIDE orchestrate's annotate
+    # phase; annotate_with_retry is never called by the test.
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {1: "fail_twice"})
+    assert h.annotate_names == ["annotate:cycle1", "annotate:cycle1(retry)"]  # retried once, in-loop
+    assert summary["cycles_failed"] == 1
+    assert summary["q3_deferred_to_rerun"] == 2
+    assert summary["failed_cycles"][0]["cycle"] == 1
+    assert summary["failed_cycles"][0]["ledger_watermark"] == 0
+    assert "annotate failed twice" in summary["failed_cycles"][0]["reason"]
+    assert store.existing_location_ids(rp) == set()          # nothing salvaged, nothing leaked
+    # the deferral is durable in state.json (what --rerun-failed later drains)
+    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    assert st["failed_cycles"][0]["cycle"] == 1
+
+
+def test_loop_annotate_raise_twice_is_isolated_and_deferred(tmp_path):
+    # a phase that RAISES (not merely returns not-ok) must be caught inside the loop, not propagate.
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {1: "raise_twice"})
+    assert h.annotate_names == ["annotate:cycle1", "annotate:cycle1(retry)"]
+    assert summary["cycles_failed"] == 1 and summary["q3_deferred_to_rerun"] == 2
+    assert store.existing_location_ids(rp) == set()
+
+
+def test_loop_annotate_retry_recovers(tmp_path):
+    # cycle 1 annotate fails ONCE then succeeds on the retry: records land, reconcile balances,
+    # NO deferral. Proves the retry both fires and honors the second attempt's success.
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {1: "fail_once"})
+    assert h.annotate_names == ["annotate:cycle1", "annotate:cycle1(retry)"]   # exactly one retry
+    assert summary["cycles_failed"] == 0 and summary["failed_cycles"] == []
+    assert summary["records_added_this_run"] == 2
+    assert store.existing_location_ids(rp) == {"c1_0", "c1_1"}
+    tot = summary["reconciliation"]["totals"]
+    assert tot["q3_found"] == 2 and tot["records_written"] == 2 and tot["unexplained"] == 0
+
+
+def test_loop_clean_cycle_no_retry(tmp_path):
+    # baseline: a clean annotate needs no retry — exactly one annotate invocation, no deferral.
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {})     # default plan == "ok"
+    assert h.annotate_names == ["annotate:cycle1"]             # NO retry when the first attempt is ok
+    assert summary["cycles_failed"] == 0
+    assert summary["records_added_this_run"] == 2
+    assert store.existing_location_ids(rp) == {"c1_0", "c1_1"}
+
+
+# --------------------------------------------------------------------------- #
+# Intermittent-run budget = ACCUMULATED active time across sessions, + graceful STOP sentinel.
+# Drives the real orchestrate() loop through the same GPU/subprocess-patched harness.
+# --------------------------------------------------------------------------- #
+def test_budget_accumulates_across_sessions_idle_free(tmp_path):
+    # Resume carrying 100s of PRIOR accumulated active time. Idle days between sessions are
+    # represented purely by this persisted total — never by wall-clock since first launch.
+    seed = {"run_id": "RUN", "cycles_done": 0, "accumulated_active_s": 100.0,
+            "totals": {}, "failed_cycles": []}
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2, 2: 2}, {}, seed_state=seed)
+    b = summary["budget"]
+    # accumulated == prior(100s) + THIS session's active time and NOTHING else (no wall-clock-gap
+    # term). This is the exact accounting model: idle between sessions cannot enter the sum.
+    assert abs(b["accumulated_active_h"] - (100.0 / 3600 + b["session_active_h"])) < 1e-3
+    assert b["accumulated_active_h"] >= 100.0 / 3600           # prior carried forward, not reset
+    # persisted on exit for the next resume to pick up
+    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    assert st["accumulated_active_s"] >= 100.0
+    assert abs(st["accumulated_active_s"] - b["accumulated_active_h"] * 3600) < 1.0
+
+
+def test_total_cap_adjustable_on_resume(tmp_path):
+    # Resuming with a DIFFERENT --total-cap-hours is not an error — it becomes the new total.
+    seed = {"run_id": "RUN", "cycles_done": 1, "accumulated_active_s": 50.0,
+            "totals": {}, "failed_cycles": []}
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {}, seed_state=seed, total_cap_hours=2.5)
+    assert summary["budget"]["total_cap_hours"] == 2.5
+    # ...and the new total is PERSISTED, so a subsequent flagless resume keeps it (below).
+    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    assert st["total_cap_hours"] == 2.5
+
+
+def test_resume_without_cap_flag_keeps_persisted_total(tmp_path):
+    # The contract: OMITTING --total-cap-hours on resume must NOT change the budget — the persisted
+    # total wins, never a silent reset to the CAP_HOURS default. Seed a run whose persisted total is
+    # 2.0h (deliberately != the 24h default), resume with total_cap_hours=None (flag omitted).
+    seed = {"run_id": "RUN", "cycles_done": 1, "accumulated_active_s": 30.0,
+            "total_cap_hours": 2.0, "totals": {}, "failed_cycles": []}
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {}, seed_state=seed, total_cap_hours=None)
+    assert summary["budget"]["total_cap_hours"] == 2.0        # persisted total won, not 24h default
+    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    assert st["total_cap_hours"] == 2.0                       # still persisted for the next resume
+
+
+def test_fresh_run_without_cap_flag_uses_default(tmp_path):
+    # A FRESH run with no --total-cap-hours falls back to the CAP_HOURS default (24h) and persists it.
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {}, total_cap_hours=None)
+    assert summary["budget"]["total_cap_hours"] == po.CAP_HOURS
+    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    assert st["total_cap_hours"] == po.CAP_HOURS
+
+
+def test_legacy_state_without_persisted_cap_resumes_at_default(tmp_path):
+    # Back-compat: state predating the persisted total_cap_hours field, resumed flagless, uses the
+    # CAP_HOURS default (there is no persisted value to honor) — and does not crash.
+    seed = {"run_id": "RUN", "cycles_done": 1, "accumulated_active_s": 20.0,
+            "totals": {}, "failed_cycles": []}                # note: no total_cap_hours key
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {}, seed_state=seed, total_cap_hours=None)
+    assert summary["budget"]["total_cap_hours"] == po.CAP_HOURS
+
+
+def test_resume_after_cap_exhausted_refuses_cleanly(tmp_path):
+    # Prior sessions already spent MORE than the total cap -> the next resume refuses cleanly:
+    # zero cycles this session, no exception, no deferral, a normal summary written.
+    seed = {"run_id": "RUN", "cycles_done": 3, "accumulated_active_s": 10_000.0,
+            "totals": {}, "failed_cycles": []}
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {}, seed_state=seed, total_cap_hours=1.0)
+    assert summary["cycles"] == 0                              # did no work
+    assert summary["cycles_failed"] == 0 and summary["failed_cycles"] == []
+    assert summary["budget"]["remaining_h"] == 0.0            # clamped, cap fully spent
+    assert h.annotate_names == []                             # never entered a cycle
+
+
+def test_session_cap_binds_independent_of_total(tmp_path):
+    # A tiny per-session cap stops the session before any cycle even with the total cap wide open.
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {}, total_cap_hours=24.0,
+                                      session_cap_hours=1e-6)   # ~3.6ms session budget
+    assert summary["cycles"] == 0 and summary["cycles_failed"] == 0
+    assert summary["budget"]["session_cap_hours"] == 1e-6
+
+
+def test_sentinel_stops_cleanly_at_cycle_boundary(tmp_path):
+    # Cycle 1 runs fully; the harness drops a STOP sentinel at the end of its annotate. The loop
+    # honors it at the NEXT boundary: exactly 1 cycle done, records landed, graceful (NOT a
+    # failure), sentinel removed so a later resume isn't blocked.
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2, 2: 2, 3: 2}, {}, stop_after=1)
+    assert summary["budget"]["stopped_by_sentinel"] is True
+    assert summary["cycles"] == 1                              # stopped after the first cycle
+    assert summary["cycles_failed"] == 0 and summary["failed_cycles"] == []
+    assert summary["q3_deferred_to_rerun"] == 0               # graceful stop defers nothing
+    assert store.existing_location_ids(rp) == {"c1_0", "c1_1"}   # cycle 1's records landed
+    assert not (tmp_path / "out" / "RUN" / "STOP").exists()   # sentinel removed on exit
+
+
+def test_resume_repools_unharvested_tail_no_stranding(tmp_path):
+    # Simulate a prior session that discovered 2 q3 into the run ledger but stopped/capped mid-cycle
+    # BEFORE pooling them: state.harvested_watermark stays 0 while the ledger already holds 2 rows.
+    # A resume must re-pool that un-harvested tail (a cycle's start watermark is harvested_watermark,
+    # NOT the live ledger length), so the 2 otherwise-stranded q3 land as records — 0 losses across
+    # the stop/start boundary.
+    disc_dir = tmp_path / "disc" / "RUN"
+    disc_dir.mkdir(parents=True)
+    ledger = disc_dir / "outcome_ledger.jsonl"
+    with open(ledger, "w", encoding="utf-8") as f:
+        for oid in ("stranded_0", "stranded_1"):
+            f.write(json.dumps(_ledger_row(oid, "mandelbrot")) + "\n")
+    seed = {"run_id": "RUN", "cycles_done": 0, "harvested_watermark": 0,
+            "accumulated_active_s": 5.0, "totals": {}, "failed_cycles": []}
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {}, run_tag="new_", seed_state=seed)
+    ids = store.existing_location_ids(rp)
+    assert {"stranded_0", "stranded_1"} <= ids       # the un-harvested tail was re-pooled + recorded
+    assert {"new_c1_0", "new_c1_1"} <= ids           # plus this session's own fresh discovery
+    # watermark advanced to the full ledger once harvested (a further resume re-pools nothing)
+    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    assert st["harvested_watermark"] == 4
+
+
+def test_deferred_cycle_watermark_vs_rerun_failed_no_disagreement(tmp_path):
+    # Q2b: the harvested_watermark (main-loop re-pool cursor) and fc.ledger_watermark (a deferred
+    # cycle's RETAINED-pool start-line) are orthogonal and must not disagree. Cycle 1 annotate fails
+    # twice (deferred); cycle 2 succeeds. After the loop:
+    #   * harvested_watermark advanced PAST cycle 1's q3 -> a plain resume never re-pools them, so
+    #     --rerun-failed is the SOLE drainer (no double-handling of the same deferral);
+    #   * the deferred entry carries cycle 1's START watermark (0), the retained pool's start-line.
+    summary, h, rp = _run_orchestrate(tmp_path, {1: 2, 2: 2}, {1: "fail_twice"})
+    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    assert st["harvested_watermark"] == 4                     # cursor past BOTH cycles' ledger rows
+    fc = st["failed_cycles"][0]
+    assert fc["cycle"] == 1 and fc["ledger_watermark"] == 0   # retained-pool start-line, NOT the cursor
+    assert store.existing_location_ids(rp) == {"c2_0", "c2_1"}   # only cycle 2 landed in the loop
+
+    # --rerun-failed drains cycle 1 from its RETAINED pool at ledger_watermark=0 (never rebuilt from
+    # the ledger, which spans cycle 2 too): its 2 q3 land, cycle 2 untouched, the cursor unchanged.
+    with _patch_annotate():
+        r = po.rerun_failed(_orchestrate_args(tmp_path, {}))
+    assert r["records_added"] == 2
+    assert store.existing_location_ids(rp) == {"c1_0", "c1_1", "c2_0", "c2_1"}   # 0 dup of cycle 2
+    st2 = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    assert st2["harvested_watermark"] == 4                    # rerun-failed did NOT move the cursor
+    assert st2["failed_cycles"] == []                         # deferral resolved
+
+
+def test_store_exact_across_stop_start(tmp_path):
+    # Session 1: run, stop via sentinel after cycle 1. Session 2: resume (same run dir/ledger/state),
+    # run to saturation. Records from BOTH sessions must be exact across the boundary: store count
+    # == unique location_ids, 0 dups, 0 losses; budget accumulates session-1 -> session-2.
+    s1, h1, rp = _run_orchestrate(tmp_path, {1: 2, 2: 2}, {}, run_tag="s1_", stop_after=1)
+    assert s1["cycles"] == 1 and s1["budget"]["stopped_by_sentinel"] is True
+    ids1 = store.existing_location_ids(rp)
+    assert ids1 == {"s1_c1_0", "s1_c1_1"}
+
+    s2, h2, rp2 = _run_orchestrate(tmp_path, {1: 2, 2: 2}, {}, run_tag="s2_")
+    assert rp2 == rp                                           # same store file
+    recs = [json.loads(l) for l in rp.read_text(encoding="utf-8").splitlines() if l.strip()]
+    locids = [r["location_id"] for r in recs]
+    assert len(locids) == len(set(locids))                    # 0 dups in the store
+    assert set(locids) == ids1 | {"s2_c1_0", "s2_c1_1", "s2_c2_0", "s2_c2_1"}   # 0 losses
+    # session 2 started its accumulated budget from session 1's persisted total
+    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    assert st["accumulated_active_s"] >= s1["budget"]["accumulated_active_h"] * 3600 - 1.0
+
+
+# --------------------------------------------------------------------------- #
+# Standalone runner.
+# --------------------------------------------------------------------------- #
+def _run_standalone():
+    import tempfile, traceback
+    tests = [(n, f) for n, f in sorted(globals().items())
+             if n.startswith("test_") and callable(f)]
+    npass = 0
+    for name, fn in tests:
+        try:
+            if "tmp_path" in fn.__code__.co_varnames[:fn.__code__.co_argcount]:
+                with tempfile.TemporaryDirectory() as d:
+                    fn(Path(d))
+            else:
+                fn()
+            print(f"PASS {name}")
+            npass += 1
+        except Exception:
+            print(f"FAIL {name}")
+            traceback.print_exc()
+    print(f"\n{npass}/{len(tests)} passed")
+    return npass == len(tests)
+
+
+if __name__ == "__main__":
+    sys.exit(0 if _run_standalone() else 1)

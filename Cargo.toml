@@ -1,0 +1,29 @@
+[package]
+name = "fractal-generator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+num-complex = "0.4"
+rayon = "1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+# Pure-Rust arbitrary-precision float for the perturbation reference orbit.
+# Only core arithmetic + decimal parsing is needed; drop random/serde.
+astro-float = { version = "0.9.5", default-features = false, features = ["std"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+# Fast-iteration lane: an optimized-but-quick-to-compile build for the
+# edit→compile→smoke-test loop. Drops the serial thin-LTO pass and lets LLVM
+# parallelize across cores (codegen-units = 16), cutting compile ~2-4x vs
+# `release`. Runtime is ~10-30% slower (the per-pixel kernel loses some
+# cross-module inlining), so use `--profile quick` for compile-checks and quick
+# eyeballs; use `--release` for production batches and any perf timing.
+[profile.quick]
+inherits = "release"
+lto = false
+codegen-units = 16
