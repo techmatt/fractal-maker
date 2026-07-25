@@ -194,10 +194,42 @@ TAU_H_CAMPAIGN_FLOOR = {
     "multibrot5": 0.2162,
 }
 
+# Vendored fidelity-derived base tau_h — the decoupling from a DISPOSABLE artifact.
+# derive_tau_h once loaded the cheap-p_good cuts straight from
+# `out/descent_score_fidelity_records.json`, a study output living in the disposable `out/`
+# tree. When `out/` was wiped, this launch-critical derivation lost its only input and
+# `SystemExit`'d during frontier setup — a config that "looks applied" but strands the next
+# campaign launch. The records file is gone and unrecoverable short of re-running the (renders +
+# dual-scorer) study, BUT the derived VALUES survive in committed config: the campaign1/2 and
+# shakeout_* run summaries (`data/discovery/*/summary.json`) all recorded this identical
+# per-partition tau_h — the PRE-floor base derive_tau_h computed from the records. We vendor it
+# here so the derivation no longer depends on a file that can vanish with `rm -r out/*`. The live
+# study path still overrides these whenever the records are regenerated; the campaign floors in
+# TAU_H_CAMPAIGN_FLOOR apply on top either way (they only ever raise).
+TAU_H_FIDELITY_BASE = {
+    "mandelbrot": 0.20102782547473907,
+    "multibrot3": 0.20102782547473907,
+    "multibrot4": 0.7739711046218872,
+    "multibrot5": 0.20102782547473907,
+    "julia:mandelbrot": 0.18439058661460875,
+    "julia:multibrot3": 0.31058982014656067,
+    "julia:multibrot4": 0.20721471309661865,
+    "julia:multibrot5": 0.18631197065114974,
+}
 
-def derive_tau_h(partitions: list[str], keep=0.90) -> dict:
-    if not FIDELITY_RECORDS.exists():
-        raise SystemExit(f"missing {FIDELITY_RECORDS} — run tools/studies/descent_score_fidelity.py")
+
+def _apply_campaign_floor(part: str, val: float) -> float:
+    """Raise a base tau_h to `part`'s campaign floor (max — only ever raises, never lowers)."""
+    floor = TAU_H_CAMPAIGN_FLOOR.get(part)
+    return max(val, floor) if floor is not None else val
+
+
+def _derive_tau_h_base_from_records(partitions: list[str], keep: float) -> dict:
+    """Per-partition cheap-p_good cut from the fidelity study records (PRE campaign floor).
+
+    The cut RETAINS ~`keep` of frames whose canonical p_good clears the family's t_good (= the
+    (1-keep) quantile of cheap p_good among those frames), with a pooled cross-family fallback
+    for partitions too thin to cut on their own."""
     rec = json.loads(FIDELITY_RECORDS.read_text(encoding="utf-8"))
     can, cheap = rec["scores"]["canonical"], rec["scores"]["cheap"]
     fam_of = {s["id"]: s["family"] for s in rec["samples"]}
@@ -214,17 +246,35 @@ def derive_tau_h(partitions: list[str], keep=0.90) -> dict:
     if pooled is None:
         pooled = 0.5
 
-    tau = {}
+    base = {}
     for part in partitions:
         tg = ps.t_good_for(part)
         ids = [i for i in can if fam_of.get(i) == part and can[i][2] >= tg]
-        tau[part] = cut(ids)
-        if tau[part] is None:
-            tau[part] = pooled
-        floor = TAU_H_CAMPAIGN_FLOOR.get(part)
-        if floor is not None:
-            tau[part] = max(tau[part], floor)
-    return tau
+        base[part] = cut(ids)
+        if base[part] is None:
+            base[part] = pooled
+    return base
+
+
+def derive_tau_h(partitions: list[str], keep=0.90) -> dict:
+    """Per-partition harvest cut, campaign floors applied.
+
+    Base is derived live from the fidelity study records when they are present (the study was
+    re-run); otherwise it falls back to the vendored `TAU_H_FIDELITY_BASE` — the launch-critical
+    path must NOT depend on the disposable `out/descent_score_fidelity_records.json`. A partition
+    with neither a record-derived nor a vendored base fails loudly and immediately (naming the
+    regenerator) rather than aborting deep in a frontier run."""
+    if FIDELITY_RECORDS.exists():
+        base = _derive_tau_h_base_from_records(partitions, keep)
+    else:
+        base = {p: TAU_H_FIDELITY_BASE.get(p) for p in partitions}
+        missing = sorted(p for p, v in base.items() if v is None)
+        if missing:
+            raise SystemExit(
+                f"tau_h derivation: {FIDELITY_RECORDS} absent and no vendored base for "
+                f"{missing} — regenerate via tools/studies/descent_score_fidelity.py, or add "
+                f"the partition to TAU_H_FIDELITY_BASE")
+    return {p: _apply_campaign_floor(p, base[p]) for p in partitions}
 
 
 # --------------------------------------------------------------------------- #

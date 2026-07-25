@@ -244,3 +244,33 @@ def test_morph_memory_roundtrip_persists_window(tmp_path):
     assert m2.n_perm == 1 and m2.n_recency == 2
     cm = m2.cos_max(np.stack([_unit(0), _unit(1), _unit(2)]))
     assert cm[0] > 0.999 and cm[1] > 0.999 and cm[2] > 0.999
+
+
+# =========================================================================== #
+# tau_h derivation — decoupled from the disposable fidelity-records artifact.
+# Fires on the absence of out/descent_score_fidelity_records.json so the launch-critical
+# derivation surfaces in pytest, not only at a campaign launch.
+# =========================================================================== #
+def test_derive_tau_h_falls_back_to_vendored_base_when_records_absent(monkeypatch, tmp_path):
+    # With the disposable records file gone, derive_tau_h must NOT SystemExit — it uses the
+    # vendored base and still returns a floored tau_h for every production partition.
+    monkeypatch.setattr(sf, "FIDELITY_RECORDS", tmp_path / "records_do_not_exist.json")
+    parts = list(sf.TAU_H_FIDELITY_BASE)
+    tau = sf.derive_tau_h(parts)
+    assert set(tau) == set(parts)
+    # campaign floors are applied on top (max — only ever raise)
+    for p, floor in sf.TAU_H_CAMPAIGN_FLOOR.items():
+        assert tau[p] >= floor - 1e-12
+    # mandelbrot's floor (0.269) dominates its vendored base (0.201)
+    assert tau["mandelbrot"] == sf.TAU_H_CAMPAIGN_FLOOR["mandelbrot"]
+    # a floor-free partition passes the vendored base through unchanged
+    assert tau["julia:multibrot3"] == sf.TAU_H_FIDELITY_BASE["julia:multibrot3"]
+
+
+def test_derive_tau_h_loud_fail_for_unvendored_partition_when_records_absent(monkeypatch, tmp_path):
+    # A partition with neither a record-derived nor a vendored base aborts loudly, naming the
+    # regenerator — immediately, not deep in a frontier run.
+    import pytest
+    monkeypatch.setattr(sf, "FIDELITY_RECORDS", tmp_path / "records_do_not_exist.json")
+    with pytest.raises(SystemExit, match="descent_score_fidelity"):
+        sf.derive_tau_h(["mandelbrot", "julia:bogus_unvendored"])
