@@ -71,3 +71,48 @@ double-count once the twin has a queue). This deficit-fold was chosen over a ded
 julia budget or twin-price-proportional spending because it needs **no separate
 planner** — the existing price-weighted-deficit pop plus the existing hook do all the
 work.
+
+## 4. τ_h on record — what the retained store can and cannot say
+
+`τ_h` is the **per-partition cheap-`p_good` harvest cut**: cheap score ≥ `τ_h` → one
+canonical render → decode. It is a **fixed offline constant** (`derive_tau_h`, keep=0.90
+= the 10th percentile of cheap `p_good` among fidelity-study frames whose *canonical*
+`p_good` clears the family's `t_good`), **not** learned per run — identical across
+campaign 1 and 2. The retroactive question was whether the campaign harvests let us
+replace that guessed constant with an **empirical per-partition curve** of the real
+tradeoff: raise `τ_h` → renders saved (cost) vs q3 admissions lost (benefit).
+
+**The join needed is `(partition, cheap_pgood, canonical fate)` per harvest check** —
+including the `canon-not-q3` / `precanon-dup` **rejects** (~95% of c-plane checks;
+readout §2 fate table). That triple *was* logged: `steered_frontier._log_harvest` →
+`harvest_log.jsonl`, one row per check, append-only. **But that file was gitignored as
+"regenerable telemetry" and was not retained** — for campaign 1/2 it survives nowhere
+(repo, `fractal-maker-artifacts/`, trash). Only `outcome_ledger.jsonl` remains =
+**admissions only** (distinct q3, each carrying `cheap_pgood`). So:
+
+- **Cost axis (renders saved = f(τ_h)) is permanently unrecoverable** for campaign 1/2 —
+  it needs the reject cheap-scores, which lived only in `harvest_log`. Reconstructing it
+  would mean re-running the cheap scorer *and* the canonical render+decode over every
+  candidate, i.e. re-deriving the harvest, not reading a retained file.
+- **Benefit axis (admissions retained = f(τ_h), for τ_h ≥ current) IS recoverable** from
+  the admitted `cheap_pgood` in the ledger. It is a conservative **lower bound**: raising
+  `τ_h` only shrinks the greedy dedup cloud, which can only promote later `q3_dup`s to
+  distinct → true retention ≥ the naive count.
+
+Retained readout (all 4 ledgers pooled, `tools/atlas/tau_h_retained_readout.py` →
+`out/tau_h/retained_readout.json`; per-run admits 311/271/314/254 reconcile with the
+summaries): **current `τ_h` sits right at the admitted-cheap floor for every partition.**
+The gap between `τ_h` and the *lowest* admitted check's cheap score is +0.0004 to +0.0106
+— i.e. there is **essentially no zero-loss headroom**; the offline keep-0.90 constant is
+empirically pinned just under the observed admissions. Raising `τ_h` above current starts
+shedding admissions immediately (e.g. `julia:multibrot3` retains 0.79 of admissions at
+0.35 vs 0.31 current; `mandelbrot` 0.80 at 0.40 vs 0.20). What that trade *buys* in saved
+renders is exactly the unrecoverable half — so the interesting question (are the ~95%
+canon-not-q3 wasted renders clustered just above `τ_h`, cheaply cuttable?) **cannot be
+answered from campaign 1/2 and must wait for a future run.**
+
+**Fix (retention, not instrumentation).** The logging is already correct and unconditional
+in the production path (`_log_harvest`, pure post-decision append — zero effect on any
+admission). The only defect was durability: `harvest_log.jsonl` is now **un-gitignored and
+committed** alongside the ledger (`.gitignore`, `data/discovery/**` block), so future runs
+retain the full `τ_h` curve. Campaign 1/2's is lost for good.

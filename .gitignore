@@ -156,10 +156,17 @@ __pycache__/
 # The steered/dive frontier machinery (steered_frontier.py) adds disposable run
 # output beside the durable ledgers: per-node render scratch (cheap JPGs, field
 # dumps, expand/nodes logs, pool sheets) and regenerable run-internal state
-# (novelty memory, node embeddings, frontier/dive state, harvest/prio/saturation
+# (novelty memory, node embeddings, frontier/dive state, prio/saturation
 # logs) — crash-safety is by ledger-rebuild, so none of it is source. Only the
 # durable harvested-outcome store (outcome_ledger/outcome_feats/probe_rejects/
 # guard_telemetry/summary/walks/pool) is committed, matching the seeder above.
+# EXCEPTION: harvest_log.jsonl is NOT regenerable and IS committed — it is the sole
+# record of every harvest check's (partition, cheap_pgood, canonical fate) triple,
+# incl. the canon-not-q3 / precanon-dup REJECTS. The ledger keeps admissions only, so
+# rebuilding harvest_log would require re-running the cheap scorer AND the canonical
+# render+decode over every candidate (a full re-derivation, not a ledger replay). It
+# is the tau_h curve's data on record; ignoring it lost campaign1/2's — see
+# docs/design/discovery_pipeline.md §"tau_h on record".
 /data/discovery/**/scratch/
 /data/discovery/**/*.log
 /data/discovery/**/morph_mem.npz
@@ -169,7 +176,6 @@ __pycache__/
 /data/discovery/**/state.json
 /data/discovery/**/dive_state.json
 /data/discovery/**/dive_log.jsonl
-/data/discovery/**/harvest_log.jsonl
 /data/discovery/**/prio_terms.jsonl
 /data/discovery/**/saturation.jsonl
 # Regenerable per-run overlays with no durable consumer: the deficit-scheduler decision
