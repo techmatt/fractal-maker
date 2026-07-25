@@ -4,3 +4,4 @@ data/wallpaper_head/v3/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/render_mode_head/v1/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/queries/scorer/v3_gvo/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/harvest_log.jsonl filter=lfs diff=lfs merge=lfs -text
+data/discovery/**/prio_terms.jsonl filter=lfs diff=lfs merge=lfs -text

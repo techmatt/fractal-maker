@@ -176,7 +176,14 @@ __pycache__/
 /data/discovery/**/state.json
 /data/discovery/**/dive_state.json
 /data/discovery/**/dive_log.jsonl
-/data/discovery/**/prio_terms.jsonl
+# EXCEPTION: prio_terms.jsonl is NOT regenerable and IS committed (via LFS) — it is the
+# sole record of every PUSHED candidate incl. the never-admitted majority, each with its
+# steering score (eord/gumbel/priority + dedup/novelty penalties). It is the steering-side
+# counterpart to harvest_log's confirmation-side triple: harvest_log records what happened
+# to checks that cleared tau_h; prio_terms records the whole priority-queue population that
+# tau_h/scheduling selected FROM. Rebuilding it would require re-running the walk. Recovered
+# from a filesystem backup of the old working tree — see docs/design/discovery_pipeline.md
+# §"tau_h on record". (Large: ~57-63 MB for the campaign breadth runs → LFS via .gitattributes.)
 /data/discovery/**/saturation.jsonl
 # Regenerable per-run overlays with no durable consumer: the deficit-scheduler decision
 # trace, the within-run morph-embedding/dedup matrix, and the julia-hook seed-injection log
