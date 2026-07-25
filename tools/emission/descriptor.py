@@ -35,6 +35,37 @@ from tools.corpus import location as loc_mod  # noqa: E402
 # (tools/studies/morphology_dedup.py DEFAULT_THRESHOLD). Join a cluster iff cos > this.
 NEAR_DUP_THRESHOLD = 0.974
 
+# --------------------------------------------------------------------------- #
+# Source-aware admission quality predicate.
+#
+# The default emission source is a DISCOVERY ledger whose locations were found BY v7
+# (the guided-descend reward is v7's q3 verdict), so `decoded_class==3` is both the
+# selection signal and the admission gate — self-consistent. A FLOOR source is
+# different: its locations were selected by a quality signal ORTHOGONAL to v7 (e.g. the
+# q4 goodness field, which is blind to v7 and to the window labels). Gating those on
+# v7's own `decoded_class==3` would let v7 silently veto locations it never chose — the
+# exact wrong thing. So a floor source is admitted on a v7 BADNESS FLOOR (reject clear
+# junk, `p_notbad >= FLOOR_PNOTBAD`) and the human does the quality pick downstream.
+# Guard + distinct + current-decode still apply to EVERY source. See
+# docs/design/q4_harvest_emission.md.
+FLOOR_ADMIT_SOURCES = frozenset({"q4_harvest"})
+FLOOR_PNOTBAD = 0.5   # v7 floor: p_notbad = sigma(l0) = P(class>=2); reject clear badness
+
+
+def source_tag_of(row: dict) -> str | None:
+    """Durable per-row source tag: `mix_source` (newer supply producers) else the older
+    `_source_tag` intake convention. None when untagged."""
+    return row.get("mix_source") or row.get("_source_tag")
+
+
+def admit_quality(row: dict) -> bool:
+    """Source-aware quality predicate. A FLOOR_ADMIT_SOURCES row admits on the v7 badness
+    floor (`p_notbad >= FLOOR_PNOTBAD`); every other source on the q3 gate
+    (`decoded_class == 3`). Guard/distinct/current are checked by the caller."""
+    if source_tag_of(row) in FLOOR_ADMIT_SOURCES:
+        return (row.get("p_notbad") or 0.0) >= FLOOR_PNOTBAD
+    return row.get("decoded_class") == 3
+
 # auto_maxiter policy (mirror tools/scoring/active_ckpt.py — replicated here to keep this
 # module torch-free; it is a pure function of fw).
 _FW_HOME = 3.0
@@ -106,10 +137,13 @@ def location_of(row: dict) -> loc_mod.Location:
 # Admitted-location loader (current-decode ENFORCED).
 # --------------------------------------------------------------------------- #
 def load_admitted(ledger_path: Path, require_current: bool = False) -> list:
-    """Yield admitted rows from a run-scoped ledger: current-decode ∧ decoded_class==3 ∧
-    guard_pass ∧ distinct. With `require_current=True` a stale-decoded row RAISES
-    (`cc.StaleDecodeError`) instead of being skipped — the strict verdict-trust form used
-    to prove old-ledger rows are rejected."""
+    """Yield admitted rows from a run-scoped ledger: current-decode ∧ <quality> ∧
+    guard_pass ∧ distinct, where <quality> is source-aware (`admit_quality`): the q3 gate
+    `decoded_class==3` for a normal discovery source, or the v7 badness floor
+    `p_notbad>=FLOOR_PNOTBAD` for a FLOOR_ADMIT_SOURCES row (e.g. `q4_harvest`). With
+    `require_current=True` a stale-decoded row RAISES (`cc.StaleDecodeError`) instead of
+    being skipped — the strict verdict-trust form used to prove old-ledger rows are
+    rejected."""
     rows = []
     for line in Path(ledger_path).read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -120,7 +154,9 @@ def load_admitted(ledger_path: Path, require_current: bool = False) -> list:
             cc.require_current(row)       # raises on stale decode
         elif not cc.is_current_decoded(row):
             continue
-        if row.get("decoded_class") != 3 or not row.get("guard_pass") or not row.get("distinct"):
+        if not row.get("guard_pass") or not row.get("distinct"):
+            continue
+        if not admit_quality(row):        # source-aware: q3 gate OR v7 floor
             continue
         rows.append(row)
     return rows
