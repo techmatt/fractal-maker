@@ -4,6 +4,18 @@ Verification-only unattended window. Two units: (§1) un-dormant the keeper cali
 gate by regenerating `data/classifier/v7/eval_scores_v7.jsonl`; (§2) exercise the
 loud-late orchestrator surface pytest can't see.
 
+> **Superseded (2026-07-25, later same day).** The dormant re-derivation gate described
+> in this section was retired. It was only ever a re-derivation-drift check on a *report-only*
+> constant (`data/atlas/keeper_cuts.json`), and its sole input ran through the dead v7 eval
+> slice — so it could never run. It is replaced by a live gate,
+> `test_keeper_cuts_committed_shape_partitions_and_provenance`, that guards the committed
+> constant directly with no dead-machinery input: parseable shape, live partition coverage
+> (derived from `keeper_cut.FT2FAM`), and a provenance stamp whose named model must be the
+> active checkpoint (`tools/scoring/active_ckpt.ACTIVE_VERSION`). `keeper_cuts.json` now
+> carries that stamp (`provenance.model == "v7"`, population = the frozen v7 eval slice —
+> established from the derivation code path, not history). The analysis below is retained for
+> the record but no longer describes a pending action.
+
 ## §1 — eval slice regen: STOPPED, guard stays dormant (correct outcome)
 
 **Verdict: cannot regenerate `eval_scores_v7.jsonl` without a multi-stage pipeline
@@ -58,9 +70,10 @@ retrain-adjacent data rebuild):
 3. Force-add the LFS pointer (`.gitattributes` rule already present), verify pointer +
    >1 MiB hook, then the dormant gate executes.
 
-The dormant test already behaves correctly: it `pytest.skip`s loudly with the regen
-command rather than crashing, so it is visible in the summary and never silently passes.
-No change was made to it.
+The dormant test behaved correctly at the time: it `pytest.skip`ped loudly with the regen
+command rather than crashing, so it was visible in the summary and never silently passed.
+**(Superseded — see the note at the top of §1: the skip-plumbed re-derivation gate was
+later retired in favour of a live gate on the committed constant.)**
 
 ## §2 — loud-late orchestrator surface
 

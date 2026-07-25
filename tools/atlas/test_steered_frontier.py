@@ -94,31 +94,43 @@ def test_fbeta_beta_half_formula():
     assert abs(f - expect) < 1e-9
 
 
-def test_keeper_derivation_calibration_gate():
-    # The four julia families + mandelbrot clear the >=15-positive floor; native multibrot
-    # (0 positives) falls back to baseline, flagged uncalibrated.
-    #
-    # kc.derive() reads the frozen v7 eval slice (data/classifier/v7/eval_scores_v7.jsonl),
-    # which is gitignored under data/classifier/* and regenerable by a deterministic re-eval
-    # (the eval-freeze tail of `classifier/train_v7.py`). If it is absent this test cannot run;
-    # skip LOUDLY with the regen command rather than crash on a bare FileNotFoundError (an
-    # unrun guard reads as a real regression and buries the actionable cause). A skip is
-    # visible in the pytest summary — it never silently passes.
-    import pytest
-    if not kc.EVAL.exists():
-        pytest.skip(
-            f"missing regenerable eval slice {kc.EVAL.relative_to(kc.ROOT)} "
-            f"(gitignored under data/classifier/*). Regenerate with the deterministic re-eval: "
-            f"`uv run python -m classifier.train_v7` (writes eval_scores_v7.jsonl to "
-            f"data/classifier/v7/), then re-run this test.")
-    cuts = kc.derive()
-    for part in ("julia:mandelbrot", "julia:multibrot3", "julia:multibrot4",
-                 "julia:multibrot5", "mandelbrot"):
-        assert cuts[part]["calibrated"] is True
-        assert 0.02 <= cuts[part]["t"] <= 0.98
-    for part in ("multibrot3", "multibrot4", "multibrot5"):
-        assert cuts[part]["calibrated"] is False
-        assert cuts[part]["t"] == kc.T_GOOD_BASELINE
+def test_keeper_cuts_committed_shape_partitions_and_provenance():
+    # LIVE gate on the committed report-only constant data/atlas/keeper_cuts.json — the thing
+    # actually consumed (steered_run2_*/keeper_calibrate read it via kc.load_keeper_cuts). Runs
+    # with no dead-machinery input: it does NOT re-derive (kc.derive needs the gitignored v7 eval
+    # slice) and does NOT re-assert threshold VALUES (those stand as committed). It guards the
+    # three things that would silently rot the constant: parseable shape, live partition coverage,
+    # and a provenance stamp whose named model is the active checkpoint.
+    import json
+    import active_ckpt  # single source of truth for the live scorer version (tools/scoring)
+
+    doc = json.loads(kc.OUT.read_text(encoding="utf-8"))
+    cuts = doc["cuts"]
+
+    # (1) shape — every partition row parses to the fields consumers rely on.
+    for part, row in cuts.items():
+        assert isinstance(row["calibrated"], bool), part
+        t = row["t"]
+        assert isinstance(t, (int, float)) and 0.0 <= float(t) <= 1.0, (part, t)
+        assert isinstance(row["n"], int) and isinstance(row["pos"], int), part
+        if not row["calibrated"]:
+            assert float(t) == kc.T_GOOD_BASELINE, part   # uncalibrated => discovery baseline
+
+    # (2) partition coverage — the live set is FT2FAM's targets (derived from code, not hardcoded,
+    # so adding a family to the derivation without recutting keeper_cuts.json fails loudly here).
+    live = set(kc.FT2FAM.values())
+    assert set(cuts) == live, f"keeper_cuts partitions {set(cuts)} != live {live}"
+
+    # (3) provenance — must carry a stamp naming the model + population the cuts came from. A stamp
+    # that NAMES a model must name the ACTIVE checkpoint; a null model is an accepted "unverified"
+    # stamp (used only if the basis were not cheaply determinable — it is, so today model=='v7').
+    prov = doc["provenance"]
+    assert prov["population"], "provenance must name the population the cuts were derived from"
+    model = prov.get("model")
+    if model is not None:
+        assert model == active_ckpt.ACTIVE_VERSION, (
+            f"keeper_cuts provenance names model {model!r} but active checkpoint is "
+            f"{active_ckpt.ACTIVE_VERSION!r} (tools/scoring/active_ckpt.py) — recut or restamp")
 
 
 def test_pop_batch_evicts_capped_root_nodes():

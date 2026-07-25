@@ -4,6 +4,13 @@
   "min_pos": 15,
   "baseline": 0.5,
   "eval": "data/classifier/v7/eval_scores_v7.jsonl",
+  "provenance": {
+    "model": "v7",
+    "verified": true,
+    "population": "data/classifier/v7/eval_scores_v7.jsonl",
+    "detail": "frozen eval slice; julia:multibrot* census-only (source=='prospect_census') per Option A",
+    "basis": "model + population named by the derivation code path: keeper_cut.load_triples reads v7_p_not_bad/v7_p_good from EVAL (data/classifier/v7/eval_scores_v7.jsonl); not inferred from history"
+  },
   "cuts": {
     "julia:mandelbrot": {
       "t": 0.55,

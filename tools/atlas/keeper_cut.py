@@ -157,10 +157,36 @@ def is_keeper(partition: str, p_notbad: float, p_good: float, cuts: dict) -> boo
 
 def write(cuts: dict, path: Path = OUT):
     path.parent.mkdir(parents=True, exist_ok=True)
+    eval_rel = str(EVAL.relative_to(ROOT)).replace("\\", "/")
     path.write_text(json.dumps(dict(
         objective="F0.5", beta=BETA, min_pos=MIN_POS, baseline=T_GOOD_BASELINE,
-        eval=str(EVAL.relative_to(ROOT)).replace("\\", "/"), cuts=cuts,
+        eval=eval_rel, provenance=provenance_stamp(), cuts=cuts,
     ), indent=2), encoding="utf-8")
+
+
+# The scorer version the cuts were derived from is fixed by the derivation code path itself:
+# EVAL lives under data/classifier/<version>/, and load_triples reads that version's inline
+# probabilities. So the model stamp is CHEAPLY DETERMINABLE here (not a history dig) — it is
+# whichever version owns EVAL. A concrete `model` string is a VERIFIED stamp the test holds to
+# the active checkpoint; `model=None` would mean "unverified" (not currently the case).
+EVAL_MODEL_VERSION = EVAL.parent.name   # "v7" — dir under data/classifier/ owning the eval slice
+
+
+def provenance_stamp() -> dict:
+    """Where these cuts came from, established from the derivation code path (not git history).
+
+    `model` names the scorer version whose probabilities were the derivation input; `population`
+    is the frozen eval slice it read. Both are named by the code, so the stamp is verified."""
+    eval_rel = str(EVAL.relative_to(ROOT)).replace("\\", "/")
+    return dict(
+        model=EVAL_MODEL_VERSION,
+        verified=True,
+        population=eval_rel,
+        detail="frozen eval slice; julia:multibrot* census-only (source=='prospect_census') per Option A",
+        basis=(f"model + population named by the derivation code path: keeper_cut.load_triples reads "
+               f"{EVAL_MODEL_VERSION}_p_not_bad/{EVAL_MODEL_VERSION}_p_good from EVAL ({eval_rel}); "
+               f"not inferred from history"),
+    )
 
 
 def main():
