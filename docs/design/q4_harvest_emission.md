@@ -100,3 +100,13 @@ each promoted strange mode → `mining head` (v1, 0.50 gate). The mining head is
 strange** minibrot renders, so the readout (`q4_harvest_readout.py`) surfaces **both** head
 scores for every release candidate and pool row — Matt judges strange by eye. The readout does
 not change routing; it just scores each tile with the non-routed head too.
+
+**Measured head behavior on strange (verified 2026-07-25, `q4_readout.json`, n=8 strange release
+rows).** A recurring claim that the *mining* head scores strange near zero is **inverted**: on
+these renders the mining head is the stable one (p_ge3 mean **0.43**, min **0.25** — never near
+zero), while the smooth-trained **wallpaper** head is the one that collapses strange to literal
+**0.000** (3 of 8; mean 0.35). The wallpaper head never gates strange, so that collapse is
+inert. The real caveat is not "near zero" but "uncalibrated": the mining head's strict 0.50
+release floor would cut 6 of 8 strange candidates — which is exactly why the readout draws from
+the whole gated pool and lets the eye decide rather than truncating to the strict-floor subset.
+The mining gate is therefore left **as-is** (not neutered) pending mining-head calibration.
