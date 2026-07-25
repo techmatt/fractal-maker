@@ -19,12 +19,17 @@ file appears in SIDECAR_LABELS" — that false-fires on the in-row-merged batche
   its map. The failure this catches is an unregistered, unmerged sidecar — reachable
   count 0 while the file holds N.
 
-Out-of-scope sidecars (0 keys match any label_corpus `image_id`) are a DIFFERENT
-store, not a drop, and are recorded + skipped rather than asserted against this reader:
-the legacy `location_labels.json` (composite `idx|framing|palette` keys, labels live
-in-store), `palette_scores.json` (palette labels), the wallpaper_corpus sidecars, and
-the render-mode head sidecars. Asserting them here would false-fire on stores the
-label_corpus reader never reads.
+Out-of-scope sidecars come in two forms, both kept OUT of the v7 reachability assert:
+  * By REGISTRATION — a file that belongs to a different corpus with different label
+    SEMANTICS (`label_store.FOREIGN_LABEL_FILES`): the q4 WINDOW store's
+    `q4_g_aimed.json` / `q4_stage1_windows{,_p2}.json`, whose values are three-way STRING
+    classes (accept/reject/filter_leak), not int scores. The integer reader would crash on
+    `int('reject')`, so these are skipped by registration and asserted per corpus below
+    (`test_q4_window_store_reachable`) — never int-coerced here.
+  * By CONTENT — 0 keys match any label_corpus `image_id`: the legacy
+    `location_labels.json` (composite `idx|framing|palette` keys, labels live in-store),
+    `palette_scores.json`, the wallpaper_corpus sidecars, and the render-mode head sidecars.
+    Asserting these against this reader would false-fire on stores it never reads.
 
 Reconciliation is on COUNT reachability, NOT score identity: 616 `image_id`s collide
 across sibling batches (e.g. loose0 vs rev4 share `0_center_...`), so a colliding key
@@ -85,6 +90,9 @@ def reconcile():
     for fn in sorted(os.listdir(ls.LABELS_DIR)):
         if not fn.endswith(".json"):
             continue
+        if not ls.is_v7_corpus_label_file(fn):             # a DIFFERENT corpus (q4 window,
+            continue                                        # string classes) — asserted per
+                                                            # corpus in its own test, not here.
         labels = ls.load_sidecar(fn)                       # {image_id: int}, nulls dropped
         in_scope = [k for k in labels if k in owners]
         reach = sum(1 for k in in_scope if k in reachable)
@@ -125,9 +133,51 @@ def test_every_label_corpus_sidecar_is_fully_reachable():
     )
 
 
+def test_q4_window_store_reachable():
+    """Per-corpus guard for the OTHER store. Every file registered as a q4-window sidecar
+    (`label_store.FOREIGN_LABEL_FILES`) must reach the q4 WINDOW corpus through ITS canonical
+    reader: every key is a `window_id` present in a `q4_window_reader.REGISTERED_BATCHES`
+    batch. This is the mirror of the v7 guard — a registered foreign file whose keys match no
+    window (an orphaned export) is the same "labels present, reader reaches zero" failure, in
+    the window corpus. It also keeps the two-corpus split honest: a file gets to be skipped by
+    the v7 reader ONLY because it genuinely belongs here."""
+    sys.path.insert(0, os.path.join(HERE))
+    import q4_window_reader as q4  # noqa: E402
+
+    foreign = ls.FOREIGN_LABEL_FILES
+    assert foreign, "no FOREIGN_LABEL_FILES registered — the per-corpus split is vacuous"
+
+    window_ids = set()
+    for bid in q4.REGISTERED_BATCHES:
+        with open(q4.batch_dir(bid) / "windows.jsonl", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    window_ids.add(json.loads(line)["window_id"])
+    assert window_ids, "no q4-window window_ids scanned — window reader/glob broke"
+
+    unreachable = {}
+    for fn, reader in foreign.items():
+        if "q4_window_reader" not in reader:
+            continue                                        # only q4-window files checked here
+        raw = json.loads((open(os.path.join(ls.LABELS_DIR, fn), encoding="utf-8")).read())
+        body = raw["labels"] if isinstance(raw.get("labels"), dict) else raw
+        keys = [k for k, v in body.items() if v is not None]
+        reach = sum(1 for k in keys if k in window_ids)
+        if reach != len(keys):
+            unreachable[fn] = (reach, len(keys))
+    assert not unreachable, (
+        "q4-window label file(s) UNREACHABLE through q4_window_reader — keys present on disk "
+        "that are not a window_id in any REGISTERED_BATCHES batch (orphaned export, or the "
+        "batch went unregistered in q4_window_reader.REGISTERED_BATCHES):\n  "
+        + "\n  ".join(f"{fn}: {r}/{n} keys reach a window" for fn, (r, n) in sorted(unreachable.items())))
+
+
 def main():
     owners, table = reconcile()
     print("=== labels/ sidecar reachability (disk / in-scope / reachable) ===")
+    for fn in sorted(ls.FOREIGN_LABEL_FILES):
+        print(f"  {fn:<40}  FOREIGN ({ls.FOREIGN_LABEL_FILES[fn]}) - asserted per corpus")
     width = max(len(fn) for fn in table)
     bad = 0
     for fn, r in table.items():

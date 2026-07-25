@@ -97,6 +97,20 @@ def test_fbeta_beta_half_formula():
 def test_keeper_derivation_calibration_gate():
     # The four julia families + mandelbrot clear the >=15-positive floor; native multibrot
     # (0 positives) falls back to baseline, flagged uncalibrated.
+    #
+    # kc.derive() reads the frozen v7 eval slice (data/classifier/v7/eval_scores_v7.jsonl),
+    # which is gitignored under data/classifier/* and regenerable by a deterministic re-eval
+    # (the eval-freeze tail of `classifier/train_v7.py`). If it is absent this test cannot run;
+    # skip LOUDLY with the regen command rather than crash on a bare FileNotFoundError (an
+    # unrun guard reads as a real regression and buries the actionable cause). A skip is
+    # visible in the pytest summary — it never silently passes.
+    import pytest
+    if not kc.EVAL.exists():
+        pytest.skip(
+            f"missing regenerable eval slice {kc.EVAL.relative_to(kc.ROOT)} "
+            f"(gitignored under data/classifier/*). Regenerate with the deterministic re-eval: "
+            f"`uv run python -m classifier.train_v7` (writes eval_scores_v7.jsonl to "
+            f"data/classifier/v7/), then re-run this test.")
     cuts = kc.derive()
     for part in ("julia:mandelbrot", "julia:multibrot3", "julia:multibrot4",
                  "julia:multibrot5", "mandelbrot"):

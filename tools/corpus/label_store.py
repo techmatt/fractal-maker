@@ -74,6 +74,30 @@ SIDECAR_LABELS = {
     "2026-07-22_native_multibrot_band_v1": "2026-07-22_native_multibrot_band_v1.json",
 }
 
+# Label files that live in labels/ but belong to a DIFFERENT corpus and MUST NOT be read
+# by this INTEGER reader. The q4 WINDOW store (tools/corpus/q4_window_reader.py) uses
+# three-way STRING classes (accept/reject/filter_leak) keyed by window_id; int-coercing
+# them is a category error (`int('reject')`), and pooling the two corpora would poison the
+# version-blind v7 training distribution (see q4_window_reader.__doc__). This is the EXPLICIT,
+# registration-driven boundary between the two stores at the filesystem level: the files stay
+# in labels/ (so disk_audit's `^labels/` NEVER-delete protection still covers them in place —
+# do NOT relocate to escape a crash), and this reader skips them by registration. Value = the
+# owning corpus's canonical reader module, for the error message that redirects a mis-call.
+FOREIGN_LABEL_FILES = {
+    "q4_g_aimed.json": "tools/corpus/q4_window_reader.py",
+    "q4_stage1_windows.json": "tools/corpus/q4_window_reader.py",
+    "q4_stage1_windows_p2.json": "tools/corpus/q4_window_reader.py",
+}
+
+
+def is_v7_corpus_label_file(filename) -> bool:
+    """True iff `filename` (a bare labels/*.json name) is in scope for THIS v7 location-corpus
+    reader. A registered FOREIGN file (q4 window store, string classes) returns False and must
+    be routed through its own reader, never int-coerced here. The explicit in-scope predicate
+    every labels/ walk (the reachability guard included) filters on."""
+    return filename not in FOREIGN_LABEL_FILES
+
+
 # A sidecar file's labels are authored against ONE batch's crops — its OWNER. The join
 # re-keys the image_id→score sidecar into coord_key→score using the OWNER batch's
 # images.jsonl (see `sidecar_for`), so the label follows the RENDER IDENTITY, not the
@@ -135,7 +159,14 @@ def _owner_keymap(owner_batch_id, batches_dir):
 def load_sidecar(filename):
     """Load a labels/*.json sidecar as {image_id: int score}, dropping nulls.
 
-    Tolerates both a bare {image_id: score} map and a {"labels": {...}} wrapper."""
+    Tolerates both a bare {image_id: score} map and a {"labels": {...}} wrapper. Raises on a
+    registered FOREIGN file (a different corpus, string classes) rather than int-crashing on it
+    — the loud, actionable form of the two-corpus boundary."""
+    if filename in FOREIGN_LABEL_FILES:
+        raise ValueError(
+            f"{filename!r} belongs to a different corpus (read it through "
+            f"{FOREIGN_LABEL_FILES[filename]}), not the v7 integer sidecar loader — its labels "
+            f"are string classes, not int scores. See label_store.FOREIGN_LABEL_FILES.")
     d = json.loads((open(os.path.join(LABELS_DIR, filename), encoding="utf-8")).read())
     body = d["labels"] if isinstance(d.get("labels"), dict) else d
     return {k: int(v) for k, v in body.items() if v is not None}
