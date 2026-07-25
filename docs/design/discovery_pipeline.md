@@ -72,47 +72,71 @@ julia budget or twin-price-proportional spending because it needs **no separate
 planner** — the existing price-weighted-deficit pop plus the existing hook do all the
 work.
 
-## 4. τ_h on record — what the retained store can and cannot say
+## 4. τ_h on record — the real per-partition curve
 
 `τ_h` is the **per-partition cheap-`p_good` harvest cut**: cheap score ≥ `τ_h` → one
-canonical render → decode. It is a **fixed offline constant** (`derive_tau_h`, keep=0.90
-= the 10th percentile of cheap `p_good` among fidelity-study frames whose *canonical*
-`p_good` clears the family's `t_good`), **not** learned per run — identical across
-campaign 1 and 2. The retroactive question was whether the campaign harvests let us
-replace that guessed constant with an **empirical per-partition curve** of the real
-tradeoff: raise `τ_h` → renders saved (cost) vs q3 admissions lost (benefit).
+canonical confirmation render → decode. It is a **fixed offline constant**
+(`derive_tau_h`, keep=0.90 = the 10th percentile of cheap `p_good` among fidelity-study
+frames whose *canonical* `p_good` clears the family's `t_good`), **not** learned per run —
+identical across campaign 1 and 2. The question was whether the campaign harvests let us
+replace that guessed constant with an **empirical curve** of the real tradeoff: raise
+`τ_h` → canonical renders saved (cost) vs q3 admissions lost (benefit).
 
-**The join needed is `(partition, cheap_pgood, canonical fate)` per harvest check** —
-including the `canon-not-q3` / `precanon-dup` **rejects** (~95% of c-plane checks;
-readout §2 fate table). That triple *was* logged: `steered_frontier._log_harvest` →
-`harvest_log.jsonl`, one row per check, append-only. **But that file was gitignored as
-"regenerable telemetry" and was not retained** — for campaign 1/2 it survives nowhere
-(repo, `fractal-maker-artifacts/`, trash). Only `outcome_ledger.jsonl` remains =
-**admissions only** (distinct q3, each carrying `cheap_pgood`). So:
+**Data.** The needed join `(partition, cheap_pgood, canonical fate)` per harvest check —
+including the `canon-not-q3` / `precanon-dup` **rejects** — was logged to
+`harvest_log.jsonl` (`steered_frontier._log_harvest`, one row per check). It was gitignored
+as "regenerable telemetry" and lost from the live repo, but **recovered from a filesystem
+backup of the old working tree** (a backup keeps gitignored files) and is now stored
+durably **in-tree via LFS** beside each run's ledger (`.gitattributes`;
+`data/discovery/**/harvest_log.jsonl`). Rows carry the raw confirmation scores
+(`canon_nb`/`canon_pgood`), so fate is recomputable. Two gates pass in
+`tools/atlas/tau_h_retained_readout.py`: **reconciliation** (harvest_log admitted ties to
+each summary — 314/254/311/271) and **threshold era** (the confirmation decode recomputed
+under current `t_good` equals the recorded `canon_decoded` — campaign 1/2 already ran at
+today's `t_good`, so this is a no-op that *proves* the era matches). Campaign 2 breadth is
+**segmented at the batch-1211 resume** where julia hook spacing changed 0.2 → 0.1
+(`julia_hooks.jsonl`: 0.2 for batches ≤1204, 0.1 for ≥1260), which shifts the julia
+candidate population; the two segments are never pooled.
 
-- **Cost axis (renders saved = f(τ_h)) is permanently unrecoverable** for campaign 1/2 —
-  it needs the reject cheap-scores, which lived only in `harvest_log`. Reconstructing it
-  would mean re-running the cheap scorer *and* the canonical render+decode over every
-  candidate, i.e. re-deriving the harvest, not reading a retained file.
-- **Benefit axis (admissions retained = f(τ_h), for τ_h ≥ current) IS recoverable** from
-  the admitted `cheap_pgood` in the ledger. It is a conservative **lower bound**: raising
-  `τ_h` only shrinks the greedy dedup cloud, which can only promote later `q3_dup`s to
-  distinct → true retention ≥ the naive count.
+**Curve** (`out/tau_h/curve.json`; both axes, per partition, per run/segment). A canonical
+render happens iff `cheap ≥ τ` **and** the check is not a pre-canonical coord-dup
+(campaign 2's `precanon_dup` filter already skips ~82% of checks before rendering; campaign
+1 has no such filter so every check renders). Steps are distribution-adapted (τ at the
+p25/p50/p75 of *rendered-check* `cheap_pgood`, so each saves ~25/50/75% of renders).
+`admits_retained` is a **first-order lower bound** (raising τ only shrinks the dedup cloud →
+some `q3_dup`s would promote to distinct). Denomination is **raw admissions**; per-reject
+distinct-look attribution is not recoverable (distinct-looks are tallied only on
+admissions) — so it is not reported.
 
-Retained readout (all 4 ledgers pooled, `tools/atlas/tau_h_retained_readout.py` →
-`out/tau_h/retained_readout.json`; per-run admits 311/271/314/254 reconcile with the
-summaries): **current `τ_h` sits right at the admitted-cheap floor for every partition.**
-The gap between `τ_h` and the *lowest* admitted check's cheap score is +0.0004 to +0.0106
-— i.e. there is **essentially no zero-loss headroom**; the offline keep-0.90 constant is
-empirically pinned just under the observed admissions. Raising `τ_h` above current starts
-shedding admissions immediately (e.g. `julia:multibrot3` retains 0.79 of admissions at
-0.35 vs 0.31 current; `mandelbrot` 0.80 at 0.40 vs 0.20). What that trade *buys* in saved
-renders is exactly the unrecoverable half — so the interesting question (are the ~95%
-canon-not-q3 wasted renders clustered just above `τ_h`, cheaply cuttable?) **cannot be
-answered from campaign 1/2 and must wait for a future run.**
+**The exchange rate — admissions lost per canonical render saved — is sharply
+partition-dependent** (campaign 2 breadth, seg-B / current 0.1-spacing regime):
 
-**Fix (retention, not instrumentation).** The logging is already correct and unconditional
-in the production path (`_log_harvest`, pure post-decision append — zero effect on any
-admission). The only defect was durability: `harvest_log.jsonl` is now **un-gitignored and
-committed** alongside the ledger (`.gitignore`, `data/discovery/**` block), so future runs
-retain the full `τ_h` curve. Campaign 1/2's is lost for good.
+| partition | save 25% renders → keep admits (lost/saved) | save 50% renders → keep admits (lost/saved) |
+|---|---|---|
+| mandelbrot | 100% (**0.00**) | 96% (**0.005**) |
+| multibrot3 | 95% (0.023) | 68% (0.071) |
+| multibrot5 | 87% (0.063) | 70% (0.071) |
+| multibrot4 | 77% (0.71) | 55% (0.71) |
+| julia:mandelbrot | 75% (0.31) | 62% (0.23) |
+| julia:multibrot3 | 64% (0.63) | 43% (0.53) |
+| julia:multibrot4 | 67% (0.40) | 50% (0.33) |
+| julia:multibrot5 | 75% (0.36) | 50% (0.36) |
+
+So the **headroom is concentrated in low-degree c-plane** — above all **mandelbrot**, where
+half the confirmation renders can be cut for ~4% admission loss (≈0.005 admits per render),
+and secondarily multibrot3/5 (cut ~25% for ≤6% loss). **multibrot4 and every julia
+partition have essentially no headroom** — raising `τ_h` there sheds admissions at ~0.3–0.7
+per render saved, i.e. near 1:1. This directly answers the campaign-1/2 open question (are
+the wasted `canon-not-q3` renders clustered just above `τ_h`, cheaply cuttable?): **yes for
+c-plane mandelbrot/mb3/mb5, no for mb4 and julia.** The campaign-1 curve (no precanon
+filter, so larger absolute render mass) agrees on the ranking and gives lower c-plane
+exchange rates still (mandelbrot 0.004–0.006 at 25–50%). Full arrays incl. campaign 1,
+campaign 2 dive, and seg-A in `out/tau_h/curve.json`.
+
+**Retention fix.** The logging was already correct and unconditional in production
+(`_log_harvest`, pure post-decision append). The only defect was durability:
+`harvest_log.jsonl` is now un-gitignored and the recovered campaign 1/2 (and shakeout /
+steered) logs are committed via LFS, so the curve is on record and future runs retain it.
+*Other* gitignored reject-class telemetry still survives only in the backup —
+`prio_terms.jsonl` (per pushed candidate incl. the never-admitted majority, 57 MB),
+`julia_hooks.jsonl`, `saturation.jsonl` — inventoried but not recovered here.
