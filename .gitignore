@@ -68,7 +68,7 @@ __pycache__/
 # NOTE (storage restructure): the regenerable file-count bombs — data/v{4,5,6,7}/
 # aug_cache* and data/discovery/campaign2/{breadth,dive}/scratch — were physically
 # RELOCATED out of the tree to ARTIFACTS_ROOT (default sibling
-# ../fractal-generator-artifacts, env FRACTAL_ARTIFACTS_ROOT); readers/writers route
+# ../fractal-maker-artifacts, env FRACTAL_ARTIFACTS_ROOT); readers/writers route
 # through tools/corpus/artifacts.py. No .gitignore lines were dead: those families
 # were only ever ignored by the blanket `/data/*` and `/data/discovery/**/scratch/`
 # rules below, which remain load-bearing for OTHER in-tree paths and also serve as a

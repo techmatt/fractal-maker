@@ -17,7 +17,7 @@ never re-materializes the bomb in-tree.
 
 ARTIFACTS_ROOT
 --------------
-Defaults to a *sibling* of the repo (``../fractal-generator-artifacts``), so a
+Defaults to a *sibling* of the repo (``../fractal-maker-artifacts``), so a
 fresh checkout on any machine resolves without configuration. Override with the
 ``FRACTAL_ARTIFACTS_ROOT`` environment variable (e.g. to point at a different
 volume). The relocated tree mirrors the repo-relative layout exactly:
@@ -57,7 +57,7 @@ def artifacts_root() -> Path:
     env = os.environ.get(ARTIFACTS_ENV)
     if env:
         return Path(env)
-    return REPO_ROOT.parent / "fractal-generator-artifacts"
+    return REPO_ROOT.parent / "fractal-maker-artifacts"
 
 
 def _norm(rel) -> str:

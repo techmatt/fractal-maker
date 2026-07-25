@@ -7,14 +7,14 @@ must stay, and a phased plan to get the rest out — under one rule from the own
 
 > **Except `out/` (disposable → trash) and the trained deep-network checkpoints
 > (`.pt`, precious → keep), most large files should live outside the source tree —
-> in `fractal-generator-artifacts`, or wherever they actually belong.**
+> in `fractal-maker-artifacts`, or wherever they actually belong.**
 
 ## Current footprint (three trees, one volume)
 
 | tree | size | what |
 |---|---:|---|
 | `C:\Code\fractal-generator` (repo) | **21 GB** | source + the weight below |
-| `C:\Code\fractal-generator-artifacts` | **60 GB** | relocated: aug_cache ×4 (the real byte bomb) + campaign2 scratch + viz sheets |
+| `C:\Code\fractal-maker-artifacts` | **60 GB** | relocated: aug_cache ×4 (the real byte bomb) + campaign2 scratch + viz sheets |
 | `C:\Code\fractal-generator-trash` | **14 GB** | staged `out/`; delete to reclaim (`rm -rf`) |
 
 **Already relocated (this session):** the aug_cache families were ~560k *files* but
@@ -101,6 +101,6 @@ anchor; `.venv` and `target*` (live, regenerable infra — relocate only via
 
 ## Net if fully executed
 Repo drops from ~21 GB to **~7–8 GB** (`.venv` 4.8 + `target*` 2.1 + checkpoints 0.9
-+ source/metadata ~0.3), with all regenerable bulk in `fractal-generator-artifacts`
++ source/metadata ~0.3), with all regenerable bulk in `fractal-maker-artifacts`
 and disposable output in trash. The source tree becomes "code + irreplaceable
 metadata + trained weights," nothing else.
