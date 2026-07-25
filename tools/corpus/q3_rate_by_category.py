@@ -101,10 +101,10 @@ def process_batch(batch_id):
     table can name the store, and flags any in-row/sidecar disagreement."""
     d = os.path.join(BATCHES_DIR, batch_id)
     rows = read_jsonl(os.path.join(d, "images.jsonl"))
-    sidecar = ls.sidecar_for(batch_id)          # {image_id: score} or None
-    ids = {r["image_id"] for r in rows}
+    sidecar = ls.sidecar_for(batch_id)          # {join_key: score} or None (coord-keyed)
+    row_keys = {ls.join_key(r["render"]) for r in rows}
     # A registered sidecar key with no matching images.jsonl row is UNJOINABLE.
-    unjoinable = sorted(k for k in (sidecar or {}) if k not in ids)
+    unjoinable = [k for k in (sidecar or {}) if k not in row_keys]
 
     labeled = []          # (row, score)
     conflicts = []
@@ -113,7 +113,7 @@ def process_batch(batch_id):
         ir = (r.get("label") or {}).get("score")
         score = ls.resolve_score(r, sidecar)    # in-row ELSE sidecar
         if ir is not None and sidecar is not None:
-            ss = sidecar.get(r["image_id"])
+            ss = sidecar.get(ls.join_key(r["render"]))
             if ss is not None and int(ss) != int(ir):
                 conflicts.append(r["image_id"])
         if score is not None:

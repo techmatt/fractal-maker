@@ -55,7 +55,7 @@ def iter_labeled(corpus_dir: str | None = None):
         batch_dir = os.path.dirname(images_path)
         batch_id = os.path.basename(batch_dir)
         crops_dir = os.path.join(batch_dir, "crops")
-        sidecar = ls.sidecar_for(batch_id)
+        sidecar = ls.sidecar_for(batch_id, os.path.join(corpus_dir, "batches"))
         joined.setdefault(batch_id, 0)
         with open(images_path, encoding="utf-8") as f:
             for line in f:
@@ -85,7 +85,7 @@ def count_pairs(corpus_dir: str | None = None) -> dict:
     joined = {}
     for images_path in _batch_images(corpus_dir):
         batch_id = os.path.basename(os.path.dirname(images_path))
-        sidecar = ls.sidecar_for(batch_id)
+        sidecar = ls.sidecar_for(batch_id, os.path.join(corpus_dir, "batches"))
         units = labeled = 0
         with open(images_path, encoding="utf-8") as f:
             for line in f:

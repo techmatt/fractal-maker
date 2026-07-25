@@ -10,27 +10,44 @@ A loader that reads `label.score` alone silently drops the (b) batches: for Juli
 that wiped out the entire family (0 Julia locations), and it dropped the mining/scale
 Mandelbrot labels too.
 
+THE JOIN KEY IS COORDINATES, NOT image_id. image_id (e.g. `A_<idx>_<comp>_<palette>`) is a
+slug that does NOT encode render scale, so it is NOT unique across batches built at
+different scales — and `scale_2x2_labelset.json` is deliberately shared by two such batches.
+Joining a label to a row by image_id could therefore hand a label to a same-id crop at a
+different scale. So the resolution keys on `join_key` (the canonical location identity —
+family + cx/cy/fw + c — plus palette/composition), and a sidecar's image_id→score map is
+re-keyed onto that coordinate key through its OWNER batch's images.jsonl (`sidecar_for`).
+This was a prose invariant (`CORPUS_SCHEMA.md`, the v5 build_manifest recipe); it is now
+enforced in code and tested (`test_label_store_join.py`).
+
 Every consumer that turns a corpus row into a label MUST route through this module —
 `corpus_reader.iter_labeled` (the version-blind trainer view) and
 `query_sampler.LocationPool.from_corpus` (the q2+q3 location universe) both do — so the
-resolution logic + the `SIDECAR_LABELS` registry live in exactly ONE place and the two
-can never drift. NEW unmerged batches MUST be registered in `SIDECAR_LABELS` (or have
-their labels merged into images.jsonl); `assert_sidecars_joined` makes a broken join
+resolution logic + the `SIDECAR_LABELS`/`SIDECAR_OWNER` registries live in exactly ONE place
+and the two can never drift. NEW unmerged batches MUST be registered in `SIDECAR_LABELS` (or
+have their labels merged into images.jsonl); `assert_sidecars_joined` makes a broken join
 loud at load.
 
 REFERENCE for the complete label set: the v5 unified classifier's training-data
 assembly, tools/v5/build_manifest.py. It recovers the J0 Julia labels from
-labels/location_labels_julia_ladder_j0.json JOINED to the batch's images.jsonl by
-image_id — exactly the join mirrored here. See data/label_corpus/CORPUS_SCHEMA.md.
+labels/location_labels_julia_ladder_j0.json JOINED to the batch's images.jsonl — the same
+join mirrored here (image_id is unique WITHIN the julia batch, so it agrees with the
+coordinate key). See data/label_corpus/CORPUS_SCHEMA.md.
 """
 from __future__ import annotations
 
 import json
 import os
 
+import location as _loc   # canonical Location.key() — the coordinate identity of a render
+
 # repo root = two levels up from tools/corpus/
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 LABELS_DIR = os.path.join(ROOT, "labels")
+# The standard label corpus. `sidecar_for` reads the OWNER batch's images.jsonl from here to
+# turn image_id-keyed sidecars into coordinate-keyed label maps; a non-default corpus (tests)
+# passes its own batches dir.
+BATCHES_DIR = os.path.join(ROOT, "data", "label_corpus", "batches")
 
 # The (b)-case batches: batch_id -> its labels/*.json sidecar file. The registry is
 # the single source of truth for "which batches carry labels only in a sidecar".
@@ -57,6 +74,63 @@ SIDECAR_LABELS = {
     "2026-07-22_native_multibrot_band_v1": "2026-07-22_native_multibrot_band_v1.json",
 }
 
+# A sidecar file's labels are authored against ONE batch's crops — its OWNER. The join
+# re-keys the image_id→score sidecar into coord_key→score using the OWNER batch's
+# images.jsonl (see `sidecar_for`), so the label follows the RENDER IDENTITY, not the
+# image_id slug. That is what stops cross-contamination: `scale_2x2_labelset.json` is shared
+# by two batches built at DIFFERENT scales, and image_id (`A_<idx>_<comp>_<palette>`) does
+# not encode the scale — so an `A_100_center_cmr.fusion` in one batch and the same id at a
+# different fw in the other are different images that must NOT trade labels. Keying on the
+# owner's coordinates makes a label reach only the crop whose (location, palette,
+# composition) actually matches. Default owner = the sole batch that registers the file; a
+# SHARED file MUST name its owner here (else `_owner_of` raises).
+SIDECAR_OWNER = {
+    "scale_2x2_labelset.json": "2026-06-25_scale_2x2_labelset",
+}
+
+
+def join_key(render):
+    """The explicit coordinate join key for a corpus render block: the canonical location
+    identity (`location.Location.key()` — family + cx/cy/fw + c, so SCALE via fw is part of
+    the key) plus the per-crop recolor/reframe axes (palette, composition). Verified unique
+    per image_id in every registered sidecar batch, so it distinguishes same-location recolor
+    crops (mining) while collapsing nothing, and it differs across scales where image_id
+    collides."""
+    loc = _loc.from_render_block(render)
+    return (loc.key(), render.get("palette"), render.get("composition"))
+
+
+def _owner_of(filename):
+    """The batch whose images.jsonl authors the coordinate identities for `filename`.
+    Explicit `SIDECAR_OWNER` wins; otherwise the sole batch registering the file. A file
+    shared by >1 batch with no explicit owner is a registry error and raises."""
+    if filename in SIDECAR_OWNER:
+        return SIDECAR_OWNER[filename]
+    owners = sorted(b for b, fn in SIDECAR_LABELS.items() if fn == filename)
+    if len(owners) == 1:
+        return owners[0]
+    raise RuntimeError(
+        f"sidecar {filename!r} is registered by {owners} — add an explicit SIDECAR_OWNER "
+        f"entry naming the batch its labels were authored against.")
+
+
+def _owner_keymap(owner_batch_id, batches_dir):
+    """image_id → join_key for every row of the owner batch's images.jsonl. This is the
+    authoritative image_id→coordinate mapping the sidecar's labels are re-keyed through."""
+    path = os.path.join(batches_dir, owner_batch_id, "images.jsonl")
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"owner batch images.jsonl missing for sidecar re-key: {path}")
+    out = {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            out[row["image_id"]] = join_key(row["render"])
+    return out
+
 
 def load_sidecar(filename):
     """Load a labels/*.json sidecar as {image_id: int score}, dropping nulls.
@@ -67,21 +141,45 @@ def load_sidecar(filename):
     return {k: int(v) for k, v in body.items() if v is not None}
 
 
-def sidecar_for(batch_id):
-    """The {image_id: score} sidecar map for a batch, or None if it isn't registered."""
+def sidecar_for(batch_id, batches_dir=None):
+    """The `{join_key: score}` label map for a batch, or None if it isn't registered.
+
+    The on-disk sidecar is `{image_id: score}`; this re-keys it onto the coordinate
+    `join_key` via the OWNER batch's images.jsonl (`_owner_keymap`), so resolution follows
+    the render identity rather than the collision-prone image_id. `batches_dir` overrides the
+    standard corpus (a non-default corpus threads its own batches dir through). Raises if a
+    labeled image_id is absent from the owner batch, or if two entries collide on one
+    join_key — both are registry/key errors, not silent drops."""
     fn = SIDECAR_LABELS.get(batch_id)
-    return load_sidecar(fn) if fn is not None else None
+    if fn is None:
+        return None
+    raw = load_sidecar(fn)                                   # {image_id: score}
+    id2key = _owner_keymap(_owner_of(fn), batches_dir or BATCHES_DIR)
+    labels = {}
+    for iid, sc in raw.items():
+        key = id2key.get(iid)
+        if key is None:
+            raise RuntimeError(
+                f"sidecar {fn!r} labels image_id {iid!r} that is absent from its owner batch "
+                f"{_owner_of(fn)!r} images.jsonl — image_id keys diverged.")
+        if key in labels and labels[key] != sc:
+            raise RuntimeError(
+                f"sidecar {fn!r}: two image_ids collide on one coordinate join_key {key!r} "
+                f"with different scores — the owner batch is not render-unique.")
+        labels[key] = sc
+    return labels
 
 
-def resolve_score(row, sidecar):
-    """A row's label: merged `label.score` ELSE the sidecar join by image_id.
+def resolve_score(row, labels):
+    """A row's label: merged `label.score` ELSE the sidecar join by coordinate `join_key`.
 
-    `sidecar` is the map from `sidecar_for(batch_id)` (or None for a merged batch).
-    Returns None if the row is unlabeled in both places. This is the ONE resolution
-    rule; both consumers call it so they cannot disagree on a row."""
+    `labels` is the map from `sidecar_for(batch_id)` (or None for a merged batch). Returns
+    None if the row is unlabeled in both places. This is the ONE resolution rule; both
+    consumers call it so they cannot disagree on a row. Joining on `join_key(row["render"])`
+    (not image_id) is what makes a shared sidecar safe across scale batches."""
     sc = (row.get("label") or {}).get("score")
-    if sc is None and sidecar is not None:
-        sc = sidecar.get(row["image_id"])
+    if sc is None and labels is not None:
+        sc = labels.get(join_key(row["render"]))
     return sc
 
 
