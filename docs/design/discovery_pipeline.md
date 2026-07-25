@@ -116,11 +116,31 @@ partition-dependent** (campaign 2 breadth, seg-B / current 0.1-spacing regime):
 | mandelbrot | 100% (**0.00**) | 96% (**0.005**) |
 | multibrot3 | 95% (0.023) | 68% (0.071) |
 | multibrot5 | 87% (0.063) | 70% (0.071) |
-| multibrot4 | 77% (0.71) | 55% (0.71) |
-| julia:mandelbrot | 75% (0.31) | 62% (0.23) |
-| julia:multibrot3 | 64% (0.63) | 43% (0.53) |
-| julia:multibrot4 | 67% (0.40) | 50% (0.33) |
-| julia:multibrot5 | 75% (0.36) | 50% (0.36) |
+| multibrot4 † | 77% (0.71) | 55% (0.71) |
+| julia:mandelbrot † | 75% (0.31) | 62% (0.23) |
+| julia:multibrot3 † | 64% (0.63) | 43% (0.53) |
+| julia:multibrot4 † | 67% (0.40) | 50% (0.33) |
+| julia:multibrot5 † | 75% (0.36) | 50% (0.36) |
+
+> **† Band-thin — read the multibrot4/julia rows as directional, not precise.** A read-only
+> re-audit of the harvest logs (no re-render) found their high exchange rate is *not* a broken
+> cheap score but the **base admit rate showing through a locally flat cheap→fate relationship**,
+> on a tiny sample. Two things stack: (1) after `precanon_dup` these partitions render only a
+> sliver (seg-B rendered checks: mb4 **29**, julia:mandelbrot **53**, julia:mb3 **30**, julia:mb4
+> **19**, julia:mb5 **44**; the q=0.25 cut band is **5–13 rows**), so each rate is a handful of
+> admissions; (2) within that rendered slice the cheap score barely ranks fate — bottom-quartile
+> and top-quartile admit rates are ~equal — so **exchange ≈ base admit rate** (mb4 ≈0.7, julia
+> ≈0.3–0.48), *not* the "several-times-the-average" inversion the raw number suggests. mb4's
+> flatness is **restriction-of-range from its very high τ_h=0.774** and persists in campaign 1
+> (which has no precanon filter at all), so it is a real, benign margin effect, not the confound.
+> Julia's is compounded by **84–97% precanon depletion**, which for julia:mandelbrot/mb3 skims off
+> the *higher*-cheap candidates (killed rows average +0.04 / +0.11 cheap vs survivors), leaving the
+> low-cheap survivors admission-dense — the confound the audit was checking for, but modest and
+> not uniform in sign (julia:mb4's killed rows skew *lower*-cheap). The §4 verdict is unchanged —
+> still **no cuttable reject cluster** in mb4/julia — but do not over-trust the individual cells.
+> The unmarked **c-plane mandelbrot/mb3/mb5** rows are the trustworthy signal: rendered 170–415
+> (not thin) and the cheap score strongly discriminates (bottom-quartile admit 0.00–0.06 vs
+> top-quartile 0.18–0.29), which is *why* their exchange rate is genuinely low.
 
 So the **headroom is concentrated in low-degree c-plane** — above all **mandelbrot**, where
 half the confirmation renders can be cut for ~4% admission loss (≈0.005 admits per render),
