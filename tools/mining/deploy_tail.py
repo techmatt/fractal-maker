@@ -18,7 +18,14 @@ For each already-emitted location (smooth winner + its approved palette/params c
 upstream by emit_v1), render a lean set of strange-mode candidate variants over the
 INHERITED approved palette, score each with the LOCKED `mining_v1` gate
 (`tools/mining/mining_gate.MiningScorer`, threshold 0.50 on marginal p_ge3), and keep
-gate-passers as alternate wallpapers.
+a diversity-allocated set as alternate wallpapers.
+
+REPORT-ONLY GATE (prompts/mining_gate_report_only.md): the 0.50 gate no longer CUTS.
+Every scored candidate flows into the diversity allocation (budget + per-mode floors
+unchanged); the gate's would-cut verdict is RECORDED — paired with the actual keep
+decision — in the committed log `data/emission/mining_gate_reports/deploy_tail.jsonl`
+(`tools/mining/gate_report.py`), not acted on. The head/threshold stay LOCKED (we still
+never retrain or re-threshold); it simply stops acting until emission is machine-curated.
 
 Incremental / idempotent state (the load-bearing production delta over the pilot):
   * The durable state is `alternates.jsonl` (the kept strange alternates). On each run
@@ -52,7 +59,10 @@ Load-bearing (see prompts/deploy_tail_emit_wirein_prompt.md + the memories):
   * normal_map OFF for all modes (none of the specs enable it; `shade:none` composites).
 
 Keep / diversity allocation (tail_alloc.allocate_strange):
-  * keep iff p_ge3 >= 0.50; AT MOST ONE strange alternate per location.
+  * REPORT-ONLY gate: the p_ge3 >= 0.50 cut no longer filters; every scored candidate is
+    eligible for allocation (would-cut recorded, not acted on). AT MOST ONE strange
+    alternate per location. The p_ge3 quality ORDER within the allocation is untouched —
+    allocation still prefers higher p_ge3, it just no longer hard-drops sub-0.50.
   * Strange budget B = round(0.25 * n_emitted) is a CEILING across the batch.
   * Keepers are SPREAD across modes for diversity (not abundance-biased): each mode
     gets a floor ~B/(n+2), the surplus (~2/(n+2)*B) lands on the abundant modes by
@@ -513,11 +523,18 @@ def main():
         by_loc.setdefault(c["loc_id"], []).append(c)
 
     # 5. Shortfall allocation: existing alternates are FIXED (count toward budget B and
-    #    per-mode floors); allocate only B-#existing over the new passers, spread across
+    #    per-mode floors); allocate only B-#existing over the candidates, spread across
     #    modes for diversity. A location may pass in several modes -> batch-level (each
     #    location fills at most one mode's slot).
-    passers = [c for c in cands if c.get("passed")]
-    keepers, alloc = allocate_strange(passers, n_emit, modes, STRANGE_BUDGET_FRAC,
+    #
+    #    REPORT-ONLY mining gate: the 0.50 gate no longer CUTS. EVERY scored candidate flows
+    #    into the diversity allocation (budget B + per-mode floors UNCHANGED — the diversity
+    #    machinery still spreads by quality); the gate's would-cut verdict is recorded, not
+    #    acted on (write_gate_report below). `passers` is kept purely as the report quantity
+    #    "would the gate have passed this" (new-supply / passer-loc counts), NOT as a filter.
+    #    See prompts/mining_gate_report_only.md.
+    passers = [c for c in cands if c.get("passed")]     # gate would-pass — REPORTED, not gating
+    keepers, alloc = allocate_strange(cands, n_emit, modes, STRANGE_BUDGET_FRAC,
                                       existing=existing_list)
     keepers.sort(key=lambda c: -c["p_ge3"])   # render/report in quality order
     n_loc_passer = len({c["loc_id"] for c in passers})
@@ -533,6 +550,22 @@ def main():
         n_ex = sum(1 for v in existing_alts.values() if v["mode"] == m)
         print(f"       {m:32} floor={alloc['floor']} achieved={achieved[m]} "
               f"(existing={n_ex}, new-supply={supply} distinct-loc passers)")
+
+    # 5b. Report-only mining gate → durable would-cut log PAIRED with the actual keep
+    #     decision (point 3 of the prompt). One row per scored candidate: what the 0.50
+    #     gate WOULD have cut and whether the allocation kept it anyway. Committed under
+    #     data/emission/ (survives `rm -r out/*`, unlike report.json/alternates.jsonl).
+    #     Runs before the (optional) full-res block so --score-only still records it.
+    from tools.mining import gate_report as GR
+    keeper_cids = {c["cid"] for c in keepers}
+    gr_rows = [GR.gate_report_row(
+        site="deploy_tail", key=c["cid"], location=c["row"]["location"],
+        style=c["mode"], palette=c["palette"], p_ge3=c["p_ge3"],
+        release_threshold=scorer.threshold, selected=(c["cid"] in keeper_cids),
+        selection_stage="keeper") for c in cands]
+    gpath, n_tot, n_cut, n_cut_sel = GR.write_gate_report("deploy_tail", gr_rows)
+    print(f"[gate-report-only] strange mining gate REPORT-ONLY (not acting): {n_tot} candidate(s) "
+          f"logged, {n_cut} would-cut ({n_cut_sel} kept anyway) → {gpath.relative_to(REPO)}")
 
     # 6. Full-res render the NEW keepers alongside the smooth wallpaper (skip-if-exists so
     #    a re-run / adopted pilot keeper never re-renders), + side-by-side for eyeball.
@@ -599,9 +632,11 @@ def main():
         save_alternates(all_alts)
         print(f"[state] alternates.jsonl now holds {len(all_alts)} alternate(s)")
 
-    # 8. Correctness checks (ship with checks, not just reasoning).
+    # 8. Correctness checks (ship with checks, not just reasoning). The idempotency sim is
+    #    fed `cands` — the report-only allocation input — not `passers`, so it mirrors the
+    #    real next-run allocation (which no longer pre-filters to gate-passers).
     checks = run_checks(smooth_before, smooth_paths, emit_fields_before, emit_field_dir,
-                        passers, keepers, existing_list, n_emit, modes, args)
+                        cands, keepers, existing_list, n_emit, modes, args)
 
     # 9. Parity: re-score 1-2 kept scoring crops through the standalone gate CLI
     #    (deploy path == measurement path across two independent entry points).
@@ -613,7 +648,7 @@ def main():
 
 
 def run_checks(smooth_before, smooth_paths, emit_fields_before, emit_field_dir,
-               passers, keepers, existing_list, n_emit, modes, args):
+               considered, keepers, existing_list, n_emit, modes, args):
     """Ship the correctness guarantees as verified checks, not just reasoning.
 
       * additive/smooth untouched — every smooth wallpaper is byte-unchanged.
@@ -642,9 +677,9 @@ def run_checks(smooth_before, smooth_paths, emit_fields_before, emit_field_dir,
     # -- idempotency: next-run allocation over the persisted state is empty.
     kept_ids = {c["loc_id"] for c in keepers}
     existing_after = existing_list + [{"loc_id": c["loc_id"], "mode": c["mode"]} for c in keepers]
-    passers_after = [{"loc_id": c["loc_id"], "mode": c["mode"], "p_ge3": c["p_ge3"]}
-                     for c in passers if c["loc_id"] not in kept_ids]
-    sel2, _ = allocate_strange(passers_after, n_emit, modes, STRANGE_BUDGET_FRAC,
+    considered_after = [{"loc_id": c["loc_id"], "mode": c["mode"], "p_ge3": c["p_ge3"]}
+                        for c in considered if c["loc_id"] not in kept_ids]
+    sel2, _ = allocate_strange(considered_after, n_emit, modes, STRANGE_BUDGET_FRAC,
                                existing=existing_after)
     idempotent = (len(sel2) == 0)
 

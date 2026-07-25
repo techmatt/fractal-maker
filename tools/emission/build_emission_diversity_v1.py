@@ -71,7 +71,11 @@ REL_W, REL_H, REL_SS, REL_FILT = 2560, 1440, 4, "lanczos3"        # release full
 JPG_Q = 95
 
 DEFAULT_FLOOR = 0.75          # wallpaper-head POOL floor (permissive; below the 0.90 gate)
-DEFAULT_MINING_FLOOR = 0.25   # mining-head POOL floor (permissive; below the 0.50 gate)
+DEFAULT_MINING_FLOOR = 0.25   # mining-head POOL floor. REPORT-ONLY: no longer cuts strange —
+#   the pool (0.25) and release (0.50) mining floors are recorded, not acted on (both mining
+#   floors below are the gate's counterfactual thresholds now, not live cuts). release_eligible()
+#   admits every scored strange row; the would-cut verdict is logged durably via write_gate_report.
+#   See prompts/mining_gate_report_only.md. The wallpaper-head floors (smooth) still act.
 # Per-head RELEASE floors — distinct from the pool floors above. Pool admission stays
 # permissive (weak wallpapers remain inventory); SELECTION only draws release candidates
 # above the head's release floor. Defaults = each head's production gate. See the emission
@@ -586,9 +590,48 @@ class EmissionDiversity:
             else self.mining_release_floor
 
     def release_eligible(self) -> list:
-        """Gated pool rows whose head score clears their head's RELEASE floor."""
-        return [r for r in self.pool.gated()
-                if (r["p_ge3"] or 0.0) >= self.release_floor_for(r["render_style"])]
+        """Pool rows eligible for release selection.
+
+        Smooth (wallpaper head): gated ∧ p_ge3 ≥ release floor — UNCHANGED.
+        Strange (mining head): the mining gate is REPORT-ONLY — its pool (0.25) and
+        release (0.50) floors no longer CUT, so EVERY successfully-scored strange pool
+        row is release-eligible regardless of either floor; the would-cut verdict is
+        recorded (write_gate_report), not acted on. Drawn straight from `self.pool.rows`
+        (not `gated()`) so the softer pool floor is bypassed for release too, while
+        `passed`/`gated()`/deficit-fill accounting stays untouched — only the RELEASE
+        decision is report-only. See prompts/mining_gate_report_only.md."""
+        out = []
+        for r in self.pool.rows:
+            if head_for_style(r["render_style"]) == "mining":
+                if r.get("p_ge3") is not None:     # scored strange: report-only, admit all
+                    out.append(r)
+            elif r.get("passed") and (r["p_ge3"] or 0.0) >= self.release_floor_for(r["render_style"]):
+                out.append(r)
+        return out
+
+    def write_gate_report(self, selected):
+        """Report-only mining gate → durable would-cut log, PAIRED with the final release
+        selection (point 3 of the prompt). One row per scored strange candidate: what the
+        gate WOULD have cut (against the live mining pool 0.25 / release 0.50 floors) and
+        whether it was actually selected. Committed under data/emission/ so a future
+        calibration pass reads labeled precision off accumulated releases."""
+        from tools.mining import gate_report as GR
+        sel_ids = {e["_rec"]["id"] for e in selected}
+        rows = []
+        for r in self.pool.rows:
+            if head_for_style(r["render_style"]) != "mining" or r.get("p_ge3") is None:
+                continue
+            loc = self.by_id.get(r["location_id"], {})
+            location = {"cx": loc.get("outcome_cx"), "cy": loc.get("outcome_cy"),
+                        "fw": loc.get("outcome_fw"), "julia_c_re": loc.get("julia_c_re"),
+                        "julia_c_im": loc.get("julia_c_im"), "location_id": r["location_id"]}
+            key = "|".join(str(x) for x in (r["location_id"], r["render_style"], r["palette"]))
+            rows.append(GR.gate_report_row(
+                site="emission_diversity_v1", key=key, location=location,
+                style=r["render_style"], palette=r["palette"], p_ge3=r.get("p_ge3"),
+                release_threshold=self.mining_release_floor, pool_floor=self.mining_floor,
+                selected=(r["id"] in sel_ids), selection_stage="release"))
+        return GR.write_gate_report("emission_diversity_v1", rows)
 
     def colorize(self, dt, cm, ranker, heads, row, tracker=None) -> dict | None:
         loc_id = row["id"]
@@ -935,6 +978,10 @@ def main():
         _, cell_to_names = cond.load_cell_map()
         eng.build_axes(dt, cell_to_names, dt.lib())
     selected, sel_log = eng.select_release()
+    gpath, n_tot, n_cut, n_cut_sel = eng.write_gate_report(selected)
+    print(f"[gate-report-only] strange mining gate REPORT-ONLY (not acting): {n_tot} strange "
+          f"candidate(s) logged, {n_cut} would-cut ({n_cut_sel} of those SELECTED anyway) → "
+          f"{gpath.relative_to(ROOT)}", flush=True)
     rel_paths = eng.render_release(selected, skip_render=args.no_release_render)
     R.write_report(eng, selected, sel_log, rel_paths)
 
