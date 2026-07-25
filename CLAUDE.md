@@ -140,6 +140,12 @@ rendered to JPG (`enrich --mode render`, full ss4 Lanczos3 wallpaper quality).
 
 ## Conventions
 
+> **Commit prompt work to `main`. Do not create branches unless explicitly asked to.** A
+> production config change sitting on an unmerged branch looks applied and isn't, and that
+> failure is silent — the τ_h floor raise was staged on `closeout-batch-tau-h` and had no effect
+> until it landed on `main`. Standing rule, not a one-off: commit directly to `main` (branch only
+> on an explicit request).
+
 > **Generated-output convention.** All generated artifacts — renders, strips, contact sheets, guided-descend/calibration JSON, logs, demo fixtures — are written under the single `out/` tree, never the repo root. The root holds only source, config, docs, and committed `assets/`. `out/` is gitignored (except `.gitkeep`), so the entire working corpus wipes with one `rm -r out/*` without touching anything tracked. **New subcommands MUST default their output under `out/<subcommand>/` and MUST NOT write to the repo root.**
 
 The fixed base defaults are `out/renders/` (bare render) and `out/strips/` (sheet); every other subcommand writes under its own `out/<subcommand>/`. Use `crate::ensure_parent_dir(path)?` before any top-level `save`/`fs::write` so a no-flag default writes its dir on a fresh checkout.
