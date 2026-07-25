@@ -109,7 +109,11 @@ FRESH_LEDGERS = [
     ROOT / "data" / "discovery" / "outcome_ledger.jsonl",
     ROOT / "data" / "discovery" / "gather" / "mandelbrot" / "outcome_ledger.jsonl",
 ]
-DEG2_FAMILIES = BFD.DEG2_FAMILIES   # ("mandelbrot", "julia:mandelbrot")
+# Deg-2 fresh filter: THIS batch is deg-2-only (see docstring + the filter string
+# below). build_fresh_discovery used to export this, but it has since widened to an
+# ALL-families flow and dropped the constant, so the deg-2 restriction now lives here
+# where it is actually applied (lines using DEG2_FAMILIES in _select_fresh).
+DEG2_FAMILIES = ("mandelbrot", "julia:mandelbrot")
 
 LABEL_CROP_WORKERS = 4      # project-wide max-workers cap — DO NOT raise
 SEED = 7                    # beam seed (gen-0 draws + refinement) — build_humanq3 parity
