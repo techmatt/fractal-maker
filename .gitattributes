@@ -5,3 +5,9 @@ data/render_mode_head/v1/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/queries/scorer/v3_gvo/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/harvest_log.jsonl filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/prio_terms.jsonl filter=lfs diff=lfs merge=lfs -text
+# Frozen v7 eval slice: only a full GPU eval-freeze (classifier/train_v7.py) produces it
+# and it's ignored by the blanket /data/* rule, so it must be force-added like the
+# classifier weights. This ensures it lands in LFS when it is: `git add -f
+# data/classifier/v7/eval_scores_v7.jsonl`. It's the frozen input the keeper calibration
+# gate (tools/atlas/keeper_cut.py, test_steered_frontier.py) derives + tests against.
+data/classifier/**/eval_scores_v7.jsonl filter=lfs diff=lfs merge=lfs -text

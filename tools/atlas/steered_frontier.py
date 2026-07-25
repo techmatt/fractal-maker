@@ -178,6 +178,23 @@ def loc_of(partition: str, c, cx, cy, fw):
 # The cheap p_good cut that RETAINS ~90% of frames whose canonical p_good clears the
 # family's t_good (= the 10th percentile of cheap p_good among those frames).
 # --------------------------------------------------------------------------- #
+# Prospective per-family floors raised from the campaign harvest logs (2026-07-25
+# closeout). For these three c-plane families the fidelity-derived cut (~0.201) sits
+# well below where the *campaign* cheap/canonical relationship starts costing admits:
+# pooling every confirmation render across campaign1+2 (breadth+dive) and raising the
+# cut to the point that loses <=5% of that family's admits gives the values below.
+# mandelbrot has real headroom (drops ~30% of its confirmation renders for 4.8% admit
+# loss); mb3/mb5 curves are band-thin near the current cut (~9-10% renders for ~5%
+# loss). mb4 and every julia partition are left at the fidelity-derived value — their
+# curves are band-thin and the cheap score is flat within the retained slice.
+# Applied as a floor (max with the derived value) so it only ever raises, never lowers.
+TAU_H_CAMPAIGN_FLOOR = {
+    "mandelbrot": 0.2690,
+    "multibrot3": 0.2193,
+    "multibrot5": 0.2162,
+}
+
+
 def derive_tau_h(partitions: list[str], keep=0.90) -> dict:
     if not FIDELITY_RECORDS.exists():
         raise SystemExit(f"missing {FIDELITY_RECORDS} — run tools/studies/descent_score_fidelity.py")
@@ -204,6 +221,9 @@ def derive_tau_h(partitions: list[str], keep=0.90) -> dict:
         tau[part] = cut(ids)
         if tau[part] is None:
             tau[part] = pooled
+        floor = TAU_H_CAMPAIGN_FLOOR.get(part)
+        if floor is not None:
+            tau[part] = max(tau[part], floor)
     return tau
 
 
