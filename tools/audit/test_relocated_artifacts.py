@@ -41,21 +41,47 @@ def _count_files(p: Path, cap: int = 5) -> int:
     return n
 
 
-def test_no_relocated_root_repopulated_in_tree():
-    """No relocated family may hold real files under its OLD in-tree path.
+def _scan_in_tree_offenders(repo_root: Path) -> list[str]:
+    """Relocated families holding real files under their OLD in-tree path in `repo_root`.
 
-    Empty leftover dirs are tolerated (a move can leave the parent behind); real
-    files mean a writer bypassed the resolver and re-bombed the tree."""
+    Empty leftover dirs are tolerated (a move can leave the parent behind); real files
+    mean a writer bypassed the resolver and re-bombed the tree. Parameterized on the
+    root so the fire direction is testable against a synthetic tree, not only the repo."""
     offenders = []
     for prefix in A.RELOCATED_PREFIXES:
-        in_tree = REPO_ROOT / prefix
+        in_tree = repo_root / prefix
         n = _count_files(in_tree)
         if n:
             offenders.append(f"{prefix} has {n}+ files in-tree at {in_tree}")
+    return offenders
+
+
+def test_no_relocated_root_repopulated_in_tree():
+    """The real working tree is clean — no relocated family repopulated in-tree."""
+    offenders = _scan_in_tree_offenders(REPO_ROOT)
     assert not offenders, (
         "Relocated artifact family repopulated in the working tree (a writer "
         "bypassed tools/corpus/artifacts.resolve): " + "; ".join(offenders)
     )
+
+
+def test_tripwire_fires_on_synthetic_repopulation(tmp_path):
+    """The tripwire FIRES (and names the offender) when a relocated family reappears.
+
+    The clean-tree test above proves it stays quiet; this proves it does not stay
+    quiet when it shouldn't. Planted in a tmp repo mirror so the real tree is untouched."""
+    # clean mirror -> quiet
+    assert _scan_in_tree_offenders(tmp_path) == []
+    # plant a real file under one relocated prefix's OLD in-tree path -> must be caught
+    victim = A.RELOCATED_PREFIXES[0]
+    planted = tmp_path / victim / "sub" / "bomb.jpg"
+    planted.parent.mkdir(parents=True)
+    planted.write_bytes(b"x")
+    offenders = _scan_in_tree_offenders(tmp_path)
+    assert any(victim in o for o in offenders), offenders
+    # an empty leftover dir alone is tolerated (a move can leave the parent behind)
+    planted.unlink()
+    assert _scan_in_tree_offenders(tmp_path) == []
 
 
 def test_relocated_prefixes_map_under_artifacts_root():
