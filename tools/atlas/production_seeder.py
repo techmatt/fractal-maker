@@ -92,6 +92,7 @@ from step0_reanalysis import (  # noqa: E402
 import reframe  # noqa: E402  (reframe_location + the DUMP_GUARD_FIELD hook)
 from reframe import reframe_location  # noqa: E402
 import guard  # noqa: E402  (degenerate-outcome guard: make_guarded_scorer + the field gate)
+import discovery_sinks as dsinks  # noqa: E402  (central sink-isolation: throwaway runs never touch data/)
 from score_lib import corn_decode  # noqa: E402  (canonical v5 CORN hard-class decode)
 import julia_ledger_schema as jls  # noqa: E402  (campaign/walk julia schema tag — tools/corpus on path)
 from active_ckpt import make_scorer as make_raw_scorer, ACTIVE_CKPT  # noqa: E402  (UNGUARDED raw — gather mode; ACTIVE_CKPT = single-source live checkpoint)
@@ -199,11 +200,15 @@ WORKERS = 4              # multiprocessing worker cap (project rule: max 4)
 JULIA_WALKS_PER_DESCENT = 3  # native --julia walks per qualifying parent outcome (tunable)
 
 # --- durable store (committed via .gitignore negation, like the atlas) ---
-DISCOVERY_DIR = ROOT / "data" / "discovery"
-OUTCOME_LEDGER = DISCOVERY_DIR / "outcome_ledger.jsonl"
-OUTCOME_FEATS = DISCOVERY_DIR / "outcome_feats.npz"
-PROBE_REJECTS = DISCOVERY_DIR / "probe_rejects.jsonl"
-RUNS_DIR = DISCOVERY_DIR / "runs"
+# The store root + every derived sink come from discovery_sinks so the seeder and its
+# isolation guard share ONE definition; main() rebinds all of them atomically via
+# _rebind_discovery when a run redirects the store (throwaway isolation / --discovery-dir).
+DISCOVERY_DIR = dsinks.default_discovery_dir(ROOT)
+_SINKS = dsinks.derive_sinks(DISCOVERY_DIR)
+OUTCOME_LEDGER = _SINKS["outcome_ledger"]
+OUTCOME_FEATS = _SINKS["outcome_feats"]
+PROBE_REJECTS = _SINKS["probe_rejects"]
+RUNS_DIR = _SINKS["runs"]
 # disposable render scratch (never data/): native run, probe pools, walk pools, reward tiles
 SCRATCH_ROOT = ROOT / "out" / "atlas" / "production_seeder"
 # contact-sheet review PNGs are disposable render VIEWS -> out/ (a sibling of the per-run
@@ -218,8 +223,25 @@ SHEETS_DIR = SCRATCH_ROOT / "sheets"
 # (guard-pass always true), so mixing them into the production ledger would silently
 # admit degenerate decoded-class-3 outcomes into live discovery. Each class run appends
 # its own ledger + writes its own walks.jsonl; nothing is cleaned up between classes. ---
-GATHER_DIR = DISCOVERY_DIR / "gather"
+GATHER_DIR = _SINKS["gather"]
 GATHER_SCRATCH_ROOT = ROOT / "out" / "atlas" / "gather"
+
+
+def _rebind_discovery(new_dir: Path) -> None:
+    """Atomically point EVERY durable sink at `new_dir` and create it. This is the one
+    place the store root moves: throwaway isolation and `--discovery-dir` both route
+    here, so no sink can be left frozen against the old root. GATHER_DIR is included —
+    the pre-refactor rebind silently missed it (it was computed once at module load), so
+    `--gather --smoke` / `--gather --discovery-dir` still hit production `data/discovery`."""
+    global DISCOVERY_DIR, OUTCOME_LEDGER, OUTCOME_FEATS, PROBE_REJECTS, RUNS_DIR, GATHER_DIR
+    DISCOVERY_DIR = Path(new_dir)
+    sinks = dsinks.derive_sinks(DISCOVERY_DIR)
+    OUTCOME_LEDGER = sinks["outcome_ledger"]
+    OUTCOME_FEATS = sinks["outcome_feats"]
+    PROBE_REJECTS = sinks["probe_rejects"]
+    RUNS_DIR = sinks["runs"]
+    GATHER_DIR = sinks["gather"]
+    DISCOVERY_DIR.mkdir(parents=True, exist_ok=True)
 
 # Loosened, degree-aware Julia DESCENT bands (from the Julia-band assessment) — applied
 # to JULIA descents ONLY (the --julia-hook sub-descents + any standalone --julia gather),
@@ -2117,18 +2139,23 @@ def main():
                          "a degree-only julia:{fam} partition (strictly additive; default off — "
                          "c-plane runs are byte-unchanged when off).")
     args = ap.parse_args()
-    if args.discovery_dir is not None:
-        # Run-scoped store redirect: rebind the durable-discovery globals BEFORE any
-        # dispatch so Ledgers/append_outcome/_finalize/RUNS_DIR all target the fresh dir.
-        global DISCOVERY_DIR, OUTCOME_LEDGER, OUTCOME_FEATS, PROBE_REJECTS, RUNS_DIR
-        DISCOVERY_DIR = args.discovery_dir.resolve()
-        OUTCOME_LEDGER = DISCOVERY_DIR / "outcome_ledger.jsonl"
-        OUTCOME_FEATS = DISCOVERY_DIR / "outcome_feats.npz"
-        PROBE_REJECTS = DISCOVERY_DIR / "probe_rejects.jsonl"
-        RUNS_DIR = DISCOVERY_DIR / "runs"
-        DISCOVERY_DIR.mkdir(parents=True, exist_ok=True)
-        print(f"[seeder] discovery store -> {DISCOVERY_DIR}  (run-scoped ledger; "
-              f"cloud rebuilt from this dir only)")
+    # Central sink isolation (BEFORE any dispatch, so Ledgers/append_outcome/_finalize/
+    # RUNS_DIR/GATHER_DIR all target the resolved dir). Precedence lives in
+    # discovery_sinks.resolve_discovery_dir: explicit --discovery-dir > throwaway
+    # (--smoke/--time-only) ephemeral scratch > production data/discovery. A bare smoke
+    # run therefore PHYSICALLY cannot append to the durable ledgers.
+    store_dir = dsinks.resolve_discovery_dir(
+        ROOT, smoke=args.smoke, time_only=args.time_only, explicit=args.discovery_dir)
+    redirected = (args.discovery_dir is not None
+                  or dsinks.is_throwaway(args.smoke, args.time_only))
+    if redirected:
+        _rebind_discovery(store_dir)
+        if args.discovery_dir is not None:
+            print(f"[seeder] discovery store -> {DISCOVERY_DIR}  (run-scoped ledger; "
+                  f"cloud rebuilt from this dir only)")
+        else:
+            print(f"[seeder] THROWAWAY run: discovery store redirected to ephemeral "
+                  f"scratch -> {DISCOVERY_DIR}  (data/discovery is untouched)")
     if args.finalize:
         _finalize(args.finalize)
     elif args.run_phoenix:
