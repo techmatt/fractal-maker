@@ -24,7 +24,7 @@ Reporting is decomposed per batch: coldstart-val regresses against the promoted
 v2 reference (V2_REFERENCE); warmstart-val is the new fine-resolution regime (no
 baseline).
 
-Artifacts (persistent, survive `rm -r out/*`):
+Artifacts (persistent, survive `rm -r scratch/*`):
     data/queries/scorer/v2/
         model_best.pt   (state_dict + config; best by val pair accuracy)
         model_last.pt

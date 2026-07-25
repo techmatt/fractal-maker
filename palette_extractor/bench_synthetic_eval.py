@@ -57,7 +57,7 @@ from bench_imbalanced import directed_coverage
 # -- paths ---------------------------------------------------------------------
 PALETTES_JSON = ROOT / "data" / "palettes" / "clean_colormaps.json"
 DATA_DIR      = ROOT / "data" / "palette_synthetic_eval"     # load-bearing manifest
-RENDERS_DIR   = ROOT / "out"  / "palette_synthetic_eval"     # regenerable views
+RENDERS_DIR   = ROOT / "scratch"  / "palette_synthetic_eval"     # regenerable views
 STRIPS_DIR    = RENDERS_DIR / "strips"
 VIZ_HTML      = ROOT / "tools" / "viz" / "palette_synthetic_eval.html"
 
@@ -347,7 +347,7 @@ b{color:#e0e0e0}
 <div id="root"></div>
 <script>
 const M = __PAYLOAD__;
-const SB = '../../out/palette_synthetic_eval/strips/';
+const SB = '../../scratch/palette_synthetic_eval/strips/';
 const f=(x,d=4)=>(x==null?'-':Number(x).toFixed(d));
 const root=document.getElementById('root');
 const SET=['def','mf995','sf'], SLAB={def:'mf 0.90 (default)',mf995:'mf 0.995',sf:'mf 0.90 + support_floor'};

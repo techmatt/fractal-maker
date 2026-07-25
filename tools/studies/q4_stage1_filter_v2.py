@@ -95,7 +95,7 @@ def filter_v2(m, spk=None):
 
 
 # --------------------------------------------------------------------------- #
-# Field-based speckle score (Bug 2). Loads the dumped fields (out/q4_stage1/
+# Field-based speckle score (Bug 2). Loads the dumped fields (scratch/q4_stage1/
 # fields/), crops each window, computes (hf_mean, speckle_ratio). Cached to the
 # STORE (committed) so the filter runs without regenerating fields.
 # --------------------------------------------------------------------------- #

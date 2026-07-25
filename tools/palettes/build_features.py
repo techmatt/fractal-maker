@@ -10,7 +10,7 @@ kept for its visual-first report; running it writes the durable file over the
 Writes:
   * data/palettes/palette_features.json  -- durable per-palette feature (type,
     canonical_reversed, (32,3) Oklab trajectory, signals). Downstream loads this.
-  * out/palette_types.png                -- swatch grid grouped by derived type.
+  * scratch/palette_types.png                -- swatch grid grouped by derived type.
 
 Prints:
   * per-palette signal distributions (so the tunable eps thresholds can be set by eye)

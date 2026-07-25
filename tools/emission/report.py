@@ -1,6 +1,6 @@
 """report.py — emission-v1 report + contact sheets.
 
-Writes `out/emission_v1_report.md` (path anchored at repo root per the prompt) plus a
+Writes `scratch/emission_v1_report.md` (path anchored at repo root per the prompt) plus a
 release contact sheet and a pool contact sheet grouped by niche, and a machine-readable
 `summary.json`. Kept separate from the driver so the report can be rebuilt from the
 durable pool log without re-colorizing.
@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 from tools.emission import descriptor as D
 
 ROOT = Path(__file__).resolve().parents[2]
-REPORT_PATH = ROOT / "out" / "emission_v1_report.md"
+REPORT_PATH = ROOT / "scratch" / "emission_v1_report.md"
 
 
 def _v1_release_reconstruction(v1_pool: Path, release_n: int):
@@ -304,7 +304,7 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
     L.append("")
 
     # v1 side-by-side: reconstruct the v1 release (no release floors) from its durable pool.
-    v1 = _v1_release_reconstruction(ROOT / "out" / "emission_v1" / "pool_log.jsonl", eng.release_n)
+    v1 = _v1_release_reconstruction(ROOT / "scratch" / "emission_v1" / "pool_log.jsonl", eng.release_n)
     if v1 and eng.out.name != "emission_v1":
         L.append("### vs the v1 release (no release floors) — side-by-side\n")
         L.append("v1 selected from ALL gated pool rows (permissive floor only). Reconstructed "
@@ -351,5 +351,5 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"[report] {report_path}\n[report] {rel_png}\n[report] {pool_png}\n"
-          f"[report] {out/'summary.json'}", flush=True)
+          f"[report] {scratch/'summary.json'}", flush=True)
     return summary

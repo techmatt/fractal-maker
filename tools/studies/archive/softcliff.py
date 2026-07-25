@@ -6,7 +6,7 @@ lock the default and (2) re-renders the whole authored set at the default width 
 both the smooth and busy diagnostic locations. Visual-first, no metrics. Renders
 through the production `render-one --palette` path.
 
-Outputs under out/palette_preview/softcliff/:
+Outputs under scratch/palette_preview/softcliff/:
   * dense_w{030,060,080,120}.json   — full set densified at each swept width
   * sweep.png                        — Oxblood/Amber x 2 locs x 4 widths
   * fullset_smooth.png / fullset_busy.png  — all 20 palettes at W=0.08, per loc
@@ -29,7 +29,7 @@ from cliff_diag import render, W, H, SS, LOC_SMOOTH, LOC_BUSY  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTHORED = ROOT / "dramatic_palettes/dramatic-test.json"
-OUTDIR = ROOT / "out/palette_preview/softcliff"
+OUTDIR = ROOT / "scratch/palette_preview/softcliff"
 RENDER_DIR = OUTDIR / "renders"
 WORKERS = 4  # project cap
 

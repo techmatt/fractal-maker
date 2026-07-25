@@ -28,7 +28,7 @@ from eval_palette import render_mandelbrot, SPIRAL_CENTER, SPIRAL_HALF_W
 from palette_lib.coloring import bake_lut, lookup_linear, linear_to_srgb, colorize
 
 OUT = ROOT / "data" / "wallpaper_harvest"
-RDIR = ROOT / "out" / "wallpaper_harvest" / "test_render"
+RDIR = ROOT / "scratch" / "wallpaper_harvest" / "test_render"
 VIZ = ROOT / "tools" / "viz" / "harvest_test_render.html"
 
 RENDER_W, RENDER_H = 520, 340
@@ -102,7 +102,7 @@ def main():
     payload = {"survivors": surv_rows, "rejects": rej_rows,
                "center": list(SPIRAL_CENTER), "extent_floor": EXTENT_FLOOR,
                "arclen_floor": ARCLEN_FLOOR,
-               "img_dir": "../../out/wallpaper_harvest/test_render/"}
+               "img_dir": "../../scratch/wallpaper_harvest/test_render/"}
     write_viewer(payload)
     print(f"\nwrote {VIZ}")
 

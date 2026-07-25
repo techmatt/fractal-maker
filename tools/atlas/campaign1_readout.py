@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 r"""campaign1_readout.py — price future scheduling off a steered-frontier campaign.
 
-Regenerates `out/campaign1/readout.md` from the campaign's durable artifacts alone
+Regenerates `scratch/campaign1/readout.md` from the campaign's durable artifacts alone
 (breadth + dive run dirs: outcome_ledger.jsonl, state.json/dive_state.json, harvest_log.jsonl,
 and the run stdout log for the batch->active-time map). Re-runnable at any checkpoint; the
 ledger is authoritative for admissions, state.json for accumulated active time.
@@ -148,7 +148,7 @@ def _norm(E):
 def morph_embed(adm: list):
     """(uids, fams, depths, normalized E[N,768]) via the library morph_gray recipe."""
     model, tf = spm.load_clip()
-    tmp = ROOT / "out" / "campaign1" / "morph_fields"
+    tmp = ROOT / "scratch" / "campaign1" / "morph_fields"
     uids, fams, depths, E = spm.embed_admissions(adm, tmp, model, tf)
     return uids, fams, depths, _norm(E)
 
@@ -451,7 +451,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--breadth", required=True, help="breadth run dir")
     ap.add_argument("--dive", default=None, help="dive run dir (optional)")
-    ap.add_argument("--out", default=str(ROOT / "out" / "campaign1" / "readout.md"))
+    ap.add_argument("--out", default=str(ROOT / "scratch" / "campaign1" / "readout.md"))
     ap.add_argument("--no-morph", action="store_true", help="skip the GPU morph pass (cheap metrics only)")
     ap.add_argument("--prior-ledgers", nargs="*", default=None,
                     help="prior outcome_ledger.jsonl paths (default: all under data/ except campaign1)")

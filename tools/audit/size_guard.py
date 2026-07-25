@@ -3,7 +3,7 @@
 
 Sibling to `disk_audit.py`. Where that tool classifies data artifacts by
 DELETION-SAFETY, this one enforces a different invariant: **the working tree
-should stay ~what git tracks — source + irreplaceable metadata + `out/`.** Nothing
+should stay ~what git tracks — source + irreplaceable metadata + `scratch/`.** Nothing
 large lives in-tree without an explicit, written-down reason.
 
 Two independent things live here:
@@ -20,7 +20,7 @@ Two independent things live here:
            coarse mixed-disposition registry entries. Small-files-only isolates the
            many-small-file case (label crops, field caches) that no single-file rule
            can see.
-     Excludes {out/, .venv/, target/, target-test/, .git/} from flagging. `.git` is
+     Excludes {scratch/, .venv/, target/, target-test/, .git/} from flagging. `.git` is
      a history-REWRITE target (git filter-repo), not a relocation one — its size is
      reported as an FYI line, never flagged.
 
@@ -70,7 +70,7 @@ DIR_THRESHOLD = 100 * 1024 * 1024       # ~100 MB — many-small-file catch
 
 # Excluded from FLAGGING (working-tree churn that is regenerable infra, not data
 # bloat we relocate). `.git` is a history-rewrite target -> FYI size only.
-EXCLUDE_PREFIXES = ("out", ".venv", "target", "target-test", ".git", ".pytest_cache")
+EXCLUDE_PREFIXES = ("scratch", ".venv", "target", "target-test", ".git", ".pytest_cache")
 GIT_DIR = ".git"
 
 # ---------------------------------------------------------------------------

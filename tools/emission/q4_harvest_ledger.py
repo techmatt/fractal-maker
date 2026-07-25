@@ -22,12 +22,12 @@ the framings, and the REAL morphology dedup ("incremental medoid within type") i
 driver's intake clustering (`descriptor.assign_morph_clusters`, cos 0.974) — this ledger seeds
 that, it does not pre-empt it.
 
-Durable outputs under data/emission/q4_harvest/ (survive `rm -r out/*`):
+Durable outputs under data/emission/q4_harvest/ (survive `rm -r scratch/*`):
   rescored.jsonl        per-candidate v7 rescore result (guard-pass AND guard-fail) — resume key
   outcome_ledger.jsonl  guard-passing rows, distinct=True (intake-ready; floor applied at intake)
   stats.json           per-condition counts (rendered / guard / floor) + decoded_class hist
 
-Decode tiles + guard fields are transient (out/emission/q4_harvest_decode/, per-candidate wiped).
+Decode tiles + guard fields are transient (scratch/emission/q4_harvest_decode/, per-candidate wiped).
 
   uv run python tools/emission/q4_harvest_ledger.py --limit 5    # smoke
   uv run python tools/emission/q4_harvest_ledger.py              # full (background)
@@ -61,9 +61,9 @@ import production_seeder as ps                  # noqa: E402
 from score_lib import corn_decode               # noqa: E402
 from colormap import load_field                 # noqa: E402
 
-CANDIDATES = ROOT / "out" / "q4_stage1" / "harvest_tight" / "candidates.json"
+CANDIDATES = ROOT / "scratch" / "q4_stage1" / "harvest_tight" / "candidates.json"
 RUN_DIR = ROOT / "data" / "emission" / "q4_harvest"
-SCRATCH = ROOT / "out" / "emission" / "q4_harvest_decode"
+SCRATCH = ROOT / "scratch" / "emission" / "q4_harvest_decode"
 SOURCE_TAG = "q4_harvest"
 FAMILY = "mandelbrot"
 RENDER_W, RENDER_H, RENDER_SS = reframe.RENDER_W, reframe.RENDER_H, reframe.RENDER_SS

@@ -15,7 +15,7 @@ canonical robust-z transfer was recovered into `library_annotate.morph_gray_imag
     K colored_clips per location (one per `palette_candidates[]` entry), vs the single
     morphology CLIP per location. Each embedding is keyed to `location_id/variant_id`.
   * FIELD-CACHE recolor path (Recipe-2): the smooth scalar field is dumped ONCE per
-    location (reused from the `out/curation/morph_fields` cache, re-dumped if absent), then
+    location (reused from the `scratch/curation/morph_fields` cache, re-dumped if absent), then
     recolored per candidate via `tools.colormap.render_candidate` (cheap — no field
     math). CLIP only sees ~224px, so we color at the morphology 640x360 (smooth base,
     box filter, normal_map off), never wallpaper res.
@@ -33,7 +33,7 @@ single `data/library_embeddings/embeddings.npz`:
 and rewrites `library_records.jsonl` in place: `descriptors.npz` repointed at the
 data/ store, `descriptors.colored_clip` filled (was null) with a store reference, and
 each `palette_candidates[]` gains a `colored_clip_row` index. `data/` survives
-`rm -r out/*` and scratch sweeps, so by-reference descriptors no longer dangle.
+`rm -r scratch/*` and scratch sweeps, so by-reference descriptors no longer dangle.
 
 Producer + backfill + store-promotion ONLY — NOT the soft-spread selection that
 consumes it. Re-runnable: reads candidate recipes straight from the records.
@@ -62,7 +62,7 @@ RECORDS = ROOT / "data/library/library_records.jsonl"
 # its rows are already PROMOTED into STORE (morph_uids/morph_clip/morph_v6). build()/report()
 # below only run to (re)promote — dead unless the gray producer is rebuilt (see morph_parity.md).
 GRAY_NPZ = ROOT / "data/library_embeddings/gray_embeddings.npz"
-FIELDS = ROOT / "out/curation/morph_fields"                # regenerable smooth-field cache
+FIELDS = ROOT / "scratch/curation/morph_fields"                # regenerable smooth-field cache
 STORE = ROOT / "data/library_embeddings/embeddings.npz"    # LOAD-BEARING sink
 EXE = ROOT / "target/release/fractal-generator.exe"
 POOL_COLORMAPS = ROOT / "data/palettes/pool_colormaps.json"   # covers all 56 palettes

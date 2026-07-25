@@ -62,7 +62,7 @@ from active_ckpt import (  # noqa: E402
     BIN, ROOT, PALETTE, JPG_Q, auto_maxiter, make_scorer, select_anchors,
 )
 
-OUT_DIR = ROOT / "out" / "reframe_speed"
+OUT_DIR = ROOT / "scratch" / "reframe_speed"
 
 # --- bounded-window grid (LOCKED, see prompt) ---
 FW_FACS = [0.5, 2.0 ** -0.5, 1.0, 2.0 ** 0.5]   # x0.5 .. x1.41 (2-sided, no zoom-max)

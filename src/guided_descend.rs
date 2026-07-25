@@ -3157,7 +3157,7 @@ pub struct GuidedDescendArgs {
     pub pct_band_schedule: Option<String>,
 
     /// Output directory (`pool_sheet.html`, `pool.jsonl`, `pool_grid.png`,
-    /// `tiles/`). Outside `out/` — durable. Use a distinct dir per run.
+    /// `tiles/`). Outside `scratch/` — durable. Use a distinct dir per run.
     #[arg(long, default_value = "data/guided_descend/run4")]
     pub out_dir: String,
 }

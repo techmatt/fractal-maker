@@ -35,7 +35,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dive-run", type=Path, default=ROOT / "data/discovery/steered_v1_2_dive")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--out-dir", type=Path, default=ROOT / "out/dive_manifest")
+    ap.add_argument("--out-dir", type=Path, default=ROOT / "scratch/dive_manifest")
     args = ap.parse_args()
     run = args.dive_run
 

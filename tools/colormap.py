@@ -954,7 +954,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Color a dumped smooth field via a CandidateConfig.")
     ap.add_argument("field", help="path to the .bin field (sidecar .json alongside)")
     ap.add_argument("--palette", default="twilight")
-    ap.add_argument("--out", default="out/colormap_render.png")
+    ap.add_argument("--out", default="scratch/colormap_render.png")
     ap.add_argument("--filter", default="box", choices=["box", "mitchell", "lanczos3"])
     ap.add_argument("--log-premap", default="none", choices=["none", "log"])
     ap.add_argument("--gamma", type=float, default=1.0)

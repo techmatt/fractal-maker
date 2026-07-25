@@ -10,8 +10,8 @@ Read-only against all existing sources (survey, harvest, curated libraries). Wri
   * data/palettes/palette_features.json  -- REGENERATED over the full merged pool
     (overwrites the old 76-entry q3-only file) so colormap.py's type lookup resolves
     for every pool entry.
-  * out/palettes/pool_types.png          -- two-group (cyclic/non_cyclic) swatch grid.
-  * out/palettes/pool_report.md          -- the contingency table + dedup report.
+  * scratch/palettes/pool_types.png          -- two-group (cyclic/non_cyclic) swatch grid.
+  * scratch/palettes/pool_report.md          -- the contingency table + dedup report.
 
 Sources / decisions (see report for the surfaced calls):
   * curated: every name scored 2 or 3 in labels/palette_scores.json, curve resolved
@@ -51,7 +51,7 @@ DUP_THRESH = 0.06  # survey's provisional trajectory-distance near-dup threshold
 # palette dimmer than this is ever drawn again (location render / preference sampler /
 # coloring). Anchored just below the curated-q3 brightness floor (83.7 = `seismic`) so
 # all 76 curated score-3 palettes survive; the boundary swatch montage
-# (out/palette_luma_floor/) shows the 70-84 band renders fine while <70 is near-black.
+# (scratch/palette_luma_floor/) shows the 70-84 band renders fine while <70 is near-black.
 # The dark tail lived almost entirely in `extracted` (floor 9.2), which put unlabelable
 # crops into gather_v6. Provisional -- re-run at a different value is a one-constant edit
 # with no re-renders. (84 = the strict alternative; it additionally drops `seismic` q3 +
@@ -61,7 +61,7 @@ LUMA_FLOOR = 70.0
 
 def mean_luma(stops):
     """Rec.709 mean luma over a 256-sample gradient. SAME definition as the darkness
-    detector (out/dark_detect_v6/) so the floor is consistent with the diagnosis."""
+    detector (scratch/dark_detect_v6/) so the floor is consistent with the diagnosis."""
     ts = np.array([s[0] for s in stops], float)
     cols = np.array([s[1] for s in stops], float)
     g = np.linspace(0, 1, 256)
@@ -223,7 +223,7 @@ def regate_existing():
     """Re-apply the luminance floor to the already-built, git-tracked pool without the
     survey. The floor is a pure source-blind SUBSET filter (needs only name/source/stops,
     all present in pool_colormaps.json), so re-gating the committed pool yields exactly the
-    pool a full survey rebuild would. Used when `out/` (disposable) has been wiped so the
+    pool a full survey rebuild would. Used when `scratch/` (disposable) has been wiped so the
     extracted survey is gone -- keeps the floor trivially re-runnable at any value.
     Prunes the dropped names from palette_features.json too so the two stay consistent."""
     from collections import Counter
@@ -253,7 +253,7 @@ def regate_existing():
     # durable drop-list report (reuses the shared writer's section)
     L = ["# Pool luminance-floor re-gate (survey absent -> re-gated committed pool)\n"]
     L.append("Mean-luma floor **%.1f** (Rec.709). %d -> %d (dropped %d: q3=%d q2=%d "
-             "ext=%d). See `out/palette_luma_floor/` for the montage + survivor table.\n"
+             "ext=%d). See `scratch/palette_luma_floor/` for the montage + survivor table.\n"
              % (LUMA_FLOOR, n_pre, len(pool), len(dropped), dc["curated_q3"],
                 dc["curated_q2"], dc["extracted"]))
     L.append("| name | source | mean_luma |")
@@ -263,13 +263,13 @@ def regate_existing():
     os.makedirs(os.path.dirname(REPORT_MD), exist_ok=True)
     open(os.path.join(os.path.dirname(REPORT_MD), "pool_luma_floor_drops.md"), "w",
          encoding="utf-8").write("\n".join(L) + "\n")
-    print("wrote out/palettes/pool_luma_floor_drops.md")
+    print("wrote scratch/palettes/pool_luma_floor_drops.md")
 
 
 def main():
     import time
     if not os.path.exists(SURVEY):
-        print("!! survey %s absent (out/ wiped) -> re-gate existing pool only\n"
+        print("!! survey %s absent (scratch/ wiped) -> re-gate existing pool only\n"
               % os.path.relpath(SURVEY, ROOT))
         regate_existing()
         return
@@ -387,7 +387,7 @@ def write_report(curated, extracted, missing, ediag, tab, sources, types,
     L = []
     L.append("# Merged palette pool — contingency + dedup report\n")
     L.append("Pool = curated q2+q3 (`palette_scores.json` -> `clean_colormaps.json`) "
-             "+ quality-passing extracted (`out/extracted_palette_survey.json` -> "
+             "+ quality-passing extracted (`scratch/extracted_palette_survey.json` -> "
              "`data/wallpaper_harvest/palettes/`).\n")
     L.append("## Sources\n")
     L.append("- **curated q2+q3**: %d (q2=%d, q3=%d), all resolved in clean_colormaps.json."
@@ -425,10 +425,10 @@ def write_report(curated, extracted, missing, ediag, tab, sources, types,
         from collections import Counter
         dc = Counter(s for _, s, _ in dropped)
         L.append("## Luminance floor (source-blind)\n")
-        L.append("Mean-luma floor **%.1f** (Rec.709, same def as `out/dark_detect_v6/`), "
+        L.append("Mean-luma floor **%.1f** (Rec.709, same def as `scratch/dark_detect_v6/`), "
                  "applied over the merged pool so no dark palette is drawn again. "
                  "Dropped **%d** (q3=%d, q2=%d, extracted=%d). Boundary swatch montage + "
-                 "survivor-by-floor table: `out/palette_luma_floor/`.\n"
+                 "survivor-by-floor table: `scratch/palette_luma_floor/`.\n"
                  % (LUMA_FLOOR, len(dropped), dc["curated_q3"], dc["curated_q2"],
                     dc["extracted"]))
         L.append("| name | source | mean_luma |")

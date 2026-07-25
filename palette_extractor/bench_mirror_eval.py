@@ -45,7 +45,7 @@ from bench_consistency import ground_truth_lab
 
 PALETTES_JSON = ROOT / "data" / "palettes" / "clean_colormaps.json"
 DATA_DIR      = ROOT / "data" / "palette_mirror_eval"      # load-bearing manifest
-RENDERS_DIR   = ROOT / "out"  / "palette_mirror_eval"      # regenerable views
+RENDERS_DIR   = ROOT / "scratch"  / "palette_mirror_eval"      # regenerable views
 STRIPS_DIR    = RENDERS_DIR / "strips"
 VIZ_HTML      = ROOT / "tools" / "viz" / "palette_mirror_eval.html"
 
@@ -305,7 +305,7 @@ td{padding:3px 8px;border-bottom:1px solid #181a20;font-variant-numeric:tabular-
 <div class="sub" id="meta"></div>
 <div id="root"></div>
 <script>
-const M=__PAYLOAD__, SB='../../out/palette_mirror_eval/strips/';
+const M=__PAYLOAD__, SB='../../scratch/palette_mirror_eval/strips/';
 const f=(x,d=3)=>(x==null?'-':Number(x).toFixed(d));
 const root=document.getElementById('root');
 const m=M.meta,s=M.summary;

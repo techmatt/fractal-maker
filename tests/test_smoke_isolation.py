@@ -5,7 +5,7 @@
 ledgers — and because smoke rows are current-decode, the version firewall read them as
 admissible, so the leak was structurally invisible. The fix redirects a throwaway run
 (`--smoke` / `--time-only`) with no explicit `--discovery-dir` to an ephemeral scratch
-dir under `out/`. This test locks that in: if the redirect ever regresses, a smoke run's
+dir under `scratch/`. This test locks that in: if the redirect ever regresses, a smoke run's
 sinks resolve back under `data/` and the assertion below fires.
 
 Light lane by construction — imports only `tools/atlas/discovery_sinks.py` (pathlib
@@ -47,11 +47,11 @@ def test_time_only_never_resolves_data_sink():
 
 
 def test_smoke_store_is_under_out():
-    """Positive assertion: the redirected store lands in the disposable out/ tree."""
+    """Positive assertion: the redirected store lands in the disposable scratch/ tree."""
     store = dsinks.resolve_discovery_dir(
         REPO_ROOT, smoke=True, time_only=False, explicit=None)
-    assert (REPO_ROOT / "out").resolve() in store.parents, (
-        f"smoke store {store} is not under out/ (the disposable tier)"
+    assert (REPO_ROOT / "scratch").resolve() in store.parents, (
+        f"smoke store {store} is not under scratch/ (the disposable tier)"
     )
 
 

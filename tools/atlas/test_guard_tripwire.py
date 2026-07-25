@@ -34,7 +34,7 @@ sys.path.insert(0, str(HERE))
 import guard  # noqa: E402
 
 FIXTURE = ROOT / "data" / "atlas" / "guard_tripwire.json"
-FIELD_DIR = ROOT / "out" / "atlas" / "guard_tripwire" / "fields"   # ephemeral render scratch
+FIELD_DIR = ROOT / "scratch" / "atlas" / "guard_tripwire" / "fields"   # ephemeral render scratch
 WORKERS = 4   # project hard cap: never exceed 4 concurrent workers.
 
 pytestmark = pytest.mark.slow

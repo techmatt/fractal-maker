@@ -8,7 +8,7 @@ Reads `<manifest>/blind_index.json` + `<manifest>/tiles/*.jpg`, embeds every til
 keeper) is embedded — the read stays blind. Feed the exported scores.json + the hidden
 manifest_key.json to the keeper-bar calibration.
 
-  uv run python tools/atlas/build_blind_labeler.py --manifest-dir out/steered_run2_manifest
+  uv run python tools/atlas/build_blind_labeler.py --manifest-dir scratch/steered_run2_manifest
 """
 from __future__ import annotations
 

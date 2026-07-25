@@ -2,7 +2,7 @@
 chroma×hue DEFICIT, restoring the green / high-chroma / spectral variety the v3-gvo
 argmax collapses.
 
-Diagnosis that motivates this (out/first_release, 1387-loc whole-library colorize):
+Diagnosis that motivates this (scratch/first_release, 1387-loc whole-library colorize):
 
   * The within-flavor palette pick is v3-gvo argmax. It systematically leaves variety
     on the table: 64% of picks were >0.15 lower-chroma than an available flavor-mate

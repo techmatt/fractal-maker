@@ -39,8 +39,8 @@ NEW_BATCH = "2026-07-23_q4_g_aimed"
 LABEL_FILES = [ROOT / "labels" / "q4_stage1_windows.json",       # p1
                ROOT / "labels" / "q4_stage1_windows_p2.json",     # p2
                ROOT / "labels" / "q4_g_aimed.json"]               # g-aimed (newest)
-OUT = ROOT / "out" / "q4_stage1" / "refit"
-FRAMES = ROOT / "out" / "q4_stage1" / "frames"
+OUT = ROOT / "scratch" / "q4_stage1" / "refit"
+FRAMES = ROOT / "scratch" / "q4_stage1" / "frames"
 FINDINGS = ROOT / "docs" / "findings" / "q4_stage1_refit.md"
 
 TIERS = ["T1_global", "T2_cells"]          # Laplacian (T3) dropped
@@ -145,8 +145,8 @@ def refit(rows):
 
 
 def weight_deltas(weights):
-    """Refit weights vs the first fit (out/q4_stage1/linear_fit/weights.json)."""
-    prior = json.loads((ROOT / "out" / "q4_stage1" / "linear_fit" / "weights.json").read_text())
+    """Refit weights vs the first fit (scratch/q4_stage1/linear_fit/weights.json)."""
+    prior = json.loads((ROOT / "scratch" / "q4_stage1" / "linear_fit" / "weights.json").read_text())
     out = {}
     for tier in TIERS:
         pw = prior["weights"][tier]["weights"]
@@ -203,7 +203,7 @@ def stage_refit():
 
     # the three named checks
     w2 = weights["T2_cells"]["weights"]
-    p2 = json.loads((ROOT / "out" / "q4_stage1" / "linear_fit" / "weights.json").read_text()
+    p2 = json.loads((ROOT / "scratch" / "q4_stage1" / "linear_fit" / "weights.json").read_text()
                     )["weights"]["T2_cells"]["weights"]
     checks = dict(
         g_mid_dominates_T1=("g_mid" in weights["T1_global"]["nonzero"]),
@@ -316,7 +316,7 @@ def write_report(out, weights):
              "noise. One secondary dispersion feature wobbled; the operating threshold "
              "for harvest should be calibrated from labels (the p≈0.5 zone is ~"
              f"{a['uncertain']['accept_rate']:.0%} accept, not 50%), not taken at p=0.5.\n")
-    L.append("Field re-verify: `out/q4_stage1/refit/field_<mb>.png` "
+    L.append("Field re-verify: `scratch/q4_stage1/refit/field_<mb>.png` "
              "(v2-masked dense grid, refit T2 model).\n")
     FINDINGS.parent.mkdir(parents=True, exist_ok=True)
     FINDINGS.write_text("\n".join(L), encoding="utf-8")

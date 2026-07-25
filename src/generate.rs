@@ -15,7 +15,7 @@
 //!    safeguard (reported if hit).
 //!  - **CLI arg parsing** for K, seed, box, scale range, screen res, and the
 //!    band constants (so the deferred boundary retune is a flag, not a recompile).
-//!  - **Output layout** outside `out/`: `locations.jsonl` (one keeper/row) +
+//!  - **Output layout** outside `scratch/`: `locations.jsonl` (one keeper/row) +
 //!    `manifest.json` under `data/generated/<run>/`, plus an annotated keeper
 //!    contact sheet for an eye-pass.
 //!
@@ -957,7 +957,7 @@ pub struct GenerateArgs {
     pub palette: String,
 
     /// Output directory for the batch (`locations.jsonl`, `manifest.json`,
-    /// `keeper_sheet.png`, `thumbs/`). Outside `out/` — a durable location store.
+    /// `keeper_sheet.png`, `thumbs/`). Outside `scratch/` — a durable location store.
     /// Use a distinct dir per batch.
     #[arg(long, default_value = "data/generated/run0")]
     pub out_dir: String,

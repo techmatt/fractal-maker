@@ -131,7 +131,7 @@ def main(argv=None):
     ap.add_argument("--n-walks", type=int, default=3)
     ap.add_argument("--depth-max", type=int, default=4)
     ap.add_argument("--out", type=str,
-                    default=str(ROOT / "out" / "phoenix" / "roots"))
+                    default=str(ROOT / "scratch" / "phoenix" / "roots"))
     args = ap.parse_args(argv)
     binary = default_binary()
     if not binary.exists():

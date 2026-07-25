@@ -60,9 +60,9 @@ except Exception:
     pass
 
 LEDGER = ROOT / "data" / "discovery" / "fresh_runs" / "prospect_run1" / "outcome_ledger.jsonl"
-OUT_MD = ROOT / "out" / "descent_score_fidelity.md"
-OUT_JSON = ROOT / "out" / "descent_score_fidelity_records.json"
-WORKDIR = ROOT / "out" / "descent_score_fidelity" / "tiles"
+OUT_MD = ROOT / "scratch" / "descent_score_fidelity.md"
+OUT_JSON = ROOT / "scratch" / "descent_score_fidelity_records.json"
+WORKDIR = ROOT / "scratch" / "descent_score_fidelity" / "tiles"
 
 # --- Phoenix fixed Ushiki constants (engine defaults; the descent runs at these). ---
 PHX_C = ("0.5667", "0")

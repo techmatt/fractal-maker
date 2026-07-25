@@ -98,7 +98,7 @@ today's `t_good`, so this is a no-op that *proves* the era matches). Campaign 2 
 (`julia_hooks.jsonl`: 0.2 for batches ≤1204, 0.1 for ≥1260), which shifts the julia
 candidate population; the two segments are never pooled.
 
-**Curve** (`out/tau_h/curve.json`; both axes, per partition, per run/segment). A canonical
+**Curve** (`scratch/tau_h/curve.json`; both axes, per partition, per run/segment). A canonical
 render happens iff `cheap ≥ τ` **and** the check is not a pre-canonical coord-dup
 (campaign 2's `precanon_dup` filter already skips ~82% of checks before rendering; campaign
 1 has no such filter so every check renders). Steps are distribution-adapted (τ at the
@@ -151,7 +151,7 @@ the wasted `canon-not-q3` renders clustered just above `τ_h`, cheaply cuttable?
 c-plane mandelbrot/mb3/mb5, no for mb4 and julia.** The campaign-1 curve (no precanon
 filter, so larger absolute render mass) agrees on the ranking and gives lower c-plane
 exchange rates still (mandelbrot 0.004–0.006 at 25–50%). Full arrays incl. campaign 1,
-campaign 2 dive, and seg-A in `out/tau_h/curve.json`.
+campaign 2 dive, and seg-A in `scratch/tau_h/curve.json`.
 
 **Retention fix.** The logging was already correct and unconditional in production
 (`_log_harvest`, pure post-decision append). The only defect was durability:

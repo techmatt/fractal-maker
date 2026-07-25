@@ -232,6 +232,6 @@ pub struct SheetArgs {
     pub palette_reverse: bool,
 
     /// Output PNG path.
-    #[arg(long, default_value = "out/strips/sheet.png")]
+    #[arg(long, default_value = "scratch/strips/sheet.png")]
     pub output: String,
 }

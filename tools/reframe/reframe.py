@@ -18,7 +18,7 @@ the chosen crop with the chosen palette. Reframing stays coloring-agnostic.
 
 The validated procedure (pinned config, FIRST-PASS-THAT-WORKED on 5 anchors --
 provisional, not swept; see prompts/coarse_reframe_module_prompt.md and the speed
-run out/reframe_speed/summary.json):
+run scratch/reframe_speed/summary.json):
 
   * Bounded window (<= half a window; single bounded search, NOT iterated):
       recenter dx,dy in {-0.25, 0, +0.25}*fw ; zoom fw in {x0.5, x0.707, x1.0, x1.414}.
@@ -80,8 +80,8 @@ from active_ckpt import (  # noqa: E402
 )
 import location as loc_mod  # noqa: E402  (the one render-one flag builder + family_params)
 
-OUT_DIR = ROOT / "out" / "reframe"
-SPEED_DIR = ROOT / "out" / "reframe_speed"    # source of the V1 reference picks
+OUT_DIR = ROOT / "scratch" / "reframe"
+SPEED_DIR = ROOT / "scratch" / "reframe_speed"    # source of the V1 reference picks
 DEFAULT_MODEL = ACTIVE_CKPT   # single source of truth (active_ckpt.ACTIVE_CKPT — currently v7)
 
 # --- degenerate-outcome guard hook (opt-in; OFF => byte-identical to today) ---
@@ -171,7 +171,7 @@ def _dump_guard_field(loc: Location, c: dict, out: Path, w: int, h: int, ss: int
     (`--dump-field-source f64`), not the slow beautiful kernel: the guard reads only
     interior_frac (escape mask) + field_std (a std), both invariant to the
     bailout-normalization offset between the two kernels, so verdicts are unchanged
-    (proven by out/atlas/gate_f64_field.py — union-of-20 reproduced exactly). This
+    (proven by scratch/atlas/gate_f64_field.py — union-of-20 reproduced exactly). This
     deletes the redundant beautiful second-render that dominated each tile's wall."""
     fbin = Path(str(out) + GUARD_FIELD_SUFFIX)
     # The fast f64 escape-time smooth-channel source exists for every escape-time
@@ -327,7 +327,7 @@ def run_gate(args):
               f"{'OK' if match else 'FAIL':<6} {res.score:>9.4f}")
     verdict = "PASS" if n_ok == len(GATE_ANCHORS) else "FAIL"
     print(f"\nGATE {verdict}: {n_ok}/{len(GATE_ANCHORS)} picks reproduced "
-          f"(reference = out/reframe_speed/<key>/records.json 640x360_ss2 separable).")
+          f"(reference = scratch/reframe_speed/<key>/records.json 640x360_ss2 separable).")
     if verdict != "PASS":
         raise SystemExit(1)
 

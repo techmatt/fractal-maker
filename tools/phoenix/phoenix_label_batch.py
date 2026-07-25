@@ -309,7 +309,7 @@ def main(argv=None):
     # contact sheets (admissions + rejects)
     adm_rows = [r for r in rows if r["provenance"]["stratum"] in ("HIGH", "Q3")]
     rej_rows = [r for r in rows if r["provenance"]["stratum"] in ("SUB", "REJECT")]
-    sd = ROOT / "out" / "phoenix_grid" / "label_sheets"
+    sd = ROOT / "scratch" / "phoenix_grid" / "label_sheets"
     a = contact_sheet(adm_rows, crops, sd / f"{batch_id}_admissions.png",
                       f"{batch_id} — admissions HIGH+Q3 ({len(adm_rows)})")
     r = contact_sheet(rej_rows, crops, sd / f"{batch_id}_rejects.png",

@@ -1,7 +1,7 @@
 """Repo-size guard: no large-in-tree bloat without an explicit registry entry.
 
 The standing constraint is that the working tree stays ~what git tracks — source +
-irreplaceable metadata + `out/`. Anything large in-tree needs a written-down reason.
+irreplaceable metadata + `scratch/`. Anything large in-tree needs a written-down reason.
 `tools/audit/size_guard.py` scans the *filesystem* (not `git ls-files`: a gitignored
 file can bloat the tree while invisible to git) and flags every file >= 1 MiB and
 every many-small-file directory >= ~100 MB, then checks each flagged violator against

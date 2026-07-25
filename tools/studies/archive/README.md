@@ -1,7 +1,7 @@
 # tools/studies/archive/ — confirmed-dead scripts (archived, not deleted)
 
 These are the 8 files classified **dead** in the code re-audit
-(`out/inventory_followup.md` §2.3): finding captured elsewhere, broken, or
+(`scratch/inventory_followup.md` §2.3): finding captured elsewhere, broken, or
 orphaned. They were **archived, not deleted** — deletion remains a separate,
 unauthorized pass. Nothing tracked imports any of them (verified repo-wide at
 archive time).

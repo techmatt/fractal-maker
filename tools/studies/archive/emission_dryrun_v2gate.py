@@ -30,8 +30,8 @@ from PIL import Image, ImageDraw, ImageFont
 REPO = Path(__file__).resolve().parents[2]
 BATCH = REPO / "data/wallpaper_corpus/batches/2026-07-05_wallpaper_humanq3_v1"
 EVAL = REPO / "data/wallpaper_head/v2/eval_scores.jsonl"
-CELL_CACHE = REPO / "out/wallpaper/emission_dryrun_colorcells.json"
-OUT_DIR = REPO / "out/wallpaper/emission_dryrun_v2gate"
+CELL_CACHE = REPO / "scratch/wallpaper/emission_dryrun_colorcells.json"
+OUT_DIR = REPO / "scratch/wallpaper/emission_dryrun_v2gate"
 
 THRESHOLDS = [0.3, 0.5, 0.7]   # conservative->permissive; see p_ge3 dist in report
 

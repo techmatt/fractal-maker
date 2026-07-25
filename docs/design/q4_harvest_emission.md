@@ -5,7 +5,7 @@
 The q4 tight harvest (`tools/studies/q4_harvest_tight.py`) selects palette-free minibrot
 framings by the **q4 goodness field** `G` (a refit T2 model over per-minibrot position×scale
 fields), gated at a label-derived high-precision cutoff (`G >= ~1.39`). It delivers
-`out/q4_stage1/harvest_tight/candidates.json` — ~116 framings over ~29 minibrots, each a
+`scratch/q4_stage1/harvest_tight/candidates.json` — ~116 framings over ~29 minibrots, each a
 `(cx_win, cy_win, fw_win, maxiter, minibrot_id, scale, G)` record.
 
 This doc records how that harvest becomes a first-class **emission source** flowing through the
@@ -63,20 +63,20 @@ emission driver's own intake clustering (`descriptor.assign_morph_clusters`). Th
 that pass, it does not pre-empt it. Hence the two distinct stage counts "floor-admitted →
 distinct clusters".
 
-Durable outputs under `data/emission/q4_harvest/` (survive `rm -r out/*`):
+Durable outputs under `data/emission/q4_harvest/` (survive `rm -r scratch/*`):
 `rescored.jsonl` (per-candidate decode, guard-pass AND guard-fail; resume key),
 `outcome_ledger.jsonl` (guard-passing rows, intake-ready — the floor is applied by the driver's
 source-aware `load_admitted`), `stats.json` (per-condition counts).
 
-Decode tiles + guard fields are transient (`out/emission/q4_harvest_decode/`, per-candidate
+Decode tiles + guard fields are transient (`scratch/emission/q4_harvest_decode/`, per-candidate
 wiped). They are ~116 small 640×360 JPGs, not a file-count bomb, so they stay under the
-disposable `out/` tree rather than being routed out-of-tree via the `ARTIFACTS_ROOT` resolver
+disposable `scratch/` tree rather than being routed out-of-tree via the `ARTIFACTS_ROOT` resolver
 (that seam is reserved for the regenerable ML aug-cache bombs; a new one was not created here).
 
 ## Running it
 
 ```bash
-# 1. harvest candidates (regenerates the q4 field stack under out/ if wiped)
+# 1. harvest candidates (regenerates the q4 field stack under scratch/ if wiped)
 uv run python -m tools.studies.q4_stage1_labelset minibrots
 uv run python -m tools.studies.q4_stage1_labelset fields
 uv run python -m tools.studies.q4_harvest_tight build
@@ -87,7 +87,7 @@ uv run python tools/emission/q4_harvest_ledger.py
 # 3. emission driver over the q4 source alone (floor-admit is automatic via the source tag)
 uv run python tools/emission/build_emission_diversity_v1.py \
     --ledger data/emission/q4_harvest/outcome_ledger.jsonl \
-    --out out/emission/q4_harvest --cover-all --release-n 24
+    --out scratch/emission/q4_harvest --cover-all --release-n 24
 
 # 4. both-heads release + reject/pool autopsy sheet + per-stage counts
 uv run python tools/emission/q4_harvest_readout.py

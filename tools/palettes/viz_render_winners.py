@@ -59,7 +59,7 @@ N_WINNERS = 3                                          # change 1: 3 emit_v1 win
 DIVERSITY_TOL = 0.05                                   # c-plane center dist below which same-family winners are dupes
 
 VIZ_DIR = ROOT / "dramatic_palettes" / "viz_render_winners"
-FIELDS_DIR = ROOT / "out" / "palette_viz_render" / "fields"   # shared disposable field cache
+FIELDS_DIR = ROOT / "scratch" / "palette_viz_render" / "fields"   # shared disposable field cache
 
 # field spec reused from viz_render (same res / ss / mode → same cache contract).
 PREVIEW_W, PREVIEW_H, PREVIEW_SS, RENDER_MODE = vr.PREVIEW_W, vr.PREVIEW_H, vr.PREVIEW_SS, vr.RENDER_MODE

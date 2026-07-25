@@ -38,10 +38,10 @@ def is_throwaway(smoke: bool, time_only: bool) -> bool:
 
 
 def smoke_scratch_dir(root: Path) -> Path:
-    """Ephemeral discovery store for throwaway runs: under the disposable `out/` tree,
+    """Ephemeral discovery store for throwaway runs: under the disposable `scratch/` tree,
     NEVER `data/`. A fixed (timestamp-free) path is fine — it is rm-safe scratch and a
     smoke run's accumulating cloud is meaningless across runs."""
-    return root / "out" / "atlas" / "production_seeder" / "_smoke_discovery"
+    return root / "scratch" / "atlas" / "production_seeder" / "_smoke_discovery"
 
 
 def resolve_discovery_dir(root: Path, *, smoke: bool, time_only: bool,

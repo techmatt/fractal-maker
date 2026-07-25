@@ -9,8 +9,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-CELLS = ROOT / "out/interior_trap_validation/cells"
-OUT = ROOT / "out/interior_trap_validation"
+CELLS = ROOT / "scratch/interior_trap_validation/cells"
+OUT = ROOT / "scratch/interior_trap_validation"
 
 FIELDS = ["trap_cross", "trap_circle"]
 ANCHORS = ["rabbit", "basilica"]

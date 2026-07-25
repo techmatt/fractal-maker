@@ -22,7 +22,7 @@ from tools.wallpaper import library_annotate as la
 
 STORE = ROOT / "data/library_embeddings/embeddings.npz"
 RECORDS = ROOT / "data/library/library_records.jsonl"
-FIELDS = ROOT / "out/curation/morph_fields"
+FIELDS = ROOT / "scratch/curation/morph_fields"
 
 
 def stem(u): return u.replace("/", "__")

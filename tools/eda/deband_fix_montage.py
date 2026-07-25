@@ -4,7 +4,7 @@ crop strip under each pair surfaces residual banding / terrace cells."""
 from PIL import Image, ImageDraw
 from pathlib import Path
 
-OUT = Path("out/deband_fix")
+OUT = Path("scratch/deband_fix")
 PAIRS = [
     ("stripe", "stripe_d6_linear_OLDnaive.png", "stripe_d6_linear.png"),
     ("tia", "tia_OLDnaive.png", "tia.png"),

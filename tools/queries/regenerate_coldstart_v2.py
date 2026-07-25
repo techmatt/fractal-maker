@@ -102,7 +102,7 @@ def regen_param_query(qid, v1_rec, sampler, lib, field_cache, prep_cache):
 
     stem = aq._field_key(ref)
     if stem not in field_cache:
-        fld, _ = aq.ensure_field(ref)           # cache hit (out/fields) => 0s
+        fld, _ = aq.ensure_field(ref)           # cache hit (scratch/fields) => 0s
         field_cache[stem] = fld
         prep_cache[stem] = qs.cm.stretch_field(fld)
     fld = field_cache[stem]

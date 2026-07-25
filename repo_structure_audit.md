@@ -14,7 +14,7 @@ doc chases it to root and audits what else the same decision costs.
 | Files **in the working tree** | **~640,000** (~**85 GB**) |
 | ├─ `data/` | **588,661** files, **72 GB** |
 | ├─ `.venv/` | 25,117 files |
-| ├─ `out/` | 18,137 files, 10 GB |
+| ├─ `scratch/` | 18,137 files, 10 GB |
 | ├─ `target/` + `target-test/` | 5,354 files, 2.1 GB |
 | └─ `data_large/` | 1,026 files, 653 MB |
 | `.git/` history size | **364 MB** (for a 6.2 MB tracked tree — 58:1) |
@@ -64,7 +64,7 @@ Symptoms that all trace back to this one cause:
    clone pays it.
 4. **Storage-tier sprawl** — because "inside the tree" was the default, disposable
    data accreted into **four parallel tiers** with overlapping semantics:
-   `out/` (disposable), `data/` (mostly-ignored-but-partly-committed),
+   `scratch/` (disposable), `data/` (mostly-ignored-but-partly-committed),
    `data_large/` (653 MB, only a README tracked), and `scratchpad/` (temp). Three
    of the four are prose-governed in CLAUDE.md. The `data/` vs `data_large/` naming
    is actively confusing. That the rules had to be written — and that load-bearing
@@ -105,7 +105,7 @@ The **Rust render core is disciplined and should not be touched by any of the
 above**: 24 files / ~17.8k LOC behind two deliberate seams (`FractalBackend`
 precision tiering; the pure `PixelSample → RGB` coloring map that makes re-color
 free), documented in real `//!` module rationale, validated by f64-vs-perturbation
-ground-truth tests, minimal pure-Rust deps by choice. The `out/<subcommand>/`
+ground-truth tests, minimal pure-Rust deps by choice. The `scratch/<subcommand>/`
 output convention and the "expose the artifact path as a `pub const` shared by
 reader and writer" rule are good instincts. The problem is **not** the engine or
 the *stated* conventions — it's that the artifact-storage model those conventions
@@ -120,9 +120,9 @@ try to police is fighting the filesystem instead of using it.
    `.gitignore` collapses to a handful of lines. This single change dissolves
    symptoms 1–4.
 2. **If artifacts must stay in-tree, enforce a hard split:** *all* disposable
-   output under one ignored root (`out/`), *all* committed metadata under one
+   output under one ignored root (`scratch/`), *all* committed metadata under one
    small tracked root (`meta/` or `store/`) — never interleaved in the same
-   directory. Then `.gitignore` is `/out/` + `/data_large/` + venv/target, not 150
+   directory. Then `.gitignore` is `/scratch/` + `/data_large/` + venv/target, not 150
    lines of negations. Retire `data_large/` into the same scheme (kill the
    `data/`↔`data_large/` name clash).
 3. **Pack the file-count bombs.** One archive per augmentation set and per

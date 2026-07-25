@@ -5,7 +5,7 @@ the slow `grep`). This one chases **bytes**: after the file-count restructure th
 working tree is 60k files but still **~21 GB on disk**. Where that weight lives, what
 must stay, and a phased plan to get the rest out — under one rule from the owner:
 
-> **Except `out/` (disposable → trash) and the trained deep-network checkpoints
+> **Except `scratch/` (disposable → trash) and the trained deep-network checkpoints
 > (`.pt`, precious → keep), most large files should live outside the source tree —
 > in `fractal-maker-artifacts`, or wherever they actually belong.**
 
@@ -15,11 +15,11 @@ must stay, and a phased plan to get the rest out — under one rule from the own
 |---|---:|---|
 | `C:\Code\fractal-generator` (repo) | **21 GB** | source + the weight below |
 | `C:\Code\fractal-maker-artifacts` | **60 GB** | relocated: aug_cache ×4 (the real byte bomb) + campaign2 scratch + viz sheets |
-| `C:\Code\fractal-generator-trash` | **14 GB** | staged `out/`; delete to reclaim (`rm -rf`) |
+| `C:\Code\fractal-generator-trash` | **14 GB** | staged `scratch/`; delete to reclaim (`rm -rf`) |
 
 **Already relocated (this session):** the aug_cache families were ~560k *files* but
 also **~60 GB of JPGs** — moving them out was the single biggest byte win, it just
-landed in the sibling tree. `out/` (14 GB) is staged to trash. Reader-free viz sheets
+landed in the sibling tree. `scratch/` (14 GB) is staged to trash. Reader-free viz sheets
 (`*_grid.png`/`*_sheet.png`, 860 files / **497 MB**) were relocated to artifacts.
 
 ## Where the remaining 21 GB is
@@ -60,7 +60,7 @@ Rust and Python halves agree on where artifacts live.
 
 ## Phased plan (each phase: sweep → wire resolver → relocate → verify gate)
 
-**Phase 0 — done.** aug_cache ×4 + campaign2 scratch → artifacts; `out/` → trash;
+**Phase 0 — done.** aug_cache ×4 + campaign2 scratch → artifacts; `scratch/` → trash;
 reader-free viz sheets → artifacts. Resolver + tripwire + >1 MB pre-commit hook in
 place. Net: ~74 GB of bytes and ~580k files out of the tree.
 
@@ -95,7 +95,7 @@ recurrence. Rewrites history — coordinate before doing it.
 
 ## What stays in-tree by design
 Source; committed metadata (tracked `.jsonl`/`.json` — ledgers, manifests, schemas,
-labels, pools); the **38 `.pt` checkpoints (918 MB)**; `out/` as an empty `.gitkeep`
+labels, pools); the **38 `.pt` checkpoints (918 MB)**; `scratch/` as an empty `.gitkeep`
 anchor; `.venv` and `target*` (live, regenerable infra — relocate only via
 `CARGO_TARGET_DIR`/env if desired, not via the artifacts resolver).
 

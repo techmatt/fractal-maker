@@ -101,4 +101,4 @@ seeds, and design a non-circular discovery test. The proposer *works in principl
 - `arm{1,2,3}_table.jsonl` — k3 best-over-walk harvest (+ reframed geometry)
 - `arm{1,2,3}_embed.npz` — v5 penultimate outcome embeddings + rewards + tags
 - `round1_report.json` — machine-readable metrics
-- `out/atlas/round1/arm{1,2,3}_good_sheet.png` — good-outcome contact sheets (eyeball check)
+- `scratch/atlas/round1/arm{1,2,3}_good_sheet.png` — good-outcome contact sheets (eyeball check)

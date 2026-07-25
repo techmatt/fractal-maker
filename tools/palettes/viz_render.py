@@ -52,7 +52,7 @@ import colormap as cm                                # noqa: E402  the field⊗c
 
 RESULTS_DIR = ROOT / "dramatic_palettes" / "results"
 VIZ_DIR = ROOT / "dramatic_palettes" / "viz_render"
-FIELDS_DIR = ROOT / "out" / "palette_viz_render" / "fields"   # persisted field cache (disposable)
+FIELDS_DIR = ROOT / "scratch" / "palette_viz_render" / "fields"   # persisted field cache (disposable)
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 
 # --- field spec (the cache key: location × resolution × render-mode) ---------

@@ -39,7 +39,7 @@ from score_lib import corn_decode             # noqa: E402
 import subprocess                             # noqa: E402
 
 CROP_W, CROP_H, CROP_SS = 1280, 720, 2        # label/deploy render geometry (Transform stretches to 384x224)
-SCRATCH = ROOT / "out" / "atlas" / "verify_v6_gate"
+SCRATCH = ROOT / "scratch" / "atlas" / "verify_v6_gate"
 
 # Fixed anchor frames.  (label, family, cx, cy, fw, c_re, c_im, expect_degenerate)
 ANCHORS = [

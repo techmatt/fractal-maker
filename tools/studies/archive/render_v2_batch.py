@@ -13,7 +13,7 @@ Reuses `densify_authored` (default soft-cliff W=0.08) and the `render` /
 Renders all 20 palettes on BOTH diagnostic locations (smooth whq3_000, busy) at
 1024x576 ss2 smooth via `render-one --palette`, into two labeled contact sheets.
 
-Outputs under out/palette_preview/v2-batch/:
+Outputs under scratch/palette_preview/v2-batch/:
   * densified.json                 — v2 batch densified at W=0.08
   * renders/                       — every individual frame
   * v2_batch_smooth.png            — 20 palettes on the smooth location
@@ -36,7 +36,7 @@ from cliff_diag import render, W, H, SS, LOC_SMOOTH, LOC_BUSY  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 BATCH = ROOT / "palette_v2.json"
-OUTDIR = ROOT / "out/palette_preview/v2-batch"
+OUTDIR = ROOT / "scratch/palette_preview/v2-batch"
 RENDER_DIR = OUTDIR / "renders"
 WORKERS = 4  # project cap
 DEFAULT_W = 0.08

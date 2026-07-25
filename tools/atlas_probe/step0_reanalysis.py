@@ -61,7 +61,7 @@ from reframe import (  # noqa: E402
 from active_ckpt import make_scorer  # noqa: E402
 
 OUT_DIR = ROOT / "data" / "atlas_probe" / "step0_reanalysis"       # DURABLE table
-SCRATCH = ROOT / "out" / "atlas_probe" / "step0_reanalysis" / "_scratch"
+SCRATCH = ROOT / "scratch" / "atlas_probe" / "step0_reanalysis" / "_scratch"
 STEP0_TABLE = ROOT / "data" / "atlas_probe" / "step0" / "walks_table.jsonl"
 
 TABLE_JSONL = OUT_DIR / "walks_table_bestwalk.jsonl"

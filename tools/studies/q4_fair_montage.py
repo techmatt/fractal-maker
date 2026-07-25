@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "out" / "fair_rerender"
+OUT = ROOT / "scratch" / "fair_rerender"
 SHEETS = OUT / "sheets"
 TILE_W, TILE_H = 1024, 576          # default (top-left) tile in a 16:9 sheet
 # sheet layout: cols=2, PAD=6 border; tile 0 top-left starts after label bar.
@@ -50,7 +50,7 @@ def montage():
 
 def identity():
     a = Image.open(OUT / "identity" / "mb19_p35_3x2.png").convert("RGB")
-    b = Image.open(ROOT / "out" / "deep_centers" / "ladder_p35" /
+    b = Image.open(ROOT / "scratch" / "deep_centers" / "ladder_p35" /
                    "fw_8p07e_10.png").convert("RGB")
     W, H = a.size
     diff = np.clip(np.abs(np.asarray(a).astype(int) -

@@ -10,7 +10,7 @@ Cheap, cached-locations-only check that the new structure-aware transfer behaves
      Eyeball: the grad gamma0.25/0.5 tiles read as GENTLE structure-alignment against the
      pct(linear) reference; gamma up = more arc pulled onto edges.
 
-Reuses the cached ss2 smooth fields under out/palette_viz_render/fields/ (the field⊗colormap
+Reuses the cached ss2 smooth fields under scratch/palette_viz_render/fields/ (the field⊗colormap
 seam) — no re-dump, no batch sweep. The `w(v)` profile is built ONCE per field and reused
 across every gamma (the whole point of the once-per-field cache seam).
 
@@ -29,8 +29,8 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import colormap as cm                                  # noqa: E402
 
-FIELDS_DIR = ROOT / "out" / "palette_viz_render" / "fields"
-OUT_DIR = ROOT / "out" / "palette_viz_render"
+FIELDS_DIR = ROOT / "scratch" / "palette_viz_render" / "fields"
+OUT_DIR = ROOT / "scratch" / "palette_viz_render"
 
 # The transfer sweep (mirrors sample_location's TRANSFER_GAMMAS / N_CYCLES).
 TRANSFER_GAMMAS = [0.25, 0.5, 1.0, 2.0]

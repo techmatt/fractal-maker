@@ -6,7 +6,7 @@ Same loop as `overnight_orchestrator.py`, different tail. Each CYCLE is: fresh d
 ONLY this cycle's fresh q3s) -> fresh-isolation assert -> ANNOTATE + PERSIST LIBRARY RECORD. There
 is NO emit phase: `emit_v1` is never called, nothing renders at wallpaper res. Instead every fresh
 q3 location accrues a dense-cheap library record (identity + v6 location-potential + grayscale
-morphology CLIP + thumbnail) into a durable store that survives `rm -r out/*`.
+morphology CLIP + thumbnail) into a durable store that survives `rm -r scratch/*`.
 
 REUSED VERBATIM from the overnight orchestrator (imported, same code objects — the strongest
 "behaves identically" guarantee): the run-scoped discovery dir + fresh-isolation assert, the
@@ -27,7 +27,7 @@ are distinguishable on inspection.
     # days between sessions cost nothing; --total-cap-hours is adjustable on resume):
     uv run python -u tools/wallpaper/prospect_orchestrator.py --run --run-id myrun --total-cap-hours 24
     # ...later, more of the SAME run (resume by --run-id); stop it gracefully mid-session by
-    # `touch out/wallpaper/prospect/myrun/STOP` — it exits cleanly at the next cycle boundary.
+    # `touch scratch/wallpaper/prospect/myrun/STOP` — it exits cleanly at the next cycle boundary.
 """
 from __future__ import annotations
 
@@ -840,8 +840,8 @@ def _apply_mini_defaults(args) -> None:
     """Remap args to the throwaway mini profile (tight cap, 1 family, SCRATCH store roots). Shared
     by a fresh `--mini` run and `--mini --rerun-failed` (so a mini run's deferred cycle drains
     against the same scratch store, never the production library)."""
-    scratch = oo.ROOT / "out" / "wallpaper" / "prospect_mini_scratch"
-    args.out_root = str(scratch / "out")
+    scratch = oo.ROOT / "scratch" / "wallpaper" / "prospect_mini_scratch"
+    args.out_root = str(scratch / "scratch")
     args.discovery_root = str(scratch / "disc")
     if args.total_cap_hours is None:
         args.total_cap_hours = 0.75
@@ -929,7 +929,7 @@ def main():
     ap.add_argument("--retain-fields", dest="retain_fields", action="store_true", default=True)
     ap.add_argument("--no-retain-fields", dest="retain_fields", action="store_false")
     ap.add_argument("--families", nargs="+", default=None)
-    ap.add_argument("--out-root", default=str(oo.ROOT / "out" / "wallpaper" / "prospect"))
+    ap.add_argument("--out-root", default=str(oo.ROOT / "scratch" / "wallpaper" / "prospect"))
     ap.add_argument("--discovery-root", default=str(oo.ROOT / "data" / "discovery" / "fresh_runs"))
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--disc-batch", type=int, default=0)

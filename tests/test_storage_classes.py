@@ -78,4 +78,4 @@ def test_bulk_leaves_non_relocated_in_tree():
 
 def test_scratch_under_disposable_tree():
     got = P.scratch("atlas", "sheet.png")
-    assert got == REPO_ROOT / "out" / "atlas" / "sheet.png"
+    assert got == REPO_ROOT / "scratch" / "atlas" / "sheet.png"

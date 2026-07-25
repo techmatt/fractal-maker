@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-r"""Phoenix Phase B — the readout generator (out/phoenix_grid/readout.md).
+r"""Phoenix Phase B — the readout generator (scratch/phoenix_grid/readout.md).
 
 Reads a grid run's durable outputs (summary.json, descent_records.jsonl, all_outcomes.jsonl,
 outcome_ledger.jsonl) + the decomposition (runs phoenix_decomp if absent) + the registered
@@ -183,13 +183,13 @@ def main(argv=None):
     intake = intake_check(ledger)
 
     # sample sheets — top admissions by p_good; guarded rejects
-    tiles = ROOT / "out" / "phoenix_grid" / "readout_tiles"
+    tiles = ROOT / "scratch" / "phoenix_grid" / "readout_tiles"
     adm = sorted(ledger, key=lambda r: -float(r["p_good"]))[:args.sheet_n]
     rej = [r for r in allo if not r.get("guard_pass")][:args.sheet_n]
-    adm_png = _sheet(adm, tiles, ROOT / "out" / "phoenix_grid" / "admissions_sheet.png",
+    adm_png = _sheet(adm, tiles, ROOT / "scratch" / "phoenix_grid" / "admissions_sheet.png",
                      f"phoenix grid — top {len(adm)} admissions by p_good",
                      lambda r: f"pg={r['p_good']:.2f} d{r['reached_depth']} {r['branch']}")
-    rej_png = _sheet(rej, tiles, ROOT / "out" / "phoenix_grid" / "rejects_sheet.png",
+    rej_png = _sheet(rej, tiles, ROOT / "scratch" / "phoenix_grid" / "rejects_sheet.png",
                      f"phoenix grid — {len(rej)} guarded rejects",
                      lambda r: f"guarded {r['branch']}")
 
@@ -268,7 +268,7 @@ def main(argv=None):
         md.append("- Render identity: fractal_type **+ (c,p,z₋₁)** stamped in every render block; "
                   "identity round-trip asserted + **Guard B byte-reproducibility PASS** (the "
                   "baserate_v1 three-axis check).")
-        md.append("- Label sheets: `out/phoenix_grid/label_sheets/`.\n")
+        md.append("- Label sheets: `scratch/phoenix_grid/label_sheets/`.\n")
     else:
         md.append("- (batch id not provided; run `phoenix_label_batch.py` then re-run with `--batch`)\n")
 
@@ -279,7 +279,7 @@ def main(argv=None):
               "surrogate-ranked, memory-backed proposer — draw cardioid+period2 at mid-|p|, skip "
               "root; z-symmetry is a morphology lever, not a fertility lever).\n")
 
-    out = Path(args.out) if args.out else ROOT / "out" / "phoenix_grid" / "readout.md"
+    out = Path(args.out) if args.out else ROOT / "scratch" / "phoenix_grid" / "readout.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(md), encoding="utf-8")
     print(f"readout -> {out}")

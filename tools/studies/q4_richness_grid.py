@@ -10,8 +10,8 @@ from PIL import Image, ImageDraw
 import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parents[2]
-FIELDS = ROOT / "out" / "q4_stage1" / "fields"
-OUT = ROOT / "out" / "fair_rerender"
+FIELDS = ROOT / "scratch" / "q4_stage1" / "fields"
+OUT = ROOT / "scratch" / "fair_rerender"
 TILE_W = 384
 COLS = 5
 DENSITY = 0.9          # palette cycles per unit log-smooth (reveals filigree)

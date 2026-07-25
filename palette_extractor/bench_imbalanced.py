@@ -46,7 +46,7 @@ from palette_lib.coloring import (
 # -- paths ---------------------------------------------------------------------
 PALETTES_JSON = ROOT / "data" / "palettes" / "clean_colormaps.json"
 DATA_DIR      = ROOT / "data" / "palette_imbalanced"          # load-bearing JSON
-RENDERS_DIR   = ROOT / "out"  / "palette_imbalanced"          # regenerable views
+RENDERS_DIR   = ROOT / "scratch"  / "palette_imbalanced"          # regenerable views
 STRIPS_DIR    = RENDERS_DIR / "strips"
 VIZ_HTML      = ROOT / "tools" / "viz" / "palette_imbalanced.html"
 WALLPAPER_DIR = Path("C:/Users/techm/Desktop/Wallpapers")
@@ -352,8 +352,8 @@ canvas{border:1px solid #23252e;border-radius:4px;background:#111}
 <div id="root"></div>
 <script>
 const M = __PAYLOAD__;
-const SB = '../../out/palette_imbalanced/strips/';
-const RB = '../../out/palette_imbalanced/';
+const SB = '../../scratch/palette_imbalanced/strips/';
+const RB = '../../scratch/palette_imbalanced/';
 const f = (x,d=3)=> (x==null?'-':Number(x).toFixed(d));
 const cls = d => Math.abs(d)<0.002?'mut':(d>0?'pos':'neg');
 const root = document.getElementById('root');

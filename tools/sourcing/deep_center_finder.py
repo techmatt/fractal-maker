@@ -222,7 +222,7 @@ class DeepCenter:
     render_maxiter: int       # a sensible maxiter for fw_suggest
 
     def render_cmd(self, exe="target/release/fractal-generator.exe",
-                   width=1024, ss=2, out="out/deep_centers/preview.png"):
+                   width=1024, ss=2, out="scratch/deep_centers/preview.png"):
         return [exe, "sheet", "--builtins", "default cubehelix viridis",
                 "--center-re", self.cx, "--center-im", self.cy,
                 "--frame-width", self.fw_suggest, "--maxiter", str(self.render_maxiter),

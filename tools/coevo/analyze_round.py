@@ -2,7 +2,7 @@
 r"""Co-evolution round — filter + stratify by v6, render review thumbnails, build
 per-band contact sheets + report.md.
 
-Consumes the round's guard-OFF gather ledger (out/coevo_round/<ts>/gather/mandelbrot/
+Consumes the round's guard-OFF gather ledger (scratch/coevo_round/<ts>/gather/mandelbrot/
 outcome_ledger.jsonl) written by coevo_round.py. Steps 2-5 of the prompt:
 
   2. Confirm the v6 stamp on every fresh row. Drop model-free degenerate-guard fails
@@ -151,11 +151,11 @@ def build_sheet(band: str, rows: list[dict], crops_dir: Path, out_png: Path, sub
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--round-ts", required=True, help="round dir name under out/coevo_round/")
+    ap.add_argument("--round-ts", required=True, help="round dir name under scratch/coevo_round/")
     ap.add_argument("--n-per-band", type=int, default=40)
     args = ap.parse_args()
 
-    round_dir = ROOT / "out" / "coevo_round" / args.round_ts
+    round_dir = ROOT / "scratch" / "coevo_round" / args.round_ts
     if not round_dir.exists():
         raise SystemExit(f"no round dir {round_dir}")
     crops_dir = round_dir / "crops"

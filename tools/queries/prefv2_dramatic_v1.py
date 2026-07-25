@@ -12,7 +12,7 @@ existed before.
 Everything commensurable with the existing corpus is REUSED VERBATIM:
   * render spec — CANDIDATE_SS/EVAL_WIDTH/EVAL_HEIGHT/CANDIDATE_FILTER from query_sampler
     (1024x576, ss2, box, interior black), colormap.render_candidate (Recipe-2),
-  * once-per-location ss2 field dump + cache (assemble_queries.ensure_field, out/fields/),
+  * once-per-location ss2 field dump + cache (assemble_queries.ensure_field, scratch/fields/),
   * the batch artifact layout (records/ + images/ + per-query contact sheet + batch_meta)
     that launch_query_label_server.py + query_label.html consume — same 3-tier UI,
   * palette_source provenance (already wired in assemble_queries.candidate_record).

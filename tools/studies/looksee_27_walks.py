@@ -37,7 +37,7 @@ from production_seeder import (  # noqa: E402  (thin engine wrappers + walk conf
 )
 
 BIN = prescreen.BIN
-OUT = ROOT / "out" / "looksee"
+OUT = ROOT / "scratch" / "looksee"
 SCRATCH = OUT / "scratch"
 FRAMES = OUT / "frames"
 

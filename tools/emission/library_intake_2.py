@@ -60,17 +60,17 @@ try:
 except Exception:
     pass
 
-OUT = ROOT / "out" / "emission" / "library_intake_2"
-REPORT = ROOT / "out" / "emission" / "library_intake_2.md"
+OUT = ROOT / "scratch" / "emission" / "library_intake_2"
+REPORT = ROOT / "scratch" / "emission" / "library_intake_2.md"
 LEDGERS = [
     ("c2_breadth",      ROOT / "data" / "discovery" / "campaign2" / "breadth" / "outcome_ledger.jsonl"),
     ("c2_dive",         ROOT / "data" / "discovery" / "campaign2" / "dive"    / "outcome_ledger.jsonl"),
     ("phoenix_grid",    ROOT / "data" / "discovery" / "phoenix_grid" / "grid" / "outcome_ledger_v7_t45.jsonl"),
     ("classic_phoenix", ROOT / "data" / "discovery" / "classic_phoenix" / "outcome_ledger.jsonl"),
 ]
-# campaign-1 was intaked separately (out/emission/campaign1_intake.md); its distinct-cluster
+# campaign-1 was intaked separately (scratch/emission/campaign1_intake.md); its distinct-cluster
 # count is loaded for a full-library cross-reference (not re-clustered here).
-C1_INTAKE_JSON = ROOT / "out" / "emission" / "campaign1" / "intake.json"
+C1_INTAKE_JSON = ROOT / "scratch" / "emission" / "campaign1" / "intake.json"
 TARGET_MEASURE = ROOT / "data" / "emission" / "target_measure.json"
 CLASSIC_RELEASE_SHARE = 0.02   # the hand-placed classic-phoenix release-share target
 
@@ -337,7 +337,7 @@ def write_report(recon, anchor, occ, sheet_paths, phx, measure, c1_distinct):
       f"{occ['singleton_fraction']:.1%}.**\n")
     if c1_distinct is not None:
         w(f"**Full-library context:** campaign-1 intake contributed **{c1_distinct}** distinct "
-          f"clusters (separate pass, `out/emission/campaign1_intake.md`); this intake adds "
+          f"clusters (separate pass, `scratch/emission/campaign1_intake.md`); this intake adds "
           f"**{occ['n_clusters']}** across the four remaining ledgers, for a library total of "
           f"**~{c1_distinct + occ['n_clusters']}** distinct looks (clustered in two passes — the "
           "counts are additive across disjoint families/sources, not re-reconciled).\n")

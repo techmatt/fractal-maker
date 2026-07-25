@@ -60,7 +60,7 @@ pub const WORK_W: u32 = 2560;
 pub const WORK_H: u32 = 1440;
 /// Region-grid side length per scale: 16×16 → 8×8 → 4×4 → 2×2 cells.
 pub const SCALE_GRID: [usize; 4] = [16, 8, 4, 2];
-/// Persistent calibration store (NOT under `out/`, so it survives `out/` clears).
+/// Persistent calibration store (NOT under `scratch/`, so it survives `scratch/` clears).
 /// The frozen quantile bins are part of the metric — regenerating risks silent
 /// drift if the corpus folder changed, so the artifact lives here, committed.
 pub const CALIBRATION_DIR: &str = "data/calibration";
@@ -451,8 +451,8 @@ pub fn run_calibrate(args: &CalibrateArgs) -> Result<(), String> {
         .map_err(|e| format!("failed to create {}: {e}", args.out_dir))?;
 
     // ---- calibration artifact (frozen edges + per-image histograms) ----
-    // Persisted OUTSIDE out/ (ARTIFACT_PATH): the frozen bins are part of the
-    // metric and must survive `out/` clears. Only the view sheets stay in out_dir.
+    // Persisted OUTSIDE scratch/ (ARTIFACT_PATH): the frozen bins are part of the
+    // metric and must survive `scratch/` clears. Only the view sheets stay in out_dir.
     let artifact = build_artifact_json(&bins, &imgs, args);
     let artifact_path = ARTIFACT_PATH.to_string();
     crate::ensure_parent_dir(&artifact_path)?;
@@ -1161,11 +1161,11 @@ pub struct CalibrateArgs {
     pub dir: String,
 
     /// Output directory for the calibration artifact + eye-check sheets.
-    #[arg(long, default_value = "out/calibrate")]
+    #[arg(long, default_value = "scratch/calibrate")]
     pub out_dir: String,
 
     /// Buffet metrics JSON whose source-B DEEP tiles are the candidate eye-check.
-    #[arg(long, default_value = "out/buffet/buffet.json")]
+    #[arg(long, default_value = "scratch/buffet/buffet.json")]
     pub buffet_json: String,
 
     /// Per-scale EMD weights `w16,w8,w4,w2` (default equal).

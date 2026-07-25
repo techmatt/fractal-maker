@@ -46,9 +46,9 @@ from label_crop import (              # noqa: E402  (shared label-crop spec — 
 
 BATCH_ID = "2026-07-05_wallpaper_bootstrap_v1"
 BATCH_DIR = ROOT / "data" / "wallpaper_corpus" / "batches" / BATCH_ID
-OUT_FIELDS = ROOT / "out" / "wallpaper_fields_ss2"   # ss2 label-spec field cache (disposable);
+OUT_FIELDS = ROOT / "scratch" / "wallpaper_fields_ss2"   # ss2 label-spec field cache (disposable);
                                                      # separate dir keeps ss2 stems clear of the
-                                                     # bootstrap build's out/wallpaper_fields cache.
+                                                     # bootstrap build's scratch/wallpaper_fields cache.
 
 # The label-crop spec (LABEL_W/H/SS, LABEL_FILTER, JPG_Q) + ensure_label_field +
 # render_label_crop are the shared canonical wallpaper label geometry (label_crop.py).

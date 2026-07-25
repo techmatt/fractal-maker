@@ -66,7 +66,7 @@ forbids nondeterminism).
 
 ## Deliverable
 
-`out/palette_contact_sheet.png` (seahorse) and `out/palette_contact_sheet_spiral.png`
+`scratch/palette_contact_sheet.png` (seahorse) and `scratch/palette_contact_sheet_spiral.png`
 — one location × 30 uniformly-sampled palettes (seed 0), captioned with
 source:name. Same palette set across both locations. **Matt judges the sheet;
 no quality claims.** The spiral location shows palette character best.

@@ -65,7 +65,7 @@ def main():
     ap.add_argument("--legacy-shakeout", type=Path, default=None)
     ap.add_argument("--tgood-json", type=Path,
                     default=ROOT / "data/atlas/mandelbrot_tgood_steered.json")
-    ap.add_argument("--out", type=Path, default=ROOT / "out/steered_v1_2_dive_report.md")
+    ap.add_argument("--out", type=Path, default=ROOT / "scratch/steered_v1_2_dive_report.md")
     args = ap.parse_args()
 
     # ---- dive admissions + per-dive records ----
@@ -80,7 +80,7 @@ def main():
     # ---- embed dive admissions (library recipe) + run-2 library ----
     print(f"dive admissions={len(adm)}; embedding (library morph_gray recipe) ...", flush=True)
     model, tf = spm.load_clip()
-    tmp = ROOT / "out" / "dive_morph_fields"
+    tmp = ROOT / "scratch" / "dive_morph_fields"
     du, df, dd, dE = spm.embed_admissions(adm, tmp, model, tf)
     dU = dE / (np.linalg.norm(dE, axis=1, keepdims=True) + 1e-9) if len(dE) else dE
 
@@ -180,7 +180,7 @@ def main():
     w("")
     w("**Deep-options read:** the top-start vs control comparison tests whether deep quality "
       "requires a good starting neighborhood or is reachable from anywhere — the blind manifest "
-      "(`out/dive_manifest/`) adjudicates it on the human read; the yield numbers above are the "
+      "(`scratch/dive_manifest/`) adjudicates it on the human read; the yield numbers above are the "
       "classifier-side view.\n")
 
     # ============================ 2. morph novelty ============================

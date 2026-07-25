@@ -20,7 +20,7 @@ Identity resolves via the Phase-A legacy Ushiki defaults (production_seeder.PHOE
 c=(0.5667,0), p=(-0.5,0), z_{-1}=(0,0). Every legacy coord is classic, so all rows share that
 identity — distinctness is a MORPHOLOGY property (cos 0.974), not a parameter property.
 
-Durable outputs under data/discovery/classic_phoenix/ (survive rm -r out/*):
+Durable outputs under data/discovery/classic_phoenix/ (survive rm -r scratch/*):
   coords.jsonl           collected legacy q3 coords (source + orig id + viewport)
   rescored.jsonl         per-coord v7 rescore result (q3 AND sub-threshold) — resume key
   outcome_ledger.jsonl   admitted q3 classic_phoenix rows (intake-ready)
@@ -77,7 +77,7 @@ LEGACY_LEDGERS = [
     ("overnight_0713", ROOT / "data" / "discovery" / "fresh_runs" / "overnight_20260713_001420" / "outcome_ledger.jsonl"),
 ]
 RUN_DIR = ROOT / "data" / "discovery" / "classic_phoenix"
-SCRATCH = ROOT / "out" / "phoenix" / "classic_supply"
+SCRATCH = ROOT / "scratch" / "phoenix" / "classic_supply"
 NEAR_DUP = pg.NEAR_DUP_THRESHOLD
 MIN_DISTINCT = 15
 TOPUP_BUDGET_MIN = 20.0

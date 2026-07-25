@@ -11,7 +11,7 @@ Categories
 ----------
   never       Authoritative / irreplaceable. Never deletable, ever.
   regenerable Safe to delete; carries a rebuild-cost note.
-  scratch     Safe, cheap (out/ scratch, diag probes, logs).
+  scratch     Safe, cheap (scratch/ scratch, diag probes, logs).
   ambiguous   Report only. NEVER auto-deletable. Needs a human decision.
 
 Hard content guard (non-negotiable): before any directory can be classified as
@@ -32,7 +32,7 @@ Protect by what the artifact *is* / how it's used, not by path-pattern version-g
 
 Usage
 -----
-  uv run python tools/audit/disk_audit.py                 # audit whole repo (data/ + out/ + labels/)
+  uv run python tools/audit/disk_audit.py                 # audit whole repo (data/ + scratch/ + labels/)
   uv run python tools/audit/disk_audit.py --root data     # audit one root
   uv run python tools/audit/disk_audit.py --min-mb 50     # lower report threshold
   uv run python tools/audit/disk_audit.py --apply --categories scratch   # gated delete
@@ -149,13 +149,13 @@ RULES: list[Rule] = [
     Rule(r"^data/guided_descend/", REGEN, "guided-descend render/field caches (pools kept separately)",
          "regenerate via present/enrich from the pool"),
 
-    # -- SCRATCH: diag probes + logs + out/ tree ------------------------------
+    # -- SCRATCH: diag probes + logs + scratch/ tree ------------------------------
     Rule(r"^data/focus_diag/", SCRATCH, "focus-diagnostic scratch"),
     Rule(r"^data/gate_diag/", SCRATCH, "gate-diagnostic scratch"),
     Rule(r"^data/palette_probe/", SCRATCH, "palette-probe scratch"),
     Rule(r"^data/wallpaper_harvest/", SCRATCH, "wallpaper-harvest scratch (superseded by corpus)"),
     Rule(r"^data/discovery/runs/", NEVER, "per-run discovery ledgers (append-only provenance)"),
-    Rule(r"^out/", SCRATCH, "disposable out/ scratch tree"),
+    Rule(r"^scratch/", SCRATCH, "disposable scratch/ scratch tree"),
     # scratchpad is the canonical disposable temp dir: image renders (contact
     # sheets, montages, sweep frames, dumped-field previews) are scratch. Data /
     # plan / script files (*.json, *.jsonl, *.py) get NO rule here on purpose, so
@@ -537,7 +537,7 @@ def main():
                     help="report threshold in MB (default 100)")
     ap.add_argument("--top", type=int, default=40, help="top-N largest items to list")
     ap.add_argument("--manifest", default=None,
-                    help="write delete-manifest JSON here (default out/audit/delete_manifest.json)")
+                    help="write delete-manifest JSON here (default scratch/audit/delete_manifest.json)")
     ap.add_argument("--apply", action="store_true",
                     help="ACTUALLY delete (requires --categories; safe categories only)")
     ap.add_argument("--categories", default="",
@@ -588,7 +588,7 @@ def main():
         print(f"             -> {n.reason}")
 
     # delete-manifest for the safe categories
-    manifest_path = repo / (args.manifest or "out/audit/delete_manifest.json")
+    manifest_path = repo / (args.manifest or "scratch/audit/delete_manifest.json")
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     # only whole-clean-subtree dirs are truly rmtree-able; synthetic loose-file
     # aggregates are report-only (their path is a mixed dir with non-safe files).

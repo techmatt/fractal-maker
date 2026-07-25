@@ -53,7 +53,7 @@ from active_ckpt import make_scorer  # noqa: E402
 
 DESCEND_DIR = ROOT / "data" / "guided_descend" / "atlas_probe_step0"
 OUT_DIR = ROOT / "data" / "atlas_probe" / "step0"          # DURABLE table
-SCRATCH = ROOT / "out" / "atlas_probe" / "step0" / "_scratch"  # disposable reframe tiles
+SCRATCH = ROOT / "scratch" / "atlas_probe" / "step0" / "_scratch"  # disposable reframe tiles
 MODEL = "data/classifier/v5/model_best.pt"
 TABLE_JSONL = OUT_DIR / "walks_table.jsonl"
 TABLE_CSV = OUT_DIR / "walks_table.csv"

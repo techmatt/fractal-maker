@@ -33,7 +33,7 @@ busy_near_black, deep_frac). Per-c J-quality = best framing's distance to the ex
 Reuses q4_c_perturbation.compute_metrics/band_dist (the two-new-axis metrics + the
 calibrated target band) and q4_neighborhood_sweep.{auto_maxiter,load_values,two_scale}, plus
 the library morph_gray + colored_clip recipe. Field source is f64 (colormap-invariant);
-colored sheets use render-one with the exemplar palette. All output under out/q4_dM/
+colored sheets use render-one with the exemplar palette. All output under scratch/q4_dM/
 (disposable); field bins purged per-unit.
 
 Stages (idempotent, resume from checkpoint):
@@ -70,7 +70,7 @@ from tools.studies.q4_c_perturbation import (  # noqa: E402
     compute_metrics, band_dist, TGT_MID, TGT_INT, TGT_FLAT, S_MID, S_INT, S_FLAT,
 )
 
-OUT = ROOT / "out" / "q4_dM"
+OUT = ROOT / "scratch" / "q4_dM"
 FIELDS = OUT / "fields"
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 PALETTE = "twilight_shifted"

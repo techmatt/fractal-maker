@@ -23,7 +23,7 @@ from palette_lib.coloring import bake_lut, lookup_linear, linear_to_srgb
 
 OUT = ROOT / "data" / "wallpaper_harvest"
 VIZ = ROOT / "tools" / "viz" / "harvest_dedup.html"
-STRIP_DIR = ROOT / "out" / "wallpaper_harvest" / "dedup_strips"
+STRIP_DIR = ROOT / "scratch" / "wallpaper_harvest" / "dedup_strips"
 
 
 def strip_png(name: str, path: Path, w=480, h=34):
@@ -81,7 +81,7 @@ def main():
     dup_count = int((dists < args.thresh).sum()) if args.thresh > 0 else 0
     rows = [{"d": round(c, 4), "a": a, "b": b} for c, a, b in closest]
     payload = {"rows": rows, "P": P, "thresh": args.thresh, "dup_pairs": dup_count,
-               "strip_dir": "../../out/wallpaper_harvest/dedup_strips/",
+               "strip_dir": "../../scratch/wallpaper_harvest/dedup_strips/",
                "hist": np.histogram(dists, bins=40)[0].tolist(),
                "hist_edges": [round(x, 4) for x in np.histogram(dists, bins=40)[1].tolist()]}
 

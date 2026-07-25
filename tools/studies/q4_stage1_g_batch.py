@@ -8,7 +8,7 @@ where the model is *uncertain* (teaches the boundary) plus a confident-accept sl
 (audits precision) plus a uniform-random control (audits confident-and-wrong).
 
 Candidate source = BOTH:
-  * dense-grid harvest over the 30 existing fields (out/q4_stage1/fields/) — cheap,
+  * dense-grid harvest over the 30 existing fields (scratch/q4_stage1/fields/) — cheap,
     no new renders; deduped against the already-labeled windows so the batch is new.
   * a handful of NEW minibrots (fresh Newton nuclei at unused ∂M anchors) — diversity.
 
@@ -43,7 +43,7 @@ from tools.studies import q4_stage1_linear_fit as LF  # noqa: E402
 NEW_BATCH_ID = "2026-07-23_q4_g_aimed"
 NEW_STORE = ROOT / "data" / "q4_window_corpus" / "batches" / NEW_BATCH_ID
 NEW_CROPS = NEW_STORE / "crops"
-GEN_OUT = ROOT / "out" / "q4_stage1" / "g_batch"
+GEN_OUT = ROOT / "scratch" / "q4_stage1" / "g_batch"
 
 TIER, C = "T2_cells", 2.0        # the fit's chosen tier + C
 SCALES = LS.SCALES               # [0.06, 0.09, 0.14]

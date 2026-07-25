@@ -8,7 +8,7 @@ Produces, for a few high-wj SEQUENTIAL (`mirror_needed`) maps:
     is visible in fractal context and seen to clear.
 
 Also renders one CYCLIC control map mirror-OFF (selective branch must leave it
-untouched). Views only — written under out/, gated viewer under tools/viz/.
+untouched). Views only — written under scratch/, gated viewer under tools/viz/.
 NO quality claim; Matt judges the strips.
 
 Usage:  python palette_extractor/phase0_mirror_visual.py
@@ -31,7 +31,7 @@ from bench_cycle_closure import stops_to_list, true_wrap_jump
 CMAPS = json.loads((ROOT / "data" / "palettes" / "clean_colormaps.json").read_text())
 BY_NAME = {e["name"]: e for e in CMAPS}
 
-OUT = ROOT / "out" / "palette_mirror_phase0"
+OUT = ROOT / "scratch" / "palette_mirror_phase0"
 STRIPS = OUT / "strips"
 FIELDS = OUT / "fields"
 VIZ = ROOT / "tools" / "viz" / "palette_mirror_phase0.html"
@@ -97,8 +97,8 @@ def main():
         print(f"  {nm:18s} wj={wj:.3f}  {e['cycle']}")
 
     manifest = {"rows": rows, "cyc_control": CYC_CONTROL,
-                "strip_dir": "../../out/palette_mirror_phase0/strips/",
-                "field_dir": "../../out/palette_mirror_phase0/fields/"}
+                "strip_dir": "../../scratch/palette_mirror_phase0/strips/",
+                "field_dir": "../../scratch/palette_mirror_phase0/fields/"}
     write_viewer(manifest)
     print(f"\nWrote viewer: {VIZ}")
 

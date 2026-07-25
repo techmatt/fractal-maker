@@ -14,7 +14,7 @@ deploy_tail produces alternates.
 
 Usage:
   uv run python tools/readout/morning_readout.py \
-      out/wallpaper/overnight/overnight_20260713_001420
+      scratch/wallpaper/overnight/overnight_20260713_001420
 """
 import json
 import sys
@@ -203,7 +203,7 @@ def section_b(items):
 
 def main():
     run_dir = Path(sys.argv[1] if len(sys.argv) > 1 else
-                   "out/wallpaper/overnight/overnight_20260713_001420")
+                   "scratch/wallpaper/overnight/overnight_20260713_001420")
     rows = load_manifest(run_dir)
     prov = load_pool_provenance(run_dir)
     items = join(rows, prov)

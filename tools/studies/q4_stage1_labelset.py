@@ -50,7 +50,7 @@ from tools.sourcing import deep_center_finder as dcf
 from tools.studies.q4_neighborhood_sweep import compute_metrics, score_A  # verbatim transfer
 
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
-OUT = ROOT / "out" / "q4_stage1"
+OUT = ROOT / "scratch" / "q4_stage1"
 FIELDS = OUT / "fields"
 
 # The label store — SEPARATE from the v7 location corpus (distribution-bound).
@@ -80,7 +80,7 @@ PALETTE = "default"
 # Full-frame capture render: 2x the field grid (same 16:9 frame / fw / center — window
 # rects are frame-normalized, so any resolution maps) at ss2, for crisp label crops.
 CAP_W, CAP_H, CAP_SS = 2 * W, 2 * H, 2
-FRAMES = OUT / "frames"          # disposable full-frame captures (out/ tree)
+FRAMES = OUT / "frames"          # disposable full-frame captures (scratch/ tree)
 
 # --- sweep -----------------------------------------------------------------
 # 3 scales spanning Matt's hand-drawn box widths (0.057..0.099 frame-normalized),

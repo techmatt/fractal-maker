@@ -54,14 +54,14 @@ TILE_DIR = OUT_DIR / "tiles"
 BATCHES = [
     dict(name="run2", run_dir=ROOT / "data/discovery/steered_run2",
          morph=ROOT / "data/discovery/steered_run2/morph_admissions.npz",
-         key=ROOT / "out/steered_run2_manifest/manifest_key.json",
+         key=ROOT / "scratch/steered_run2_manifest/manifest_key.json",
          scores=ROOT / "labels/steered_run2_blind_scores.json",
-         tiles=ROOT / "out/steered_run2_manifest/tiles"),
+         tiles=ROOT / "scratch/steered_run2_manifest/tiles"),
     dict(name="dive", run_dir=ROOT / "data/discovery/steered_v1_2_dive",
          morph=ROOT / "data/discovery/steered_v1_2_dive/dive_admissions.npz",
-         key=ROOT / "out/dive_manifest/manifest_key.json",
+         key=ROOT / "scratch/dive_manifest/manifest_key.json",
          scores=ROOT / "labels/steered_v1_2_dive_blind_scores.json",
-         tiles=ROOT / "out/dive_manifest/tiles"),
+         tiles=ROOT / "scratch/dive_manifest/tiles"),
 ]
 
 # Prior corpus: (labels json -> batch crop dir). v7-only; bounded balanced subsample.

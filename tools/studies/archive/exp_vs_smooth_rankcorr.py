@@ -18,7 +18,7 @@ sys.path.insert(0, str(REPO / "tools"))
 sys.path.insert(0, str(REPO / "tools" / "corpus"))
 EXE = str(REPO / "target/release/fractal-generator.exe")
 BATCH = REPO / "data/render_mode_corpus/batches/2026-07-10_render_mode_pilot_v1"
-OUT = REPO / "out/render_mode_pilot/exp_vs_smooth"
+OUT = REPO / "scratch/render_mode_pilot/exp_vs_smooth"
 OUT.mkdir(parents=True, exist_ok=True)
 W, H, SS = 640, 360, 2
 

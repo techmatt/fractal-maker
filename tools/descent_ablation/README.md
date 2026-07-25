@@ -43,5 +43,5 @@ per-arm shallow-death (d1–d2) rate as a first-class go/no-go stat.
   added the `d≥5` gating. Rebuild from `run_campaign.py` + `finalize.py` if needed; the gating
   logic is the guardrail above.
 
-Output lands under `out/descent_ablation/<timestamp>/` (per-arm ledgers, `terminals_*.png`,
+Output lands under `scratch/descent_ablation/<timestamp>/` (per-arm ledgers, `terminals_*.png`,
 `overview.html`, `probes.json`, `report.md`).

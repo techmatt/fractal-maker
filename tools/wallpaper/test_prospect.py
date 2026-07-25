@@ -349,7 +349,7 @@ def _fake_annotate_pool(batch_dir, ledger, watermark, run_id, cycle, sinks, fiel
 
 def _setup_deferred_run(tmp_path, oids=("c1_a", "c1_b")):
     """A run tree with ONE deferred failed cycle: retained pool + ledger + state.failed_cycles."""
-    run_dir = tmp_path / "out" / "RUN"
+    run_dir = tmp_path / "scratch" / "RUN"
     disc_dir = tmp_path / "disc" / "RUN"
     (run_dir / "pools" / "cycle_001").mkdir(parents=True)
     disc_dir.mkdir(parents=True)
@@ -365,7 +365,7 @@ def _setup_deferred_run(tmp_path, oids=("c1_a", "c1_b")):
         "failed_cycles": [{"cycle": 1, "q3_deferred": len(oids), "records_salvaged": 0,
                            "reason": "annotate failed twice (test)", "ledger_watermark": 0}]})
     args = argparse.Namespace(
-        run_id="RUN", out_root=str(tmp_path / "out"), discovery_root=str(tmp_path / "disc"),
+        run_id="RUN", out_root=str(tmp_path / "scratch"), discovery_root=str(tmp_path / "disc"),
         field_cache_gb=20.0, retain_fields=True, est_loc_s=6.0,
         store_records=str(tmp_path / "store" / "records.jsonl"),
         store_thumbs=str(tmp_path / "store" / "thumbs"),
@@ -596,7 +596,7 @@ class _patch_orchestrate_phases:
 
 def _orchestrate_args(tmp_path, annotate_plan, total_cap_hours=1.0, session_cap_hours=None):
     args = argparse.Namespace(
-        run_id="RUN", out_root=str(tmp_path / "out"), discovery_root=str(tmp_path / "disc"),
+        run_id="RUN", out_root=str(tmp_path / "scratch"), discovery_root=str(tmp_path / "disc"),
         families=["mandelbrot"], per_family_min=2.0,
         total_cap_hours=total_cap_hours, session_cap_hours=session_cap_hours,  # default: never binds
         retain_fields=True, field_cache_gb=20.0, seed=0,
@@ -636,7 +636,7 @@ def test_loop_annotate_fail_twice_defers_and_continues(tmp_path):
     assert "annotate failed twice" in summary["failed_cycles"][0]["reason"]
     assert store.existing_location_ids(rp) == set()          # nothing salvaged, nothing leaked
     # the deferral is durable in state.json (what --rerun-failed later drains)
-    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    st = oo.load_state(tmp_path / "scratch" / "RUN" / "state.json")
     assert st["failed_cycles"][0]["cycle"] == 1
 
 
@@ -685,7 +685,7 @@ def test_budget_accumulates_across_sessions_idle_free(tmp_path):
     assert abs(b["accumulated_active_h"] - (100.0 / 3600 + b["session_active_h"])) < 1e-3
     assert b["accumulated_active_h"] >= 100.0 / 3600           # prior carried forward, not reset
     # persisted on exit for the next resume to pick up
-    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    st = oo.load_state(tmp_path / "scratch" / "RUN" / "state.json")
     assert st["accumulated_active_s"] >= 100.0
     assert abs(st["accumulated_active_s"] - b["accumulated_active_h"] * 3600) < 1.0
 
@@ -697,7 +697,7 @@ def test_total_cap_adjustable_on_resume(tmp_path):
     summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {}, seed_state=seed, total_cap_hours=2.5)
     assert summary["budget"]["total_cap_hours"] == 2.5
     # ...and the new total is PERSISTED, so a subsequent flagless resume keeps it (below).
-    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    st = oo.load_state(tmp_path / "scratch" / "RUN" / "state.json")
     assert st["total_cap_hours"] == 2.5
 
 
@@ -709,7 +709,7 @@ def test_resume_without_cap_flag_keeps_persisted_total(tmp_path):
             "total_cap_hours": 2.0, "totals": {}, "failed_cycles": []}
     summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {}, seed_state=seed, total_cap_hours=None)
     assert summary["budget"]["total_cap_hours"] == 2.0        # persisted total won, not 24h default
-    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    st = oo.load_state(tmp_path / "scratch" / "RUN" / "state.json")
     assert st["total_cap_hours"] == 2.0                       # still persisted for the next resume
 
 
@@ -717,7 +717,7 @@ def test_fresh_run_without_cap_flag_uses_default(tmp_path):
     # A FRESH run with no --total-cap-hours falls back to the CAP_HOURS default (24h) and persists it.
     summary, h, rp = _run_orchestrate(tmp_path, {1: 2}, {}, total_cap_hours=None)
     assert summary["budget"]["total_cap_hours"] == po.CAP_HOURS
-    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    st = oo.load_state(tmp_path / "scratch" / "RUN" / "state.json")
     assert st["total_cap_hours"] == po.CAP_HOURS
 
 
@@ -760,7 +760,7 @@ def test_sentinel_stops_cleanly_at_cycle_boundary(tmp_path):
     assert summary["cycles_failed"] == 0 and summary["failed_cycles"] == []
     assert summary["q3_deferred_to_rerun"] == 0               # graceful stop defers nothing
     assert store.existing_location_ids(rp) == {"c1_0", "c1_1"}   # cycle 1's records landed
-    assert not (tmp_path / "out" / "RUN" / "STOP").exists()   # sentinel removed on exit
+    assert not (tmp_path / "scratch" / "RUN" / "STOP").exists()   # sentinel removed on exit
 
 
 def test_resume_repools_unharvested_tail_no_stranding(tmp_path):
@@ -782,7 +782,7 @@ def test_resume_repools_unharvested_tail_no_stranding(tmp_path):
     assert {"stranded_0", "stranded_1"} <= ids       # the un-harvested tail was re-pooled + recorded
     assert {"new_c1_0", "new_c1_1"} <= ids           # plus this session's own fresh discovery
     # watermark advanced to the full ledger once harvested (a further resume re-pools nothing)
-    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    st = oo.load_state(tmp_path / "scratch" / "RUN" / "state.json")
     assert st["harvested_watermark"] == 4
 
 
@@ -794,7 +794,7 @@ def test_deferred_cycle_watermark_vs_rerun_failed_no_disagreement(tmp_path):
     #     --rerun-failed is the SOLE drainer (no double-handling of the same deferral);
     #   * the deferred entry carries cycle 1's START watermark (0), the retained pool's start-line.
     summary, h, rp = _run_orchestrate(tmp_path, {1: 2, 2: 2}, {1: "fail_twice"})
-    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    st = oo.load_state(tmp_path / "scratch" / "RUN" / "state.json")
     assert st["harvested_watermark"] == 4                     # cursor past BOTH cycles' ledger rows
     fc = st["failed_cycles"][0]
     assert fc["cycle"] == 1 and fc["ledger_watermark"] == 0   # retained-pool start-line, NOT the cursor
@@ -806,7 +806,7 @@ def test_deferred_cycle_watermark_vs_rerun_failed_no_disagreement(tmp_path):
         r = po.rerun_failed(_orchestrate_args(tmp_path, {}))
     assert r["records_added"] == 2
     assert store.existing_location_ids(rp) == {"c1_0", "c1_1", "c2_0", "c2_1"}   # 0 dup of cycle 2
-    st2 = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    st2 = oo.load_state(tmp_path / "scratch" / "RUN" / "state.json")
     assert st2["harvested_watermark"] == 4                    # rerun-failed did NOT move the cursor
     assert st2["failed_cycles"] == []                         # deferral resolved
 
@@ -827,7 +827,7 @@ def test_store_exact_across_stop_start(tmp_path):
     assert len(locids) == len(set(locids))                    # 0 dups in the store
     assert set(locids) == ids1 | {"s2_c1_0", "s2_c1_1", "s2_c2_0", "s2_c2_1"}   # 0 losses
     # session 2 started its accumulated budget from session 1's persisted total
-    st = oo.load_state(tmp_path / "out" / "RUN" / "state.json")
+    st = oo.load_state(tmp_path / "scratch" / "RUN" / "state.json")
     assert st["accumulated_active_s"] >= s1["budget"]["accumulated_active_h"] * 3600 - 1.0
 
 

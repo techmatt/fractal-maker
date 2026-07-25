@@ -641,7 +641,7 @@ def write_report(out: Path, mat: dict, ana: dict, bmw: dict, name_to_cell: dict,
                  f"(one best-in-cell thumbnail per cell, ARGMAX cell tagged).\n")
 
     (out / "report.md").write_text("\n".join(L), encoding="utf-8")
-    print(f"[report] {out/'report.md'}  +  matrix.json  +  analysis.json", flush=True)
+    print(f"[report] {scratch/'report.md'}  +  matrix.json  +  analysis.json", flush=True)
 
 
 # --------------------------------------------------------------------------- #

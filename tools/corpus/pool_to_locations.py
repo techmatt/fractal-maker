@@ -11,7 +11,7 @@ own render and land in the store via the manifest).
 
 Run:  uv run python tools/corpus/pool_to_locations.py \
           --pool data/guided_descend/run4/pool.jsonl \
-          --out  out/present/run4_bridge/locations.jsonl
+          --out  scratch/present/run4_bridge/locations.jsonl
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ import os
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--pool", default="data/guided_descend/run4/pool.jsonl")
-    ap.add_argument("--out", default="out/present/run4_bridge/locations.jsonl")
+    ap.add_argument("--out", default="scratch/present/run4_bridge/locations.jsonl")
     a = ap.parse_args()
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)

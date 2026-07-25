@@ -30,7 +30,7 @@ BATCH_DIR = REPO / "data/render_mode_corpus/batches" / BATCH_ID
 CROPS = BATCH_DIR / "crops"
 IMAGES = BATCH_DIR / "images.jsonl"
 
-OUT = REPO / "out/render_mode_pilot/smooth_pass"
+OUT = REPO / "scratch/render_mode_pilot/smooth_pass"
 SMOOTH_CROPS = OUT / "smooth_crops"
 FIELDS = OUT / "_fields"
 RESULTS = OUT / "distances.json"

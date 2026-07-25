@@ -11,7 +11,7 @@ just top-18 by within-location score.
 
 Everything reuses the warmstart generator / pilot / colormap seams — no coloring path is
 re-implemented and no fractal is recomputed per candidate:
-  * once-per-location ss2 field dump + cache (assemble_queries.ensure_field, out/fields/),
+  * once-per-location ss2 field dump + cache (assemble_queries.ensure_field, scratch/fields/),
   * cheap recolor of the cached field (colormap.render_candidate + stretch_field prep),
   * the sampler's palette/param draw (query_sampler.sample_candidate — correct cyclic vs
     non-cyclic knob handling),
@@ -79,7 +79,7 @@ import data as SD                            # noqa: E402  (ACTIVE_SCORER_DIR si
 # Deployed pref scorer resolves from the single-source pointer (data.ACTIVE_SCORER_DIR);
 # promoting a retrain is a one-line flip there, not an edit here. Currently pref-v2.
 V2_DIR = Path(SD.ACTIVE_SCORER_DIR)
-OUT_DIR = ROOT / "out" / "sampler_eval"
+OUT_DIR = ROOT / "scratch" / "sampler_eval"
 
 # --- pipeline constants ----------------------------------------------------
 N_GEN0 = 60          # gen-0 palettes drawn by feature-space FP over the 777 pool

@@ -45,10 +45,10 @@ from tools.ranker.scorer import RankerScorer          # noqa: E402
 RUN = ROOT / "data" / "discovery" / "phoenix_grid" / "grid"
 BATCH_ID = "2026-07-21_phoenix_grid"
 BATCH = ROOT / "data" / "label_corpus" / "batches" / BATCH_ID
-SCRATCH = ROOT / "out" / "phoenix_grid" / "label_analysis"
+SCRATCH = ROOT / "scratch" / "phoenix_grid" / "label_analysis"
 FCACHE = ROOT / "data" / "library" / "field_cache"
 OUT = ROOT / "data" / "discovery" / "phoenix_grid" / "diversity_ranker.json"
-SHEET = ROOT / "out" / "phoenix_grid" / "good_look_medoids.png"
+SHEET = ROOT / "scratch" / "phoenix_grid" / "good_look_medoids.png"
 
 NEAR_DUP = 0.974        # library distinct-look cosine
 WORKERS = 4             # project cap

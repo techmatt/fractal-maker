@@ -172,7 +172,7 @@ pub struct Cli {
     pub palette: PaletteSelectArgs,
 
     /// Output PNG path.
-    #[arg(long, default_value = "out/renders/out.png")]
+    #[arg(long, default_value = "scratch/renders/out.png")]
     pub output: String,
 }
 

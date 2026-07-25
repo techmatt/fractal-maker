@@ -1,6 +1,6 @@
 """Too-close-to-smooth: analysis + calibration montage (smooth-distance-pass.md step 3+4).
 
-Reads out/render_mode_pilot/smooth_pass/distances.json (from smooth_pass.py), the batch
+Reads scratch/render_mode_pilot/smooth_pass/distances.json (from smooth_pass.py), the batch
 images.jsonl, and the human labels, then:
   * prints the sorted low tail + gap structure so a cutoff can be proposed per metric,
   * writes a self-contained-by-reference local HTML montage (rasters sorted closest->
@@ -16,7 +16,7 @@ from collections import defaultdict, Counter
 
 REPO = Path(__file__).resolve().parents[2]
 BATCH = REPO / "data/render_mode_corpus/batches/2026-07-10_render_mode_pilot_v1"
-OUT = REPO / "out/render_mode_pilot/smooth_pass"
+OUT = REPO / "scratch/render_mode_pilot/smooth_pass"
 DIST = OUT / "distances.json"
 LABELS = REPO / "labels/render_mode_pilot_v1.json"
 HTML = OUT / "montage.html"

@@ -163,7 +163,7 @@ def main():
                                 f"{s['admits_lost_per_render_saved']:.3f}" for s in c["steps"])
                 print(head + " " + seg)
 
-    outp = ROOT / "out/tau_h/curve.json"
+    outp = ROOT / "scratch/tau_h/curve.json"
     outp.parent.mkdir(parents=True, exist_ok=True)
     outp.write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(f"\nwrote {outp}")

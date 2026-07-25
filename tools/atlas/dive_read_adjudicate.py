@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Adjudicate the dive blind read — the deep-options hypothesis.
 
-Joins the blind scores ({tile: 1|2|3}) with out/dive_manifest/manifest_key.json (the hidden
+Joins the blind scores ({tile: 1|2|3}) with scratch/dive_manifest/manifest_key.json (the hidden
 key: tile -> start-group / depth / canonical p_good / family / morph-cluster / dive_id /
 source_id) and answers:
 
@@ -25,7 +25,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 SCORES = ROOT / "labels" / "steered_v1_2_dive_blind_scores.json"
-MANIFEST = ROOT / "out" / "dive_manifest" / "manifest_key.json"
+MANIFEST = ROOT / "scratch" / "dive_manifest" / "manifest_key.json"
 OUT = ROOT / "docs" / "findings" / "steered_v1_2_dive_read.md"
 
 

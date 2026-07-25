@@ -8,7 +8,7 @@ Per image runs BOTH shipped paths (reuse, never reimplement):
   - classify_palette        -> seam, n_jump, quarantine, cyclic/sequential, internal_max_step
                                (the same audit the library build uses)
 
-Logged per image (manifest, outside out/):  cov, extent (palette gyration), arclen
+Logged per image (manifest, outside scratch/):  cov, extent (palette gyration), arclen
 (palette curve length, the complexity-proxy partner of extent), branch_drop_frac,
 dropped_extent, seam_cycle, cycle_label, n_stops, plus the classify fields.
 
@@ -16,7 +16,7 @@ The harvested palette stored per image = the best-CYCLE result (Phase-1 mandates
 extract_palette_cycles); mirror_needed comes from classify (sequential => mirror on
 the Phase-4 render).
 
-Persists to data/wallpaper_harvest/  (data/ = persistent store, survives rm -r out/*).
+Persists to data/wallpaper_harvest/  (data/ = persistent store, survives rm -r scratch/*).
 
 Usage:  python palette_extractor/harvest_wallpapers.py [--workers N] [--limit N]
 """

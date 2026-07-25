@@ -978,7 +978,7 @@ pub struct PresentArgs {
     pub input: String,
 
     /// Output directory root; a `<run_stem>/` subdirectory is created inside.
-    #[arg(long, default_value = "out/present/")]
+    #[arg(long, default_value = "scratch/present/")]
     pub out_dir: String,
 
     /// Full-resolution render width in pixels.

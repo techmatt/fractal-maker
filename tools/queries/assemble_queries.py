@@ -6,7 +6,7 @@ query-type split, renders each through the shared `colormap.render_candidate` pa
 writes a durable **query record** with full recipes plus the 6 images, then a 3x2
 contact sheet for the eye-check.
 
-Field dumps (ss2) are cached per location under `out/fields/` and reused across the 6
+Field dumps (ss2) are cached per location under `scratch/fields/` and reused across the 6
 candidates and across queries at the same location — the expensive Rust iterate runs
 once per location, every recolor is pure Python.
 
@@ -36,8 +36,8 @@ import location as loc_mod  # noqa: E402  (canonical Location key + render-one f
 ROOT = qs.ROOT
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 
-OUT_QUERIES = ROOT / "out" / "queries"
-OUT_FIELDS = ROOT / "out" / "fields"
+OUT_QUERIES = ROOT / "scratch" / "queries"
+OUT_FIELDS = ROOT / "scratch" / "fields"
 OUT_IMAGES = OUT_QUERIES / "images"
 OUT_RECORDS = OUT_QUERIES / "records"
 

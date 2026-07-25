@@ -64,7 +64,7 @@ PRIOR_MANIFEST = ROOT / "data" / "palette_synthetic_eval" / "manifest.json"   # 
 DATA_DIR       = ROOT / "data" / "palette_roundtrip_sweep"     # load-bearing (persisted)
 STRIPS_DIR     = DATA_DIR / "strips"
 SCATTER_DIR    = DATA_DIR / "scatter"
-RENDERS_DIR    = ROOT / "out"  / "palette_roundtrip_sweep"     # regenerable views
+RENDERS_DIR    = ROOT / "scratch"  / "palette_roundtrip_sweep"     # regenerable views
 VIZ_HTML       = ROOT / "tools" / "viz" / "palette_roundtrip_sweep.html"
 
 # -- fixed bench parameters (reported, NOT tuned; match bench_synthetic_eval) --

@@ -35,7 +35,7 @@ from production_seeder import T_GOOD_OVERRIDES           # noqa: E402
 
 EVAL = ROOT / "data" / "classifier" / "v7" / "eval_scores_v7.jsonl"
 SCORES = ROOT / "labels" / "steered_run2_blind_scores.json"
-MANIFEST = ROOT / "out" / "steered_run2_manifest" / "manifest_key.json"
+MANIFEST = ROOT / "scratch" / "steered_run2_manifest" / "manifest_key.json"
 SEEDER = ROOT / "tools" / "atlas" / "production_seeder.py"
 OUT_JSON = ROOT / "data" / "atlas" / "mandelbrot_tgood_steered.json"
 OUT_DOC = ROOT / "docs" / "findings" / "mandelbrot_tgood_steered.md"

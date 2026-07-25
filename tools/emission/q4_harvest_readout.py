@@ -14,15 +14,15 @@ pipeline; it reads the durable driver artifacts + the producer's decode ledger a
   * reject/pool autopsy:  pooled-but-not-selected wallpapers (both heads) + the producer-stage
                           rejects (guard-fail / below-floor), so nothing is silently dropped.
 
-Reads   out/emission/q4_harvest/{pool_log.jsonl, intake.json, summary.json, release/*.png}
+Reads   scratch/emission/q4_harvest/{pool_log.jsonl, intake.json, summary.json, release/*.png}
         data/emission/q4_harvest/{outcome_ledger.jsonl, rescored.jsonl, stats.json}
-Writes  out/emission/q4_harvest/q4_release_sheet.png
-        out/emission/q4_harvest/q4_autopsy_sheet.png
-        out/emission/q4_harvest/q4_readout.md
-        out/emission/q4_harvest/q4_readout.json
+Writes  scratch/emission/q4_harvest/q4_release_sheet.png
+        scratch/emission/q4_harvest/q4_autopsy_sheet.png
+        scratch/emission/q4_harvest/q4_readout.md
+        scratch/emission/q4_harvest/q4_readout.json
 
   uv run python tools/emission/q4_harvest_readout.py
-  uv run python tools/emission/q4_harvest_readout.py --out out/emission/q4_harvest_smoke
+  uv run python tools/emission/q4_harvest_readout.py --out scratch/emission/q4_harvest_smoke
 """
 from __future__ import annotations
 
@@ -428,7 +428,7 @@ def _markdown(counts, selected, inventory, floor_rejected, rescored, ledger, bot
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default=str(ROOT / "out" / "emission" / "q4_harvest"),
+    ap.add_argument("--out", default=str(ROOT / "scratch" / "emission" / "q4_harvest"),
                     help="emission driver --out dir for the q4 run")
     args = ap.parse_args(argv)
     build(Path(args.out).resolve())

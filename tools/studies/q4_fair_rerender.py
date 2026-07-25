@@ -4,17 +4,17 @@ already 4x size), judge-quality res (tile 1024, 16:9, ss2). Sequential; each
 render uses all cores via rayon, so we do NOT fan out processes.
 
 mb19_p35's sheet is rendered with the exact ladder params, so it doubles as the
-identity reproduction of out/deep_centers/ladder_p35/fw_8p07e_10.png.
+identity reproduction of scratch/deep_centers/ladder_p35/fw_8p07e_10.png.
 """
 import json, subprocess, sys, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
-MINIS = json.load(open(ROOT / "out" / "q4_stage1" / "minibrots.json"))
+MINIS = json.load(open(ROOT / "scratch" / "q4_stage1" / "minibrots.json"))
 POOL = [json.loads(l) for l in
-        open(ROOT / "out" / "deep_centers" / "pool.jsonl")]
-OUT = ROOT / "out" / "fair_rerender" / "sheets"
+        open(ROOT / "scratch" / "deep_centers" / "pool.jsonl")]
+OUT = ROOT / "scratch" / "fair_rerender" / "sheets"
 OUT.mkdir(parents=True, exist_ok=True)
 
 COMMON = ["--builtins", "default cubehelix viridis",

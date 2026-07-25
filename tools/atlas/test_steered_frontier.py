@@ -260,7 +260,7 @@ def test_morph_memory_roundtrip_persists_window(tmp_path):
 
 # =========================================================================== #
 # tau_h derivation — decoupled from the disposable fidelity-records artifact.
-# Fires on the absence of out/descent_score_fidelity_records.json so the launch-critical
+# Fires on the absence of scratch/descent_score_fidelity_records.json so the launch-critical
 # derivation surfaces in pytest, not only at a campaign launch.
 # =========================================================================== #
 def test_derive_tau_h_falls_back_to_vendored_base_when_records_absent(monkeypatch, tmp_path):

@@ -22,7 +22,7 @@ Reuses q4_dM_property.{dump_julia_field,dump_mandel_field,purge,mandel_inside,ma
 signed_dist_dM}, q4_c_perturbation.{compute_metrics,band_dist,TGT_*,S_*}, and
 q4_neighborhood_sweep.{auto_maxiter,load_values}. Band geometry (768x432 ss1, the calibrated
 band mid≈0.73/int≈0.24/flat≈0.23, CORNER_THRESH 1.5) is held IDENTICAL to the prior passes so
-band_dist is directly comparable. All output under out/q4_decisive/ (disposable); fields
+band_dist is directly comparable. All output under scratch/q4_decisive/ (disposable); fields
 purged per-unit.
 
 Stages (idempotent, resume from checkpoint):
@@ -64,7 +64,7 @@ from tools.studies.q4_dM_property import (                                      
     MEAS_W, MEAS_H, FW_M, M_MAXITER,
 )
 
-OUT = ROOT / "out" / "q4_decisive"
+OUT = ROOT / "scratch" / "q4_decisive"
 FIELDS = OUT / "fields"
 
 # --- boundary sampler ------------------------------------------------------

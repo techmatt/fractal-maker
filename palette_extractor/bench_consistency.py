@@ -36,7 +36,7 @@ from palette_lib.coloring import (
 PALETTES_JSON  = ROOT / "data" / "palettes" / "clean_colormaps.json"
 BENCH_DATA_DIR = ROOT / "data" / "palette_consistency"
 STRIPS_DIR     = BENCH_DATA_DIR / "strips"
-RENDERS_DIR    = ROOT / "out" / "palette_consistency"
+RENDERS_DIR    = ROOT / "scratch" / "palette_consistency"
 VIZ_HTML       = ROOT / "tools" / "viz" / "palette_consistency.html"
 
 # -- fixed bench parameters ----------------------------------------------------
@@ -183,7 +183,7 @@ def run_one(name: str, stops_raw: list, field: np.ndarray, t_array: np.ndarray,
 def write_spot_html(entries: list[dict], out_html: Path) -> None:
     rows = []
     for e in entries:
-        render_rel = f"../../out/palette_consistency/{e['name']}.png"
+        render_rel = f"../../scratch/palette_consistency/{e['name']}.png"
         gt_rel     = f"../../data/palette_consistency/strips/{e['name']}_gt.png"
         ext_rel    = f"../../data/palette_consistency/strips/{e['name']}_ext.png"
         scatter_js = (
@@ -429,7 +429,7 @@ td{padding:4px 10px;color:#ccc;border-bottom:1px solid #1a1c24}
 <script>
 const MANIFEST_URL    = '../../data/palette_consistency/manifest.json';
 const SENSITIVITY_URL = '../../data/palette_consistency/sensitivity.json';
-const RENDERS_BASE    = '../../out/palette_consistency/';
+const RENDERS_BASE    = '../../scratch/palette_consistency/';
 const STRIPS_BASE     = '../../data/palette_consistency/strips/';
 
 let allEntries = [];

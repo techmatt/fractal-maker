@@ -99,7 +99,7 @@ CANON_SPEC = RenderSpec(CANON_W, CANON_H, CANON_SS, CANON_FILTER)
 EVAL_SPEC = RenderSpec(1024, 576, 2, CANON_FILTER, eval_res=True)
 
 EXE = REPO / "target" / "release" / "fractal-generator.exe"
-OUT_DIR = REPO / "out" / "wallpaper" / "emit_v1"
+OUT_DIR = REPO / "scratch" / "wallpaper" / "emit_v1"
 FIELD_DIR = OUT_DIR / "fields"         # disposable full-res field dumps (one per location)
 WALL_DIR = OUT_DIR / "wallpapers"      # emitted PNGs
 CELL_CACHE = OUT_DIR / "colorcells.json"
@@ -475,7 +475,7 @@ def main():
     ap.add_argument("--filter", help="override actual render filter: box|mitchell|lanczos3")
     ap.add_argument("--out-dir", type=Path,
                     help="override the emission home (use a THROWAWAY dir for tests; "
-                         "default out/wallpaper/emit_v1 is the production home)")
+                         "default scratch/wallpaper/emit_v1 is the production home)")
     ap.add_argument("--fail-at", type=int, default=-1,
                     help="testing only: force a render failure at this emit index "
                          "(exercises the failure-isolation path)")

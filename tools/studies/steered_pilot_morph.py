@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """steered_pilot_morph.py — morphological composition + M-cap depth audit of the steered A/B.
 
-Read-only post-hoc analysis of the steered-vs-baseline pilot (`out/steered_pilot_report.md`).
+Read-only post-hoc analysis of the steered-vs-baseline pilot (`scratch/steered_pilot_report.md`).
 Nothing mutated in any store/ledger. Two questions:
 
   Q1  Are the 16 steered admissions distinct LOOKS, or one cheap look re-bought? Embed the
@@ -255,14 +255,14 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--steered", type=Path, default=ROOT / "data/discovery/steered_pilot/steered")
     ap.add_argument("--baseline", type=Path, default=ROOT / "data/discovery/steered_pilot/baseline")
-    ap.add_argument("--out", type=Path, default=ROOT / "out/steered_pilot_morph.md")
+    ap.add_argument("--out", type=Path, default=ROOT / "scratch/steered_pilot_morph.md")
     args = ap.parse_args()
 
     st_rows = admitted_q3(load_jsonl(args.steered / "outcome_ledger.jsonl"))
     bl_rows = admitted_q3(load_jsonl(args.baseline / "outcome_ledger.jsonl"))
     print(f"steered admissions={len(st_rows)}  baseline admissions={len(bl_rows)}", flush=True)
 
-    tmp = ROOT / "out" / "steered_pilot_morph_fields"
+    tmp = ROOT / "scratch" / "steered_pilot_morph_fields"
     print("loading CLIP (vit_base_patch16_clip_224.openai) ...", flush=True)
     model, tf = load_clip()
     print("embedding steered ...", flush=True)
@@ -283,7 +283,7 @@ def main():
         out.append(s)
 
     w("# Steered pilot — morphological composition + M-cap depth audit\n")
-    w("Read-only companion to `out/steered_pilot_report.md`. Morph_clip recipe imported "
+    w("Read-only companion to `scratch/steered_pilot_report.md`. Morph_clip recipe imported "
       "byte-identical from the library audit (`vit_base_patch16_clip_224.openai`, timm eval "
       "transform, robust-z tanh grayscale render at 640x360 ss2). Yardsticks from "
       "`docs/design/morphology_dedup.md`: library-wide median pairwise "
@@ -439,7 +439,7 @@ def main():
     # contact sheet — grouped at the PERCEPTUAL cut (strict = all singletons, no grouping to show)
     sheet = contact_sheet(st_rows, su, sf, sd,
                           sorted(scl_loose, key=lambda c: -len(c)), LOOSE_CUT,
-                          ROOT / "out/steered_pilot_morph_clusters.png")
+                          ROOT / "scratch/steered_pilot_morph_clusters.png")
     w("## Contact sheet\n")
     w(f"Steered admissions grouped by morph cluster at the **perceptual** cut (cos>{LOOSE_CUT}); "
       f"the strict cut leaves all 16 as singletons so nothing groups. Each tile labeled "

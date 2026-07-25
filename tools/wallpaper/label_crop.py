@@ -13,8 +13,8 @@ NOT the Recipe-1 corpus renderer (render_corpus_crop) — the name render_label_
 is deliberately kept distinct from render_corpus_crop.
 
 The field-cache directory is a PARAMETER of ensure_label_field (default
-out/wallpaper_fields, shared by the bootstrap + humanq3 build scripts);
-rerender_bootstrap_ss2 passes its own out/wallpaper_fields_ss2 so its ss2 cache
+scratch/wallpaper_fields, shared by the bootstrap + humanq3 build scripts);
+rerender_bootstrap_ss2 passes its own scratch/wallpaper_fields_ss2 so its ss2 cache
 stays separate from the old ss4-era stems. The cache location never affects crop
 bytes — the field is a pure function of loc + geometry + maxiter.
 """
@@ -37,7 +37,7 @@ import colormap as cm                 # noqa: E402  (load_field, render_candidat
 import location as loc_mod            # noqa: E402  (render_one_flags)
 
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
-DEFAULT_FIELDS_DIR = ROOT / "out" / "wallpaper_fields"   # bootstrap + humanq3 share this
+DEFAULT_FIELDS_DIR = ROOT / "scratch" / "wallpaper_fields"   # bootstrap + humanq3 share this
 
 # --- label-crop spec (LOCKED — the canonical wallpaper label geometry) -----
 # ss2: the ss2/ss4 difference is washed out by the q90 JPEG + 384x224 training

@@ -8,8 +8,8 @@ straight off accumulated releases — the gate's verdict against the selection (
 once eye-routing is joined, the human) verdict — instead of starting a fresh labeling
 session. See prompts/mining_gate_report_only.md.
 
-Why here and not out/: the log must survive `rm -r out/*`, so it is committed under
-`data/emission/` (NOT the disposable out/ tree where every existing per-candidate
+Why here and not scratch/: the log must survive `rm -r scratch/*`, so it is committed under
+`data/emission/` (NOT the disposable scratch/ tree where every existing per-candidate
 score already lives and is silently wiped). See CLAUDE.md "Persistent-store convention".
 
 Idempotent + accumulating: rows are UPSERT-by-`key` then rewritten sorted. A re-run over

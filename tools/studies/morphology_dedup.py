@@ -30,7 +30,7 @@ viewports of one Ushiki plane mis-grouped by the coordinate metric, not real dup
 
 Run (near-free, reuses the saved CLIP matrix — no re-render, no re-embed):
     uv run python -m tools.curation.morphology_dedup \
-        --artifacts out/curation/visual_dup --threshold 0.974
+        --artifacts scratch/curation/visual_dup --threshold 0.974
 
 The `--artifacts` dir holds a visual_dup-style `embeddings.npz` + `fields/`. The original
 grayscale producer (visual_dup/embed.py) was wiped; regenerate the artifacts before running
@@ -210,10 +210,10 @@ def load_corpus_from_artifacts(artifacts: Path) -> Corpus:
     """Build a Corpus from `visual_dup`-style artifacts (see --artifacts).
 
     Reads `clusters.json` (62->47 structure + full per-row manifest fields incl. p_ge3)
-    and `out/sim_matrices.npz` (the saved CLIP cosine matrix). No GPU, no re-embed.
+    and `scratch/sim_matrices.npz` (the saved CLIP cosine matrix). No GPU, no re-embed.
     """
     data = json.loads((artifacts / "clusters.json").read_text())
-    z = np.load(artifacts / "out" / "sim_matrices.npz", allow_pickle=True)
+    z = np.load(artifacts / "scratch" / "sim_matrices.npz", allow_pickle=True)
     uids = list(z["uids"])
     clip = z["clip"]
     idx = {u: i for i, u in enumerate(uids)}
@@ -298,12 +298,12 @@ def print_report(res: DedupResult, corpus: Corpus):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--artifacts", type=Path, default=Path("out/curation/visual_dup"),
-                    help="dir with clusters.json + out/sim_matrices.npz")
+    ap.add_argument("--artifacts", type=Path, default=Path("scratch/curation/visual_dup"),
+                    help="dir with clusters.json + scratch/sim_matrices.npz")
     ap.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
     ap.add_argument("--exclude", nargs="*", default=list(DEFAULT_EXCLUDE))
     ap.add_argument("--out", type=Path, default=None,
-                    help="optional JSON report path (default: <artifacts>/out/morphology_dedup.json)")
+                    help="optional JSON report path (default: <artifacts>/scratch/morphology_dedup.json)")
     args = ap.parse_args()
 
     corpus = load_corpus_from_artifacts(args.artifacts)
@@ -311,7 +311,7 @@ def main():
                            exclude_families=tuple(args.exclude))
     print_report(res, corpus)
 
-    out = args.out or (args.artifacts / "out" / "morphology_dedup.json")
+    out = args.out or (args.artifacts / "scratch" / "morphology_dedup.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result_to_dict(res), indent=1))
     print(f"\nwrote {out}")

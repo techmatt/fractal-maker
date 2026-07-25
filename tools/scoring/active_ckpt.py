@@ -46,7 +46,7 @@ sys.path.insert(0, str(ROOT / "tools" / "corpus"))
 sys.path.insert(0, str(ROOT / "tools" / "mining"))
 
 BIN = ROOT / "target" / "release" / "fractal-generator.exe"
-OUT_DIR = ROOT / "out" / "reframe_probe"
+OUT_DIR = ROOT / "scratch" / "reframe_probe"
 PALETTE = "twilight_shifted"           # v4/v5 deploy-canonical palette
 # --- Active discovery/guard/reframe classifier checkpoint (SINGLE SOURCE OF TRUTH) ---
 # Every discovery-path scorer (production_seeder, guard, reframe) resolves the live

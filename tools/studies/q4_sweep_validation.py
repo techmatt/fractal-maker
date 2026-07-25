@@ -6,7 +6,7 @@ Measurement only (NO net / training / production; no config or data/ changes).
 See docs/design/deep_zoom_sourcing.md §5.
 
 Ground truth = Matt's magenta rectangles burned on subframe 0 of three deep-center
-contact sheets (out/deep_centers/{preview_p58.png, ladder_mis/fw_1e_8.png,
+contact sheets (scratch/deep_centers/{preview_p58.png, ladder_mis/fw_1e_8.png,
 ladder_p35/fw_8p07e_10.png}) — his q4 picks, the target to RECOVER, never fit against.
 
 The composite feature family + weights are transferred VERBATIM from the julia q4 work
@@ -15,8 +15,8 @@ are hand-set q4 priors, NOT fit to Matt's boxes (that is the test set). Uncalibr
 recall is the headline.
 
 Stages (idempotent):
-  boxes     color-key magenta rectangles -> normalized frame windows  (out/.../boxes.json)
-  fields    render-one --dump-field each frame at pool/ladder geometry (out/.../fields/)
+  boxes     color-key magenta rectangles -> normalized frame windows  (scratch/.../boxes.json)
+  fields    render-one --dump-field each frame at pool/ladder geometry (scratch/.../fields/)
   sweep     16:9 window sweep x 3 scales -> score_A -> NMS -> top-K + recall (recall.json)
   overlays  Matt boxes vs sweep top-K per frame (overlay_*.png, overlay_all.png)
   diagnose  per-box metrics vs top-K distribution -> named failing feature
@@ -38,7 +38,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tools.studies.q4_neighborhood_sweep import compute_metrics, score_A  # verbatim transfer
 
-OUT = ROOT / "out" / "q4_sweep_val"
+OUT = ROOT / "scratch" / "q4_sweep_val"
 FIELDS = OUT / "fields"
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 PAD = 6  # sheet.rs grid gutter
@@ -46,15 +46,15 @@ PAD = 6  # sheet.rs grid gutter
 # The three magenta-boxed frames: PNG + (cx, cy, fw, maxiter) from pool.jsonl /
 # deep_center_sourcer ladders. Field aspect follows the sheet TILE aspect (below).
 FRAMES = {
-    "p58": dict(png="out/deep_centers/preview_p58.png",
+    "p58": dict(png="scratch/deep_centers/preview_p58.png",
                 cx="-0.74903659502693622988762003916537468",
                 cy="0.12465575243193049482586137195444164",
                 fw="1.587612e-10", maxiter=14699, W=768, H=432),   # 16:9 tile
-    "mis": dict(png="out/deep_centers/ladder_mis/fw_1e_8.png",
+    "mis": dict(png="scratch/deep_centers/ladder_mis/fw_1e_8.png",
                 cx="0.32187663879025893205691900369603022",
                 cy="0.033260752306371290736322529793821926",
                 fw="1e-8", maxiter=13500, W=768, H=432),           # 16:9 tile
-    "p35": dict(png="out/deep_centers/ladder_p35/fw_8p07e_10.png",
+    "p35": dict(png="scratch/deep_centers/ladder_p35/fw_8p07e_10.png",
                 cx="-0.74977483272365342795786040375088960",
                 cy="0.10761724352653678278696798751738616",
                 fw="8.069624e-10", maxiter=13640, W=768, H=512),   # 3:2 tile

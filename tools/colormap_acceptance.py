@@ -57,7 +57,7 @@ def run_gate(test_id="test_01", palette="twilight", filt="box",
         raise FileNotFoundError(f"release binary not found at {BIN} — run `cargo build --release`")
     locs = {l["id"]: l for l in json.loads(TEST_RENDERS.read_text())["locations"]}
     loc = locs[test_id]
-    out_dir = Path(out_dir) if out_dir else (REPO / "out" / "colormap_acceptance")
+    out_dir = Path(out_dir) if out_dir else (REPO / "scratch" / "colormap_acceptance")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     ref_png = out_dir / f"{test_id}_{filt}_ref.png"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""steered_pilot_report.py — build out/steered_pilot_report.md from a steered/baseline A/B.
+"""steered_pilot_report.py — build scratch/steered_pilot_report.md from a steered/baseline A/B.
 
 Reads both arms' run-scoped dirs (each has outcome_ledger.jsonl + summary.json; the steered
 arm also has harvest_log.jsonl + state.json) and emits the pilot report:
@@ -28,8 +28,8 @@ sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 import location as loc_mod                       # noqa: E402
 from active_ckpt import BIN, PALETTE, JPG_Q, auto_maxiter  # noqa: E402
 
-OUT_MD = ROOT / "out" / "steered_pilot_report.md"
-MANIFEST_DIR = ROOT / "out" / "steered_pilot_manifest"
+OUT_MD = ROOT / "scratch" / "steered_pilot_report.md"
+MANIFEST_DIR = ROOT / "scratch" / "steered_pilot_manifest"
 
 
 def load_jsonl(p: Path) -> list[dict]:

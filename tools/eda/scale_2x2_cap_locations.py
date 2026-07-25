@@ -17,7 +17,7 @@ import os
 import random
 
 POOL_BASE = "data/guided_descend/scale_2x2"
-PRESENT_BASE = "out/present/scale_2x2"
+PRESENT_BASE = "scratch/present/scale_2x2"
 CELLS = ["a", "b", "c", "d"]
 
 

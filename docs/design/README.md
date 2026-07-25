@@ -18,5 +18,5 @@ the render core and pipeline; these docs go a level deeper on specific decisions
 
 **Provenance.** These docs were promoted in the 2026-07-24 docs-hygiene pass; the
 research ledger they distil (`docs/findings/`, `docs/rescued/`) was retired in the same
-pass and is recoverable from git history. See `out/docs_cleanup_summary.md` for the
+pass and is recoverable from git history. See `scratch/docs_cleanup_summary.md` for the
 per-file dispositions.

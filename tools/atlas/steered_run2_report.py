@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Report for the v1.1 steered run — out/steered_run2_report.md.
+"""Report for the v1.1 steered run — scratch/steered_run2_report.md.
 
 Answers the run's questions against the pilot yardsticks:
   - q3(discovery) and q3(keeper) per family (keeper = report-time F0.5 filter on canonical p_good)
@@ -44,7 +44,7 @@ from score_lib import corn_decode                      # noqa: E402
 
 M_CAP = 40   # steered_frontier.M_CAP (per-root expansion cap)
 
-# ---- pilot yardsticks (out/steered_pilot_report.md + out/steered_pilot_morph.md) ----
+# ---- pilot yardsticks (scratch/steered_pilot_report.md + scratch/steered_pilot_morph.md) ----
 PILOT = dict(
     admissions=16, morphs_strict=16, morphs_loose=13, morph_median=0.882,
     near_repeat_pairs=4, coord_dup_rate=0.1111, mcap_roots=8,
@@ -79,7 +79,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--run-dir", type=Path, default=ROOT / "data/discovery/steered_run2")
-    ap.add_argument("--out", type=Path, default=ROOT / "out/steered_run2_report.md")
+    ap.add_argument("--out", type=Path, default=ROOT / "scratch/steered_run2_report.md")
     ap.add_argument("--stdout", type=Path, default=None)
     args = ap.parse_args()
     run = args.run_dir
@@ -97,7 +97,7 @@ def main():
     # ---- morph_gray (library recipe) embeddings of admissions, OFFLINE ----
     # Reuse the cached npz when it already covers this admission set (field renders are the slow
     # part) so the report regenerates in seconds; otherwise render + embed and cache.
-    tmp = ROOT / "out" / "steered_run2_morph_fields"
+    tmp = ROOT / "scratch" / "steered_run2_morph_fields"
     npz_path = run / "morph_admissions.npz"
     uids = fams = depths = None
     E = None
@@ -152,7 +152,7 @@ def main():
     rk_score, rk_pct = {}, {}
     try:
         _lr = LocationRanker()
-        rk_score = _lr.score_rows(keepers, ROOT / "out" / "steered_run2_ranker_tiles")
+        rk_score = _lr.score_rows(keepers, ROOT / "scratch" / "steered_run2_ranker_tiles")
         rk_pct = rank_percentiles(rk_score)
         print(f"ranker: ordered {len(rk_score)} keepers ({_lr.scorer.head}, sets={_lr.sets})",
               flush=True)

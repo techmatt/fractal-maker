@@ -8,7 +8,7 @@ depth cap D trades wasted deep steps for more walks/budget WITHOUT losing theta.
 
 This runs ENTIRELY on the 600-walk step-0 pool: every frame's raw center tile was
 already rendered+scored during the best-over-walk re-analysis and cached under
-out/atlas_probe/step0_reanalysis/_scratch/walk_XXXX/raw/raw_<idx>.jpg. We:
+scratch/atlas_probe/step0_reanalysis/_scratch/walk_XXXX/raw/raw_<idx>.jpg. We:
 
   --score   : re-score every cached raw tile -> per-frame table
               (walk, idx, depth, raw, seed_cx, seed_cy) in data/.../frames_raw.jsonl.
@@ -404,7 +404,7 @@ def run_confirm(args):
                     gidx = frs[fi]["idx"]
                     pr = pool_rows[gidx]
                     loc = _mand_location(pr["cx"], pr["cy"], pr["fw"])
-                    wd = (ROOT / "out" / "atlas_probe" / "step0_efficiency" / "_confirm"
+                    wd = (ROOT / "scratch" / "atlas_probe" / "step0_efficiency" / "_confirm"
                           / f"walk_{wid:04d}" / f"idx_{gidx}")
                     res = reframe_location(loc, scorer=scorer, seed=0, workdir=wd,
                                            workers=args.workers)

@@ -105,8 +105,8 @@ EXE = str(REPO / "target/release/fractal-generator.exe")
 POOL_CMAPS = str(REPO / "data/palettes/pool_colormaps.json")
 MODES_REGISTRY = REPO / "specs" / "modes_registry.json"   # SOURCE OF TRUTH for mode promotion
 
-EMIT_MANIFEST = REPO / "out/wallpaper/emit_v1/manifest.jsonl"
-OUT_DIR = REPO / "out/mining/deploy_tail"   # DISPOSABLE scratch (scoring crops, fields, sbs, reports)
+EMIT_MANIFEST = REPO / "scratch/wallpaper/emit_v1/manifest.jsonl"
+OUT_DIR = REPO / "scratch/mining/deploy_tail"   # DISPOSABLE scratch (scoring crops, fields, sbs, reports)
 SCORE_CROPS = OUT_DIR / "scoring_crops"     # 1280x720 candidate jpgs (kept for eyeball+parity)
 FIELD_TMP = OUT_DIR / "_fields"             # disposable field dumps (deploy-tail-owned, token'd)
 SBS_DIR = OUT_DIR / "sidebyside"            # smooth-vs-kept comparisons (regenerable eyeball view)
@@ -115,7 +115,7 @@ SBS_DIR = OUT_DIR / "sidebyside"            # smooth-vs-kept comparisons (regene
 # 2560x1440 alternate is product and must sit ALONGSIDE the smooth wallpaper it is an alternate
 # of, so the two share one lifecycle (co-located manifest + pngs; a manifest that outlives its
 # pngs is dangling state). Bound in main() from the manifest's parent so they track wherever
-# emit_v1 emits (default out/wallpaper/emit_v1/).
+# emit_v1 emits (default scratch/wallpaper/emit_v1/).
 KEEP_DIR = None                             # <emit_home>/alternates  — full-res keeper pngs
 ALTERNATES = None                           # <emit_home>/alternates.jsonl — DURABLE incremental state
 LEGACY_KEEP_DIR = OUT_DIR / "keepers"       # pilot home (pre-relocation) — migrated on first run
@@ -360,7 +360,7 @@ def save_alternates(recs: dict):
 def _reset_state():
     """Deliberate start-fresh (--reset): wipe the durable alternates state — manifest +
     keeper pngs — in BOTH the emission home and the legacy pilot home. Explicit flag so a
-    wipe is a deliberate act, never a side effect of clearing out/."""
+    wipe is a deliberate act, never a side effect of clearing scratch/."""
     for p in (ALTERNATES, LEGACY_ALTERNATES):
         Path(p).unlink(missing_ok=True)
     for d in (KEEP_DIR, LEGACY_KEEP_DIR):
@@ -370,7 +370,7 @@ def _reset_state():
 
 
 def _migrate_legacy_home():
-    """One-time carry-over: relocate the pilot's alternates (out/mining/deploy_tail/) into the
+    """One-time carry-over: relocate the pilot's alternates (scratch/mining/deploy_tail/) into the
     durable emission home. Move each keeper png + rewrite its `keeper_png` path, then drop the
     legacy manifest. Idempotent — no-op once the emission-home manifest exists. Any png that
     fails to move is left for the self-heal pass to re-render from the surviving record."""
@@ -554,7 +554,7 @@ def main():
     # 5b. Report-only mining gate → durable would-cut log PAIRED with the actual keep
     #     decision (point 3 of the prompt). One row per scored candidate: what the 0.50
     #     gate WOULD have cut and whether the allocation kept it anyway. Committed under
-    #     data/emission/ (survives `rm -r out/*`, unlike report.json/alternates.jsonl).
+    #     data/emission/ (survives `rm -r scratch/*`, unlike report.json/alternates.jsonl).
     #     Runs before the (optional) full-res block so --score-only still records it.
     from tools.mining import gate_report as GR
     keeper_cids = {c["cid"] for c in keepers}

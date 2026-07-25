@@ -137,4 +137,4 @@ not as the primary. Gate production wiring on the non-circular relabel→refit l
 - `arm{1,2,3}_table.jsonl` — k3 best-over-walk harvest (+ reframed geometry)
 - `arm{1,2,3}_embed.npz` — v5 penultimate outcome embeddings + rewards + tags
 - `round2_report.json` — machine-readable metrics
-- `out/atlas/round2/embed_tiles/arm{1,2,3}/` — per-outcome best-frame tiles (eyeball check)
+- `scratch/atlas/round2/embed_tiles/arm{1,2,3}/` — per-outcome best-frame tiles (eyeball check)

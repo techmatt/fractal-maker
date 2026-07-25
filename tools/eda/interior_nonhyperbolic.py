@@ -10,8 +10,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-CELLS = ROOT / "out/interior_nonhyperbolic/cells"
-OUT = ROOT / "out/interior_nonhyperbolic"
+CELLS = ROOT / "scratch/interior_nonhyperbolic/cells"
+OUT = ROOT / "scratch/interior_nonhyperbolic"
 
 FIELDS = ["trap_cross", "trap_circle"]
 ANCHORS = ["siegel_golden", "parabolic_2", "parabolic_3"]

@@ -44,7 +44,7 @@ from tools.studies import q4_stage1_refit as R  # noqa: E402
 from tools.studies.q4_neighborhood_sweep import auto_maxiter  # noqa: E402
 
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
-OUT = ROOT / "out" / "q4_stage1" / "harvest_tight"
+OUT = ROOT / "scratch" / "q4_stage1" / "harvest_tight"
 RENDERS = OUT / "renders"
 BATCHES = ("2026-07-23_q4_stage1_windows", "2026-07-23_q4_g_aimed")
 

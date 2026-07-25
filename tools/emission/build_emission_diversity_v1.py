@@ -329,7 +329,7 @@ class EmissionDiversity:
         self.ledger = self.ledgers[0]
         self.out = Path(args.out).resolve()
         self.report_path = Path(args.report).resolve() if args.report else \
-            (ROOT / "out" / "emission_v1_report.md")
+            (ROOT / "scratch" / "emission_v1_report.md")
         self.renders = self.out / "renders"
         self.release_dir = self.out / "release"
         self.field_cache = self.out / "fields"
@@ -915,9 +915,9 @@ def main():
     ap.add_argument("--ledger", nargs="+",
                     default=["data/discovery/steered_run2/outcome_ledger.jsonl"],
                     help="one or more run-scoped ledgers; admitted rows are unioned (dedup by id)")
-    ap.add_argument("--out", default="out/emission_v1")
+    ap.add_argument("--out", default="scratch/emission_v1")
     ap.add_argument("--report", default=None,
-                    help="report .md path (default out/emission_v1_report.md)")
+                    help="report .md path (default scratch/emission_v1_report.md)")
     ap.add_argument("--release-n", type=int, default=12)
     ap.add_argument("--strange-frac", type=float, default=DEFAULT_STRANGE_FRAC,
                     help="target strange share of the release; strange_slots = round(N·frac), "

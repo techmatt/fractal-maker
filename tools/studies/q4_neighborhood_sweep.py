@@ -10,7 +10,7 @@ contact sheets for the two target bins + the two failure modes.
 
 Field source is the f64 escape-time backend (colormap-invariant); colored sheet
 renders use render-one with the exemplar palette. Everything writes under
-out/q4_sweep/ (disposable); the field bins are purged per-unit.
+scratch/q4_sweep/ (disposable); the field bins are purged per-unit.
 
 Stages (idempotent, resume from checkpoint):
   measure   field-dump the full grid, compute metrics -> metrics.jsonl
@@ -31,7 +31,7 @@ import numpy as np
 from scipy.ndimage import uniform_filter
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "out" / "q4_sweep"
+OUT = ROOT / "scratch" / "q4_sweep"
 FIELDS = OUT / "fields"
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 PALETTE = "twilight_shifted"

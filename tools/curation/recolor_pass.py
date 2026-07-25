@@ -75,7 +75,7 @@ RECORDS = cc.RECORDS             # the 47-instance library records (beam cands +
 GRID = esel.ColorGrid()          # the emit-time coarse CIELAB grid (3x3 a/b x 2 L = 18 cells)
 
 # DURABLE home: the assignment ledger is incremental non-churn state that must survive
-# `rm -r out/*` (data/ convention), so the home defaults under data/. Corrected preview
+# `rm -r scratch/*` (data/ convention), so the home defaults under data/. Corrected preview
 # PNGs + sheets co-locate with the ledger (deploy_tail-style shared lifecycle). Override
 # with --out-dir (use a THROWAWAY dir for tests).
 HOME = ROOT / "data/curation/recolor_pass"

@@ -15,7 +15,7 @@ Bounded: small batches + a modest per-family wallclock budget. The budget is a
 between-batch floor (a single deep batch can overshoot it — see the 37-min single-batch
 outlier), so total wallclock is roughly (families x [budget .. budget + one batch]).
 
-Writes a manifest (out/atlas/v6_monitored_harvest/manifest.json) mapping each family to
+Writes a manifest (scratch/atlas/v6_monitored_harvest/manifest.json) mapping each family to
 its run_ts + summary path, consumed by harvest_report.py. Self-monitoring: each family's
 full stdout is teed to a per-family log; a heartbeat + running tally prints here.
 
@@ -35,7 +35,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SEEDER = ROOT / "tools" / "atlas" / "production_seeder.py"
 RUNS_DIR = ROOT / "data" / "discovery" / "runs"
-OUT_DIR = ROOT / "out" / "atlas" / "v6_monitored_harvest"
+OUT_DIR = ROOT / "scratch" / "atlas" / "v6_monitored_harvest"
 
 # The four parameter-plane families. Phoenix is seeder-exempt (no plane) and left out.
 FAMILIES = ["mandelbrot", "multibrot3", "multibrot4", "multibrot5"]

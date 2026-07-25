@@ -126,7 +126,7 @@ def persist_query(qid, qtype, loc, final_cfgs, final_imgs, detail, sampler):
 
 def estimate(plan, chosen, lib, sampler):
     total_recolors = sum(RECOLORS_PER_TYPE[qt] for _, qt, _ in plan)
-    # dumps needed = locations whose ss2 field is not already cached in out/fields.
+    # dumps needed = locations whose ss2 field is not already cached in scratch/fields.
     need_dump = 0
     for _, _, loc in plan:
         stem = aq._field_key(loc.ref)

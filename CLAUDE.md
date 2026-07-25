@@ -146,9 +146,9 @@ rendered to JPG (`enrich --mode render`, full ss4 Lanczos3 wallpaper quality).
 > until it landed on `main`. Standing rule, not a one-off: commit directly to `main` (branch only
 > on an explicit request).
 
-> **Generated-output convention.** All generated artifacts — renders, strips, contact sheets, guided-descend/calibration JSON, logs, demo fixtures — are written under the single `out/` tree, never the repo root. The root holds only source, config, docs, and committed `assets/`. `out/` is gitignored (except `.gitkeep`), so the entire working corpus wipes with one `rm -r out/*` without touching anything tracked. **New subcommands MUST default their output under `out/<subcommand>/` and MUST NOT write to the repo root.**
+> **Generated-output convention.** All generated artifacts — renders, strips, contact sheets, guided-descend/calibration JSON, logs, demo fixtures — are written under the single `scratch/` tree, never the repo root. The root holds only source, config, docs, and committed `assets/`. `scratch/` is gitignored (except `.gitkeep`), so the entire working corpus wipes with one `rm -r scratch/*` without touching anything tracked. **New subcommands MUST default their output under `scratch/<subcommand>/` and MUST NOT write to the repo root.**
 
-The fixed base defaults are `out/renders/` (bare render) and `out/strips/` (sheet); every other subcommand writes under its own `out/<subcommand>/`. Use `crate::ensure_parent_dir(path)?` before any top-level `save`/`fs::write` so a no-flag default writes its dir on a fresh checkout.
+The fixed base defaults are `scratch/renders/` (bare render) and `scratch/strips/` (sheet); every other subcommand writes under its own `scratch/<subcommand>/`. Use `crate::ensure_parent_dir(path)?` before any top-level `save`/`fs::write` so a no-flag default writes its dir on a fresh checkout.
 
 > **Scratchpad is not a dependency tier.** `scratchpad/` is the canonical *disposable temp*
 > dir (gitignored). **If a file is imported from outside `scratchpad/`, or it's the only
@@ -170,7 +170,7 @@ The fixed base defaults are `out/renders/` (bare render) and `out/strips/` (shee
 > grep -rnE "savez|write_text|open\([^)]*['\"]w" --include="*.py" scratchpad/ | grep -iE "data/|STORE"
 > ```
 
-> **Persistent-store convention (`data/`).** `out/` is *disposable* — anything that must survive `rm -r out/*` lives under `data/` instead (committed, NOT gitignored). Use this for **load-bearing artifacts that are part of a metric's definition** and that you don't want silently regenerated: e.g. `data/calibration/energy_calibration.json` (the `calibrate` frozen quantile bins + per-image histograms — see `energy::ARTIFACT_PATH`). Regenerable *views* (PNG sheets) stay in `out/`. When something reads such an artifact back, expose the default path as a `pub const` (e.g. `energy::ARTIFACT_PATH`) shared by writer and reader rather than re-deriving the string.
+> **Persistent-store convention (`data/`).** `scratch/` is *disposable* — anything that must survive `rm -r scratch/*` lives under `data/` instead (committed, NOT gitignored). Use this for **load-bearing artifacts that are part of a metric's definition** and that you don't want silently regenerated: e.g. `data/calibration/energy_calibration.json` (the `calibrate` frozen quantile bins + per-image histograms — see `energy::ARTIFACT_PATH`). Regenerable *views* (PNG sheets) stay in `scratch/`. When something reads such an artifact back, expose the default path as a `pub const` (e.g. `energy::ARTIFACT_PATH`) shared by writer and reader rather than re-deriving the string.
 
 > **Adding a subcommand.** The per-subcommand `Args` struct (+ its `impl
 > { resolved_* }` helpers) lives **in the subcommand's own module**, next to its
@@ -184,7 +184,7 @@ The fixed base defaults are `out/renders/` (bare render) and `out/strips/` (shee
 > (4) `src/lib.rs` `pub mod`. **`cli.rs` keeps only** the shared cross-cutting types
 > (`BackendChoice`, `LocationArgs`, `ShadeArgs`, `PaletteSelectArgs`, `Cli`,
 > `Command`, `parse_complex`). New subcommands MUST default outputs under
-> `out/<subcommand>/` (disposable) or `data/<subcommand>/` (load-bearing artifacts)
+> `scratch/<subcommand>/` (disposable) or `data/<subcommand>/` (load-bearing artifacts)
 > — never the repo root. Keep `#[derive(Args)]`/`#[arg(...)]` attributes and all
 > default values/flag names stable (batch reproducibility depends on them).
 

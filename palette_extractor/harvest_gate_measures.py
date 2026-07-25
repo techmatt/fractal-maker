@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT))
 from palette_lib.coloring import bake_lut, lookup_linear, linear_to_srgb
 
 OUT = ROOT / "data" / "wallpaper_harvest"
-VDIR = ROOT / "out" / "wallpaper_harvest" / "gate"
+VDIR = ROOT / "scratch" / "wallpaper_harvest" / "gate"
 STRIPS = VDIR / "strips"
 HISTS = VDIR / "hists"
 VIZ = ROOT / "tools" / "viz" / "harvest_gate.html"
@@ -145,8 +145,8 @@ def main():
                                "branch_drop": bd, "dropped_extent": de}.items()},
         "measures": {k: [{"name": n, "v": v} for n, v in zip(*pair)]
                      for k, pair in measures.items()},
-        "strip_dir": "../../out/wallpaper_harvest/gate/strips/",
-        "hist_dir": "../../out/wallpaper_harvest/gate/hists/",
+        "strip_dir": "../../scratch/wallpaper_harvest/gate/strips/",
+        "hist_dir": "../../scratch/wallpaper_harvest/gate/hists/",
     }
     write_viewer(payload)
     print(f"wrote {VIZ}")

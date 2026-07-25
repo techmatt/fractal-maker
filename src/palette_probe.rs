@@ -24,7 +24,7 @@
 //! Per-palette **corpus not-bad rate** (fraction of that palette's corpus labels
 //! that are not label-1) is computed from the labels and emitted with the index,
 //! so the viewer (`tools/viz/palette_probe.html`) can sort palettes worst-first.
-//! Outputs land under `data/palette_probe/` (a stable store, **not** `out/`): the
+//! Outputs land under `data/palette_probe/` (a stable store, **not** `scratch/`): the
 //! JPG crops + `probe_index.json`. The viewer writes the decision artifact
 //! (`palette_verdict.json`); this subcommand makes **no** quality claim and cuts
 //! nothing.
@@ -495,7 +495,7 @@ pub struct PaletteProbeArgs {
     #[arg(long, default_value_t = 90)]
     pub jpg_quality: u8,
 
-    /// Stable output directory (not under `out/`).
+    /// Stable output directory (not under `scratch/`).
     #[arg(long, default_value = "data/palette_probe/")]
     pub out_dir: String,
 }

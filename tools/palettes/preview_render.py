@@ -104,9 +104,9 @@ def contact_sheet(entries: list[dict], render_dir: Path, out: Path,
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--colormaps", type=Path,
-                    default=ROOT / "out/palette_preview/dramatic-test/densified.json")
+                    default=ROOT / "scratch/palette_preview/dramatic-test/densified.json")
     ap.add_argument("--outdir", type=Path,
-                    default=ROOT / "out/palette_preview/dramatic-test")
+                    default=ROOT / "scratch/palette_preview/dramatic-test")
     args = ap.parse_args()
 
     lib = json.loads(args.colormaps.read_text())

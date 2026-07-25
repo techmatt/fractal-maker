@@ -16,7 +16,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 BATCH = REPO / "data/render_mode_corpus/batches/2026-07-10_render_mode_pilot_v1"
 IMAGES = BATCH / "images.jsonl"
-DIST = REPO / "out/render_mode_pilot/smooth_pass/distances.json"
+DIST = REPO / "scratch/render_mode_pilot/smooth_pass/distances.json"
 LABELS = REPO / "labels/render_mode_pilot_v1.json"
 
 DE_CUT, OMS_CUT = 8.0, 0.12

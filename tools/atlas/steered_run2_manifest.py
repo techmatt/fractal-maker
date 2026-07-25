@@ -76,7 +76,7 @@ def main():
     ap.add_argument("--run-dir", type=Path, default=ROOT / "data/discovery/steered_run2")
     ap.add_argument("--n", type=int, default=60)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--out-dir", type=Path, default=ROOT / "out/steered_run2_manifest")
+    ap.add_argument("--out-dir", type=Path, default=ROOT / "scratch/steered_run2_manifest")
     args = ap.parse_args()
     run = args.run_dir
 

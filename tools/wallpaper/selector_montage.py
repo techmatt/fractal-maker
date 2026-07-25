@@ -31,7 +31,7 @@ BATCH = REPO / "data/wallpaper_corpus/batches/2026-07-05_wallpaper_bootstrap_v1"
 LABELS = REPO / "labels/wallpaper_bootstrap_v1.json"
 CACHED = REPO / "data/wallpaper_head/v1/eval_scores.jsonl"
 CKPT = REPO / "data/wallpaper_head/v1/model_best.pt"
-OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "out/wallpaper/selector_bootstrap_montage.png"
+OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "scratch/wallpaper/selector_bootstrap_montage.png"
 
 sys.path.insert(0, str(REPO))
 _spec = importlib.util.spec_from_file_location(

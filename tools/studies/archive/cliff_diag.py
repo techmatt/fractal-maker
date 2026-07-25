@@ -31,7 +31,7 @@ from preview_render import lut_strip, font, sanitize  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
-OUTDIR = ROOT / "out/palette_preview/cliff-diag"
+OUTDIR = ROOT / "scratch/palette_preview/cliff-diag"
 WORKERS = 4  # project cap
 W, H, SS = 1024, 576, 2
 

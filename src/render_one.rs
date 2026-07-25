@@ -9,7 +9,7 @@
 //! reconstruction kernel — not new logic.
 //!
 //! Renders **one** (location × palette) at the locked quality to a caller-chosen
-//! **stable** path (not `out/`), reporting iterate / filter / total wall-clock.
+//! **stable** path (not `scratch/`), reporting iterate / filter / total wall-clock.
 //! The locked values (`--width 2560 --height 1440 --ss 4 --pattern grid --filter
 //! lanczos3`) live here only; the bare render path keeps its own defaults so fast
 //! ss1/ss2 previews and diagnostics are unaffected.
@@ -714,7 +714,7 @@ pub struct RenderOneArgs {
     #[arg(long, default_value = "data/palettes/clean_colormaps.json")]
     pub colormaps: String,
 
-    /// Output PNG path — a stable path the caller chooses (not under `out/`).
+    /// Output PNG path — a stable path the caller chooses (not under `scratch/`).
     #[arg(long, default_value = "render.png")]
     pub out: String,
 

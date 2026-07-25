@@ -76,7 +76,7 @@ EMITTER = ROOT / "tools" / "wallpaper" / "emit_v1.py"
 # just for a path — keep in sync if the seeder moves it). A CLEAN seeder self-purges its
 # own <ts>/ scratch on exit; a HARD-KILLED one (the orchestrator's KILL_MULT backstop)
 # leaves it behind, which the startup sweep reclaims. Run dirs are named YYYYMMDD_HHMMSS.
-SEEDER_SCRATCH_ROOT = ROOT / "out" / "atlas" / "production_seeder"
+SEEDER_SCRATCH_ROOT = ROOT / "scratch" / "atlas" / "production_seeder"
 _RUN_TS_RX = re.compile(r"^\d{8}_\d{6}$")
 
 # All c-plane families; --julia-hook on each yields the julia:{fam} found-points too.
@@ -787,7 +787,7 @@ def main():
                     help="initial per-winner eval-res render estimate (refined at runtime)")
     ap.add_argument("--families", nargs="+", default=None,
                     help="override the family set (default: all c-plane families)")
-    ap.add_argument("--out-root", default=str(ROOT / "out" / "wallpaper" / "overnight"),
+    ap.add_argument("--out-root", default=str(ROOT / "scratch" / "wallpaper" / "overnight"),
                     help="output tree root (pools/emit/manifest/log; disposable, survives crash)")
     ap.add_argument("--discovery-root", default=str(ROOT / "data" / "discovery" / "fresh_runs"),
                     help="durable run-scoped discovery store root")
@@ -816,8 +816,8 @@ def main():
     if args.mini:
         # Tight, self-contained validation: 1 family (mandelbrot + its julia twin via the
         # hook), short discovery, small pool, throwaway scratch roots that clean up.
-        scratch = ROOT / "out" / "wallpaper" / "overnight_mini_scratch"
-        args.out_root = str(scratch / "out")
+        scratch = ROOT / "scratch" / "wallpaper" / "overnight_mini_scratch"
+        args.out_root = str(scratch / "scratch")
         args.discovery_root = str(scratch / "disc")
         if args.cap_hours == CAP_HOURS:
             args.cap_hours = 0.75                      # ~45 min (room for >=2 full cycles now that

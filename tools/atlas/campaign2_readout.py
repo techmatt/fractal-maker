@@ -745,7 +745,7 @@ def build(args) -> str:
         sheet_runs += f" --run {dive.relative_to(ROOT)}"
     w("Whole-campaign admission / reject contact sheet(s):\n")
     w(f"```\nuv run python tools/atlas/campaign1_contact_sheet.py {sheet_runs} \\\n"
-      f"    --out out/campaign2/contact_sheet.png\n```\n")
+      f"    --out scratch/campaign2/contact_sheet.png\n```\n")
 
     L += dive_prior_finding_section()
 
@@ -761,7 +761,7 @@ def build(args) -> str:
       "result is **§C above** (whole-run).\n")
     c1_args = argparse.Namespace(
         breadth=str(breadth), dive=(str(dive) if dive is not None else None),
-        out=str(ROOT / "out" / "campaign2" / "_base.md"),
+        out=str(ROOT / "scratch" / "campaign2" / "_base.md"),
         no_morph=True,   # forced: §I already did the single combined morph pass
         prior_ledgers=[str(p) for p in sorted((ROOT / "data").rglob("outcome_ledger.jsonl"))
                        if "campaign2" not in p.parts])
@@ -777,7 +777,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--breadth", required=True, help="campaign-2 breadth run dir")
     ap.add_argument("--dive", default=None, help="campaign-2 dive run dir (adds §H/§I close-out)")
-    ap.add_argument("--out", default=str(ROOT / "out" / "campaign2" / "readout.md"))
+    ap.add_argument("--out", default=str(ROOT / "scratch" / "campaign2" / "readout.md"))
     ap.add_argument("--no-morph", action="store_true", help="skip the GPU morph pass (cheap only)")
     args = ap.parse_args()
     md = build(args)

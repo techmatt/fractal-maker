@@ -5,7 +5,7 @@
 //! iterate once, assert the call count equals the subsample grid size, then run
 //! `shade_and_downsample` three times with different `--color`/palette params
 //! and assert the count never moves — i.e. re-coloring never re-iterated. The
-//! three PNGs are written to `target/test-out/` for visual inspection.
+//! three PNGs are written to `target/test-scratch/` for visual inspection.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};

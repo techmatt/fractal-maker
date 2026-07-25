@@ -1,7 +1,7 @@
 """Assemble the trap_circle render-mode sweep montage (5 trap_radius x 5 transform)."""
 from PIL import Image, ImageDraw, ImageFont
 
-OUT = "out/render_modes/trap_circle_sweep"
+OUT = "scratch/render_modes/trap_circle_sweep"
 RADII = ["0.25", "0.5", "1.0", "1.5", "2.0"]
 TRANSFORMS = ["linear", "sqrt", "log", "scurve", "histeq"]
 

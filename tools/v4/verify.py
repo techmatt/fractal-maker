@@ -25,7 +25,7 @@ from artifacts import resolve as resolve_artifact  # noqa: E402
 
 CACHE_MANIFEST = ROOT / "data" / "v4" / "cache_manifest.jsonl"
 ROSTER = ROOT / "data" / "v4" / "aug_roster.json"
-OUT = ROOT / "out" / "v4"
+OUT = ROOT / "scratch" / "v4"
 EXPECTED = 3622 * 42
 
 SCALES = [0.7, 1.0, 1.3]

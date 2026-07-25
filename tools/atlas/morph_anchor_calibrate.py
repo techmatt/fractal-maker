@@ -98,7 +98,7 @@ def main():
     model, tf = load_clip()
 
     # --- grayscale morph_gray (library canon) -> identify near-repeat pairs ---------------
-    tmp_fields = ROOT / "out" / "morph_anchor_fields"
+    tmp_fields = ROOT / "scratch" / "morph_anchor_fields"
     print("morph_gray embeddings (near-repeat identification) ...", flush=True)
     su, sf, sd, Eg = spm.embed_admissions(rows, tmp_fields, model, tf)
     Cg = spm.cos_matrix(Eg)
@@ -109,7 +109,7 @@ def main():
           f"strict (cos>{spm.STRICT_CUT}): {len(strict_pairs)}", flush=True)
 
     # --- cheap-JPG substrate embeddings (the live recipe) --------------------------------
-    tmp_cheap = ROOT / "out" / "morph_anchor_cheap"
+    tmp_cheap = ROOT / "scratch" / "morph_anchor_cheap"
     print("cheap-substrate embeddings (the live penalty recipe) ...", flush=True)
     Ec = cheap_embeddings(rows, model, tf, tmp_cheap)
     Cc = Ec @ Ec.T

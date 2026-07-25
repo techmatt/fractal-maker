@@ -8,7 +8,7 @@ sit adjacent. Union breadth + dive if both are given. Reuses steered_pilot_morph
 
   uv run python tools/atlas/campaign1_contact_sheet.py \
       --run data/discovery/campaign1/breadth \
-      [--run data/discovery/campaign1/dive] --out out/campaign1/contact_sheet.png
+      [--run data/discovery/campaign1/dive] --out scratch/campaign1/contact_sheet.png
 """
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ def build(run_dirs: list[Path], out_png: Path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--run", action="append", required=True, help="run dir(s) with outcome_ledger.jsonl")
-    ap.add_argument("--out", default=str(ROOT / "out" / "campaign1" / "contact_sheet.png"))
+    ap.add_argument("--out", default=str(ROOT / "scratch" / "campaign1" / "contact_sheet.png"))
     args = ap.parse_args()
     build([Path(r).resolve() for r in args.run], Path(args.out))
 

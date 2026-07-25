@@ -2,7 +2,7 @@
 r"""first_release_readout.py — the prompt-specific readout for the first real release,
 complementing the driver's own report.py.
 
-Reads ONLY the durable artifacts (out/first_release/{pool_log.jsonl, intake.json} +
+Reads ONLY the durable artifacts (scratch/first_release/{pool_log.jsonl, intake.json} +
 data/emission/target_measure.json) — pure, no GPU, safe to run alongside the colorize or
 after it. Produces the §Readout items report.py does not:
 
@@ -48,8 +48,8 @@ try:
 except Exception:
     pass
 
-OUT = ROOT / "out" / "first_release"
-REPORT = ROOT / "out" / "first_release_readout.md"
+OUT = ROOT / "scratch" / "first_release"
+REPORT = ROOT / "scratch" / "first_release_readout.md"
 MEASURE = ROOT / "data" / "emission" / "target_measure.json"
 WP_RELEASE_FLOOR, MN_RELEASE_FLOOR = 0.90, 0.50
 STYLES = ["smooth", "tia", "stripe", "smooth_mean_angle", "smooth_angle_min",
@@ -298,7 +298,7 @@ def main():
     w("# First release — supplementary readout\n")
     w(f"Status: **{'COMPLETE' if done else 'IN PROGRESS'}** — pool has **{n_att}** colorize "
       f"attempts so far ({n_pass} gated). Reads only the durable pool log + snapshot; "
-      f"complements the driver's `out/first_release_report.md`.\n")
+      f"complements the driver's `scratch/first_release_report.md`.\n")
 
     w("## 0. Per-stage reconciliation\n")
     w(f"- attempts (found) **{n_att}** == passed (written) **{n_pass}** + floor-dropped "
@@ -356,7 +356,7 @@ def main():
 
     w("## 5. Realized hue / chroma (pooled over the gated pool)\n")
     w(f"Accumulated over **{nh}** gated wallpapers (chroma-weighted hue histogram + chroma "
-      f"histogram). See `out/first_release/hue_chroma.png`.\n")
+      f"histogram). See `scratch/first_release/hue_chroma.png`.\n")
     w("| hue bin | share |   | chroma bin | share |")
     w("|---|--:|---|---|--:|")
     for i in range(12):
@@ -367,7 +367,7 @@ def main():
     w("")
 
     w("## 6. Reject autopsy — fate-stratified sheet\n")
-    w("`out/first_release/reject_autopsy_sheet.png` — a visual sample across every fate band:\n")
+    w("`scratch/first_release/reject_autopsy_sheet.png` — a visual sample across every fate band:\n")
     for name, total in fate:
         w(f"- {name}: {total}")
     w("")

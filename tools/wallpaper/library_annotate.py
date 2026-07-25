@@ -262,7 +262,7 @@ def annotate(args) -> dict:
     records_path = Path(args.records) if args.records else store.RECORDS_PATH
     thumbs_dir = Path(args.thumbs) if args.thumbs else store.THUMBS_DIR
     thumbs_dir.mkdir(parents=True, exist_ok=True)
-    tmp_field_dir = ROOT / "out" / "prospect" / "_field_tmp"
+    tmp_field_dir = ROOT / "scratch" / "prospect" / "_field_tmp"
     field_cache_root = Path(args.field_cache_dir) if args.field_cache_dir else store.FIELD_CACHE_DIR
     shards_dir = Path(args.emb_shards) if args.emb_shards else store.EMB_SHARDS
 

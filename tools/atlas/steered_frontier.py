@@ -3,11 +3,11 @@
 
 The current production descent (`production_seeder.py` -> `guided-descend` walk -> reward)
 picks a **uniform-random survivor** per rung and only scores FINISHED frames; the aesthetic
-classifier never touches the trajectory (see `out/descent_algorithm_current.md`). Here the
+classifier never touches the trajectory (see `scratch/descent_algorithm_current.md`). Here the
 classifier STEERS: a best-first frontier where each pop expands one rung
 (`guided-descend --expand`, all gate survivors), scores every survivor's cheap 384-wide
 twilight_shifted field with the active checkpoint, and re-prioritises by
-`E[ord] + Gumbel - dup-penalty`. The fidelity study (`out/descent_score_fidelity.md`)
+`E[ord] + Gumbel - dup-penalty`. The fidelity study (`scratch/descent_score_fidelity.md`)
 proved v7 on that cheap presentation ranks frames at Spearman 0.95 vs canonical, so the
 steering signal is nearly free.
 
@@ -138,7 +138,7 @@ EXPAND_FLAGS = [
     "--descent-occ-floor", str(ps.OCC_FLOOR), "--descent-black-cap", str(ps.BLACK_CAP),
 ]
 
-FIDELITY_RECORDS = ROOT / "out" / "descent_score_fidelity_records.json"
+FIDELITY_RECORDS = ROOT / "scratch" / "descent_score_fidelity_records.json"
 C_PLANE = ("mandelbrot", "multibrot3", "multibrot4", "multibrot5")
 
 
@@ -196,14 +196,14 @@ TAU_H_CAMPAIGN_FLOOR = {
 
 # Vendored fidelity-derived base tau_h — the decoupling from a DISPOSABLE artifact.
 # derive_tau_h once loaded the cheap-p_good cuts straight from
-# `out/descent_score_fidelity_records.json`, a study output living in the disposable `out/`
-# tree. When `out/` was wiped, this launch-critical derivation lost its only input and
+# `scratch/descent_score_fidelity_records.json`, a study output living in the disposable `scratch/`
+# tree. When `scratch/` was wiped, this launch-critical derivation lost its only input and
 # `SystemExit`'d during frontier setup — a config that "looks applied" but strands the next
 # campaign launch. The records file is gone and unrecoverable short of re-running the (renders +
 # dual-scorer) study, BUT the derived VALUES survive in committed config: the campaign1/2 and
 # shakeout_* run summaries (`data/discovery/*/summary.json`) all recorded this identical
 # per-partition tau_h — the PRE-floor base derive_tau_h computed from the records. We vendor it
-# here so the derivation no longer depends on a file that can vanish with `rm -r out/*`. The live
+# here so the derivation no longer depends on a file that can vanish with `rm -r scratch/*`. The live
 # study path still overrides these whenever the records are regenerated; the campaign floors in
 # TAU_H_CAMPAIGN_FLOOR apply on top either way (they only ever raise).
 TAU_H_FIDELITY_BASE = {
@@ -261,7 +261,7 @@ def derive_tau_h(partitions: list[str], keep=0.90) -> dict:
 
     Base is derived live from the fidelity study records when they are present (the study was
     re-run); otherwise it falls back to the vendored `TAU_H_FIDELITY_BASE` — the launch-critical
-    path must NOT depend on the disposable `out/descent_score_fidelity_records.json`. A partition
+    path must NOT depend on the disposable `scratch/descent_score_fidelity_records.json`. A partition
     with neither a record-derived nor a vendored base fails loudly and immediately (naming the
     regenerator) rather than aborting deep in a frontier run."""
     if FIDELITY_RECORDS.exists():

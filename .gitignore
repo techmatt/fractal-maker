@@ -49,12 +49,12 @@ __pycache__/
 # from pyproject.toml + uv.lock via `uv sync` — both of those ARE committed.
 /.venv/
 
-# All generated artifacts live under the single out/ tree (see CLAUDE.md,
+# All generated artifacts live under the single scratch/ tree (see CLAUDE.md,
 # "Generated-output convention"). Ignore the whole tree but keep its anchor so
 # the directory survives a clean checkout. This blanket rule subsumes the old
 # per-dir/per-file entries (/renders, /descend_strip_panels, *_stdout.txt, …).
-/out/*
-!/out/.gitkeep
+/scratch/*
+!/scratch/.gitkeep
 # scratchpad/ is the canonical disposable temp dir (see CLAUDE.md disk-hygiene). It is
 # gitignored and MUST never be on anyone's dependency path: nothing outside it imports it,
 # and it is never the sole producer of a durable artifact. Load-bearing code -> tools/,
@@ -143,14 +143,14 @@ __pycache__/
 
 # Mandelbrot seed atlas (tools/atlas/build_atlas.py): the fitted theta_hat/conf
 # artifact is a tiny (~12KB) load-bearing object the proposer reloads (atlas.py) --
-# commit it like the calibration artifacts. Its round0 viz PNGs stay in out/.
+# commit it like the calibration artifacts. Its round0 viz PNGs stay in scratch/.
 !/data/atlas/
 
 # Production discovery seeder ledgers (tools/atlas/production_seeder.py): the durable
 # cross-run outcome/cell ledgers + per-outcome features + per-run summaries are
 # load-bearing (the harvested-outcome store everything downstream consumes), committed
 # like the atlas. Render scratch (contact_sheet.png review views) is disposable and
-# lives under out/ (SHEETS_DIR) — never here; the rule below evicts any straggler.
+# lives under scratch/ (SHEETS_DIR) — never here; the rule below evicts any straggler.
 !/data/discovery/
 /data/discovery/**/contact_sheet.png
 # The steered/dive frontier machinery (steered_frontier.py) adds disposable run

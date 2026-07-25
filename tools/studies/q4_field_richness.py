@@ -1,7 +1,7 @@
 """Palette-invariant field-richness ranking for the 30 q4 stage-1 minibrots.
 
 Measures multi-scale, non-dead decoration density directly on the dumped SMOOTH
-fields (out/q4_stage1/fields/*.bin) at the 4x-size "money-shot" framing they were
+fields (scratch/q4_stage1/fields/*.bin) at the 4x-size "money-shot" framing they were
 dumped at. Nothing is fit; the stat is a fixed transform reported for the eye.
 
 Stat (per center):
@@ -26,9 +26,9 @@ from pathlib import Path
 from scipy.ndimage import gaussian_filter
 
 ROOT = Path(__file__).resolve().parents[2]
-FIELDS = ROOT / "out" / "q4_stage1" / "fields"
-MINIS = ROOT / "out" / "q4_stage1" / "minibrots.json"
-OUT = ROOT / "out" / "fair_rerender"
+FIELDS = ROOT / "scratch" / "q4_stage1" / "fields"
+MINIS = ROOT / "scratch" / "q4_stage1" / "minibrots.json"
+OUT = ROOT / "scratch" / "fair_rerender"
 TAU = 0.01                      # fixed, NOT fit
 SIGMAS = [1.0, 2.0, 4.0, 8.0]   # octave band-pass scales
 

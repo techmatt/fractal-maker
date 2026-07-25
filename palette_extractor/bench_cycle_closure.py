@@ -51,7 +51,7 @@ from palette_lib.coloring import (
 # -- paths ---------------------------------------------------------------------
 PALETTES_JSON = ROOT / "data" / "palettes" / "clean_colormaps.json"
 DATA_DIR      = ROOT / "data" / "palette_cycle_closure"      # load-bearing manifest
-RENDERS_DIR   = ROOT / "out"  / "palette_cycle_closure"      # regenerable views
+RENDERS_DIR   = ROOT / "scratch"  / "palette_cycle_closure"      # regenerable views
 STRIPS_DIR    = RENDERS_DIR / "strips"
 VIZ_HTML      = ROOT / "tools" / "viz" / "palette_cycle_closure.html"
 WALLPAPER_DIR = Path("C:/Users/techm/Desktop/Wallpapers")
@@ -348,8 +348,8 @@ b{color:#e0e0e0}
 <div id="root"></div>
 <script>
 const M = __PAYLOAD__;
-const SB = '../../out/palette_cycle_closure/strips/';
-const RB = '../../out/palette_cycle_closure/';
+const SB = '../../scratch/palette_cycle_closure/strips/';
+const RB = '../../scratch/palette_cycle_closure/';
 const f = (x,d=3)=> (x==null?'-':Number(x).toFixed(d));
 const root = document.getElementById('root');
 const s = M.summary;

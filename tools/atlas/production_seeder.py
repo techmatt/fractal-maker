@@ -210,8 +210,8 @@ OUTCOME_FEATS = _SINKS["outcome_feats"]
 PROBE_REJECTS = _SINKS["probe_rejects"]
 RUNS_DIR = _SINKS["runs"]
 # disposable render scratch (never data/): native run, probe pools, walk pools, reward tiles
-SCRATCH_ROOT = ROOT / "out" / "atlas" / "production_seeder"
-# contact-sheet review PNGs are disposable render VIEWS -> out/ (a sibling of the per-run
+SCRATCH_ROOT = ROOT / "scratch" / "atlas" / "production_seeder"
+# contact-sheet review PNGs are disposable render VIEWS -> scratch/ (a sibling of the per-run
 # scratch dirs, so _purge_run_scratch never touches it), NEVER data/. data/ is the
 # never-delete tier reserved for the unregenerable (ledgers + feats); a render view there
 # erodes that distinction. The sheet is a pure function of the durable ledger + tiles.
@@ -224,7 +224,7 @@ SHEETS_DIR = SCRATCH_ROOT / "sheets"
 # admit degenerate decoded-class-3 outcomes into live discovery. Each class run appends
 # its own ledger + writes its own walks.jsonl; nothing is cleaned up between classes. ---
 GATHER_DIR = _SINKS["gather"]
-GATHER_SCRATCH_ROOT = ROOT / "out" / "atlas" / "gather"
+GATHER_SCRATCH_ROOT = ROOT / "scratch" / "atlas" / "gather"
 
 
 def _rebind_discovery(new_dir: Path) -> None:
@@ -1072,7 +1072,7 @@ def build_contact_sheet(distinct_tiles, dup_tiles, out_png: Path, title: str):
 # disk sink — GBs per run, hundreds of runs/night, ~130GB accumulated. It is pure
 # scoring intermediate: the durable outputs (outcome_ledger + feats npz, and the
 # run's summary/telemetry under RUNS_DIR in data/; the contact_sheet is a disposable
-# render view under SHEETS_DIR in out/) never live here,
+# render view under SHEETS_DIR in scratch/) never live here,
 # and the pool builder + emitter read only the ledger, so nothing downstream needs
 # it once the run process has scored its walks. Purge it on clean exit.
 _SCRATCH_KEEP = ("outcome_tiles",)   # tiny per-outcome jpgs; only --finalize (manual,
@@ -1104,7 +1104,7 @@ def _purge_run_scratch(scratch: Path, keep: tuple[str, ...] = _SCRATCH_KEEP):
 
 
 def _sheet_path(run_ts: str) -> Path:
-    """Disposable contact-sheet path under SHEETS_DIR (out/), keyed by run_ts. Rebuilt on
+    """Disposable contact-sheet path under SHEETS_DIR (scratch/), keyed by run_ts. Rebuilt on
     demand by `_finalize` from the durable ledger + tiles, so it never belongs in data/."""
     SHEETS_DIR.mkdir(parents=True, exist_ok=True)
     return SHEETS_DIR / f"{run_ts}.png"
@@ -2098,7 +2098,7 @@ def main():
     ap.add_argument("--time-only", action="store_true", help="project per-batch wallclock")
     ap.add_argument("--keep-scratch", action="store_true",
                     help="keep the transient render scratch (reward_*/walk_*/batch_*/round_* under "
-                         "out/atlas/production_seeder/<ts>/). Default: purge it on clean exit — it is "
+                         "scratch/atlas/production_seeder/<ts>/). Default: purge it on clean exit — it is "
                          "scoring intermediate (~GBs/run) that nothing downstream reads; the durable "
                          "ledger/feats/summary live elsewhere. Pass this to debug a run's frames or to "
                          "preserve outcome_tiles for a later --finalize of a run that finished cleanly.")

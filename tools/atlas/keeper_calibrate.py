@@ -17,7 +17,7 @@ over the stratified set, not the raw admission population — good for threshold
 (spans the p_good range), biased for population good-rate estimates. Report-only.
 
   uv run python tools/atlas/keeper_calibrate.py \
-      --scores labels/steered_run2_blind_scores.json --manifest out/steered_run2_manifest
+      --scores labels/steered_run2_blind_scores.json --manifest scratch/steered_run2_manifest
 """
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scores", type=Path, default=ROOT / "labels/steered_run2_blind_scores.json")
-    ap.add_argument("--manifest", type=Path, default=ROOT / "out/steered_run2_manifest")
+    ap.add_argument("--manifest", type=Path, default=ROOT / "scratch/steered_run2_manifest")
     ap.add_argument("--out", type=Path, default=ROOT / "docs/findings/steered_run2_keeper_calibration.md")
     args = ap.parse_args()
 

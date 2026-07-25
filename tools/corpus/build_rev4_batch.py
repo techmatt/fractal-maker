@@ -13,7 +13,7 @@ Crops are copied in (gitignored, rebuildable from `render`).
 
 Run (after present finishes):
   uv run python tools/corpus/build_rev4_batch.py \
-      --manifest out/present/run4_present/manifest.json \
+      --manifest scratch/present/run4_present/manifest.json \
       --pool data/guided_descend/run4/pool.jsonl
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ PRESENT_MAXITER = 8000  # present default; the gates (black 0.30) are calibrated
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--manifest", default="out/present/run4_present/manifest.json")
+    ap.add_argument("--manifest", default="scratch/present/run4_present/manifest.json")
     ap.add_argument("--pool", default="data/guided_descend/run4/pool.jsonl")
     ap.add_argument("--present-dir", default=None,
                     help="dir holding the present crop jpgs (default: manifest's dir)")
@@ -138,7 +138,7 @@ def main() -> None:
         "generator_version": GENERATOR_VERSION,
         "source_run": os.path.relpath(os.path.join(cc.ROOT, a.pool), cc.ROOT).replace("\\", "/")
         if not os.path.isabs(a.pool) else a.pool,
-        "present_input": "out/present/run4_bridge/locations.jsonl (pool_to_locations.py bridge)",
+        "present_input": "scratch/present/run4_bridge/locations.jsonl (pool_to_locations.py bridge)",
         "note": ("guided-descend run4 invocation was not persisted; sampling_metaparameters "
                  "below are the rev4 documented defaults (src/cli.rs GuidedDescendArgs) plus "
                  "observed-from-pool stats. The d1->d2 occ-floor disable (Part 0) postdates run4."),

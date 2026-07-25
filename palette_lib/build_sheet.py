@@ -1,9 +1,9 @@
 """End-to-end: harvest -> import -> sample -> contact-sheet PNG (the deliverable).
 
 Run:  python -m palette_lib.build_sheet
-Outputs (under out/, the disposable tree):
-  out/palette_contact_sheet.png            (location 1 x N sampled palettes)
-  out/palette_contact_sheet_<loc>.png      (a second location, same palettes)
+Outputs (under scratch/, the disposable tree):
+  scratch/palette_contact_sheet.png            (location 1 x N sampled palettes)
+  scratch/palette_contact_sheet_<loc>.png      (a second location, same palettes)
 Plus the clean, committable colormap-derived library:
   data/palettes/clean_colormaps.json
 
@@ -25,7 +25,7 @@ from .importer import build_library
 from .sampler import Sampler
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "out"
+OUT = ROOT / "scratch"
 DATA = ROOT / "data" / "palettes"
 
 # Contact-sheet geometry.

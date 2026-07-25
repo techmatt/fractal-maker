@@ -8,7 +8,7 @@ producers. Every field is sourced from one of:
   pools/<cycle>/images.jsonl    palette-candidate beam (K siblings) + prov->oid
   fresh_runs/.../outcome_ledger location-potential (v6 k3/p_good/decoded_class)
   data/palettes/palette_categories.json   color_category (nested k=8/12/16)
-  out/mining/deploy_tail/report.json      mode-candidacy
+  scratch/mining/deploy_tail/report.json      mode-candidacy
   data/library_embeddings/embeddings.npz  descriptor reference (morph_clip/v6, by uid)
 
 Gaps (fields with no producer) are emitted as null with a comment in the schema.
@@ -21,11 +21,11 @@ morph_uids/morph_clip/morph_v6 (the wiped gray embeddings.npz used uids/clip/v6)
 """
 import json, os
 
-ROOT = "out/wallpaper/overnight/overnight_20260713_001420"
+ROOT = "scratch/wallpaper/overnight/overnight_20260713_001420"
 LEDGER = "data/discovery/fresh_runs/overnight_20260713_001420/outcome_ledger.jsonl"
 GATHER = ["phoenix", "mandelbrot", "multibrot3", "multibrot4", "multibrot5"]
 PC = "data/palettes/palette_categories.json"
-DT = "out/mining/deploy_tail/report.json"
+DT = "scratch/mining/deploy_tail/report.json"
 EMB = "data/library_embeddings/embeddings.npz"
 OUT = "data/library/library_records.jsonl"
 

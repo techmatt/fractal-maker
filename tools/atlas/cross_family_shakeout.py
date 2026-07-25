@@ -89,7 +89,7 @@ FAMILIES = [
     ("multibrot5", ["--family", "multibrot5"], "multibrot5", None),
 ]
 
-OUT_ROOT = ROOT / "out" / "atlas" / "cross_family_shakeout"
+OUT_ROOT = ROOT / "scratch" / "atlas" / "cross_family_shakeout"
 
 
 def make_loc_of(family: str, c):

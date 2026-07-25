@@ -13,7 +13,7 @@ Every admission (both legs, 568) is scored ONCE with the deployed pref_loc_v0 ra
 persisting to `data/ranker/campaign1/features.npz`. Terciles/percentiles are then over
 the full per-family population, so the sample can target the ranker's operating range.
 
-Writes under `--out-dir` (default out/campaign1_blind):
+Writes under `--out-dir` (default scratch/campaign1_blind):
   tiles/blind_NNN.jpg   shuffled canonical tiles (the labeling units)
   blind_index.json      {run, n, instructions, tiles[]}  — what the human sees (NO metadata)
   manifest_key.json     HIDDEN key: tile -> id / coords / family / leg / pref_loc score+pct+
@@ -150,7 +150,7 @@ def main() -> None:
     ap.add_argument("--n-nonjulia", type=int, default=200)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--out-dir", type=Path, default=ROOT / "out/campaign1_blind")
+    ap.add_argument("--out-dir", type=Path, default=ROOT / "scratch/campaign1_blind")
     ap.add_argument("--features", type=Path, default=ROOT / "data/ranker/campaign1/features.npz")
     ap.add_argument("--render-only", action="store_true",
                     help="render the 568 canonical tiles and exit (the long pass; no torch)")

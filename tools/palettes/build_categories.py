@@ -8,7 +8,7 @@ Writes:
     special in {neutral, spectral, outlier, chromatic}; chromatic gets a NESTED
     cluster id at each canonical k (8/12/16) + dendrogram leaf position; plus the
     full stored linkage so any k is derivable later. Default color axis = k=16.
-  * out/palettes/palette_categories.html   -- disposable review sheet: the three
+  * scratch/palettes/palette_categories.html   -- disposable review sheet: the three
     cuts side-by-side with gradient swatches + fixed special sections.
 
 Method (why hierarchical, not k-means-per-k): a SINGLE deterministic agglomerative
@@ -38,7 +38,7 @@ from scipy.spatial.distance import pdist
 
 # durable artifact path (shared writer/reader contract)
 ARTIFACT_PATH = 'data/palettes/palette_categories.json'
-HTML_PATH = 'out/palettes/palette_categories.html'
+HTML_PATH = 'scratch/palettes/palette_categories.html'
 
 ACHROMA_GATE = 0.030
 SEED = 0
@@ -232,7 +232,7 @@ json.dump(artifact, open(ARTIFACT_PATH, 'w'), indent=1)
 print(f'\nwrote {ARTIFACT_PATH}  (durable)')
 
 # =============================================================================
-# DISPOSABLE REVIEW SHEET (out/)
+# DISPOSABLE REVIEW SHEET (scratch/)
 # =============================================================================
 def full_map(k):
     m = {n: 0 for n in neutral}

@@ -6,11 +6,11 @@ Honors prompts/first_release.md: "Intake is already done; start from the current
 do not re-intake." The current-decoded library is the union of the two committed intake
 passes:
 
-  * library_intake_2 (out/emission/library_intake_2) — 819 admitted / 745 clusters, adds
+  * library_intake_2 (scratch/emission/library_intake_2) — 819 admitted / 745 clusters, adds
     phoenix; ids + cluster tags are kept VERBATIM (campaign1 has no phoenix). The measure's
     classic-phoenix split knob now keys on the durable source_tag, not these cluster ids, so
     verbatim preservation is a snapshot-integrity nicety rather than an override requirement.
-  * campaign1        (out/emission/campaign1)        — 568 admitted / 523 clusters.
+  * campaign1        (scratch/emission/campaign1)        — 568 admitted / 523 clusters.
 
 The two passes clustered SEPARATELY and their run-scoped ids COLLIDE: 60 `st_<fam>_<arm>_<seq>`
 ids are reused across campaigns for DIFFERENT locations (verified: same id, different coords).
@@ -22,11 +22,11 @@ never collide. library_intake_2 stays the unprefixed, measure-native space.
 
 Result: 1387 globally-distinct locations, each with a reused morph-CLIP embedding + cached
 640x360 smooth field (no re-render, no re-embed). The driver then runs with
-`--out out/first_release` and `--ledger <the 6 ledgers>` (2 prefixed campaign1 copies + 4
+`--out scratch/first_release` and `--ledger <the 6 ledgers>` (2 prefixed campaign1 copies + 4
 library_intake_2 originals) and REUSES this snapshot (descriptor.load_embs + the cached
 intake.json), skipping intake entirely.
 
-Outputs (out/first_release/):
+Outputs (scratch/first_release/):
   ledgers/c1__breadth.jsonl, c1__dive.jsonl   id-prefixed campaign1 ledger copies
   intake.json                                  {cluster_tags, fields, n_admitted}
   morph_embs.npz                               descriptor._save_embs format (ids, emb)
@@ -58,9 +58,9 @@ try:
 except Exception:
     pass
 
-C1_DIR = ROOT / "out" / "emission" / "campaign1"
-I2_DIR = ROOT / "out" / "emission" / "library_intake_2"
-OUT = ROOT / "out" / "first_release"
+C1_DIR = ROOT / "scratch" / "emission" / "campaign1"
+I2_DIR = ROOT / "scratch" / "emission" / "library_intake_2"
+OUT = ROOT / "scratch" / "first_release"
 
 C1_LEDGERS = [
     ("c1_breadth", ROOT / "data" / "discovery" / "campaign1" / "breadth" / "outcome_ledger.jsonl"),

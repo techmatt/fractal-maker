@@ -23,7 +23,7 @@ the library morph_gray/CLIP recipe. Two NEW axes:
                        sweep), as frame fraction. Distinct from flat_frac (total).
 
 Field source is the f64 escape-time backend (colormap-invariant); colored sheet renders
-use render-one with the exemplar palette. Everything writes under out/q4_cperturb/
+use render-one with the exemplar palette. Everything writes under scratch/q4_cperturb/
 (disposable); field bins are purged per-unit.
 
 Stages (idempotent, resume from checkpoint):
@@ -55,7 +55,7 @@ from tools.studies.q4_neighborhood_sweep import (  # noqa: E402
     STRUCT_FLAT, STRUCT_MID_HI, FINE_SPECKLE, SPECKLE_STRUCT, DEEP_NORM,
 )
 
-OUT = ROOT / "out" / "q4_cperturb"
+OUT = ROOT / "scratch" / "q4_cperturb"
 FIELDS = OUT / "fields"
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 PALETTE = "twilight_shifted"

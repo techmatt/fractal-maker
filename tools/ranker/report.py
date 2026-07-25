@@ -3,10 +3,10 @@
 
 Consumes the deployed head (`model.npz`), the eval grid (`metrics.json`), and the feature matrix
 (`features.npz`). Emits:
-  * out/pref_loc_v0_report.md           -- eval grid, winner, per-family, verdict, uncertainty.
-  * out/ranker/pref_loc_v0_ranked_sheet.png  -- all 96 admissions sorted by ranker score, human
+  * scratch/pref_loc_v0_report.md           -- eval grid, winner, per-family, verdict, uncertainty.
+  * scratch/ranker/pref_loc_v0_ranked_sheet.png  -- all 96 admissions sorted by ranker score, human
                                            labels marked (G/O/B, '-' unlabeled).
-  * out/ranker_next_read/               -- ~20-tile next read: top-ranked unlabeled + a
+  * scratch/ranker_next_read/               -- ~20-tile next read: top-ranked unlabeled + a
                                            max-uncertainty band, shuffled, with a HIDDEN key.
                                            Seeds the standing loop (every read = fresh eval+train).
 
@@ -27,9 +27,9 @@ sys.path.insert(0, str(ROOT))
 from tools.ranker.scorer import RankerScorer          # noqa: E402
 
 ARTDIR = ROOT / "data/ranker/pref_loc_v0"
-REPORT = ROOT / "out/pref_loc_v0_report.md"
-SHEET = ROOT / "out/ranker/pref_loc_v0_ranked_sheet.png"
-NEXT = ROOT / "out/ranker_next_read"
+REPORT = ROOT / "scratch/pref_loc_v0_report.md"
+SHEET = ROOT / "scratch/ranker/pref_loc_v0_ranked_sheet.png"
+NEXT = ROOT / "scratch/ranker_next_read"
 LABEL = {0: "-", 1: "B", 2: "O", 3: "G"}
 LABEL_RGB = {0: (110, 110, 110), 1: (200, 60, 60), 2: (210, 180, 60), 3: (70, 200, 90)}
 N_NEXT_TOP = 8            # top-ranked unlabeled

@@ -5,7 +5,7 @@ Reusable — edit SEEDS (or import `emit_pool`) and re-run. The single-center pa
 is `deep_center_finder.py <nucleus|misiurewicz|scan>`; this just fans that over a
 list and writes a pool + ready-to-run render commands.
 
-    uv run python tools/sourcing/emit_deep_pool.py            # -> out/deep_centers/pool.jsonl
+    uv run python tools/sourcing/emit_deep_pool.py            # -> scratch/deep_centers/pool.jsonl
 """
 from __future__ import annotations
 
@@ -36,8 +36,8 @@ SEEDS = [
 ]
 
 
-def emit_pool(seeds=SEEDS, *, dps=80, out_path="out/deep_centers/pool.jsonl",
-              preview_dir="out/deep_centers"):
+def emit_pool(seeds=SEEDS, *, dps=80, out_path="scratch/deep_centers/pool.jsonl",
+              preview_dir="scratch/deep_centers"):
     """Refine each seed to an exact center and write a pool.jsonl. Returns rows."""
     mp.mp.dps = dps
     rows = []

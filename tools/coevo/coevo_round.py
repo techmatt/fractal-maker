@@ -4,7 +4,7 @@ default, isolated to a dedicated round dir for a clean v6-gap diagnostic snapsho
 
 Reuses `production_seeder._gather` VERBATIM (native seeder / depth-2 probe / full
 walks / k3 reward / v6 CORN decode / density rejection / degenerate-guard-as-prior),
-but redirects the durable GATHER_DIR + scratch into `out/coevo_round/<ts>/` so this
+but redirects the durable GATHER_DIR + scratch into `scratch/coevo_round/<ts>/` so this
 round's ledger is a self-contained snapshot that never touches the shared
 `data/discovery/gather/` store. Mandelbrot c-plane deg-2 only (NO --julia-hook);
 current binary = random-survivor selection default (no --selection flag anywhere).
@@ -55,7 +55,7 @@ def _worker(args):
     # these module globals at call time, so reassigning here fully isolates the round:
     #   class_dir = GATHER_DIR/mandelbrot  ->  <round_dir>/gather/mandelbrot
     ps.GATHER_DIR = round_dir / "gather"
-    ps.GATHER_SCRATCH_ROOT = ROOT / "out" / "coevo_round" / "_scratch" / round_dir.name
+    ps.GATHER_SCRATCH_ROOT = ROOT / "scratch" / "coevo_round" / "_scratch" / round_dir.name
 
     # Full args namespace for _gather + resolve_family (mandelbrot c-plane, guard-OFF,
     # NO julia-hook: deg-2 only). Matches production_seeder.main()'s --gather path.
@@ -159,7 +159,7 @@ def main():
         sys.exit(_worker(args))
 
     round_ts = args.round_ts or time.strftime("%Y%m%d_%H%M%S")
-    round_dir = ROOT / "out" / "coevo_round" / round_ts
+    round_dir = ROOT / "scratch" / "coevo_round" / round_ts
     round_dir.mkdir(parents=True, exist_ok=True)
 
     n_chunks_cap = max(1, math.ceil(args.wall_min / max(1.0, args.chunk_min)))

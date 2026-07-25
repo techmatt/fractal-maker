@@ -16,7 +16,7 @@ changes, no scheduler (spec §5.2 is DEFERRED — its go/no-go is what this run'
 the human labels, decide). The variance-decomposition itself is `phoenix_decomp.py`; the label
 batch is `phoenix_label_batch.py`; both read this run's durable outputs.
 
-Durable outputs under `data/discovery/phoenix_grid/<run>/` (survive `rm -r out/*`):
+Durable outputs under `data/discovery/phoenix_grid/<run>/` (survive `rm -r scratch/*`):
   seeds.jsonl            one row per drawn seed (identity + branch/theta/offset + stratum + features)
   descent_records.jsonl  one row per (seed, repeat) descent — the decomposition unit + resume key
   all_outcomes.jsonl     one row per scored walk (q3 AND sub-threshold AND reject) — label-batch source
@@ -24,7 +24,7 @@ Durable outputs under `data/discovery/phoenix_grid/<run>/` (survive `rm -r out/*
   outcome_feats.npz      id -> 1280-D v7 penultimate feature for each admitted q3 (library intake)
   distinct_looks.npz     the run-global morph-embed distinct-look tally (cos 0.974), resumable
   summary.json           config + totals + realized min-per-look price + stratification plan
-Disposable render scratch: out/phoenix/grid/<run>/ (purged on clean exit unless --keep-scratch).
+Disposable render scratch: scratch/phoenix/grid/<run>/ (purged on clean exit unless --keep-scratch).
 
   uv run python tools/phoenix/phoenix_grid.py --smoke            # 3 seeds x 2, tiny — validates the pipeline
   uv run python tools/phoenix/phoenix_grid.py --run --budget 240 # the real 4-hour-cap grid (backgrounded)
@@ -96,7 +96,7 @@ NEAR_DUP_THRESHOLD = 0.974   # morph-embed distinct-look cosine (matches the lib
 DEDUP_K = ps.DEDUP_K         # cloud viewport dedup (identity-aware via near_dup)
 
 DISCOVERY_ROOT = ROOT / "data" / "discovery" / "phoenix_grid"
-SCRATCH_ROOT = ROOT / "out" / "phoenix" / "grid"
+SCRATCH_ROOT = ROOT / "scratch" / "phoenix" / "grid"
 
 
 # =========================================================================== #

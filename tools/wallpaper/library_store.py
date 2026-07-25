@@ -6,7 +6,7 @@ Everything here is **pure I/O + numpy** — NO GPU, NO torch, NO render — so i
 without a model. The GPU annotate tail (`library_annotate.py`) computes vectors/thumbnails
 and hands them here to persist.
 
-Three durable artifacts, all surviving `rm -r out/*` (they live under `data/`):
+Three durable artifacts, all surviving `rm -r scratch/*` (they live under `data/`):
 
   data/library/records.jsonl                 append-only, one JSON record per LOCATION.
                                              `location_id` is the primary key; appends
@@ -34,7 +34,7 @@ Embedding-append design (chosen: SHARD-PER-CYCLE, not in-place rewrite).
   ledger join).
 
 Field-cache retention (LRU under a GB cap). Retained smooth fields make Phase-2 colorize cheap.
-  Kept under `data/library/field_cache/` (survives out/* wipes, unlike the disposable seeder
+  Kept under `data/library/field_cache/` (survives scratch/* wipes, unlike the disposable seeder
   scratch) but LRU-EVICTED under `--field-cache-gb` so it can never become an unbounded sink.
   Fields are deterministic from coordinates, so eviction costs re-dump time, never data. The
   cache key reuses the canonical `location.field_mode_token` + geometry tokens (see `field_stem`)
@@ -55,7 +55,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT))
 from tools.corpus import location as loc_mod  # noqa: E402
 
-# --- durable roots (data/ = survives `rm -r out/*`) ---
+# --- durable roots (data/ = survives `rm -r scratch/*`) ---
 LIB_ROOT = ROOT / "data" / "library"
 RECORDS_PATH = LIB_ROOT / "records.jsonl"
 THUMBS_DIR = LIB_ROOT / "thumbs"

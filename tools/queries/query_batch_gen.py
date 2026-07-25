@@ -25,7 +25,7 @@ and thinned to 6 by render-space CIEDE2000 farthest-point selection:
             FP-select 6 by render-space dE. NO v1 filtering of the param axis.
   joint   : vary palette x param. Score 48 (moderate axis), keep top 18, FP-6.
 
-Cost discipline: the ss2 field is dumped ONCE per location (cached in out/fields)
+Cost discipline: the ss2 field is dumped ONCE per location (cached in scratch/fields)
 and every candidate is a cheap Python recolor of that cached field. Only the final
 6 per query are persisted as batch images.
 

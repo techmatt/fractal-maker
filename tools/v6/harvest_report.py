@@ -14,7 +14,7 @@ Reads the durable outcome ledger, restricts to the run timestamps in a harvest m
 
 Usage:
   uv run python tools/v6/harvest_report.py [manifest.json]
-      default manifest: out/atlas/v6_monitored_harvest/manifest.json
+      default manifest: scratch/atlas/v6_monitored_harvest/manifest.json
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 LEDGER = ROOT / "data" / "discovery" / "outcome_ledger.jsonl"
-DEFAULT_MANIFEST = ROOT / "out" / "atlas" / "v6_monitored_harvest" / "manifest.json"
+DEFAULT_MANIFEST = ROOT / "scratch" / "atlas" / "v6_monitored_harvest" / "manifest.json"
 
 T_DEG2, T_BASE = 0.24, 0.50
 BINS = [i / 20 for i in range(21)]   # 0.00, 0.05, ... 1.00  (width 0.05)

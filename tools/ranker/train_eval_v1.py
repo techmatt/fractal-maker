@@ -38,7 +38,7 @@ from sklearn.preprocessing import StandardScaler  # noqa: E402
 
 V0_DIR = ROOT / "data" / "ranker" / "pref_loc_v0"
 C1_FEATS = ROOT / "data" / "ranker" / "campaign1" / "features.npz"
-C1_KEY = ROOT / "out" / "campaign1_blind" / "manifest_key.json"
+C1_KEY = ROOT / "scratch" / "campaign1_blind" / "manifest_key.json"
 C1_LABELS = ROOT / "labels" / "campaign1_blind_blind_scores.json"
 OUT_DIR = ROOT / "data" / "ranker" / "pref_loc_v1"
 

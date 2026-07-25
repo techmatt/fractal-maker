@@ -35,7 +35,7 @@ from active_ckpt import ACTIVE_CKPT  # noqa: E402
 GATHER = ROOT / "data" / "discovery" / "gather" / "multibrot4" / "outcome_ledger.jsonl"
 BATCH_ID = "2026-07-22_native_multibrot_band_v1"
 CACHE = ROOT / "data" / "label_corpus" / "batches" / BATCH_ID / "mb4_gather_v7_rescore.jsonl"
-TILES = ROOT / "out" / "native_multibrot_band" / "mb4_rescore_tiles"
+TILES = ROOT / "scratch" / "native_multibrot_band" / "mb4_rescore_tiles"
 WORKERS = 4  # project cap
 
 

@@ -2,15 +2,16 @@
 write a path without declaring its durability class.
 
 Four times in one week a module treated its own output as durable while writing it
-somewhere that guarantees deletion — because the name (`out/`) invited "my output
+somewhere that guarantees deletion — because a name like `out/` invited "my output
 matters" and the ignore rule that contradicts it lives in a different file written by a
-different hand. This module removes the ambiguity: every write goes through the function
-that names its class, and `durable()` refuses — loudly, at write time — to hand back a
-path that git would throw away.
+different hand (the rename to `scratch/` refutes that invitation). This module removes
+the ambiguity: every write goes through the function that names its class, and
+`durable()` refuses — loudly, at write time — to hand back a path that git would throw
+away.
 
 The four classes (see the durability contract):
 
-    scratch(...)  disposable        -> out/ (soon scratch/): gitignored, rm-rf-safe,
+    scratch(...)  disposable        -> scratch/: gitignored, rm-rf-safe,
                                        NO durability claims. Cheap or free to rebuild.
     bulk(rel)     bulk-regenerable  -> out-of-tree via the ARTIFACTS_ROOT resolver.
                                        Expensive but deterministic to rebuild.
@@ -72,9 +73,9 @@ def _is_gitignored(abspath: str) -> bool:
 
 
 def scratch(*parts) -> Path:
-    """Disposable path under the gitignored `out/` tree. rm-rf-safe; no durability
+    """Disposable path under the gitignored `scratch/` tree. rm-rf-safe; no durability
     claim. Accepts path components: `scratch("atlas", "sheet.png")`."""
-    return REPO_ROOT.joinpath("out", *[str(p) for p in parts])
+    return REPO_ROOT.joinpath("scratch", *[str(p) for p in parts])
 
 
 def bulk(rel) -> Path:

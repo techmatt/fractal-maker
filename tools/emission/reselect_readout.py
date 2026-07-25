@@ -2,7 +2,7 @@
 r"""reselect_readout.py — the render-mode-split re-selection readout (prompts/reselect_release.md).
 
 Complements the driver report with the three items the re-selection prompt asks for, read
-ONLY from durable artifacts under out/first_release/ (pool_log.jsonl, intake.json,
+ONLY from durable artifacts under scratch/first_release/ (pool_log.jsonl, intake.json,
 morph_embs.npz, summary.json) plus the rendered release/ dir. Pure, no GPU, no re-render:
 
   1. Realized render-mode split — target vs actual + per-mode counts among the 50 released.
@@ -26,8 +26,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "out" / "first_release"
-REPORT = ROOT / "out" / "first_release_reselect_readout.md"
+OUT = ROOT / "scratch" / "first_release"
+REPORT = ROOT / "scratch" / "first_release_reselect_readout.md"
 WP_RELEASE_FLOOR, MN_RELEASE_FLOOR = 0.90, 0.50
 
 try:
@@ -226,7 +226,7 @@ def main():
     w("## 2. Morph-diversity check — pairwise morph-CLIP cos among the released\n")
     w("Did the continuous-cos coverage term actually spread the spirals? Distribution over all "
       f"{len(arr)} released pairs (0 = orthogonal look, 1 = identical). See "
-      "`out/first_release/release_morph_diversity.png`.\n")
+      "`scratch/first_release/release_morph_diversity.png`.\n")
     if qs:
         w("| quantile | pairwise cos |")
         w("|---|--:|")
@@ -248,7 +248,7 @@ def main():
     w(f"- of which released (★): **{sum(1 for r in strange_rel if r['id'] in released_set)}**")
     w(f"- by mode: " + ", ".join(f"{s}×{c}" for s, c in
                                  Counter(r["render_style"] for r in strange_rel).most_common()))
-    w(f"\n`out/first_release/strange_candidates_sheet.png` — all {len(strange_rel)} ranked by "
+    w(f"\n`scratch/first_release/strange_candidates_sheet.png` — all {len(strange_rel)} ranked by "
       f"mining p_ge3 at deploy fidelity.\n")
 
     REPORT.write_text("\n".join(x for x in L if x is not None), encoding="utf-8")

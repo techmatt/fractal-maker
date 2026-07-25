@@ -19,7 +19,7 @@ minibrot; LOMO pooled AUC/AP is the referee, NOT in-sample fit):
   T2 +cell-disp    — + {spread, worst} per base stat + edge/center flat split
   T3 +laplacian    — + per-cell Laplacian variance {mean, spread, worst}
 
-Outputs (out/q4_stage1/linear_fit/):
+Outputs (scratch/q4_stage1/linear_fit/):
   1. weights.json / stdout   — surviving L1 weights per tier + held-out scores
   2. next_to_label.json      — margin-uncertain UNLABELED survivors + random control
   3. field_<mb>.png          — dense position x scale G heatmap w/ maxima + crops
@@ -49,8 +49,8 @@ BATCH_ID = "2026-07-23_q4_stage1_windows"
 STORE = qr.batch_dir(BATCH_ID)
 LABELS_P1 = ROOT / "labels" / "q4_stage1_windows.json"
 LABELS_P2 = ROOT / "labels" / "q4_stage1_windows_p2.json"
-OUT = ROOT / "out" / "q4_stage1" / "linear_fit"
-FRAMES = ROOT / "out" / "q4_stage1" / "frames"
+OUT = ROOT / "scratch" / "q4_stage1" / "linear_fit"
+FRAMES = ROOT / "scratch" / "q4_stage1" / "frames"
 FINDINGS = ROOT / "docs" / "findings" / "q4_stage1_linear_fit.md"
 
 # thresholds shared with the existing decomposition (q4_neighborhood_sweep)
@@ -453,12 +453,12 @@ def write_report(report, weights, chosen, rows):
             L.append(f"| {k} | {v:+.3f} |")
         L.append("")
     L.append("## Next-to-label\n")
-    L.append("`out/q4_stage1/linear_fit/next_to_label.json` — margin-uncertain unlabeled "
+    L.append("`scratch/q4_stage1/linear_fit/next_to_label.json` — margin-uncertain unlabeled "
              "survivors (where labels teach the boundary) + a uniform-random control slug "
              "(audits confident-and-wrong outside what the model knows). Crops already exist "
              f"in the store (`{qr.crop_path(BATCH_ID,'<id>').parent.relative_to(ROOT)}`).\n")
     L.append("## Goodness field\n")
-    L.append("`out/q4_stage1/linear_fit/field_<mb>.png` — G over a dense position×scale grid "
+    L.append("`scratch/q4_stage1/linear_fit/field_<mb>.png` — G over a dense position×scale grid "
              "(G computed directly, score_A NMS bypassed), position-maxima marked, their "
              "windows rendered. The visual test of *plot G, take maxima*.\n")
     FINDINGS.parent.mkdir(parents=True, exist_ok=True)

@@ -445,7 +445,7 @@ def test_location_ranker_cache_hit_matches_direct_scoring():
               for k, v in enumerate(s.score_matrix({b: z[b] for b in s.sets}))}
     lr = LocationRanker()
     rows = [{"id": str(i)} for i in z["ids"]]
-    mine = lr.score_rows(rows, ROOT / "out" / "_test_ranker_tiles")   # all cache hits
+    mine = lr.score_rows(rows, ROOT / "scratch" / "_test_ranker_tiles")   # all cache hits
     assert lr._stack is None                     # torch feature stack never loaded
     assert max(abs(mine[i] - direct[i]) for i in direct) < 1e-9
 
@@ -459,7 +459,7 @@ from tools.emission import build_emission_diversity_v1 as B     # noqa: E402
 def _args(tmp_path, **over):
     import argparse
     a = argparse.Namespace(
-        ledger=["x.jsonl"], out=str(tmp_path / "out"), report=None, release_n=5,
+        ledger=["x.jsonl"], out=str(tmp_path / "scratch"), report=None, release_n=5,
         target_gated=0, floor=B.DEFAULT_FLOOR, mining_floor=B.DEFAULT_MINING_FLOOR,
         release_floor=B.DEFAULT_RELEASE_FLOOR, mining_release_floor=B.DEFAULT_MINING_RELEASE_FLOOR,
         intake_floor=None, target_measure=str(B.DEFAULT_TARGET_MEASURE),

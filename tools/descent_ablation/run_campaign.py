@@ -117,7 +117,7 @@ def harvest_seeds(campaign, seed, n_harvest, timeout):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out-root", default="out/descent_ablation")
+    ap.add_argument("--out-root", default="scratch/descent_ablation")
     ap.add_argument("--cap-seconds", type=float, default=6 * 3600)
     ap.add_argument("--reserve-seconds", type=float, default=3600)
     ap.add_argument("--seed", type=int, default=20260710)

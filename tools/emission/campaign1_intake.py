@@ -63,8 +63,8 @@ LEDGERS = [
     ("c1_breadth", ROOT / "data" / "discovery" / "campaign1" / "breadth" / "outcome_ledger.jsonl"),
     ("c1_dive",    ROOT / "data" / "discovery" / "campaign1" / "dive"    / "outcome_ledger.jsonl"),
 ]
-OUT = ROOT / "out" / "emission" / "campaign1"
-REPORT = ROOT / "out" / "emission" / "campaign1_intake.md"
+OUT = ROOT / "scratch" / "emission" / "campaign1"
+REPORT = ROOT / "scratch" / "emission" / "campaign1_intake.md"
 CROSS_REF_DISTINCT = 508           # campaign-1 readout's within-family distinct-look count
 ANCHOR_TOL = 1e-4                  # max|Δ p_good| for the julia re-score anchor
 

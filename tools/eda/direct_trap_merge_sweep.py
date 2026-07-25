@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
-OUT = ROOT / "out" / "uf_modes"
+OUT = ROOT / "scratch" / "uf_modes"
 SPECS = OUT / "specs"
 OUT.mkdir(parents=True, exist_ok=True)
 SPECS.mkdir(parents=True, exist_ok=True)

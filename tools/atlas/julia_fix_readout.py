@@ -11,7 +11,7 @@ Reports, for the julia dup-fix acceptance:
   * canonical confirmation renders SAVED by the pre-canonical coord-dup filter (precanon_dup);
   * julia-hook decisions: fired vs spacing-skipped.
 
-  uv run python tools/atlas/julia_fix_readout.py --run out/atlas/julia_fix_smoke/breadth
+  uv run python tools/atlas/julia_fix_readout.py --run scratch/atlas/julia_fix_smoke/breadth
 """
 from __future__ import annotations
 

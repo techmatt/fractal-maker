@@ -11,7 +11,7 @@ radius (=0.75*mean_sigma) are ALL derived from sigma, so rescaling --sigma-band 
 rescales every pixel-unit constant; the dimensionless fractions (occ floor 0.321,
 black-cap 0.30) are left untouched.
 
-Runs (launched by out/_run_eff_descents.sh): 150 walks at node-width 768 / 512 / 384,
+Runs (launched by scratch/_run_eff_descents.sh): 150 walks at node-width 768 / 512 / 384,
 SAME global seed + --per-walk-rng, so each walk's depth-1 seed is bit-identical across
 resolutions (validated) and the walks then diverge at depth>=2 (the thing under test).
 Depth cap D from Lever 1 (--depth-max 14) applied to all three so the levers compound.
@@ -59,7 +59,7 @@ RESOLUTIONS = [768, 512, 384]
 RUN_DIR = {r: ROOT / "data" / "guided_descend" / f"eff_res_{r}" for r in RESOLUTIONS}
 OUT_DIR = ROOT / "data" / "atlas_probe" / "step0_efficiency"
 TABLE = {r: OUT_DIR / f"res_{r}_table.jsonl" for r in RESOLUTIONS}
-SCRATCH_ROOT = ROOT / "out" / "atlas_probe" / "eff_res"
+SCRATCH_ROOT = ROOT / "scratch" / "atlas_probe" / "eff_res"
 
 RHO_TARGET = 0.85       # theta preservation bar per resolution (prompt)
 # effective sigma sets actually passed to each descent (linear in res, x res/768).

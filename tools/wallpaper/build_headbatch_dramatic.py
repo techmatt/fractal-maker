@@ -732,7 +732,7 @@ def main():
     print(f"by location origin : {dict(by_origin)}")
     print(f"eval-side TOP-K renders (the eval-good candidate pool): {eval_topk}")
     print(f"field dumps ~= distinct locations completed = {completed} "
-          f"(1 label-field dump per unit; reused humanq3 fields hit the out/wallpaper_fields cache)")
+          f"(1 label-field dump per unit; reused humanq3 fields hit the scratch/wallpaper_fields cache)")
     print(f"-> {bd}")
     print(f"   images.jsonl ({len(all_rows)} rows, all label.score=null) + crops/ + batch.json")
     print(f"\n[label] open tools/viz/wallpaper_label.html, load {bd.relative_to(ROOT)}/images.jsonl")
