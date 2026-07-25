@@ -93,6 +93,7 @@ import reframe  # noqa: E402  (reframe_location + the DUMP_GUARD_FIELD hook)
 from reframe import reframe_location  # noqa: E402
 import guard  # noqa: E402  (degenerate-outcome guard: make_guarded_scorer + the field gate)
 from score_lib import corn_decode  # noqa: E402  (canonical v5 CORN hard-class decode)
+import julia_ledger_schema as jls  # noqa: E402  (campaign/walk julia schema tag — tools/corpus on path)
 from active_ckpt import make_scorer as make_raw_scorer, ACTIVE_CKPT  # noqa: E402  (UNGUARDED raw — gather mode; ACTIVE_CKPT = single-source live checkpoint)
 
 # =========================================================================== #
@@ -1347,7 +1348,9 @@ def _run(args, fam: FamilyResolved):
                             "mix_source": "julia_hook", "parent_oid": oid,
                             "descend_mode": jmode,
                             "outcome_cx": jc[0], "outcome_cy": jc[1], "outcome_fw": jc_fw,
-                            # render target: the Julia walk's own z-plane wallpaper location.
+                            # WALK schema: outcome_* IS c; render target (viewport) is the
+                            # Julia walk's own z-plane wallpaper location. Stamp it explicitly.
+                            jls.SCHEMA_KEY: jls.WALK,
                             "julia_z_cx": jrew["outcome_cx"], "julia_z_cy": jrew["outcome_cy"],
                             "julia_z_fw": jrew["outcome_fw"],
                             "k3": jrew["reward_k3"], "raw_top3": jrew["raw_top3"],
@@ -1666,6 +1669,8 @@ def _gather(args, fam: FamilyResolved):
                             "mix_source": "julia_hook", "parent_oid": oid,
                             "descend_mode": jmode,
                             "outcome_cx": jc[0], "outcome_cy": jc[1], "outcome_fw": jc_fw,
+                            # WALK schema: outcome_* IS c; viewport is julia_z_*. Stamp it.
+                            jls.SCHEMA_KEY: jls.WALK,
                             "julia_z_cx": jrew["outcome_cx"], "julia_z_cy": jrew["outcome_cy"],
                             "julia_z_fw": jrew["outcome_fw"],
                             "k3": jrew["reward_k3"], "raw_top3": jrew["raw_top3"],

@@ -30,6 +30,7 @@ for p in (ROOT, ROOT / "tools" / "corpus"):
 
 import corpus_common as cc            # noqa: E402  is_current_decoded / require_current
 from tools.corpus import location as loc_mod  # noqa: E402
+from tools.corpus import julia_ledger_schema as jls  # noqa: E402  asserted julia (viewport,c) resolve
 
 # Strict near-dup cosine threshold — the established within-family morph-CLIP dedup knee
 # (tools/studies/morphology_dedup.py DEFAULT_THRESHOLD). Join a cluster iff cos > this.
@@ -115,10 +116,18 @@ def _phoenix_family_params(row: dict) -> dict:
 
 
 def location_of(row: dict) -> loc_mod.Location:
-    """Ledger row → canonical Location. Coords are the reframed OUTCOME viewport; julia
-    twins carry the parameter c from the row (`julia_c_re/im`); phoenix rows carry the full
-    (c, p, z_{-1}) parameter point (absent axes → Ushiki defaults)."""
+    """Ledger row → canonical Location. Native/phoenix coords are the reframed OUTCOME
+    viewport; phoenix rows carry the full (c, p, z_{-1}) parameter point (absent axes →
+    Ushiki defaults). Julia twins resolve through the ASSERTED schema tag
+    (`julia_ledger_schema.viewport_and_c`): a CAMPAIGN row reads the viewport from
+    `outcome_*` and c from `julia_c_*`; a WALK row reads the viewport from `julia_z_*` and c
+    from `outcome_*`. An untagged/unknown-tagged julia row raises — no shape inference."""
     fam = render_family_of(row["family"])
+    if jls.is_julia_row(row):
+        cx, cy, fw_v, c_re, c_im = jls.viewport_and_c(row)   # asserts julia_schema
+        fw = float(fw_v)
+        return loc_mod.Location(family=fam, cx=str(cx), cy=str(cy), fw=str(fw),
+                                maxiter=auto_maxiter(fw), c_re=str(c_re), c_im=str(c_im))
     fw = float(row["outcome_fw"])
     kw = dict(family=fam, cx=str(row["outcome_cx"]), cy=str(row["outcome_cy"]),
               fw=str(fw), maxiter=auto_maxiter(fw))
@@ -127,9 +136,6 @@ def location_of(row: dict) -> loc_mod.Location:
         kw["c_re"] = repr(float(cre)) if cre is not None else repr(_PHOENIX_C_DEFAULT[0])
         kw["c_im"] = repr(float(cim)) if cim is not None else repr(_PHOENIX_C_DEFAULT[1])
         kw["family_params"] = _phoenix_family_params(row)
-    elif row.get("julia_c_re") is not None:
-        kw["c_re"] = str(row["julia_c_re"])
-        kw["c_im"] = str(row["julia_c_im"])
     return loc_mod.Location(**kw)
 
 

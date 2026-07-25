@@ -355,7 +355,8 @@ def test_location_of_partition_mapping():
                        "outcome_fw": 0.03})
     assert m.family == "mandelbrot" and m.c_re is None
     j = D.location_of({"family": "julia:multibrot3", "outcome_cx": 0.0, "outcome_cy": 0.0,
-                       "outcome_fw": 3.0, "julia_c_re": 0.28, "julia_c_im": 0.008})
+                       "outcome_fw": 3.0, "julia_c_re": 0.28, "julia_c_im": 0.008,
+                       "julia_schema": "campaign"})
     assert j.family == "julia_multibrot3" and j.c_re == "0.28"
 
 

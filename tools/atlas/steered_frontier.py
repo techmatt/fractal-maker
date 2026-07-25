@@ -72,6 +72,7 @@ import prescreen                        # noqa: E402
 import reframe                          # noqa: E402
 import guard                            # noqa: E402
 import location as loc_mod              # noqa: E402
+import julia_ledger_schema as jls       # noqa: E402  (campaign/walk julia schema tag)
 from score_lib import corn_decode       # noqa: E402
 from active_ckpt import ACTIVE_CKPT, auto_maxiter  # noqa: E402
 import deficit_scheduler as dsched       # noqa: E402  (pure; torch-free scheduling logic)
@@ -1019,6 +1020,9 @@ class SteeredFrontier:
         )
         if c["c"] is not None:                       # julia twin outcome carries the parameter c
             row["julia_c_re"], row["julia_c_im"] = c["c"][0], c["c"][1]
+            # CAMPAIGN schema (outcome_* = viewport, c = julia_c_*): stamp it so the row is
+            # born tagged and no reader has to infer the era from field presence.
+            row[jls.SCHEMA_KEY] = jls.CAMPAIGN
         if self.cur_dive is not None:                # dive: stamp provenance for the read
             row["mix_source"] = "dive"
             row["dive_id"], row["dive_start_group"], row["dive_source_id"] = self.cur_dive
