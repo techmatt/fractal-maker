@@ -285,6 +285,19 @@ pub fn run_render_one(args: &RenderOneArgs) -> Result<(), String> {
         // mask/std-only guard, and smooth-only (no fast twin for the other fields).
         // `report_bailout` records the escape radius actually used, so the sidecar's
         // `bailout_b` matches the field.
+        //
+        // PERF WARNING (future runs): `beautiful` is ~35x SLOWER than `f64` for a
+        // smooth dump (measured 39s vs 1.1s at 2176x1224, degree 5). Both paths are
+        // rayon-parallel — the gap is the kernel: `iterate_orbit` computes EVERY field
+        // accumulator (stripe/tia/curvature/two orbit traps/Gaussian-lattice/exp-
+        // smoothing/velocity, i.e. exp+sin+atan2+arg+round per iteration) then keeps
+        // one scalar. If you only need the smooth field for STATISTICS that are
+        // invariant to a constant offset (escape mask + any percentile-normalized
+        // feature — e.g. the q4 stage-1 screen, the degenerate-outcome guard), prefer
+        // `--dump-field-source f64`: it differs only by the constant ln(ln B)/ln d,
+        // which washes out. Use `beautiful` ONLY when you need the byte-identical field
+        // (the field⊗colormap reproduction path) or a NON-smooth field (tia/stripe/…).
+        // See docs/design/beautiful_perf_report.md.
         let t0 = Instant::now();
         let ((field, sub_w, sub_h), report_bailout) = match args.dump_field_source {
             FieldSourceChoice::Beautiful => (

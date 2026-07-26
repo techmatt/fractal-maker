@@ -2032,6 +2032,15 @@ pub fn smooth_field_supersampled(
 /// n_cycles / phase) for free. [`Field::DirectTrap`] is colour-valued (no scalar
 /// reduction) and rejected by the caller before this is reached; on the off chance it
 /// arrives, its subpixels fall to `NaN`. Returns `(field, sub_w, sub_h)`.
+///
+/// PERF: the [`iterate_orbit`] pass computes ALL field accumulators (several
+/// transcendentals per iteration) and discards all but `params.field` — ~35x slower
+/// than the escape-time [`smooth_field_f64_supersampled`] twin for a `Smooth` dump.
+/// For `Smooth` consumers that only need offset-invariant statistics, prefer that
+/// twin (`--dump-field-source f64`). This kernel is required only for byte-identical
+/// smooth reproduction and for the non-smooth fields (no fast twin exists for those).
+/// A future optimization would gate the unused accumulators behind `params.field`
+/// (+ the colormap's needs) — see docs/design/beautiful_perf_report.md.
 pub fn single_field_supersampled(
     frame: &Frame,
     ss: u32,

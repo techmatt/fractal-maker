@@ -69,30 +69,52 @@ def emit_digits_for_fw(fw: float, guard: int = 15) -> int:
 
 # ---------------------------------------------------------------------------
 # Core orbit + derivative recurrences (all in the ambient mpmath precision).
-#   z_0 = 0,  z_{n+1} = z_n^2 + c
-#   d_n = dz_n/dc:  d_0 = 0,  d_{n+1} = 2 z_n d_n + 1
+#   z_0 = 0,  z_{n+1} = z_n^d + c              (d = `degree`, the multibrot power)
+#   d_n = dz_n/dc:  d_0 = 0,  d_{n+1} = d · z_n^{d-1} · d_n + 1
+#
+# Degree-2 (Mandelbrot) keeps its ORIGINAL expressions textually untouched, so
+# every d=2 result is byte-identical to before the multibrot generalization
+# (regression: `tests/test_deep_center_finder_degree.py`). This mirrors the Rust
+# backend split (`sample_flags` for d=2 vs `sample_multibrot` for d≥3): the
+# quadratic bytes are load-bearing and are never re-routed through the general
+# power kernel. For d≥3 the recurrence uses z^{d-1} (computed once per step and
+# reused for both z^d = z^{d-1}·z and the derivative factor d·z^{d-1}).
 # ---------------------------------------------------------------------------
-def _orbit(c, n):
+def _orbit(c, n, degree=2):
     """Return (z_n, d_n) after n steps of the critical orbit at parameter c."""
     z = mp.mpc(0)
     d = mp.mpc(0)
-    for _ in range(n):
-        d = 2 * z * d + 1
-        z = z * z + c
+    if degree == 2:
+        for _ in range(n):
+            d = 2 * z * d + 1
+            z = z * z + c
+    else:
+        for _ in range(n):
+            zpm1 = z ** (degree - 1)          # z^{d-1}
+            d = degree * zpm1 * d + 1
+            z = zpm1 * z + c                  # z^d = z^{d-1} · z
     return z, d
 
 
-def _orbit_at(c, k, n):
+def _orbit_at(c, k, n, degree=2):
     """Return (z_k, d_k, z_{k+n}, d_{k+n}) — orbit + derivative captured at step
     k and at step k+n. For the Misiurewicz residual z_{k+n} - z_k."""
     z = mp.mpc(0)
     d = mp.mpc(0)
     zk = dk = None
-    for i in range(k + n):
-        if i == k:
-            zk, dk = z, d
-        d = 2 * z * d + 1
-        z = z * z + c
+    if degree == 2:
+        for i in range(k + n):
+            if i == k:
+                zk, dk = z, d
+            d = 2 * z * d + 1
+            z = z * z + c
+    else:
+        for i in range(k + n):
+            if i == k:
+                zk, dk = z, d
+            zpm1 = z ** (degree - 1)
+            d = degree * zpm1 * d + 1
+            z = zpm1 * z + c
     if k == 0:
         zk, dk = mp.mpc(0), mp.mpc(0)
     return zk, dk, z, d
@@ -110,16 +132,17 @@ class NewtonResult:
     kind: str            # "nucleus" | "misiurewicz"
     period: int
     preperiod: int = 0
+    degree: int = 2      # multibrot power d in z^d + c (2 = Mandelbrot)
 
 
-def newton_nucleus(c0, period, *, max_steps=200, tol_dps_margin=6):
+def newton_nucleus(c0, period, *, degree=2, max_steps=200, tol_dps_margin=6):
     """Newton on z_p(c) = 0 (period-p nucleus). Returns a NewtonResult."""
     c = mp.mpc(c0)
     tol = mp.mpf(10) ** (-(mp.mp.dps - tol_dps_margin))
     residual = mp.inf
     it = 0
     for it in range(1, max_steps + 1):
-        z, d = _orbit(c, period)
+        z, d = _orbit(c, period, degree)
         residual = abs(z)
         if d == 0:
             break
@@ -127,15 +150,15 @@ def newton_nucleus(c0, period, *, max_steps=200, tol_dps_margin=6):
         c = c - step
         if abs(step) < tol and residual < tol:
             break
-    z, _ = _orbit(c, period)
+    z, _ = _orbit(c, period, degree)
     residual = abs(z)
     conv = residual < tol
     return NewtonResult(c=c, converged=bool(conv), iters=it,
                         residual=float(mp.log10(residual)) if residual > 0 else -999.0,
-                        kind="nucleus", period=period)
+                        kind="nucleus", period=period, degree=degree)
 
 
-def newton_misiurewicz(c0, preperiod, period, *, max_steps=200, tol_dps_margin=6):
+def newton_misiurewicz(c0, preperiod, period, *, degree=2, max_steps=200, tol_dps_margin=6):
     """Newton on z_{k+n}(c) - z_k(c) = 0 (pre-periodic Misiurewicz point,
     preperiod k, eventual period n). Returns a NewtonResult."""
     c = mp.mpc(c0)
@@ -143,7 +166,7 @@ def newton_misiurewicz(c0, preperiod, period, *, max_steps=200, tol_dps_margin=6
     residual = mp.inf
     it = 0
     for it in range(1, max_steps + 1):
-        zk, dk, zkn, dkn = _orbit_at(c, preperiod, period)
+        zk, dk, zkn, dkn = _orbit_at(c, preperiod, period, degree)
         g = zkn - zk
         gp = dkn - dk
         residual = abs(g)
@@ -153,15 +176,15 @@ def newton_misiurewicz(c0, preperiod, period, *, max_steps=200, tol_dps_margin=6
         c = c - step
         if abs(step) < tol and residual < tol:
             break
-    zk, _, zkn, _ = _orbit_at(c, preperiod, period)
+    zk, _, zkn, _ = _orbit_at(c, preperiod, period, degree)
     residual = abs(zkn - zk)
     conv = residual < tol
     return NewtonResult(c=c, converged=bool(conv), iters=it,
                         residual=float(mp.log10(residual)) if residual > 0 else -999.0,
-                        kind="misiurewicz", period=period, preperiod=preperiod)
+                        kind="misiurewicz", period=period, preperiod=preperiod, degree=degree)
 
 
-def is_minimal_misiurewicz(c, preperiod, period, *, tol_dps_margin=6):
+def is_minimal_misiurewicz(c, preperiod, period, *, degree=2, tol_dps_margin=6):
     """A Misiurewicz solution is *minimal* (genuinely preperiod-k / period-n)
     only if the orbit is not already periodic one step earlier and the eventual
     period does not divide to something smaller. Cheap sanity screen so `scan`
@@ -169,13 +192,13 @@ def is_minimal_misiurewicz(c, preperiod, period, *, tol_dps_margin=6):
     tol = mp.mpf(10) ** (-(mp.mp.dps - tol_dps_margin))
     # Not already satisfied at preperiod k-1 (would mean true preperiod < k).
     if preperiod >= 1:
-        zk1, _, zkn1, _ = _orbit_at(c, preperiod - 1, period)
+        zk1, _, zkn1, _ = _orbit_at(c, preperiod - 1, period, degree)
         if abs(zkn1 - zk1) < tol:
             return False
     # Eventual period is minimal: no proper divisor q|n also closes.
     for q in range(1, period):
         if period % q == 0:
-            zk, _, zkq, _ = _orbit_at(c, preperiod, q)
+            zk, _, zkq, _ = _orbit_at(c, preperiod, q, degree)
             if abs(zkq - zk) < tol:
                 return False
     return True
@@ -185,18 +208,43 @@ def is_minimal_misiurewicz(c, preperiod, period, *, tol_dps_margin=6):
 # Minibrot size estimate (Munafo / Kalles-Fraktaler). |size| ~ atom radius,
 # arg(size)/2 ~ orientation. Used to suggest an fw band for a nucleus.
 # ---------------------------------------------------------------------------
-def nucleus_size_estimate(c, period):
-    """Return a complex size estimate for the period-p minibrot at nucleus c."""
+def nucleus_size_estimate(c, period, degree=2):
+    """Return a complex size estimate for the period-p minibrot at nucleus c.
+
+    Degree-2 is the Munafo/Kalles-Fraktaler formula (`size = 1/(b·λ²)`), kept
+    textually untouched. For d≥3 the derivative factor generalizes to
+    f'(z)=d·z^{d-1} (so `λ` = Π f'(z_k) is the true orbit derivative and `b` its
+    second-order correction), AND the size-law exponent on λ changes from 2 to
+    **d/(d-1)** — the multibrot renormalization scaling (the p-fold iterate near a
+    period-p nucleus is a small w→w^d+c copy whose linear scale goes as
+    |λ|^{-d/(d-1)}, not |λ|^{-2}). d/(d-1) reduces to 2 at d=2, so the two branches
+    agree there. This matters: the flat degree-2 `λ²` law under-estimates the d≥3
+    atom by ~4-11×, putting a 4·|size| frame *inside* the minibrot body (all-black
+    field). Validated against rendered interior-fraction: with d/(d-1), a 4·|size|
+    nucleus-centred frame lands at interior-frac ≈0.2-0.5 (comparable to d2's ≈0.16),
+    i.e. the minibrot frames as an island ringed by decorations — what the screen
+    and the eye need. |size| is exact-in-magnitude (`|λ^e| = |λ|^e`, branch-free);
+    arg(size) is not consumed here. See docs/design/q4_multibrot_transfer.md.
+    """
     l = mp.mpc(1)
     b = mp.mpc(1)
     z = mp.mpc(0)
-    for _ in range(1, period):
-        z = z * z + c
-        l = 2 * z * l
-        if l == 0:
-            return mp.mpc(0)
-        b = b + 1 / l
-    denom = b * l * l
+    if degree == 2:
+        for _ in range(1, period):
+            z = z * z + c
+            l = 2 * z * l
+            if l == 0:
+                return mp.mpc(0)
+            b = b + 1 / l
+        denom = b * l * l                         # degree-2 λ² law (untouched)
+    else:
+        for _ in range(1, period):
+            z = z ** degree + c
+            l = degree * z ** (degree - 1) * l
+            if l == 0:
+                return mp.mpc(0)
+            b = b + 1 / l
+        denom = b * l ** (mp.mpf(degree) / (degree - 1))   # multibrot d/(d-1) law
     if denom == 0:
         return mp.mpc(0)
     return 1 / denom
@@ -220,14 +268,24 @@ class DeepCenter:
     newton_iters: int
     newton_residual_log10: float
     render_maxiter: int       # a sensible maxiter for fw_suggest
+    degree: int = 2           # multibrot power d in z^d + c (2 = Mandelbrot)
 
     def render_cmd(self, exe="target/release/fractal-generator.exe",
                    width=1024, ss=2, out="scratch/deep_centers/preview.png"):
-        return [exe, "sheet", "--builtins", "default cubehelix viridis",
-                "--center-re", self.cx, "--center-im", self.cy,
-                "--frame-width", self.fw_suggest, "--maxiter", str(self.render_maxiter),
-                "--tile-width", str(width), "--aspect", "16:9", "--supersample", str(ss),
-                "--backend", "auto", "--output", out]
+        # d=2 keeps the multi-palette `sheet` preview (sheet is degree-2 only).
+        # d≥3 (multibrot, parameter plane) has no sheet path → render-one with
+        # `--family multibrot{d}`; single palette, one PNG.
+        if self.degree == 2:
+            return [exe, "sheet", "--builtins", "default cubehelix viridis",
+                    "--center-re", self.cx, "--center-im", self.cy,
+                    "--frame-width", self.fw_suggest, "--maxiter", str(self.render_maxiter),
+                    "--tile-width", str(width), "--aspect", "16:9", "--supersample", str(ss),
+                    "--backend", "auto", "--output", out]
+        return [exe, "render-one", "--family", f"multibrot{self.degree}",
+                "--cx", self.cx, "--cy", self.cy,
+                "--fw", self.fw_suggest, "--maxiter", str(self.render_maxiter),
+                "--width", str(width), "--aspect", "16:9", "--supersample", str(ss),
+                "--output", out]
 
 
 def _maxiter_for_fw(fw: float) -> int:
@@ -255,7 +313,7 @@ def make_deep_center(res: NewtonResult, *, fw_suggest=None, emit_fw_floor=1e-20)
         size_s = None
         self_sim = True
     else:
-        size = nucleus_size_estimate(res.c, res.period)
+        size = nucleus_size_estimate(res.c, res.period, res.degree)
         size_abs = float(abs(size)) if size != 0 else 0.0
         size_s = f"{size_abs:.6e}"
         # A nucleus sits in the minibrot's *interior* (black). Centered on it, the
@@ -281,6 +339,7 @@ def make_deep_center(res: NewtonResult, *, fw_suggest=None, emit_fw_floor=1e-20)
         newton_iters=res.iters,
         newton_residual_log10=res.newton_residual_log10 if hasattr(res, "newton_residual_log10") else res.residual,
         render_maxiter=_maxiter_for_fw(fw0),
+        degree=res.degree,
     )
 
 
