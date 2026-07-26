@@ -153,6 +153,14 @@ def test_field_mode_token_semantics():
     assert loc_mod.field_mode_token("stripe") == "stripe"
 
 
+def test_field_source_token_semantics():
+    # beautiful (default / None) -> empty token so smooth stems are unchanged;
+    # f64 (the offset field) -> its own token so it keys disjointly.
+    assert loc_mod.field_source_token(None) == ""
+    assert loc_mod.field_source_token("beautiful") == ""
+    assert loc_mod.field_source_token("f64") == "f64"
+
+
 # Known input, frozen pre-token stems (computed on the live smooth path). These
 # literals are the invariant: if a key edit moves the smooth stem, every cached
 # field is orphaned — this test must fail before that ships.
@@ -173,6 +181,20 @@ def test_field_key_smooth_parity_beam():
     assert _BEAM_SMOOTH in stems
 
 
+def test_field_key_source_parity_beam():
+    # default `beautiful` source (None / explicit) leaves the frozen smooth stem
+    # byte-identical — no cached field is orphaned by adding the source axis.
+    assert aq._field_key(_KNOWN, None, None) == _BEAM_SMOOTH
+    assert aq._field_key(_KNOWN, "smooth", "beautiful") == _BEAM_SMOOTH
+    # f64 source keys DISJOINTLY (its constant-offset field must not collide).
+    assert aq._field_key(_KNOWN, None, "f64") != _BEAM_SMOOTH
+    # the source axis is orthogonal to the mode axis: smooth/beautiful, smooth/f64,
+    # tia/beautiful, tia/f64 are four distinct stems.
+    quad = {aq._field_key(_KNOWN, m, s)
+            for m in (None, "tia") for s in (None, "f64")}
+    assert len(quad) == 4
+
+
 def test_field_key_smooth_parity_emit():
     import importlib
     sys.path.insert(0, os.path.join(_TOOLS, "wallpaper"))
@@ -183,6 +205,14 @@ def test_field_key_smooth_parity_emit():
     stems = {ev._emit_field_stem(_KNOWN, m) for m in (None, "smooth", "tia", "stripe", "curvature")}
     assert len(stems) == 4
     assert _EMIT_SMOOTH in stems
+    # field-SOURCE axis: default `beautiful` keeps the frozen emit stem byte-identical;
+    # f64 keys disjointly, orthogonal to the mode axis.
+    assert ev._emit_field_stem(_KNOWN, None, field_source=None) == _EMIT_SMOOTH
+    assert ev._emit_field_stem(_KNOWN, "smooth", field_source="beautiful") == _EMIT_SMOOTH
+    assert ev._emit_field_stem(_KNOWN, None, field_source="f64") != _EMIT_SMOOTH
+    quad = {ev._emit_field_stem(_KNOWN, m, field_source=s)
+            for m in (None, "tia") for s in (None, "f64")}
+    assert len(quad) == 4
 
 
 # --------------------------------------------------------------------------- #
@@ -286,7 +316,9 @@ def main():
         test_existing_families_are_only_m_j,
         test_cache_key_noncollision,
         test_field_mode_token_semantics,
+        test_field_source_token_semantics,
         test_field_key_smooth_parity_beam,
+        test_field_key_source_parity_beam,
         test_field_key_smooth_parity_emit,
         test_from_render_block_families,
         test_sidecar_phoenix_p_survives,

@@ -250,7 +250,7 @@ def _parity_check(rows, p_ge3, ssum):
 # ===========================================================================
 # 4. Emit — full-res render_candidate (Recipe 2) for each selected winner.
 # ===========================================================================
-def _emit_field_stem(loc, field_mode=None, spec=CANON_SPEC):
+def _emit_field_stem(loc, field_mode=None, spec=CANON_SPEC, field_source=None):
     """Filename stem for `loc`'s emit field dump (pure, no I/O — the parity gate
     tests this directly, so `field_mode` stays the 2nd positional arg; `spec` defaults
     to the canon geometry, keeping the frozen 2560x1440ss4 smooth stem byte-identical).
@@ -258,12 +258,17 @@ def _emit_field_stem(loc, field_mode=None, spec=CANON_SPEC):
     `field_mode` is the render-mode / field-identity token (`loc_mod.field_mode_token`):
     the smooth field (default/None) appends NOTHING to the hashed key — so the smooth
     stem is byte-identical to the pre-token scheme — while a strange pure-field mode
-    keys distinctly and never collides with the cached smooth field. `spec` folds the
-    render geometry into the key so an eval-res (1024x576ss2) field never collides with
-    the wallpaper-canon field for the same location."""
+    keys distinctly and never collides with the cached smooth field. `field_source`
+    (`--dump-field-source`, `loc_mod.field_source_token`) closes the same-shaped axis
+    for the field SOURCE: `beautiful` (default) appends nothing; `f64` keys disjointly
+    so its offset field can't collide with a beautiful dump. `spec` folds the render
+    geometry into the key so an eval-res (1024x576ss2) field never collides with the
+    wallpaper-canon field for the same location."""
     import hashlib
     tok = loc_mod.field_mode_token(field_mode)
     suffix = f"|{tok}" if tok else ""
+    stok = loc_mod.field_source_token(field_source)
+    suffix += f"|{stok}" if stok else ""
     geom = f"{spec.width}x{spec.height}ss{spec.ss}"
     h = hashlib.sha1(f"{loc.key()}|{geom}|{loc.maxiter}{suffix}".encode()).hexdigest()[:16]
     return f"{loc.family}_{h}_{geom}"

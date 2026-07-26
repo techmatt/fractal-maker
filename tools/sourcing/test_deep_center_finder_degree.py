@@ -106,3 +106,31 @@ def test_multibrot_nucleus_converges(degree, seed, period):
     assert r.residual < -30
     size = f.nucleus_size_estimate(r.c, period, degree)
     assert size != 0 and 1e-12 < float(abs(size)) < 1e2      # a real, finite minibrot
+
+
+# --- atom instrument `A`: the |A| ≡ 1/|size| identity (§2 build) ---------------- #
+@pytest.mark.parametrize("degree,seed,period", [
+    (2, (-0.7453, 0.1127), 35),      # d2 seahorse
+    (2, (-0.1226, 0.7449), 3),       # d2 rabbit (shallow: n=3, identity still exact)
+    (3, (0.7, 0.3), 4),
+    (4, (-0.748, 0.263), 5),
+    (5, (-0.786, 0.365), 5),
+])
+def test_atom_A_equals_inverse_size(degree, seed, period):
+    """`A = Λ^(1/(d-1))·P_n'(c0)` is the same analytic quantity the size law
+    computes: |A| ≡ 1/|size| and arg A ≡ −arg(size), to full precision at every n
+    (n=3 included — the identity is exact, not asymptotic). Locks the §2 finding
+    that `A` re-derives (and so confirms) the corrected d/(d-1) size exponent."""
+    mp.mp.dps = 60
+    r = f.newton_nucleus(mp.mpc(seed[0], seed[1]), period, degree=degree)
+    assert r.converged
+    inst = f.atom_instrument(r.c, period, degree)
+    size = f.nucleus_size_estimate(r.c, period, degree)
+    # |A|·|size| == 1 to ~50 digits (relative), branch-free in magnitude.
+    assert abs(abs(inst.A) * abs(size) - 1) < mp.mpf(10) ** (-40)
+    # arg A ≡ −arg(size) mod 2π (principal branches line up here).
+    dphase = mp.arg(inst.A) + mp.arg(size)
+    assert abs(mp.expjpi(dphase / mp.pi) - 1) < mp.mpf(10) ** (-30)
+    # required precision scales with depth; window scale is the atom's inverse size.
+    assert inst.required_dps >= 50
+    assert inst.window_scale > 0

@@ -251,6 +251,96 @@ def nucleus_size_estimate(c, period, degree=2):
 
 
 # ---------------------------------------------------------------------------
+# Atom instrument `A` — size, orientation, and required precision, from the same
+# recursion Newton already runs. With the nucleus c0 and period n:
+#
+#     z_{k+1}  = z_k^d + c
+#     z'_{k+1} = d·z_k^(d−1)·z'_k + 1              z'_0 = 0     (P_n'(c0) = z'_n)
+#     Lambda   = Π_{k=1..n-1} d·z_k^(d−1)                       (reduced multiplier)
+#     A        = Lambda^(1/(d−1)) · P_n'(c0)
+#
+# Locally the p-fold map conjugates to w^d + C, and the embedded copy is the whole
+# multibrot pulled back by δ = C/A. So |A| is the atom's inverse linear scale and
+# arg A its orientation: default window scale ≈ 1/|A|, rotation ≈ −arg A.
+#
+# EXACT IDENTITY with `nucleus_size_estimate`. Both are the *same analytic
+# quantity*: |A| ≡ 1/|size| and arg A ≡ −arg(size) to full precision at every n
+# (verified over the d2 + d3/d4/d5 nuclei, and locked in
+# `test_deep_center_finder_degree.py`). This is not a coincidence — the size code's
+# `b`-sum times `Lambda` equals `P_n'(c0)` algebraically, and its `Lambda^{d/(d-1)}`
+# denominator is `Lambda^{1/(d-1)}·Lambda`. So `A` is NOT a second, independent
+# estimate to cross-check `size` against; it is the size law re-derived from the
+# c-derivative, and it *independently confirms* the `d/(d−1)` exponent (a flat
+# `λ²` law disagrees with `A` by |λ|^{(d−2)/(d−1)} at d≥3 — the measured 4–11×).
+# `A` is kept as the primary export because it hands three things `size` does not:
+# a principal-branch orientation, a required-precision figure, and an a-priori f64
+# pixel-spacing-wall predictor. See docs/design/atom_instrument.md.
+#
+# The (d−1)-th root leaves arg A determined only mod 2π/(d−1): an orientation
+# ambiguity (which of the d−1 rotational copies), not an error. We record the
+# mpmath principal branch and the ambiguity spacing alongside it.
+# ---------------------------------------------------------------------------
+@dataclass
+class AtomInstrument:
+    degree: int
+    period: int
+    A: object                    # mpmath.mpc — the atom scaling factor Λ^(1/(d-1))·P_n'
+    abs_A: float
+    arg_A: float                 # principal branch (radians); determined mod 2π/(d-1)
+    log10_abs_A: float
+    window_scale: float          # ≈ 1/|A| — frame width that frames the whole atom
+    rotation_rad: float          # ≈ −arg A (principal branch)
+    rotation_ambiguity_rad: float  # 2π/(d-1): (d-1)-th-root branch spacing (0 at d=2)
+    required_dps: int            # mpmath dps to localize a ~1/|A| frame, incl. guard
+
+    def f64_wall_margin_decades(self, width, *, ss=1, spacing_floor=1e-13, k=4.0):
+        """Headroom (in decades of |A|) before a default `k·window_scale` frame
+        crosses the f64 pixel-spacing wall at render `width`×`ss`. Pixel spacing =
+        k/(|A|·width·ss); the wall is `spacing_floor` (Rust `PERTURB_SPACING`=1e-13,
+        below which `F64Backend` quantizes — and multibrot has NO perturbation
+        fallback, so this wall is absolute there). Positive = safe; **negative
+        predicts an f64 render failure a priori**, no render attempt needed."""
+        import math
+        wall_log10 = math.log10(k) - math.log10(spacing_floor) - math.log10(width * ss)
+        return wall_log10 - self.log10_abs_A
+
+
+def atom_instrument(c, period, degree=2, *, guard_digits=15) -> AtomInstrument:
+    """Compute the atom instrument `A` for a period-`period` nucleus at `c`.
+
+    Self-contained (one orbit pass; does not call `nucleus_size_estimate`) so the
+    `|A| ≡ 1/|size|` identity is a genuine cross-check rather than a tautology."""
+    c = mp.mpc(c)
+    z = mp.mpc(0)
+    zp = mp.mpc(0)                    # z'_k = dz_k/dc
+    lam = mp.mpc(1)                   # Λ = Π_{k=1..n-1} d·z_k^(d-1)
+    for k in range(1, period + 1):
+        if degree == 2:
+            zp = 2 * z * zp + 1
+            z = z * z + c
+        else:
+            zpm1 = z ** (degree - 1)
+            zp = degree * zpm1 * zp + 1
+            z = zpm1 * z + c
+        if k <= period - 1:          # multiplier excludes the k=0 critical point (z_0=0)
+            lam = lam * (degree * z ** (degree - 1))
+    A = lam ** (mp.mpf(1) / (degree - 1)) * zp
+    abs_A = float(abs(A)) if A != 0 else 0.0
+    log10_abs_A = float(mp.log10(abs(A))) if A != 0 else float("inf")
+    arg_A = float(mp.arg(A))
+    import math
+    req_dps = max(50, int(math.ceil(log10_abs_A)) + guard_digits) if abs_A > 0 else 50
+    return AtomInstrument(
+        degree=degree, period=period, A=A,
+        abs_A=abs_A, arg_A=arg_A, log10_abs_A=log10_abs_A,
+        window_scale=(1.0 / abs_A if abs_A > 0 else float("inf")),
+        rotation_rad=-arg_A,
+        rotation_ambiguity_rad=(2.0 * math.pi / (degree - 1) if degree > 2 else 0.0),
+        required_dps=req_dps,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Emission — a NewtonResult -> render-ready deep center (decimal strings).
 # ---------------------------------------------------------------------------
 @dataclass

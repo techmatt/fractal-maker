@@ -135,10 +135,16 @@ def source_nuclei(degree, *, n_target=N_PER_DEGREE):
                 continue
             r.newton_residual_log10 = r.residual
             dc = dcf.make_deep_center(r)       # fw_suggest = 4*size, render_maxiter
+            inst = dcf.atom_instrument(r.c, p, degree)   # A: |A|≡1/size, arg, req precision
             found[key] = dict(
                 degree=degree, period=p, cx=dc.cx, cy=dc.cy,
                 fw=dc.fw_suggest, maxiter=dc.render_maxiter,
-                size=sabs, newton_res_log10=round(r.residual, 1))
+                size=sabs, newton_res_log10=round(r.residual, 1),
+                # §2 covariates — n/|A|/degree logged per window so period-vs-quality
+                # reads later without re-running. Nothing keys off them yet.
+                abs_A=inst.abs_A, log10_abs_A=round(inst.log10_abs_A, 3),
+                arg_A=round(inst.arg_A, 4), required_dps=inst.required_dps,
+                f64_wall_margin=round(inst.f64_wall_margin_decades(W), 3))
     recs = list(found.values())
     # spread across the period range (proxy for scale diversity), like the d2 label-set
     recs.sort(key=lambda d: (d["period"], d["cx"]))
@@ -413,6 +419,8 @@ def stage_screen():
             n_acc = sum(1 for c in res["kept"] if c["G"] >= cutoff)
             kept_all.extend(res["kept"])
             per_mb.append(dict(id=r["id"], period=r["period"], size=r["size"],
+                               degree=deg, log10_abs_A=r.get("log10_abs_A"),
+                               f64_wall_margin=r.get("f64_wall_margin"),
                                n_surv=a["n_surv"], n_masked=a["n_masked"],
                                n_kept=len(res["kept"]), n_accepted=n_acc,
                                G_max=(float(res["G"].max()) if len(res["G"]) else None)))

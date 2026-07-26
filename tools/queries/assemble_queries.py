@@ -46,7 +46,7 @@ OUT_RECORDS = OUT_QUERIES / "records"
 # Field cache — one ss2 dump per unique location, reused everywhere.
 # ---------------------------------------------------------------------------
 
-def _field_key(ref, field_mode=None):
+def _field_key(ref, field_mode=None, field_source=None):
     """Stable filename stem for a location's ss2/eval field dump.
 
     Keyed on the canonical location (family + geometry + family_params) so
@@ -60,7 +60,10 @@ def _field_key(ref, field_mode=None):
     dumped (`loc_mod.field_mode_token`): the smooth field (default/None) appends
     NOTHING — so the smooth stem is byte-identical to the pre-token scheme — while
     a strange pure-field mode (tia/stripe/…) appends its token so it never
-    collides with the cached smooth field."""
+    collides with the cached smooth field. `field_source` (`--dump-field-source`,
+    `loc_mod.field_source_token`) closes the same-shaped axis for the field SOURCE:
+    the default `beautiful` appends nothing (stem unchanged); `f64` keys disjointly
+    so its constant-offset field never collides with a beautiful dump."""
     fam = loc_mod.family_of(ref)
     p = loc_mod.params_of(ref)
     parts = [fam, ref.cx, ref.cy, ref.fw, str(ref.maxiter),
@@ -72,6 +75,11 @@ def _field_key(ref, field_mode=None):
     tok = loc_mod.field_mode_token(field_mode)
     if tok:
         parts.append(tok)
+    # field-SOURCE token (beautiful default appends nothing → smooth stem unchanged;
+    # f64 keys disjointly so the offset field can't collide on one cache entry).
+    stok = loc_mod.field_source_token(field_source)
+    if stok:
+        parts.append(stok)
     h = hashlib.sha1("|".join(parts).encode()).hexdigest()[:16]
     return f"{fam}_{h}"
 

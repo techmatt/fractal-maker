@@ -175,6 +175,26 @@ def field_mode_token(mode) -> str:
     return str(mode)
 
 
+# The `--dump-field-source` axis (render_one.rs `FieldSourceChoice`): the default
+# `beautiful` kernel is the byte-identical smooth field; `f64` is the fast
+# escape-time backend's smooth channel, offset by the constant ln(ln B)/ln d. Same
+# geometry and NaN-interior seam, DIFFERENT values (~1e-9 after any percentile
+# stretch). If a cache keyed only on geometry serves an `f64` dump where a consumer
+# expects `beautiful` (or vice-versa), the offset field leaks silently. This token
+# closes that axis the same way `field_mode_token` closes the render-mode axis.
+BEAUTIFUL_SOURCE = "beautiful"
+
+
+def field_source_token(source) -> str:
+    """Field-identity token for the `--dump-field-source`. `""` for the default
+    `beautiful` source (or None) so every existing smooth stem is byte-identical to
+    the pre-token scheme (no cache orphaned); otherwise the source string itself
+    (`f64`), so a beautiful dump never collides with an f64 dump at one geometry."""
+    if source is None or source == BEAUTIFUL_SOURCE:
+        return ""
+    return str(source)
+
+
 # ---------------------------------------------------------------------------
 # The ONE render-one flag builder. Five cases (Step 3 of the prompt):
 #   mandelbrot   -> --family mandelbrot
