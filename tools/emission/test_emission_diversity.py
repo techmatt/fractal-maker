@@ -477,26 +477,30 @@ def _gate_rec(id, loc, style, p_ge3, cell):
 
 
 def test_release_floors_exclude_subfloor_and_short_fill(tmp_path):
+    # Wallpaper-head RELEASE floor (0.90) still CUTS a sub-floor smooth row (em_1). The mining
+    # head is REPORT-ONLY since b515017: its 0.50 release floor no longer cuts, so a sub-floor
+    # strange row (em_3) is release-eligible anyway (would-cut is logged, not acted on). See
+    # prompts/mining_gate_report_only.md / release_eligible().
     eng = B.EmissionDiversity(_args(tmp_path))
     eng.embs = {}
-    # 4 pool-admitted rows in distinct cells: one eligible + one sub-floor per head.
+    # 4 pool-admitted rows in distinct cells: smooth floor cuts em_1; strange admits all scored.
     recs = [
         _gate_rec("em_0", "l0", "smooth", 0.95, ("mandelbrot", "m#0", "k16:1", "smooth")),  # ≥0.90 ✓
-        _gate_rec("em_1", "l1", "smooth", 0.80, ("mandelbrot", "m#1", "k16:2", "smooth")),  # <0.90 inv
-        _gate_rec("em_2", "l2", "tia",    0.60, ("mandelbrot", "m#2", "k16:3", "tia")),     # ≥0.50 ✓
-        _gate_rec("em_3", "l3", "tia",    0.30, ("mandelbrot", "m#3", "k16:4", "tia")),     # <0.50 inv
+        _gate_rec("em_1", "l1", "smooth", 0.80, ("mandelbrot", "m#1", "k16:2", "smooth")),  # <0.90 CUT
+        _gate_rec("em_2", "l2", "tia",    0.60, ("mandelbrot", "m#2", "k16:3", "tia")),     # scored ✓
+        _gate_rec("em_3", "l3", "tia",    0.30, ("mandelbrot", "m#3", "k16:4", "tia")),     # <0.50 but report-only ✓
     ]
     for r in recs:
         eng.pool.append(r)
     elig = {r["id"] for r in eng.release_eligible()}
-    assert elig == {"em_0", "em_2"}                       # sub-floor rows banked as inventory
+    assert elig == {"em_0", "em_2", "em_3"}              # smooth floor cuts em_1; strange admits all scored
     selected, _log = eng.select_release()
     sel_ids = {e["_rec"]["id"] for e in selected}
-    assert sel_ids == {"em_0", "em_2"}                    # never dips below the floor to fill N=5
+    assert sel_ids == {"em_0", "em_2", "em_3"}           # smooth head still short-fills below its floor
     sf = eng.release_short_fill
-    assert (sf["requested"], sf["eligible"], sf["selected"], sf["short_by"]) == (5, 2, 2, 3)
-    # head-split: one smooth (wallpaper) + one strange (mining), never compared in one step
-    assert eng.release_split["smooth_selected"] == 1 and eng.release_split["strange_selected"] == 1
+    assert (sf["requested"], sf["eligible"], sf["selected"], sf["short_by"]) == (5, 3, 3, 2)
+    # head-split: one smooth (wallpaper) + two strange (mining), never compared in one step
+    assert eng.release_split["smooth_selected"] == 1 and eng.release_split["strange_selected"] == 2
 
 
 def test_release_floor_per_head_boundary(tmp_path):
