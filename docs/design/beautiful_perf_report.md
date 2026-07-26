@@ -1,14 +1,23 @@
-# Why the `beautiful` field dump is ~35× slower than the `f64` twin
+# Why the `beautiful` field dump was ~35× slower than the `f64` twin (now field-gated)
 
-**TL;DR.** For a `--dump-field` of the **smooth** field, `--dump-field-source
-beautiful` (the default) measured **39.2 s** vs `--dump-field-source f64` at **1.1 s**
-on the same 2176×1224 ss1 frame (degree-5 multibrot, maxiter ~13 k) — ~35×. It is
-**not** a threading gap: both kernels are `rayon` `into_par_iter` over rows. The cost
-is the per-pixel kernel. `iterate_orbit` (beautiful) is **field-agnostic** — it
-accumulates *every* coloring field on *every* iteration (≈4 transcendentals/iter) and
-then keeps a single scalar; `F64Backend::sample` (f64 twin) is a lean escape loop with
-~0 transcendentals/iter. Neither pathway can be deleted, but the smooth-beautiful path
-is redundant for offset-invariant statistics and has an obvious in-kernel speedup.
+**TL;DR.** For a `--dump-field` of the **smooth** field, the default
+`--dump-field-source beautiful` originally measured **39.2 s** vs `f64` at **1.1 s**
+on a 2176×1224 ss1 frame — ~35×. It is **not** a threading gap: both kernels are
+`rayon` `into_par_iter` over rows. The cost was the per-pixel kernel: `iterate_orbit`
+(beautiful) is **field-agnostic** — it accumulated *every* coloring field on *every*
+iteration (≈4 transcendentals/iter) and then kept a single scalar; `F64Backend::sample`
+(f64 twin) is a lean escape loop with ~0 transcendentals/iter.
+
+**Implemented fix (this change): field-gating.** `iterate_orbit_needs` takes a
+`FieldNeeds` flag set and skips every accumulator the requested field(s) don't read.
+On the identical d2 shallow nucleus (maxiter 3000) this took the beautiful smooth dump
+from **39.2 s → 2.24 s (~17.5×)**, landing within ~4× of the f64 backend (0.5 s). The
+residual gap is the general kernel's inherent overhead (per-iteration `match family`,
+`ColoringParams` indirection, `cpow_deriv`, always-on `zabs`/`zprev`), not wasted field
+work. Parity is proven bit-for-bit: `render_modes::tests::field_gating_matches_ungated`
+asserts every field's reduced value (and `ushade`) is bit-identical gated vs ungated.
+Neither pathway is deleted; the `f64` source stays strictly best for offset-invariant
+smooth statistics (~0.5 s, no general-kernel overhead).
 
 This report was written after the q4 multibrot-transfer read discovered the gap while
 dumping ~80 fields for the stage-1 screen; switching those to `f64` cut the render
@@ -96,30 +105,36 @@ It is load-bearing for two things the f64 twin cannot provide:
 So the recommendation is not deprecation but **narrowing**: any smooth consumer that
 only needs offset-invariant statistics should pass `--dump-field-source f64`.
 
-## The obvious in-kernel speedup (optional, larger)
+## The in-kernel speedup — implemented
 
-`iterate_orbit` computes every accumulator regardless of `params.field`. A **field-gated
-kernel** — compute only what the requested field(s) need — would bring *beautiful-smooth*
-to ≈`f64` speed **while staying byte-identical**, and would speed up *all* single-field
-beautiful renders (not just dumps), since `single_field_supersampled` and
-`render_beautiful_single` reduce to one field too.
+`iterate_orbit` used to compute every accumulator regardless of `params.field`. It now
+delegates to **`iterate_orbit_needs(.., needs: FieldNeeds)`**, which guards each
+accumulator block behind a flag; `iterate_orbit` is a thin wrapper passing
+`FieldNeeds::all()` (byte-identical catch-all for tests / unknown callers).
 
-- Smooth needs **none** of exp/stripe/tia/curvature/gaussian/traps/velocity/derivative
-  — just the escape `n` and final `|z|²`. Gating those off is the whole win.
-- Shape: pass the requested field set (or a `const`-generic / bitset) into
-  `iterate_orbit` and guard each accumulator block. The composite (`direct_trap`) and
-  Color-By paths request several fields at once, so the gate must honor the **union** of
-  what the caller will reduce — not hardcode "smooth only."
-- Risk: modest and mechanical (per-field dependency sets are local to each accumulator
-  block); the existing render tests (separability, sheet) pin byte-identity and would
-  catch a mis-gate. Not attempted here — flagged for a future pass.
+- `FieldNeeds::for_field(F)` sets exactly the flags field `F` reduces from: Smooth /
+  Decomposition need **none** (escape + final `z`); Stripe/Tia/Curvature/TrapCircle/
+  TrapCross/Velocity/GaussianInt/ExpSmoothing each set one; `De` sets `deriv` (the `dz`
+  recurrence). `.with_deriv(want_shade)` ORs in `dz` for the `normal_map` emboss
+  (`ushade = z/dz`). `DirectTrap` (colour-valued) falls to `all()`.
+- The four hot callers pass the right needs: `smooth_field_supersampled` →
+  `for_field(Smooth)` (none); `single_field_supersampled` → `for_field(the_field)`;
+  `render_beautiful_single` → `for_field(field).with_deriv(want_shade)`;
+  `render_beautiful_composite` → `for_field(base).union(for_field(tex)).with_deriv(..)`.
+- The flag set is constant for a whole render, so the per-iteration branch is perfectly
+  predicted (≈free); when a field IS requested its block runs verbatim, so the reduced
+  value is **byte-identical** — guarded by `field_gating_matches_ungated` (every field's
+  reduced value + `ushade` bit-identical gated vs ungated) plus the existing separability
+  / sheet / montage guards (all green).
+- Always-on essentials kept (cheap, no transcendentals): the escape/smooth logic,
+  `zn_sq`, `zabs`, and the `zprev` history shifts. Gating those too would shave the
+  residual ~4× gap to `f64` but risks the byte-pinned paths for little gain.
 
 ## Recommendations
 
 1. **Done.** Route offset-invariant smooth-statistic consumers to
-   `--dump-field-source f64`. Applied in `tools/studies/q4_multibrot_transfer.py`;
-   warnings added at `src/render_one.rs` (dump-field site) and
-   `src/render_modes.rs` (`single_field_supersampled`).
-2. **Optional, higher value.** Field-gate `iterate_orbit` so beautiful-smooth ≈ f64
-   speed with byte-identity — benefits every single-field beautiful render.
+   `--dump-field-source f64` (still strictly fastest, ~0.5 s). Applied in
+   `tools/studies/q4_multibrot_transfer.py`.
+2. **Done.** Field-gated `iterate_orbit` → beautiful-smooth 39.2 s → 2.24 s (~17.5×),
+   byte-identical. Benefits every single-field beautiful render, not just dumps.
 3. **Keep `beautiful`** for byte-identical smooth reproduction and all non-smooth fields.

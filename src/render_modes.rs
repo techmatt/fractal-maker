@@ -1440,13 +1440,124 @@ impl OrbitAccum {
 // The orbit-history bindings (`zprev2`, `escaped`) are initialized then
 // unconditionally overwritten on the first loop pass before they're read — the
 // loop always runs ≥1 iteration. That's the carried-history idiom, not a bug.
-#[allow(unused_assignments)]
+/// Which per-iteration orbit accumulators an [`iterate_orbit_needs`] pass must
+/// actually compute. The beautiful kernel used to accumulate *every* field on
+/// *every* iteration (exp / sin / two atan2 / lattice-round + norm) and then keep
+/// only the one scalar the caller reduced — ~35× slower than the escape-time twin
+/// for a smooth dump (`beautiful_perf_report.md`). Gating each block behind its flag
+/// computes only what the requested field(s) read. The flag set is fixed for the
+/// whole render, so the per-iteration branch is perfectly predicted (≈free), and
+/// when a field IS requested its block runs verbatim — byte-identical to the
+/// ungated kernel (pinned by the montage/SHA + separability guards). Build one with
+/// [`FieldNeeds::for_field`] (`.with_deriv(normal_map)`), union two for the composite
+/// path, or [`FieldNeeds::all`] for the byte-identical catch-all ([`iterate_orbit`]).
+#[derive(Clone, Copy, Debug)]
+pub struct FieldNeeds {
+    /// stripe averaging (`sin(s·arg z)` per iteration).
+    pub stripe: bool,
+    /// triangle-inequality average.
+    pub tia: bool,
+    /// curvature averaging (`arg((Δz)/(Δz_prev))` per iteration).
+    pub curv: bool,
+    /// circle orbit trap `min‖z|−r|`.
+    pub trap_circle: bool,
+    /// cross orbit trap `min(|Re|,|Im|)`.
+    pub trap_cross: bool,
+    /// discrete velocity `Σ|z_{n+1}−z_n|`.
+    pub velocity: bool,
+    /// Gaussian-integer lattice trap (`round(z)` + `norm` per iteration).
+    pub gaussint: bool,
+    /// exponential smoothing `Σ exp(−|z|)`.
+    pub exp_sum: bool,
+    /// the `dz` derivative recurrence — needed by the `De` field and `normal_map`
+    /// (`ushade`). Not gated to a single field, so callers OR in `want_shade`.
+    pub deriv: bool,
+}
+
+impl FieldNeeds {
+    /// Compute nothing optional (smooth / decomposition read only escape + `z`).
+    pub const fn none() -> Self {
+        FieldNeeds {
+            stripe: false, tia: false, curv: false, trap_circle: false,
+            trap_cross: false, velocity: false, gaussint: false, exp_sum: false,
+            deriv: false,
+        }
+    }
+
+    /// Compute every accumulator — the ungated behaviour, byte-identical to before.
+    pub const fn all() -> Self {
+        FieldNeeds {
+            stripe: true, tia: true, curv: true, trap_circle: true,
+            trap_cross: true, velocity: true, gaussint: true, exp_sum: true,
+            deriv: true,
+        }
+    }
+
+    /// Exactly the accumulators one scalar field reduces from. `DirectTrap` is
+    /// colour-valued (reduced by `render_direct_trap`, never via a single-field
+    /// scalar pass) so it falls to the conservative `all()`.
+    pub fn for_field(field: Field) -> Self {
+        let mut n = Self::none();
+        match field {
+            Field::Smooth | Field::Decomposition => {}       // escape + final z only
+            Field::Stripe => n.stripe = true,
+            Field::Tia => n.tia = true,
+            Field::Curvature => n.curv = true,
+            Field::TrapCircle => n.trap_circle = true,
+            Field::TrapCross => n.trap_cross = true,
+            Field::Velocity => n.velocity = true,
+            Field::De => n.deriv = true,                     // de = |z|·ln|z|/|dz|
+            Field::GaussianInt => n.gaussint = true,
+            Field::ExpSmoothing => n.exp_sum = true,
+            Field::DirectTrap => return Self::all(),
+        }
+        n
+    }
+
+    /// OR in the derivative need (the `normal_map` emboss reads `ushade` = `z/dz`).
+    pub fn with_deriv(mut self, yes: bool) -> Self {
+        self.deriv |= yes;
+        self
+    }
+
+    /// Union two field needs (the composite path reduces base + texture in one pass).
+    pub fn union(self, o: Self) -> Self {
+        FieldNeeds {
+            stripe: self.stripe || o.stripe,
+            tia: self.tia || o.tia,
+            curv: self.curv || o.curv,
+            trap_circle: self.trap_circle || o.trap_circle,
+            trap_cross: self.trap_cross || o.trap_cross,
+            velocity: self.velocity || o.velocity,
+            gaussint: self.gaussint || o.gaussint,
+            exp_sum: self.exp_sum || o.exp_sum,
+            deriv: self.deriv || o.deriv,
+        }
+    }
+}
+
+/// Iterate one orbit computing the **full** channel union — the byte-identical
+/// catch-all. Thin wrapper over [`iterate_orbit_needs`] with [`FieldNeeds::all`];
+/// use `iterate_orbit_needs` directly on hot paths to skip the accumulators the
+/// requested field never reads.
 pub fn iterate_orbit(
     z0: Complex<f64>,
     c: Complex<f64>,
     maxiter: u32,
     params: &ColoringParams,
     family: Family,
+) -> OrbitAccum {
+    iterate_orbit_needs(z0, c, maxiter, params, family, FieldNeeds::all())
+}
+
+#[allow(unused_assignments)]
+pub fn iterate_orbit_needs(
+    z0: Complex<f64>,
+    c: Complex<f64>,
+    maxiter: u32,
+    params: &ColoringParams,
+    family: Family,
+    needs: FieldNeeds,
 ) -> OrbitAccum {
     let b = params.bailout_b;
     let b2 = b * b;
@@ -1514,14 +1625,23 @@ pub fn iterate_orbit(
         // `z·z + c` / `2·z·z' (+1)` float sequence exactly (z^{d-1} = z, so
         // `cpow_deriv` returns `(z·z, z)`); d ∈ {3,4,5} take the base-d power and
         // degree-scaled derivative. Phoenix carries the two-state z_{n-1} coupling.
+        // The `dz` derivative recurrence is gated behind `needs.deriv` (De field /
+        // normal_map only) — when unread, `dz` stays at its seed and the mults are
+        // skipped. `z_next` (and its cpow_deriv byproduct) is always computed;
+        // byte-identity when `deriv` holds since the exact ops run in the same order.
         let (z_next, dz_next) = match family {
             Family::Phoenix { .. } => {
                 // z_{n+1} = z_n² + c + p·z_{n-1}; z'_{n+1} = 2·z_n·z'_n + p·z'_{n-1}
                 // (dynamical — no +1). Shift the two-state after reading it.
                 let z_next = zn_sq + c + phoenix_p * ph_zprev;
-                let dz_next = Complex::new(2.0, 0.0) * z * dz + phoenix_p * ph_dzprev;
+                let dz_next = if needs.deriv {
+                    let d = Complex::new(2.0, 0.0) * z * dz + phoenix_p * ph_dzprev;
+                    ph_dzprev = dz;
+                    d
+                } else {
+                    dz
+                };
                 ph_zprev = z;
-                ph_dzprev = dz;
                 (z_next, dz_next)
             }
             _ => {
@@ -1531,11 +1651,15 @@ pub fn iterate_orbit(
                 // dz' = d·z^{d-1}·z' (+1 on the parameter plane only). Branch on the
                 // `+1` (not `+ 0`) so the dynamical arm never adds a `+0.0` that
                 // could flip a signed zero vs the prior degree-2 Julia bytes.
-                let core = Complex::new(degree as f64, 0.0) * zd_minus_1 * dz;
-                let dz_next = if dynamical {
-                    core
+                let dz_next = if needs.deriv {
+                    let core = Complex::new(degree as f64, 0.0) * zd_minus_1 * dz;
+                    if dynamical {
+                        core
+                    } else {
+                        core + Complex::new(1.0, 0.0)
+                    }
                 } else {
-                    core + Complex::new(1.0, 0.0)
+                    dz
                 };
                 (z_next, dz_next)
             }
@@ -1551,65 +1675,83 @@ pub fn iterate_orbit(
         let zabs = zabs2.sqrt();
 
         // Orbit traps: min over the whole orbit (every n ≥ 1, independent of skip).
-        let tc = (zabs - r).abs();
-        if tc < trap_circle_min {
-            trap_circle_min = tc;
+        // Each accumulator block is gated behind its `needs` flag: the flag set is
+        // constant for the whole render (perfectly predicted branch), and when the
+        // field IS requested the block runs verbatim — so the reduced value is
+        // byte-identical to the ungated kernel.
+        if needs.trap_circle {
+            let tc = (zabs - r).abs();
+            if tc < trap_circle_min {
+                trap_circle_min = tc;
+            }
         }
-        let tx = z.re.abs().min(z.im.abs());
-        if tx < trap_cross_min {
-            trap_cross_min = tx;
+        if needs.trap_cross {
+            let tx = z.re.abs().min(z.im.abs());
+            if tx < trap_cross_min {
+                trap_cross_min = tx;
+            }
         }
         // Gaussian-integer trap: distance to the nearest unit-lattice point
         // (N = 1), q = round(z). Track rmin/zmin/itermin, rmax/zmax/itermax, and the
         // running total/count over the whole orbit (the Color By accumulators).
-        let q = Complex::new(z.re.round(), z.im.round());
-        let gi = (z - q).norm();
-        g_total += gi;
-        g_count += 1;
-        if gi < g_rmin {
-            g_rmin = gi;
-            g_zmin = z;
-            g_itermin = n;
-        }
-        if gi > g_rmax {
-            g_rmax = gi;
-            g_zmax = z;
-            g_itermax = n;
+        if needs.gaussint {
+            let q = Complex::new(z.re.round(), z.im.round());
+            let gi = (z - q).norm();
+            g_total += gi;
+            g_count += 1;
+            if gi < g_rmin {
+                g_rmin = gi;
+                g_zmin = z;
+                g_itermin = n;
+            }
+            if gi > g_rmax {
+                g_rmax = gi;
+                g_zmax = z;
+                g_itermax = n;
+            }
         }
         // Exponential smoothing: Σ exp(−|z|) over the orbit (escaped-gated at
         // reduction). Accumulated every iteration, independent of skip.
-        exp_sum.0 += (-zabs).exp();
-        exp_sum.1 += 1;
+        if needs.exp_sum {
+            exp_sum.0 += (-zabs).exp();
+            exp_sum.1 += 1;
+        }
 
         // Discrete velocity: |z_{n+1} − z_n|. After the advance above `zprev1`
         // holds z_n and `z` holds z_{n+1}, so this is the step just taken. Runs
         // every iteration (full bounded orbit for interior points), unconditional.
-        velocity.0 += (z - zprev1).norm();
-        velocity.1 += 1;
+        if needs.velocity {
+            velocity.0 += (z - zprev1).norm();
+            velocity.1 += 1;
+        }
 
         // Averaging fields, n ≥ skip.
-        if n >= skip {
+        if n >= skip && (needs.stripe || needs.tia || needs.curv) {
             // stripe: 0.5 + 0.5·sin(s·arg z)
-            let st = 0.5 + 0.5 * (s_density * z.im.atan2(z.re)).sin();
-            stripe.0 += st;
-            stripe.1 += 1;
-            stripe.2 = st;
+            if needs.stripe {
+                let st = 0.5 + 0.5 * (s_density * z.im.atan2(z.re)).sin();
+                stripe.0 += st;
+                stripe.1 += 1;
+                stripe.2 = st;
+            }
 
             // tia: (|z| − lo)/(hi − lo), lo = ‖z_prev²|−|c‖, hi = |z_prev²|+|c|
-            let lo = (zn_sq_abs - cabs).abs();
-            let hi = zn_sq_abs + cabs;
-            let denom = hi - lo;
-            let ti = if denom > 1e-300 {
-                ((zabs - lo) / denom).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            tia.0 += ti;
-            tia.1 += 1;
-            tia.2 = ti;
+            if needs.tia {
+                let lo = (zn_sq_abs - cabs).abs();
+                let hi = zn_sq_abs + cabs;
+                let denom = hi - lo;
+                let ti = if denom > 1e-300 {
+                    ((zabs - lo) / denom).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                tia.0 += ti;
+                tia.1 += 1;
+                tia.2 = ti;
+            }
 
             // curvature: |arg((zₙ−zₙ₋₁)/(zₙ₋₁−zₙ₋₂))|, needs three points (n ≥ 2).
-            if n >= 2 {
+            if needs.curv && n >= 2 {
                 let num = z - zprev1;
                 let den = zprev1 - zprev2;
                 if den.norm_sqr() > 1e-300 {
@@ -2002,7 +2144,8 @@ pub fn smooth_field_supersampled(
                 let dc_re = (px / sub_w_f - 0.5) * fw;
                 let pixel = Complex::new(center.re + dc_re, center.im + dc_im);
                 let (z0, c) = family.seed(pixel);
-                let acc = iterate_orbit(z0, c, maxiter, params, family);
+                let acc = iterate_orbit_needs(
+                    z0, c, maxiter, params, family, FieldNeeds::for_field(Field::Smooth));
                 // NaN encodes interior / non-escaped (Field::Smooth is exterior-only).
                 let v = acc.field(Field::Smooth).map_or(f32::NAN, |x| x as f32);
                 row.push(v);
@@ -2033,14 +2176,15 @@ pub fn smooth_field_supersampled(
 /// reduction) and rejected by the caller before this is reached; on the off chance it
 /// arrives, its subpixels fall to `NaN`. Returns `(field, sub_w, sub_h)`.
 ///
-/// PERF: the [`iterate_orbit`] pass computes ALL field accumulators (several
-/// transcendentals per iteration) and discards all but `params.field` — ~35x slower
-/// than the escape-time [`smooth_field_f64_supersampled`] twin for a `Smooth` dump.
-/// For `Smooth` consumers that only need offset-invariant statistics, prefer that
-/// twin (`--dump-field-source f64`). This kernel is required only for byte-identical
-/// smooth reproduction and for the non-smooth fields (no fast twin exists for those).
-/// A future optimization would gate the unused accumulators behind `params.field`
-/// (+ the colormap's needs) — see docs/design/beautiful_perf_report.md.
+/// PERF: this path now iterates via [`iterate_orbit_needs`] with
+/// [`FieldNeeds::for_field`]`(params.field)`, so it computes ONLY the accumulators the
+/// requested field reduces from (a `Smooth` dump runs no stripe/tia/trap/gaussian/exp
+/// blocks). That took beautiful-smooth ~35x→~4x the escape-time
+/// [`smooth_field_f64_supersampled`] twin (39s→2.24s at 2176x1224 mi3000). The reduced
+/// value is byte-identical (guard: `tests::field_gating_matches_ungated`). `f64` stays
+/// strictly fastest for offset-invariant `Smooth` statistics (`--dump-field-source
+/// f64`); this kernel is required for byte-identical smooth reproduction and the
+/// non-smooth fields. See docs/design/beautiful_perf_report.md.
 pub fn single_field_supersampled(
     frame: &Frame,
     ss: u32,
@@ -2072,7 +2216,10 @@ pub fn single_field_supersampled(
                 let dc_re = (px / sub_w_f - 0.5) * fw;
                 let pixel = Complex::new(center.re + dc_re, center.im + dc_im);
                 let (z0, c) = family.seed(pixel);
-                let acc = iterate_orbit(z0, c, maxiter, params, family);
+                // Only the accumulators `the_field` reduces from (De → the dz
+                // derivative; the rest none/one). No shade in the field-extractor path.
+                let acc = iterate_orbit_needs(
+                    z0, c, maxiter, params, family, FieldNeeds::for_field(the_field));
                 // Same per-field reduction the composite `eval` closure uses; `de` and
                 // `gaussian_int` need their pixel-/Color-By-aware reducers.
                 let v = match the_field {
@@ -2444,7 +2591,11 @@ fn render_beautiful_single(
                 let pixel = Complex::new(center.re + dc_re, center.im + dc_im);
                 // Parameter plane: z0 = 0, c = pixel. Dynamical: z0 = pixel, c = param.
                 let (z0, c) = family.seed(pixel);
-                let acc = iterate_orbit(z0, c, maxiter, params, family);
+                // Compute only what this field reduces from, plus the dz derivative
+                // when normal_map (ushade) is on. Byte-identical to the ungated kernel
+                // for the reduced field (montage/SHA guard on this v1 path pins it).
+                let acc = iterate_orbit_needs(z0, c, maxiter, params, family,
+                    FieldNeeds::for_field(params.field).with_deriv(want_shade));
                 let value = match params.field {
                     Field::De => acc.de_value(pixel_size, params.de_scale),
                     // Color-By-aware reduction (the default `field()` is min-distance only).
@@ -2602,8 +2753,12 @@ fn render_beautiful_composite(
                 let dc_re = (px / sub_w_f - 0.5) * fw;
                 let pixel = Complex::new(center.re + dc_re, center.im + dc_im);
                 let (z0, c) = family.seed(pixel);
-                let acc = iterate_orbit(z0, c, maxiter, params, family);
-                // One pass, two fields off the shared channel union.
+                // One pass, two fields off the shared channel union: compute the
+                // UNION of what base + texture reduce from (+ dz if normal_map).
+                let acc = iterate_orbit_needs(z0, c, maxiter, params, family,
+                    FieldNeeds::for_field(params.field)
+                        .union(FieldNeeds::for_field(texture_field))
+                        .with_deriv(want_shade));
                 let bv = eval(&acc, params.field);
                 let tv = eval(&acc, texture_field);
                 row.push(CompositePix {
@@ -3516,6 +3671,73 @@ mod tests {
             assert_eq!(ph.z.im.to_bits(), ju.z.im.to_bits());
             assert_eq!(ph.dz.re.to_bits(), ju.dz.re.to_bits());
             assert_eq!(ph.dz.im.to_bits(), ju.dz.im.to_bits());
+        }
+    }
+
+    /// Field-gating parity — the guarantee that makes the accumulator-gating speedup
+    /// safe. For EVERY scalar field, the gated `iterate_orbit_needs(for_field(F))`
+    /// pass reduces to a **bit-identical** value vs the ungated `iterate_orbit` (all
+    /// channels), across parameter-plane / multibrot / Julia families and interior +
+    /// exterior pixels. Also checks `ushade` (normal_map) parity under `with_deriv`.
+    /// If this passes, the montage/SHA guards on the render paths cannot regress from
+    /// the gating (the reduced field bytes are unchanged).
+    #[test]
+    fn field_gating_matches_ungated() {
+        let fields = [
+            Field::Smooth, Field::Stripe, Field::Tia, Field::Curvature,
+            Field::TrapCircle, Field::TrapCross, Field::Velocity, Field::De,
+            Field::GaussianInt, Field::ExpSmoothing, Field::Decomposition,
+        ];
+        let families = [
+            Family::Mandelbrot,
+            Family::Multibrot { degree: 3 },
+            Family::Julia { c: Complex::new(-0.8, 0.156), degree: 2 },
+        ];
+        let pixel_size = 0.03 / 24.0;
+        let reduce = |acc: &OrbitAccum, f: Field, p: &ColoringParams| -> Option<f64> {
+            match f {
+                Field::De => acc.de_value(pixel_size, p.de_scale),
+                Field::GaussianInt => acc.gaussint_value(p.gaussint_color_by),
+                _ => acc.field(f),
+            }
+        };
+        for &fam in &families {
+            for &field in &fields {
+                let p = ColoringParams::beautiful(field);
+                let needs = FieldNeeds::for_field(field);
+                // 8×8 grid straddling ∂M near the seahorse valley (interior + exterior).
+                for gy in 0..8 {
+                    for gx in 0..8 {
+                        let pixel = Complex::new(
+                            -0.78 + gx as f64 * 0.02, 0.06 + gy as f64 * 0.02);
+                        let (z0, c) = fam.seed(pixel);
+                        let full = iterate_orbit(z0, c, 300, &p, fam);
+                        let gated = iterate_orbit_needs(z0, c, 300, &p, fam, needs);
+                        match (reduce(&full, field, &p), reduce(&gated, field, &p)) {
+                            (Some(x), Some(y)) => assert_eq!(
+                                x.to_bits(), y.to_bits(),
+                                "{fam:?} {field:?} @({},{})", pixel.re, pixel.im),
+                            (None, None) => {}
+                            _ => panic!("validity mismatch {fam:?} {field:?}"),
+                        }
+                    }
+                }
+            }
+        }
+        // ushade (normal_map emboss): with_deriv(true) reproduces the ungated dz.
+        let p = ColoringParams::beautiful(Field::Smooth);
+        let needs = FieldNeeds::for_field(Field::Smooth).with_deriv(true);
+        for gy in 0..8 {
+            for gx in 0..8 {
+                let pixel = Complex::new(-0.78 + gx as f64 * 0.02, 0.06 + gy as f64 * 0.02);
+                let (z0, c) = Family::Mandelbrot.seed(pixel);
+                let full = iterate_orbit(z0, c, 300, &p, Family::Mandelbrot);
+                let gated =
+                    iterate_orbit_needs(z0, c, 300, &p, Family::Mandelbrot, needs);
+                let (uf, ug) = (full.ushade(), gated.ushade());
+                assert_eq!(uf.re.to_bits(), ug.re.to_bits());
+                assert_eq!(uf.im.to_bits(), ug.im.to_bits());
+            }
         }
     }
 

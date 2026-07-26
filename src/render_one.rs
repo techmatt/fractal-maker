@@ -286,18 +286,17 @@ pub fn run_render_one(args: &RenderOneArgs) -> Result<(), String> {
         // `report_bailout` records the escape radius actually used, so the sidecar's
         // `bailout_b` matches the field.
         //
-        // PERF WARNING (future runs): `beautiful` is ~35x SLOWER than `f64` for a
-        // smooth dump (measured 39s vs 1.1s at 2176x1224, degree 5). Both paths are
-        // rayon-parallel — the gap is the kernel: `iterate_orbit` computes EVERY field
-        // accumulator (stripe/tia/curvature/two orbit traps/Gaussian-lattice/exp-
-        // smoothing/velocity, i.e. exp+sin+atan2+arg+round per iteration) then keeps
-        // one scalar. If you only need the smooth field for STATISTICS that are
-        // invariant to a constant offset (escape mask + any percentile-normalized
-        // feature — e.g. the q4 stage-1 screen, the degenerate-outcome guard), prefer
-        // `--dump-field-source f64`: it differs only by the constant ln(ln B)/ln d,
-        // which washes out. Use `beautiful` ONLY when you need the byte-identical field
-        // (the field⊗colormap reproduction path) or a NON-smooth field (tia/stripe/…).
-        // See docs/design/beautiful_perf_report.md.
+        // PERF (future runs): `beautiful` smooth is now field-GATED (skips the field
+        // accumulators a smooth dump never reads), so it is ~4x `f64` — not the ~35x it
+        // was before gating (39s→2.24s at 2176x1224 mi3000; see
+        // docs/design/beautiful_perf_report.md). But `f64` is still strictly fastest
+        // (~0.5s, no general-kernel overhead) and offset-invariant, so for smooth-field
+        // STATISTICS invariant to a constant offset (escape mask + any percentile-
+        // normalized feature — e.g. the q4 stage-1 screen, the degenerate-outcome
+        // guard), prefer `--dump-field-source f64`: it differs only by the constant
+        // ln(ln B)/ln d, which washes out. Use `beautiful` when you need the byte-
+        // identical field (the field⊗colormap reproduction path) or a NON-smooth field
+        // (tia/stripe/…) — those have no fast twin (and gating keeps only their accum).
         let t0 = Instant::now();
         let ((field, sub_w, sub_h), report_bailout) = match args.dump_field_source {
             FieldSourceChoice::Beautiful => (
