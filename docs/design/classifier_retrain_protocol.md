@@ -20,6 +20,9 @@ manifest and the cache-manifest rows.
 - Force **model-selected or negative-by-construction batches → train**.
 - Partition the group union-find by `(fractal_type, split, c-bucket)` so forced splits
   cannot **transitively straddle** train/eval.
+  
+  Children inherit their seed's split — any parent-derived location (julia twins, dives off a seed) takes the seed's train/eval assignment, so a descendant can't leak the seed's morphology across the split. (The c-bucket union-find mostly enforces this, but stating it explicitly closes the gap where a child's c drifts into a different bucket.)
+Manifest-build gates abort-all — if any build gate fails, abort the whole build rather than emit a partial manifest.
 
 Labels attach to **locations**, and training **re-renders from coordinates** — so a
 batch's stored crops never constrain training. But the **deploy presentation point**
