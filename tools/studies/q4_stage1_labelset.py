@@ -166,7 +166,7 @@ def stage_minibrots():
             sabs = float(abs(size)) if size != 0 else 0.0
             if not (SIZE_LO <= sabs <= SIZE_HI):
                 continue
-            key = (mp.nstr(r.c.real, DEDUP_DPS), mp.nstr(r.c.imag, DEDUP_DPS))
+            key = dcf.nucleus_dedup_key(r.c, 2, DEDUP_DPS)   # d=2: identity guard
             if key in found:
                 continue
             r.newton_residual_log10 = r.residual

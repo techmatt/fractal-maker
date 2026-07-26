@@ -130,7 +130,7 @@ def source_nuclei(degree, *, n_target=N_PER_DEGREE):
             sabs = float(abs(size)) if size != 0 else 0.0
             if not (SIZE_LO <= sabs <= SIZE_HI):
                 continue
-            key = (mp.nstr(r.c.real, DEDUP_DPS), mp.nstr(r.c.imag, DEDUP_DPS))
+            key = dcf.nucleus_dedup_key(r.c, degree, DEDUP_DPS)   # symmetry-canonical
             if key in found:
                 continue
             r.newton_residual_log10 = r.residual

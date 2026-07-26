@@ -134,3 +134,55 @@ def test_atom_A_equals_inverse_size(degree, seed, period):
     # required precision scales with depth; window scale is the atom's inverse size.
     assert inst.required_dps >= 50
     assert inst.window_scale > 0
+
+
+# --- symmetry-canonical dedup: rotational copies collapse to one key ------------- #
+def test_dedup_key_degree2_is_plain_rounded_key():
+    """d=2 is 1-fold symmetric → the fundamental sector is the whole plane, so the
+    canonical key is byte-identical to the original (nstr(cx), nstr(cy)) rounded key.
+    Pins that the d2 corpus dedup is unchanged."""
+    mp.mp.dps = 60
+    for c in CS:
+        assert f.nucleus_dedup_key(c, 2, 22) == (mp.nstr(c.real, 22), mp.nstr(c.imag, 22))
+
+
+@pytest.mark.parametrize("degree,seed,period", [
+    (3, (0.7, 0.3), 4),
+    (4, (-0.748, 0.263), 5),
+    (5, (-0.786, 0.365), 5),
+])
+def test_rotational_copies_collapse_to_one_key(degree, seed, period):
+    """z^d+c has (d−1)-fold rotational symmetry: c·ω^k (ω=exp(2πi/(d−1))) is the SAME
+    atom under z→ωz. Each copy is independently a converged period-p nucleus of equal
+    size — a genuine rotational family — yet rounded-coordinate dedup keeps them apart.
+    The symmetry-canonical key collapses the whole family to ONE entry, so a clean
+    per-degree distinct count is a guard, not luck (the multibrot-transfer read had
+    d4=10/12, d5=8/12 distinct precisely from this leak; d3's 12/12 was luck)."""
+    mp.mp.dps = 60
+    r = f.newton_nucleus(mp.mpc(seed[0], seed[1]), period, degree=degree)
+    assert r.converged
+    omega = mp.expjpi(mp.mpf(2) / (degree - 1))          # exp(2πi/(d−1))
+    size0 = abs(f.nucleus_size_estimate(r.c, period, degree))
+    copies = [r.c * omega ** k for k in range(degree - 1)]   # the full rotational orbit
+    canon_keys, raw_keys = set(), set()
+    for ck in copies:
+        # each copy is a genuine period-p nucleus of the same size (a real family)
+        rk = f.newton_nucleus(ck, period, degree=degree, max_steps=40)
+        assert rk.converged
+        assert abs(abs(f.nucleus_size_estimate(ck, period, degree)) - size0) < 1e-9 * size0
+        canon_keys.add(f.nucleus_dedup_key(ck, degree, 22))
+        raw_keys.add((mp.nstr(ck.real, 22), mp.nstr(ck.imag, 22)))
+    # the guard: the (d−1) copies collapse to one canonical key ...
+    assert len(canon_keys) == 1, f"d{degree}: {degree-1} copies -> {len(canon_keys)} keys"
+    # ... whereas the OLD rounded-coordinate key kept every copy separate.
+    assert len(raw_keys) == degree - 1
+
+
+def test_distinct_atoms_do_not_collapse():
+    """The guard only quotients the rotational symmetry — it must not over-merge two
+    genuinely different atoms (different |c|, or same |c| but not a symmetry rotation)."""
+    mp.mp.dps = 60
+    for degree in (3, 4, 5):
+        diff_mag = (f.nucleus_dedup_key(mp.mpc("0.30", "0.10"), degree, 22)
+                    != f.nucleus_dedup_key(mp.mpc("0.55", "0.42"), degree, 22))
+        assert diff_mag

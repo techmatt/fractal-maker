@@ -251,6 +251,41 @@ def nucleus_size_estimate(c, period, degree=2):
 
 
 # ---------------------------------------------------------------------------
+# Symmetry-aware nucleus dedup key. z^d+c has (d−1)-fold rotational symmetry about
+# the origin: c and c·ω^k (ω = exp(2πi/(d−1)), k=0..d−2) are the SAME atom under the
+# conjugacy z→ωz — same period, same |size|, rotated field. Rounded-coordinate dedup
+# alone lets those rotational copies survive as separate "minibrots" (this manufactured
+# d4=10/12, d5=8/12 distinct in the multibrot-transfer read). Canonicalize first —
+# rotate c into the fundamental sector arg c ∈ [0, 2π/(d−1)) by unwinding whole sectors
+# (each a symmetry rotation, so the atom is unchanged) — THEN round and dedup as before.
+# d=2 is 1-fold (sector = whole plane) → identity, so the degree-2 key is byte-identical.
+# ---------------------------------------------------------------------------
+def canonical_nucleus_c(c, degree):
+    """Rotate nucleus `c` into the fundamental sector arg c ∈ [0, 2π/(d−1)) of the
+    z^d+c rotational symmetry. d=2 (and c=0) return `c` unchanged."""
+    c = mp.mpc(c)
+    if degree <= 2 or c == 0:
+        return c
+    sector = 2 * mp.pi / (degree - 1)
+    m = mp.floor(mp.arg(c) / sector)          # whole sectors to unwind; arg∈(−π,π]
+    ang = -sector * m                         # a symmetry rotation (multiple of 2π/(d−1))
+    return c * mp.mpc(mp.cos(ang), mp.sin(ang))
+
+
+def nucleus_dedup_key(c, degree, dps):
+    """Symmetry-canonical rounded-coordinate dedup key for a degree-d nucleus at `c`.
+    Collapses the (d−1) rotational copies of one atom to a single key. At d=2 this is
+    exactly the pre-existing `(nstr(cx, dps), nstr(cy, dps))` key.
+
+    Runs at working precision ≥ dps+15 so the `dps`-digit rounding is meaningful even
+    if the ambient `mp.mp.dps` is low — but the CALLER must have parsed `c` at adequate
+    precision (a string parsed at dps=15 has already lost its tail before it gets here)."""
+    with mp.workdps(max(mp.mp.dps, dps + 15)):
+        cc = canonical_nucleus_c(c, degree)
+        return (mp.nstr(cc.real, dps), mp.nstr(cc.imag, dps))
+
+
+# ---------------------------------------------------------------------------
 # Atom instrument `A` — size, orientation, and required precision, from the same
 # recursion Newton already runs. With the nucleus c0 and period n:
 #

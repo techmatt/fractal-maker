@@ -103,7 +103,7 @@ def gen_new_minibrots():
             sabs = float(abs(size)) if size != 0 else 0.0
             if not (LS.SIZE_LO <= sabs <= LS.SIZE_HI):
                 continue
-            key = (mp.nstr(r.c.real, DEDUP_DPS), mp.nstr(r.c.imag, DEDUP_DPS))
+            key = dcf.nucleus_dedup_key(r.c, 2, DEDUP_DPS)   # d=2: identity guard
             if key in found:
                 continue
             dc = dcf.make_deep_center(r)

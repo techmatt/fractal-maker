@@ -5,11 +5,17 @@ field G → G-maxima framing) was fitted on **degree-2** minibrot windows. Befor
 minibrot pipeline is designed we need to know whether it works on **d3/d4/d5
 multibrot** minibrots, and whether there is a q4 vein in those neighborhoods at all.
 
-**Answer: yes, it transfers.** The fitted screen — run *unchanged* — accepts, rejects,
-and OOD-masks multibrot windows at rates comparable to d2; the G field keeps its shape
-and positive tail; and G-maxima framing produces q4-quality candidates at every degree
-(d3 finds *more* above the d2 cutoff than d2 does). The eye confirms it: the accepted
-sheets are ornate multibrot dendrite/spiral filigree, not degenerate crops.
+**Answer: the screen transfers — the mask is not degree-bound and multibrot
+neighborhoods do yield accepted q4 windows — but the cross-degree comparison had to be
+re-read after removing two confounds (rotational-copy pseudo-replication and period
+mismatch), and one headline claim did not survive.** What holds up: the OOD mask accepts
+multibrot windows *at or below* the rate it rejects d2 (so the vein is not masked away);
+the G field keeps its shape and positive tail; and G-maxima framing produces q4-quality
+candidates at every degree, which the eye confirms as ornate multibrot filigree. What did
+**not** hold up: the raw "d3 finds *more* accepted windows than d2 (23 vs 8)" ranking —
+that was a period-coverage artifact (see "The confound re-read" below), not a degree
+effect. The accepted-count *ranking across degrees* is retracted; the *existence* of a q4
+vein at each degree stands.
 
 **One load-bearing caveat, stated up front:** the transfer only holds once the
 **minibrot atom-size law is corrected for degree** (exponent `d/(d-1)` on λ, not the
@@ -26,6 +32,14 @@ avoid, and it bit at the sourcing layer rather than the screen layer.
   nuclei per degree, spread across periods 3–15, Newton-refined, kept in the same
   f64-dumpable size band as the d2 label-set. A freshly-sourced **d2** set (not the
   training corpus — that would be in-sample) is the control.
+- **Symmetry-canonical dedup (added in the re-read).** `z^d+c` has **(d−1)-fold
+  rotational symmetry** about the origin: `c` and `c·ω^k` (`ω = exp(2πi/(d−1))`) are the
+  *same* atom under the conjugacy `z→ωz` — same period, same |size|, rotated field.
+  Rounded-coordinate dedup alone let rotational copies survive as separate "minibrots".
+  `deep_center_finder.nucleus_dedup_key` now canonicalizes `c` into the fundamental
+  sector `arg c ∈ [0, 2π/(d−1))` *before* rounding (d=2 = identity, byte-identical), so a
+  clean per-degree distinct count is a guard, not luck. Regression-covered
+  (`test_rotational_copies_collapse_to_one_key`).
 - **Fields.** Each nucleus → an f64 field via the **same** `render-one --dump-field`
   path, degree carried by `--family multibrot{d}` (`F64Backend` is already
   degree-parametric). 2176×1224 ss1, `fw = 4·|size|`. (Rendered with
@@ -38,8 +52,11 @@ avoid, and it bit at the sourcing layer rather than the screen layer.
   OOD-mask ceilings: interior 0.10 / flat 0.88 / speckle 0.30), `clf.decision_function`,
   `HT._all_peaks` + elliptical NMS. The instrumentation only *counts* fates; it is
   asserted to reproduce `LF.dense_grid`'s survivor set exactly.
-- Code: `tools/studies/q4_multibrot_transfer.py`. Disposable outputs under
-  `scratch/q4_multibrot_transfer/` (`stats.json`, `sheet_d{2..5}.png`).
+- Code: `tools/studies/q4_multibrot_transfer.py`; the post-hoc confound re-read is
+  `tools/studies/q4_multibrot_transfer_reread.py` (no re-source, no re-render — it
+  collapses rotational copies and re-screens the **cached** `.bin` fields per-minibrot,
+  recovering the per-window G/clause detail the aggregate `stats.json` didn't persist).
+  Disposable outputs under `scratch/q4_multibrot_transfer/`.
 
 Note on the two named stages: in the **deployed** harvest path the "coarse pre-filter"
 and the "OOD mask" are the *same* three-ceiling `_v2_drop` predicate (the coarse
@@ -47,63 +64,128 @@ and the "OOD mask" are the *same* three-ceiling `_v2_drop` predicate (the coarse
 the brief asks for coincide by construction; the informative split is the **per-clause**
 rejection (interior / flat / speckle), which is where the degree signal lives.
 
-## Results (d2 control vs d3/d4/d5)
+## The confound re-read (what changed, and why)
 
-Aggregated over 12 fields/degree, 3 scales, dense position sweep. "Featurizable" =
-swept positions with ≥64 finite pixels (the rest are all-interior crops).
+The first cross-degree table (12 fields/degree, size-band-matched) had two problems that
+can each manufacture a monotone trend across degree. Both are fixed from data already on
+disk — no re-source, no re-render.
 
-| degree | featurizable | OOD-mask reject | G median | G range (min…max) | maxima kept | accepted (G≥1.39) |
+**1. Rotational-copy pseudo-replication.** The rounded-coordinate dedup kept rotational
+copies of one atom as separate minibrots, and it did so **unequally** by degree. With the
+symmetry-canonical key, the distinct counts are **d2 12/12, d3 12/12, d4 10/12
+(one 3-fold p4 family → 1), d5 8/12 (four copies dropped)**. So d3's clean result was
+luck; d4/d5 were inflated. Collapsing the copies removes that weight.
+
+**2. Period mismatch.** The 12/degree were matched on **size band, not period.** Because
+`P_n′` has degree `d^(n−1)`, |A| grows faster with period at higher degree, so the fixed
+f64-dumpable size band admits systematically *lower* periods as degree rises. It did — the
+period coverage is badly mismatched:
+
+| degree | period distribution (collapsed) | note |
+|---|---|---|
+| d2 | 3, 5, 6, 6, 7, 7, 7, 8, 8, 9, 11, 15 | mass at 7–9, reaches 15; **no p4** |
+| d3 | 3, 4, 5, 5, 6, 6, 7, 8, 9, 10, 12, 15 | broad, well-spread |
+| d4 | 3, 3, 4, 5, 6, 7, 8, 9, 10, 10 | **caps at period 10** |
+| d5 | 3, 3, 4, 5, 5, 6, 15, 15 | **bimodal**: 3–6 plus a p15 cluster |
+
+So the raw comparison partly compared *different period regimes*. To remove it, condition
+on the period band **every** degree populates — periods **3–6** — and recompute. (This
+also drains the q4 signal, because at every degree the accepted windows live in the
+*deeper*, higher-period minibrots — see reading point 4. The p3–6 cut therefore tests the
+mask/G-shape drifts cleanly but has too few high-G positions to compare abundance.)
+
+## Results (confound-corrected)
+
+Re-aggregated over the **collapsed** (distinct-atom) sets; "featurizable" = swept
+positions with ≥64 finite pixels. RAW (all sourced, pre-collapse) reproduces the original
+`stats.json` exactly — the per-minibrot re-screen is faithful.
+
+**Collapsed, all periods:**
+
+| degree | eff. n | featurizable | OOD-mask reject | G median | G P90 | G max | accepted (G≥1.39) |
+|---|---|---|---|---|---|---|---|
+| **d2** (control) | 12 | 158 789 | **65.0 %** | −2.81 | −1.01 | +2.45 | 8 |
+| **d3** | 12 | 154 891 | **55.2 %** | −2.97 | −0.69 | +2.63 | 23 |
+| **d4** | 10 | 124 950 | **57.7 %** | −3.33 | +0.02 | +4.06 | 16 |
+| **d5** | 8 | 92 766 | **64.1 %** | −4.50 | −0.28 | +3.28 | 8 |
+
+**Collapsed + conditioned on period ∈ {3,4,5,6}** (the common band):
+
+| degree | eff. n | featurizable | OOD-mask reject | G median | G max | accepted |
 |---|---|---|---|---|---|---|
-| **d2** (control) | 158 789 | **65.0 %** | −2.81 | −13.2 … 2.5 | 48 | **8** |
-| **d3** | 154 891 | **55.2 %** | −2.97 | −13.7 … 2.6 | 48 | **23** |
-| **d4** | 150 475 | **60.4 %** | −3.41 | −14.2 … 4.1 | 48 | **16** |
-| **d5** | 140 008 | **64.0 %** | −4.36 | −14.6 … 3.3 | 48 | **12** |
+| d2 | 4 | 53 048 | **75.1 %** | −3.10 | +0.52 | 0 |
+| d3 | 6 | 76 965 | **61.5 %** | −3.50 | +2.60 | 5 |
+| d4 | 5 | 62 267 | **70.6 %** | −4.02 | +0.48 | 0 |
+| d5 | 6 | 67 553 | **71.7 %** | −5.54 | +0.37 | 0 |
 
 OOD-mask rejection **by clause** (fraction of featurizable positions each ceiling trips):
 
-| degree | interior ≥0.10 | flat ≥0.88 | speckle ≥0.30 |
+| degree | interior ≥0.10 (collapsed / p3–6) | flat ≥0.88 (collapsed / p3–6) | speckle ≥0.30 (collapsed / p3–6) |
 |---|---|---|---|
-| d2 | 19.1 % | 51.3 % | 1.8 % |
-| d3 | 23.5 % | 36.6 % | 2.7 % |
-| d4 | 27.6 % | 36.9 % | 4.4 % |
-| d5 | 32.1 % | 36.6 % | 6.5 % |
+| d2 | 19.1 % / 19.1 % | 51.3 % / 61.8 % | 1.8 % / 1.7 % |
+| d3 | 23.5 % / 24.3 % | 36.6 % / 41.9 % | 2.7 % / 3.0 % |
+| d4 | 28.0 % / 28.0 % | 33.7 % / 47.4 % | 4.7 % / 4.0 % |
+| d5 | 32.8 % / 35.2 % | 35.6 % / 41.9 % | 6.7 % / 6.6 % |
 
-### Reading
+### Reading — which claims survive
 
-1. **Coarse pre-filter / OOD-mask pass rate — comparable, not degenerate.** Multibrot
-   is rejected at **55–64 %**, *at or below* d2's 65 %. The mask is **not degree-bound**:
-   multibrot windows survive it at the same rate d2 windows do. (The failure mode the
-   brief warned about — the mask rejecting all multibrot — appeared only under the
-   broken size law, and was a black-field artifact, not the screen.)
+1. **Headline: OOD-mask is not degree-bound — SURVIVES, and strengthens.** Multibrot is
+   rejected at **55–64 %** (collapsed), *at or below* d2's 65 %; when period-matched, d2's
+   shallow fields are rejected **hardest of all** (75 % vs multibrot's 61–72 %). So under
+   every cut the multibrot vein survives the mask at least as well as d2. The failure mode
+   the brief warned about (mask rejecting all multibrot) appeared only under the broken
+   size law, and was a black-field artifact. Stated loudly, as requested: **this survives.**
 
-2. **Per-clause degree signal is inherent geometry, not screen failure.** `interior`
-   rises monotonically with degree (19 → 24 → 28 → 32 %) — the (d−1)-fold nucleus has a
-   proportionally larger interior body, exactly as predicted. `flat` *drops* (51 → 37 %)
-   — multibrot decorations are busier, less barren. `speckle` rises modestly (1.8 → 6.5 %)
-   — higher-degree ornament is finer. All three are real differences in what a multibrot
-   neighborhood *is*, and the mask responds to them correctly.
+2. **G-median downward drift with degree — SURVIVES as a genuine degree effect.** The raw
+   drift (−2.81 / −2.97 / −3.41 / −4.36) was **not** duplication: collapsing barely moves
+   it (−2.81 / −2.97 / −3.33 / −4.50). And it was **not** period mismatch: conditioning on
+   period 3–6 *steepens* it (−3.10 / −3.50 / −4.02 / −5.54). Higher-degree neighborhoods
+   genuinely score lower-median G at matched period. The **range and positive tail are
+   still preserved** (max G ≈ +2.5…+4.1 at every degree, collapsed) — the screen is not
+   collapsing multibrot G to a dead point, it is shifting a full spread downward.
 
-3. **G distribution — shifted, not compressed or degenerate.** The median drifts down
-   with degree (−2.81 → −4.36) but the **range and shape are preserved** (≈[−14, +3] at
-   every degree) and the **positive tail is intact** — d4 and d5 reach *higher* max G
-   (4.1, 3.3) than d2 (2.5). The screen is not collapsing multibrot G to a dead point;
-   it is scoring a full spread, top end included.
+3. **Interior-clause rise (19 → 33 %) — SURVIVES.** Monotone under collapse
+   (19.1 / 23.5 / 28.0 / 32.8) *and* under period conditioning (19.1 / 24.3 / 28.0 /
+   35.2). The (d−1)-fold nucleus has a proportionally larger interior body; the mask reads
+   it as more interior at matched period, so this is inherent geometry, not confound.
+   **Flat-clause "51 → 37 %" survives as a d2→multibrot step, not a smooth gradient:** d2
+   is the flat/barren one (51 %, and 62 % at low period); every multibrot degree sits
+   ~34–37 % (collapsed) with no monotone ordering among d3/d4/d5. Speckle rises modestly
+   with degree (finer ornament) and survives both cuts.
 
-4. **G-maxima framing yields q4 candidates at every degree.** 48 kept framings per
-   degree (PER_MB_CAP 4 × 12 fields), and windows clear the **d2-fitted** cutoff G≥1.39
-   at every degree: d2 = 8, **d3 = 23**, d4 = 16, d5 = 12. The screen doesn't just
-   tolerate multibrot — it *finds* q4-quality windows there, d3 more abundantly than d2.
+4. **Accepted-window abundance ranking (raw d2=8, d3=23, d4=16, d5=12) — DOES NOT
+   SURVIVE; retracted.** Two problems compound: (a) pseudo-replication inflated d5 (its
+   raw 12 → **8** after collapse, the dropped accepts being rotational copies of its p15
+   minibrots); (b) the accepts live almost entirely in the **deeper, higher-period**
+   minibrots at *every* degree — at matched period 3–6 the accepted counts are
+   **0 / 5 / 0 / 0** and G>0 ≈ 0 % everywhere, **including d2**. So the raw per-degree
+   accepted counts track each degree's period *mix* (d2 skews high 7–15; d4 caps at 10;
+   d5 is 3–6 plus p15), not a degree property. The correct statement is **existential, not
+   comparative**: q4-quality windows *do* appear in multibrot neighborhoods (from their
+   deeper minibrots), but this data cannot rank the vein's *abundance* across degree.
 
 5. **The eye agrees (fate sheets).** `sheet_d{2..5}.png`, vivid blue/orange field
-   colorize (not `twilight_shifted`). **Accepted** = ornate dendrite/spiral filigree,
-   well-framed — genuine wallpaper candidates. **Rejected (survived, G<cutoff)** =
-   sparser / less-balanced structure. **OOD-masked** = interior-heavy black-blob or
-   barren-gradient crops. The three fates look the same across degrees; the higher-degree
-   accepted windows are the deep (p15) minibrots, where the atom-size law is most
-   accurate and the framing tightest.
+   colorize. **Accepted** = ornate dendrite/spiral filigree, well-framed — genuine
+   wallpaper candidates. **Rejected (survived, G<cutoff)** = sparser / less-balanced
+   structure. **OOD-masked** = interior-heavy black-blob or barren-gradient crops. The
+   three fates look the same across degrees; the accepted windows are the deeper
+   (higher-period) minibrots, consistent with reading 4.
 
-**There is a q4 vein in d3/d4/d5 multibrot neighborhoods, and the degree-2 screen finds
-it.** The minibrot pipeline can reuse the stage-1 screen across degrees without a refit.
+**Effective-n caveat.** Position counts are large (53–90 k per period-conditioned cell),
+so the pooled *rates and medians* are well-powered; but atom-level replication after
+conditioning is thin — **4 / 6 / 5 / 6** distinct minibrots — so treat the
+period-conditioned medians as directional (d2's p3–6 numbers rest on just 4 atoms), and do
+not read a per-degree *count* (e.g. accepted) off the conditioned cut. No degree was left
+with too few distinct sources to make the *rate* comparisons, but the accepted-abundance
+comparison is exactly the one the thin high-G tail cannot support (reading 4).
+
+**Bottom line.** There is a q4 vein in d3/d4/d5 multibrot neighborhoods and the
+degree-2 screen finds it: the mask is not degree-bound (survives, strengthened), and the
+G field keeps its shape and top end. The minibrot pipeline can reuse the stage-1 screen
+across degrees without a refit. The genuine degree signals are the **downward G-median
+drift** and the **rising interior fraction** (both real at matched period); the apparent
+degree *ranking of accepted-window abundance* was a period-coverage artifact and is
+dropped.
 
 ## The trap we fell into (artifact vs. inherent, at the sourcing layer)
 
@@ -137,3 +219,7 @@ are computed on. This correction now lives in `deep_center_finder.nucleus_size_e
   degree signal the two-number split was meant to expose.
 - The d2 baseline is **freshly sourced** (out-of-sample), not the training corpus, so the
   control is not inflated by in-sample G.
+- **Confound re-read is post-hoc on cached data** — the collapsed/conditioned figures come
+  from `q4_multibrot_transfer_reread.py` re-screening the on-disk `.bin` fields (no
+  re-source, no re-render); the sourcing guard (`nucleus_dedup_key`) fixes *future* runs
+  but was **not** re-run here, so the field set is the original one, collapsed post-hoc.
