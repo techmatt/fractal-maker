@@ -15,6 +15,7 @@ the render core and pipeline; these docs go a level deeper on specific decisions
 | [morphology_dedup.md](morphology_dedup.md) | Visual dedup: coordinate dedup is not visual dedup, the cone-compressed CLIP space, grayscale-CLIP descriptor choice, and dedup-key identity rules. |
 | [render_coloring_surface.md](render_coloring_surface.md) | The two coloring algorithms, three palette namespaces, the silent density fork, the open corpus-coloring hazard (P4), and why the OKLab ports must not be merged. |
 | [discovery_pipeline.md](discovery_pipeline.md) | The guided-descend walk + reward split, the freshness-prior/dive incompatibility, and the distinct-look deficit scheduler (incl. julia routing). |
+| [storage_classes.md](storage_classes.md) | The durability contract: the four storage classes, why a missing `scratch/` artifact is not data loss, and that durability is claimed only by `durable()` at the write site. |
 
 **Provenance.** These docs were promoted in the 2026-07-24 docs-hygiene pass; the
 research ledger they distil (`docs/findings/`, `docs/rescued/`) was retired in the same
