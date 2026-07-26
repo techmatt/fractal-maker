@@ -494,7 +494,10 @@ def near_dup(a_cx, a_cy, a_fw, b_cx, b_cy, b_fw, k=DEDUP_K,
             return False                                   # different keyed families: never a dup
         if float(np.linalg.norm(np.asarray(a_c, float) - np.asarray(b_c, float))) >= c_eps:
             return False                                   # distinct identities: never a dup
-    d = float(np.hypot(a_cx - b_cx, a_cy - b_cy))
+    # coords may arrive as high-precision decimal STRINGS (deep / q4_harvest / phoenix ledger
+    # rows serialize outcome_cx/cy as strings) — coerce like the fw's below, so a mixed prior
+    # cloud can't crash the plane-distance. Byte-identical for numeric inputs.
+    d = float(np.hypot(float(a_cx) - float(b_cx), float(a_cy) - float(b_cy)))
     return d < k * max(float(a_fw), float(b_fw))
 
 

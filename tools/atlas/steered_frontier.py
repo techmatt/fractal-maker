@@ -515,6 +515,11 @@ class SteeredFrontier:
         # single-track dives don't spawn julia roots (no frontier); force the hook off there.
         self.julia_hook = bool(args.julia_hook) and not self.dive
         self.julia_hook_spacing = float(getattr(args, "julia_hook_spacing", JULIA_HOOK_SPACING))
+        # PRIMARY julia supply under test (julia_parent_sourcing_probe): a file of c-diverse
+        # near-∂M sampler c's, injected as julia:mandelbrot roots at fresh start (see
+        # seed_julia_pool). None => current path (julia roots only via the parent-fired hook).
+        jp = getattr(args, "julia_seed_pool", None)
+        self.julia_seed_pool_path = Path(jp).resolve() if jp else None
         # item 5: cross-run coordinate freshness prior — seed this run's dup/rejection clouds
         # from prior-library admitted coords at start (ON by default; --no-freshness-prior off).
         self.freshness_prior = bool(getattr(args, "freshness_prior", False))
@@ -545,7 +550,7 @@ class SteeredFrontier:
         # partitions this run tracks a cloud for (c-plane + julia twins if hooked; dive covers
         # all twins so a start from any source partition has a cloud + tau_h).
         self.partitions = list(self.families)
-        if self.julia_hook or self.dive:
+        if self.julia_hook or self.dive or self.julia_seed_pool_path:
             self.partitions += [ps.julia_partition(f) for f in self.families]
 
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -651,8 +656,19 @@ class SteeredFrontier:
                 continue
             for line in open(led, encoding="utf-8"):
                 line = line.strip()
-                if line:
-                    rows.append(json.loads(line))
+                if not line:
+                    continue
+                r = json.loads(line)
+                # Some ledgers (deep / q4_harvest / phoenix) serialize outcome coords as
+                # high-precision decimal STRINGS. The prior rows feed float arithmetic in every
+                # dedup/steering site (near_dup, dup_penalty, count_within), so coerce once here
+                # at ingestion — float64 is ample for these O(1) dedup coords and lossless for the
+                # purpose (prior rows are never re-rendered from this run).
+                for k in ("outcome_cx", "outcome_cy", "outcome_fw"):
+                    v = r.get(k)
+                    if isinstance(v, str):
+                        r[k] = float(v)
+                rows.append(r)
         return rows
 
     def rebuild_hooked_c(self):
@@ -831,6 +847,40 @@ class SteeredFrontier:
                 spacing=self.julia_hook_spacing,
             )) + "\n")
 
+    def seed_julia_pool(self) -> int:
+        """PRIMARY julia supply under test (julia_parent_sourcing_probe). Inject the c-diverse
+        near-∂M sampler pool as julia:mandelbrot base-scale z-plane roots at fresh start.
+
+        Deliberately BYPASSES add_julia_root's hook-spacing gate: the sampler already dedups its
+        c's at MIN_SEP (0.006) « the 0.2 hook spacing, so routing them through the gate would
+        collapse the pool to a handful. Each injected c is registered in `hooked_c` so a later
+        parent-fired hook whose seed c lands within spacing of a sampler c is suppressed — the
+        hook stays available (§1 secondary path) but does not re-cover the sampler's ground.
+        The pool is degree-2 near-∂M (z²+c), so every root is the julia:mandelbrot twin."""
+        if self.julia_seed_pool_path is None:
+            return 0
+        jpart = ps.julia_partition("mandelbrot")
+        if jpart not in self.partitions:
+            raise SystemExit(f"--julia-seed-pool needs 'mandelbrot' in --families (for {jpart})")
+        pool = json.loads(self.julia_seed_pool_path.read_text(encoding="utf-8"))
+        added = 0
+        for e in pool:
+            cr, ci = float(e["c_re"]), float(e["c_im"])
+            nid = self.new_node_id()
+            self.frontier.append(dict(
+                node_id=nid, root_id=nid, partition=jpart, c=[str(cr), str(ci)],
+                cx=0.0, cy=0.0, fw=JULIA_ROOT_FW, depth=1,
+                priority=NEUTRAL_PRIOR + gumbel(self.rng, T_GUMBEL),
+                cheap_eord=None, cheap_pgood=None, branch="julia_root",
+                mix_source="sampler",
+            ))
+            self.hooked_c[jpart].append((cr, ci))
+            self.totals["julia_roots"] += 1
+            added += 1
+        print(f"[julia-seed-pool] injected {added} sampler-sourced {jpart} roots "
+              f"(fw={JULIA_ROOT_FW}) from {self.julia_seed_pool_path.name}", flush=True)
+        return added
+
     # ---------------------------------------------------------------- expand
     def pop_batch(self) -> list[dict]:
         """Top-B expandable nodes by priority. A node whose root has hit the M cap can NEVER be
@@ -960,6 +1010,7 @@ class SteeredFrontier:
                 partition=partition, c=c,
                 cx=float(row["cx"]), cy=float(row["cy"]), fw=float(row["fw"]),
                 depth=int(row["depth"]), branch=row["branch"],
+                mix_source=parent.get("mix_source"),   # propagate root supply for harvest attribution
                 img=str((gdir / row["img"]).resolve()),
                 int_frac=row["int_frac"], occ=row["occ"],
             ))
@@ -1139,7 +1190,7 @@ class SteeredFrontier:
                 canon_nb=c.get("canon_nb"), canon_pgood=c.get("canon_pg"),
                 canon_decoded=c.get("canon_decoded"), reframe_decoded=reframe_decoded,
                 admitted=bool(admitted), tau_h=self.tau_h[c["partition"]],
-                precanon_dup=precanon_dup,
+                precanon_dup=precanon_dup, mix_source=c.get("mix_source"),
             )) + "\n")
 
     # ---------------------------------------------------------------- push
@@ -1157,6 +1208,7 @@ class SteeredFrontier:
                 node_id=c["node_id"], root_id=c["root_id"], partition=c["partition"], c=c["c"],
                 cx=c["cx"], cy=c["cy"], fw=c["fw"], depth=c["depth"], priority=prio,
                 cheap_eord=c["cheap_eord"], cheap_pgood=c["cheap_pgood"], branch=c["branch"],
+                mix_source=c.get("mix_source"),   # carry root supply down the tree (probe attribution)
             ))
             if c.get("emb") is not None:
                 self.node_embs[c["node_id"]] = c["emb"]
@@ -1470,6 +1522,7 @@ class SteeredFrontier:
                       f"(total {self.scheduler.tally.total()}, newly seeded {sum(seeded.values())})", flush=True)
                 print(f"[scheduler] launch look_frac={lf}\n[scheduler] launch deficits={df}", flush=True)
             self.draw_roots()
+            self.seed_julia_pool()          # PRIMARY julia supply: sampler-sourced roots (probe)
             self.save_state()
 
         while True:
@@ -1589,6 +1642,11 @@ def main():
     ap.add_argument("--julia-hook-spacing", type=float, default=JULIA_HOOK_SPACING,
                     help="c-plane spacing radius for the julia hook: skip a parent whose seed c is "
                          f"within this of an already-hooked one (default {JULIA_HOOK_SPACING})")
+    ap.add_argument("--julia-seed-pool", type=str, default=None,
+                    help="PRIMARY julia supply under test: a JSON list of {c_re,c_im} c's from the "
+                         "c-diverse near-∂M sampler, injected as julia:mandelbrot roots at fresh "
+                         "start (bypasses the hook-spacing gate; requires 'mandelbrot' in --families). "
+                         "DEFAULT None => julia roots only via the parent-fired hook.")
     ap.add_argument("--freshness-prior", action="store_true",
                     help="ENABLE the cross-run coordinate freshness prior: seed this run's DEDUP "
                          "clouds (pre-canonical + admission near-dup + steering) from prior-library "

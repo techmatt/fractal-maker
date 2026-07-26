@@ -1,0 +1,76 @@
+{
+  "run_ts": "breadth",
+  "mode": "steered",
+  "families": [
+    "mandelbrot"
+  ],
+  "julia_hook": true,
+  "julia_hook_spacing": 0.1,
+  "freshness_prior": true,
+  "prior_rows": 9375,
+  "budget_min": 55.0,
+  "lambda_m": 0.5,
+  "beta": 0.02,
+  "recency_k": 0,
+  "morph_mem": 4509,
+  "morph_perm": 4509,
+  "morph_recency": 0,
+  "morph_lo": 0.8775,
+  "morph_hi": 0.939,
+  "anchor_src": "morph_anchors.json",
+  "sat_cos": 0.9328,
+  "sat_frac": 0.909,
+  "active_min": 55.07,
+  "batches": 154,
+  "tau_h": {
+    "mandelbrot": 0.269,
+    "julia:mandelbrot": 0.18439058661460875
+  },
+  "totals": {
+    "expanded": 4886,
+    "candidates": 17898,
+    "harvest_checks": 8600,
+    "canonical_q3": 448,
+    "admitted": 188,
+    "q3_dup": 259,
+    "guarded": 0,
+    "julia_roots": 534,
+    "julia_hooks_skipped": 6,
+    "precanon_dup": 8025,
+    "cap_hits": 82,
+    "dead_nodes": 72,
+    "novelty_hits": 17713,
+    "nov_scored": 17898,
+    "sat_hits": 16269,
+    "distinct_looks": 141
+  },
+  "cloud_sizes": {
+    "mandelbrot": 277,
+    "julia:mandelbrot": 319
+  },
+  "scheduler": {
+    "target_frac": {
+      "mandelbrot": 0.3243,
+      "julia:mandelbrot": 0.6757
+    },
+    "look_frac": {
+      "mandelbrot": 0.0355,
+      "julia:mandelbrot": 0.9645
+    },
+    "looks": {
+      "julia:mandelbrot": 136,
+      "mandelbrot": 5
+    },
+    "total_looks": 141,
+    "prices": {
+      "mandelbrot": 1.806,
+      "julia:mandelbrot": 2.127
+    },
+    "min_spent": {
+      "mandelbrot": 14.2,
+      "julia:mandelbrot": 40.88
+    },
+    "capped": [],
+    "n_observed_cells": 2
+  }
+}
