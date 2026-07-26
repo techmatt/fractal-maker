@@ -74,6 +74,10 @@ __pycache__/
 # rules below, which remain load-bearing for OTHER in-tree paths and also serve as a
 # backstop (any accidental in-tree rebuild stays un-committable).
 /data/*
+# Durable minibrot roster (tools/sourcing/build_minibrot_roster.py): records a per-
+# (degree,band) atom selection + a train/eval split that later descent crops inherit.
+# Impossible to reproduce identically across future sourcing runs -> committed by path.
+!/data/minibrot_roster/
 !/data/palettes/
 /data/palettes/*
 !/data/palettes/clean_colormaps.json
