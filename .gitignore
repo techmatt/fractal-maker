@@ -223,3 +223,9 @@ __pycache__/
 /dramatic_palettes/densified/
 /dramatic_palettes/viz/
 /dramatic_palettes/viz_render_winners
+
+# Anchor class-4 rubric reference sheets — regenerable views (rebuild:
+# `uv run python tools/corpus/anchor_rubric_sheets.py`). Placed next to the rubric
+# doc for writing, not committed as binaries; the builder is the committed source.
+/docs/design/label_rubric_class4_examples.png
+/docs/design/label_rubric_demoted_examples.png

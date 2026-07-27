@@ -36,14 +36,24 @@ def _reader_labels_by_batch():
     return out
 
 
+def _raw_json_map(filename):
+    """Load a labels/*.json as {image_id: int}, nulls dropped, WITHOUT going through
+    label_store — the external side of the check."""
+    raw = json.loads(open(os.path.join(ls.LABELS_DIR, filename), encoding="utf-8").read())
+    body = raw["labels"] if isinstance(raw.get("labels"), dict) else raw
+    return {k: int(v) for k, v in body.items() if v is not None}
+
+
 def _independent_join(batch_id):
     """Reconstruct a sidecar batch's labels WITHOUT label_store: raw sidecar file
-    JOINED to the batch's images.jsonl image_ids. This is the external ground truth
-    that the shared resolver must reproduce."""
-    sidecar_file = ls.SIDECAR_LABELS[batch_id]
-    raw = json.loads(open(os.path.join(ls.LABELS_DIR, sidecar_file), encoding="utf-8").read())
-    body = raw["labels"] if isinstance(raw.get("labels"), dict) else raw
-    sidecar = {k: int(v) for k, v in body.items() if v is not None}
+    JOINED to the batch's images.jsonl image_ids, then the REVISION amendment overlaid
+    (if the batch has one registered). This is the external ground truth that the shared
+    resolver must reproduce — and iter_labeled applies amendments (revised truth wins),
+    so the ground truth must too, else a demoted/promoted sidecar row (e.g. the
+    julia_ladder_j0 anchor revisions) reads as a spurious mismatch. The overlay is by
+    image_id: for these sidecar batches the amendment's owner is the batch itself, so its
+    keys are that batch's own image_ids (merge_amendments keyed them by revises_image_id)."""
+    sidecar = _raw_json_map(ls.SIDECAR_LABELS[batch_id])
     jl = os.path.join(cr.cc.BATCHES_DIR, batch_id, "images.jsonl")
     ids = set()
     with open(jl, encoding="utf-8") as f:
@@ -51,7 +61,13 @@ def _independent_join(batch_id):
             line = line.strip()
             if line:
                 ids.add(json.loads(line)["image_id"])
-    return {iid: sc for iid, sc in sidecar.items() if iid in ids}
+    joined = {iid: sc for iid, sc in sidecar.items() if iid in ids}
+    amend_file = ls.AMENDMENT_LABELS.get(batch_id)
+    if amend_file:
+        for iid, sc in _raw_json_map(amend_file).items():
+            if iid in ids:
+                joined[iid] = sc          # revision wins, exactly as resolve_score prefers it
+    return joined
 
 
 def test_recovers_sidecar_only_labels():
@@ -77,10 +93,14 @@ def test_both_consumers_share_the_resolver():
     assert qs.SIDECAR_LABELS is ls.SIDECAR_LABELS
 
     reader = _reader_labels_by_batch()
-    # Reproduce the sampler's per-row resolution (its from_corpus loop calls the SAME
-    # ls.resolve_score) and confirm it agrees with the reader on the q2/q3 rows.
+    # Reproduce the sampler's per-row resolution (its from_corpus loop delegates to
+    # iter_labeled, which resolves through the SAME ls.resolve_score WITH amendments) and
+    # confirm it agrees with the reader on the q2/q3 rows. Passing `amendments` here is
+    # load-bearing: a revised sidecar row (e.g. a julia_ladder_j0 3->2 demotion) resolves
+    # to the revised value in BOTH consumers, and dropping the arg would falsely flag it.
     for bid in SIDECAR_BATCHES:
         sidecar = ls.sidecar_for(bid)
+        amendments = ls.amendments_for(bid)
         jl = os.path.join(cr.cc.BATCHES_DIR, bid, "images.jsonl")
         with open(jl, encoding="utf-8") as f:
             for line in f:
@@ -88,7 +108,7 @@ def test_both_consumers_share_the_resolver():
                 if not line:
                     continue
                 row = json.loads(line)
-                sc = ls.resolve_score(row, sidecar)
+                sc = ls.resolve_score(row, sidecar, amendments)
                 if sc in (2, 3):   # q2/q3: the sampler's keep-set
                     assert reader.get(bid, {}).get(row["image_id"]) == sc, (
                         f"{bid}/{row['image_id']}: reader != sampler resolution")
