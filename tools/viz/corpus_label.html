@@ -55,8 +55,8 @@ code{color:#9bb}
   <span class="spacer"></span>
   <button id="reveal-toggle" title="show/hide the screen's opinion + prior label (off = blind)">reveal (r): OFF</button>
   <button id="next-unscored">next unlabeled (u)</button>
-  <button id="export">export scores.json</button>
-  <label class="cap" style="cursor:pointer;color:#ccc">load scores<input id="load-scores" type="file" accept=".json" hidden></label>
+  <button id="export">export labels.json</button>
+  <label class="cap" style="cursor:pointer;color:#ccc">load labels<input id="load-scores" type="file" accept=".json" hidden></label>
 </header>
 
 <div id="loader">
@@ -116,8 +116,9 @@ const CORPUS_ROOT=(QP.get('root')||'data/label_corpus/batches').replace(/\/+$/,'
 //   any prior label. So all provenance (the screen's G/verdict/arm, degree/period/band, the
 //   image_id — which encodes fate — and the anchor batch's original class-3 label) is HIDDEN.
 //   A `reveal` toggle (button / `r`) turns it back on; it is OFF by default and its state is
-//   RECORDED per label (reveals.json) so a peeked judgement is auditable. Everything stays in
-//   the manifest, so the funnel/agreement comparison is still computable afterward.
+//   RECORDED per label (the `revealed` field beside each score in labels.json) so a peeked
+//   judgement is auditable. Everything stays in the manifest, so the funnel/agreement
+//   comparison is still computable afterward.
 let revealed = QP.get('reveal')==='1';    // default false = blind
 const BATCH_DIR=CORPUS_ROOT+'/'+BATCH_ID;
 const IMAGES_URL=ROOT+BATCH_DIR+'/images.jsonl';
@@ -341,23 +342,28 @@ function download(name,obj){
   URL.revokeObjectURL(a.href);
 }
 document.getElementById('export').onclick=()=>{
-  // scores.json: only non-null integer scores, sorted by image_id for stable diffs.
-  const out={}; Object.keys(scores).sort().forEach(k=>{ if(scores[k]) out[k]=scores[k]; });
-  download('scores.json', out);
-  // reveals.json: whether the screen's opinion / prior label was revealed when each score was
-  // set (1) or the call was blind (0). Sidecar to scores.json — joined afterward, never merged
-  // into images.jsonl. Only rows that were actually scored are included.
-  const rev={}; Object.keys(scores).sort().forEach(k=>{ if(scores[k]) rev[k]=reveals[k]?1:0; });
-  download('reveals.json', rev);
+  // labels.json: ONE file, one row per label — {image_id:{score,revealed}}, sorted by
+  // image_id for stable diffs. A score and the reveal flag it was set under are the same
+  // fact about the same label, so they ship together (superseding the old split
+  // scores.json / reveals.json pair). `revealed` is 1 if the screen's opinion / prior label
+  // was showing when the score was set, else 0 (blind). Only actually-scored rows included.
+  // merge_scores.load_scores() reads this shape and the legacy {id:int} shape alike.
+  const out={}; Object.keys(scores).sort().forEach(k=>{ if(scores[k]) out[k]={score:scores[k],revealed:reveals[k]?1:0}; });
+  download('labels.json', out);
 };
 document.getElementById('load-scores').onchange=e=>{
   const f=e.target.files[0]; if(!f)return;
   const r=new FileReader();
   r.onload=()=>{ try{
-    scores=JSON.parse(r.result); saveScores();
+    // accept both the combined {id:{score,revealed}} and the legacy {id:int} shapes.
+    const raw=JSON.parse(r.result); scores={};
+    Object.keys(raw).forEach(k=>{ const v=raw[k];
+      if(v&&typeof v==='object'){ scores[k]=v.score; if(v.revealed!=null)reveals[k]=v.revealed?1:0; }
+      else scores[k]=v; });
+    saveScores(); saveReveals();
     [...document.getElementById('overview').children].forEach((c,i)=>refreshCell(i));
     show();
-  }catch(err){alert('bad scores.json: '+err);} };
+  }catch(err){alert('bad labels file: '+err);} };
   r.readAsText(f);
 };
 

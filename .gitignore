@@ -229,3 +229,9 @@ __pycache__/
 # doc for writing, not committed as binaries; the builder is the committed source.
 /docs/design/label_rubric_class4_examples.png
 /docs/design/label_rubric_demoted_examples.png
+
+# Minibrot roster v2 G-transfer companion sheets — regenerable views (rebuild:
+# `uv run python tools/corpus/minibrot_roster_v2_sheets.py`). Builder is the committed source.
+/docs/design/minibrot_roster_v2_class4.png
+/docs/design/minibrot_roster_v2_hi_g_lo.png
+/docs/design/minibrot_roster_v2_sub_hi.png

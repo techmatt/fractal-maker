@@ -27,6 +27,27 @@ import os
 import corpus_common as cc
 
 
+def load_scores(path: str) -> dict:
+    """Read a label export into `{image_id: score|None}`, accepting BOTH shapes:
+
+      * legacy pair — `scores.json` is `{id: int}` (its reveal flags live in a
+        separate `reveals.json` sidecar, which the merge never consumed);
+      * new combined — `{id: {"score": int, "revealed": 0|1}}`, one row's score and
+        its reveal flag in a single object.
+
+    Only the score is merged into the store either way (a label's reveal flag is an
+    audit sidecar, never a store field — see the schema's `label` block). No
+    migration: old files stay as-is, this loader reads whichever shape it's given.
+    """
+    raw = json.load(open(path, encoding="utf-8"))
+    out = {}
+    for k, v in raw.items():
+        if isinstance(v, dict):          # combined form: pull the score out
+            v = v.get("score")
+        out[k] = int(v) if v is not None else None
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--batch", required=True, help="batch_id under the corpus root")
@@ -47,8 +68,7 @@ def main() -> None:
     scores_path = a.scores or os.path.join(bdir, "scores.json")
 
     rows = cc.read_jsonl(images_path)
-    scores = json.load(open(scores_path, encoding="utf-8"))
-    scores = {k: (int(v) if v is not None else None) for k, v in scores.items()}
+    scores = load_scores(scores_path)
 
     filled, reaffirmed, conflicts, unknown, out_of_range = 0, 0, [], [], []
     by_id = {r["image_id"]: r for r in rows}
