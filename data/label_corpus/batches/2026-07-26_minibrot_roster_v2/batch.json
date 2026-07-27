@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-07-26_minibrot_roster_v2",
+  "generator_version": "minibrot_roster_v2",
+  "created": null,
+  "labeler": null,
+  "source": "data/minibrot_roster/roster.jsonl (v2) via the deployed stage-1 screen",
+  "counts": {
+    "total": 487,
+    "positive": 237,
+    "negative": 250
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 4,
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "cmr.fusion",
+    "maxiter": "per-crop deploy maxiter (dcf._maxiter_for_fw)"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sampling_metaparameters": {
+    "screen": "q4_multibrot_transfer (deployed stage-1, unchanged)",
+    "cutoff_rule": "q4_harvest_tight tight cutoff (prec>=0.85, n>=12)",
+    "pos_target": 250,
+    "neg_target": 250,
+    "neg_masked_frac": 0.1,
+    "neg_deep_floor": 0.5,
+    "per_atom_cap_per_arm": 3,
+    "split": "inherited from source atom (roster v2), never reassigned"
+  }
+}

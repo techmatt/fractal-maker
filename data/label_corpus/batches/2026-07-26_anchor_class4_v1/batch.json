@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-07-26_anchor_class4_v1",
+  "generator_version": "anchor_class4_v1",
+  "created": null,
+  "labeler": null,
+  "purpose": "mixed-family class-4 anchor; class-3 revisions (amendment path) + 8 minibrot",
+  "counts": {
+    "total": 60,
+    "revisions": 52,
+    "minibrot_fresh": 8
+  },
+  "family_quota": {
+    "mandelbrot": 12,
+    "julia": 10,
+    "phoenix": 8,
+    "julia_multibrot3": 4,
+    "julia_multibrot4": 4,
+    "julia_multibrot5": 4,
+    "multibrot3": 4,
+    "multibrot4": 3,
+    "multibrot5": 3
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 4,
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "note": "revisions render at their ORIGINAL palette/identity"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/pool_colormaps.json",
+    "jpg_quality": 90
+  }
+}
