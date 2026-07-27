@@ -47,7 +47,7 @@ blocks:
     "void_guard": false
   },
 
-  "label": { "score": null, "labeler": null, "labeled_at": null }   // score ∈ {null,1,2,3}
+  "label": { "score": null, "labeler": null, "labeled_at": null }   // score ∈ {null,1,2,3,4}
 }
 ```
 
@@ -66,14 +66,32 @@ Fields a given generator version never produced are `null`. **Nothing is fabrica
 sample does not get invented rev4-style provenance.
 
 ### `label` — the human verdict.
-`score`: `null` (unlabeled) | `1` (bad) | `2` (okay) | `3` (good). `labeler`, `labeled_at`
-filled when scored. **`null → value` is the ONE allowed mutation anywhere in the store.**
+`score`: `null` (unlabeled) | `1` (bad) | `2` (okay) | `3` (good) | `4` (exceptional wallpaper
+emission). Class 4 is a **fourth tier on the same quality scale**, not a separate head or a new
+floor — final emissions can be class 3 or class 4; class 4 is preferred where available. See
+`docs/design/label_rubric.md`. `labeler`, `labeled_at` filled when scored. **`null → value` is
+the ONE allowed mutation to an original label anywhere in the store.**
+
+### Revisions — the amendment overlay.
+An existing label can be **revised** (a q3 demoted to q2, or promoted to q4). Because a revision
+can move the `>=3` (good) boundary — demotions as well as promotions — and at least one batch is
+the frozen evaluation census for the current model, **revisions never modify the original label
+file.** They go to a separate registered amendment stream (`labels/<revision>.json`, registered
+in `label_store.AMENDMENT_LABELS`, written by `tools/corpus/merge_amendments.py`).
+`label_store.resolve_score` **prefers the amendment when one exists and falls back to the original
+otherwise**, so the pre-revision label stays recoverable for any row and reconstructing the
+original `>=3` boundary is the one-liner `resolve_score(row, sidecar) >= 3` (no `amendments`
+argument). The amendment is authored against a source row's coordinate identity, so a revision
+follows render identity, not image_id.
 
 ## Hard invariants
 
 1. **Nothing labeled is ever deleted or overwritten.** Every sample is precious.
-2. The **only** allowed mutation is a label's `score` going `null → value`. A merge that would
-   change a non-null score **warns and refuses** — it never silently clobbers (`merge_scores.py`).
+2. The **only** allowed mutation to an original label is its `score` going `null → value`. A
+   merge that would change a non-null score **warns and refuses** — it never silently clobbers
+   (`merge_scores.py`). A *revision* of a non-null label is not an exception to this: it is not
+   written in place at all, but to the separate amendment stream (`merge_amendments.py`), leaving
+   the original file byte-for-byte intact and recoverable.
 3. The classifier trainer (`corpus_reader.py`) reads **only `(render-crop, label.score)`** and
    **unions every batch blind to `generator_version`.** Provenance NEVER enters training — which
    is exactly why v4's metaparameters not matching v1's costs nothing on the training side.
@@ -89,7 +107,8 @@ data/label_corpus/
     batch.json              # batch-level manifest (below)
     images.jsonl            # one row per labeling unit: {image_id, render, provenance, label}
     crops/<image_id>.jpg    # the 1280×720 q90 crop (a pure function of `render`)
-    scores.json             # harness export: { image_id: 1|2|3 }, merged into images.jsonl labels
+    scores.json             # harness export: { image_id: 1|2|3|4 }, merged into images.jsonl labels
+labels/<revision>.json      # (repo root) amendment stream: revised labels, resolve_score prefers it
 ```
 
 `batch_id` = `<date>_<generator_version>` (e.g. `2026-06-24_guided_descend_rev4`).

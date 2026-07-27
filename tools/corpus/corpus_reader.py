@@ -5,10 +5,11 @@ yield `(crop_path, score)` for non-null labels, **blind to generator_version**.
 Provenance is NEVER read here — that is exactly what makes v4's metaparameters
 not matching v1's cost nothing on the training side.
 
-Label resolution goes through the shared `label_store` primitive (merged
-`label.score` ELSE the registered `labels/*.json` sidecar joined by image_id), so
-the sidecar-only batches (Julia/mining/scale) are seen here just as the query
-sampler sees them — the two consumers cannot drift.
+Label resolution goes through the shared `label_store` primitive (the registered
+revision/amendment ELSE merged `label.score` ELSE the registered `labels/*.json` sidecar
+joined by coordinate key), so the sidecar-only batches (Julia/mining/scale) are seen here
+just as the query sampler sees them — the two consumers cannot drift. This trainer view
+applies amendments (`amendments_for`), so a revised label reaches training as the new value.
 
 API:
   iter_labeled(corpus_dir=None) -> yields LabeledCrop(crop_path, score, image_id, batch_id, render)
@@ -31,7 +32,7 @@ import label_store as ls
 @dataclass
 class LabeledCrop:
     crop_path: str   # absolute path to crops/<image_id>.jpg
-    score: int       # 1 | 2 | 3
+    score: int       # 1 | 2 | 3 | 4  (revision wins over the original label, if registered)
     image_id: str
     batch_id: str
     render: dict     # the version-invariant render block (also available to the trainer)
@@ -55,7 +56,9 @@ def iter_labeled(corpus_dir: str | None = None):
         batch_dir = os.path.dirname(images_path)
         batch_id = os.path.basename(batch_dir)
         crops_dir = os.path.join(batch_dir, "crops")
-        sidecar = ls.sidecar_for(batch_id, os.path.join(corpus_dir, "batches"))
+        batches_dir = os.path.join(corpus_dir, "batches")
+        sidecar = ls.sidecar_for(batch_id, batches_dir)
+        amendments = ls.amendments_for(batch_id, batches_dir)   # revised truth wins, if any
         joined.setdefault(batch_id, 0)
         with open(images_path, encoding="utf-8") as f:
             for line in f:
@@ -63,7 +66,7 @@ def iter_labeled(corpus_dir: str | None = None):
                 if not line:
                     continue
                 row = json.loads(line)
-                score = ls.resolve_score(row, sidecar)
+                score = ls.resolve_score(row, sidecar, amendments)
                 if score is None:
                     continue
                 joined[batch_id] += 1
@@ -85,7 +88,9 @@ def count_pairs(corpus_dir: str | None = None) -> dict:
     joined = {}
     for images_path in _batch_images(corpus_dir):
         batch_id = os.path.basename(os.path.dirname(images_path))
-        sidecar = ls.sidecar_for(batch_id, os.path.join(corpus_dir, "batches"))
+        batches_dir = os.path.join(corpus_dir, "batches")
+        sidecar = ls.sidecar_for(batch_id, batches_dir)
+        amendments = ls.amendments_for(batch_id, batches_dir)
         units = labeled = 0
         with open(images_path, encoding="utf-8") as f:
             for line in f:
@@ -93,7 +98,7 @@ def count_pairs(corpus_dir: str | None = None) -> dict:
                 if not line:
                     continue
                 units += 1
-                if ls.resolve_score(json.loads(line), sidecar) is not None:
+                if ls.resolve_score(json.loads(line), sidecar, amendments) is not None:
                     labeled += 1
         out[batch_id] = {"units": units, "labeled": labeled}
         joined[batch_id] = labeled

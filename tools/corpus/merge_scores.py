@@ -6,15 +6,15 @@ currently null, and **warns and refuses** (never silently clobbers) when a
 scores.json entry would change an already-non-null label to a different value.
 Re-applying the same score is a no-op.
 
-Run (location corpus, 3-tier — unchanged default):
-  uv run python tools/corpus/merge_scores.py \
-      --batch 2026-06-24_guided_descend_rev4 \
-      [--scores <path>]  [--labeler matt] [--labeled-at 2026-06-25] [--apply]
+The label scale is 1..4 (bad/okay/good/exceptional); class 4 is a fourth tier on the SAME
+quality scale, not a separate head. This merges NEW labels in-row (null -> value). REVISIONS
+to already-labeled rows do NOT go through here — they go to the amendment stream via
+tools/corpus/merge_amendments.py, which never mutates the original label.
 
-Run (wallpaper corpus, 4-tier — different store root + score range):
+Run (location corpus, 4-tier — default):
   uv run python tools/corpus/merge_scores.py \
-      --corpus-root data/wallpaper_corpus/batches --max-score 4 \
-      --batch 2026-07-05_wallpaper_bootstrap_v1 [--apply]
+      --batch 2026-07-26_minibrot_roster_v2 \
+      [--scores <path>]  [--labeler matt] [--labeled-at 2026-07-26] [--apply]
 
 Without --apply it's a dry run (reports what would change, writes nothing).
 """
@@ -33,8 +33,8 @@ def main() -> None:
     ap.add_argument("--corpus-root", default=None,
                     help="batches dir the --batch lives under "
                          "(default: data/label_corpus/batches — the location corpus)")
-    ap.add_argument("--max-score", type=int, default=3,
-                    help="max valid ordinal tier (3 = location corpus, 4 = wallpaper)")
+    ap.add_argument("--max-score", type=int, default=4,
+                    help="max valid ordinal tier (label scale is 1..4: bad/okay/good/exceptional)")
     ap.add_argument("--scores", default=None, help="scores.json (default: <batch>/scores.json)")
     ap.add_argument("--labeler", default="matt")
     ap.add_argument("--labeled-at", default=None)

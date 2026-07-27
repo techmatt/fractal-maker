@@ -107,6 +107,9 @@ __pycache__/
 # rebuildable via present/render-one.
 !/data/label_corpus/
 /data/label_corpus/batches/*/crops/
+# vivid (blue/orange) companion crops — the labeler-judges-from render; rebuildable
+# from the row's render block under a vivid palette, same policy as crops/.
+/data/label_corpus/batches/*/vivid/
 # Wallpaper-quality corpus (tools/wallpaper/build_bootstrap.py) — same policy: commit
 # batch.json + images.jsonl + scores.json, gitignore the rebuildable crops.
 !/data/wallpaper_corpus/

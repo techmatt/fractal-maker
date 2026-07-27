@@ -88,6 +88,14 @@ PROVENANCE_KEYS = (
     # `stratum`/`seed_index` reused from above (branch ∈ {cardioid,period2,root}; stratum =
     # the "p<band>|<branch>|z_<class>" draw cell). Bias loop / analysis only — never training.
     "theta", "offset", "z_class",
+    # anchor / revision batch (2026-07-26): a presentation batch whose rows RE-LABEL
+    # already-labeled source rows on the 1..4 scale. These keys carry the pointer back to
+    # the source row so `merge_amendments.py` can route each new score to the source batch's
+    # amendment stream (never mutating the original). `revises_batch_id` + `revises_image_id`
+    # = the source row's identity; `original_score` = the pre-revision label (for audit /
+    # demotion-vs-promotion accounting). A fresh (non-revision) row leaves all three null.
+    # `family` reused from above (the source family). Bias/routing only — never training.
+    "revises_batch_id", "revises_image_id", "original_score",
 )
 
 

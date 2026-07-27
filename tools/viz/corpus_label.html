@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><title>corpus label — 1/2/3</title>
+<!doctype html><html><head><meta charset="utf-8"><title>corpus label — 1/2/3/4</title>
 <style>
 :root{color-scheme:dark}
 *{box-sizing:border-box}
@@ -11,25 +11,35 @@ button{font:inherit;background:#1c1f29;color:#ccc;border:1px solid #2c2f3a;borde
 button:hover{background:#262a36}
 .counts{color:#888;font-size:12px}
 .counts b{color:#cdd}
-.bad{color:#e06a6a}.mid{color:#e0b24a}.good{color:#5ec07a}
+.bad{color:#e06a6a}.mid{color:#e0b24a}.good{color:#5ec07a}.exc{color:#c9a0ff}
 main{display:flex;gap:18px;padding:18px;align-items:flex-start}
 #stage{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:10px}
+#pair{display:flex;gap:10px;width:100%;justify-content:center;align-items:flex-start}
+#pair figure{margin:0;flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+#pair figcaption{color:#888;font-size:11px;text-align:center}
+#vivid-fig figcaption{color:#c9a0ff}
+#stage.no-vivid #vivid-fig{display:none}
+#stage.no-vivid #canon-fig{max-width:min(100%,calc(86vh*16/9));flex:none;width:100%}
+#stage.no-vivid #canon-fig figcaption{display:none}
 #stage img{width:100%;height:auto;max-height:86vh;object-fit:contain;border:1px solid #23252e;border-radius:6px;background:#000}
 .meta{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;color:#777;font-size:11px}
 .meta .cap{border:1px solid #23252e;border-radius:4px;padding:1px 7px}
 .cur-score{font-size:12px}
 .score-btns{display:flex;gap:10px;margin-top:2px}
 .score-btns button{font-size:15px;padding:8px 18px}
-.sb1{border-color:#5a2c2c}.sb2{border-color:#5a4a2c}.sb3{border-color:#2c5a3a}
+.sb1{border-color:#5a2c2c}.sb2{border-color:#5a4a2c}.sb3{border-color:#2c5a3a}.sb4{border-color:#4a2c5a}
 aside{width:340px;flex:none;max-height:86vh;overflow:auto;border:1px solid #1c1f29;border-radius:6px;padding:6px}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
 .cell{position:relative;border:2px solid transparent;border-radius:3px;cursor:pointer;aspect-ratio:16/9;background:#000;overflow:hidden}
 .cell img{width:100%;height:100%;object-fit:cover;display:block}
 .cell.cur{border-color:#6a8fd0}
 .cell .tag{position:absolute;right:1px;bottom:0;font-size:10px;padding:0 3px;border-radius:2px;background:rgba(0,0,0,.6)}
-.cell.s1 .tag{color:#e06a6a}.cell.s2 .tag{color:#e0b24a}.cell.s3 .tag{color:#5ec07a}
-.cell.s1{border-color:#5a2c2c}.cell.s2{border-color:#5a4a2c}.cell.s3{border-color:#2c5a3a}
+.cell.s1 .tag{color:#e06a6a}.cell.s2 .tag{color:#e0b24a}.cell.s3 .tag{color:#5ec07a}.cell.s4 .tag{color:#c9a0ff}
+.cell.s1{border-color:#5a2c2c}.cell.s2{border-color:#5a4a2c}.cell.s3{border-color:#2c5a3a}.cell.s4{border-color:#4a2c5a}
 .hint{color:#777;font-size:11px;max-width:560px;text-align:center}
+.rubric{color:#8a8d99;font-size:11px;max-width:620px;border:1px solid #1c1f29;border-radius:6px;padding:8px 12px;background:#12141a}
+.rubric b{color:#cdd}
+.rubric .r1{color:#e06a6a}.rubric .r2{color:#e0b24a}.rubric .r3{color:#5ec07a}.rubric .r4{color:#c9a0ff}
 #stage img{cursor:zoom-in}
 #loader{padding:30px;max-width:680px}
 input[type=file]{font:inherit}
@@ -57,7 +67,10 @@ code{color:#9bb}
 
 <main id="app" style="display:none">
   <div id="stage">
-    <img id="cur-img" alt="">
+    <div id="pair">
+      <figure id="vivid-fig"><img id="cur-vivid" alt=""><figcaption>judge from · vivid (blue/orange)</figcaption></figure>
+      <figure id="canon-fig"><img id="cur-img" alt=""><figcaption>model sees · canonical</figcaption></figure>
+    </div>
     <div class="meta">
       <span class="cap" id="cap-loc"></span>
       <span class="cap" id="cap-prov"></span>
@@ -72,8 +85,18 @@ code{color:#9bb}
       <button class="sb1" data-s="1">1 · bad</button>
       <button class="sb2" data-s="2">2 · okay</button>
       <button class="sb3" data-s="3">3 · good</button>
+      <button class="sb4" data-s="4">4 · exceptional</button>
     </div>
-    <div class="hint">does <b>this crop</b> work as a wallpaper · keys: <b>1</b>/<b>2</b>/<b>3</b> label &amp; advance · <b>←</b>/<b>→</b> move · <b>u</b> next unlabeled</div>
+    <div class="hint">does <b>this crop</b> work as a wallpaper · keys: <b>1</b>/<b>2</b>/<b>3</b>/<b>4</b> label &amp; advance · <b>←</b>/<b>→</b> move · <b>u</b> next unlabeled</div>
+    <div class="rubric">
+      <b>1–4 quality scale</b> (judge from the vivid render) —
+      <span class="r1">1 bad</span>: dead/structureless, never ships.
+      <span class="r2">2 okay</span>: has structure but unremarkable; below the floor.
+      <span class="r3">3 good</span>: a genuine wallpaper; the emission floor.
+      <span class="r4">4 exceptional</span>: the best of "good" — worth surfacing first.
+      Class 4 is a tier on the same scale, <b>preferred where available but not a new floor</b>;
+      emissions can be 3 or 4. Full rubric: <code>docs/design/label_rubric.md</code>.
+    </div>
   </div>
   <aside><div class="grid" id="overview"></div></aside>
 </main>
@@ -96,12 +119,16 @@ const IMAGES_URL=ROOT+BATCH_DIR+'/images.jsonl';
 const LS_KEY='corpus_label::'+BATCH_ID;   // localStorage is per-batch
 const SHUFFLE_SEED=0xC0FFEE;
 let ROWS=[];                         // presentation-ordered rows {image_id, render, provenance, label}
-let scores=loadScores();             // { image_id: 1|2|3 }
+let scores=loadScores();             // { image_id: 1|2|3|4 }
 let cur=0;
+const SCORE_WORD={1:'bad',2:'okay',3:'good',4:'exceptional'};
 
 // the image_id IS the durable identity; the crop lives at crops/<image_id>.jpg
 function keyOf(r){ return r.image_id; }
 function imgSrc(r){ return ROOT+BATCH_DIR+'/crops/'+r.image_id+'.jpg'; }
+// optional vivid (blue/orange) companion the labeler judges from; batches without one
+// (the vivid/ dir absent) just fall back to the canonical crop alone (onerror hides it).
+function vividSrc(r){ return ROOT+BATCH_DIR+'/vivid/'+r.image_id+'.jpg'; }
 function loadScores(){ try{return JSON.parse(localStorage.getItem(LS_KEY))||{}}catch{return {}} }
 function saveScores(){ localStorage.setItem(LS_KEY,JSON.stringify(scores)); }
 
@@ -181,18 +208,23 @@ function refreshCell(i){
 }
 
 function refreshCounts(){
-  let n1=0,n2=0,n3=0;
-  for(const r of ROWS){const s=scores[keyOf(r)]; if(s===1)n1++;else if(s===2)n2++;else if(s===3)n3++;}
-  const done=n1+n2+n3;
+  let n1=0,n2=0,n3=0,n4=0;
+  for(const r of ROWS){const s=scores[keyOf(r)]; if(s===1)n1++;else if(s===2)n2++;else if(s===3)n3++;else if(s===4)n4++;}
+  const done=n1+n2+n3+n4;
   document.getElementById('counts').innerHTML=
     `<b>${done}/${ROWS.length}</b> labeled &nbsp; `+
-    `<span class="bad">${n1}·bad</span> / <span class="mid">${n2}·okay</span> / <span class="good">${n3}·good</span>`;
+    `<span class="bad">${n1}·bad</span> / <span class="mid">${n2}·okay</span> / <span class="good">${n3}·good</span> / <span class="exc">${n4}·exc</span>`;
 }
 
 function show(){
   const r=ROWS[cur], rd=r.render||{}, pv=r.provenance||{};
   document.getElementById('cur-img').src=imgSrc(r);
   document.getElementById('cur-img').alt=keyOf(r);
+  // vivid companion: show it if present, else collapse to the canonical crop alone.
+  const stage=document.getElementById('stage'), vimg=document.getElementById('cur-vivid');
+  stage.classList.remove('no-vivid');
+  vimg.onerror=()=>stage.classList.add('no-vivid');
+  vimg.src=vividSrc(r); vimg.alt=keyOf(r);
   if(BLIND){
     // hide mode / palette / location / all provenance — label on the raster alone
     document.getElementById('cap-loc').textContent=`${cur+1}/${ROWS.length}`;
@@ -207,8 +239,8 @@ function show(){
     document.getElementById('cap-occ').textContent=(pv.occupancy!=null)?('occ '+(+pv.occupancy).toFixed(3)):'occ ?';
     const v2=document.getElementById('cap-v2'), fs=fscore(r);
     if(fs!==null){
-      const ec=pv.v2_est_class, lbl={1:'bad',2:'okay',3:'good'};
-      v2.textContent='v2 P(not-bad) '+fs.toFixed(3)+(ec?(' · est '+ec+'·'+(lbl[ec]||'')):'');
+      const ec=pv.v2_est_class;
+      v2.textContent='v2 P(not-bad) '+fs.toFixed(3)+(ec?(' · est '+ec+'·'+(SCORE_WORD[ec]||'')):'');
       v2.style.color = fs>=0.5 ? '#5ec07a' : '#e0b24a';
     } else { v2.textContent=''; v2.style.color=''; }
     const role=document.getElementById('cap-role');
@@ -217,10 +249,9 @@ function show(){
   }
   if(lbOpen)syncLightbox();
   const s=scores[keyOf(r)];
-  const lbl={1:'bad',2:'okay',3:'good'};
   const sc=document.getElementById('cur-score');
-  sc.textContent=s?('label: '+s+' · '+lbl[s]):'unlabeled';
-  sc.className='cur-score'+(s?(' '+['','bad','mid','good'][s]):'');
+  sc.textContent=s?('label: '+s+' · '+SCORE_WORD[s]):'unlabeled';
+  sc.className='cur-score'+(s?(' '+['','bad','mid','good','exc'][s]):'');
   [...document.getElementById('overview').children].forEach((c,i)=>refreshCell(i));
   document.getElementById('overview').children[cur]?.scrollIntoView({block:'nearest'});
   refreshCounts();
@@ -237,10 +268,11 @@ function nextUnscored(){
 }
 
 let lbOpen=false;
+let lbSrcFn=imgSrc;               // which image the lightbox zooms (canonical or vivid)
 function syncLightbox(){
   const r=ROWS[cur], rd=r.render||{}, pv=r.provenance||{};
-  document.getElementById('lbimg').src=imgSrc(r);
-  const lbl={1:'bad',2:'okay',3:'good'}, s=scores[keyOf(r)];
+  document.getElementById('lbimg').src=lbSrcFn(r);
+  const lbl=SCORE_WORD, s=scores[keyOf(r)];
   if(BLIND){
     document.getElementById('lbcap').textContent=
       `${cur+1}/${ROWS.length} · ${s?('label '+s+' · '+lbl[s]):'unlabeled'}`;
@@ -254,14 +286,15 @@ function syncLightbox(){
 }
 function openLightbox(){ lbOpen=true; syncLightbox(); document.getElementById('lightbox').style.display='flex'; }
 function closeLightbox(){ lbOpen=false; document.getElementById('lightbox').style.display='none'; }
-document.getElementById('cur-img').onclick=openLightbox;
+document.getElementById('cur-img').onclick=()=>{ lbSrcFn=imgSrc; openLightbox(); };
+document.getElementById('cur-vivid').onclick=()=>{ lbSrcFn=vividSrc; openLightbox(); };
 document.getElementById('lightbox').onclick=closeLightbox;
 
 document.querySelectorAll('.score-btns button').forEach(b=>b.onclick=()=>setScore(+b.dataset.s));
 window.addEventListener('keydown',e=>{
   if(document.getElementById('app').style.display==='none')return;
   if(e.key==='Escape'){ if(lbOpen)closeLightbox(); return; }
-  if(e.key==='1'||e.key==='2'||e.key==='3'){setScore(+e.key);e.preventDefault();}
+  if(e.key==='1'||e.key==='2'||e.key==='3'||e.key==='4'){setScore(+e.key);e.preventDefault();}
   else if(e.key==='ArrowRight')move(1);
   else if(e.key==='ArrowLeft')move(-1);
   else if(e.key==='u'||e.key==='U')nextUnscored();

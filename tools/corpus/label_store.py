@@ -28,6 +28,11 @@ and the two can never drift. NEW unmerged batches MUST be registered in `SIDECAR
 have their labels merged into images.jsonl); `assert_sidecars_joined` makes a broken join
 loud at load.
 
+REVISIONS go to a separate `AMENDMENT_LABELS` stream, never in-place: `resolve_score` prefers
+the amendment when one exists and falls back to the original otherwise, so the pre-revision
+label stays recoverable (`resolve_score(row, sidecar)` with no amendments = the original). See
+the `AMENDMENT_LABELS` block below and `amendments_for`.
+
 REFERENCE for the complete label set: the v5 unified classifier's training-data
 assembly, tools/v5/build_manifest.py. It recovers the J0 Julia labels from
 labels/location_labels_julia_ladder_j0.json JOINED to the batch's images.jsonl — the same
@@ -112,6 +117,37 @@ SIDECAR_OWNER = {
     "scale_2x2_labelset.json": "2026-06-25_scale_2x2_labelset",
 }
 
+# ---------------------------------------------------------------------------
+# Amendment overlay — the revision stream.
+#
+# A human label is authored ONCE, in a batch's images.jsonl `label.score` (merged) or in a
+# registered SIDECAR file. That original is NEVER modified. When a label is REVISED (a q3
+# demoted to q2, or promoted to the new q4 tier), the new value goes to a SEPARATE amendment
+# file registered here — batch_id -> labels/*.json — and `resolve_score` PREFERS the amendment
+# over the original. This exists because:
+#   * a revision can move the >=3 (good) boundary (demotions as well as promotions), and at
+#     least one batch is the FROZEN eval census for the current model — rewriting labels in
+#     place would silently destroy that comparison; and
+#   * the pre-revision label must stay recoverable for any row. It is: the amendment lives in
+#     a distinct file, the original is untouched, and calling `resolve_score(row, sidecar)`
+#     with NO `amendments` argument reconstructs the original label. Reconstructing the
+#     original >=3 boundary is the one-liner `resolve_score(row, sidecar) >= 3`.
+# An amendment file is authored against ONE batch's crops (its OWNER = the amended batch),
+# re-keyed onto the coordinate `join_key` through that batch's images.jsonl exactly like a
+# sidecar (`amendments_for`), so revisions follow render identity, not the collision-prone
+# image_id. Amendment files live in labels/, so disk_audit's `^labels/` NEVER-delete rule
+# protects them in place. Registered here, they are NOT re-checked by `assert_sidecars_joined`
+# (that guards the original sidecar stream); an amended batch already resolves non-null through
+# its original label, so the reachability guard stays green.
+AMENDMENT_LABELS: dict[str, str] = {
+    # batch_id -> labels/<revision>.json  (populated by tools/corpus/merge_amendments.py)
+}
+
+# Parallel to SIDECAR_OWNER: a shared amendment file MUST name the batch its coordinate
+# identities are authored against. Default owner = the amended batch itself (the sole
+# registrant), so this is usually empty.
+AMENDMENT_OWNER: dict[str, str] = {}
+
 
 def join_key(render):
     """The explicit coordinate join key for a corpus render block: the canonical location
@@ -172,6 +208,27 @@ def load_sidecar(filename):
     return {k: int(v) for k, v in body.items() if v is not None}
 
 
+def _rekey_onto_join(raw, owner_batch_id, batches_dir, fn):
+    """Re-key an on-disk `{image_id: score}` file onto the coordinate `join_key` via the
+    OWNER batch's images.jsonl. Shared by `sidecar_for` and `amendments_for` so the two
+    streams re-key identically. Raises if a labeled image_id is absent from the owner batch,
+    or if two entries collide on one join_key with different scores."""
+    id2key = _owner_keymap(owner_batch_id, batches_dir or BATCHES_DIR)
+    labels = {}
+    for iid, sc in raw.items():
+        key = id2key.get(iid)
+        if key is None:
+            raise RuntimeError(
+                f"label file {fn!r} labels image_id {iid!r} that is absent from its owner "
+                f"batch {owner_batch_id!r} images.jsonl — image_id keys diverged.")
+        if key in labels and labels[key] != sc:
+            raise RuntimeError(
+                f"label file {fn!r}: two image_ids collide on one coordinate join_key {key!r} "
+                f"with different scores — the owner batch is not render-unique.")
+        labels[key] = sc
+    return labels
+
+
 def sidecar_for(batch_id, batches_dir=None):
     """The `{join_key: score}` label map for a batch, or None if it isn't registered.
 
@@ -184,30 +241,44 @@ def sidecar_for(batch_id, batches_dir=None):
     fn = SIDECAR_LABELS.get(batch_id)
     if fn is None:
         return None
-    raw = load_sidecar(fn)                                   # {image_id: score}
-    id2key = _owner_keymap(_owner_of(fn), batches_dir or BATCHES_DIR)
-    labels = {}
-    for iid, sc in raw.items():
-        key = id2key.get(iid)
-        if key is None:
-            raise RuntimeError(
-                f"sidecar {fn!r} labels image_id {iid!r} that is absent from its owner batch "
-                f"{_owner_of(fn)!r} images.jsonl — image_id keys diverged.")
-        if key in labels and labels[key] != sc:
-            raise RuntimeError(
-                f"sidecar {fn!r}: two image_ids collide on one coordinate join_key {key!r} "
-                f"with different scores — the owner batch is not render-unique.")
-        labels[key] = sc
-    return labels
+    return _rekey_onto_join(load_sidecar(fn), _owner_of(fn), batches_dir, fn)
 
 
-def resolve_score(row, labels):
-    """A row's label: merged `label.score` ELSE the sidecar join by coordinate `join_key`.
+def _amendment_owner_of(batch_id, fn):
+    """Owner batch whose images.jsonl authors an amendment file's coordinate identities.
+    Explicit `AMENDMENT_OWNER` wins; otherwise the amended batch itself (the default —
+    an amendment is authored against the very batch it revises)."""
+    return AMENDMENT_OWNER.get(fn, batch_id)
 
-    `labels` is the map from `sidecar_for(batch_id)` (or None for a merged batch). Returns
-    None if the row is unlabeled in both places. This is the ONE resolution rule; both
-    consumers call it so they cannot disagree on a row. Joining on `join_key(row["render"])`
-    (not image_id) is what makes a shared sidecar safe across scale batches."""
+
+def amendments_for(batch_id, batches_dir=None):
+    """The `{join_key: revised_score}` REVISION map for a batch, or None if unregistered.
+
+    Same coordinate re-key as `sidecar_for`, but the owner defaults to the amended batch
+    itself. `resolve_score` prefers this over both the in-row label and the sidecar, so a
+    revision overrides the original WITHOUT touching the original file. Called only where the
+    REVISED truth is wanted (the canonical trainer view); pass nothing to read originals."""
+    fn = AMENDMENT_LABELS.get(batch_id)
+    if fn is None:
+        return None
+    return _rekey_onto_join(load_sidecar(fn), _amendment_owner_of(batch_id, fn), batches_dir, fn)
+
+
+def resolve_score(row, labels, amendments=None):
+    """A row's label: the REVISION (amendment) if one exists, ELSE merged `label.score`,
+    ELSE the sidecar join by coordinate `join_key`.
+
+    `labels` is the map from `sidecar_for(batch_id)` (or None for a merged batch);
+    `amendments` is the map from `amendments_for(batch_id)` (or None — the default). Called
+    WITHOUT `amendments` this yields the ORIGINAL, pre-revision label, so reconstructing the
+    original >=3 boundary is the one-liner `resolve_score(row, sidecar) >= 3`. Returns None if
+    the row is unlabeled everywhere. This is the ONE resolution rule; every consumer calls it
+    so they cannot disagree on a row. Joining on `join_key(row["render"])` (not image_id) is
+    what makes a shared sidecar/amendment safe across scale batches."""
+    if amendments is not None:
+        amd = amendments.get(join_key(row["render"]))
+        if amd is not None:
+            return amd
     sc = (row.get("label") or {}).get("score")
     if sc is None and labels is not None:
         sc = labels.get(join_key(row["render"]))
