@@ -88,7 +88,12 @@ PALETTE_SOURCE = os.path.join(_ROOT, "data", "palettes", "score3_colormaps.json"
 # canonical (model-facing) palette per degree — a fixed, legible score-3 map, so the
 # classifier sees a consistent colorway; the labeler judges from the vivid companion.
 CANON_PALETTE = "magma"
-VIVID_PALETTE = "cmr.fusion"                           # vivid blue/orange companion
+# vivid blue/orange companion = the roster PILOT sheet's map (q4_multibrot_transfer._blue_orange:
+# blue -> teal -> cream -> orange), so the labeler's eye stays calibrated to the pilot.
+VIVID_PALETTE = "blue_orange"
+VIVID_SOURCE = os.path.join(_ROOT, "data", "palettes", "vivid_blue_orange.json")
+# presentation shuffle seed, recorded in batch.json so the labeling order is reproducible.
+PRESENTATION_SEED = 0xC0FFEE
 
 # arm targets
 POS_TARGET = 250
@@ -514,6 +519,7 @@ def _write_batch(allc):
     batch_json = dict(
         schema_version=1, batch_id=BATCH_ID, generator_version=GEN_VERSION,
         created=None, labeler=None,
+        presentation_seed=PRESENTATION_SEED,   # UI blind-shuffle seed (reproducible order)
         source="data/minibrot_roster/roster.jsonl (v2) via the deployed stage-1 screen",
         counts=dict(total=len(rows),
                     positive=sum(1 for c in allc if c["arm"] == "positive"),
@@ -553,7 +559,7 @@ def _render_row(job):
     if not vivid.exists():
         vr = dict(render)
         vr["palette"] = VIVID_PALETTE
-        cc.render_corpus_crop(vr, str(vivid), palette_source=PALETTE_SOURCE, timeout=timeout)
+        cc.render_corpus_crop(vr, str(vivid), palette_source=VIVID_SOURCE, timeout=timeout)
         made.append("vivid")
     return iid, made
 
@@ -700,7 +706,7 @@ def _fate_sheet(crops):
         ("NEG deep", sample(lambda c: c["arm"] == "negative" and c["band"] in DEEP_BANDS, N)),
     ]
     fig, axes = plt.subplots(len(rows), N, figsize=(2.0 * N, 1.55 * len(rows) + 1))
-    fig.suptitle(f"{BATCH_ID} — fate-stratified (vivid cmr.fusion) · negatives next to "
+    fig.suptitle(f"{BATCH_ID} — fate-stratified (vivid {VIVID_PALETTE}) · negatives next to "
                  f"positives · POS accept | NEG reject=near-miss | NEG masked=featureless",
                  y=0.997, fontsize=10)
     for ri, (label, items) in enumerate(rows):

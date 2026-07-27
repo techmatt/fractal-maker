@@ -79,9 +79,12 @@ resumable (per-atom JSON cache + cached f64 fields), atomic writes, per-dump har
 - Canonical (model-facing) crop: **1280×720, ss4, Lanczos3, q90 JPG**, per-crop deploy
   maxiter (`dcf._maxiter_for_fw`), seeded score-3 palette — the existing location-corpus
   label-crop spec (read off `build_enrich_batch` / `render_corpus_crop`).
-- **Vivid companion: `cmr.fusion`** (vivid, cyclic blue/orange, already in the deployed
-  score-3 roster) at `vivid/<image_id>.jpg`, shown beside the canonical in the labeling
-  UI — the labeler judges from the vivid, the model eventually sees the canonical.
+- **Vivid companion: `blue_orange`** = the roster PILOT sheet's map
+  (`q4_multibrot_transfer._blue_orange`: blue → teal → cream → orange), baked into
+  `data/palettes/vivid_blue_orange.json` so the labeler's eye stays calibrated to the pilot.
+  At `vivid/<image_id>.jpg`, shown beside the canonical in the labeling UI — the labeler
+  judges from the vivid, the model eventually sees the canonical. (An earlier draft used
+  `cmr.fusion`, but its dark midtone did not match the pilot's cream midtone; switched.)
 - Report + fate-stratified vivid sheet: `scratch/minibrot_batch/{distribution_report.txt,
   fate_sheet.png}` (negatives shown next to positives, incl. deep-vs-deep rows).
 
@@ -89,6 +92,17 @@ resumable (per-atom JSON cache + cached f64 fields), atomic writes, per-dump har
 
 `2026-07-26_anchor_class4_v1` (60 crops): 52 already-labeled class-3 locations spanning
 mandelbrot / julia / phoenix / native multibrot / julia-multibrot, rendered at their
-**original** identity, re-labeled on 1–4 as **revisions** (amendment path), plus **8**
-minibrot accepts spanning d2–d5. Fixes the class-4 bar across families before the minibrot
-volume is labeled.
+**original** identity (primary, not renormalized) **with a `blue_orange` vivid companion**
+(same map as the minibrot batch, the cross-family reference), re-labeled on 1–4 as
+**revisions** (amendment path), plus **8** minibrot accepts spanning d2–d5. Fixes the class-4
+bar across families before the minibrot volume is labeled.
+
+## Blind labeling (UI)
+
+Both batches label **blind by default** in `tools/viz/corpus_label.html`: presentation is a
+seeded shuffle (seed recorded in each `batch.json` as `presentation_seed`), and the screen's
+G/verdict/arm, the degree/period/band, the image_id (which encodes fate), and the anchor's
+prior class-3 label are all hidden. A `reveal` toggle (`r`, off by default) shows them and its
+per-label state is exported to `reveals.json` alongside `scores.json`, so a peeked call is
+auditable. `original_score` stays in the anchor manifest, so blind-vs-original **agreement**
+(a test-retest read on boundary stability) is computable afterward.

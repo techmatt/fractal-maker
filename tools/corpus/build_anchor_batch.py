@@ -57,6 +57,12 @@ FAMILY_QUOTA = {
 }
 REVISION_PALETTES = os.path.join(ROOT, "data", "palettes", "pool_colormaps.json")   # covers all
 MINIBROT_PALETTES = os.path.join(ROOT, "data", "palettes", "score3_colormaps.json")
+# vivid companion = the SAME map as the minibrot batch (the roster pilot sheet's blue_orange),
+# rendered ALONGSIDE the original identity as a cross-family reference. The original crop stays
+# primary and is NOT renormalized — a revision must reflect re-judgement, not a render change.
+VIVID_PALETTE = "blue_orange"
+VIVID_SOURCE = os.path.join(ROOT, "data", "palettes", "vivid_blue_orange.json")
+PRESENTATION_SEED = 0xA11C40   # UI blind-shuffle seed, recorded in batch.json
 ANCHOR_PICKS = os.path.join(ROOT, "data", "minibrot_roster", "batch_v1",
                             "anchor_minibrot_picks.jsonl")
 CROP_W, CROP_H, CROP_SS = 1280, 720, 4
@@ -144,24 +150,38 @@ def build_rows(revisions, minibrot_picks):
 def render_all(rows, workers=4):
     bdir = Path(cc.batch_dir(BATCH_ID))
     crops = bdir / "crops"
+    vivid = bdir / "vivid"
     crops.mkdir(parents=True, exist_ok=True)
+    vivid.mkdir(parents=True, exist_ok=True)
 
     def one(item):
         iid, row, palsrc = item
-        out = crops / f"{iid}.jpg"
-        if out.exists():
-            return iid, False
-        cc.render_corpus_crop(row["render"], str(out), palette_source=palsrc, timeout=180)
-        return iid, True
-    todo = [it for it in rows if not (crops / f"{it[0]}.jpg").exists()]
-    print(f"rendering {len(todo)}/{len(rows)} anchor crops (workers={workers}) ...", flush=True)
+        made = []
+        canon = crops / f"{iid}.jpg"
+        if not canon.exists():                       # original identity (varied palette), primary
+            cc.render_corpus_crop(row["render"], str(canon), palette_source=palsrc, timeout=300)
+            made.append("canon")
+        vout = vivid / f"{iid}.jpg"
+        if not vout.exists():                        # vivid companion (blue_orange), NOT renormalized
+            vr = dict(row["render"])
+            vr["palette"] = VIVID_PALETTE
+            cc.render_corpus_crop(vr, str(vout), palette_source=VIVID_SOURCE, timeout=300)
+            made.append("vivid")
+        return iid, made
+
+    def needs(it):
+        iid = it[0]
+        return not (crops / f"{iid}.jpg").exists() or not (vivid / f"{iid}.jpg").exists()
+    todo = [it for it in rows if needs(it)]
+    print(f"rendering {len(todo)}/{len(rows)} anchor crops (canonical + vivid companion, "
+          f"workers={workers}) ...", flush=True)
     made = 0
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for iid, did in ex.map(one, todo):
-            made += did
+        for iid, m in ex.map(one, todo):
+            made += bool(m)
             if made and made % 10 == 0:
                 print(f"  ...{made} rendered", flush=True)
-    print(f"  crops -> {crops}  ({made} rendered this run)")
+    print(f"  crops -> {crops} + {vivid}  ({made} rows rendered this run)")
 
 
 def main():
@@ -191,6 +211,8 @@ def main():
     cc.write_jsonl([r for _, r, _ in rows], str(bdir / "images.jsonl"))
     batch_json = dict(
         schema_version=1, batch_id=BATCH_ID, generator_version=GEN, created=None, labeler=None,
+        presentation_seed=PRESENTATION_SEED,   # UI blind-shuffle seed (reproducible order)
+        vivid_companion=VIVID_PALETTE,
         purpose="mixed-family class-4 anchor; class-3 revisions (amendment path) + 8 minibrot",
         counts=dict(total=len(rows), revisions=len(revisions), minibrot_fresh=len(minibrot_picks)),
         family_quota=FAMILY_QUOTA,

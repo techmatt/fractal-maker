@@ -93,6 +93,9 @@ __pycache__/
 # durable palette color-axis categorization (tools/palettes/build_categories.py):
 # one hierarchical tree cut at k=8/12/16, nested; special cells + stored linkage.
 !/data/palettes/palette_categories.json
+# vivid blue/orange companion map (the roster pilot sheet's _blue_orange, baked as a
+# render-one colormap library): the label-crop vivid companions rebuild from it — durable.
+!/data/palettes/vivid_blue_orange.json
 # Hand-picked reference test fixtures (load-bearing metadata, not regenerable):
 # the test render locations and the test palette selection.
 !/data/test_renders.json

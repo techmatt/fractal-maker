@@ -4,6 +4,7 @@
   "generator_version": "minibrot_roster_v2",
   "created": null,
   "labeler": null,
+  "presentation_seed": 12648430,
   "source": "data/minibrot_roster/roster.jsonl (v2) via the deployed stage-1 screen",
   "counts": {
     "total": 487,
@@ -18,7 +19,7 @@
     "interior_mode": "black",
     "composition": "center",
     "palette_roster": "data/palettes/score3_colormaps.json",
-    "vivid_companion": "cmr.fusion",
+    "vivid_companion": "blue_orange",
     "maxiter": "per-crop deploy maxiter (dcf._maxiter_for_fw)"
   },
   "render_recipe": {
