@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-07-27_interior_band_v1",
+  "generator_version": "interior_band_v1",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 1773029,
+  "vivid_companion": "blue_orange",
+  "purpose": "degree x interior-band crossed batch drawn from positions the deployed OOD mask currently discards, plus a same-sampler low-interior control arm",
+  "counts": {
+    "total": 80,
+    "control": 20,
+    "i10_20": 20,
+    "i20_35": 20,
+    "i35_50": 20
+  },
+  "bands": {
+    "control": [
+      0.0,
+      0.1,
+      "low_interior_control"
+    ],
+    "i10_20": [
+      0.1,
+      0.2,
+      "interior_band"
+    ],
+    "i20_35": [
+      0.2,
+      0.35,
+      "interior_band"
+    ],
+    "i35_50": [
+      0.35,
+      0.5,
+      "interior_band"
+    ]
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 4,
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "blue_orange",
+    "maxiter": "per-crop deploy maxiter (dcf._maxiter_for_fw)"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sampling_metaparameters": {
+    "sampler": "uniform-random over the deployed swept grid (LF.FIELD_SCALES x DENSE_STRIDE_FRAC, 16:9), reservoir-sampled per (atom, band, scale)",
+    "selection_predicate": "screen-resolution g_interior band ONLY",
+    "g_used_for_selection": false,
+    "scale_mix": "matched to the 487-crop batch's realized mix {0.06: 0.867, 0.09: 0.103, 0.14: 0.031}",
+    "per_cell_target": 5,
+    "per_atom_cap": 3,
+    "draw_seed": 20260727,
+    "split": "inherited from the source roster atom, never reassigned; the per-cell atom ORDER offers an eval atom every 4 slots so both arms carry the same eval share",
+    "recorded_not_selected": [
+      "G_counterfactual",
+      "int_perim_area",
+      "coh_scale_drop"
+    ]
+  }
+}

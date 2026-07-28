@@ -138,4 +138,131 @@ Reverse direction (does the control survive degree?):
 `data/label_corpus/batches/2026-07-27_interior_band_v1`, manifest
 `data/minibrot_roster/interior_band_v1/`)*
 
-Filled in below once the batch is drawn — see the verification section.
+### Why this batch exists
+
+The bake-off's Part C established that the deployed OOD mask's interior clause
+(`g_interior >= 0.10`) removes **20.2% of every position the screen sweeps** — 34.0% of
+everything it masks — and that dropping the clause would enlarge the scoreable pool by
+**49.8%**. It also established that the labeled corpus cannot adjudicate that, because the
+screen that built the corpus made sure the band was never populated. Counting the 487 on
+the screen-resolution quantity the mask actually cuts on:
+
+| `g_interior` band | n labeled | mean label | n ≥ 3 |
+|---|---|---|---|
+| [0.00, 0.10) — below the ceiling | 481 | 1.84 | 75 |
+| **[0.10, 0.20)** | **2** | 1.00 | 0 |
+| **[0.20, 0.35)** | **1** | 1.00 | 0 |
+| **[0.35, 0.50)** | **1** | 1.00 | 0 |
+| [0.50, 1.00] | 2 | 1.00 | 0 |
+
+Four crops in the whole [0.10, 0.50] band. This batch puts 60 there.
+
+### The two confounds it is built to avoid
+
+**1. Interior vs degree.** In the 487 the two moved together, which is why the bake-off
+could only separate them by conditioning after the fact. Here they are crossed
+explicitly — degree {2,3,4,5} × band {0.10–0.20, 0.20–0.35, 0.35–0.50}, 5 crops per cell.
+
+**2. Interior vs framing method — the subtler one.** The 487 were G-maxima framed, and G
+carries `interior_worst` = −1.278 (its second-largest weight), so G-maxima framing
+*physically cannot* produce a high-interior window. Any framing rule usable here therefore
+differs from the 487's, and a naive new-vs-old comparison would confound interior with the
+framing method. So the batch carries its **own** low-interior control arm (`g_interior` <
+0.10, same degrees, 5 per degree) drawn by the **identical sampler** — same swept grid,
+same scale mix, same uniform-random draw, same per-atom cap, no additional predicate.
+Within this batch, interior fraction is the only thing that varies between the arms.
+
+### The sampler
+
+Uniform-random over exactly the positions the deployed screen sweeps: `LF.FIELD_SCALES`
+(0.06 / 0.09 / 0.14) × `DENSE_STRIDE_FRAC` = 0.12 stride × 16:9 windows, on the same cached
+2176×1224 parent atom fields the 487 came off. The grid geometry is copied verbatim from
+`MT._sweep_fates`, so the candidate universe **is** the screen's swept set; the sampler
+differs from the screen only in what it selects on. Per atom, every swept position is
+featurized once (~14.6k positions/atom, 160 atoms) and reservoir-sampled into
+(band × scale) buckets, so each bucket holds a uniform random sample of that atom's
+positions in that band.
+
+- **The only selection predicate is the interior band.** G is never used to frame or to
+  filter. Each drawn candidate's counterfactual G *is* recorded (`G_counterfactual`) for
+  the analysis afterward; nothing reads it before the labels exist.
+- **Scale is drawn to the 487's realized mix** (0.867 / 0.103 / 0.031 at 0.06 / 0.09 / 0.14
+  — measured off `batch_v1/draw.jsonl`, pinned by a test), so scale is not a second thing
+  varying between this batch and the old one.
+- **≤ 3 crops per atom**, and two windows from one atom must clear the screen's own
+  elliptical separation (`HT.SEP`) — same NMS metric the deployed framing uses.
+- **Split inherited** from the source roster atom, never reassigned. The per-cell *atom
+  order* offers an eval atom every 4th slot, so both arms carry the same eval share rather
+  than drawing it by luck (a partial-sweep dry run gave 0.43 vs 0.10 without it).
+- **Presentation**: blind by default and seeded-shuffled, the same rig as the 487
+  (`presentation_seed` = 0x1B0DE5 in `batch.json`). Beyond that, the `image_id` itself is
+  opaque — `ib<shuffled slot>_<content hash>`. The 487's ids encoded the screen's fate;
+  these encode nothing, because the id is the one string that reaches the browser as a URL
+  even when the UI is blind.
+- **Recorded, never selected on**: `int_perim_area` and `coh_scale_drop` (the two features
+  that survived degree-conditioning in the bake-off) are computed on every drawn crop at
+  draw time, on the crop's own re-derived 1280×720 f64 escape-time field, via
+  `interior_bakeoff.crop_features` — the same function that produced the 487's numbers, so
+  the two batches are directly comparable.
+
+### Verification
+
+Drawn, featurized, rendered (all 80 crops: canonical + vivid), reported. Sheet:
+`scratch/interior_band_batch/band_sheet.png`; full text: `scratch/interior_band_batch/report.txt`.
+
+**1. The crossing filled.** Every one of the 16 (band × degree) cells holds exactly 5
+crops — no under-fill, no backfill across bands. 60 in the interior arm, 20 in the control.
+Both arms carry an identical **20% eval share** (12/60 and 4/20), by the every-4th-slot atom
+ordering rather than by luck.
+
+| arm | n | train | eval | per-cell |
+|---|---|---|---|---|
+| `interior_band` (3 bands × 4 deg) | 60 | 48 | 12 | 5/5/5/5 all cells |
+| `low_interior_control` (4 deg) | 20 | 16 | 4 | 5/5/5/5 |
+
+**2. Interior is the only thing that varies between the arms.** Same sampler, same grid,
+so on everything *except* interior the two arms line up:
+
+| quantity | interior arm | control arm |
+|---|---|---|
+| `g_interior` (median) | **0.291** | **0.0001** |
+| scale mix 0.06 / 0.09 / 0.14 | 0.883 / 0.100 / 0.017 | 0.950 / 0.000 / 0.050 |
+| mean degree | 3.50 | 3.50 |
+| mean period | 8.53 | 7.55 |
+| eval share | 0.200 | 0.200 |
+| `G_counterfactual` (median) | −11.20 | −3.52 |
+
+Interior fraction separates cleanly (0.291 vs ~0); degree, eval share are identical; scale
+mix tracks the 487's target (0.867 / 0.103 / 0.031) on both arms modulo the 0.09/0.14 tail at
+n=20. The `G_counterfactual` gap (−11.2 vs −3.5) is the confound this batch is built to expose,
+not a leak: G would rank the interior arm far below the control **because G penalizes interior**
+— which is exactly why G-maxima framing could never have produced these windows, and why the
+counterfactual is recorded and never selected on.
+
+**3. No duplicate pictures.** ≤ 2 crops per atom (cap 3), 64 atoms; **zero same-atom window
+pairs with IoU > 0**.
+
+**4. Mask clauses (recorded, never selected on).** All 60 interior-arm windows trip the
+`interior` clause by construction. The control arm carries the swept grid's own base rate —
+15 unmasked, 5 `flat` — because it is drawn by the identical sampler with no extra predicate.
+
+**5. Recorded crop features (computed at draw time, never a selector).** Medians by band:
+
+| band | int_perim_area | coh_scale_drop |
+|---|---|---|
+| control | 0.147 | 0.079 |
+| i10_20 | 0.050 | 0.081 |
+| i20_35 | 0.036 | 0.080 |
+| i35_50 | 0.026 | 0.081 |
+
+`coh_scale_drop` is flat across the interior axis (~0.08 everywhere) — consistent with the
+bake-off's read that it measures something orthogonal to interior mass. `int_perim_area`
+*falls* as the band deepens (thicker interior → lower perimeter-to-area).
+
+**6. Resolution parity.** Spearman(screen `g_interior`, crop `int_frac` @1280×720) = **+0.999**
+(n=80): the screen-resolution quantity the mask cuts on is a near-perfect proxy for the
+crop-resolution interior fraction, so selecting on the screen quantity is selecting on what the
+labeler sees.
+
+Ready to label (`tools/viz/corpus_label.html`, blind + shuffled). What to do about the mask is
+Matt's call once the labels are in.
