@@ -63,9 +63,11 @@ def test_docs_findings_is_retired():
 
 def test_no_source_file_targets_the_retired_directory():
     """No tracked source file names docs/findings as a path — that is how it came back."""
+    # This file is the one legitimate exception: a guard has to name what it forbids.
+    self_rel = Path(__file__).resolve().relative_to(REPO_ROOT).as_posix()
     offenders = []
     for rel in _git("ls-files"):
-        if not rel.endswith(SOURCE_SUFFIXES):
+        if not rel.endswith(SOURCE_SUFFIXES) or rel == self_rel:
             continue
         p = REPO_ROOT / rel
         try:
