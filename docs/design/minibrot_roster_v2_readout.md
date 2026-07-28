@@ -118,7 +118,9 @@ blind-by-default labeling held.
 
 ## The sheets (Part C)
 
-Three vivid-companion sheets in `docs/design/` (blue_orange, one map, read beside the rubric):
+Three vivid-companion sheets (blue_orange, one map, read beside the rubric). They are a
+regenerable view, so they live in `scratch/minibrot_roster_v2_sheets/`, not in `docs/`
+(rebuild: `uv run python tools/corpus/minibrot_roster_v2_sheets.py`):
 
 - **`minibrot_roster_v2_class4.png`** — the 2 class-4s (both windows of atom `d5_p11_029`).
 - **`minibrot_roster_v2_hi_g_lo.png`** — top 24 by G of the 189 accepts I scored 1–2. **These

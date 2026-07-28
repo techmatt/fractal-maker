@@ -10,9 +10,14 @@ writes `docs/design/label_rubric.md` § "Class 4 — aesthetic criteria" from:
 
 Tiles are the VIVID companion renders (blue_orange, `<batch>/vivid/<image_id>.jpg`), the same
 map across every row so the eye compares structure, not palette. Each tile is captioned with
-family + the score move (orig -> new). Sheets land next to the rubric file
-(`docs/design/label_rubric_{class4,demoted}_examples.png`) so they can be read beside it; the
-PNGs are gitignored (regenerable view), this builder is the committed source.
+family + the score move (orig -> new).
+
+The PNGs are a REGENERABLE VIEW, so they go to `scratch/anchor_rubric_sheets/` per the
+generated-output convention — not into `docs/`. (They were briefly written into
+`docs/design/` and gitignored there, which left `tests/test_repo_size_guard.py`
+permanently red on 4 uncovered multi-MB files; `tests/test_docs_tree.py` now forbids
+untracked content under `docs/` outright.) Read them beside the rubric; rebuild with the
+one-liner below.
 
   uv run python tools/corpus/anchor_rubric_sheets.py
 """
@@ -32,7 +37,10 @@ sys.path.insert(0, str(HERE))
 import corpus_common as cc  # noqa: E402
 
 BATCH_ID = "2026-07-26_anchor_class4_v1"
-OUT_DIR = ROOT / "docs" / "design"
+sys.path.insert(0, str(ROOT / "tools"))
+import paths  # noqa: E402
+
+OUT_DIR = paths.scratch("anchor_rubric_sheets")   # regenerable view -> scratch/, never docs/
 TW, TH, PAD, LAB = 384, 216, 6, 22          # tile 16:9, caption strip below
 BG, STRIP, INK = (18, 18, 20), (30, 30, 34), (232, 232, 150)
 

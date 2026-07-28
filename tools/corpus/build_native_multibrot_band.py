@@ -59,7 +59,7 @@ BATCH_DIR = ROOT / "data" / "label_corpus" / "batches" / BATCH_ID
 CROPS = BATCH_DIR / "crops"
 SIDECAR = ROOT / "labels" / f"{GEN_VER}.json"
 MB4_CACHE = BATCH_DIR / "mb4_gather_v7_rescore.jsonl"
-MANIFEST = ROOT / "docs" / "findings" / "native_multibrot_band_v1_manifest.md"
+MANIFEST = ROOT / "docs" / "design" / "native_multibrot_band_v1_manifest.md"
 
 OUTCOME_LANES = ["campaign1/breadth", "campaign1/dive", "campaign2/breadth", "campaign2/dive"]
 HARVEST_LANES = ["campaign2/breadth", "campaign2/dive"]  # campaign1 harvest has NO coords

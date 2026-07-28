@@ -9,7 +9,7 @@ into the mandelbrot slice and re-derives the cut **precision-weighted (F0.5)** f
 family specifically (unlike the julia families, whose blind slices were too small / not
 similarly one-sided to justify tightening).
 
-Report-only by default (writes docs/findings/mandelbrot_tgood_steered.md +
+Report-only by default (writes docs/design/mandelbrot_tgood_steered.md +
 data/atlas/mandelbrot_tgood_steered.json). Pass --apply to also patch
 production_seeder.T_GOOD_OVERRIDES["mandelbrot"] to the derived value.
 
@@ -38,7 +38,7 @@ SCORES = ROOT / "labels" / "steered_run2_blind_scores.json"
 MANIFEST = ROOT / "scratch" / "steered_run2_manifest" / "manifest_key.json"
 SEEDER = ROOT / "tools" / "atlas" / "production_seeder.py"
 OUT_JSON = ROOT / "data" / "atlas" / "mandelbrot_tgood_steered.json"
-OUT_DOC = ROOT / "docs" / "findings" / "mandelbrot_tgood_steered.md"
+OUT_DOC = ROOT / "docs" / "design" / "mandelbrot_tgood_steered.md"
 
 GRID = [round(0.02 + 0.01 * i, 2) for i in range(97)]    # [0.02, 0.98]
 BETA = 0.5                                                # precision-weighted

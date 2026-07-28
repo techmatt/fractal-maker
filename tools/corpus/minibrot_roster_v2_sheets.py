@@ -14,9 +14,14 @@ of the eye:
                   test of whether hunting near minibrots outside the screen's accepts pays.
 
 Tiles are the VIVID companion renders (blue_orange, `<batch>/vivid/<image_id>.jpg`) — one map
-across every row so the eye compares structure, not palette. PNGs land next to the rubric
-(docs/design/minibrot_roster_v2_{class4,hi_g_lo,sub_hi}.png); they are gitignored (regenerable
-views), this builder is the committed source.
+across every row so the eye compares structure, not palette.
+
+The PNGs are a REGENERABLE VIEW, so they go to `scratch/minibrot_roster_v2_sheets/` per the
+generated-output convention — not into `docs/`. (They were briefly written into `docs/design/`
+and gitignored there, which left `tests/test_repo_size_guard.py` permanently red on 4
+uncovered multi-MB files; `tests/test_docs_tree.py` now forbids untracked content under
+`docs/` outright.) Read them beside `docs/design/label_rubric.md`; rebuild with the one-liner
+below.
 
   uv run python tools/corpus/minibrot_roster_v2_sheets.py
 """
@@ -36,7 +41,10 @@ import corpus_common as cc  # noqa: E402
 
 BATCH_ID = "2026-07-26_minibrot_roster_v2"
 DRAW = ROOT / "data" / "minibrot_roster" / "batch_v1" / "draw.jsonl"
-OUT_DIR = ROOT / "docs" / "design"
+sys.path.insert(0, str(ROOT / "tools"))
+import paths  # noqa: E402
+
+OUT_DIR = paths.scratch("minibrot_roster_v2_sheets")  # regenerable view -> scratch/, never docs/
 HI_G_LO_MAX = 24                              # top-N by G of the 189 accepts I scored <=2
 TW, TH, PAD, LAB = 384, 216, 6, 22            # tile 16:9, caption strip below
 BG, STRIP, INK = (18, 18, 20), (30, 30, 34), (232, 232, 150)

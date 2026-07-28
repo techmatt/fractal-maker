@@ -2,7 +2,7 @@
 
 Context: in the campaign-1 blind read I saw zero julia center-descent views, and julia harvest checks were 78–99% dup-churn. Suspicion: the coord-dup machinery may be colliding *distinct-c* julias — every julia hook starts at the same fixed shared z-plane view, so if dup keying within a julia partition uses z-coordinates without the seed c, every near-root view after the first one collides regardless of c. That bug would mimic the "continuity in c" churn story in the aggregate numbers. This prompt decides which story is true before we design hook spacing and the pre-canonical filter. Diagnosis only — fixes are the next prompt.
 
-Answer these, one-line verdict each, full detail in a findings doc under `docs/findings/`:
+Answer these, one-line verdict each, full detail in a findings doc under `docs/design/`:
 
 1. **Keying.** What exactly does each dup check key on for julia rows — the run's coord-dup/q3-cloud check, the admission near-dup check, and the cross-run prior-corpus overlap? Does the seed c participate anywhere, or is it z-coords-only within a partition? Quote the relevant code.
 

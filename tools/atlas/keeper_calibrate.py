@@ -86,7 +86,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scores", type=Path, default=ROOT / "labels/steered_run2_blind_scores.json")
     ap.add_argument("--manifest", type=Path, default=ROOT / "scratch/steered_run2_manifest")
-    ap.add_argument("--out", type=Path, default=ROOT / "docs/findings/steered_run2_keeper_calibration.md")
+    ap.add_argument("--out", type=Path, default=ROOT / "docs/design/steered_run2_keeper_calibration.md")
     args = ap.parse_args()
 
     scores = json.loads(args.scores.read_text(encoding="utf-8"))

@@ -116,7 +116,7 @@ Recoverable from the archive if ever needed.
    a one-inference smoke through each head's deploy path still worth running).
 3. Decide which regenerable bulk (if any) is cheaper to copy than recompute; leave
    the rest to rebuild on demand.
-4. Refresh `docs/findings/repo_size_guard.md` + `CLAUDE.md` in `fractal-maker` to
+4. Refresh `docs/design/repo_size_guard.md` + `CLAUDE.md` in `fractal-maker` to
    the new baseline (the old `.git`-rewrite worklist is retired by this migration).
 5. Only after 1–4: rename old repo to `-deprecated`, then move/delete it and the
    mirror backup.

@@ -6,6 +6,13 @@ resolved to no label. It now routes through `label_store` — the SAME primitive
 query sampler uses — so (a) it recovers those labels and (b) the two consumers can
 never disagree on a row.
 
+The expectation in `_independent_join` is EXTERNAL to that primitive on purpose: raw
+`labels/*.json` read straight off disk, joined by image_id, with the revision overlay
+reconstructed in two lines here rather than delegated to `resolve_score`. Since the reader
+applies amendments, the ground truth has to as well — and applying them by CALLING
+`resolve_score` would turn the check into a restatement. `test_independent_ground_truth_is_
+not_tautological` proves by mutation that it has not.
+
 Run either way:
   uv run pytest tools/corpus/test_corpus_reader.py
   uv run python tools/corpus/test_corpus_reader.py     # prints PASS/FAIL summary
@@ -81,10 +88,64 @@ def test_recovers_sidecar_only_labels():
             f"{bid}: reader labels diverge from the raw sidecar join")
 
 
+def test_the_amendment_overlay_in_the_ground_truth_is_load_bearing():
+    """Non-vacuity: at least one sidecar batch carries an amendment that CHANGES a score.
+
+    If every amendment merely reaffirmed its original, the overlay in `_independent_join`
+    would be a no-op and the test below would pass for the wrong reason."""
+    changed = 0
+    for bid, sidecar_file in ls.SIDECAR_LABELS.items():
+        amend_file = ls.AMENDMENT_LABELS.get(bid)
+        if not amend_file:
+            continue
+        orig = _raw_json_map(sidecar_file)
+        for iid, sc in _raw_json_map(amend_file).items():
+            if iid in orig and orig[iid] != sc:
+                changed += 1
+    assert changed > 0, (
+        "no sidecar-batch amendment changes a score — the amendment overlay in the "
+        "independent ground truth is currently vacuous, so the test below proves nothing")
+
+
+def test_independent_ground_truth_is_not_tautological():
+    """The "independent" expectation must RECONSTRUCT the amendment overlay, not delegate
+    to the resolver it is checking.
+
+    `_independent_join` reads the raw `labels/*.json` files and overlays them by image_id
+    with its own two lines of dict logic; `resolve_score` reads `label.score` and joins on
+    the coordinate `join_key`. Different code, different join key, same expected answer —
+    that is what makes it a check rather than a restatement.
+
+    Proven by mutation, because "looks independent" is not a guarantee: break
+    `resolve_score`'s amendment preference and the sidecar test must go RED. A ground truth
+    that called `resolve_score` would stay green under the same break, which is exactly the
+    tautology this pins shut."""
+    orig = ls.resolve_score
+    ls.resolve_score = lambda row, labels, amendments=None: orig(row, labels, None)
+    try:
+        caught = False
+        try:
+            test_recovers_sidecar_only_labels()
+        except AssertionError:
+            caught = True
+    finally:
+        ls.resolve_score = orig
+    assert caught, (
+        "breaking resolve_score's amendment preference did NOT fail the sidecar test — "
+        "the 'independent' ground truth is delegating to the resolver it is supposed to "
+        "check, so that test can no longer detect a resolution bug")
+    test_recovers_sidecar_only_labels()          # and green again once restored
+
+
 def test_both_consumers_share_the_resolver():
     """corpus_reader and query_sampler resolve through the SAME label_store object —
     the structural guarantee that they cannot drift. Also assert they agree row-for-row
-    on the sidecar batches (the concrete cross-consumer check)."""
+    on the sidecar batches (the concrete cross-consumer check).
+
+    This one IS resolver-based on both sides, deliberately: it checks that the two
+    CONSUMERS agree, which is a wiring question, not a ground-truth question. The
+    independent ground truth lives in `_independent_join` above, and
+    `test_independent_ground_truth_is_not_tautological` pins it there."""
     sys.path.insert(0, os.path.join(HERE, "..", "palettes"))
     import query_sampler as qs  # noqa: E402  (heavy import: colormap + numpy)
 
@@ -117,6 +178,8 @@ def test_both_consumers_share_the_resolver():
 def main():
     tests = [
         test_recovers_sidecar_only_labels,
+        test_the_amendment_overlay_in_the_ground_truth_is_load_bearing,
+        test_independent_ground_truth_is_not_tautological,
         test_both_consumers_share_the_resolver,
     ]
     failed = 0

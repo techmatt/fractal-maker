@@ -26,7 +26,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 SCORES = ROOT / "labels" / "steered_v1_2_dive_blind_scores.json"
 MANIFEST = ROOT / "scratch" / "dive_manifest" / "manifest_key.json"
-OUT = ROOT / "docs" / "findings" / "steered_v1_2_dive_read.md"
+OUT = ROOT / "docs" / "design" / "steered_v1_2_dive_read.md"
 
 
 def spearman(x, y):

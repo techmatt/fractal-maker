@@ -23,7 +23,7 @@ Outputs (scratch/q4_stage1/linear_fit/):
   1. weights.json / stdout   — surviving L1 weights per tier + held-out scores
   2. next_to_label.json      — margin-uncertain UNLABELED survivors + random control
   3. field_<mb>.png          — dense position x scale G heatmap w/ maxima + crops
-  docs/findings/q4_stage1_linear_fit.md — the report
+  docs/design/q4_stage1_linear_fit.md — the report
 
 Run:  uv run python -m tools.studies.q4_stage1_linear_fit fit
       uv run python -m tools.studies.q4_stage1_linear_fit field
@@ -51,7 +51,7 @@ LABELS_P1 = ROOT / "labels" / "q4_stage1_windows.json"
 LABELS_P2 = ROOT / "labels" / "q4_stage1_windows_p2.json"
 OUT = ROOT / "scratch" / "q4_stage1" / "linear_fit"
 FRAMES = ROOT / "scratch" / "q4_stage1" / "frames"
-FINDINGS = ROOT / "docs" / "findings" / "q4_stage1_linear_fit.md"
+FINDINGS = ROOT / "docs" / "design" / "q4_stage1_linear_fit.md"
 
 # thresholds shared with the existing decomposition (q4_neighborhood_sweep)
 STRUCT_FLAT = 0.030

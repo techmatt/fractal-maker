@@ -30,5 +30,5 @@ for the three that import a same-dir sibling, note the sibling moved with it).
 | `render_v2_batch.py` | `tools/palettes/` | `parents[2]` → `parents[3]`; imports `cliff_diag` (moved here too) |
 | `exp_vs_smooth_rankcorr.py` | `tools/render_mode_pilot/` | `parents[N]` → `parents[N+1]` |
 
-Findings for the closed studies live in MEMORY / `docs/findings/`; see the re-audit
+Findings for the closed studies live in MEMORY / `docs/design/`; see the re-audit
 for the per-file rationale.

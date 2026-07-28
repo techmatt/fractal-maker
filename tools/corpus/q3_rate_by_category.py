@@ -33,7 +33,7 @@ WHAT COUNTS AS A LABEL (the traps this script is built around):
     filename guess; it is stated in the output.
 
 Read-only. No thresholds, re-labeling, or re-scoring. Writes nothing outside the
-report path passed with --out (default docs/findings/).
+report path passed with --out (default docs/design/).
 """
 from __future__ import annotations
 
@@ -179,7 +179,7 @@ def fmt_table(total, q3, order=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=os.path.join(ROOT, "docs", "findings",
+    ap.add_argument("--out", default=os.path.join(ROOT, "docs", "design",
                     "labeled_q3_rate_by_category.md"))
     args = ap.parse_args()
 

@@ -60,7 +60,7 @@ except Exception:
 # Pool render res = the SMALLEST res that faithfully feeds every render consumer. Both quality
 # heads deploy Transform(train=False) = 384×224 bicubic stretch, the pref pick scores on the
 # cached 640×360 field, and realized-stats is a resolution-robust histogram — so the pool render
-# only has to survive the 384×224 downsample. The scores-match guard (docs/findings/
+# only has to survive the 384×224 downsample. The scores-match guard (docs/design/
 # pool-render-res-960.md) pinned 960×540 ss2: the mining head is res-robust everywhere (median
 # |Δ|=0.007 vs the old 1280×720 ss2) and the wallpaper head — the strict 0.90 gate, trained on
 # 1280-sourced crops, hence res-sensitive — matches at 960 ss2 (median |Δ|=0.027, spearman 0.933,

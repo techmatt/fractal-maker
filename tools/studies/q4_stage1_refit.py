@@ -41,7 +41,7 @@ LABEL_FILES = [ROOT / "labels" / "q4_stage1_windows.json",       # p1
                ROOT / "labels" / "q4_g_aimed.json"]               # g-aimed (newest)
 OUT = ROOT / "scratch" / "q4_stage1" / "refit"
 FRAMES = ROOT / "scratch" / "q4_stage1" / "frames"
-FINDINGS = ROOT / "docs" / "findings" / "q4_stage1_refit.md"
+FINDINGS = ROOT / "docs" / "design" / "q4_stage1_refit.md"
 
 TIERS = ["T1_global", "T2_cells"]          # Laplacian (T3) dropped
 PRIOR_AUC = {"T1_global": 0.848, "T2_cells": 0.878}

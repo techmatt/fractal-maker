@@ -153,7 +153,9 @@ The fixed base defaults are `scratch/renders/` (bare render) and `scratch/strips
 > **Scratchpad is not a dependency tier.** `scratchpad/` is the canonical *disposable temp*
 > dir (gitignored). **If a file is imported from outside `scratchpad/`, or it's the only
 > thing that produces a durable artifact, it isn't scratch — promote it to `tools/` (or
-> delete it).** Findings/analysis text goes to `docs/findings/`, committed. `scratchpad/`
+> delete it).** Findings/analysis text goes to `docs/design/`, committed — **`docs/findings/`
+> is RETIRED and must not be recreated** (`tests/test_docs_tree.py` enforces both that it is
+> gone and that no source writes to it). `scratchpad/`
 > must never be on anyone's dependency path — nothing tracked may import from it or read a
 > non-regenerable artifact out of it. (This rule exists because `scratchpad/visual_dup/embed.py`
 > was load-bearing production code — the whole morph_clip dedup axis depended on it — living

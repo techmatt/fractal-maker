@@ -18,7 +18,7 @@ the decode predicate, nothing is hand-deleted (the original 0.18 ledger stays on
 Distinct-look count at the new threshold = the stored run-global distinct flag intersected with
 the new q3 set: a row that was distinct vs all earlier 0.18-admissions is still distinct vs the
 0.45 subset (a strict subset can only drop would-be founders, never introduce a new near-dup
-collision for a surviving distinct row). This reproduces the docs/findings §2 table exactly.
+collision for a surviving distinct row). This reproduces the docs/design §2 table exactly.
 
 Outputs (under the grid run dir):
   outcome_ledger_v7_t45.jsonl   the re-decoded admitted q3 ledger (intake source for library_intake_2)
