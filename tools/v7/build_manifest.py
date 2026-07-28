@@ -70,6 +70,15 @@ CENSUS_BATCHES = {"2026-07-17_prospect_run1_baserate_R_v1",
 BAND_BATCHES = {"2026-07-11_jm3_band_v1", "2026-07-12_jm45_band_v1"}
 BLINDSPOT_BATCH = "2026-07-12_blindspot_v6reject_v1"
 
+# Unbiased/eval-eligibility is EXPLICIT, never a fall-through. `assign_split` fails CLOSED:
+# a batch not named in CENSUS / BAND / BLINDSPOT / UNBIASED_TRAIN below is classified
+# biased→train. The only unbiased-given-descent draw is the census (julia→eval); the only
+# unbiased train source is the v5-era flat re-labels (loose0_v3). Any new unbiased or
+# eval-eligible batch MUST be added here — a biased batch that someone forgets to register
+# is then still safe (biased/train), which is the failure mode the old `return "train",
+# False, "loose0_v3"` default got backwards (it tagged every unregistered batch unbiased).
+UNBIASED_TRAIN_BATCHES = {"2026-06-23_flat_generate_loose0_v3"}  # flat unbiased re-labels
+
 
 class UF:
     def __init__(self, n): self.p = list(range(n))
@@ -155,8 +164,13 @@ def load_post_freeze(v6_ids):
 
 
 def assign_split(loc):
-    """(split, biased, source) forced by batch — the plan §2 rule set. Census julia ->
-    eval (unbiased); everything else -> train. Band/blindspot/native are biased->train."""
+    """(split, biased, source) forced by batch — the plan §2 rule set, FAIL-CLOSED. Census
+    julia -> eval (unbiased); band/blindspot/native/unregistered -> biased->train; the one
+    explicitly-registered unbiased train source (loose0_v3) -> train (unbiased). An
+    UNREGISTERED batch classifies biased->train: unbiased/eval-eligibility requires explicit
+    registration (CENSUS/UNBIASED_TRAIN), so a biased batch nobody remembered to list is
+    still safe. This inverts the old default, which fell every unregistered batch through to
+    ("train", False, "loose0_v3") and silently tagged it unbiased."""
     b, ft = loc["batch"], loc["ft"]
     if b in CENSUS_BATCHES:
         if ft.startswith("julia_multibrot"):
@@ -166,7 +180,19 @@ def assign_split(loc):
         return "train", True, "jm_band"                      # model-band-selected
     if b == BLINDSPOT_BATCH:
         return "train", True, "blindspot_v6reject"           # negative-by-construction
-    return "train", False, "loose0_v3"                       # unbiased flat re-labels
+    if b in UNBIASED_TRAIN_BATCHES:
+        return "train", False, "loose0_v3"                   # unbiased flat re-labels
+    return "train", True, "unregistered"                     # FAIL CLOSED: biased-by-default
+
+
+def registration_contradictions(locs):
+    """Locations whose split classification contradicts label_store's biased registration:
+    classified unbiased (biased is False) yet registered train-side-only in
+    `label_store.TRAIN_SIDE_ONLY_BATCHES`. A non-empty return is a hard abort in main()
+    (gate 8) — the two authorities (this module's split rules, label_store's biased
+    registry) must never silently disagree; we refuse rather than prefer one."""
+    return [l for l in locs
+            if l["biased"] is False and l["batch"] in ls.TRAIN_SIDE_ONLY_BATCHES]
 
 
 def assign_groups(locs):
@@ -357,6 +383,18 @@ def main():
     assert not poid_ov, f"GATE 7 FAIL: {len(poid_ov)} census parent_oid in train"
     print(f"  [7] census disjoint from train    OK (id 0 / seed-c 0 / parent_oid 0"
           f"; train parent_oids={len(train_poids)}, census parent_oids={len(census_poids)})")
+
+    # Gate 8: split classification vs label_store biased-registration — no silent disagreement.
+    # A batch label_store registers train-side-only (biased) must never be classified unbiased
+    # here. The fail-closed default makes unregistered batches biased; this catches the inverse
+    # mistake — a biased batch wrongly listed in an unbiased/eval registry.
+    contra = registration_contradictions(post)
+    assert not contra, (
+        f"GATE 8 FAIL: {len(contra)} batch(es) classified unbiased but registered "
+        f"train-side-only in label_store: "
+        f"{sorted({(l['batch'], l['split'], l['source']) for l in contra})}")
+    print(f"  [8] split vs label_store registr. OK "
+          f"({len(ls.TRAIN_SIDE_ONLY_BATCHES)} train-side-only batches, 0 classified unbiased)")
 
     # ---- write manifest (v6 verbatim + appended) ----
     OUT.parent.mkdir(parents=True, exist_ok=True)

@@ -84,6 +84,27 @@ SIDECAR_LABELS = {
     "2026-07-27_interior_band_v1": "interior_band_v1.json",
 }
 
+# Machine-readable form of the "train-side only / never an unbiased base-rate" prose in
+# the SIDECAR_LABELS entries above: batches whose SELECTION is biased (model-band /
+# score-band / grid stratified, or negative-by-construction). They are train-side ONLY and
+# must NEVER be classified unbiased or eval-eligible. `tools/v7/build_manifest` cross-checks
+# its per-batch split assignment against this set and HARD-ABORTS if a batch it classified
+# unbiased/eval is registered biased here (`registration_contradictions`), so the two
+# authorities can never silently disagree.
+#
+# This set does NOT drive classification and need NOT be exhaustive: build_manifest's split
+# default is fail-closed (an unregistered batch is biased/train), so an omission here is
+# still safe. It exists to CATCH a mistaken unbiased/eval registration on a batch label_store
+# already knows is biased — the one direction the fail-closed default cannot protect.
+TRAIN_SIDE_ONLY_BATCHES = {
+    "2026-07-11_jm3_band_v1",              # model-band-selected (decoded_class=2)
+    "2026-07-12_jm45_band_v1",             # model-band-selected
+    "2026-07-12_blindspot_v6reject_v1",    # negative-by-construction (v6 rejects)
+    "2026-07-21_phoenix_grid",             # grid-stratified (Phase-B seed grid)
+    "2026-07-22_native_multibrot_band_v1", # v7 p_good-band stratified
+    "2026-07-27_interior_band_v1",         # OOD-masked interior band; hard-negative source
+}
+
 # Label files that live in labels/ but belong to a DIFFERENT corpus and MUST NOT be read
 # by this INTEGER reader. The q4 WINDOW store (tools/corpus/q4_window_reader.py) uses
 # three-way STRING classes (accept/reject/filter_leak) keyed by window_id; int-coercing
