@@ -45,10 +45,19 @@ def _reader_labels_by_batch():
 
 def _raw_json_map(filename):
     """Load a labels/*.json as {image_id: int}, nulls dropped, WITHOUT going through
-    label_store — the external side of the check."""
+    label_store — the external side of the check. Reimplements the same value-shape
+    tolerance independently (flat `int`, or the combined `{"score", "revealed"}` reveal-audit
+    export) so the ground truth stays a genuine second implementation, not a call to the code
+    under test."""
     raw = json.loads(open(os.path.join(ls.LABELS_DIR, filename), encoding="utf-8").read())
     body = raw["labels"] if isinstance(raw.get("labels"), dict) else raw
-    return {k: int(v) for k, v in body.items() if v is not None}
+    out = {}
+    for k, v in body.items():
+        if isinstance(v, dict):
+            v = v.get("score")
+        if v is not None:
+            out[k] = int(v)
+    return out
 
 
 def _independent_join(batch_id):

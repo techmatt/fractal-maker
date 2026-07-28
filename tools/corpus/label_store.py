@@ -77,6 +77,11 @@ SIDECAR_LABELS = {
     # Sidecar name is the labeling export (2026-07-22_*), NOT the empty placeholder the
     # batch builder pre-created.
     "2026-07-22_native_multibrot_band_v1": "2026-07-22_native_multibrot_band_v1.json",
+    # Interior-band batch (80 items, labeled 2026-07-28; combined reveal-audit export,
+    # empty scores.json, never merged in-row). Deliberately samples the g_interior>=0.10
+    # band the deployed OOD mask discards -> 74 bad / 6 okay / 0 good, all masked-band
+    # material; a train-side hard-negative source, never an unbiased base-rate.
+    "2026-07-27_interior_band_v1": "interior_band_v1.json",
 }
 
 # Label files that live in labels/ but belong to a DIFFERENT corpus and MUST NOT be read
@@ -211,9 +216,15 @@ def _owner_keymap(owner_batch_id, batches_dir):
 def load_sidecar(filename):
     """Load a labels/*.json sidecar as {image_id: int score}, dropping nulls.
 
-    Tolerates both a bare {image_id: score} map and a {"labels": {...}} wrapper. Raises on a
-    registered FOREIGN file (a different corpus, string classes) rather than int-crashing on it
-    — the loud, actionable form of the two-corpus boundary."""
+    Tolerates the three on-disk shapes a label export takes (same value forms as
+    `merge_scores.load_scores`, so the two loaders can never disagree on a format):
+      * bare `{image_id: int}` — the legacy flat sidecar (jm3/jm45/native_multibrot/phoenix);
+      * `{"labels": {...}}` wrapper around either value form;
+      * combined reveal-audit export `{image_id: {"score": int, "revealed": 0|1}}` — the
+        blind-labeling UI's current output (`interior_band_v1`). Only the score is a store
+        value; the reveal flag is an audit field, dropped here.
+    Raises on a registered FOREIGN file (a different corpus, string classes) rather than
+    int-crashing on it — the loud, actionable form of the two-corpus boundary."""
     if filename in FOREIGN_LABEL_FILES:
         raise ValueError(
             f"{filename!r} belongs to a different corpus (read it through "
@@ -221,7 +232,13 @@ def load_sidecar(filename):
             f"are string classes, not int scores. See label_store.FOREIGN_LABEL_FILES.")
     d = json.loads((open(os.path.join(LABELS_DIR, filename), encoding="utf-8")).read())
     body = d["labels"] if isinstance(d.get("labels"), dict) else d
-    return {k: int(v) for k, v in body.items() if v is not None}
+    out = {}
+    for k, v in body.items():
+        if isinstance(v, dict):          # combined reveal-audit form: pull the score out
+            v = v.get("score")
+        if v is not None:
+            out[k] = int(v)
+    return out
 
 
 def _rekey_onto_join(raw, owner_batch_id, batches_dir, fn):
