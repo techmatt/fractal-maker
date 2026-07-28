@@ -123,6 +123,27 @@ def test_partial_spearman_removes_a_common_cause():
     assert abs(par) < 0.25
 
 
+def test_atom_bootstrap_partial_spearman_brackets_the_point_estimate():
+    """The clustered CI must contain the point estimate, and must be WIDER when the same
+    rows are clustered into few atoms than when every row is its own atom — that widening
+    IS the correction (3 windows off one atom are not 3 independent observations)."""
+    rng = np.random.default_rng(1)
+    n, k = 300, 20
+    atoms = np.repeat(np.arange(k), n // k)
+    a = np.repeat(rng.normal(size=k), n // k)          # atom-level effect the control MISSES
+    z = rng.normal(size=n)                             # an unrelated control
+    x = a + 0.5 * rng.normal(size=n)
+    y = a + 0.5 * rng.normal(size=n)
+    point, _ = IB.partial_spearman(x, y, z)
+    lo, hi, reps = IB.atom_bootstrap_partial_spearman(x, y, z, atoms, reps=400)
+    assert reps > 300 and lo <= point <= hi
+    lo2, hi2, _ = IB.atom_bootstrap_partial_spearman(
+        x, y, z, np.arange(n), reps=400)               # every row its own cluster
+    # The residual correlation here is entirely atom-level, so pretending the 300 rows are
+    # independent understates the interval by a wide margin. That gap is the correction.
+    assert (hi - lo) > 2 * (hi2 - lo2)
+
+
 def test_auc_matches_a_hand_computed_case():
     a, _, _ = IB.auc([1.0, 2.0, 3.0, 4.0], [0, 0, 1, 1])
     assert a == pytest.approx(1.0)

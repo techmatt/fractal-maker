@@ -32,6 +32,9 @@ Stages:
             much of the accept/reject split does that account for? Clause attribution over
             the drawn windows plus a sampled full-field sweep (counterfactual: which
             positions the interior clause ALONE removes).
+  questions Two follow-ups on the same table, no new data: (1) coh_scale_drop's per-degree
+            AUCs split out by train vs eval, with the board it was selected off; (2)
+            atom-bootstrapped CIs on degree's conditional rank correlation.
 
 Runtime: features ~2 min (487 field dumps at ~0.1s + 145 parent-field re-featurizations);
 board ~5 s; audit ~4 min with 4 workers (background it).
@@ -387,6 +390,32 @@ def partial_spearman(x, y, z):
         beta, *_ = np.linalg.lstsq(Z, v, rcond=None)
         return v - Z @ beta
     return float(pearsonr(resid(rx), resid(ry)).statistic), int(m.sum())
+
+
+def atom_bootstrap_partial_spearman(x, y, z, atoms, reps=2000, seed=0):
+    """90% CI for the rank partial correlation rho(x, y | z), resampling ATOMS.
+
+    Same clustered bootstrap as `atom_bootstrap_auc` and for the same reason: up to 3
+    windows share one atom, so a crop-level resample would treat correlated rows as
+    independent and understate the interval. Rows from a re-drawn atom appear more than
+    once, which is what the cluster bootstrap is supposed to do."""
+    x, y, z = (np.asarray(v, float) for v in (x, y, z))
+    atoms = np.asarray(atoms)
+    m = _finite(x, y, z)
+    x, y, z, atoms = x[m], y[m], z[m], atoms[m]
+    uniq = np.unique(atoms)
+    idx_by_atom = {a: np.where(atoms == a)[0] for a in uniq}
+    rng = np.random.default_rng(seed)
+    vals = []
+    for _ in range(reps):
+        pick = rng.choice(uniq, size=len(uniq), replace=True)
+        ii = np.concatenate([idx_by_atom[a] for a in pick])
+        r, n = partial_spearman(x[ii], y[ii], z[ii])
+        if np.isfinite(r):
+            vals.append(r)
+    if len(vals) < reps // 10:
+        return float("nan"), float("nan"), len(vals)
+    return float(np.percentile(vals, 5)), float(np.percentile(vals, 95)), len(vals)
 
 
 def atom_bootstrap_auc(x, pos, atoms, reps=2000, seed=0):
@@ -970,6 +999,148 @@ def stage_audit(args):
 
 
 # =========================================================================== #
+# Stage: questions — the two follow-ups on data already in hand.
+#
+# Q1. The findings doc reported coh_scale_drop's per-degree AUCs as 0.70 / 0.76 / 0.73.
+#     Those came from the §2b table, whose per-degree columns are TRAIN ONLY (the header
+#     says so; the eval confirmation printed there covers degree 5 alone). coh_scale_drop
+#     was SELECTED on train out of a board of 13 crop features x 4 degrees, so it is the
+#     single most selection-exposed number in the report — the honest read needs eval
+#     beside train, and the multiplicity it was picked out of stated.
+#
+# Q2. Degree's conditional rank correlation rho(degree, label | int_frac) was +0.399
+#     (train) and +0.683 (eval). Eval stronger than train is the unusual direction and
+#     eval is 40 atoms, so the point estimates need clustered intervals before degree is
+#     promoted to a draw axis.
+# =========================================================================== #
+def stage_questions(args):
+    rows = _flatten(_read_jsonl(paths.durable(TABLE_REL)))
+    rows = [r for r in rows if r["label"] is not None]
+    splits = {}
+    for tag in ("train", "eval"):
+        sub = [r for r in rows if r["split"] == tag]
+        splits[tag] = dict(rows=sub,
+                           lab=np.array([r["label"] for r in sub], float),
+                           at=np.array([r["atom"] for r in sub]))
+        splits[tag]["pos"] = splits[tag]["lab"] >= 3
+
+    print("=" * 100)
+    print("Q1. coh_scale_drop's per-degree AUCs — WHICH SPLIT?  (answer: the reported "
+          "0.70/0.76/0.73 are TRAIN)")
+    print("=" * 100)
+    print("  The findings table §2b is a TRAIN table (its own caption says so). Below, both "
+          "splits,\n  split out, with cell sizes and atom-bootstrap 90% CIs.\n")
+    h = (f"  {'feature':<18}{'deg':>4}{'split':>7}{'n':>6}{'pos':>5}{'atoms':>7}"
+         f"{'rho':>9}{'AUC':>8}{'AUC 90% CI':>18}")
+    print(h)
+    print("  " + "-" * (len(h) - 2))
+    q1 = {}
+    # `degree` itself is constant inside a degree slice, so it is not on this table.
+    for nm in ("coh_scale_drop", "int_perim_area", "G"):
+        for d in (2, 3, 4, 5):
+            for tag in ("train", "eval"):
+                s = splits[tag]
+                D, F = _col(s["rows"], "degree"), _col(s["rows"], nm)
+                m = (D == d) & _finite(F)
+                if m.sum() < 4:
+                    print(f"  {nm:<18}{d:>4}{tag:>7}{int(m.sum()):>6}"
+                          f"{'':>5}{'':>7}{'':>9}{'':>8}{'too small':>18}")
+                    continue
+                rr, nn = spearman(F[m], s["lab"][m])
+                aa, pp, ng = auc(F[m], s["pos"][m])
+                nat = len(set(s["at"][m]))
+                if np.isfinite(aa):
+                    lo, hi = atom_bootstrap_auc(F[m], s["pos"][m], s["at"][m])
+                    ci = f"[{lo:.3f}, {hi:.3f}]"
+                else:
+                    ci = "undefined (0 pos)"
+                print(f"  {nm:<18}{d:>4}{tag:>7}{int(m.sum()):>6}{pp:>5}{nat:>7}"
+                      f"{rr:>+9.3f}{aa:>8.3f}{ci:>18}")
+                q1[f"{nm}|d{d}|{tag}"] = dict(n=int(m.sum()), pos=pp, atoms=nat,
+                                              rho=rr, auc=aa, ci=ci)
+        print()
+    print("  SELECTION EXPOSURE. coh_scale_drop was picked on TRAIN out of the full crop "
+          "board.\n  Every crop feature's within-degree TRAIN AUC, so the multiplicity it "
+          "won against is visible:")
+    hh = f"    {'feature':<20}" + "".join(f"{'d'+str(d):>16}" for d in (3, 4, 5))
+    print(hh)
+    print("    " + "-" * (len(hh) - 4))
+    tr = splits["train"]
+    Dtr = _col(tr["rows"], "degree")
+    for nm in CROP_KEYS + ["G"]:
+        F = _col(tr["rows"], nm)
+        cells = []
+        for d in (3, 4, 5):
+            m = (Dtr == d) & _finite(F)
+            aa, pp, _ = auc(F[m], tr["pos"][m])
+            cells.append(f"{aa:.3f} (n={int(m.sum())})" if np.isfinite(aa) else "--")
+        print(f"    {nm:<20}" + "".join(f"{c:>16}" for c in cells))
+    print("    -> 13 crop features x 3 degrees = 39 train AUCs; the max of a board that "
+          "size is\n       biased upward, which is exactly why the eval column above is the "
+          "number that counts.")
+
+    print("\n" + "=" * 100)
+    print("Q2. ATOM-BOOTSTRAPPED CIs on degree's CONDITIONAL rank correlation")
+    print("=" * 100)
+    print("  rho(degree, label | F): degree's rank correlation with the label after "
+          "regressing out F's\n  ranks. Resampling ATOMS (not crops) — up to 3 windows "
+          "share an atom.\n")
+    h2 = (f"  {'control F':<18}{'split':>7}{'n':>6}{'atoms':>7}{'rho(deg,y)':>12}"
+          f"{'rho(deg,y|F)':>14}{'90% CI':>20}{'reps':>7}")
+    print(h2)
+    print("  " + "-" * (len(h2) - 2))
+    q2 = {}
+    for nm in ("int_frac", "int_perim_area", "coh_scale_drop", "G", "(none: raw)"):
+        for tag in ("train", "eval"):
+            s = splits[tag]
+            D = _col(s["rows"], "degree")
+            if nm == "(none: raw)":
+                F = np.zeros_like(D)                # regressing out a constant = no control
+            else:
+                F = _col(s["rows"], nm)
+            m = _finite(D, F, s["lab"])
+            raw, _ = spearman(D[m], s["lab"][m])
+            if nm == "(none: raw)":
+                lo, hi, reps = atom_bootstrap_partial_spearman(
+                    D[m], s["lab"][m], np.arange(m.sum(), dtype=float) * 0.0 + 1.0,
+                    s["at"][m])
+                pr = raw
+            else:
+                pr, _ = partial_spearman(D[m], s["lab"][m], F[m])
+                lo, hi, reps = atom_bootstrap_partial_spearman(
+                    D[m], s["lab"][m], F[m], s["at"][m])
+            nat = len(set(s["at"][m]))
+            print(f"  {nm:<18}{tag:>7}{int(m.sum()):>6}{nat:>7}{raw:>+12.3f}{pr:>+14.3f}"
+                  f"{'[' + f'{lo:+.3f}, {hi:+.3f}' + ']':>20}{reps:>7}")
+            q2[f"{nm}|{tag}"] = dict(n=int(m.sum()), atoms=nat, rho_raw=raw,
+                                     rho_partial=pr, ci=[lo, hi], reps=reps)
+        print()
+    print("  The reverse direction, for symmetry (does the CONTROL survive degree?):")
+    h3 = (f"    {'feature F':<18}{'split':>7}{'rho(F,y)':>10}{'rho(F,y|deg)':>14}"
+          f"{'90% CI':>20}")
+    print(h3)
+    print("    " + "-" * (len(h3) - 4))
+    for nm in ("int_frac", "int_perim_area", "coh_scale_drop"):
+        for tag in ("train", "eval"):
+            s = splits[tag]
+            D, F = _col(s["rows"], "degree"), _col(s["rows"], nm)
+            m = _finite(D, F, s["lab"])
+            raw, _ = spearman(F[m], s["lab"][m])
+            pr, _ = partial_spearman(F[m], s["lab"][m], D[m])
+            lo, hi, _reps = atom_bootstrap_partial_spearman(
+                F[m], s["lab"][m], D[m], s["at"][m])
+            print(f"    {nm:<18}{tag:>7}{raw:>+10.3f}{pr:>+14.3f}"
+                  f"{'[' + f'{lo:+.3f}, {hi:+.3f}' + ']':>20}")
+        print()
+
+    outp = SCR / "questions.json"
+    outp.parent.mkdir(parents=True, exist_ok=True)
+    outp.write_text(json.dumps(dict(q1=q1, q2=q2), indent=1))
+    print(f"-> {outp.relative_to(ROOT)}")
+    return 0
+
+
+# =========================================================================== #
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="stage", required=True)
@@ -984,6 +1155,9 @@ def main():
     pa.add_argument("--workers", type=int, default=WORKERS)
     pa.add_argument("--atoms", type=int, default=24, help="atoms in the counterfactual sweep")
     pa.set_defaults(func=stage_audit)
+    pq = sub.add_parser("questions")
+    pq.add_argument("--workers", type=int, default=WORKERS)
+    pq.set_defaults(func=stage_questions)
     args = ap.parse_args()
     if args.workers > 4:
         sys.exit("workers capped at 4 (project rule)")
