@@ -191,7 +191,22 @@ The fixed base defaults are `scratch/renders/` (bare render) and `scratch/strips
 > default values/flag names stable (batch reproducibility depends on them).
 
 - Deps are kept minimal and pure-Rust (no C deps): clap, num-complex, rayon, image (png/jpeg/webp), astro-float. The JSON logs (guided-descend pool, generate manifest, calibration artifact) are hand-rolled rather than pulling in serde.
-- **Max 4 workers for multiprocessing.** Any parallel/multiprocessing worker pool (Python `ThreadPoolExecutor`/`ProcessPoolExecutor` `max_workers`, subprocess fan-out, `WORKERS` constants, etc.) MUST cap at 4. Do not exceed 4 concurrent workers.
+- **Max 4 concurrent PROCESSES. In-process threads are not capped at 4.** The limit is
+  about how many heavyweight OS processes contend at once, not how much parallelism one
+  process uses — 4+ simultaneous `fractal-generator.exe` instances make the desktop
+  unusable, because each carries its own rayon pool, its own plan/corpus scan and its own
+  resident colormap LUTs. One process running many threads is a different resource shape
+  and does not have that effect.
+  - **Capped at 4:** `ProcessPoolExecutor` `max_workers`, subprocess fan-out, any
+    `WORKERS` constant that spawns child processes, and `ThreadPoolExecutor` when each
+    thread drives a subprocess (that is process concurrency wearing a thread pool's
+    clothes).
+  - **NOT capped at 4:** worker threads inside a single process — `RAYON_NUM_THREADS`,
+    a rayon pool in the Rust binary. Size those against the box's **12 logical cores** and
+    run long jobs at `BELOW_NORMAL_PRIORITY_CLASS` so they yield to interactive work.
+    `tools/v8/render_cache.py` runs `WORKERS = 6` on exactly this basis (measured 12.1
+    tiles/s at 6 threads vs 7.0 at 3, 5.94 cores busy, desktop unaffected) — do not
+    "correct" it to 4.
 - Matt is expert (graphics + ML PhD) — be terse and precise; skip basics.
 - Module docs (`//!`) carry the real design rationale; read them before changing a module.
 
