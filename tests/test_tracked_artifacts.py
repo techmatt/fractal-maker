@@ -29,10 +29,16 @@ It asserts each path is tracked via `git ls-files --error-unmatch`; if a path is
 untracked or newly ignored, git exits non-zero naming the path and the assertion
 fails.
 
-Scope note — this guards *deletion / de-tracking* of a static list. It does NOT
-discover newly-added irreplaceable files (that needs a glob, which by
+Scope note — `TRACKED_CANARIES` guards *deletion / de-tracking* of a static list.
+It does NOT discover newly-added irreplaceable files (that needs a glob, which by
 construction cannot detect a file that is already gone). Adding a batch of human
 labels is therefore a conscious edit to `TRACKED_CANARIES` below.
+
+The `data/v8/` artifacts are the exception and are guarded RELATIONALLY at the
+bottom of this file — their path set is derived from the `.gitignore` negations
+that declare them durable, because unlike everything in the static list they are
+periodically REBUILT, and a list that must be emptied and refilled around each
+rebuild is a guard that is off exactly when it is needed.
 
 Runs under default `pytest`: no release binary, no GPU, no corpus reads — only
 `git`. See `test_release_binary.py` for the binary-presence canary.
@@ -109,17 +115,10 @@ TRACKED_CANARIES = [
     "data/wallpaper_head/v3/model_best.pt",       # LIVE cross-location wallpaper-quality head
     "data/render_mode_head/v1/model_best.pt",     # LIVE strange-mode (mining_v1) gate
     "data/queries/scorer/v3_gvo/model_best.pt",   # LIVE palette-preference ranker (pref-v3-gvo)
-    # data/v8/* is NOT listed here right now, and that is a deliberate empty slot rather
-    # than an omission. The v8 build artifacts (manifest / eval_slice / plan /
-    # cache_manifest / build_metadata / aug_roster) were canaried when they were built and
-    # then deliberately removed on 2026-07-29 along with the abandoned cache render; the
-    # content stays in git history. The .gitignore negations and the .gitattributes LFS
-    # rules for those exact paths are intact, so re-running tools/v8/build_manifest.py +
-    # build_plan.py restores them tracked. RE-ADD THE SIX PATHS HERE WHEN THAT HAPPENS —
-    # they satisfy both conjuncts (a rebuild needs the label amendment overlay exactly as
-    # it stood at build time, and that stream is live and append-merged, so a later rebuild
-    # yields a different population), and losing plan/cache_manifest is precisely how the
-    # v4..v7 caches became 243k unattributable JPGs.
+    # data/v8/* is deliberately ABSENT from this static list — it is guarded relationally
+    # instead, by `test_v8_durable_declared_paths_tracked` below. See that section's
+    # rationale: the v8 artifacts are rebuilt periodically, and a static list that has to be
+    # deleted and re-added around every rebuild is a guard that spends half its life off.
     # The prospect location library. Both are unregenerable: morph_v6 has no
     # producer and the CLIP arrays only regenerate value-approximate under a
     # verdict-sensitive threshold. (.gitignore negates these two exact paths; the
@@ -158,3 +157,130 @@ def test_canary_tracked(path):
         f"swept it, or a deletion — do NOT delete it from the canary list to "
         f"make this green."
     )
+
+
+# --------------------------------------------------------------------------- #
+# The v8 build artifacts — guarded RELATIONALLY, not by literal path.
+#
+# These differ from everything above in one way that matters: they are REBUILT. The
+# population is rebuilt when the label overlay moves; the plan and cache_manifest are
+# rebuilt whenever the augmentation recipe changes (v8b did exactly that). Under a static
+# list, each rebuild cycle deletes six literal entries and depends on a human remembering to
+# put them back — which is what happened on 2026-07-29, and it left the "these are genuinely
+# tracked" guarantee switched OFF, with a comment where the assertion used to be. A guard
+# that spends half its life as a TODO is not a guard.
+#
+# So the invariant is expressed against the DURABILITY WIRING instead of against a list:
+#
+#     a data/v8/ path that is re-included by an exact-path .gitignore negation is, by that
+#     negation, declared durable — therefore it must actually be tracked.
+#
+# The negation IS the declaration (`tools/paths.durable()` asserts non-ignored at the write
+# site against these same rules), so the set self-adjusts: add a durable v8 artifact and it
+# is guarded the moment its negation lands; the assertion cannot be quietly satisfied by
+# editing a list. `.gitattributes` LFS rules are cross-checked against the same set, since
+# an LFS rule on a path git would ignore is configuration for a file that never arrives.
+#
+# The not-ignored re-verification uses `git check-ignore --no-index`. The index-consulting
+# form reports any force-added path as not-ignored regardless of the rules, which is how a
+# real false-accept got through on the v7 checkpoint; `--no-index` evaluates the rules alone.
+# --------------------------------------------------------------------------- #
+V8_PREFIX = "data/v8/"
+
+
+def _v8_gitignore_negations() -> list[str]:
+    """data/v8/ paths re-included by an EXACT-path negation (`!/data/v8/<file>`).
+
+    Directory negations (`!/data/v8/`) are excluded on purpose: that line exists only to let
+    the following `/data/v8/*` re-exclude everything, and it declares nothing durable."""
+    out = []
+    for raw in (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line.startswith("!") or line.endswith("/"):
+            continue
+        rel = line[1:].lstrip("/")
+        if rel.startswith(V8_PREFIX):
+            out.append(rel)
+    return sorted(out)
+
+
+def _v8_lfs_rules() -> list[str]:
+    """data/v8/ paths carrying a `filter=lfs` rule in .gitattributes."""
+    out = []
+    for raw in (REPO_ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "filter=lfs" not in line:
+            continue
+        pattern = line.split()[0]
+        if pattern.startswith(V8_PREFIX):
+            out.append(pattern)
+    return sorted(out)
+
+
+V8_DURABLE = _v8_gitignore_negations()
+V8_LFS = _v8_lfs_rules()
+
+
+def _rules_ignore(path: str) -> bool:
+    """True iff the ignore RULES exclude `path`, index disregarded. `--no-index` is
+    load-bearing: without it a force-added file reports not-ignored no matter the rules."""
+    proc = subprocess.run(
+        ["git", "check-ignore", "--no-index", "-q", "--", path],
+        cwd=REPO_ROOT, capture_output=True,
+    )
+    return proc.returncode == 0
+
+
+def _lfs_filter_applies(path: str) -> bool:
+    """True iff `.gitattributes` resolves the `filter` attribute to `lfs` for `path`."""
+    proc = subprocess.run(
+        ["git", "check-attr", "filter", "--", path],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    )
+    return proc.returncode == 0 and proc.stdout.strip().endswith(": lfs")
+
+
+def test_v8_durability_wiring_coherent():
+    """Guard the guard, and cross-check the two halves of the wiring.
+
+    Non-vacuity first: an empty derived set would make the parametrized test below vanish
+    silently, which is the exact failure mode the static list had. Then: every v8 LFS rule
+    must name a path the ignore rules re-include, or LFS is configured for a file git will
+    never be handed."""
+    assert V8_DURABLE, (
+        "no `!/data/v8/<file>` negations found in .gitignore — either the v8 durability "
+        "wiring was removed, or this parser stopped matching it. Either way the relational "
+        "canary below would pass vacuously."
+    )
+    orphan_lfs = [p for p in V8_LFS if p not in V8_DURABLE]
+    assert not orphan_lfs, (
+        f".gitattributes routes these data/v8/ paths through LFS but .gitignore does not "
+        f"re-include them, so git would never see the content:\n    {orphan_lfs}"
+    )
+
+
+@pytest.mark.parametrize("path", V8_DURABLE)
+def test_v8_durable_declared_paths_tracked(path):
+    """A data/v8/ path declared durable by an exact-path .gitignore negation must be
+    tracked, must survive the rules-only ignore check, and must honour its LFS rule."""
+    assert not _rules_ignore(path), (
+        f"data/v8 durability wiring is INCOHERENT: {path} has an exact-path negation but "
+        f"`git check-ignore --no-index` still reports it ignored — a later, broader rule "
+        f"re-excludes it. tools/paths.durable() would refuse this write."
+    )
+    tracked, stderr = _git_tracked(path)
+    assert tracked, (
+        f"CANARY TRIPPED: {path} is declared durable by its .gitignore negation but is NOT "
+        f"git-tracked.\n"
+        f"git: {stderr}\n"
+        f"Either it was never added after a rebuild (`uv run python tools/v8/"
+        f"build_manifest.py` then `build_plan.py`, then `git add` it), or it was deleted. "
+        f"Do NOT remove the negation to make this green — that silently downgrades the "
+        f"artifact to regenerable, which is how every data/v{{4..7}}/manifest.jsonl was lost."
+    )
+    if path in V8_LFS:
+        assert _lfs_filter_applies(path), (
+            f"{path} has a filter=lfs rule in .gitattributes but `git check-attr` does not "
+            f"resolve the filter to lfs — a later attributes line overrides it, and this "
+            f"large file would be committed inline."
+        )

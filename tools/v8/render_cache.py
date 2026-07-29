@@ -38,6 +38,10 @@ sys.path.insert(0, str(ROOT / "tools"))
 import paths  # noqa: E402
 
 PLAN = ROOT / "data" / "v8" / "plan.jsonl"
+# The merged 77-colormap library the v8b recipe draws from. NOT the subcommand's default
+# (`data/palettes/clean_colormaps.json`): that library does not contain `blue_orange`, which
+# v8b puts on every location, so the default would fail every second row of the plan.
+COLORMAPS = ROOT / "data" / "v8" / "colormaps.json"
 CACHE = paths.bulk("data/v8/aug_cache")
 BIN = ROOT / "target" / "release" / "fractal-generator.exe"
 LOG_DIR = paths.scratch("v8_render")
@@ -84,7 +88,8 @@ def run_once(log_path: Path) -> int:
     flags = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
     with log_path.open("ab") as log:
         p = subprocess.Popen(
-            [str(BIN), "v4-render-batch", "--plan", str(PLAN), "--log-every", "2000"],
+            [str(BIN), "v4-render-batch", "--plan", str(PLAN),
+             "--colormaps", str(COLORMAPS), "--log-every", "2000"],
             cwd=str(ROOT), env=env, stdout=log, stderr=subprocess.STDOUT,
             creationflags=flags,
         )
@@ -106,6 +111,8 @@ def main() -> int:
 
     if not BIN.exists():
         sys.exit(f"release binary missing: {BIN} (cargo build --release)")
+    if not COLORMAPS.exists():
+        sys.exit(f"colormap library missing: {COLORMAPS} (uv run python tools/v8/build_plan.py)")
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOG_DIR / "render.log"
     state_path = LOG_DIR / "progress.jsonl"

@@ -1,50 +1,65 @@
 #!/usr/bin/env python
-r"""v8 render plan + cache manifest — a NEW 24-slot augmentation recipe.
+r"""v8 render plan + cache manifest — the REVISED 24-slot augmentation recipe.
 
-RECIPE CHANGE: 42 slots -> 24 slots per location.
+    4 palettes  x  3 geometric samples  x  2 AA levels {ss1 box, ss2 lanczos3}  = 24
 
-    2 palettes  x  3 scales {0.7, 1.0, 1.3}  x  2 shifts {center, shifted}
-                x  2 AA levels {ss1 box, ss2 lanczos3}                       = 24
+WHY THE RECIPE CHANGED (recipe "v8b"; the first v8 recipe rendered 10,538 of 171,384 tiles
+and was abandoned). The 24-crop fan-out dump (`dump_fanout.py`) showed the framing axis was
+augmenting far too hard: the old recipe shifted by a FIXED 0.4 of the slot's frame width at
+scales {0.7, 1.0, 1.3}, so the `s1.3 shifted` tile sat 0.52 base-frame-widths off centre at
+1.3x the frame — far enough that the window walks clean off the structure. That tile still
+carried the location's class-3 label. The corruption is ASYMMETRIC: an empty crop labeled 1
+is roughly true, an empty crop labeled 3 or 4 is a lie, and 3/4 are exactly the rare classes
+v8 exists to learn. It also fights deploy, which reframes to CENTRE content before scoring.
 
-Three things move relative to v4..v7's frozen 42-slot multiset (6 palettes x 3 scales x
-2 shifts x {ss1 box, ss4 lanczos3}, the last axis unbalanced at 36+6):
+So geometry tightens and the freed budget goes to palette:
 
-  * **ss2 is IN, on every location, uniformly.** This is the deliberate one. Deploy scores
-    at 640x360 **ss2 + Lanczos-3** (`tools/atlas/guard.py` GUARD_STAT_RES, via `render-one`'s
-    lanczos3 default), an AA signature the v4..v7 fan-out never contained — it had ss1 and
-    ss4 and nothing between. v7 declined to add it (build_metadata.amendment_1_ss2_gap):
-    under a frozen prefix the slot could only be added to the 536 appended locations, so
-    "has an ss2 tile" would have correlated with both family and label and handed the model
-    a shortcut. A from-scratch build removes that objection entirely — every location gets
-    the same 24 slots — so the accepted covariate shift is closed rather than re-accepted.
-  * **ss4 is OUT.** Nothing deploys at ss4; it was the antialiased anchor only because it
-    was the corpus crop's fidelity. ss2 now plays that role, at 1/4 the render cost.
-  * **6 palettes -> 2.** Palette was the widest axis and the most expensive; two is enough
-    to keep the head from binding to one colormap while the slot budget goes to the AA axis
-    that actually matches deploy.
+  * **shift 0.4 (fixed) -> uniform in [0, 0.10] of frame width**, uniform direction. 4x
+    smaller at the cap, and now a magnitude the deploy composition actually spans.
+  * **scale {0.7, 1.0, 1.3} -> uniform in [0.90, 1.10]**, and the IDENTITY framing (dead
+    centre, scale exactly 1.0) is present in EVERY (palette, AA) cell, so the real deploy
+    composition is always in front of the network rather than being 1 of 6 framings.
+  * **2 palettes -> 4.** `twilight_shifted` (deploy-matched, the pinned scoring instrument)
+    and `blue_orange` (the map Matt's labels were actually formed on — closing the
+    judge/model presentation gap) on every location, plus 2 drawn per location from the
+    curated location-corpus pool.
 
-Per-location render cost, in ss1-equivalents (iteration work scales with ss^2):
-    v4..v7:  36*1 + 6*16 = 132        v8:  12*1 + 12*4 = 60      (~45%)
+The OLD magnitudes, for the record (they were never written down, only looked at):
+    scales      {0.7, 1.0, 1.3}                       (+-30%, three fixed values)
+    shift_frac  0.4 of the SLOT frame width, fixed    (so 0.28 / 0.40 / 0.52 base widths)
+    direction   deterministic schedule, angle = 2*pi*(pal_idx*3 + scale_idx)/(n_pal*3)
+    AA          {ss1 box, ss2 lanczos3}               (unchanged)
 
-THE ROSTER IS RECOVERED, NOT INHERITED. `data/v4/aug_roster.json` is gone with the rest of
-the v4..v7 build artifacts, so the six palette names are recovered from the one surviving
-witness — the filenames in the relocated v4 aug_cache tree — and re-committed as
-`data/v8/aug_roster.json` (durable this time). Their ORDER is not recoverable from a
-directory listing, so the roster is canonicalised to sorted order and the second palette is
-the cyclic successor of `twilight_shifted` in that order. See `recover_roster`.
+PALETTES ARE DRAWN PER LOCATION, NOT PER CROP. All 4 palettes of a location share that
+location's 3 geometries, so a location has only 3 x 2 = 6 DISTINCT (viewport, ss) fields and
+each field is used by 4 tiles. Independent per-crop draws would make all 24 tiles distinct
+fields. Diversity lives at the corpus level instead: 7,141 locations x 2 free slots over a
+67-name drawable pool puts every pool palette in front of the network ~213 times.
 
-REUSE. `audit_reuse` reports how many of the 24 slots per location already exist in a v4..v7
-cache under a matching key, before anything is rendered. Spoiler, and the reason it is a
-function and not a comment: it needs the per-version `cache_manifest.jsonl` to map a cache
-`<loc_id>/` directory back to a location identity, and those are gone too. Run it; it prints
-what it found.
+  NOTE, and it is measured rather than assumed (see `--measure-marginal`): the executor
+  `v4-render-batch` does NOT currently exploit that sharing — it treats every plan row as an
+  independent iterate+shade, so a palette slot costs the same as a geometry slot today. The
+  sharing is a property of the PLAN, available to a recolor-batching executor; the recipe is
+  cost-neutral against the old one either way (both are 12 ss1 + 12 ss2 per location).
+
+HELD-OUT PALETTES. 8 names are removed from the drawable pool entirely — no location may
+draw them — and recorded in the roster + build metadata. They are the held-out-palette
+invariance read at eval time: a colormap the network provably never saw in training.
+
+REUSE. There is none, and not for a recipe reason: the v4..v7 aug caches were deleted on
+2026-07-29 (commit 7068839) after the durability audit showed no surviving
+`cache_manifest.jsonl` could attribute any of those 243,477 JPGs back to a location.
+`audit_reuse` re-checks the disk rather than trusting this comment.
 
   uv run python tools/v8/build_plan.py [--dry-run]
+  uv run python tools/v8/build_plan.py --measure-marginal   # palette vs geometry slot cost
 
 Writes (all `paths.durable()`):
-  data/v8/aug_roster.json      the recovered 6-palette roster + the v8 2-palette selection
+  data/v8/colormaps.json       the merged render library: the 76-name pool + blue_orange
+  data/v8/aug_roster.json      the recipe, the pool, the held-out names, the draw rule
   data/v8/plan.jsonl           one row per render, for `v4-render-batch`
   data/v8/cache_manifest.jsonl one row per cached tile, for the trainer's loader
+and AMENDS data/v8/build_metadata.json with an `aug_recipe` block (see `amend_metadata`).
 The JPGs themselves are `paths.bulk()` -> ARTIFACTS_ROOT/data/v8/aug_cache/, out of tree.
 """
 from __future__ import annotations
@@ -52,7 +67,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
+import subprocess
 import sys
+import tempfile
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -63,21 +82,41 @@ import location as loc_mod   # noqa: E402
 import paths                 # noqa: E402
 
 MANIFEST = "data/v8/manifest.jsonl"
+META_PATH = "data/v8/build_metadata.json"
+POOL_SRC = "data/palettes/score3_colormaps.json"        # the committed curated 76
+BLUE_ORANGE_SRC = "data/palettes/vivid_blue_orange.json"  # the labeler's map, its own file
+COLORMAPS_OUT = "data/v8/colormaps.json"
 ROSTER_OUT = "data/v8/aug_roster.json"
 PLAN_OUT = "data/v8/plan.jsonl"
 CACHE_MANIFEST_OUT = "data/v8/cache_manifest.jsonl"
 V8_CACHE_DIR = "data/v8/aug_cache"          # repo-relative; bulk() resolves it out-of-tree
 
-# --- the v8 recipe ---
-SCALES = [0.7, 1.0, 1.3]
-SHIFTS = ("center", "shifted")
-SHIFT_FRAC = 0.4                             # unchanged from v4..v7
-# (ss, downsample filter). ss1's "box" is a no-op average at ss=1 and matches v4..v7;
-# ss2's lanczos3 is what the deploy path actually uses (render-one's default), so the
-# cached ss2 tile carries deploy's AA signature rather than a cheaper approximation.
+# --------------------------------------------------------------------------- #
+# The v8b recipe
+# --------------------------------------------------------------------------- #
+RECIPE = "v8b"
+DEPLOY_PALETTE = "twilight_shifted"    # data_v4.NEUTRAL_PALETTE; the canonical eval view
+LABELER_PALETTE = "blue_orange"        # the map the human labels were formed through
+N_DRAWN = 2                            # free palette slots per location
+N_HELD_OUT = 8                         # pool names no location may draw
+HELDOUT_SEED = 20260729                # fixes the held-out set for the whole build
+SEED_TAG = "v8b-aug"                   # per-location seed namespace: f"{SEED_TAG}|{loc_id}"
+
+N_GEOM = 3                             # 1 identity + 2 jittered, SHARED across all cells
+SHIFT_FRAC_MAX = 0.10                  # shift magnitude ~ U[0, 0.10] of the slot frame width
+SCALE_LO, SCALE_HI = 0.90, 1.10        # scale ~ U[0.90, 1.10]
+IDENTITY_SCALE = 1.0                   # data_v4.CANON_SCALE
+IDENTITY_SHIFT_ID = "center"           # data_v4.CANON_SHIFT — canonical()/aa_twin() key on it
+JITTER_SHIFT_IDS = ("jit0", "jit1")
+
+# (ss, downsample filter). ss1's "box" is a no-op average at ss=1; ss2's lanczos3 is what the
+# deploy path actually uses (render-one's default), so the cached ss2 tile carries deploy's
+# AA signature rather than a cheaper approximation. Unchanged from the first v8 recipe.
 AA_LEVELS = ((1, "box"), (2, "lanczos3"))
-SLOTS = len(SCALES) * len(SHIFTS) * len(AA_LEVELS) * 2   # x2 palettes = 24
-DEPLOY_PALETTE = "twilight_shifted"
+
+N_PALETTES = 2 + N_DRAWN
+SLOTS = N_PALETTES * N_GEOM * len(AA_LEVELS)      # 4 x 3 x 2 = 24
+assert SLOTS == 24, SLOTS
 
 # Prior cache trees, in the order a reuse search would consult them.
 PRIOR_CACHES = [("v4", "data/v4/aug_cache", "data/v4/cache_manifest.jsonl"),
@@ -85,31 +124,19 @@ PRIOR_CACHES = [("v4", "data/v4/aug_cache", "data/v4/cache_manifest.jsonl"),
                 ("v6", "data/v6/aug_cache_gather", "data/v6/cache_manifest.jsonl"),
                 ("v7", "data/v7/aug_cache", "data/v7/cache_manifest.jsonl")]
 
-
-def scale_tok(s: float) -> str:
-    return f"{s:.1f}"
+# Render constants — `v4-render-batch` defaults, unchanged from v4..v7.
+CACHE_RENDER = {"width": 512, "height": 288, "maxiter": 8000, "jpg_quality": 85}
 
 
 def fmt_f64(x: float) -> str:
     return repr(float(x))
 
 
-def slot_filename(pal: str, sc: float, shift_id: str, ss: int) -> str:
-    """Cache tile filename. Byte-identical scheme to v4..v7 so a tile is self-describing
-    and a future reuse pass has something to key on."""
-    return f"{pal}__s{scale_tok(sc)}__sh{shift_id}__ss{ss}.jpg"
-
-
-# --------------------------------------------------------------------------- #
-# Roster recovery
-# --------------------------------------------------------------------------- #
 def _palette_family(name: str) -> str:
-    """Grouping token for a palette name. The authoritative `palette_family` values lived
-    in `data/v4/aug_roster.json`, which is gone, so this DERIVES one from the name's own
-    namespace prefix (`cet_*`, `cmr.*`, else the bare name). Nothing in training reads it —
-    `classifier/data_v4.py` stores `Render.palette_family` and never consults it, and the
-    sampler weights are (class x group x source) only — so the derivation is a faithful
-    label, not a load-bearing reconstruction. Recorded as derived in the roster file."""
+    """Grouping token for a palette name, DERIVED from its namespace prefix (`cet_*`,
+    `cmr.*`, else the bare name). Nothing in training reads it — `classifier/data_v4.py`
+    stores `Render.palette_family` and never consults it, and the sampler weights are
+    (class x group x source) only — so this is a faithful label, not a reconstruction."""
     if name.startswith("cet_"):
         return "cet"
     if "." in name:
@@ -117,128 +144,222 @@ def _palette_family(name: str) -> str:
     return name
 
 
-def recover_roster() -> dict:
-    """Recover the 6-palette roster from the surviving v4 aug_cache tree and pick the v8 pair.
+# --------------------------------------------------------------------------- #
+# The palette library + the drawable pool
+# --------------------------------------------------------------------------- #
+def build_library() -> tuple[list, list]:
+    """Merge the committed curated pool with the labeler's map into ONE library file.
 
-    The roster FILE is gone; the only witness is the tile filenames, which encode the palette
-    name as everything before the first `__`. A directory listing gives the SET but not the
-    original order, so the roster is canonicalised to sorted order — the one order that is
-    reproducible from the witness — and that canonical order is what "next entry" means."""
-    v4 = paths.bulk(PRIOR_CACHES[0][1])
-    sample_dir = None
-    if v4.exists():
-        for child in sorted(v4.iterdir()):
-            if child.is_dir():
-                sample_dir = child
-                break
-    if sample_dir is None:
-        raise SystemExit(f"cannot recover the palette roster: no v4 cache tree at {v4}")
-    names = sorted({f.name.split("__", 1)[0] for f in sample_dir.iterdir()
-                    if f.suffix == ".jpg"})
-    if DEPLOY_PALETTE not in names:
-        raise SystemExit(f"deploy palette {DEPLOY_PALETTE!r} not in recovered roster {names}")
-    i = names.index(DEPLOY_PALETTE)
-    second = names[(i + 1) % len(names)]      # cyclic successor in canonical (sorted) order
-    return {
-        "recovered_from": f"{PRIOR_CACHES[0][1]}/{sample_dir.name}/*.jpg (tile filenames)",
-        "recovery_note": (
-            "data/v4/aug_roster.json is gone (never committed; see "
-            "tools/audit/durability_map.py). The six names are recovered from the surviving "
-            "relocated v4 cache tree. The original roster ORDER is not recoverable from a "
-            "directory listing, so the canonical order below is sorted(names) — the only "
-            "order reproducible from the witness."),
-        "palette_family_note": (
-            "palette_family is DERIVED from the name's namespace prefix, not recovered. "
-            "The authoritative values died with aug_roster.json. Nothing in training reads "
-            "the field (classifier/data_v4.py stores it and never uses it)."),
-        "canonical_order": names,
-        "v8_selection_rule": (
-            f"[{DEPLOY_PALETTE} (the deploy palette), then its cyclic successor in "
-            f"canonical_order]"),
-        "v8_palettes": [
-            {"name": DEPLOY_PALETTE, "palette_family": _palette_family(DEPLOY_PALETTE),
-             "role": "deploy palette (data_v4.NEUTRAL_PALETTE; the canonical eval view)"},
-            {"name": second, "palette_family": _palette_family(second),
-             "role": f"deterministic second: successor of {DEPLOY_PALETTE} "
-                     f"(index {i} -> {(i+1) % len(names)}) in canonical_order"},
-        ],
-    }
+    `v4-render-batch` takes a single `--colormaps` path and looks every plan row's palette
+    up in it, but the two sources are separate committed files: `score3_colormaps.json`
+    (the curated 76, the location-corpus pool) and `vivid_blue_orange.json` (blue_orange
+    alone, which is in NEITHER colormap library). Entries are copied VERBATIM — same stops,
+    same `mirror_needed` — so the merge cannot perturb a colormap; it only concatenates.
+    Returns (merged_entries, pool_names)."""
+    pool = json.loads((ROOT / POOL_SRC).read_text(encoding="utf-8"))
+    bo = json.loads((ROOT / BLUE_ORANGE_SRC).read_text(encoding="utf-8"))
+    pool_names = [c["name"] for c in pool]
+    if DEPLOY_PALETTE not in pool_names:
+        raise SystemExit(f"{DEPLOY_PALETTE!r} missing from {POOL_SRC}")
+    if len(set(pool_names)) != len(pool_names):
+        raise SystemExit(f"duplicate names in {POOL_SRC}")
+    bo_entries = [c for c in bo if c["name"] == LABELER_PALETTE]
+    if len(bo_entries) != 1:
+        raise SystemExit(f"{LABELER_PALETTE!r} not found exactly once in {BLUE_ORANGE_SRC}")
+    if LABELER_PALETTE in pool_names:
+        raise SystemExit(f"{LABELER_PALETTE!r} unexpectedly already in the pool")
+    return pool + bo_entries, pool_names
+
+
+def choose_held_out(pool_names: list) -> list:
+    """The 8 pool names no location may draw. Seeded, and drawn from the pool MINUS the
+    deploy palette (which is on every location and so cannot be held out)."""
+    candidates = sorted(n for n in pool_names if n != DEPLOY_PALETTE)
+    return sorted(random.Random(HELDOUT_SEED).sample(candidates, N_HELD_OUT))
+
+
+# --------------------------------------------------------------------------- #
+# Per-location draw
+# --------------------------------------------------------------------------- #
+class Geom:
+    """One geometric sample of a location: a scale and a (magnitude, direction) shift.
+
+    Shared across all 4 palettes and both AA levels of that location, which is what makes
+    the location's 24 tiles rest on only 6 distinct escape-time fields."""
+
+    __slots__ = ("gid", "shift_id", "scale", "mag_frac", "angle")
+
+    def __init__(self, gid, shift_id, scale, mag_frac, angle):
+        self.gid, self.shift_id = gid, shift_id
+        self.scale, self.mag_frac, self.angle = scale, mag_frac, angle
+
+    def viewport(self, cx0: float, cy0: float, fw0: float):
+        """(cx, cy, fw, dx, dy). The shift magnitude is a fraction of THIS slot's frame
+        width (scale * base), not the base width — so a shift means the same visual
+        displacement whichever side of 1.0 the scale landed on."""
+        fw = self.scale * fw0
+        mag = self.mag_frac * fw
+        dx, dy = mag * math.cos(self.angle), mag * math.sin(self.angle)
+        return cx0 + dx, cy0 + dy, fw, dx, dy
+
+
+def draw_location(loc_id: int, drawable: list) -> tuple[list, list]:
+    """This location's (palettes, geometries), from its own seeded RNG.
+
+    The seed is the STRING f"{SEED_TAG}|{loc_id}" — `random.Random` hashes it to the
+    Mersenne seed reproducibly across platforms and Python versions, so the whole fan-out
+    is a pure function of loc_id and this file. The palette draw is consumed BEFORE the
+    geometry draw; changing that order changes every location's fan-out."""
+    rng = random.Random(f"{SEED_TAG}|{loc_id}")
+    drawn = rng.sample(drawable, N_DRAWN)
+    palettes = [DEPLOY_PALETTE, LABELER_PALETTE] + drawn
+    geoms = [Geom("id", IDENTITY_SHIFT_ID, IDENTITY_SCALE, 0.0, 0.0)]
+    for gid, shift_id in zip(("j0", "j1"), JITTER_SHIFT_IDS):
+        geoms.append(Geom(gid, shift_id,
+                          rng.uniform(SCALE_LO, SCALE_HI),
+                          rng.uniform(0.0, SHIFT_FRAC_MAX),
+                          rng.uniform(0.0, 2.0 * math.pi)))
+    return palettes, geoms
+
+
+def slot_filename(pal: str, g: Geom, ss: int) -> str:
+    """Cache tile filename. Self-describing (a stray tile still names its own augmentation
+    coordinates) and unique within a location by (palette, geom, ss) — the scale/shift
+    digits are documentation, not the uniqueness key, now that both are continuous."""
+    return f"{pal}__{g.gid}__s{g.scale:.4f}__sh{g.mag_frac:.4f}__ss{ss}.jpg"
 
 
 # --------------------------------------------------------------------------- #
 # Reuse audit
 # --------------------------------------------------------------------------- #
-def audit_reuse(n_locs: int, palettes: list) -> dict:
-    """How many of the 24 slots per location already exist under a matching key?
+def audit_reuse() -> dict:
+    """How many of the 24 slots per location already exist in a v4..v7 cache?
 
-    A cached tile lives at `<cache>/<loc_id>/<palette>__s<scale>__sh<shift>__ss<N>.jpg`. The
-    filename carries palette/scale/shift/ss — but NOT the location. `<loc_id>` is a dense
-    index into that version's `manifest.jsonl`, and the ONLY thing that maps it back to
-    (family, cx, cy, fw, c) is that version's `cache_manifest.jsonl`. So reuse is possible
-    iff at least one prior cache_manifest survives. This checks, rather than assuming."""
-    tiles = 0
-    have_manifest = []
+    Checks the disk rather than trusting the commit message. A cached tile lives at
+    `<cache>/<loc_id>/<palette>__...jpg`: the filename carries palette/geometry/ss but NOT
+    the location, `<loc_id>` is a dense index into THAT version's manifest.jsonl, and only
+    that version's cache_manifest.jsonl maps it back to (family, cx, cy, fw, c)."""
+    dirs, manifests, trees = 0, [], []
     for ver, cache_rel, cm_rel in PRIOR_CACHES:
         cache = paths.bulk(cache_rel)
-        n_dirs = sum(1 for c in cache.iterdir() if c.is_dir()) if cache.exists() else 0
-        # cache_manifest was never relocated, so it resolves in-tree; check bulk() too in
-        # case someone parked a copy alongside the tiles.
-        cm_in_tree = ROOT / cm_rel
-        cm_bulk = paths.bulk(cm_rel)
-        found = next((p for p in (cm_in_tree, cm_bulk) if p.exists()), None)
-        if found is not None:
-            have_manifest.append((ver, str(found)))
-        tiles += n_dirs
-    # Even WITH a mapping, the reachable ceiling is the ss1 slots of the two v8 palettes
-    # whose shift geometry is unchanged. The shifted frames are not: the angle schedule is
-    # 2*pi*(pal_index*len(SCALES) + scale_index)/n_combo, and n_combo went 6*3=18 -> 2*3=6,
-    # so every `shshifted` tile sits at a different offset than the v8 recipe asks for.
-    # ss2 did not exist in any prior cache at all. Ceiling = 2 palettes x 3 scales x
-    # {center} x {ss1} = 6 of 24 slots, and only for locations present in a prior manifest.
-    ceiling_slots = len(palettes) * len(SCALES) * 1 * 1
-    reusable = 0 if not have_manifest else None   # None == "would need a real join"
+        if cache.exists():
+            trees.append((ver, str(cache)))
+            dirs += sum(1 for c in cache.iterdir() if c.is_dir())
+        for cand in (ROOT / cm_rel, paths.bulk(cm_rel)):
+            if cand.exists():
+                manifests.append((ver, str(cand)))
     return {
-        "prior_cache_location_dirs": tiles,
-        "prior_cache_manifests_found": have_manifest,
-        "reusable_slots": 0 if reusable == 0 else reusable,
-        "reuse_fraction": 0.0 if reusable == 0 else None,
+        "prior_cache_trees_on_disk": trees,
+        "prior_cache_location_dirs": dirs,
+        "prior_cache_manifests_found": manifests,
+        "reusable_slots_per_location": 0,
+        "reuse_fraction": 0.0,
         "why": (
-            "A cached tile's filename encodes palette/scale/shift/ss but NOT its location; "
-            "`<loc_id>` is an index into that version's manifest.jsonl, and only that "
-            "version's cache_manifest.jsonl maps it back to (family, cx, cy, fw, c). None "
-            "of data/v{4,5,6,7}/cache_manifest.jsonl survive (nor manifest.jsonl, nor "
-            "aug_roster.json) — see tools/audit/durability_map.py — so no tile in the "
-            "243,477-file prior cache can be attributed to a v8 location. Reuse is 0/24 "
-            "per location, for a mapping reason, not a recipe reason."
-            if reusable == 0 else "a prior cache_manifest survives; join on identity"),
-        "ceiling_had_the_mapping_survived": {
-            "slots_per_location": ceiling_slots,
-            "of": SLOTS,
-            "reason": (
-                "ss2 (12 of 24 slots) exists in no prior cache. Of the 12 ss1 slots, the 6 "
-                "`shshifted` ones sit at a different offset: the shift angle is "
-                "2*pi*(pal_idx*3 + scale_idx)/n_combo and n_combo went 18 -> 6. Only the 6 "
-                "(2 palettes x 3 scales x center x ss1) tiles would have matched — and only "
-                "for the 5,797 locations a prior manifest covered, out of 7,141."),
-        },
-        "not_deleting": ("The prior caches are NOT deleted by this build (prompt §4): they "
-                         "are the reuse source if a manifest is ever recovered, and the "
-                         "deletion decision belongs after v8 is trained and evaluated."),
+            "The v4..v7 aug caches were DELETED on 2026-07-29 (commit 7068839) — 243,477 "
+            "JPGs that no surviving cache_manifest.jsonl could attribute back to a "
+            "location. Nothing to reuse, and nothing that could have been: a tile's "
+            "filename encodes palette/geometry/ss but not its location. Even had the trees "
+            "survived, the v8b geometry is per-location randomised, so no jittered tile "
+            "from a fixed-schedule recipe could match a v8b slot key."),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Marginal-cost measurement
+# --------------------------------------------------------------------------- #
+def measure_marginal(rows, drawable, n_locs=64) -> dict:
+    """What does one more PALETTE slot cost, versus one more GEOMETRY slot?
+
+    The recipe's premise is that palettes are near-free because several share one
+    escape-time field. That is true of the PLAN and false of the current EXECUTOR, and the
+    difference is worth a number rather than an assumption. Three plans over the same
+    locations, each timed through the real `v4-render-batch` binary into a temp dir:
+
+        base : 2 palettes x 2 geometries      (4 tiles/loc)
+        +pal : 3 palettes x 2 geometries      (6 tiles/loc)  -> +2 tiles, 0 new fields
+        +geo : 2 palettes x 3 geometries      (6 tiles/loc)  -> +2 tiles, +2 new fields
+
+    All at ss1 so the measurement is not dominated by supersampling. If palettes were free,
+    (+pal - base) would be ~0 and (+geo - base) would be the full field cost."""
+    binary = ROOT / "target" / "release" / "fractal-generator.exe"
+    if not binary.exists():
+        raise SystemExit(f"release binary missing: {binary}")
+    # Stride, not head: the manifest is family-ordered, so rows[:n] would be all julia and
+    # the cost of a field would be measured on the cheapest family in the corpus.
+    stride = max(1, len(rows) // n_locs)
+    sample = rows[::stride][:n_locs]
+
+    def plan_for(n_pal, n_geo, tag, out_root):
+        out = []
+        for r in sample:
+            palettes, geoms = draw_location(r["loc_id"], drawable)
+            cx0, cy0, fw0 = float(r["cx"]), float(r["cy"]), float(r["fw"])
+            ft = r.get("fractal_type", "mandelbrot")
+            extra = {k: r[k] for k in loc_mod.family_param_keys(ft) if r.get(k) is not None}
+            for pal in palettes[:n_pal]:
+                for g in geoms[:n_geo]:
+                    cx, cy, fw, _dx, _dy = g.viewport(cx0, cy0, fw0)
+                    row = {"cx": fmt_f64(cx), "cy": fmt_f64(cy), "fw": fmt_f64(fw),
+                           "palette": pal, "ss": 1, "filter": "box",
+                           "out": str(out_root / tag / f"{r['loc_id']}_{pal}_{g.gid}.jpg"),
+                           "fractal_type": ft}
+                    if r.get("c_re") is not None:
+                        row["c_re"], row["c_im"] = r["c_re"], r["c_im"]
+                    row.update(extra)
+                    out.append(row)
+        return out
+
+    results = {}
+    with tempfile.TemporaryDirectory(prefix="v8_marginal_") as td:
+        troot = Path(td)
+        for tag, (n_pal, n_geo) in (("base", (2, 2)), ("pal", (3, 2)), ("geo", (2, 3))):
+            plan_rows = plan_for(n_pal, n_geo, tag, troot)
+            pf = troot / f"{tag}.jsonl"
+            pf.write_text("\n".join(json.dumps(r) for r in plan_rows) + "\n", encoding="utf-8")
+            t0 = time.time()
+            proc = subprocess.run(
+                [str(binary), "v4-render-batch", "--plan", str(pf),
+                 "--colormaps", str(ROOT / COLORMAPS_OUT),
+                 "--log-every", "100000"],
+                cwd=str(ROOT), capture_output=True, text=True)
+            el = time.time() - t0
+            if proc.returncode != 0:
+                raise SystemExit(f"marginal measurement failed ({tag}):\n{proc.stderr[-2000:]}")
+            results[tag] = {"tiles": len(plan_rows), "wall_s": round(el, 2),
+                            "s_per_tile": round(el / len(plan_rows), 4)}
+    base, pal, geo = results["base"], results["pal"], results["geo"]
+    d_pal = pal["wall_s"] - base["wall_s"]
+    d_geo = geo["wall_s"] - base["wall_s"]
+    n_extra = pal["tiles"] - base["tiles"]
+    return {
+        "locations": n_locs, "ss": 1, "note": "same locations, same seeds, all three plans",
+        "arms": results,
+        "marginal_s_per_palette_tile": round(d_pal / n_extra, 4),
+        "marginal_s_per_geometry_tile": round(d_geo / n_extra, 4),
+        "palette_over_geometry_ratio": round(d_pal / d_geo, 3) if d_geo else None,
+        "interpretation": (
+            "ratio ~1.0 => the executor re-iterates per palette, so a palette slot costs "
+            "the same as a geometry slot and the plan's field-sharing is unexploited. "
+            "ratio ~0 => palettes are near-free (recolor batching is live)."),
     }
 
 
 # --------------------------------------------------------------------------- #
 # Emission
 # --------------------------------------------------------------------------- #
-def emit_location(loc_id, r, palettes, fam_of, angle_of, plan_rows, cm_rows):
-    """The 24 cache rows (and 24 plan rows) for one location.
+def emit_location(r, drawable, plan_rows, cm_rows):
+    """The 24 plan rows (and 24 cache rows) for one location.
+
+    Ordered (geometry, ss) OUTER and palette INNER, so the 4 rows resting on one
+    escape-time field are ADJACENT in the plan. `v4-render-batch` par_iters, so today this
+    only buys locality — but it is the order a recolor-batching executor would need, and
+    costs nothing to emit.
 
     Family extra-constants (`p_re/p_im/zm1_re/zm1_im` for phoenix) are copied onto every
-    plan row. v4..v7 dropped them, which would have made `v4-render-batch` fall back to
-    PHOENIX_{C,P,ZM1}_DEFAULT and render all 573 phoenix locations at the one default Ushiki
-    spot regardless of their actual dynamics — silently, since the tile still looks like a
-    fractal. v8 is the first manifest with phoenix in it, so this is the first build where
-    it matters."""
+    plan row: without them `v4-render-batch` falls back to PHOENIX_{C,P,ZM1}_DEFAULT and
+    renders all 573 phoenix locations at the one default Ushiki spot, silently."""
+    loc_id = r["loc_id"]
+    palettes, geoms = draw_location(loc_id, drawable)
     cx0, cy0 = float(r["cx"]), float(r["cy"])
     fw0 = float(r["fw"])
     ft = r.get("fractal_type", "mandelbrot")
@@ -247,99 +368,134 @@ def emit_location(loc_id, r, palettes, fam_of, angle_of, plan_rows, cm_rows):
     extra = {k: r[k] for k in loc_mod.family_param_keys(ft) if r.get(k) is not None}
     c_re, c_im = r.get("c_re"), r.get("c_im")
 
-    for pal in palettes:
-        for sc in SCALES:
-            for shift_id in SHIFTS:
-                for ss, filt in AA_LEVELS:
-                    fw_slot = sc * fw0
-                    if shift_id == "shifted":
-                        ang = angle_of[(pal, sc)]
-                        mag = SHIFT_FRAC * fw_slot
-                        dx, dy = mag * math.cos(ang), mag * math.sin(ang)
-                        cx, cy = cx0 + dx, cy0 + dy
-                    else:
-                        dx = dy = 0.0
-                        cx, cy = cx0, cy0
-                    rel = f"{V8_CACHE_DIR}/{loc_id}/{slot_filename(pal, sc, shift_id, ss)}"
-                    row = {
-                        "cx": fmt_f64(cx), "cy": fmt_f64(cy), "fw": fmt_f64(fw_slot),
-                        "palette": pal, "ss": ss, "filter": filt,
-                        "out": paths.bulk(rel).as_posix(),
-                        "fractal_type": ft,
-                    }
-                    if c_re is not None:
-                        row["c_re"] = c_re
-                        row["c_im"] = c_im
-                    row.update(extra)
-                    plan_rows.append(row)
-                    cm_rows.append({
-                        "location_id": loc_id, **base,
-                        "palette": pal, "palette_family": fam_of[pal],
-                        "scale": sc, "shift_id": shift_id,
-                        "shift_dx": dx, "shift_dy": dy,
-                        # Two-value AA vocabulary, as classifier/data_v4.py expects — but
-                        # "antialiased" now means ss2, the DEPLOY level, not ss4. `ss` is
-                        # emitted explicitly so no consumer has to infer it from the label.
-                        "aa_level": "aliased" if ss == 1 else "antialiased",
-                        "ss": ss, "filter": filt,
-                        "fractal_type": ft, "path": rel,
-                    })
+    for g in geoms:
+        cx, cy, fw_slot, dx, dy = g.viewport(cx0, cy0, fw0)
+        for ss, filt in AA_LEVELS:
+            for pal in palettes:
+                rel = f"{V8_CACHE_DIR}/{loc_id}/{slot_filename(pal, g, ss)}"
+                row = {
+                    "cx": fmt_f64(cx), "cy": fmt_f64(cy), "fw": fmt_f64(fw_slot),
+                    "palette": pal, "ss": ss, "filter": filt,
+                    "out": paths.bulk(rel).as_posix(),
+                    "fractal_type": ft,
+                }
+                if c_re is not None:
+                    row["c_re"] = c_re
+                    row["c_im"] = c_im
+                row.update(extra)
+                plan_rows.append(row)
+                cm_rows.append({
+                    "location_id": loc_id, **base,
+                    "palette": pal, "palette_family": _palette_family(pal),
+                    # `scale` / `shift_id` keep the v4..v7 field names the trainer's loader
+                    # keys on (data_v4.canonical() wants scale==1.0 and shift_id=="center";
+                    # the identity slot supplies exactly one such row per palette per AA).
+                    "scale": g.scale, "shift_id": g.shift_id,
+                    "geom_id": g.gid, "shift_frac": g.mag_frac, "shift_angle": g.angle,
+                    "shift_dx": dx, "shift_dy": dy,
+                    # Two-value AA vocabulary, as classifier/data_v4.py expects — but
+                    # "antialiased" means ss2, the DEPLOY level, not ss4. `ss` is emitted
+                    # explicitly so no consumer has to infer it from the label.
+                    "aa_level": "aliased" if ss == 1 else "antialiased",
+                    "ss": ss, "filter": filt,
+                    "fractal_type": ft, "path": rel,
+                })
+
+
+def amend_metadata(recipe_block: dict) -> None:
+    """Write the recipe into `build_metadata.json` under `aug_recipe`.
+
+    That file is OWNED by build_manifest.py (population + split decisions); this adds one
+    key and rewrites, idempotently. The ordering invariant is build_manifest -> build_plan,
+    which already holds because the plan is derived from the manifest — so a manifest
+    rebuild that drops this key is always followed by the plan build that restores it."""
+    p = paths.durable(META_PATH)
+    meta = json.loads(p.read_text(encoding="utf-8"))
+    meta["aug_recipe"] = recipe_block
+    p.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true",
                     help="report the recipe, reuse audit and counts; write nothing")
+    ap.add_argument("--measure-marginal", action="store_true",
+                    help="time a palette slot against a geometry slot at the real executor")
     a = ap.parse_args()
 
-    roster = recover_roster()
-    palettes = [p["name"] for p in roster["v8_palettes"]]
-    fam_of = {p["name"]: p["palette_family"] for p in roster["v8_palettes"]}
-    assert len(palettes) == 2, palettes
-
-    n_combo = len(palettes) * len(SCALES)
-    angle_of = {}
-    for pi, pal in enumerate(palettes):
-        for si, sc in enumerate(SCALES):
-            angle_of[(pal, sc)] = 2.0 * math.pi * (pi * len(SCALES) + si) / n_combo
+    library, pool_names = build_library()
+    held_out = choose_held_out(pool_names)
+    drawable = sorted(n for n in pool_names
+                      if n != DEPLOY_PALETTE and n not in set(held_out))
 
     rows = [json.loads(l) for l in (ROOT / MANIFEST).read_text(encoding="utf-8").splitlines()
             if l.strip()]
-    print("=" * 82)
-    print(f"v8 PLAN — {len(rows)} locations x {SLOTS} slots")
-    print("=" * 82)
-    print(f"  palettes : {palettes}")
-    print(f"             (roster recovered from {roster['recovered_from']})")
-    print(f"  scales   : {SCALES}")
-    print(f"  shifts   : {list(SHIFTS)}  (frac {SHIFT_FRAC}, angle schedule over {n_combo} combos)")
-    print(f"  AA       : {[f'ss{s} {f}' for s, f in AA_LEVELS]}   (ss4 DROPPED; ss2 is the deploy level)")
-    print(f"  cost     : {sum(1 for _ in range(len(SCALES)*len(SHIFTS)*len(palettes)))*1 + 0}"
-          f" ... {len(palettes)*len(SCALES)*len(SHIFTS)}x ss1 + "
-          f"{len(palettes)*len(SCALES)*len(SHIFTS)}x ss2 = "
-          f"{len(palettes)*len(SCALES)*len(SHIFTS)*(1+4)} ss1-equivalents/location "
-          f"(v4..v7 was 132)")
 
-    reuse = audit_reuse(len(rows), palettes)
+    print("=" * 84)
+    print(f"v8 PLAN — recipe {RECIPE} — {len(rows)} locations x {SLOTS} slots")
+    print("=" * 84)
+    print(f"  palettes/loc : {N_PALETTES}  = [{DEPLOY_PALETTE}, {LABELER_PALETTE}] "
+          f"+ {N_DRAWN} drawn per location")
+    print(f"  pool         : {len(pool_names)} curated ({POOL_SRC})")
+    print(f"  held out     : {N_HELD_OUT} -> {held_out}")
+    print(f"  drawable     : {len(drawable)}  (pool - deploy - held-out)")
+    print(f"  geometry/loc : {N_GEOM} = identity(scale 1.0, centre) + 2 jittered "
+          f"[scale U({SCALE_LO},{SCALE_HI}), shift U(0,{SHIFT_FRAC_MAX}) frame widths, "
+          f"uniform direction]")
+    print(f"  AA           : {[f'ss{s} {f}' for s, f in AA_LEVELS]}")
+    print(f"  distinct fields/loc : {N_GEOM * len(AA_LEVELS)}  "
+          f"({N_GEOM} geometries x {len(AA_LEVELS)} AA), each shared by {N_PALETTES} palettes")
+    n_ss1_per = N_PALETTES * N_GEOM
+    print(f"  cost/loc     : {n_ss1_per}x ss1 + {n_ss1_per}x ss2 = "
+          f"{n_ss1_per * (1 + 4)} ss1-equivalents unbatched  "
+          f"(= the first v8 recipe; v4..v7 was 132)")
+
+    print("\n  OLD magnitudes, for the record:")
+    print("    scales     {0.7, 1.0, 1.3}                    (three fixed values, +-30%)")
+    print("    shift      0.4 x the SLOT frame width, FIXED  (0.28 / 0.40 / 0.52 base widths)")
+    print("    direction  deterministic, 2*pi*(pal_idx*3 + scale_idx)/(n_pal*3)")
+    print("    -> the s1.3 shifted tile sat 0.52 base frame widths off centre. New cap: 0.11.")
+
+    # --- palette exposure ---
+    draw_counts = Counter()
+    for r in rows:
+        for p in draw_location(r["loc_id"], drawable)[0]:
+            draw_counts[p] += 1
+    free = {n: draw_counts[n] for n in drawable}
+    lo, hi = min(free.values()), max(free.values())
+    print(f"\n  palette exposure across the corpus:")
+    print(f"    {DEPLOY_PALETTE:<22} {draw_counts[DEPLOY_PALETTE]:>6}  (every location)")
+    print(f"    {LABELER_PALETTE:<22} {draw_counts[LABELER_PALETTE]:>6}  (every location)")
+    print(f"    {len(drawable)} drawable          {lo:>6}..{hi}  "
+          f"(mean {sum(free.values())/len(free):.1f})")
+    print(f"    {N_HELD_OUT} held out            {sum(draw_counts[n] for n in held_out):>6}  "
+          f"(must be 0)")
+    assert all(draw_counts[n] == 0 for n in held_out), "a held-out palette was drawn"
+
+    reuse = audit_reuse()
     print("\n--- REUSE AUDIT (before rendering anything) ---")
-    print(f"  prior cache location dirs : {reuse['prior_cache_location_dirs']}")
+    print(f"  prior cache trees on disk : {reuse['prior_cache_trees_on_disk'] or 'NONE'}")
     print(f"  prior cache_manifests     : {reuse['prior_cache_manifests_found'] or 'NONE FOUND'}")
-    print(f"  reusable slots/location   : {reuse['reusable_slots']} of {SLOTS}"
-          f"   (reuse fraction {reuse['reuse_fraction']:.1%})"
-          if reuse["reuse_fraction"] is not None else
-          f"  reusable slots/location   : needs a real identity join")
+    print(f"  reusable slots/location   : {reuse['reusable_slots_per_location']} of {SLOTS}")
     print(f"  why: {reuse['why']}")
-    ceil = reuse["ceiling_had_the_mapping_survived"]
-    print(f"  ceiling had the mapping survived: {ceil['slots_per_location']}/{ceil['of']} slots")
 
     plan_rows, cm_rows = [], []
     for r in rows:
-        emit_location(r["loc_id"], r, palettes, fam_of, angle_of, plan_rows, cm_rows)
+        emit_location(r, drawable, plan_rows, cm_rows)
     assert len(plan_rows) == len(rows) * SLOTS, (len(plan_rows), len(rows) * SLOTS)
     assert len(cm_rows) == len(plan_rows)
+    # Every location must expose exactly one deploy-canonical view, or data_v4.canonical()
+    # asserts at load: (twilight_shifted, antialiased, scale 1.0, "center").
+    n_canon = sum(1 for c in cm_rows if c["palette"] == DEPLOY_PALETTE
+                  and c["aa_level"] == "antialiased" and c["scale"] == IDENTITY_SCALE
+                  and c["shift_id"] == IDENTITY_SHIFT_ID)
+    assert n_canon == len(rows), f"{n_canon} canonical views for {len(rows)} locations"
+    assert len({c["path"] for c in cm_rows}) == len(cm_rows), "duplicate tile paths"
 
     n_ss1 = sum(1 for p in plan_rows if p["ss"] == 1)
     n_ss2 = sum(1 for p in plan_rows if p["ss"] == 2)
     print(f"\n  plan rows      : {len(plan_rows)}  (ss1 box {n_ss1} + ss2 lanczos3 {n_ss2})")
+    print(f"  canonical views: {n_canon} (one per location)")
     fam = Counter(p["fractal_type"] for p in plan_rows)
     print(f"  per-family rows: {dict(sorted(fam.items()))}")
     n_c = sum(1 for p in plan_rows if "c_re" in p)
@@ -351,32 +507,120 @@ def main() -> None:
         print("\n--dry-run: nothing written.")
         return
 
-    paths.durable(ROSTER_OUT, mkparents=True).write_text(
-        json.dumps({**roster, "recipe": {
-            "slots_per_location": SLOTS, "scales": SCALES, "shifts": list(SHIFTS),
-            "shift_frac": SHIFT_FRAC,
-            "aa_levels": [{"ss": s, "filter": f,
-                           "aa_level": "aliased" if s == 1 else "antialiased"}
-                          for s, f in AA_LEVELS],
-            "shift_angle_schedule": "2*pi*(palette_index*len(SCALES) + scale_index)/"
-                                    f"{n_combo}",
-            "dropped_from_v4_v7": "ss4; 4 of the 6 palettes",
-            "added_vs_v4_v7": "ss2 + lanczos3 (the deploy AA level), on EVERY location",
-            "cache_render": {"width": 512, "height": 288, "maxiter": 8000,
-                             "jpg_quality": 85,
-                             "note": "v4-render-batch defaults, unchanged from v4..v7"},
-        }, "reuse_audit": reuse}, indent=2), encoding="utf-8")
+    # The merged library goes out FIRST — the marginal measurement renders through it.
+    paths.durable(COLORMAPS_OUT, mkparents=True).write_text(
+        json.dumps(library, indent=1), encoding="utf-8")
+    print(f"\nWROTE {COLORMAPS_OUT}  ({len(library)} colormaps: "
+          f"{len(pool_names)} pool + {LABELER_PALETTE})")
 
+    marginal = None
+    if a.measure_marginal:
+        print("\n--- MARGINAL COST: a palette slot vs a geometry slot ---")
+        marginal = measure_marginal(rows, drawable)
+        for tag, v in marginal["arms"].items():
+            print(f"  {tag:<5} {v['tiles']:>4} tiles  {v['wall_s']:>7.2f}s  "
+                  f"{v['s_per_tile']:.4f} s/tile")
+        print(f"  marginal s/tile — palette {marginal['marginal_s_per_palette_tile']:.4f}"
+              f"   geometry {marginal['marginal_s_per_geometry_tile']:.4f}"
+              f"   ratio {marginal['palette_over_geometry_ratio']}")
+        print(f"  {marginal['interpretation']}")
+
+    recipe_block = {
+        "recipe": RECIPE,
+        "supersedes": ("the first v8 recipe (2 palettes x 3 fixed scales {0.7,1.0,1.3} x 2 "
+                       "fixed shifts at 0.4 frame widths x 2 AA), abandoned at 10,538 of "
+                       "171,384 tiles"),
+        "why": ("the fixed 0.4-frame-width shift at scale 1.3 put the window 0.52 base frame "
+                "widths off centre — off the structure entirely — while the tile kept the "
+                "location's label. That corrupts only the positive classes (an empty crop "
+                "labeled 1 is roughly true; labeled 3 or 4 it is a lie) and fights deploy, "
+                "which reframes to centre content before scoring."),
+        "slots_per_location": SLOTS,
+        "axes": f"{N_PALETTES} palettes x {N_GEOM} geometries x {len(AA_LEVELS)} AA levels",
+        "palettes": {
+            "always": [DEPLOY_PALETTE, LABELER_PALETTE],
+            "always_roles": {
+                DEPLOY_PALETTE: "deploy-matched; data_v4.NEUTRAL_PALETTE, the pinned "
+                                "scoring instrument and the canonical eval view",
+                LABELER_PALETTE: "the vivid companion the human labels were formed "
+                                 "through (data/palettes/vivid_blue_orange.json); closes "
+                                 "the judge/model presentation gap",
+            },
+            "drawn_per_location": N_DRAWN,
+            "pool_source": POOL_SRC,
+            "pool_size": len(pool_names),
+            "drawable": drawable,
+            "drawable_size": len(drawable),
+            "held_out": held_out,
+            "held_out_seed": HELDOUT_SEED,
+            "held_out_role": ("no location may draw these; they are the held-out-palette "
+                              "invariance read at eval time"),
+            "draw_scope": ("PER LOCATION, not per crop — all 4 palettes share the "
+                           "location's 3 geometries, so 24 tiles rest on 6 distinct "
+                           "escape-time fields"),
+            "exposure_per_drawable_palette": {"min": lo, "max": hi,
+                                              "mean": round(sum(free.values())/len(free), 1)},
+        },
+        "geometry": {
+            "samples_per_location": N_GEOM,
+            "identity": {"scale": IDENTITY_SCALE, "shift": 0.0, "shift_id": IDENTITY_SHIFT_ID,
+                         "role": "the deploy composition; present in every (palette, AA) cell"},
+            "jittered": {
+                "count": 2,
+                "shift_frac": f"U(0, {SHIFT_FRAC_MAX}) of the slot frame width",
+                "shift_direction": "U(0, 2*pi)",
+                "scale": f"U({SCALE_LO}, {SCALE_HI})",
+                "shift_ids": list(JITTER_SHIFT_IDS),
+            },
+            "seed": f'random.Random("{SEED_TAG}|<loc_id>"); palette draw consumed first',
+        },
+        "aa_levels": [{"ss": s, "filter": f,
+                       "aa_level": "aliased" if s == 1 else "antialiased"}
+                      for s, f in AA_LEVELS],
+        "previous_recipe_magnitudes": {
+            "note": "recorded for the first time — these were never written down, only seen",
+            "scales": [0.7, 1.0, 1.3],
+            "shift_frac": 0.4,
+            "shift_frac_basis": "the SLOT frame width (scale x base), so 0.28/0.40/0.52 base",
+            "shift_direction": "deterministic: 2*pi*(palette_index*3 + scale_index)/(n_pal*3)",
+            "aa_levels": "ss1 box + ss2 lanczos3 (unchanged)",
+        },
+        "colormap_library": {
+            "path": COLORMAPS_OUT,
+            "n": len(library),
+            "built_from": [POOL_SRC, BLUE_ORANGE_SRC],
+            "note": ("v4-render-batch takes ONE --colormaps path and blue_orange is in "
+                     "neither committed library, so the two committed sources are "
+                     "concatenated verbatim (stops and mirror_needed untouched)"),
+        },
+        "cache_render": {**CACHE_RENDER,
+                         "note": "v4-render-batch defaults, unchanged from v4..v7"},
+        "executor_note": ("the plan shares 4 palettes per escape-time field, but "
+                          "v4-render-batch renders each row independently, so that sharing "
+                          "is NOT exploited today — see marginal_cost below"),
+        "marginal_cost": marginal,
+        "reuse_audit": reuse,
+        "trainer_followup": (
+            "classifier/data_v4.py Loc.palette_renders() asserts exactly 6 palette renders "
+            "per location and must become 4 (and per-location variable) before a v8 train. "
+            "canonical() and aa_twin() are unaffected: the identity slot supplies exactly "
+            "one (twilight_shifted, ss2, scale 1.0, center) row per location."),
+    }
+
+    paths.durable(ROSTER_OUT, mkparents=True).write_text(
+        json.dumps(recipe_block, indent=2), encoding="utf-8")
     with paths.durable(PLAN_OUT, mkparents=True).open("w", encoding="utf-8") as f:
         for row in plan_rows:
             f.write(json.dumps(row) + "\n")
     with paths.durable(CACHE_MANIFEST_OUT, mkparents=True).open("w", encoding="utf-8") as f:
         for row in cm_rows:
             f.write(json.dumps(row) + "\n")
+    amend_metadata(recipe_block)
 
-    print(f"\nWROTE {ROSTER_OUT}")
+    print(f"WROTE {ROSTER_OUT}")
     print(f"WROTE {PLAN_OUT}            ({len(plan_rows)} rows)")
     print(f"WROTE {CACHE_MANIFEST_OUT}  ({len(cm_rows)} rows)")
+    print(f"AMENDED {META_PATH}         (aug_recipe block)")
 
 
 if __name__ == "__main__":

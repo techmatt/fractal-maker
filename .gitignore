@@ -237,6 +237,12 @@ __pycache__/
 !/data/v8/plan.jsonl
 !/data/v8/cache_manifest.jsonl
 !/data/v8/aug_roster.json
+# The merged render library the cache tiles were actually coloured through. It is a
+# verbatim concatenation of two committed sources, so it is cheap to rebuild — but a
+# plan row names a palette and NOTHING else records which stops that name resolved to,
+# so if either source is ever edited the cache becomes unattributable in exactly the way
+# the v4..v7 caches were. Committed for that reason.
+!/data/v8/colormaps.json
 # Backstop only — the v8 aug cache is bulk() and resolves out-of-tree through
 # artifacts.RELOCATED_PREFIXES. If it ever reappears here it stays un-committable.
 /data/v8/aug_cache/

@@ -1,0 +1,204 @@
+{
+  "recipe": "v8b",
+  "supersedes": "the first v8 recipe (2 palettes x 3 fixed scales {0.7,1.0,1.3} x 2 fixed shifts at 0.4 frame widths x 2 AA), abandoned at 10,538 of 171,384 tiles",
+  "why": "the fixed 0.4-frame-width shift at scale 1.3 put the window 0.52 base frame widths off centre \u2014 off the structure entirely \u2014 while the tile kept the location's label. That corrupts only the positive classes (an empty crop labeled 1 is roughly true; labeled 3 or 4 it is a lie) and fights deploy, which reframes to centre content before scoring.",
+  "slots_per_location": 24,
+  "axes": "4 palettes x 3 geometries x 2 AA levels",
+  "palettes": {
+    "always": [
+      "twilight_shifted",
+      "blue_orange"
+    ],
+    "always_roles": {
+      "twilight_shifted": "deploy-matched; data_v4.NEUTRAL_PALETTE, the pinned scoring instrument and the canonical eval view",
+      "blue_orange": "the vivid companion the human labels were formed through (data/palettes/vivid_blue_orange.json); closes the judge/model presentation gap"
+    },
+    "drawn_per_location": 2,
+    "pool_source": "data/palettes/score3_colormaps.json",
+    "pool_size": 76,
+    "drawable": [
+      "Blues",
+      "BrBG",
+      "CMRmap",
+      "GnBu",
+      "PuOr",
+      "RdBu",
+      "RdGy",
+      "RdPu",
+      "RdYlBu",
+      "Spectral",
+      "YlGnBu",
+      "YlOrBr",
+      "YlOrRd",
+      "afmhot",
+      "berlin",
+      "bwr",
+      "cet_cyclic_mybm_20_100_c48_s25",
+      "cet_cyclic_protanopic_deuteranopic_bwyk_16_96_c31",
+      "cet_cyclic_protanopic_deuteranopic_wywb_55_96_c33",
+      "cet_cyclic_rygcbmr_50_90_c64_s25",
+      "cet_cyclic_wrkbw_10_90_c43",
+      "cet_cyclic_wrkbw_10_90_c43_s25",
+      "cet_linear_bgyw_15_100_c68",
+      "cet_linear_bmy_10_95_c71",
+      "cet_linear_bmy_10_95_c78",
+      "cet_linear_kry_0_97_c73",
+      "cet_linear_kry_5_95_c72",
+      "cet_linear_kryw_0_100_c71",
+      "cet_linear_kryw_5_100_c64",
+      "cet_linear_kryw_5_100_c67",
+      "cet_linear_protanopic_deuteranopic_kbjyw_5_95_c25",
+      "cet_linear_protanopic_deuteranopic_kbw_5_95_c34",
+      "cet_linear_tritanopic_krjcw_5_98_c46",
+      "cet_linear_tritanopic_krw_5_95_c46",
+      "cividis",
+      "cmr.amber",
+      "cmr.copper",
+      "cmr.ember",
+      "cmr.emergency_s",
+      "cmr.fall",
+      "cmr.fusion",
+      "cmr.jungle",
+      "cmr.lilac",
+      "cmr.pride",
+      "cmr.prinsenvlag",
+      "cmr.rainforest",
+      "cmr.redshift",
+      "cmr.savanna",
+      "cmr.seasons_s",
+      "cmr.sunburst",
+      "cmr.swamp",
+      "cmr.torch",
+      "cmr.toxic",
+      "cmr.voltage",
+      "cmr.waterlily",
+      "cmr.wildfire",
+      "coolwarm",
+      "gist_heat",
+      "gist_stern",
+      "inferno",
+      "magma",
+      "managua",
+      "plasma",
+      "seismic",
+      "turbo",
+      "twilight",
+      "viridis"
+    ],
+    "drawable_size": 67,
+    "held_out": [
+      "cet_cyclic_wrwbw_40_90_c42",
+      "cet_diverging_bwr_40_95_c42",
+      "cet_linear_bmw_5_95_c86",
+      "cet_linear_kry_5_98_c75",
+      "cet_linear_protanopic_deuteranopic_kbw_5_98_c40",
+      "cmr.ocean",
+      "cmr.seasons",
+      "cmr.viola"
+    ],
+    "held_out_seed": 20260729,
+    "held_out_role": "no location may draw these; they are the held-out-palette invariance read at eval time",
+    "draw_scope": "PER LOCATION, not per crop \u2014 all 4 palettes share the location's 3 geometries, so 24 tiles rest on 6 distinct escape-time fields",
+    "exposure_per_drawable_palette": {
+      "min": 185,
+      "max": 246,
+      "mean": 213.2
+    }
+  },
+  "geometry": {
+    "samples_per_location": 3,
+    "identity": {
+      "scale": 1.0,
+      "shift": 0.0,
+      "shift_id": "center",
+      "role": "the deploy composition; present in every (palette, AA) cell"
+    },
+    "jittered": {
+      "count": 2,
+      "shift_frac": "U(0, 0.1) of the slot frame width",
+      "shift_direction": "U(0, 2*pi)",
+      "scale": "U(0.9, 1.1)",
+      "shift_ids": [
+        "jit0",
+        "jit1"
+      ]
+    },
+    "seed": "random.Random(\"v8b-aug|<loc_id>\"); palette draw consumed first"
+  },
+  "aa_levels": [
+    {
+      "ss": 1,
+      "filter": "box",
+      "aa_level": "aliased"
+    },
+    {
+      "ss": 2,
+      "filter": "lanczos3",
+      "aa_level": "antialiased"
+    }
+  ],
+  "previous_recipe_magnitudes": {
+    "note": "recorded for the first time \u2014 these were never written down, only seen",
+    "scales": [
+      0.7,
+      1.0,
+      1.3
+    ],
+    "shift_frac": 0.4,
+    "shift_frac_basis": "the SLOT frame width (scale x base), so 0.28/0.40/0.52 base",
+    "shift_direction": "deterministic: 2*pi*(palette_index*3 + scale_index)/(n_pal*3)",
+    "aa_levels": "ss1 box + ss2 lanczos3 (unchanged)"
+  },
+  "colormap_library": {
+    "path": "data/v8/colormaps.json",
+    "n": 77,
+    "built_from": [
+      "data/palettes/score3_colormaps.json",
+      "data/palettes/vivid_blue_orange.json"
+    ],
+    "note": "v4-render-batch takes ONE --colormaps path and blue_orange is in neither committed library, so the two committed sources are concatenated verbatim (stops and mirror_needed untouched)"
+  },
+  "cache_render": {
+    "width": 512,
+    "height": 288,
+    "maxiter": 8000,
+    "jpg_quality": 85,
+    "note": "v4-render-batch defaults, unchanged from v4..v7"
+  },
+  "executor_note": "the plan shares 4 palettes per escape-time field, but v4-render-batch renders each row independently, so that sharing is NOT exploited today \u2014 see marginal_cost below",
+  "marginal_cost": {
+    "locations": 64,
+    "ss": 1,
+    "note": "same locations, same seeds, all three plans",
+    "arms": {
+      "base": {
+        "tiles": 256,
+        "wall_s": 8.53,
+        "s_per_tile": 0.0333
+      },
+      "pal": {
+        "tiles": 384,
+        "wall_s": 11.64,
+        "s_per_tile": 0.0303
+      },
+      "geo": {
+        "tiles": 384,
+        "wall_s": 11.38,
+        "s_per_tile": 0.0296
+      }
+    },
+    "marginal_s_per_palette_tile": 0.0243,
+    "marginal_s_per_geometry_tile": 0.0223,
+    "palette_over_geometry_ratio": 1.091,
+    "interpretation": "ratio ~1.0 => the executor re-iterates per palette, so a palette slot costs the same as a geometry slot and the plan's field-sharing is unexploited. ratio ~0 => palettes are near-free (recolor batching is live)."
+  },
+  "reuse_audit": {
+    "prior_cache_trees_on_disk": [],
+    "prior_cache_location_dirs": 0,
+    "prior_cache_manifests_found": [],
+    "reusable_slots_per_location": 0,
+    "reuse_fraction": 0.0,
+    "why": "The v4..v7 aug caches were DELETED on 2026-07-29 (commit 7068839) \u2014 243,477 JPGs that no surviving cache_manifest.jsonl could attribute back to a location. Nothing to reuse, and nothing that could have been: a tile's filename encodes palette/geometry/ss but not its location. Even had the trees survived, the v8b geometry is per-location randomised, so no jittered tile from a fixed-schedule recipe could match a v8b slot key."
+  },
+  "trainer_followup": "classifier/data_v4.py Loc.palette_renders() asserts exactly 6 palette renders per location and must become 4 (and per-location variable) before a v8 train. canonical() and aa_twin() are unaffected: the identity slot supplies exactly one (twilight_shifted, ss2, scale 1.0, center) row per location."
+}

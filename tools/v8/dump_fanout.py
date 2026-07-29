@@ -13,11 +13,17 @@ The point is to see EXACTLY what the network sees, in the palette it sees it in.
   * the only text is the parameter captions. A tile's caption is its own augmentation
     coordinates; a sheet's header is the location's identity. Nothing else.
 
-LAYOUT. 4 rows x 6 columns. Row = (palette, AA level); column = (scale, shift). So the
-palette axis is read by comparing row 0 vs row 2 (ss1) or row 1 vs row 3 (ss2) — the same
-geometry, a different colormap, side by side — and the AA axis by comparing adjacent rows
-within a palette. Every tile still carries its own caption, so the grouping is a
-convenience, not the source of truth.
+LAYOUT. 4 rows x 6 columns, recut for the v8b recipe (4 palettes x 3 geometries x 2 AA).
+Row = palette; column = (geometry, AA level), geometry-major. So a COLUMN is the same
+viewport at the same AA under all four colormaps — the most direct palette read available —
+and the AA axis is the adjacent column pair within a geometry. Column 0/1 is always the
+IDENTITY framing (dead centre, scale exactly 1.0), the composition deploy actually scores,
+so every sheet opens on the deploy view. The grid is the same 4x6 as the pre-restart sheets,
+which keeps the before/after a direct comparison.
+
+The palette row order is per LOCATION, not global: v8b draws two of a location's four
+palettes from a 67-name pool with a per-location seed, so rows 2 and 3 name different
+colormaps on different sheets. Rows 0 and 1 are always twilight_shifted then blue_orange.
 
 SELECTION. 3 locations per quality class {1,2,3,4}, TRAIN split only, drawn under a fixed
 seed and spread across families: distinct families are taken first (in a seeded order), and
@@ -35,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import sys
 from collections import defaultdict
@@ -57,9 +64,14 @@ SEED = 20260729
 PER_CLASS = 3
 CLASSES = (1, 2, 3, 4)
 
-# Grid: 4 rows x 6 cols = 24. Row key = (palette_index, ss); col key = (scale, shift).
+# Recipe-order head of a location's palette list (tools/v8/build_plan.py).
+DEPLOY_PALETTE = "twilight_shifted"
+LABELER_PALETTE = "blue_orange"
+
+# Grid: 4 rows x 6 cols = 24. Row = palette; col = (geometry, ss), geometry-major.
 COLS = 6
 ROWS = 4
+GEOM_ORDER = ("id", "j0", "j1")      # identity first — the deploy composition
 PAD = 10
 CAP_H = 20            # per-tile caption strip
 HEAD_H = 74           # sheet header
@@ -127,19 +139,35 @@ def identity_line(r) -> str:
 
 
 def tile_caption(cm) -> str:
+    """A tile's own augmentation coordinates. Scale and shift are continuous under v8b, so
+    they are printed at the precision that distinguishes them, and the shift carries its
+    direction — a magnitude alone cannot tell you which way the window walked."""
     aa = f"ss{cm['ss']} {cm['filter']}"
-    return f"{cm['palette']}  ·  s{cm['scale']:.1f}  ·  {cm['shift_id']}  ·  {aa}"
+    if cm["geom_id"] == "id":
+        geom = "s1.000 · centred"
+    else:
+        deg = math.degrees(cm["shift_angle"]) % 360.0
+        geom = f"s{cm['scale']:.3f} · sh{cm['shift_frac']:.3f}fw @{deg:.0f}°"
+    return f"{cm['palette']}  ·  {geom}  ·  {aa}"
 
 
-def build_sheet(loc_row, cm_rows, palettes, out_path: Path, font, font_hd, font_sm):
+def palette_order(cm_rows) -> list:
+    """This location's four palettes, in recipe order: the two always-on maps first
+    (deploy, then the labeler's), then the two pool draws sorted. Read off the location's
+    OWN cache rows — v8b draws per location, so there is no global roster order to use."""
+    names = {c["palette"] for c in cm_rows}
+    head = [p for p in (DEPLOY_PALETTE, LABELER_PALETTE) if p in names]
+    return head + sorted(names - set(head))
+
+
+def build_sheet(loc_row, cm_rows, out_path: Path, font, font_hd, font_sm):
     """One location's 24 cached tiles on a 4x6 grid. Tiles are pasted at native size."""
-    scale_order = sorted({c["scale"] for c in cm_rows})
-    shift_order = ["center", "shifted"]
+    palettes = palette_order(cm_rows)
     ss_order = sorted({c["ss"] for c in cm_rows})
     cell = {}
     for c in cm_rows:
-        row = palettes.index(c["palette"]) * len(ss_order) + ss_order.index(c["ss"])
-        col = scale_order.index(c["scale"]) * len(shift_order) + shift_order.index(c["shift_id"])
+        row = palettes.index(c["palette"])
+        col = GEOM_ORDER.index(c["geom_id"]) * len(ss_order) + ss_order.index(c["ss"])
         cell[(row, col)] = c
     assert len(cell) == ROWS * COLS, f"{out_path.name}: {len(cell)} distinct grid cells, want 24"
 
@@ -225,8 +253,6 @@ def main() -> int:
         return 1
 
     font, font_hd, font_sm = _font(13), _font(20), _font(12)
-    palettes = [p["name"] for p in json.loads(
-        (ROOT / "data" / "v8" / "aug_roster.json").read_text(encoding="utf-8"))["v8_palettes"]]
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print()
@@ -234,8 +260,9 @@ def main() -> int:
         rows_i = by_loc[r["loc_id"]]
         assert len(rows_i) == 24, f"loc {r['loc_id']}: {len(rows_i)} cache rows"
         out = OUT_DIR / f"class{r['label']}_{r['fractal_type']}_loc{r['loc_id']}.png"
-        size = build_sheet(r, rows_i, palettes, out, font, font_hd, font_sm)
-        print(f"  {out.name}  {size[0]}x{size[1]}")
+        size = build_sheet(r, rows_i, out, font, font_hd, font_sm)
+        print(f"  {out.name}  {size[0]}x{size[1]}   palettes: "
+              f"{', '.join(palette_order(rows_i))}")
     print(f"\n{len(picked)} sheets -> {OUT_DIR}")
     return 0
 
