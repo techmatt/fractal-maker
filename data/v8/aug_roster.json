@@ -1,0 +1,74 @@
+{
+  "recovered_from": "data/v4/aug_cache/0/*.jpg (tile filenames)",
+  "recovery_note": "data/v4/aug_roster.json is gone (never committed; see tools/audit/durability_map.py). The six names are recovered from the surviving relocated v4 cache tree. The original roster ORDER is not recoverable from a directory listing, so the canonical order below is sorted(names) \u2014 the only order reproducible from the witness.",
+  "palette_family_note": "palette_family is DERIVED from the name's namespace prefix, not recovered. The authoritative values died with aug_roster.json. Nothing in training reads the field (classifier/data_v4.py stores it and never uses it).",
+  "canonical_order": [
+    "cet_cyclic_mybm_20_100_c48_s25",
+    "cet_linear_grey_10_95_c0",
+    "cmr.amber",
+    "cmr.jungle",
+    "coolwarm",
+    "twilight_shifted"
+  ],
+  "v8_selection_rule": "[twilight_shifted (the deploy palette), then its cyclic successor in canonical_order]",
+  "v8_palettes": [
+    {
+      "name": "twilight_shifted",
+      "palette_family": "twilight_shifted",
+      "role": "deploy palette (data_v4.NEUTRAL_PALETTE; the canonical eval view)"
+    },
+    {
+      "name": "cet_cyclic_mybm_20_100_c48_s25",
+      "palette_family": "cet",
+      "role": "deterministic second: successor of twilight_shifted (index 5 -> 0) in canonical_order"
+    }
+  ],
+  "recipe": {
+    "slots_per_location": 24,
+    "scales": [
+      0.7,
+      1.0,
+      1.3
+    ],
+    "shifts": [
+      "center",
+      "shifted"
+    ],
+    "shift_frac": 0.4,
+    "aa_levels": [
+      {
+        "ss": 1,
+        "filter": "box",
+        "aa_level": "aliased"
+      },
+      {
+        "ss": 2,
+        "filter": "lanczos3",
+        "aa_level": "antialiased"
+      }
+    ],
+    "shift_angle_schedule": "2*pi*(palette_index*len(SCALES) + scale_index)/6",
+    "dropped_from_v4_v7": "ss4; 4 of the 6 palettes",
+    "added_vs_v4_v7": "ss2 + lanczos3 (the deploy AA level), on EVERY location",
+    "cache_render": {
+      "width": 512,
+      "height": 288,
+      "maxiter": 8000,
+      "jpg_quality": 85,
+      "note": "v4-render-batch defaults, unchanged from v4..v7"
+    }
+  },
+  "reuse_audit": {
+    "prior_cache_location_dirs": 5797,
+    "prior_cache_manifests_found": [],
+    "reusable_slots": 0,
+    "reuse_fraction": 0.0,
+    "why": "A cached tile's filename encodes palette/scale/shift/ss but NOT its location; `<loc_id>` is an index into that version's manifest.jsonl, and only that version's cache_manifest.jsonl maps it back to (family, cx, cy, fw, c). None of data/v{4,5,6,7}/cache_manifest.jsonl survive (nor manifest.jsonl, nor aug_roster.json) \u2014 see tools/audit/durability_map.py \u2014 so no tile in the 243,477-file prior cache can be attributed to a v8 location. Reuse is 0/24 per location, for a mapping reason, not a recipe reason.",
+    "ceiling_had_the_mapping_survived": {
+      "slots_per_location": 6,
+      "of": 24,
+      "reason": "ss2 (12 of 24 slots) exists in no prior cache. Of the 12 ss1 slots, the 6 `shshifted` ones sit at a different offset: the shift angle is 2*pi*(pal_idx*3 + scale_idx)/n_combo and n_combo went 18 -> 6. Only the 6 (2 palettes x 3 scales x center x ss1) tiles would have matched \u2014 and only for the 5,797 locations a prior manifest covered, out of 7,141."
+    },
+    "not_deleting": "The prior caches are NOT deleted by this build (prompt \u00a74): they are the reuse source if a manifest is ever recovered, and the deletion decision belongs after v8 is trained and evaluated."
+  }
+}

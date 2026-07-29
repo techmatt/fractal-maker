@@ -759,10 +759,39 @@ pub fn render_crop_f64(
 /// Save an `RgbImage` as JPEG at an explicit quality via the explicit encoder
 /// (the `image::save` default is 75; the wallpaper crops want q≈90). Shared by
 /// the present/palette_probe/enrich crop writers.
+/// Write a JPEG **atomically**: encode into a sibling temp file, flush it, then rename
+/// over the destination.
+///
+/// The naive form (`File::create(path)` then encode) truncates the destination first, so a
+/// process killed mid-encode leaves a SHORT, valid-looking `.jpg` on disk. That is not
+/// merely a lost unit of work: `v4-render-batch` resumes by skipping any row whose output
+/// `exists()`, so the truncated tile is never rewritten and silently poisons the
+/// augmentation cache. An external reaper kills long runs at random, and a 171k-render
+/// cache build is many hours of exposure, so the temp+rename is load-bearing rather than
+/// belt-and-braces.
+///
+/// `fs::rename` replaces an existing destination on both POSIX and Windows (the latter via
+/// `MoveFileEx(MOVEFILE_REPLACE_EXISTING)`), and the temp file is a sibling so the rename
+/// stays within one filesystem. The temp name carries the pid, so two concurrent batch
+/// processes over the same plan cannot collide on it. Output bytes are unchanged.
 pub fn save_jpeg(img: &RgbImage, path: &std::path::Path, quality: u8) -> Result<(), String> {
-    let f = std::fs::File::create(path).map_err(|e| format!("create {}: {e}", path.display()))?;
-    let mut w = std::io::BufWriter::new(f);
-    let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut w, quality);
-    enc.encode(img.as_raw(), img.width(), img.height(), image::ExtendedColorType::Rgb8)
-        .map_err(|e| format!("encode jpeg {}: {e}", path.display()))
+    use std::io::Write;
+    let tmp = path.with_extension(format!("jpg.{}.tmp", std::process::id()));
+    let write = || -> Result<(), String> {
+        let f = std::fs::File::create(&tmp).map_err(|e| format!("create {}: {e}", tmp.display()))?;
+        let mut w = std::io::BufWriter::new(f);
+        let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut w, quality);
+        enc.encode(img.as_raw(), img.width(), img.height(), image::ExtendedColorType::Rgb8)
+            .map_err(|e| format!("encode jpeg {}: {e}", tmp.display()))?;
+        w.flush().map_err(|e| format!("flush {}: {e}", tmp.display()))?;
+        Ok(())
+    };
+    if let Err(e) = write() {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    std::fs::rename(&tmp, path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("rename {} -> {}: {e}", tmp.display(), path.display())
+    })
 }

@@ -11,3 +11,14 @@ data/discovery/**/prio_terms.jsonl filter=lfs diff=lfs merge=lfs -text
 # data/classifier/v7/eval_scores_v7.jsonl`. It's the frozen input the keeper calibration
 # gate (tools/atlas/keeper_cut.py, test_steered_frontier.py) derives + tests against.
 data/classifier/**/eval_scores_v7.jsonl filter=lfs diff=lfs merge=lfs -text
+# v8 build artifacts. Unlike v4..v7 (which wrote these to ignored, untracked paths and
+# lost every one of them), the v8 population record is durable() and committed. The two
+# per-render files are large — 7151 locations x 24 slots = 171,624 rows each, ~30-45 MB —
+# so they go through LFS; manifest.jsonl / eval_slice.jsonl / build_metadata.json /
+# aug_roster.json are small and stay plain text (readable in a diff, which is the point
+# for a split assignment). These paths are NEGATED in .gitignore by exact path, so a
+# normal `git add` works — no force-add needed, and `git check-ignore --no-index`
+# confirms it independently of the index.
+data/v8/plan.jsonl filter=lfs diff=lfs merge=lfs -text
+data/v8/cache_manifest.jsonl filter=lfs diff=lfs merge=lfs -text
+data/classifier/**/eval_scores_v8.jsonl filter=lfs diff=lfs merge=lfs -text

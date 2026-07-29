@@ -20,6 +20,16 @@ Two independent things live here:
            coarse mixed-disposition registry entries. Small-files-only isolates the
            many-small-file case (label crops, field caches) that no single-file rule
            can see.
+       (c) any DIRECTORY whose subtree holds >= DIR_FILE_COUNT_THRESHOLD FILES or
+           >= DIR_BYTES_THRESHOLD BYTES (all files, large ones included), again at
+           MINIMAL granularity. This is the BULK rule — the enforcement arm of
+           storage_classes.md rule 5, "no large training data or results in-tree, even
+           if gitignored". Rules (a)/(b) do not cover it: (a) is per-file, so a cache
+           of a million 4 KB crops passes cleanly no matter how big the tree gets, and
+           (b) caps out at 100 MB of *small* files, which says nothing about file
+           COUNT — and traversal cost, the actual harm, is driven by count. The two
+           historical bombs (243k aug-cache JPGs, 317k discovery-scratch files) are
+           exactly what (c) exists to refuse a second time.
      Excludes {scratch/, .venv/, target/, target-test/, .git/} from flagging. `.git` is
      a history-REWRITE target (git filter-repo), not a relocation one — its size is
      reported as an FYI line, never flagged.
@@ -67,6 +77,25 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 FILE_THRESHOLD = 1 * 1024 * 1024        # 1 MiB — matches .git/hooks/pre-commit LIMIT
 DIR_THRESHOLD = 100 * 1024 * 1024       # ~100 MB — many-small-file catch
+
+# --- BULK rule (c) thresholds: storage_classes.md rule 5, "no bulk in-tree" ---
+# Chosen against the measured shape of THIS tree, not picked round:
+#   * FILE COUNT 2,000. The whole non-excluded working tree is ~5.2k files. A single
+#     subtree holding 2k is already ~40% of everything a recursive walk has to visit,
+#     and it is two orders of magnitude below the bombs that made `grep -r` take >120s
+#     (152k / 42k / 27k / 22k aug-cache dirs; 317k discovery scratch) — i.e. low enough
+#     to fire long before the tree is unusable, high enough that no source or metadata
+#     directory here comes close (largest today: tools/ at 504).
+#   * BYTES 500 MB. Rule (a) already catches single blobs at 1 MiB and rule (b) catches
+#     small-file aggregates at 100 MB, so this is not a lower bound on "large" — it is
+#     the point at which a directory is unambiguously a DATA STORE rather than source
+#     plus metadata. Set above the ~250 MB scale of one label batch on purpose: a
+#     per-batch threshold would flap as crops churn inside a directory whose disposition
+#     is already registered at the parent prefix.
+# Raising either is a policy change; say so in the commit rather than nudging it to make
+# a red build green.
+DIR_FILE_COUNT_THRESHOLD = 2_000        # files in a subtree — traversal cost
+DIR_BYTES_THRESHOLD = 500 * 1024 * 1024  # ~500 MB in a subtree (all files)
 
 # Excluded from FLAGGING (working-tree churn that is regenerable infra, not data
 # bloat we relocate). `.git` is a history-rewrite target -> FYI size only.
@@ -118,6 +147,12 @@ REGISTRY: list[Entry] = [
     Entry("data/palettes/", KEEP, None, "mixed",
           "committed palette definitions (harvested 746-palette pool + features); "
           "load-bearing config for the palette system, tracked, no smaller form"),
+    Entry("data/v8/", KEEP, None, "tracked",
+          "v8 classifier build: manifest.jsonl IS the training population + split; "
+          "plan/cache_manifest are 171,624 rows each (~55/79 MB, LFS) and are the ONLY "
+          "thing that maps a cached tile back to a location — losing them is exactly how "
+          "the v4..v7 caches became 243k unattributable JPGs. durable() + canaried; the "
+          "aug_cache JPGs themselves are bulk() and out-of-tree. CANARY.", canary=True),
     Entry("data/library_embeddings/", KEEP, None, "mixed",
           "prospect-library CLIP embeddings (embeddings.npz, tracked): unregenerable "
           "except value-approximate under a verdict-sensitive threshold. CANARY.",
@@ -216,6 +251,8 @@ class Violator:
     rel: str            # repo-relative POSIX; dir violators end with '/'
     size: int
     is_dir: bool
+    n_files: int = 0            # bulk violators only: files in the subtree
+    rules: tuple = ()           # bulk violators only: which of ('files','bytes') fired
 
 
 @dataclass
@@ -223,13 +260,20 @@ class ScanResult:
     file_violators: list[Violator]
     dir_violators: list[Violator]
     git_size: int
+    # rule (c) — bulk directories (file-count and/or aggregate-byte), minimal granularity.
+    bulk_violators: list[Violator] = field(default_factory=list)
     # populated by check_registry:
     uncovered: list[Violator] = field(default_factory=list)
     stale: list[Entry] = field(default_factory=list)
 
     @property
     def violators(self) -> list[Violator]:
-        return self.file_violators + self.dir_violators
+        """Every flagged violator, across all three rules. Coverage + the hard fail are
+        computed over this. A directory CAN appear twice (once under rule (b), once under
+        rule (c)) — that is deliberate: each rule states an independent reason the path
+        needs a registry line, and `entry_size` excludes the bulk list so the reported
+        byte columns are not double-counted."""
+        return self.file_violators + self.dir_violators + self.bulk_violators
 
 
 def _excluded(rel_parts: tuple[str, ...]) -> bool:
@@ -239,11 +283,15 @@ def _excluded(rel_parts: tuple[str, ...]) -> bool:
 def scan(repo: Path) -> ScanResult:
     """Walk the working tree; return file + directory violators and the .git FYI size."""
     small_sub: dict[Path, int] = {}     # subtree bytes of files < FILE_THRESHOLD
+    all_sub: dict[Path, int] = {}       # subtree bytes of ALL files (rule c)
+    cnt_sub: dict[Path, int] = {}       # subtree file COUNT (rule c)
     file_viol: list[Violator] = []
 
     # one pruned top-down walk: collect each dir's own small-file bytes + its kept
     # children, and flag big files inline. Excluded top-level trees are never descended.
     small_own: dict[Path, int] = {}
+    all_own: dict[Path, int] = {}
+    cnt_own: dict[Path, int] = {}
     kid_map: dict[Path, list[Path]] = {}
     for dirpath, dirnames, filenames in os.walk(repo, topdown=True):
         d = Path(dirpath)
@@ -254,25 +302,31 @@ def scan(repo: Path) -> ScanResult:
             dirnames[:] = []
             continue
         own = 0
+        own_all = 0
+        own_cnt = 0
         for fn in filenames:
             fp = d / fn
             try:
                 sz = fp.stat().st_size
             except OSError:
                 continue
+            own_all += sz
+            own_cnt += 1
             if sz >= FILE_THRESHOLD:
                 file_viol.append(Violator(fp.relative_to(repo).as_posix(), sz, False))
             else:
                 own += sz
         small_own[d] = own
+        all_own[d] = own_all
+        cnt_own[d] = own_cnt
         kid_map[d] = [d / n for n in dirnames]
 
-    # bottom-up subtree small-file sums
+    # bottom-up subtree sums (small-file bytes, all-file bytes, file count)
     for d in sorted(kid_map, key=lambda p: len(p.parts), reverse=True):
-        total = small_own.get(d, 0)
-        for k in kid_map[d]:
-            total += small_sub.get(k, 0)
-        small_sub[d] = total
+        kids = kid_map[d]
+        small_sub[d] = small_own.get(d, 0) + sum(small_sub.get(k, 0) for k in kids)
+        all_sub[d] = all_own.get(d, 0) + sum(all_sub.get(k, 0) for k in kids)
+        cnt_sub[d] = cnt_own.get(d, 0) + sum(cnt_sub.get(k, 0) for k in kids)
 
     # rule (b): MINIMAL dirs whose small-file subtree >= DIR_THRESHOLD (no child qualifies)
     dir_viol: list[Violator] = []
@@ -286,10 +340,34 @@ def scan(repo: Path) -> ScanResult:
             continue
         dir_viol.append(Violator(rel.as_posix() + "/", sz, True))
 
+    # rule (c) BULK: MINIMAL dirs over the file-count OR aggregate-byte threshold.
+    # "Minimal" is evaluated on the SAME predicate that flagged the dir, so a 10k-file /
+    # 300 MB dir is reported at the leaf-most 10k-file dir, not pushed up to a parent that
+    # merely happens to be over on bytes.
+    def _bulk(p: Path) -> bool:
+        return (cnt_sub.get(p, 0) >= DIR_FILE_COUNT_THRESHOLD
+                or all_sub.get(p, 0) >= DIR_BYTES_THRESHOLD)
+
+    bulk_viol: list[Violator] = []
+    for d in cnt_sub:
+        if not _bulk(d):
+            continue
+        if any(_bulk(k) for k in kid_map.get(d, [])):
+            continue
+        rel = d.relative_to(repo)
+        if rel == Path("."):
+            continue
+        rules = tuple(
+            r for r, hit in (("files", cnt_sub[d] >= DIR_FILE_COUNT_THRESHOLD),
+                             ("bytes", all_sub[d] >= DIR_BYTES_THRESHOLD)) if hit)
+        bulk_viol.append(Violator(rel.as_posix() + "/", all_sub[d], True,
+                                  n_files=cnt_sub[d], rules=rules))
+
     git_size = _dir_size(repo / GIT_DIR)
     file_viol.sort(key=lambda v: -v.size)
     dir_viol.sort(key=lambda v: -v.size)
-    return ScanResult(file_viol, dir_viol, git_size)
+    bulk_viol.sort(key=lambda v: -v.size)
+    return ScanResult(file_viol, dir_viol, git_size, bulk_violators=bulk_viol)
 
 
 def _dir_size(root: Path) -> int:
@@ -334,9 +412,13 @@ def check_registry(res: ScanResult, registry: list[Entry] = REGISTRY) -> ScanRes
 
 
 def entry_size(res: ScanResult, entry: Entry) -> int:
-    """Total violator bytes assigned (most-specifically) to this entry."""
+    """Total violator bytes assigned (most-specifically) to this entry.
+
+    Rules (a)+(b) only. The rule-(c) bulk list overlaps them by construction (a bulk dir
+    usually also holds the small files rule (b) flagged), so summing all three would
+    double-count; bulk gets its own report section with its own count/byte columns."""
     tot = 0
-    for v in res.violators:
+    for v in res.file_violators + res.dir_violators:
         if covering_entry(v.rel) is entry:
             tot += v.size
     return tot
@@ -359,12 +441,14 @@ def _report(repo: Path) -> int:
     print("=" * 78)
     print(f"REPO-SIZE GUARD   root={repo}")
     print(f"  file threshold >= {human(FILE_THRESHOLD)}   dir(small-file) threshold >= {human(DIR_THRESHOLD)}")
+    print(f"  bulk dir threshold >= {DIR_FILE_COUNT_THRESHOLD} files or >= {human(DIR_BYTES_THRESHOLD)}")
     print(f"  excluded from flagging: {', '.join(EXCLUDE_PREFIXES)}")
     print("=" * 78)
     n_v = len(res.violators)
-    tot = sum(v.size for v in res.violators)
+    tot = sum(v.size for v in res.file_violators + res.dir_violators)
     print(f"\n{n_v} violators ({len(res.file_violators)} files + {len(res.dir_violators)} "
-          f"small-file dirs), {human(tot)} flagged.")
+          f"small-file dirs + {len(res.bulk_violators)} bulk dirs), {human(tot)} flagged "
+          f"(rules a+b; bulk bytes overlap and are listed separately).")
     print(f".git FYI (history-rewrite target, not flagged): {human(res.git_size)}")
 
     # grouped by disposition
@@ -380,6 +464,17 @@ def _report(repo: Path) -> int:
             tag = " [CANARY]" if e.canary else ""
             print(f"  {human(sz):>9}  {e.prefix:<52} {e.tracked}{tag}")
             print(f"             -> {e.reason}")
+
+    # --- rule (c): BULK directories (storage_classes.md rule 5) ---
+    print(f"\n--- BULK DIRECTORIES  (rule c: >= {DIR_FILE_COUNT_THRESHOLD} files "
+          f"or >= {human(DIR_BYTES_THRESHOLD)}, minimal granularity) ---")
+    if not res.bulk_violators:
+        print("  none — no in-tree directory is bulk.")
+    for v in res.bulk_violators:
+        e = covering_entry(v.rel)
+        cov = f"covered by {e.prefix} [{e.label()}]" if e else "*** UNCOVERED ***"
+        print(f"  {v.n_files:>7} files  {human(v.size):>9}  {v.rel:<46} "
+              f"({'+'.join(v.rules)})  {cov}")
 
     print("\n" + "=" * 78)
     if res.uncovered:

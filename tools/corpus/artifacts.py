@@ -47,6 +47,9 @@ RELOCATED_PREFIXES = (
     "data/v5/aug_cache_julia",
     "data/v6/aug_cache_gather",
     "data/v7/aug_cache",
+    # v8: registered BEFORE the first render, not after 170k files have landed in the
+    # tree (storage_classes.md rule 5 — a new bulk family is born out-of-tree).
+    "data/v8/aug_cache",
     "data/discovery/campaign2/breadth/scratch",
     "data/discovery/campaign2/dive/scratch",
 )

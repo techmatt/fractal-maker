@@ -215,6 +215,32 @@ __pycache__/
 /data/library_embeddings/*
 !/data/library_embeddings/embeddings.npz
 
+# ---------------------------------------------------------------------------
+# v8 classifier build — DURABLE by exact path.
+#
+# v4..v7 wrote their manifest/plan/cache_manifest to an ignored, untracked path and
+# every one of them is now GONE (see tools/audit/durability_map.py). data/v8/manifest
+# .jsonl IS the training population and its train/eval split — every v8 metric is
+# quoted against it and it cannot be rebuilt once the live label overlay moves on;
+# eval_slice.jsonl is the frozen instrument the v7 comparison runs on. So v8 declares
+# these `paths.durable()` and they are re-included here BY EXACT PATH, not by
+# directory: a bare `!/data/v8/` would also re-include an accidental in-tree
+# aug_cache/ rebuild, which is the one thing that must never land in the tree.
+# Enforced: tools/paths.durable() asserts non-ignored at the write site,
+# tests/test_tracked_artifacts.py canaries them, .gitattributes routes the big two
+# through LFS.
+!/data/v8/
+/data/v8/*
+!/data/v8/manifest.jsonl
+!/data/v8/build_metadata.json
+!/data/v8/eval_slice.jsonl
+!/data/v8/plan.jsonl
+!/data/v8/cache_manifest.jsonl
+!/data/v8/aug_roster.json
+# Backstop only — the v8 aug cache is bulk() and resolves out-of-tree through
+# artifacts.RELOCATED_PREFIXES. If it ever reappears here it stays un-committable.
+/data/v8/aug_cache/
+
 # Large regeneratable datasets (see data_large/README.md)
 /data_large/*
 !/data_large/README.md

@@ -1,0 +1,254 @@
+{
+  "build": "v8",
+  "mode": "from_scratch",
+  "scale": "1..4 ordinal (CORN K-1 = 3 cutpoints)",
+  "protocol_departure": {
+    "rule": "classifier_retrain_protocol.md \u00a71 (append, never rebuild)",
+    "reason": "data/v{4,5,6,7}/manifest.jsonl are gone and are not to be reconstructed; there is no prefix to freeze and no byte gate to run. The frozen-prefix byte gate is DROPPED.",
+    "replacement": "GATE 6 \u2014 the census-144 eval slice is reproduced identically and asserted location-for-location. Eval comparability rides on the instrument, not on row order."
+  },
+  "population": {
+    "labeled_crops": 8467,
+    "labeled_locations": 7151,
+    "manifest_rows": 7141,
+    "groups": 4930,
+    "gid_offset": 8000000,
+    "train": 6997,
+    "eval": 144,
+    "class_train": {
+      "1": 4634,
+      "2": 1441,
+      "3": 635,
+      "4": 287
+    },
+    "class_eval": {
+      "1": 23,
+      "2": 56,
+      "3": 43,
+      "4": 22
+    },
+    "per_family": {
+      "julia": {
+        "1": 541,
+        "2": 297,
+        "3": 172,
+        "4": 77
+      },
+      "julia_multibrot3": {
+        "1": 76,
+        "2": 55,
+        "3": 26,
+        "4": 19
+      },
+      "julia_multibrot4": {
+        "1": 51,
+        "2": 38,
+        "3": 33,
+        "4": 25
+      },
+      "julia_multibrot5": {
+        "1": 25,
+        "2": 31,
+        "3": 31,
+        "4": 24
+      },
+      "mandelbrot": {
+        "1": 3165,
+        "2": 588,
+        "3": 289,
+        "4": 83
+      },
+      "multibrot3": {
+        "1": 167,
+        "2": 120,
+        "3": 25,
+        "4": 9
+      },
+      "multibrot4": {
+        "1": 127,
+        "2": 136,
+        "3": 36,
+        "4": 5
+      },
+      "multibrot5": {
+        "1": 151,
+        "2": 96,
+        "3": 37,
+        "4": 13
+      },
+      "phoenix": {
+        "1": 354,
+        "2": 136,
+        "3": 29,
+        "4": 54
+      }
+    },
+    "per_batch_labeled_crops": {
+      "2026-06-23_flat_generate_loose0_v3": 1043,
+      "2026-06-24_guided_descend_rev4": 1176,
+      "2026-06-24_guided_descend_rev4occfix_v2filtered": 1066,
+      "2026-06-25_mining_v3guided_v1": 450,
+      "2026-06-25_scale_2x2_labelset": 600,
+      "2026-06-25_scale_controlled_2x2": 600,
+      "2026-07-05_gather_v6": 640,
+      "2026-07-11_jm3_band_v1": 58,
+      "2026-07-12_blindspot_v6reject_v1": 219,
+      "2026-07-12_jm45_band_v1": 71,
+      "2026-07-17_prospect_run1_baserate_R_v1": 86,
+      "2026-07-17_prospect_run1_baserate_v1": 83,
+      "2026-07-21_phoenix_grid": 500,
+      "2026-07-22_native_multibrot_band_v1": 300,
+      "2026-07-26_anchor_class4_v1": 8,
+      "2026-07-26_minibrot_roster_v2": 487,
+      "2026-07-27_interior_band_v1": 80,
+      "julia_ladder_j0": 1000
+    }
+  },
+  "split_rule": "Group first (union-find partitioned by (fractal_type, c-bucket)), then split per GROUP: a group containing a census location -> eval, else train. The census (prospect run-1 base-rate julia:multibrot) is the only registered eval-eligible source and is forced 100% eval. assign_split is FAIL-CLOSED: an unregistered batch classifies biased -> train.",
+  "eval_is_census_only": "Eval is the census-144 and nothing else. loose0_v3 is registered UNBIASED but train-side, matching v7 \u2014 moving it to eval would change the instrument the paired v7<->v8 comparison is pre-registered on (protocol \u00a73, n~144). No batch was added to an eval list to enlarge the slice; that is the one move the fail-closed rule forbids.",
+  "eval_power_note": "144 eval locations out of 7141 (2.0%). This is thin for a 4-class ordinal head and it is a KNOWN limit, not an oversight: it is the only unbiased-given-descent draw in existence (run-1 ledger exhausted). Per protocol \u00a73 a null result here means 'label more', not 'model failed' \u2014 and the class-4 count inside the eval slice is the binding constraint on measuring the new tier at all.",
+  "multi_batch_locations": "616 locations are contributed by >1 batch (600 shared by the two scale_* batches, 8 anchor/roster, 8 gather/native-band). v7 asserted one batch per location, which only held because it looked at post-freeze rows. biased = OR over batches, eval_eligible = AND \u2014 conservative on both.",
+  "phoenix_family_params": "Location identity is location.Location.key(), which includes family_params (phoenix p_re/p_im/zm1_re/zm1_im). The 500 phoenix_grid locations vary p and z_-1 per row; v7's tuple key omitted them, which would collapse distinct locations and render every phoenix cache tile at the Rust default Ushiki spot. Those keys are carried into the manifest row and the render plan. v8 is the first manifest to contain phoenix.",
+  "dropped_biased_in_forced_eval_group": {
+    "count": 10,
+    "why": "A forced-eval (census) group that also holds a biased location cannot satisfy census-100%-eval + 0-biased-in-eval + 0-group-straddle at once. Keeping the biased neighbour in train would leak the eval neighbourhood into training, so it is dropped from the manifest.",
+    "locations": [
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "2.121320343559643",
+        "c_re": "0.23235111196981809",
+        "c_im": "0.7273380745324011",
+        "label": 2,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8004318
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.15283133487459447",
+        "cy": "0.0",
+        "fw": "0.6113253394983779",
+        "c_re": "0.5650023581746639",
+        "c_im": "0.2302221708851889",
+        "label": 2,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8004344
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "1.1462002344290696",
+        "c_re": "0.5459941721073124",
+        "c_im": "0.21336588290584366",
+        "label": 1,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8004344
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.5585937499999999",
+        "cy": "-0.06640625000000001",
+        "fw": "1.0948063858003612",
+        "c_re": "-0.4245928979325057",
+        "c_im": "0.5980694448277311",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "0.3763894303813933",
+        "c_re": "-0.48066976996596106",
+        "c_im": "0.6010951619208411",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "0.3554542853945903",
+        "c_re": "-0.48066976996596106",
+        "c_im": "0.6010951619208411",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "-0.375",
+        "fw": "1.5",
+        "c_re": "-0.359817144870237",
+        "c_im": "0.6488658691815916",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "0.5044378333292681",
+        "c_re": "-0.4583690302288969",
+        "c_im": "0.5453692617977908",
+        "label": 3,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.2573157035842422",
+        "cy": "0.0",
+        "fw": "1.0292628143369689",
+        "c_re": "-0.4583690302288969",
+        "c_im": "0.5453692617977908",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.19974321172095238",
+        "cy": "0.0",
+        "fw": "0.7989728468838095",
+        "c_re": "-0.4583690302288969",
+        "c_im": "0.5453692617977908",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      }
+    ]
+  },
+  "amendment_overlay": {
+    "crops_revised": 364,
+    "class4_locations": 309,
+    "note": "Every label resolves through resolve_score(row, sidecar, amendments). There is no post-freeze branch, so no path reads a pre-revision label. Gate 9 asserts the overlay bound; gate 10 asserts no revision row contributes an in-row label of its own."
+  },
+  "deploy_note": "ACTIVE_CKPT NOT switched (v7 remains the deployed scorer); no threshold touched; t_good NOT set; nothing trained by this build."
+}

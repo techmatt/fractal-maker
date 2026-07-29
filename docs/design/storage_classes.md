@@ -41,11 +41,41 @@ commentary.
    write time: if the path would be gitignored, it raises `DurabilityError` on the spot
    rather than letting the write succeed and the file silently disappear later.
 
+5. **No large training data or results inside the `fractal-maker` folder — even if
+   gitignored.** Bulk regenerable data lives out-of-tree, under the artifacts root
+   (`ARTIFACTS_ROOT`, default `../fractal-maker-artifacts`), reached through
+   `paths.bulk(rel)` → `tools/corpus/artifacts.resolve`. **The reason is tool and
+   `grep` traversal cost, not repo size.** A gitignored directory is invisible to
+   `git status` and fully visible to every recursive walk — `grep -r`, `find`, editor
+   indexers, file watchers, and this agent's own search tools. Two file-count bombs
+   (243k aug-cache JPGs, 317k discovery-scratch files) once made a plain `grep -r` take
+   over two minutes; being ignored bought nothing, because none of those tools consult
+   `.gitignore`. So "it's ignored" is not a defense, and neither is "it's small on
+   disk": a million 4 KB crops cost more traversal than one 10 GB blob.
+
+   The corollary for a *new* bulk family is that it must be born out-of-tree — declare
+   it `bulk()` at the write site and register its prefix in
+   `artifacts.RELOCATED_PREFIXES` **before** the first run, not after it has already
+   materialized 170k files in the tree.
+
 ## Where this is enforced
 
 - `tools/paths.py` — the four class functions; `durable()` carries the write-time
-  gitignore assertion.
-- `tests/test_storage_classes.py` — guards that assertion (a durable path git would
-  discard is rejected).
+  gitignore assertion. **This is the primary mechanism**: a family that declares
+  `bulk()` never lands in-tree in the first place.
+- `tools/audit/size_guard.py` — the **backstop**. Three independent scan rules, each
+  checked against one shared `REGISTRY` allowlist:
+    - per-**file** ≥ `FILE_THRESHOLD` (1 MiB),
+    - per-**directory** small-file aggregate ≥ `DIR_THRESHOLD` (100 MB),
+    - per-**directory** bulk: ≥ `DIR_FILE_COUNT_THRESHOLD` (2,000 files) **or**
+      ≥ `DIR_BYTES_THRESHOLD` (500 MB) in its subtree, at minimal granularity.
+  The bulk rule is the one that matches rule 5's harm: the older per-file rule passes a
+  cache of a million small crops cleanly, because no single file is large.
+- `tools/audit/test_relocated_artifacts.py` — reappearance tripwire: a relocated family
+  that re-materializes under its old in-tree path goes red and names the offender.
+- `tests/test_repo_size_guard.py` — hard-fails on any flagged violator with no registry
+  entry; warns on registry entries that no longer cover anything.
+- `tests/test_storage_classes.py` — guards the `durable()` assertion (a durable path git
+  would discard is rejected).
 - `tests/test_no_out_dir.py` — tripwire: the retired `out/` directory must not exist
   or be recreated.
