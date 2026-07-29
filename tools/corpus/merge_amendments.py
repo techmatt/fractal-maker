@@ -69,8 +69,10 @@ def main() -> None:
 
     rows = cc.read_jsonl(images_path)
     by_id = {r["image_id"]: r for r in rows}
-    scores = json.load(open(scores_path, encoding="utf-8"))
-    scores = {k: (int(v) if v is not None else None) for k, v in scores.items()}
+    # accept BOTH export shapes (flat {id:int} and the labeler's {id:{score,revealed}}) via the
+    # shared loader, so an amendment merge takes the exact file the label UI exports.
+    import merge_scores
+    scores = merge_scores.load_scores(scores_path)
 
     # source_batch_id -> {source_image_id: (new_score, original_score)}
     revisions: dict[str, dict] = {}

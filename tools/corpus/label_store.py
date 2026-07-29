@@ -169,11 +169,16 @@ AMENDMENT_LABELS: dict[str, str] = {
     # batch_id -> labels/<revision>.json  (populated by tools/corpus/merge_amendments.py)
     # 2026-07-26_anchor_class4_v1 revision pass: 52 previously-q3 rows re-judged blind on the
     # 1..4 scale; 14 demotions + 7 promotions + 31 reaffirmed, routed here per source batch.
+    # 2026-07-28_revisit_class3 pass (4 blind chunks): ALL 1157 current-q3 rows re-judged on the
+    # 1..4 scale; 338 promotions + 5 demotions + 814 reaffirmed, routed here per source batch
+    # (merged cumulatively onto the anchor amendments above). Added scale_controlled_2x2 and
+    # minibrot_roster_v2, which the anchor pass did not touch.
     "2026-06-23_flat_generate_loose0_v3": "amend_2026-06-23_flat_generate_loose0_v3.json",
     "2026-06-24_guided_descend_rev4": "amend_2026-06-24_guided_descend_rev4.json",
     "2026-06-24_guided_descend_rev4occfix_v2filtered": "amend_2026-06-24_guided_descend_rev4occfix_v2filtered.json",
     "2026-06-25_mining_v3guided_v1": "amend_2026-06-25_mining_v3guided_v1.json",
     "2026-06-25_scale_2x2_labelset": "amend_2026-06-25_scale_2x2_labelset.json",
+    "2026-06-25_scale_controlled_2x2": "amend_2026-06-25_scale_controlled_2x2.json",
     "2026-07-05_gather_v6": "amend_2026-07-05_gather_v6.json",
     "2026-07-11_jm3_band_v1": "amend_2026-07-11_jm3_band_v1.json",
     "2026-07-12_blindspot_v6reject_v1": "amend_2026-07-12_blindspot_v6reject_v1.json",
@@ -182,6 +187,7 @@ AMENDMENT_LABELS: dict[str, str] = {
     "2026-07-17_prospect_run1_baserate_v1": "amend_2026-07-17_prospect_run1_baserate_v1.json",
     "2026-07-21_phoenix_grid": "amend_2026-07-21_phoenix_grid.json",
     "2026-07-22_native_multibrot_band_v1": "amend_2026-07-22_native_multibrot_band_v1.json",
+    "2026-07-26_minibrot_roster_v2": "amend_2026-07-26_minibrot_roster_v2.json",
     "julia_ladder_j0": "amend_julia_ladder_j0.json",
 }
 
