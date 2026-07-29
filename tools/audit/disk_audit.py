@@ -100,6 +100,20 @@ RULES: list[Rule] = [
     # forced NEVER (whole-directory blanket, not just the *.json sidecars).
     Rule(r"^labels/", NEVER, "repo-root human label store (batch sidecars + legacy labels; unregenerable, registry-independent)"),
 
+    # -- emission gate/release decision records -------------------------------
+    # WHICH locations were gated, WHICH were released, and out of what population. The
+    # population no longer exists once a run's --out (a scratch/ path) is cleared, so these
+    # are unregenerable by construction — re-running produces a DIFFERENT run, not this one.
+    # Campaign-2's emission output was wiped with no such record, which is why "did mb4's
+    # admissions ship" and "campaign-2's julia look denominator" are both unanswerable.
+    # Blanket on LOCATION so a companion file (__runs.jsonl, a future site) is covered
+    # without re-registration.
+    Rule(r"^data/emission/release_records/", NEVER,
+         "emission gate/release decision record + run population (unregenerable: the pool and "
+         "population a decision was taken against are gone once --out is cleared)"),
+    Rule(r"^data/emission/mining_gate_reports/", NEVER,
+         "report-only mining-gate would-cut log paired with realized selections"),
+
     # -- active + rollback model checkpoints ----------------------------------
     Rule(r"^data/classifier/v6/", NEVER, "active discovery-gate classifier v6"),
     Rule(r"^data/classifier/v5/", NEVER, "v5 classifier (live rollback checkpoint)"),

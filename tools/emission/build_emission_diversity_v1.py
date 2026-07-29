@@ -609,6 +609,126 @@ class EmissionDiversity:
                 out.append(r)
         return out
 
+    # ---- durable gate/release record ------------------------------------- #
+    #
+    # The record of WHICH locations were gated, WHICH were released, and OUT OF WHAT
+    # population — written to data/ through paths.durable(), not under --out. Everything
+    # under --out is a scratch/ path in practice, which is why campaign-2's emission stage
+    # has no record for any run. See tools/emission/release_record.py.
+    #
+    # Distinct from `write_gate_report` below: that logs only the strange head's REPORT-ONLY
+    # counterfactual. This logs the decisions that actually cut, for both heads, plus the
+    # denominators.
+
+    RECORD_SITE = "emission_diversity_v1"
+
+    def _run_id(self) -> str:
+        """The run this record belongs to = the output dir it was driven into. A --resume of
+        the same run re-derives the same id and upserts in place; a different run accumulates
+        alongside."""
+        return self.out.name
+
+    def _record_location(self, location_id) -> dict:
+        loc = self.by_id.get(location_id, {})
+        return {"location_id": location_id, "cx": loc.get("outcome_cx"),
+                "cy": loc.get("outcome_cy"), "fw": loc.get("outcome_fw"),
+                "julia_c_re": loc.get("julia_c_re"), "julia_c_im": loc.get("julia_c_im")}
+
+    @staticmethod
+    def _record_join_key(r) -> str:
+        return "|".join(str(x) for x in (r["location_id"], r["render_style"], r["palette"]))
+
+    def _gate_decision_rows(self):
+        """One row per colorized candidate: did it clear its head's POOL floor, and why not."""
+        from tools.emission import release_record as RR
+        run_id = self._run_id()
+        rows = []
+        for r in self.pool.rows:
+            if r.get("error"):
+                decision, reason = "rejected", f"render_error: {r['error'][:120]}"
+            elif r.get("p_ge3") is None:
+                decision, reason = "rejected", "unscored (no head result)"
+            elif r.get("passed"):
+                decision, reason = "admitted", None
+            else:
+                decision, reason = "rejected", "below pool floor"
+            rows.append(RR.decision_row(
+                run_id=run_id, stage=RR.STAGE_GATE,
+                join_key=self._record_join_key(r), location_id=r["location_id"],
+                location=self._record_location(r["location_id"]),
+                partition=r.get("type"), morph_cluster=r.get("morph_cluster"),
+                decision=decision, score=r.get("p_ge3"), reason=reason,
+                head=r.get("head"), floor=r.get("floor"),
+                style=r.get("render_style"), palette=r.get("palette")))
+        return rows
+
+    def _release_decision_rows(self, selected):
+        """One row per RELEASE-ELIGIBLE candidate: selected, or eligible-and-passed-over. The
+        not_selected rows are the point — a released row alone cannot say what it beat."""
+        from tools.emission import release_record as RR
+        run_id = self._run_id()
+        sel_ids = {e["_rec"]["id"] for e in selected}
+        rows = []
+        for r in self.release_eligible():
+            chosen = r["id"] in sel_ids
+            rows.append(RR.decision_row(
+                run_id=run_id, stage=RR.STAGE_RELEASE,
+                join_key=self._record_join_key(r), location_id=r["location_id"],
+                location=self._record_location(r["location_id"]),
+                partition=r.get("type"), morph_cluster=r.get("morph_cluster"),
+                decision=("selected" if chosen else "not_selected"),
+                score=r.get("p_ge3"),
+                reason=None if chosen else "eligible; not picked by greedy release selection",
+                head=r.get("head"), floor=self.release_floor_for(r["render_style"]),
+                style=r.get("render_style"), palette=r.get("palette")))
+        return rows
+
+    def _record_counts(self, gate_rows, release_rows, selected) -> dict:
+        """The funnel, with per-partition breakdowns at every stage. The breakdowns are what
+        make a per-family rate recoverable later; a bare total cannot answer 'out of how many
+        julia'."""
+        def by_part(rows, pred=lambda _r: True):
+            out: dict = {}
+            for r in rows:
+                if pred(r):
+                    out[r["partition"]] = out.get(r["partition"], 0) + 1
+            return out
+        intake_parts: dict = {}
+        for r in self.rows:
+            intake_parts[r.get("family")] = intake_parts.get(r.get("family"), 0) + 1
+        return {
+            "intake_admitted": len(self.rows),
+            "intake_by_partition": intake_parts,
+            "colorized": len(gate_rows),
+            "colorized_by_partition": by_part(gate_rows),
+            "gate_admitted": sum(1 for r in gate_rows if r["decision"] == "admitted"),
+            "gate_admitted_by_partition": by_part(gate_rows, lambda r: r["decision"] == "admitted"),
+            "release_eligible": len(release_rows),
+            "release_eligible_by_partition": by_part(release_rows),
+            "released": sum(1 for r in release_rows if r["decision"] == "selected"),
+            "released_by_partition": by_part(release_rows, lambda r: r["decision"] == "selected"),
+            "release_n_requested": self.release_n,
+        }
+
+    def write_release_record(self, selected):
+        """Write the durable gate + release record for this run. Returns
+        (path, n_total, n_new, runs_path)."""
+        from tools.emission import release_record as RR
+        gate_rows = self._gate_decision_rows()
+        rel_rows = self._release_decision_rows(selected)
+        path, n_total, n_new = RR.write_decisions(self.RECORD_SITE, gate_rows + rel_rows)
+        rpath, _, _ = RR.write_run(self.RECORD_SITE, RR.run_row(
+            run_id=self._run_id(), site=self.RECORD_SITE,
+            out_dir=str(self.out.relative_to(ROOT)) if str(self.out).startswith(str(ROOT))
+            else str(self.out),
+            ledgers=[str(p) for p in self.ledgers],
+            counts=self._record_counts(gate_rows, rel_rows, selected),
+            floors={"pool_wallpaper": self.floor, "pool_mining": self.mining_floor,
+                    "release_wallpaper": self.release_floor,
+                    "release_mining": self.mining_release_floor},
+            ts=time.strftime("%Y-%m-%dT%H:%M:%S")))
+        return path, n_total, n_new, rpath
+
     def write_gate_report(self, selected):
         """Report-only mining gate → durable would-cut log, PAIRED with the final release
         selection (point 3 of the prompt). One row per scored strange candidate: what the
@@ -978,6 +1098,10 @@ def main():
         _, cell_to_names = cond.load_cell_map()
         eng.build_axes(dt, cell_to_names, dt.lib())
     selected, sel_log = eng.select_release()
+    rpath, r_tot, r_new, runs_path = eng.write_release_record(selected)
+    print(f"[release-record] durable gate+release record: {r_new} new row(s), {r_tot} "
+          f"accumulated → {rpath.relative_to(ROOT)} (population → {runs_path.relative_to(ROOT)})",
+          flush=True)
     gpath, n_tot, n_cut, n_cut_sel = eng.write_gate_report(selected)
     print(f"[gate-report-only] strange mining gate REPORT-ONLY (not acting): {n_tot} strange "
           f"candidate(s) logged, {n_cut} would-cut ({n_cut_sel} of those SELECTED anyway) → "
