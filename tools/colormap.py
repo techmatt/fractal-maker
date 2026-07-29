@@ -278,14 +278,30 @@ def percentile_nearest(sorted_vals, p):
     return float(sorted_vals[idx])
 
 
-def percentile_stretch(field):
-    """Raw field (NaN interior) -> (lo, span) over non-NaN finite values (Rust PCT)."""
-    valid = field[np.isfinite(field)]
-    if valid.size == 0:
+def _nearest_rank_idx(n, p):
+    """Rust nearest-rank index for the p-th percentile of n ascending values:
+    round-half-away = floor((p/100)*(n-1)+0.5), clamped to n-1. Same index
+    `percentile_nearest` selects on a sorted array."""
+    return min(int(math.floor((p / 100.0) * (n - 1) + 0.5)), n - 1)
+
+
+def percentile_stretch(field, valid=None):
+    """Raw field (NaN interior) -> (lo, span) over non-NaN finite values (Rust PCT).
+
+    `valid` (optional precomputed finite mask) avoids recomputing `np.isfinite` when the
+    caller already has it (see `stretch_field`). Uses `np.partition` — only the two
+    nearest-rank positions are needed, so a full `np.sort` of the ~2M valid values is
+    wasted work. Byte-identical to the `np.sort` + `percentile_nearest` path it replaces:
+    `np.partition(v, k)[k] == np.sort(v)[k]` at each requested k."""
+    vals = field[valid] if valid is not None else field[np.isfinite(field)]
+    n = vals.size
+    if n == 0:
         return 0.0, 1.0
-    sv = np.sort(valid)
-    lo = percentile_nearest(sv, PCT_LO)
-    hi = percentile_nearest(sv, PCT_HI)
+    i_lo = _nearest_rank_idx(n, PCT_LO)
+    i_hi = _nearest_rank_idx(n, PCT_HI)
+    part = np.partition(vals, (i_lo, i_hi))     # both kth positions land in sorted order
+    lo = float(part[i_lo])
+    hi = float(part[i_hi])
     span = (hi - lo) if hi > lo else 1.0
     return lo, span
 
@@ -628,7 +644,7 @@ def stretch_field(field):
     """(FieldData) -> StretchedField. Percentile-stretch on the RAW field (Rust PCT)."""
     raw = field.values
     valid = np.isfinite(raw)
-    lo, span = percentile_stretch(raw)
+    lo, span = percentile_stretch(raw, valid=valid)   # reuse mask; no second np.isfinite
     x = np.zeros_like(raw)
     x[valid] = np.clip((raw[valid] - lo) / span, 0.0, 1.0)
     return StretchedField(x=x, valid=valid)
