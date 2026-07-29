@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-07-28_revisit_class3_c3",
+  "generator_version": "revisit_class3",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 20261730,
+  "vivid_companion": "blue_orange",
+  "served_manifest": "blind.jsonl",
+  "purpose": "class-3 REVISIT: re-judge current class-3 rows on the 1..4 scale via the amendment overlay. Blind (opaque ids + blind.jsonl); serve with ?manifest=blind.jsonl. Revisions -> merge_amendments.py.",
+  "counts": {
+    "total": 289
+  },
+  "composition": {
+    "2026-06-23_flat_generate_loose0_v3|mandelbrot": 8,
+    "2026-06-24_guided_descend_rev4|mandelbrot": 9,
+    "2026-06-24_guided_descend_rev4occfix_v2filtered|mandelbrot": 7,
+    "2026-06-25_mining_v3guided_v1|mandelbrot": 107,
+    "2026-06-25_scale_2x2_labelset|mandelbrot": 1,
+    "2026-06-25_scale_controlled_2x2|mandelbrot": 1,
+    "2026-07-05_gather_v6|julia": 6,
+    "2026-07-05_gather_v6|julia_multibrot4": 2,
+    "2026-07-05_gather_v6|julia_multibrot5": 1,
+    "2026-07-05_gather_v6|mandelbrot": 2,
+    "2026-07-05_gather_v6|multibrot4": 1,
+    "2026-07-05_gather_v6|phoenix": 2,
+    "2026-07-11_jm3_band_v1|julia_multibrot3": 7,
+    "2026-07-12_blindspot_v6reject_v1|mandelbrot": 1,
+    "2026-07-12_jm45_band_v1|julia_multibrot4": 6,
+    "2026-07-12_jm45_band_v1|julia_multibrot5": 7,
+    "2026-07-17_prospect_run1_baserate_R_v1|julia_multibrot3": 2,
+    "2026-07-17_prospect_run1_baserate_R_v1|julia_multibrot4": 4,
+    "2026-07-17_prospect_run1_baserate_R_v1|julia_multibrot5": 4,
+    "2026-07-17_prospect_run1_baserate_v1|julia_multibrot3": 3,
+    "2026-07-17_prospect_run1_baserate_v1|julia_multibrot4": 2,
+    "2026-07-17_prospect_run1_baserate_v1|julia_multibrot5": 2,
+    "2026-07-17_prospect_run1_baserate_v1|multibrot3": 1,
+    "2026-07-17_prospect_run1_baserate_v1|multibrot5": 1,
+    "2026-07-21_phoenix_grid|phoenix": 18,
+    "2026-07-22_native_multibrot_band_v1|multibrot3": 4,
+    "2026-07-22_native_multibrot_band_v1|multibrot4": 3,
+    "2026-07-22_native_multibrot_band_v1|multibrot5": 3,
+    "2026-07-26_minibrot_roster_v2|multibrot3": 4,
+    "2026-07-26_minibrot_roster_v2|multibrot4": 5,
+    "2026-07-26_minibrot_roster_v2|multibrot5": 9,
+    "julia_ladder_j0|julia": 56
+  },
+  "render_defaults": {
+    "width": null,
+    "height": null,
+    "note": "render fields taken per-row from the source render block (varied geometry/maxiter/palette)"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/pool_colormaps.json",
+    "jpg_quality": 90
+  }
+}

@@ -121,7 +121,12 @@ const CORPUS_ROOT=(QP.get('root')||'data/label_corpus/batches').replace(/\/+$/,'
 //   comparison is still computable afterward.
 let revealed = QP.get('reveal')==='1';    // default false = blind
 const BATCH_DIR=CORPUS_ROOT+'/'+BATCH_ID;
-const IMAGES_URL=ROOT+BATCH_DIR+'/images.jsonl';
+// ?manifest=<file> overrides which JSONL the browser fetches (default images.jsonl). The
+//   class-3 REVISIT batches serve a BLINDED manifest (blind.jsonl: provenance emptied, label
+//   nulled) so a prior label is never fetched into the page — the full-provenance images.jsonl
+//   stays the merge-side file merge_amendments.py reads and is NEVER fetched here.
+const MANIFEST=(QP.get('manifest')||'images.jsonl').replace(/^\/+/,'');
+const IMAGES_URL=ROOT+BATCH_DIR+'/'+MANIFEST;
 const BATCH_JSON_URL=ROOT+BATCH_DIR+'/batch.json';
 const LS_KEY='corpus_label::'+BATCH_ID;   // localStorage is per-batch
 const REVEAL_KEY='corpus_reveals::'+BATCH_ID;
