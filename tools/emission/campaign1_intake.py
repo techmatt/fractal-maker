@@ -52,6 +52,7 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "wal
         sys.path.insert(0, str(p))
 
 import corpus_common as cc                         # noqa: E402
+import paths                                        # noqa: E402   durability-class declaration
 from tools.emission import descriptor as D          # noqa: E402
 
 try:
@@ -63,7 +64,13 @@ LEDGERS = [
     ("c1_breadth", ROOT / "data" / "discovery" / "campaign1" / "breadth" / "outcome_ledger.jsonl"),
     ("c1_dive",    ROOT / "data" / "discovery" / "campaign1" / "dive"    / "outcome_ledger.jsonl"),
 ]
-OUT = ROOT / "scratch" / "emission" / "campaign1"
+OUT = ROOT / "scratch" / "emission" / "campaign1"          # scratch: fields/embs/sheets (bulk)
+# The intake SNAPSHOT (cluster_tags/medoid_id/occupancy) is the population-defining artifact —
+# it names WHICH locations/clusters the seeded library draws from and cannot be regenerated
+# once its discovery scratch is cleared. It lives DURABLE (git-tracked), split out of the
+# scratch OUT dir that holds the regenerable field/emb bulk. Readers point at INTAKE_JSON.
+INTAKE_REL = "data/emission/campaign1/intake.json"
+INTAKE_JSON = ROOT / INTAKE_REL
 REPORT = ROOT / "scratch" / "emission" / "campaign1_intake.md"
 CROSS_REF_DISTINCT = 508           # campaign-1 readout's within-family distinct-look count
 ANCHOR_TOL = 1e-4                  # max|Δ p_good| for the julia re-score anchor
@@ -549,7 +556,9 @@ def main():
 
     tags, medoid_id = cluster(union_rows, embs)
     occ = occupancy(union_rows, tags)
-    (OUT / "intake.json").write_text(json.dumps(
+    # durable(): asserts at the write site that git would keep this snapshot, so it cannot be
+    # eaten by the derived-artifact chain the way the previous scratch copy was.
+    paths.durable(INTAKE_REL, mkparents=True).write_text(json.dumps(
         {"cluster_tags": tags, "medoid_id": medoid_id, "occupancy":
          {k: v for k, v in occ.items() if k != "cluster_size"}}, indent=1), encoding="utf-8")
     sheet_paths = medoid_sheet(union_rows, tags, medoid_id, occ)

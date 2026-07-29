@@ -51,6 +51,7 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "wal
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+import paths                                        # noqa: E402   durability-class declaration
 from tools.emission import descriptor as D          # noqa: E402
 from tools.emission import campaign1_intake as c1i   # noqa: E402  (reused primitives)
 from tools.emission import cells as C                # noqa: E402  (TargetMeasure — override verify)
@@ -60,7 +61,11 @@ try:
 except Exception:
     pass
 
-OUT = ROOT / "scratch" / "emission" / "library_intake_2"
+OUT = ROOT / "scratch" / "emission" / "library_intake_2"   # scratch: fields/embs/sheets (bulk)
+# Population-defining intake snapshot -> durable (see campaign1_intake.INTAKE_JSON for the
+# rationale); the regenerable field/emb bulk stays under the scratch OUT dir.
+INTAKE_REL = "data/emission/library_intake_2/intake.json"
+INTAKE_JSON = ROOT / INTAKE_REL
 REPORT = ROOT / "scratch" / "emission" / "library_intake_2.md"
 LEDGERS = [
     ("c2_breadth",      ROOT / "data" / "discovery" / "campaign2" / "breadth" / "outcome_ledger.jsonl"),
@@ -69,8 +74,9 @@ LEDGERS = [
     ("classic_phoenix", ROOT / "data" / "discovery" / "classic_phoenix" / "outcome_ledger.jsonl"),
 ]
 # campaign-1 was intaked separately (scratch/emission/campaign1_intake.md); its distinct-cluster
-# count is loaded for a full-library cross-reference (not re-clustered here).
-C1_INTAKE_JSON = ROOT / "scratch" / "emission" / "campaign1" / "intake.json"
+# count is loaded for a full-library cross-reference (not re-clustered here). Read from the
+# durable campaign1 snapshot, the same path its writer now lands.
+C1_INTAKE_JSON = c1i.INTAKE_JSON
 TARGET_MEASURE = ROOT / "data" / "emission" / "target_measure.json"
 CLASSIC_RELEASE_SHARE = 0.02   # the hand-placed classic-phoenix release-share target
 
@@ -429,7 +435,7 @@ def main():
     if C1_INTAKE_JSON.exists():
         c1_distinct = json.loads(C1_INTAKE_JSON.read_text(encoding="utf-8"))["occupancy"]["n_clusters"]
 
-    (OUT / "intake.json").write_text(json.dumps({
+    paths.durable(INTAKE_REL, mkparents=True).write_text(json.dumps({
         "cluster_tags": tags, "medoid_id": medoid_id,
         "occupancy": {k: v for k, v in occ.items() if k != "cluster_size"},
         "phoenix_cluster_space": phx, "measure_override": measure,

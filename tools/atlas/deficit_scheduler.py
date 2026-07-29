@@ -59,8 +59,8 @@ from tools.emission import cells as C  # noqa: E402  (pure; no torch)
 # ------------------------------------------------------------------------- #
 DEFAULT_TARGET_PATH = ROOT / "data" / "emission" / "target_measure.json"
 DEFAULT_PRICES_PATH = ROOT / "data" / "atlas" / "scheduler_prices.json"
-INTAKE_ARTIFACT = ROOT / "scratch" / "emission" / "campaign1" / "intake.json"
-INTAKE_EMB_DIR = ROOT / "scratch" / "emission" / "campaign1" / "embs"
+INTAKE_ARTIFACT = ROOT / "data" / "emission" / "campaign1" / "intake.json"   # durable snapshot
+INTAKE_EMB_DIR = ROOT / "scratch" / "emission" / "campaign1" / "embs"         # bulk (regenerable)
 
 NEAR_DUP_THRESHOLD = 0.974   # distinct-look cosine knee (== emission/descriptor)
 EMB_DIM = 768                # CLIP vit_base_patch16_clip_224.openai

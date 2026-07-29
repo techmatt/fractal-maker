@@ -58,8 +58,12 @@ try:
 except Exception:
     pass
 
-C1_DIR = ROOT / "scratch" / "emission" / "campaign1"
-I2_DIR = ROOT / "scratch" / "emission" / "library_intake_2"
+C1_DIR = ROOT / "scratch" / "emission" / "campaign1"        # bulk: fields/embs (regenerable)
+I2_DIR = ROOT / "scratch" / "emission" / "library_intake_2"  # bulk: fields/embs (regenerable)
+# The population-defining intake snapshots (cluster_tags) are DURABLE, split out of the scratch
+# field/emb dirs above; each intake writer now lands its snapshot here.
+C1_INTAKE = ROOT / "data" / "emission" / "campaign1" / "intake.json"
+I2_INTAKE = ROOT / "data" / "emission" / "library_intake_2" / "intake.json"
 OUT = ROOT / "scratch" / "first_release"
 
 C1_LEDGERS = [
@@ -97,8 +101,8 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "ledgers").mkdir(parents=True, exist_ok=True)
 
-    c1_tags = json.loads((C1_DIR / "intake.json").read_text(encoding="utf-8"))["cluster_tags"]
-    i2_tags = json.loads((I2_DIR / "intake.json").read_text(encoding="utf-8"))["cluster_tags"]
+    c1_tags = json.loads(C1_INTAKE.read_text(encoding="utf-8"))["cluster_tags"]
+    i2_tags = json.loads(I2_INTAKE.read_text(encoding="utf-8"))["cluster_tags"]
     print(f"[stage] campaign1 tags={len(c1_tags)}  library_intake_2 tags={len(i2_tags)}", flush=True)
 
     # per-family offset so campaign1 <fam>#<k> lands past every intake2 <fam> index.

@@ -114,6 +114,23 @@ RULES: list[Rule] = [
     Rule(r"^data/emission/mining_gate_reports/", NEVER,
          "report-only mining-gate would-cut log paired with realized selections"),
 
+    # -- emission intake snapshots (population-defining cluster assignments) ---
+    # `cluster_tags` names WHICH locations/clusters the seeded library draws against; the
+    # discovery scratch a snapshot was built from is disposable, so once cleared the population
+    # cannot be reconstructed (the campaign-1/library_intake_2 snapshots were wiped exactly this
+    # way). The regenerable field/emb bulk stays under scratch/; only the snapshot is durable.
+    Rule(r"^data/emission/campaign1/", NEVER,
+         "campaign1 emission intake snapshot (population-defining cluster_tags; unregenerable)"),
+    Rule(r"^data/emission/library_intake_2/", NEVER,
+         "library_intake_2 emission intake snapshot (cluster_tags incl. phoenix; unregenerable)"),
+
+    # -- julia-arm seed population (steered_frontier --julia-seed-pool source) -
+    # The near-∂M viable-c list the julia arm injects as roots; derived once from a q4_decisive
+    # scratch pass and now produced durably by tools/atlas/build_julia_seed_pool.py. (Also caught
+    # by the generic *_pool rule below; named explicitly for provenance.)
+    Rule(r"^data/atlas/julia_seed_pool\.json$", NEVER,
+         "julia-arm seed population (steered_frontier roots; committed producer)"),
+
     # -- active + rollback model checkpoints ----------------------------------
     Rule(r"^data/classifier/v6/", NEVER, "active discovery-gate classifier v6"),
     Rule(r"^data/classifier/v5/", NEVER, "v5 classifier (live rollback checkpoint)"),
