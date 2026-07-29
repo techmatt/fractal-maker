@@ -128,7 +128,11 @@ def coord_overlap(adm: list, priors: dict) -> tuple[int, int, dict]:
         part = r.get("family", "mandelbrot")
         cloud = priors.get(part, [])
         distinct, _ = ps.is_distinct(r["outcome_cx"], r["outcome_cy"], r["outcome_fw"], cloud,
-                                     c=ps.row_seed_c(r))   # fixed seed-c-aware metric
+                                     c=ps.row_ident(r))   # family-aware identity (julia 2-vec,
+        #                                                   phoenix 6-vec, c-plane None) — must
+        #                                                   match build_cloud's row_ident, else a
+        #                                                   phoenix admission keys as None (c-plane)
+        #                                                   and every phoenix overlap reads distinct.
         tot += 1
         per_fam[part][1] += 1
         if not distinct:

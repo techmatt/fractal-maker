@@ -162,6 +162,28 @@ def test_build_cloud_keeps_distinct_phoenix_as_separate_places():
     assert {m["id"] for m in cloud} == {"pa", "pb"}
 
 
+def test_coord_overlap_detects_phoenix_dups():
+    """campaign1_readout.coord_overlap must key the CANDIDATE by row_ident (family-aware),
+    not row_seed_c (julia-only). The bug: row_seed_c returns None for a phoenix admission,
+    so near_dup's identity gate treats it as a c-plane row and every phoenix overlap reads
+    as DISTINCT — a wrong diversity diagnostic. Regression: a same-params phoenix admission
+    at a near viewport must register as an overlap; a distinct-params one must not."""
+    import sys as _sys
+    _sys.path.insert(0, str(HERE))
+    import campaign1_readout as c1
+
+    priors = {"phoenix": ps.build_cloud([_ph_row("pa", 0.0, 0.0, 1.0, p=(-0.5, 0.0))], "phoenix")}
+    dup = _ph_row("cand_dup", 0.5, 0.0, 1.0, p=(-0.5, 0.0))     # same params, viewport within 1.5*fw
+    distinct = _ph_row("cand_new", 0.5, 0.0, 1.0, p=(-0.4, 0.0))  # distinct p -> different place
+
+    hit, tot, per_fam = c1.coord_overlap([dup], priors)
+    assert (hit, tot) == (1, 1), "same-params phoenix admission must read as an overlap"
+    assert per_fam["phoenix"] == [1, 1]
+
+    hit, tot, _ = c1.coord_overlap([distinct], priors)
+    assert (hit, tot) == (0, 1), "distinct-params phoenix admission must read as distinct"
+
+
 def test_legacy_phoenix_row_resolves_ushiki():
     """Backward compat against a REAL legacy ledger row: a pre-axis phoenix row carries no
     phoenix_c/p/zm1 fields, so its identity resolves to the classic Ushiki point byte-for-
