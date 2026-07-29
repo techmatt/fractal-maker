@@ -516,11 +516,17 @@ def is_distinct(cx, cy, fw, cloud, k=DEDUP_K, c=None):
 
 def count_within(cloud, cx, cy, radius=REJECT_RADIUS) -> int:
     """# distinct q3 cloud members within `radius` of (cx, cy) in (cx, cy) space.
-    Linear scan — the cloud is small (<1e3) and the descent dwarfs this query."""
+    Linear scan — the cloud is small (<1e3) and the descent dwarfs this query.
+
+    Coords are coerced with `float()` like `near_dup`: a cloud built from the string-coord
+    ledgers (q4_harvest / classic_phoenix serialize outcome_cx/cy as decimal STRINGS) would
+    otherwise raise `str - float` here — a LATENT crash the density gate must not take. Float64
+    is ample for these O(1) dedup coords."""
     if not cloud:
         return 0
+    cx, cy = float(cx), float(cy)
     return sum(1 for m in cloud
-               if np.hypot(m["outcome_cx"] - cx, m["outcome_cy"] - cy) < radius)
+               if np.hypot(float(m["outcome_cx"]) - cx, float(m["outcome_cy"]) - cy) < radius)
 
 
 # =========================================================================== #

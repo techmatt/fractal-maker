@@ -287,10 +287,16 @@ def gumbel(rng: np.random.Generator, T: float) -> float:
 
 
 def dup_penalty(cx, cy, cloud) -> float:
-    """Large near an admitted q3, decaying (Gaussian, scale DUP_SCALE) with plane distance."""
+    """Large near an admitted q3, decaying (Gaussian, scale DUP_SCALE) with plane distance.
+
+    Coords `float()`-coerced like `near_dup`: a cloud carrying string coords (q4_harvest /
+    classic_phoenix serialize outcome_cx/cy as decimal STRINGS) would otherwise raise
+    `float - str` here (a latent crash of the steering penalty). `load_prior_library_rows`
+    already coerces the prior cloud at ingestion; this coercion makes the reader itself safe."""
     if not cloud:
         return 0.0
-    d = min(math.hypot(cx - m["outcome_cx"], cy - m["outcome_cy"]) for m in cloud)
+    cx, cy = float(cx), float(cy)
+    d = min(math.hypot(cx - float(m["outcome_cx"]), cy - float(m["outcome_cy"])) for m in cloud)
     return DUP_P0 * math.exp(-(d / DUP_SCALE) ** 2)
 
 
