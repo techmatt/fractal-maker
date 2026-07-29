@@ -99,7 +99,16 @@ def main() -> int:
     print(f"\n  rendered      : {made}/{len(sample)} tiles in {el:.1f}s")
     print(f"  per tile      : {per_tile:.4f} s  ({1/per_tile:.1f} tiles/s at {WORKERS} workers)")
     print(f"  FULL RUN      : {total} tiles -> {full_s/3600:.2f} h  ({full_s/60:.0f} min)")
-    print(f"  cache size    : ~{total * 26 / 1024 / 1024:.1f} GB at ~26 KB/tile (512x288 q85)")
+    # MEASURED, not assumed. The first guess here was 26 KB/tile and it was wrong by 3x —
+    # a 512x288 q85 tile of dense fractal detail is nothing like a photo of the same size.
+    # Taken over the first 24,938 tiles of the v8b run (2.02 GB), split by AA level because
+    # the aliased tile carries high-frequency noise the JPEG cannot cheaply encode:
+    # ss1 box 89.0 KB, ss2 lanczos3 69.2 KB. Family spread is real but second-order
+    # (julia_multibrot3 is the fattest at 126/98.7 KB, multibrot3 the leanest at 83/68).
+    kb = {1: 89.0, 2: 69.2}
+    gb = sum(mix * kb[ss] for ss, mix in plan_mix.items()) / 1024 / 1024
+    print(f"  cache size    : ~{gb:.1f} GB   (measured: ss1 {kb[1]:.0f} KB + ss2 {kb[2]:.0f} KB "
+          f"per tile at 512x288 q85)")
     print(f"  caveats       : the sample pays one binary start + one 77-colormap parse over "
           f"{len(sample)} tiles instead of {total}, so this OVER-estimates slightly; a "
           f"desktop under load or the external reaper's restarts push the other way.")
