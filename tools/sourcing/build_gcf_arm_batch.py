@@ -444,6 +444,35 @@ def stage_verify(args):
     sep = float(np.mean([[1.0 if a > b else 0.5 if a == b else 0.0 for b in gl] for a in gh]))
     check("separation AUC == 1.0", sep == 1.0, f"AUC={sep:.4f}")
 
+    # What maximising G_cf does INSIDE each arm — two consequences that are inherent to the
+    # brief ("both arms framed by maximising G_cf"), not build errors, but load-bearing for
+    # how the batch can be read.
+    emit("\n    WHERE IN THE REJECTED BAND THE HIGH ARM LANDS")
+    emit("    (the interior-band batch's own strata, for comparison — it stratified to cover "
+         "the band; this batch lets the objective choose)")
+    for lo, hi in ((INTERIOR_CUT, 0.20), (0.20, 0.35), (0.35, 0.50)):
+        n = sum(1 for v in gh if lo <= v < hi)
+        emit(f"      [{lo:.2f},{hi:.2f}): {n:3d}/{len(gh)}")
+    emit(f"    CONSEQUENCE 1: G_cf still penalises interior, so within the HIGH arm the "
+         f"argmax runs to the BOTTOM EDGE of the rejected band — "
+         f"{sum(1 for v in gh if v < 0.20)}/{len(gh)} rows sit in [{INTERIOR_CUT:.2f}, 0.20), "
+         f"median {np.median(gh):.4f}, p90 {np.percentile(gh, 90):.4f}. This batch therefore "
+         f"adjudicates the band's LOWER LIP, not [0.10, 0.50] as a whole. The interior-band "
+         f"batch's stratified arm still covers the deeper bands; the two are complementary, "
+         f"and neither alone answers the clause.")
+    fh = np.array([r["g_flat"] for r in H])
+    fl = np.array([r["g_flat"] for r in Lo])
+    emit(f"\n    CONSEQUENCE 2: the LOW control is materially FLATTER — g_flat median "
+         f"{np.median(fl):.3f} vs {np.median(fh):.3f}, tripping the deployed flat clause "
+         f"{sum(1 for r in Lo if 'flat' in r['clauses'])}/{len(Lo)} vs "
+         f"{sum(1 for r in H if 'flat' in r['clauses'])}/{len(H)}. Maximising G_cf under "
+         f"interior < {INTERIOR_CUT} lands on smooth exterior gradient washes (visible on "
+         f"the arm sheet). So the contrast a labeler would score is closer to "
+         f"'interior-rich vs empty' than to 'high vs low interior at matched richness'. That "
+         f"is what the objective does, not a sampler fault — but it is the reason to read a "
+         f"HIGH win as 'better than what G_cf picks without interior', NOT as 'interior "
+         f"mass helps'.")
+
     emit("\n    the framing objective, per arm (recorded — G_cf is what BOTH arms maximise)")
     for nm, sub in ((ARM_HIGH, H), (ARM_LOW, Lo)):
         g = np.array([r["G_cf"] for r in sub])
@@ -510,18 +539,35 @@ def stage_verify(args):
     import re
     id_ok = all(re.fullmatch(r"gc\d{4}_[0-9a-f]{8}", r["image_id"]) for r in rows)
     check("image_id is opaque `gc<slot>_<hash>`", id_ok)
-    # NB: a bare degree DIGIT is not a leak — it occurs in an 8-hex-digit content hash by
-    # chance. What must not appear is a token that identifies the row: arm, atom, family.
+    # Substring test only for tokens that cannot arise by accident. `d<degree>` is NOT one of
+    # them: `d` and the digits are hex, so an 8-hex-digit content hash contains e.g. "d2" with
+    # p ~ 7/256 regardless of the row's degree — flagging that is a false positive that would
+    # also make the check fail at random on any rebuild. Degree is covered structurally below.
     leaks = [(r["image_id"], k) for r in rows
-             for k in (r["arm"], r["atom_id"], r["family"], f"d{r['degree']}")
-             if k in r["image_id"]]
-    check("no arm / atom / family / d<degree> token in any image_id", not leaks, str(leaks[:3]))
+             for k in (r["arm"], r["atom_id"], r["family"]) if k in r["image_id"]]
+    check("no arm / atom / family token in any image_id", not leaks, str(leaks[:3]))
     check("image_ids are unique", len({r["image_id"] for r in rows}) == len(rows))
-    # id ordering carries no arm structure (a shuffle-assigned slot, not draw order)
-    arms = [r["arm"] for r in sorted(rows, key=lambda r: r["image_id"])]
-    runs = 1 + sum(1 for a, b in zip(arms, arms[1:]) if a != b)
-    check("id order carries no arm block structure", runs > 0.5 * len(arms) * 0.5,
-          f"{runs} runs over {len(arms)} rows (draw order would give 2)")
+
+    # Structural: the slot is shuffle-assigned, so sorting by image_id — the natural order
+    # anything downstream falls into, including the labeling UI — must not block up by arm or
+    # by degree. Draw order would give k runs; a shuffle gives ~n*(1-1/k).
+    def _no_block_structure(name, key):
+        vals = [key(r) for r in sorted(rows, key=lambda r: r["image_id"])]
+        k = len(set(vals))
+        runs = 1 + sum(1 for a, b in zip(vals, vals[1:]) if a != b)
+        check(f"id order carries no {name} block structure",
+              runs > 0.5 * len(vals) * (1 - 1 / k),
+              f"{runs} runs over {len(vals)} rows, {k} values (draw order would give {k})")
+    _no_block_structure("arm", lambda r: r["arm"])
+    _no_block_structure("degree", lambda r: r["degree"])
+    # and a pair's two windows must not land in adjacent slots, which would make the pairing
+    # itself visible as "the same atom twice in a row".
+    order = {r["image_id"]: i for i, r in enumerate(sorted(rows, key=lambda r: r["image_id"]))}
+    slots = defaultdict(list)
+    for r in rows:
+        slots[r["atom_id"]].append(order[r["image_id"]])
+    adjacent = [a for a, v in slots.items() if len(v) == 2 and abs(v[0] - v[1]) == 1]
+    check("no pair sits in adjacent presentation slots", not adjacent, str(adjacent[:3]))
     if (bdir / "blind.jsonl").exists():
         blind = _read_jsonl(bdir / "blind.jsonl")
         served = (bdir / "blind.jsonl").read_text(encoding="utf-8")
