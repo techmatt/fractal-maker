@@ -109,23 +109,17 @@ TRACKED_CANARIES = [
     "data/wallpaper_head/v3/model_best.pt",       # LIVE cross-location wallpaper-quality head
     "data/render_mode_head/v1/model_best.pt",     # LIVE strange-mode (mining_v1) gate
     "data/queries/scorer/v3_gvo/model_best.pt",   # LIVE palette-preference ranker (pref-v3-gvo)
-    # The v8 classifier build. Not "regenerable at compute cost": rebuilding these needs
-    # the label overlay EXACTLY as it stood at build time, and `labels/amend_*.json` is a
-    # live, append-merged revision stream — the next revision pass moves labels and the
-    # rebuild yields a different population. manifest.jsonl IS that population plus its
-    # train/eval split; eval_slice.jsonl is the frozen census-144 instrument the paired
-    # v7<->v8 comparison is pre-registered on; plan/cache_manifest are the per-render
-    # expansion the aug cache is keyed by (the cache JPGs are bulk() and out-of-tree, and
-    # without these two nothing can attribute a cached JPG back to a location — which is
-    # precisely how the v4..v7 caches became unusable when their manifests were lost).
-    # aug_roster.json is the palette roster recovered from the surviving v4 cache tree;
-    # its own source file is gone, so it has no rebuild path at all.
-    "data/v8/manifest.jsonl",
-    "data/v8/eval_slice.jsonl",
-    "data/v8/build_metadata.json",
-    "data/v8/plan.jsonl",
-    "data/v8/cache_manifest.jsonl",
-    "data/v8/aug_roster.json",
+    # data/v8/* is NOT listed here right now, and that is a deliberate empty slot rather
+    # than an omission. The v8 build artifacts (manifest / eval_slice / plan /
+    # cache_manifest / build_metadata / aug_roster) were canaried when they were built and
+    # then deliberately removed on 2026-07-29 along with the abandoned cache render; the
+    # content stays in git history. The .gitignore negations and the .gitattributes LFS
+    # rules for those exact paths are intact, so re-running tools/v8/build_manifest.py +
+    # build_plan.py restores them tracked. RE-ADD THE SIX PATHS HERE WHEN THAT HAPPENS —
+    # they satisfy both conjuncts (a rebuild needs the label amendment overlay exactly as
+    # it stood at build time, and that stream is live and append-merged, so a later rebuild
+    # yields a different population), and losing plan/cache_manifest is precisely how the
+    # v4..v7 caches became 243k unattributable JPGs.
     # The prospect location library. Both are unregenerable: morph_v6 has no
     # producer and the CLIP arrays only regenerate value-approximate under a
     # verdict-sensitive threshold. (.gitignore negates these two exact paths; the
