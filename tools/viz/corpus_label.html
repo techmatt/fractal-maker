@@ -140,11 +140,14 @@ let cur=0;
 const SCORE_WORD={1:'bad',2:'okay',3:'good',4:'exceptional'};
 
 // the image_id IS the durable identity; the crop lives at crops/<image_id>.jpg
+// ?cachebust=1 appends a per-load version query so the browser refetches every crop fresh
+//   (defeats a stale image cache left by a transient bad-serve). Off by default → no change.
+const CACHEBUST = QP.get('cachebust') ? ('?v=' + Date.now()) : '';
 function keyOf(r){ return r.image_id; }
-function imgSrc(r){ return ROOT+BATCH_DIR+'/crops/'+r.image_id+'.jpg'; }
+function imgSrc(r){ return ROOT+BATCH_DIR+'/crops/'+r.image_id+'.jpg'+CACHEBUST; }
 // optional vivid (blue/orange) companion the labeler judges from; batches without one
 // (the vivid/ dir absent) just fall back to the canonical crop alone (onerror hides it).
-function vividSrc(r){ return ROOT+BATCH_DIR+'/vivid/'+r.image_id+'.jpg'; }
+function vividSrc(r){ return ROOT+BATCH_DIR+'/vivid/'+r.image_id+'.jpg'+CACHEBUST; }
 function loadScores(){ try{return JSON.parse(localStorage.getItem(LS_KEY))||{}}catch{return {}} }
 function saveScores(){ localStorage.setItem(LS_KEY,JSON.stringify(scores)); }
 function loadReveals(){ try{return JSON.parse(localStorage.getItem(REVEAL_KEY))||{}}catch{return {}} }
