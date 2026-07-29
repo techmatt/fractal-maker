@@ -128,17 +128,25 @@ def ftype_of(row):
 # --------------------------------------------------------------------------- #
 def load_post_freeze(v6_ids):
     """Every labeled location (canonical resolver, label=max over crops) not already in
-    the frozen v6 manifest. Returns list of loc dicts with string coords + batch + parent_oids."""
+    the frozen v6 manifest. Returns list of loc dicts with string coords + batch + parent_oids.
+
+    Labels resolve through the REVISION overlay (`amendments_for` -> `resolve_score(...,
+    amendments)`), exactly as `corpus_reader.iter_labeled` and `query_sampler` do — so a
+    re-judged row (a q3 demoted to q2, or promoted to the new q4 tier) reaches an appended
+    manifest row as its revised value, not the stale original. This is the LIVE label for a
+    post-freeze (new) location; the past-model freeze lives entirely in the byte-identical v6
+    prefix (Gate 6), not here, so applying amendments to the appended rows cannot touch it."""
     locs = {}
     for images_path in sorted(glob.glob(BATCHES_GLOB)):
         batch_id = os.path.basename(os.path.dirname(images_path))
         sidecar = ls.sidecar_for(batch_id)
+        amendments = ls.amendments_for(batch_id)   # revised truth wins (revision stream)
         for line in Path(images_path).read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line:
                 continue
             row = json.loads(line)
-            score = ls.resolve_score(row, sidecar)
+            score = ls.resolve_score(row, sidecar, amendments)
             if score is None:
                 continue
             ft = ftype_of(row)
@@ -243,8 +251,11 @@ def assign_groups(locs):
 
 
 def fmt_hist(h, n):
-    return (f"n={n:4d}  1:{h.get(1,0):4d}  2:{h.get(2,0):4d}  3:{h.get(3,0):4d} "
-            f"({100*h.get(3,0)/max(n,1):.1f}% q3)")
+    # class 4 exists only in the revision overlay; report it so an amended build is honest
+    # about the tier instead of folding q4 into a silent gap. q_pos = the >=3 (good) rate.
+    pos = h.get(3, 0) + h.get(4, 0)
+    return (f"n={n:4d}  1:{h.get(1,0):4d}  2:{h.get(2,0):4d}  3:{h.get(3,0):4d}  4:{h.get(4,0):4d} "
+            f"({100*pos/max(n,1):.1f}% >=3)")
 
 
 # --------------------------------------------------------------------------- #
