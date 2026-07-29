@@ -83,18 +83,26 @@ V5_MANIFEST = ROOT / "data" / "v5" / "manifest.jsonl"
 
 
 def v5_julia_q23_count(scores=(2, 3)):
-    """Q2+q3 Julia count computed by the SAME join tools/v5/build_manifest.py uses:
-    labels/location_labels_julia_ladder_j0.json (image_id -> score) INTERSECT the
-    julia_ladder_j0 batch images.jsonl (render params) by image_id. This is the
-    authoritative reference the sampler's Julia location count must match; empirically
-    no q2/q3 row is dropped by build_manifest's v4-seed split filter, so this equals
-    the Julia q2/q3 count in data/v5/manifest.jsonl."""
-    labels = ls.load_sidecar(SIDECAR_LABELS[V5_JULIA_BATCH])
-    jl = BATCHES_DIR / V5_JULIA_BATCH / "images.jsonl"
-    batch_ids = {json.loads(l)["image_id"]
-                 for l in jl.read_text(encoding="utf-8").splitlines() if l.strip()}
+    """Q2+q3 Julia count over the julia_ladder_j0 batch, resolved the AUTHORITATIVE way —
+    `label_store.resolve_score` (registered amendment ELSE sidecar), the exact resolution the
+    live sampler side (`v5_julia_count`) and every training consumer use. Both sides of
+    `assert_matches_v5` therefore read the same overlay, so the cross-check still catches sampler
+    keying-drift (a ref.key() regression perturbs the LIVE count only) but no longer fires on a
+    legitimate post-v5 label REVISION.
+
+    Amendment-aware since the 2026-07-28 class-3 revisit: promoting julia_ladder rows q3->q4
+    moves them out of the q2/q3 band on BOTH sides in lockstep (was 495 sidecar-frozen; 426 after
+    the revisit's 69 promotions). Previously this used `load_sidecar` (sidecar-only), which froze
+    the reference to the pre-class-4 count and diverged from the live side on any revision. The
+    old docstring's manifest-equality no longer holds post-revision (`data/v5/manifest.jsonl` is a
+    frozen pre-revisit artifact); `v5_manifest_julia_q23()` reports that frozen count separately."""
+    rows = [json.loads(l)
+            for l in (BATCHES_DIR / V5_JULIA_BATCH / "images.jsonl")
+            .read_text(encoding="utf-8").splitlines() if l.strip()]
+    sidecar = ls.sidecar_for(V5_JULIA_BATCH, str(BATCHES_DIR))
+    amendments = ls.amendments_for(V5_JULIA_BATCH, str(BATCHES_DIR))
     keep = set(scores)
-    return sum(1 for iid, sc in labels.items() if iid in batch_ids and sc in keep)
+    return sum(1 for r in rows if ls.resolve_score(r, sidecar, amendments) in keep)
 
 
 def v5_manifest_julia_q23(scores=(2, 3)):
