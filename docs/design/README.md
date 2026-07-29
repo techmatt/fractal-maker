@@ -8,7 +8,8 @@ the render core and pipeline; these docs go a level deeper on specific decisions
 | doc | governs |
 |---|---|
 | [phoenix_seed_sampler_spec.md](phoenix_seed_sampler_spec.md) | Phoenix seed proposal: the closed-form stability skeleton, the `(c,p,z₋₁)` axes, the corrected real-axis-reflection symmetry (§7.1), the fertility-aware surrogate loop, and the settled human-label verdicts (§8). |
-| [deep_zoom_sourcing.md](deep_zoom_sourcing.md) | Deep-center sourcing (Newton nucleus/Misiurewicz → decimal-string centers), depth-band locality, the f64-bound walker, the standing perturbation-engine gaps, and why deep-Mandelbrot curation needs its own objective. |
+| [deep_zoom_sourcing.md](deep_zoom_sourcing.md) | **Deep regime (PARKED).** Deep-center sourcing (Newton nucleus/Misiurewicz → decimal-string centers), depth-band locality, the f64-bound walker, the standing perturbation-engine gaps, and why deep-Mandelbrot curation needs its own objective. |
+| [minibrot_sourcing.md](minibrot_sourcing.md) | **Moderate depth, inside f64.** The minibrot-atom arc: the atom roster, the stage-1 screen `G` and its measured worth, the pre-filter and its interior catch-22, the `A` feasibility cut, and the atom/window-level signals from the labeled evidence. |
 | [julia_c_sourcing.md](julia_c_sourcing.md) | The ~2% Julia "corner" exemplar class and the three-stage `c`-selection screen; the interior-lake determinant. |
 | [aesthetic_scoring.md](aesthetic_scoring.md) | How to read the signal: occupancy/busy-ness is anti-quality (report-only), and `p_good` is a badness filter, not a goodness ranker. |
 | [classifier_retrain_protocol.md](classifier_retrain_protocol.md) | Append-don't-rebuild manifests, forced eval/train split rules, pre-registered paired-eval bar, and per-version `t_good` re-derivation. |
@@ -16,6 +17,15 @@ the render core and pipeline; these docs go a level deeper on specific decisions
 | [render_coloring_surface.md](render_coloring_surface.md) | The two coloring algorithms, three palette namespaces, the silent density fork, the open corpus-coloring hazard (P4), and why the OKLab ports must not be merged. |
 | [discovery_pipeline.md](discovery_pipeline.md) | The guided-descend walk + reward split, the freshness-prior/dive incompatibility, and the distinct-look deficit scheduler (incl. julia routing). |
 | [storage_classes.md](storage_classes.md) | The durability contract: the four storage classes, why a missing `scratch/` artifact is not data loss, and that durability is claimed only by `durable()` at the write site. |
+
+**Two sourcing docs, one boundary — pick by depth regime.** `deep_zoom_sourcing.md` is
+the **deep, beyond-f64 tier** (perturbation, ∂M-tracking, deep-center production) and is
+**parked**; `minibrot_sourcing.md` is the **moderate-depth minibrot-atom arc that runs
+entirely inside f64** (roster, screen, pre-filter, labeled evidence). They touch at only
+two places — the atom-size law `size ≡ 1/|A|` and the fitted-objective status — and each
+doc's boundary note names those explicitly. If you want roster / screen / pre-filter /
+window-label content, read `minibrot_sourcing.md`; if you want precision, the
+perturbation tier or deep-center production, read `deep_zoom_sourcing.md`.
 
 **Dated readouts** (a run's numbers, not a timeless rule) also live here — there is nowhere
 else. They are named for the run and carry their own date: `interior_feature_bakeoff.md`,
