@@ -167,13 +167,34 @@ def project_type_marginals(target: C.TargetMeasure, observed_type_cluster: list[
 # counted as new). Same CLIP recipe (morph_gray -> vit_base_patch16_clip_224.openai, 768-d)
 # emission clusters at cos 0.974, so the seed is metric-consistent with the tally.
 # ------------------------------------------------------------------------- #
+class UnseededRunError(RuntimeError):
+    """A `--scheduler` run found no library seed and did not pass `--allow-unseeded`.
+
+    Fail-closed in the same shape as `v7.build_manifest.assign_split`: the unsafe state is
+    never a silent fall-through. An unseeded run's deficits measure RUN-LOCAL scarcity while
+    every downstream reader assumes LIBRARY-WIDE scarcity, and — this is what made the last
+    one expensive — its numbers are indistinguishable from a seeded run's afterwards. So the
+    absent seed aborts, and the override stamps the run summary (see `seed_record`)."""
+
+
+def library_seed_paths(intake_path: Path | None = None,
+                       emb_dir: Path | None = None) -> tuple[Path, Path]:
+    """The (intake artifact, embedding dir) a seed would be loaded from. Shared by the loader,
+    the guard and the error message so all three name the same paths."""
+    return (Path(intake_path) if intake_path else INTAKE_ARTIFACT,
+            Path(emb_dir) if emb_dir else INTAKE_EMB_DIR)
+
+
 def load_library_seed_embeddings(intake_path: Path | None = None,
                                  emb_dir: Path | None = None) -> dict[str, np.ndarray]:
     """partition -> (N, 768) float32 medoid embeddings from the campaign-1 intake. One medoid
-    (cluster founder) per distinct look. Returns {} if the intake artifact is absent (seeding
-    then no-ops, and the run starts at run-local scarcity — logged by the caller)."""
-    ip = Path(intake_path) if intake_path else INTAKE_ARTIFACT
-    ed = Path(emb_dir) if emb_dir else INTAKE_EMB_DIR
+    (cluster founder) per distinct look. Returns {} if the intake artifact is absent.
+
+    This is the LOW-LEVEL loader and it stays total (no raise) — the fail-closed decision is
+    `require_library_seed` / `DeficitScheduler.seed_from_library`, so callers that legitimately
+    want "seed if you can" keep a way to ask. Do NOT reintroduce a caller that consumes {}
+    from here and shrugs: that is the exact shape that sent a whole probe run unseeded."""
+    ip, ed = library_seed_paths(intake_path, emb_dir)
     if not ip.exists():
         return {}
     intake = json.loads(ip.read_text(encoding="utf-8"))
@@ -189,6 +210,54 @@ def load_library_seed_embeddings(intake_path: Path | None = None,
             continue
         by_part[part].append(e / (np.linalg.norm(e) + 1e-9))
     return {p: np.stack(v).astype(np.float32) for p, v in by_part.items() if v}
+
+
+def require_library_seed(*, allow_unseeded: bool = False,
+                         intake_path: Path | None = None,
+                         emb_dir: Path | None = None) -> dict:
+    """Fail-closed preflight for a `--scheduler` run: load the library seed and REFUSE to
+    return if it is absent or empty, unless `allow_unseeded` is passed.
+
+    Returns a SEED RECORD — the thing that gets stamped into the run summary, so a reader of
+    that summary months later can tell a seeded run from an unseeded one without re-deriving
+    anything. Keys: status ("seeded" | "unseeded"), source / emb_dir (the paths consulted),
+    source_exists, library_looks (looks available in the artifact), library_partitions,
+    allow_unseeded, plus `embeddings` (the loaded matrices; stripped before stamping by
+    `seed_stamp`).
+
+    Raises UnseededRunError naming both paths when the seed is missing and not overridden."""
+    ip, ed = library_seed_paths(intake_path, emb_dir)
+    embs = load_library_seed_embeddings(ip, ed)
+    n_looks = int(sum(int(m.shape[0]) for m in embs.values()))
+    rec = dict(status="seeded" if n_looks else "unseeded",
+               source=str(ip), emb_dir=str(ed), source_exists=bool(ip.exists()),
+               library_looks=n_looks, library_partitions=sorted(embs),
+               allow_unseeded=bool(allow_unseeded), embeddings=embs)
+    if n_looks:
+        return rec
+    why = ("the intake artifact does not exist" if not ip.exists() else
+           "the intake artifact exists but yielded no usable medoid embeddings "
+           "(embedding dir missing, empty, or wrong dimension)")
+    rec["reason"] = why
+    if not allow_unseeded:
+        raise UnseededRunError(
+            f"--scheduler run has NO library seed, so its deficits would measure run-local "
+            f"scarcity while every reader assumes library-wide. Aborting before any work.\n"
+            f"    reason     : {why}\n"
+            f"    intake     : {ip}\n"
+            f"    embeddings : {ed}\n"
+            f"Rebuild the intake snapshot, or pass --allow-unseeded to proceed deliberately "
+            f"(the run summary is then permanently stamped status=unseeded)."
+        )
+    return rec
+
+
+def seed_stamp(rec: dict | None) -> dict | None:
+    """The stampable projection of a seed record: everything except the embedding matrices
+    (which are megabytes and not JSON). Used for the run summary."""
+    if rec is None:
+        return None
+    return {k: v for k, v in rec.items() if k != "embeddings"}
 
 
 # ------------------------------------------------------------------------- #
@@ -367,6 +436,9 @@ class DeficitScheduler:
         self.prices = PriceModel(self.partitions, pcfg)
 
         self.tally = DistinctLookTally(self.run_dir / "distinct_looks.npz")
+        # Set by seed_from_library; stamped into the run summary. `None` means seeding was
+        # never even attempted — reported as status "never_attempted", not silently omitted.
+        self.seed_record: dict | None = None
         # allocation trace (per-batch partition choice + deficits) for the readout.
         self.trace_path = self.run_dir / "scheduler_trace.jsonl"
 
@@ -452,20 +524,58 @@ class DeficitScheduler:
         """Account a batch's active time to the served partition (attempt-cap accounting)."""
         return self.prices.charge(partition, minutes)
 
-    def seed_from_library(self, embeddings: dict[str, np.ndarray] | None = None) -> dict:
+    def seed_from_library(self, embeddings: dict[str, np.ndarray] | None = None, *,
+                          allow_unseeded: bool = False, record: dict | None = None,
+                          intake_path: Path | None = None,
+                          emb_dir: Path | None = None) -> dict:
         """One-time baseline seed of the distinct-look tally from the library's existing looks
         (campaign-1 intake medoids), so deficits measure LIBRARY-WIDE scarcity rather than
         run-local scarcity, and the seeded embeddings become dedup memory (a new admission that
         duplicates a known library look does not count as a new look).
 
+        FAIL-CLOSED: with no usable seed this RAISES UnseededRunError unless `allow_unseeded`.
+        Either way it sets `self.seed_record` — the durable stamp for the run summary — so an
+        overridden run is permanently marked and can never be read back as a seeded one.
+
+        `embeddings` injects the matrices directly (tests / a preloaded preflight); `record`
+        passes a `require_library_seed` result straight through so the CLI preflight's single
+        load is reused. Neither bypasses the guard: an EMPTY injected dict fails closed too.
+
         Resume-safe + idempotent: seeds ONLY when the tally is empty. A resume reloads the
-        persisted npz (total > 0) and this is a no-op — the seed is never double-counted, and
-        after seeding the tally is persisted immediately so the very first kill can't lose it.
-        Restricted to this run's tracked partitions. Returns {partition: seeded_count}."""
+        persisted npz (total > 0) and this is a no-op — the seed is never double-counted, the
+        guard does not fire (a resumed tally IS the seed), and after seeding the tally is
+        persisted immediately so the very first kill can't lose it. Restricted to this run's
+        tracked partitions. Returns {partition: seeded_count}."""
         if self.tally.total() > 0:                    # already populated (resume) — never re-seed
+            # A resumed tally already carries whatever the fresh start seeded; re-checking the
+            # artifact here would abort legitimate resumes of seeded runs on a since-moved file.
+            self.seed_record = dict(status="resume", seeded=False, seeded_looks=0,
+                                    per_partition={}, tally_total=self.tally.total(),
+                                    note="tally reloaded from distinct_looks.npz; "
+                                         "seeding skipped (see the fresh run's summary)")
             return {}
-        if embeddings is None:
-            embeddings = load_library_seed_embeddings()
+
+        if record is not None:                        # preflight already loaded + guarded
+            rec = dict(record)
+            embeddings = rec.pop("embeddings", embeddings) or {}
+        elif embeddings is None:
+            rec = require_library_seed(allow_unseeded=allow_unseeded,
+                                       intake_path=intake_path, emb_dir=emb_dir)
+            embeddings = rec.pop("embeddings")
+        else:                                         # injected matrices — guard them the same
+            n = int(sum(int(np.asarray(m).shape[0]) for m in embeddings.values()))
+            rec = dict(status="seeded" if n else "unseeded", source="<injected>",
+                       emb_dir=None, source_exists=None, library_looks=n,
+                       library_partitions=sorted(embeddings),
+                       allow_unseeded=bool(allow_unseeded))
+            if not n:
+                rec["reason"] = "injected seed embeddings were empty"
+                if not allow_unseeded:
+                    raise UnseededRunError(
+                        "--scheduler run was handed an EMPTY library seed (injected). "
+                        "Aborting before any work; pass allow_unseeded=True to proceed "
+                        "deliberately (the run summary is then stamped status=unseeded).")
+
         seeded: dict[str, int] = {}
         for part in self.partitions:                  # only families this run tracks
             mat = embeddings.get(part)
@@ -476,6 +586,14 @@ class DeficitScheduler:
                     seeded[part] = seeded.get(part, 0) + 1
         if seeded:
             self.tally.save()                         # persist the baseline before any batch runs
+
+        # The stamp. Seeded or not, the summary now says WHICH artifact it seeded from and HOW
+        # MANY looks it seeded — the two facts campaign-2's summary could not answer.
+        rec = seed_stamp(rec)
+        rec.update(seeded=bool(seeded), seeded_looks=int(sum(seeded.values())),
+                   per_partition=dict(seeded), tracked_partitions=list(self.partitions),
+                   tally_total=self.tally.total())
+        self.seed_record = rec
         return seeded
 
     def log_choice(self, batch: int, chosen: str | None, queue_lens: dict):
@@ -509,7 +627,11 @@ class DeficitScheduler:
         self.tally.save()
 
     def summary(self) -> dict:
-        return dict(target_frac={p: round(v, 4) for p, v in self.target_frac.items()},
+        return dict(library_seed=(self.seed_record if self.seed_record is not None else
+                                  dict(status="never_attempted", seeded=False, seeded_looks=0,
+                                       reason="seed_from_library was never called; deficits "
+                                              "measure RUN-LOCAL scarcity")),
+                    target_frac={p: round(v, 4) for p, v in self.target_frac.items()},
                     look_frac={p: round(v, 4) for p, v in self.look_frac().items()},
                     looks=self.tally.counts(), total_looks=self.tally.total(),
                     prices={p: round(v, 3) for p, v in self.prices.price.items()},

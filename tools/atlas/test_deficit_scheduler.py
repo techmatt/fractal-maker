@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 for p in (ROOT, ROOT / "tools" / "atlas"):
@@ -320,3 +321,177 @@ def test_scheduler_state_roundtrip(tmp_path):
     sch2.load_state(st, reopen_caps=True)
     assert sch2.tally.counts() == {"mandelbrot": 2}          # reloaded from npz
     assert abs(sch2.prices.price["multibrot5"] - sch.prices.price["multibrot5"]) < 1e-9
+
+
+# --------------------------------------------------------------------------- #
+# 9. The unseeded-run guard.
+#
+# WHERE THE LAST SET FAILED: every test above hands `seed_from_library` a hand-built
+# embeddings dict, so the `embeddings is None -> load_library_seed_embeddings()` branch was
+# never taken and no test ever touched the real artifact. A test that INJECTS the dependency
+# does not cover the loader — which is why the loader's `return {}` on a missing artifact
+# survived, and an entire probe run went unseeded looking exactly like a seeded one.
+# Cases 1-3 below therefore drive the REAL loader against REAL files on disk.
+# --------------------------------------------------------------------------- #
+def _write_library(tmp_path, per_partition: dict, *, seed0: int = 100):
+    """Materialize a real intake artifact + embedding dir. Returns (intake_path, emb_dir)."""
+    intake_dir = tmp_path / "lib"
+    emb_dir = tmp_path / "lib_embs"
+    intake_dir.mkdir(parents=True, exist_ok=True)
+    emb_dir.mkdir(parents=True, exist_ok=True)
+    medoid_id, s = {}, seed0
+    for part, n in per_partition.items():
+        for k in range(n):
+            loc_id = f"{part.replace(':', '_')}_{k}"
+            medoid_id[f"{part}#{k}"] = loc_id
+            np.save(emb_dir / f"{loc_id}.npy", _emb(s).astype(np.float32))
+            s += 1
+    ip = intake_dir / "intake.json"
+    ip.write_text(json.dumps({"medoid_id": medoid_id}), encoding="utf-8")
+    return ip, emb_dir
+
+
+def _sched(tmp_path, parts):
+    return D.DeficitScheduler(parts, tmp_path / "run",
+                              target_path=tmp_path / "none.json",
+                              prices_path=tmp_path / "none.json")
+
+
+# --- case 1: missing artifact, no flag -> abort, message names the path ----- #
+def test_missing_artifact_aborts_and_names_the_path(tmp_path):
+    missing = tmp_path / "gone" / "intake.json"
+    embs_dir = tmp_path / "gone_embs"
+    assert not missing.exists()
+
+    # the loader itself stays total (returns {}) — it is the low-level read.
+    assert D.load_library_seed_embeddings(missing, embs_dir) == {}
+
+    # the GUARD is what fails closed, and it names both paths so the abort is actionable.
+    with pytest.raises(D.UnseededRunError) as ei:
+        D.require_library_seed(intake_path=missing, emb_dir=embs_dir)
+    msg = str(ei.value)
+    assert str(missing) in msg and str(embs_dir) in msg
+    assert "--allow-unseeded" in msg
+
+    # and the same guard fires through the scheduler, before any look is tallied.
+    sch = _sched(tmp_path, ["mandelbrot"])
+    with pytest.raises(D.UnseededRunError):
+        sch.seed_from_library(intake_path=missing, emb_dir=embs_dir)
+    assert sch.tally.total() == 0
+    assert not (tmp_path / "run" / "distinct_looks.npz").exists()   # nothing persisted
+
+
+def test_artifact_present_but_embeddings_missing_also_aborts(tmp_path):
+    # "absent OR EMPTY": an intake that exists but whose embedding dir is gone yields no
+    # medoids. That is an unseeded run just the same, and must not slip through.
+    import shutil
+    ip, emb_dir = _write_library(tmp_path, {"mandelbrot": 3})
+    shutil.rmtree(emb_dir)
+    with pytest.raises(D.UnseededRunError) as ei:
+        D.require_library_seed(intake_path=ip, emb_dir=emb_dir)
+    assert "no usable medoid embeddings" in str(ei.value)
+
+
+# --- case 2: missing artifact + override -> proceeds, stamped unseeded ------ #
+def test_allow_unseeded_proceeds_and_stamps_the_summary(tmp_path):
+    missing = tmp_path / "gone" / "intake.json"
+    sch = _sched(tmp_path, ["mandelbrot", "julia:mandelbrot"])
+    seeded = sch.seed_from_library(allow_unseeded=True,
+                                   intake_path=missing, emb_dir=tmp_path / "gone_embs")
+    assert seeded == {}                                  # proceeded, seeded nothing
+    assert sch.tally.total() == 0
+
+    rec = sch.summary()["library_seed"]
+    assert rec["status"] == "unseeded"                   # the durable stamp
+    assert rec["seeded"] is False and rec["seeded_looks"] == 0
+    assert rec["allow_unseeded"] is True
+    assert rec["source"] == str(missing)                 # WHICH path was missing
+    assert rec["source_exists"] is False
+    assert "reason" in rec
+    assert json.dumps(sch.summary())                     # and the stamp is JSON-serializable
+
+
+# --- case 3: artifact present on disk -> seeds, stamped with source + count - #
+def test_real_artifact_on_disk_seeds_and_stamps_source_and_count(tmp_path):
+    ip, emb_dir = _write_library(tmp_path, {"mandelbrot": 3, "julia:mandelbrot": 2,
+                                            "multibrot5": 4})   # multibrot5 untracked
+    parts = ["mandelbrot", "julia:mandelbrot"]
+    sch = _sched(tmp_path, parts)
+    seeded = sch.seed_from_library(intake_path=ip, emb_dir=emb_dir)   # REAL loader, REAL files
+    assert seeded == {"mandelbrot": 3, "julia:mandelbrot": 2}
+    assert sch.tally.counts() == {"mandelbrot": 3, "julia:mandelbrot": 2}
+    assert (tmp_path / "run" / "distinct_looks.npz").exists()
+
+    rec = sch.summary()["library_seed"]
+    assert rec["status"] == "seeded" and rec["seeded"] is True
+    assert rec["seeded_looks"] == 5                       # how many looks it seeded
+    assert rec["per_partition"] == {"mandelbrot": 3, "julia:mandelbrot": 2}
+    assert rec["source"] == str(ip)                       # what it seeded FROM
+    assert rec["emb_dir"] == str(emb_dir)
+    assert rec["library_looks"] == 9                      # incl. the untracked family
+    assert rec["tracked_partitions"] == parts
+    assert json.dumps(sch.summary())
+
+
+def test_resume_is_stamped_resume_and_never_aborts(tmp_path):
+    # A resumed tally IS the seed. Re-checking a since-moved artifact must not abort a
+    # legitimate resume — but the summary still says so rather than claiming "seeded".
+    ip, emb_dir = _write_library(tmp_path, {"mandelbrot": 2})
+    sch = _sched(tmp_path, ["mandelbrot"])
+    sch.seed_from_library(intake_path=ip, emb_dir=emb_dir)
+    sch2 = _sched(tmp_path, ["mandelbrot"])               # same run dir -> reloads npz
+    assert sch2.tally.total() == 2
+    gone = tmp_path / "vanished" / "intake.json"
+    assert sch2.seed_from_library(intake_path=gone, emb_dir=tmp_path / "vanished") == {}
+    assert sch2.summary()["library_seed"]["status"] == "resume"
+
+
+def test_never_attempted_is_reported_not_omitted(tmp_path):
+    # A scheduler whose seed_from_library was never called reports it loudly rather than
+    # emitting a summary that merely lacks the key (campaign-2's exact failure shape).
+    sch = _sched(tmp_path, ["mandelbrot"])
+    rec = sch.summary()["library_seed"]
+    assert rec["status"] == "never_attempted" and rec["seeded"] is False
+
+
+def test_empty_injected_dict_fails_closed_too(tmp_path):
+    # Injection must not be a bypass: an empty dict is an unseeded run however it arrived.
+    sch = _sched(tmp_path, ["mandelbrot"])
+    with pytest.raises(D.UnseededRunError):
+        sch.seed_from_library({})
+    assert sch.seed_from_library({}, allow_unseeded=True) == {}
+    assert sch.summary()["library_seed"]["status"] == "unseeded"
+
+
+# --- case 4: red-before proof that the OLD path continued silently ---------- #
+def test_red_before_old_call_shape_continued_silently(tmp_path):
+    """The pre-guard code path, reconstructed verbatim, and the proof it was silent.
+
+    Old caller (steered_frontier.__init__):  self.scheduler.seed_from_library()
+    Old callee:                              embeddings = load_library_seed_embeddings()
+                                             -> {} on a missing artifact -> seeds nothing
+                                             -> return {} -> caller logs "newly seeded 0"
+
+    Every observable was a legal value of a normal run: {} is also what a RESUME returns, and
+    the summary carried no seed field at all. Nothing anywhere said "unseeded". This pins that
+    state as the bug and asserts the guard now makes it unreachable unmarked.
+    """
+    missing = tmp_path / "gone" / "intake.json"
+
+    # 1. the old two-step, replayed exactly: loader returns {}, seeding it is a silent no-op.
+    old_embeddings = D.load_library_seed_embeddings(missing, tmp_path / "gone_embs")
+    assert old_embeddings == {}
+    sch_old = _sched(tmp_path, ["mandelbrot"])
+    silent = sch_old.seed_from_library(old_embeddings, allow_unseeded=True)  # the old behaviour
+    assert silent == {}                       # <- indistinguishable from a resume's {}
+    assert sch_old.tally.total() == 0         # <- nothing seeded, no error, run would continue
+
+    # 2. RED-BEFORE: under the old code the summary had no seed field at all, so that `{}` was
+    #    the entire record of an unseeded run. The old shape is now impossible — the fact is
+    #    present in the summary, and it says unseeded.
+    assert sch_old.summary()["library_seed"]["status"] == "unseeded"
+
+    # 3. and the unoverridden path — the one the old code took by default — now aborts.
+    sch_new = _sched(tmp_path / "b", ["mandelbrot"])
+    with pytest.raises(D.UnseededRunError):
+        sch_new.seed_from_library(intake_path=missing, emb_dir=tmp_path / "gone_embs")

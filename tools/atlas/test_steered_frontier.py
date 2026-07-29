@@ -286,3 +286,85 @@ def test_derive_tau_h_loud_fail_for_unvendored_partition_when_records_absent(mon
     monkeypatch.setattr(sf, "FIDELITY_RECORDS", tmp_path / "records_do_not_exist.json")
     with pytest.raises(SystemExit, match="descent_score_fidelity"):
         sf.derive_tau_h(["mandelbrot", "julia:bogus_unvendored"])
+
+
+# =========================================================================== #
+# The unseeded-run preflight — the "before any work" half of the guard.
+#
+# The scheduler-level guard is tested in test_deficit_scheduler.py; what MUST be pinned here
+# is the ORDER: the driver's __init__ mkdirs the run dir and opens the ledger, so a guard that
+# only fires inside the scheduler would already have written to disk. These assert the abort
+# happens ahead of SteeredFrontier(...) entirely.
+# =========================================================================== #
+def _sched_args(tmp_path, **kw):
+    from types import SimpleNamespace
+    return SimpleNamespace(scheduler=True, resume=False, allow_unseeded=False,
+                           run_dir=str(tmp_path / "run"), **kw)
+
+
+def _no_library(monkeypatch, tmp_path):
+    monkeypatch.setattr(sf.dsched, "INTAKE_ARTIFACT", tmp_path / "gone" / "intake.json")
+    monkeypatch.setattr(sf.dsched, "INTAKE_EMB_DIR", tmp_path / "gone_embs")
+
+
+def test_preflight_aborts_unseeded_and_touches_nothing(monkeypatch, tmp_path):
+    import pytest
+    _no_library(monkeypatch, tmp_path)
+    args = _sched_args(tmp_path)
+    with pytest.raises(SystemExit) as ei:
+        sf.preflight_library_seed(args)
+    msg = str(ei.value)
+    assert "REFUSING TO START UNSEEDED" in msg
+    assert str(tmp_path / "gone" / "intake.json") in msg      # names the missing path
+    assert not (tmp_path / "run").exists()                    # nothing written
+
+
+def test_preflight_is_a_noop_without_the_scheduler(monkeypatch, tmp_path):
+    # Scoped to --scheduler only: the seed matters when the scheduler is allocating.
+    _no_library(monkeypatch, tmp_path)
+    args = _sched_args(tmp_path)
+    args.scheduler = False
+    assert sf.preflight_library_seed(args) is None            # no abort, no seed loaded
+
+
+def test_preflight_override_proceeds_and_marks_the_record(monkeypatch, tmp_path):
+    _no_library(monkeypatch, tmp_path)
+    args = _sched_args(tmp_path)
+    args.allow_unseeded = True
+    rec = sf.preflight_library_seed(args)
+    assert rec["status"] == "unseeded" and rec["allow_unseeded"] is True
+    assert args._library_seed is rec                          # rides on args for the driver
+
+
+def test_preflight_skips_a_resume_with_a_tally_on_disk(monkeypatch, tmp_path):
+    # A resumed distinct-look tally IS the seed; a since-moved artifact must not abort it.
+    _no_library(monkeypatch, tmp_path)
+    run = tmp_path / "run"
+    run.mkdir(parents=True)
+    (run / "distinct_looks.npz").write_bytes(b"")
+    args = _sched_args(tmp_path)
+    args.resume = True
+    assert sf.preflight_library_seed(args) is None
+
+
+def test_main_runs_the_preflight_before_constructing_the_driver(monkeypatch, tmp_path):
+    """Order proof: with no seed, main() must exit WITHOUT ever instantiating SteeredFrontier
+    (whose __init__ creates the run dir and the ledger). A sentinel records instantiation."""
+    import pytest
+    _no_library(monkeypatch, tmp_path)
+    built = []
+
+    class _Sentinel:
+        def __init__(self, args):
+            built.append(args)
+
+        def run(self):
+            built.append("ran")
+
+    monkeypatch.setattr(sf, "SteeredFrontier", _Sentinel)
+    monkeypatch.setattr(sys, "argv", ["steered_frontier.py",
+                                      "--run-dir", str(tmp_path / "run"), "--scheduler"])
+    with pytest.raises(SystemExit):
+        sf.main()
+    assert built == []                                        # never constructed, never ran
+    assert not (tmp_path / "run").exists()

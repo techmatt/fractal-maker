@@ -629,7 +629,15 @@ class SteeredFrontier:
             # embeddings) so deficits measure LIBRARY-WIDE scarcity, not run-local scarcity.
             # No-op on resume (tally reloaded from its npz; total > 0). Resume-safe: seeds and
             # persists the npz once, before the first batch.
-            self._sched_seeded = self.scheduler.seed_from_library()
+            #
+            # FAIL-CLOSED: no seed => UnseededRunError unless --allow-unseeded. main() runs the
+            # same guard as a preflight so the CLI aborts before this object is even built (no
+            # run dir, no ledger); repeating it here means a programmatic constructor cannot
+            # slip past it either. `_library_seed` carries main()'s already-loaded record so
+            # the embeddings are read exactly once.
+            self._sched_seeded = self.scheduler.seed_from_library(
+                record=getattr(args, "_library_seed", None),
+                allow_unseeded=bool(getattr(args, "allow_unseeded", False)))
 
     def build_clouds(self) -> dict:
         """Per-partition q3 cloud from (prior-library rows ⊕ this run's ledger rows). Prior rows
@@ -1484,6 +1492,14 @@ class SteeredFrontier:
             active_min=round(self.active_s / 60.0, 2), totals=self.totals,
             cloud_sizes={p: len(v) for p, v in self.clouds.items()},
         )
+        if self.scheduler is not None:      # same stamp as finish(): a dive under --scheduler
+            summary["scheduler"] = self.scheduler.summary()   # must be as readable afterwards
+            summary["library_seed"] = summary["scheduler"]["library_seed"]
+            if summary["library_seed"].get("status") != "seeded":
+                summary["UNSEEDED_RUN"] = (
+                    "library seed absent (status=%s): deficits/look_frac in this run measure "
+                    "RUN-LOCAL scarcity, NOT library-wide. Do not compare them to a seeded run."
+                    % summary["library_seed"].get("status"))
         (self.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print("\n=== DIVE SUMMARY ===")
         print(f"  {done_idx}/{len(plan)} dives, active {self.active_s/60:.1f}m")
@@ -1524,7 +1540,10 @@ class SteeredFrontier:
                 seeded = getattr(self, "_sched_seeded", {}) or {}
                 lf = {p: round(v, 3) for p, v in self.scheduler.look_frac().items()}
                 df = {p: round(v, 3) for p, v in self.scheduler.deficits().items()}
-                print(f"[scheduler] library seed: distinct-look tallies={self.scheduler.tally.counts()} "
+                rec = self.scheduler.seed_record or {}
+                print(f"[scheduler] library seed: status={rec.get('status')} "
+                      f"source={rec.get('source')} seeded_looks={rec.get('seeded_looks')} "
+                      f"tallies={self.scheduler.tally.counts()} "
                       f"(total {self.scheduler.tally.total()}, newly seeded {sum(seeded.values())})", flush=True)
                 print(f"[scheduler] launch look_frac={lf}\n[scheduler] launch deficits={df}", flush=True)
             self.draw_roots()
@@ -1611,6 +1630,16 @@ class SteeredFrontier:
         )
         if self.scheduler is not None:
             summary["scheduler"] = self.scheduler.summary()
+            # Stamp the seed provenance at the TOP level too, not only nested under
+            # "scheduler" — campaign-2's summary is indistinguishable from a seeded run's
+            # precisely because this fact was nowhere in it. An unseeded run additionally
+            # gets a screaming key so no reader can quote its deficits as library-wide.
+            summary["library_seed"] = summary["scheduler"]["library_seed"]
+            if summary["library_seed"].get("status") != "seeded":
+                summary["UNSEEDED_RUN"] = (
+                    "library seed absent (status=%s): deficits/look_frac in this run measure "
+                    "RUN-LOCAL scarcity, NOT library-wide. Do not compare them to a seeded run."
+                    % summary["library_seed"].get("status"))
         (self.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print("\n=== STEERED FRONTIER SUMMARY ===")
         print(f"  active {self.active_s/60:.1f}m over {self.batch_i} batches")
@@ -1637,6 +1666,32 @@ class SteeredFrontier:
             print(f"    prices={s['prices']} capped={s['capped']}")
             print(f"    trace -> {self.scheduler.trace_path}")
         print(f"  ledger -> {self.ledger.path}\n  summary -> {self.run_dir/'summary.json'}")
+
+
+def preflight_library_seed(args):
+    """Scheduler-only fail-closed preflight: refuse to start unseeded, BEFORE a run dir,
+    ledger, state file or render exists. Called from main() ahead of `SteeredFrontier(args)`,
+    which is what makes "aborts before doing any work" true rather than merely early — the
+    driver's __init__ mkdirs the run dir and opens the ledger.
+
+    Skipped on a resume whose distinct-look tally is already on disk: that tally IS the seed,
+    and re-checking a since-moved artifact would abort legitimate resumes of seeded runs.
+
+    The loaded record rides on `args._library_seed` so the driver reuses the one load.
+    Raises SystemExit (message names both paths) when the seed is absent and not overridden."""
+    if not getattr(args, "scheduler", False):
+        return None
+    if getattr(args, "resume", False) and (Path(args.run_dir) / "distinct_looks.npz").exists():
+        return None
+    try:
+        args._library_seed = dsched.require_library_seed(
+            allow_unseeded=bool(getattr(args, "allow_unseeded", False)))
+    except dsched.UnseededRunError as e:
+        raise SystemExit(f"[scheduler] REFUSING TO START UNSEEDED\n{e}")
+    if args._library_seed["status"] != "seeded":
+        print("[scheduler] WARNING --allow-unseeded: no library seed; deficits are RUN-LOCAL. "
+              "summary.json will be stamped library_seed.status=unseeded.", flush=True)
+    return args._library_seed
 
 
 def main():
@@ -1685,6 +1740,10 @@ def main():
                          "(default data/emission/target_measure.json)")
     ap.add_argument("--scheduler-prices", type=str, default=None,
                     help="seed price / cap / routing config (default data/atlas/scheduler_prices.json)")
+    ap.add_argument("--allow-unseeded", action="store_true",
+                    help="proceed with --scheduler even though the library look seed is absent "
+                         "or empty. Deficits then measure RUN-LOCAL scarcity, not library-wide; "
+                         "the run summary is permanently stamped library_seed.status=unseeded.")
     # --- dive mode ---
     ap.add_argument("--dive", action="store_true",
                     help="single-track descent off a completed run's admissions (uses dive_state.json)")
@@ -1700,6 +1759,7 @@ def main():
                     help="control dives from random source admissions regardless of score (default 8)")
     ap.add_argument("--resume", action="store_true", help="continue from state.json / dive_state.json")
     args = ap.parse_args()
+    preflight_library_seed(args)
     SteeredFrontier(args).run()
 
 
