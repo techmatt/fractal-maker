@@ -36,12 +36,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
-import paths  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import paths          # noqa: E402
+import render_cache   # noqa: E402
 
 PLAN = ROOT / "data" / "v8" / "plan.jsonl"
 COLORMAPS = ROOT / "data" / "v8" / "colormaps.json"
 BIN = ROOT / "target" / "release" / "fractal-generator.exe"
-WORKERS = 3            # must match render_cache.WORKERS
+# IMPORTED, not copied. An estimate produced at a different worker count than the run uses
+# is worse than no estimate, and a `# must match` comment is not a mechanism — this one had
+# already gone stale against a 3 -> 6 bump before it was read.
+WORKERS = render_cache.WORKERS
 SLOTS = 24             # rows per location in the plan
 
 

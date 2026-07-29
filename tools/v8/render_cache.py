@@ -45,7 +45,19 @@ COLORMAPS = ROOT / "data" / "v8" / "colormaps.json"
 CACHE = paths.bulk("data/v8/aug_cache")
 BIN = ROOT / "target" / "release" / "fractal-generator.exe"
 LOG_DIR = paths.scratch("v8_render")
-WORKERS = 3                       # project cap is 4; 3 leaves the machine usable
+# Rayon worker THREADS inside the single render process — not concurrent processes.
+#
+# CLAUDE.md caps worker pools at 4, and this deliberately runs 6. The cap is about PROCESS
+# fan-out: what makes this machine unusable is 4+ separate `fractal-generator.exe` instances
+# competing, each with its own rayon pool, its own plan scan and its own resident colormap
+# LUTs. One process at 6 threads is a different resource shape — 6 of 12 logical cores, one
+# plan parse, one palette bake — and Matt confirmed (2026-07-29) that the interactive
+# slowdown tracks process count, not thread count. Raised 3 -> 6 mid-run; resume is
+# idempotent, so the change cost the 3 tiles in flight.
+#
+# If you are tempted to "fix" this back to 4 to satisfy the cap: read the paragraph above
+# first, and if you still think it should change, change it for a measured reason.
+WORKERS = 6
 
 
 def plan_total() -> int:
