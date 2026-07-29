@@ -6,6 +6,32 @@ it decides whether the file is expected to survive, and therefore whether its ab
 is ever a problem. This note is the contract those functions enforce. It is rules, not
 commentary.
 
+## The first question is usefulness, not cost
+
+The contract's question — *what would it cost to get the identical content back?* — is
+only ever the **second** question. The **first** is whether we would ever want it back
+at all. As written, the rules below weigh preservation by rebuild cost, which quietly
+implies that anything expensive to reproduce deserves to be kept. It does not. A recipe
+for regenerating something no one will ever ask for is itself clutter — and keeping the
+apparatus (index, manifest, plan, registry line) for such a thing is the specific
+failure this note exists to stop.
+
+So classify in this order:
+
+1. **Name a concrete future use.** Not "this could in principle be regenerated," but
+   what will actually want it. If none can be named, **delete it — and delete its
+   regeneration machinery with it**: the index, the manifest, the recipe, the registry
+   line. Keeping the machinery for reproducing something nobody will run again is the
+   clutter, not the saving.
+2. **Only then** apply the cost question. If a use *can* be named and the thing records
+   a population that no longer exists and cannot be re-observed (labels, current-decoded
+   ledgers, the library), keep it. If it is regenerable and something will genuinely want
+   it again, keep the **minimum** needed to regenerate and state that cost.
+
+The one safety rail: for **unclassified** items — no write site, no declaration — do not
+delete silently, but do record a judgement of whether anything will ever want it, so the
+set can be resolved in one pass instead of sitting open.
+
 ## The classes
 
 | class | writer | lives in | survives `rm -r scratch/*`? |
