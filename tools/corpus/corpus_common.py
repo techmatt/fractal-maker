@@ -313,6 +313,20 @@ def batch_dir(batch_id: str) -> str:
 CANONICAL_CROP_RECIPE = "render-one --palette --colormaps"
 DEFAULT_CROP_JPGQ = 90
 
+# Batch renders default to BELOW-NORMAL OS scheduling priority so a background corpus
+# render (which fans the engine out over every core) never starves foreground work. Only
+# meaningful on win32 (`creationflags` is a no-op elsewhere). Callers can still override via
+# the `creationflags` kwarg (pass 0 for normal priority). This is the committed default for
+# every batch builder that funnels through `render_corpus_crop` (minibrot/native/interior/
+# revisit/...); a manual single render via `cargo run` is unaffected.
+BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
+
+
+def default_creationflags() -> int:
+    """The default subprocess creation flags for an engine launch: BELOW_NORMAL priority on
+    win32, 0 elsewhere. Shared so every launcher gets the same low-priority default."""
+    return BELOW_NORMAL_PRIORITY_CLASS if sys.platform == "win32" else 0
+
 
 def default_bin() -> str:
     """The release engine binary (Windows exe; the .exe suffix is harmless on the
@@ -331,7 +345,7 @@ def _location_mod():
 
 def render_corpus_crop(render: dict, out_path, *, palette_source, bin_path=None,
                        jpg_quality: int = DEFAULT_CROP_JPGQ, cwd=None,
-                       creationflags: int = 0, timeout=None) -> str:
+                       creationflags: int | None = None, timeout=None) -> str:
     """Render ONE location-corpus label crop the canonical way and return `out_path`.
 
     `render` is a version-invariant render block (`RENDER_KEYS`, optionally the
@@ -345,6 +359,8 @@ def render_corpus_crop(render: dict, out_path, *, palette_source, bin_path=None,
     """
     loc_mod = _location_mod()
     loc = loc_mod.from_render_block(render)
+    # None => the low-priority default (BELOW_NORMAL on win32); an explicit value (incl. 0) wins.
+    cflags = default_creationflags() if creationflags is None else creationflags
     binp = str(bin_path) if bin_path is not None else default_bin()
     cmd = [binp, "render-one", *loc_mod.render_one_flags(loc),
            "--cx", str(render["cx"]), "--cy", str(render["cy"]), "--fw", str(render["fw"]),
@@ -354,7 +370,7 @@ def render_corpus_crop(render: dict, out_path, *, palette_source, bin_path=None,
            "--palette", str(render["palette"]), "--colormaps", str(palette_source),
            "--jpg-quality", str(jpg_quality), "--out", str(out_path)]
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True,
-                       creationflags=creationflags, timeout=timeout)
+                       creationflags=cflags, timeout=timeout)
     if r.returncode != 0 or not os.path.exists(out_path):
         raise RuntimeError(
             f"render_corpus_crop failed for {out_path} "
