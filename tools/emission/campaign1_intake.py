@@ -316,16 +316,32 @@ def embed_all(union_rows):
 # --------------------------------------------------------------------------- #
 # Stage D — cluster + medoids.
 # --------------------------------------------------------------------------- #
-def cluster(union_rows, embs):
-    """Within-family incremental medoid clustering (cos 0.974). Returns (tags, medoid_id),
-    where medoid_id[cluster_tag] is the founding member's location id (first-in-order)."""
-    tags = D.assign_morph_clusters(union_rows, embs)      # id -> "<family>#<k>"
-    # founding member per cluster = first row (union order) carrying that tag.
+def cluster(union_rows, embs, library_dir=None):
+    """Within-family incremental medoid clustering (cos 0.974), SEEDED from the released
+    library's per-type medoids so this batch is deduplicated against the atlas and not only
+    against itself. Returns (tags, medoid_id), where medoid_id[cluster_tag] is the founding
+    member's location id (first-in-order) for the clusters THIS batch founds.
+
+    An absent library snapshot is logged loudly and the pass falls back to self-only dedup —
+    correct for the first-ever intake, an un-deduped seam for any later one."""
+    lib, prior, note = D.load_library_seed(library_dir or D.DEFAULT_LIBRARY_DIR)
+    log(f"[cluster] {note}")
+    tags = D.assign_morph_clusters(union_rows, embs, library=lib)   # id -> "<family>#<k>"
+    D.verify_library_unmoved(prior, tags)      # nothing already in the library moves
+    # Founding member per cluster = first row (union order) carrying that tag — but ONLY for
+    # clusters this batch founds. A row that JOINED a seeded library cluster is a member, not
+    # its medoid; recording it here would silently re-point the medoid (and with it the
+    # deficit scheduler's dedup memory, which reads this map) at a non-founder.
+    seeded = {f"{f}#{k}" for f, med in lib.items() for k, _e in med}
     medoid_id = {}
     for row in union_rows:
         t = tags.get(row["id"])
-        if t is not None and t not in medoid_id:
+        if t is not None and t not in seeded and t not in medoid_id:
             medoid_id[t] = row["id"]
+    n_joined = sum(1 for t in tags.values() if t in seeded)
+    if seeded:
+        log(f"[cluster] {n_joined}/{len(tags)} rows joined an existing library cluster; "
+            f"{len(medoid_id)} new clusters founded")
     return tags, medoid_id
 
 

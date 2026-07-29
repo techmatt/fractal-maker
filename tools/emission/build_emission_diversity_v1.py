@@ -337,6 +337,11 @@ class EmissionDiversity:
         self.ranker_feats_path = self.out / "ranker_feats.npz"
         self.ranker_tiles = self.out / "ranker_tiles"
         self.intake_path = self.out / "intake.json"
+        # The released library this run's intake is deduplicated AGAINST (its per-type medoids
+        # seed the clustering). Defaults to the union snapshot; `--library ""` opts out — the
+        # first-ever intake, which legitimately has no library behind it.
+        self.library_dir = (Path(args.library).resolve()
+                            if getattr(args, "library", None) else None)
         self.colorize_log = self.out / "colorize_log.jsonl"
         self.floor = float(args.floor)                 # wallpaper-head POOL floor (smooth)
         self.mining_floor = float(args.mining_floor)   # mining-head POOL floor (strange styles)
@@ -464,7 +469,14 @@ class EmissionDiversity:
         else:
             print(f"[intake] {len(rows)} admitted locations — embedding morph + clustering ...", flush=True)
             embs, fields = D.embed_locations(rows, self.field_cache, self.embs_path)
-            tags = D.assign_morph_clusters(rows, embs)
+            # Seed the clustering with the LIBRARY's per-type medoids, so this batch is
+            # deduplicated against the atlas and not only against itself. Without it every
+            # intake adds an un-deduped seam and the cluster count (and every deficit computed
+            # over those cells) drifts upward by one seam's worth of near-duplicates.
+            lib, prior, note = D.load_library_seed(self.library_dir or D.DEFAULT_LIBRARY_DIR)
+            print(f"[intake] {note}", flush=True)
+            tags = D.assign_morph_clusters(rows, embs, library=lib)
+            D.verify_library_unmoved(prior, tags)   # nothing already in the library moves
             self.intake_path.write_text(json.dumps(
                 {"cluster_tags": tags, "fields": {k: list(v) for k, v in fields.items()},
                  "n_admitted": len(rows),
@@ -1036,6 +1048,11 @@ def main():
                     default=["data/discovery/steered_run2/outcome_ledger.jsonl"],
                     help="one or more run-scoped ledgers; admitted rows are unioned (dedup by id)")
     ap.add_argument("--out", default="scratch/emission_v1")
+    ap.add_argument("--library", default=str(D.DEFAULT_LIBRARY_DIR),
+                    help="library intake snapshot dir (intake.json + morph_embs.npz) whose "
+                         "per-type medoids SEED this intake's clustering, so the batch is "
+                         "deduplicated against the atlas and not only against itself. Pass "
+                         "an empty string for the first-ever intake (no library behind it).")
     ap.add_argument("--report", default=None,
                     help="report .md path (default scratch/emission_v1_report.md)")
     ap.add_argument("--release-n", type=int, default=12)
