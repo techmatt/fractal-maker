@@ -121,13 +121,18 @@ const CORPUS_ROOT=(QP.get('root')||'data/label_corpus/batches').replace(/\/+$/,'
 //   comparison is still computable afterward.
 let revealed = QP.get('reveal')==='1';    // default false = blind
 const BATCH_DIR=CORPUS_ROOT+'/'+BATCH_ID;
+// ?cachebust=1 appends a per-load version query so the browser refetches the manifest AND every
+//   crop fresh (defeats a stale cache left by a transient bad-serve, and picks up a manifest whose
+//   seed labels were just updated server-side). Off by default → no change to other batches.
+const CACHEBUST = QP.get('cachebust') ? ('?v=' + Date.now()) : '';
 // ?manifest=<file> overrides which JSONL the browser fetches (default images.jsonl). The
-//   class-3 REVISIT batches serve a BLINDED manifest (blind.jsonl: provenance emptied, label
-//   nulled) so a prior label is never fetched into the page — the full-provenance images.jsonl
-//   stays the merge-side file merge_amendments.py reads and is NEVER fetched here.
+//   class-3 REVISIT batches serve a BLINDED manifest (blind.jsonl: provenance emptied) so a prior
+//   label is never fetched into the page — the full-provenance images.jsonl stays the merge-side
+//   file merge_amendments.py reads and is NEVER fetched here. (A resumed manifest may carry the
+//   labeler's OWN in-progress scores in label.score — those are the resume seed, not a prior label.)
 const MANIFEST=(QP.get('manifest')||'images.jsonl').replace(/^\/+/,'');
-const IMAGES_URL=ROOT+BATCH_DIR+'/'+MANIFEST;
-const BATCH_JSON_URL=ROOT+BATCH_DIR+'/batch.json';
+const IMAGES_URL=ROOT+BATCH_DIR+'/'+MANIFEST+CACHEBUST;
+const BATCH_JSON_URL=ROOT+BATCH_DIR+'/batch.json'+CACHEBUST;
 const LS_KEY='corpus_label::'+BATCH_ID;   // localStorage is per-batch
 const REVEAL_KEY='corpus_reveals::'+BATCH_ID;
 // presentation shuffle seed — overridden by batch.json `presentation_seed` (recorded with the
@@ -140,9 +145,6 @@ let cur=0;
 const SCORE_WORD={1:'bad',2:'okay',3:'good',4:'exceptional'};
 
 // the image_id IS the durable identity; the crop lives at crops/<image_id>.jpg
-// ?cachebust=1 appends a per-load version query so the browser refetches every crop fresh
-//   (defeats a stale image cache left by a transient bad-serve). Off by default → no change.
-const CACHEBUST = QP.get('cachebust') ? ('?v=' + Date.now()) : '';
 function keyOf(r){ return r.image_id; }
 function imgSrc(r){ return ROOT+BATCH_DIR+'/crops/'+r.image_id+'.jpg'+CACHEBUST; }
 // optional vivid (blue/orange) companion the labeler judges from; batches without one
