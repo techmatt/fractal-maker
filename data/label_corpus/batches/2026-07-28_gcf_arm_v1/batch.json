@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-07-28_gcf_arm_v1",
+  "generator_version": "gcf_arm_v1",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 7139329,
+  "vivid_companion": "blue_orange",
+  "served_manifest": "blind.jsonl",
+  "queued_for_labeling": false,
+  "purpose": "paired two-arm within-atom contrast, BOTH arms framed by maximising G_cf (the deployed objective with the interior clause removed), differing only in interior mass: HIGH interior_frac >= 0.10 (the currently-rejected band, properly framed for the first time) vs LOW < 0.10 (control). BUILT AND PARKED \u2014 not queued for labeling.",
+  "counts": {
+    "total": 120,
+    "pairs": 60,
+    "gcf_high_interior": 60,
+    "gcf_low_interior": 60
+  },
+  "arms": {
+    "gcf_high_interior": [
+      0.1,
+      null
+    ],
+    "gcf_low_interior": [
+      0.0,
+      0.1
+    ]
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 4,
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "blue_orange",
+    "maxiter": "per-crop deploy maxiter (dcf._maxiter_for_fw)"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sampling_metaparameters": {
+    "framing": "argmax G_cf within the arm, at the pair's shared window scale (both arms, one objective)",
+    "selection_predicate": "interior_frac vs the deployed ceiling 0.1",
+    "g_used_for_selection": true,
+    "pairing": "one window per arm per atom, both at the SAME window scale (within-atom, within-scale case-control); the shared scale is the one whose HIGH-arm best G_cf is largest",
+    "candidate_universe": "the interior-band sweep's reservoir sample: <=24 uniformly drawn windows per (atom, band, scale) over the deployed swept grid, so G_cf is a SAMPLE-argmax, identically sampled in both arms",
+    "high_arm_ceiling": "0.50 \u2014 the sweep never cached interior_frac >= 0.50 (band_of returns None there)",
+    "atom_selection": "seeded, degree-balanced over train-side roster atoms (seed 20260728); blind to G_cf and to interior",
+    "split": "inherited from the source roster atom, never reassigned; train-side only",
+    "separation": "LOW clears MT.HT.SEP against HIGH (the screen's own NMS metric)",
+    "draw_seed": 20260728
+  }
+}
