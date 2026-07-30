@@ -57,7 +57,7 @@ def gather():
             score = r["label"]["score"]
             if score is None:
                 continue
-            crop = os.path.join(bdir, "crops", r["image_id"] + ".jpg")
+            crop = os.path.join(cc.crops_dir(b), r["image_id"] + ".jpg")
             if os.path.exists(crop):
                 rows.append((crop, int(score), False))
     # holdout: scale_2x2 standalone label map
@@ -66,7 +66,7 @@ def gather():
     for image_id, score in labels.items():
         if score is None:
             continue
-        crop = os.path.join(hdir, "crops", image_id + ".jpg")
+        crop = os.path.join(cc.crops_dir(HOLDOUT_BATCH), image_id + ".jpg")
         if os.path.exists(crop):
             rows.append((crop, int(score), True))
     return rows

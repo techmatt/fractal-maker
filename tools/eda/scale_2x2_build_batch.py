@@ -52,7 +52,7 @@ def load_pool(cell: str) -> dict:
 
 def main() -> None:
     out_dir = cc.batch_dir(BATCH_ID)
-    crops_dir = os.path.join(out_dir, "crops")
+    crops_dir = cc.crops_dir(BATCH_ID)
     os.makedirs(crops_dir, exist_ok=True)
 
     rows = []

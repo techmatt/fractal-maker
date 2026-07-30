@@ -55,7 +55,7 @@ def iter_labeled(corpus_dir: str | None = None):
     for images_path in _batch_images(corpus_dir):
         batch_dir = os.path.dirname(images_path)
         batch_id = os.path.basename(batch_dir)
-        crops_dir = os.path.join(batch_dir, "crops")
+        crops_dir = cc.crops_dir(batch_id)   # relocated out-of-tree; route through the seam
         batches_dir = os.path.join(corpus_dir, "batches")
         sidecar = ls.sidecar_for(batch_id, batches_dir)
         amendments = ls.amendments_for(batch_id, batches_dir)   # revised truth wins, if any

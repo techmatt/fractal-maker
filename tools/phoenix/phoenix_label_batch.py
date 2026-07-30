@@ -229,7 +229,7 @@ def main(argv=None):
     t_good = summ["config"]["t_good"]
     batch_id = args.batch_id or f"{args.date}_phoenix_grid"
     batch_dir = Path(cc.batch_dir(batch_id))
-    crops = batch_dir / "crops"
+    crops = Path(cc.crops_dir(batch_id))
     crops.mkdir(parents=True, exist_ok=True)
     names = [p["name"] for p in json.loads(SCORE3.read_text(encoding="utf-8"))]
 

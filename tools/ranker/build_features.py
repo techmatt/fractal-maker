@@ -41,6 +41,8 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools" / "atlas"))
 sys.path.insert(0, str(ROOT / "tools" / "mining"))
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+sys.path.insert(0, str(ROOT / "tools" / "corpus"))
+import corpus_common as cc  # noqa: E402
 
 import tools.studies.steered_pilot_morph as spm            # noqa: E402  loc_of_row / render_colored
 import prescreen                                            # noqa: E402  embed_paths (v7 penultimate)
@@ -163,7 +165,7 @@ def build_prior(scorer, rng) -> dict:
     for labf, batchdir in PRIOR:
         labf = ROOT / labf
         batchdir = ROOT / batchdir
-        crops = batchdir / "crops"
+        crops = Path(cc.crops_dir(batchdir.name))
         if not labf.exists() or not crops.exists():
             print(f"prior: skip {labf.name} (missing)", flush=True)
             continue

@@ -568,8 +568,8 @@ def stage_render(args):
     from concurrent.futures import ThreadPoolExecutor
     bdir = Path(cc.batch_dir(BATCH_ID))
     rows = cc.read_jsonl(str(bdir / "images.jsonl"))
-    crops_dir = bdir / "crops"
-    vivid_dir = bdir / "vivid"
+    crops_dir = Path(cc.crops_dir(BATCH_ID))
+    vivid_dir = Path(cc.vivid_dir(BATCH_ID))
     crops_dir.mkdir(parents=True, exist_ok=True)
     vivid_dir.mkdir(parents=True, exist_ok=True)
 
@@ -690,7 +690,7 @@ def _fate_sheet(crops):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import matplotlib.image as mpimg
-    vivid_dir = Path(cc.batch_dir(BATCH_ID)) / "vivid"
+    vivid_dir = Path(cc.vivid_dir(BATCH_ID))
     rng = np.random.default_rng(7)
 
     def sample(pred, n):

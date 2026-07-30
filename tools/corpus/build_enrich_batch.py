@@ -72,7 +72,7 @@ def main() -> None:
                 break
 
     out_dir = cc.batch_dir(BATCH_ID)
-    os.makedirs(os.path.join(out_dir, "crops"), exist_ok=True)
+    os.makedirs(cc.crops_dir(BATCH_ID), exist_ok=True)
 
     rows = []
     by_palette, by_role, by_root, by_depth, by_branch = (Counter() for _ in range(5))

@@ -34,7 +34,7 @@ def main() -> None:
     a = ap.parse_args()
 
     src_dir = cc.batch_dir(SRC_BATCH_ID)
-    src_crops = os.path.join(src_dir, "crops")
+    src_crops = cc.crops_dir(SRC_BATCH_ID)
     rows = cc.read_jsonl(os.path.join(src_dir, "images.jsonl"))
 
     by_cell = defaultdict(list)
@@ -54,7 +54,7 @@ def main() -> None:
             print(f"  NOTE cell {cell}: only {len(pool)} available (< {a.per_cell})")
 
     dst_dir = cc.batch_dir(DST_BATCH_ID)
-    dst_crops = os.path.join(dst_dir, "crops")
+    dst_crops = cc.crops_dir(DST_BATCH_ID)
     os.makedirs(dst_crops, exist_ok=True)
 
     n_copied = 0

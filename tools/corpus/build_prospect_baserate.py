@@ -113,7 +113,7 @@ def main():
     rows_out, deferred_R = build_rows(tgt)
     pops = populations(tgt)
     bdir = Path(cc.batch_dir(BATCH_ID))
-    (bdir / "crops").mkdir(parents=True, exist_ok=True)
+    Path(cc.crops_dir(BATCH_ID)).mkdir(parents=True, exist_ok=True)
 
     cc.write_jsonl(rows_out, str(bdir / "images.jsonl"))
 
@@ -179,7 +179,7 @@ def main():
 
 
 def render_all(tgt, bdir):
-    crops = bdir / "crops"
+    crops = Path(cc.crops_dir(BATCH_ID))
     todo = [r for r in tgt if stratum(r["p_good"]) in STAGE1]
     ok = fail = 0
     for i, r in enumerate(todo):

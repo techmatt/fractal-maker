@@ -50,6 +50,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))            # tool
 from corpus_common import (make_row, provenance_block, label_block,       # noqa: E402
                            render_block, hp_str, write_jsonl, read_jsonl,
                            render_corpus_crop, render_recipe_stamp)
+import corpus_common as cc                                                # noqa: E402
 from verify_render_path import check_batch                                # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "mining"))
@@ -69,7 +70,7 @@ GENERATOR_VERSION = "gather_v6"
 BATCH_DIR = BATCHES_DIR / BATCH_ID
 WORK = BATCH_DIR / "_work"
 STAGE_CROPS = WORK / "crops_stage"       # every rendered candidate (pre pHash-dedup)
-CROPS_DIR = BATCH_DIR / "crops"          # kept crops (post-dedup)
+CROPS_DIR = Path(cc.crops_dir(BATCH_ID))          # kept crops (post-dedup)
 PICKS = WORK / "picks.jsonl"
 
 # --- canonical crop spec (match the enrich label-crop exactly) ---
@@ -345,7 +346,7 @@ def seed_prior_hashes(index: DedupIndex):
             continue
         for r in read_jsonl(imgs):
             if (r.get("label") or {}).get("score") is not None:
-                p = bdir / "crops" / f"{r['image_id']}.jpg"
+                p = Path(cc.crops_dir(bdir.name)) / f"{r['image_id']}.jpg"
                 if p.exists():
                     labeled.append(p)
     print(f"seeding pHash index with {len(labeled)} prior LABELED crops ...")

@@ -17,6 +17,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "corpus"))
+import corpus_common as cc
 
 from PIL import Image, ImageDraw
 
@@ -57,7 +61,7 @@ def main():
     a = ap.parse_args()
 
     rows = load_rows(a.batch)
-    crops = os.path.join(a.batch, "crops")
+    crops = cc.crops_dir(os.path.basename(os.path.normpath(a.batch)))
     enr = sorted([r for r in rows if r["provenance"].get("selection_role") == "enriched"],
                  key=lambda r: -(fscore(r) or 0))
     res = sorted([r for r in rows if r["provenance"].get("selection_role") == "random_eval"],

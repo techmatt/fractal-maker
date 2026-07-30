@@ -9,7 +9,10 @@ Measurement only. Reads:
   data/label_corpus/batches/2026-06-24_guided_descend_rev4/images.jsonl (run4 baseline, root_src=flat)
 Writes a montage of best crops per cell under data/eda/scale_2x2/.
 """
-import json, os, collections, shutil
+import json, os, collections, shutil, sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "corpus"))
+import corpus_common as cc
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LABELS = os.path.join(ROOT, "labels", "scale_2x2_labelset.json")
@@ -145,7 +148,7 @@ for c in cells:
     print(f"cell {c}: {sum(1 for s,_ in best if s==3)} good + {sum(1 for s,_ in best if s==2)} okay = {len(best)} crops")
 
 # copy crops + write an HTML montage
-crops_src = os.path.join(LS_DIR, "crops")
+crops_src = cc.crops_dir("2026-06-25_scale_2x2_labelset")
 html = ["<html><head><meta charset=utf-8><style>",
         "body{background:#111;color:#ddd;font-family:monospace}",
         ".cell{margin:18px 0}.cell h2{color:#fff}",

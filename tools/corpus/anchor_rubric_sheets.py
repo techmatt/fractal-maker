@@ -49,7 +49,7 @@ def load_rows():
     bdir = Path(cc.batch_dir(BATCH_ID))
     rows = [json.loads(l) for l in (bdir / "images.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
     scores = json.loads((bdir / "scores.json").read_text(encoding="utf-8"))
-    vivid = bdir / "vivid"
+    vivid = Path(cc.vivid_dir(BATCH_ID))
     out = []
     for r in rows:
         iid = r["image_id"]

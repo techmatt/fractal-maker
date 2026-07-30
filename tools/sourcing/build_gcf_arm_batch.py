@@ -369,7 +369,7 @@ def _render_row(job):
 def stage_render(args):
     bdir = Path(cc.batch_dir(BATCH_ID))
     rows = cc.read_jsonl(str(bdir / "images.jsonl"))
-    crops_dir, vivid_dir = bdir / "crops", bdir / "vivid"
+    crops_dir, vivid_dir = Path(cc.crops_dir(BATCH_ID)), Path(cc.vivid_dir(BATCH_ID))
     crops_dir.mkdir(parents=True, exist_ok=True)
     vivid_dir.mkdir(parents=True, exist_ok=True)
 
@@ -617,8 +617,8 @@ def stage_verify(args):
 
     # --- 6. crops ------------------------------------------------------------
     emit("\n[6] CROPS")
-    nc = sum(1 for r in rows if (bdir / "crops" / f"{r['image_id']}.jpg").exists())
-    nv = sum(1 for r in rows if (bdir / "vivid" / f"{r['image_id']}.jpg").exists())
+    nc = sum(1 for r in rows if (Path(cc.crops_dir(BATCH_ID)) / f"{r['image_id']}.jpg").exists())
+    nv = sum(1 for r in rows if (Path(cc.vivid_dir(BATCH_ID)) / f"{r['image_id']}.jpg").exists())
     check(f"canonical crops rendered", nc == len(rows), f"{nc}/{len(rows)}")
     check(f"vivid companions rendered", nv == len(rows), f"{nv}/{len(rows)}")
 
@@ -646,7 +646,7 @@ def _arm_sheet(rows):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import matplotlib.image as mpimg
-    vivid = Path(cc.batch_dir(BATCH_ID)) / "vivid"
+    vivid = Path(cc.vivid_dir(BATCH_ID))
     pairs = defaultdict(dict)
     for r in rows:
         pairs[r["atom_id"]][r["arm"]] = r

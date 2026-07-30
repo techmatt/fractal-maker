@@ -84,7 +84,7 @@ def calibrate_tau(scorer):
     but tau is only used to define a CONSISTENT operating point applied identically
     to every 2x2 cell (the cross-cell comparison is what matters)."""
     rows = cc.read_jsonl(os.path.join(cc.batch_dir(REV4_BATCH), "images.jsonl"))
-    crops = os.path.join(cc.batch_dir(REV4_BATCH), "crops")
+    crops = cc.crops_dir(REV4_BATCH)
     labels, ids = [], []
     for r in rows:
         s = r["label"]["score"]
@@ -125,7 +125,7 @@ def _boot_ci(vals, seed=0, n_boot=2000):
 def main() -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
     rows = cc.read_jsonl(os.path.join(cc.batch_dir(BATCH_ID), "images.jsonl"))
-    crops_dir = os.path.join(cc.batch_dir(BATCH_ID), "crops")
+    crops_dir = cc.crops_dir(BATCH_ID)
 
     by_cell = defaultdict(list)
     for r in rows:

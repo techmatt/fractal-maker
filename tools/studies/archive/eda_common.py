@@ -14,6 +14,10 @@ Label convention: score in {1 bad, 2 okay, 3 good}; not-bad := score>=2; good :=
 """
 import json
 import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "corpus"))
+import corpus_common as cc
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 BATCH_DIR = os.path.join(ROOT, "data", "label_corpus", "batches")
@@ -48,7 +52,7 @@ def _rows(batch):
 
 
 def crop_path(batch, image_id):
-    return os.path.join(BATCH_DIR, batch, "crops", image_id + ".jpg")
+    return os.path.join(cc.crops_dir(batch), image_id + ".jpg")
 
 
 def load_cohorts():

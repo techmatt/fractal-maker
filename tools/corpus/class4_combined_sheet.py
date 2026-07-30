@@ -28,6 +28,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import paths  # noqa: E402
+sys.path.insert(0, str(HERE))
+import corpus_common as cc  # noqa: E402
 
 BATCHES = ROOT / "data" / "label_corpus" / "batches"
 OUT_DIR = paths.scratch("class4_combined_sheet")
@@ -54,7 +56,7 @@ TILES = [
 
 def tile_img(batch, iid):
     for sub in ("vivid", "crops"):
-        p = BATCHES / batch / sub / f"{iid}.jpg"
+        p = Path(cc.crops_dir(batch) if sub == "crops" else cc.vivid_dir(batch)) / f"{iid}.jpg"
         if p.exists():
             return Image.open(p).convert("RGB").resize((TW, TH)), sub
     return Image.new("RGB", (TW, TH), (60, 20, 20)), "MISSING"

@@ -63,7 +63,7 @@ def corpus_crop_hashes(log=print):
         return [int(h) for h in json.loads(CORPUS_HASH_CACHE.read_text())]
     hashes = []
     for b in LABEL_BATCHES:
-        cdir = os.path.join(cc.batch_dir(b), "crops")
+        cdir = cc.crops_dir(b)
         if not os.path.isdir(cdir):
             continue
         files = [f for f in os.listdir(cdir) if f.endswith(".jpg")]
@@ -211,7 +211,7 @@ def finalize(
 
     # 5. render ss4 crops + re-score the actual crop ------------------------
     sel_path = os.path.join(work, "selection.jsonl")
-    crops_dir = os.path.join(out_batch_dir, "crops")
+    crops_dir = cc.crops_dir(batch_id)
     os.makedirs(crops_dir, exist_ok=True)
     rows_meta = []
     with open(sel_path, "w") as f:

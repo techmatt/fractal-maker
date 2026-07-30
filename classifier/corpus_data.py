@@ -89,7 +89,7 @@ def load_corpus_rows(corpus_dir: str | None = None,
     for images_path in _batch_images(corpus_dir):
         batch_dir = os.path.dirname(images_path)
         batch_id = os.path.basename(batch_dir)
-        crops_dir = os.path.join(batch_dir, "crops")
+        crops_dir = cc.crops_dir(batch_id)   # relocated out-of-tree; route through the seam
         for r in cc.read_jsonl(images_path):
             score = r.get("label", {}).get("score")
             if score is None:

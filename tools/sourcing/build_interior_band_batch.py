@@ -577,7 +577,7 @@ def _render_row(job):
 def stage_render(args):
     bdir = Path(cc.batch_dir(BATCH_ID))
     rows = cc.read_jsonl(str(bdir / "images.jsonl"))
-    crops_dir, vivid_dir = bdir / "crops", bdir / "vivid"
+    crops_dir, vivid_dir = Path(cc.crops_dir(BATCH_ID)), Path(cc.vivid_dir(BATCH_ID))
     crops_dir.mkdir(parents=True, exist_ok=True)
     vivid_dir.mkdir(parents=True, exist_ok=True)
 
@@ -751,7 +751,7 @@ def _band_sheet(rows):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import matplotlib.image as mpimg
-    vivid = Path(cc.batch_dir(BATCH_ID)) / "vivid"
+    vivid = Path(cc.vivid_dir(BATCH_ID))
     groups = []
     for b, lo, hi, arm in BANDS:
         items = sorted([r for r in rows if r["band"] == b

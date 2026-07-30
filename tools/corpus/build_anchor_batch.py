@@ -149,8 +149,8 @@ def build_rows(revisions, minibrot_picks):
 
 def render_all(rows, workers=4):
     bdir = Path(cc.batch_dir(BATCH_ID))
-    crops = bdir / "crops"
-    vivid = bdir / "vivid"
+    crops = Path(cc.crops_dir(BATCH_ID))
+    vivid = Path(cc.vivid_dir(BATCH_ID))
     crops.mkdir(parents=True, exist_ok=True)
     vivid.mkdir(parents=True, exist_ok=True)
 

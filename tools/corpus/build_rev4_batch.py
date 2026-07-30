@@ -60,7 +60,7 @@ def main() -> None:
                 pool[c["idx"]] = c
 
     out_dir = cc.batch_dir(BATCH_ID)
-    crops_dir = os.path.join(out_dir, "crops")
+    crops_dir = cc.crops_dir(BATCH_ID)
     os.makedirs(crops_dir, exist_ok=True)
 
     rows = []

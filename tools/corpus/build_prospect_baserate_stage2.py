@@ -127,7 +127,7 @@ def main():
     census_complete = (mgh_all + len(rows_out) == julia_all == 147)
 
     bdir = Path(cc.batch_dir(BATCH_ID))
-    (bdir / "crops").mkdir(parents=True, exist_ok=True)
+    Path(cc.crops_dir(BATCH_ID)).mkdir(parents=True, exist_ok=True)
     cc.write_jsonl(rows_out, str(bdir / "images.jsonl"))
 
     per_family = {f: pops[f]["R"] for f in JULIA}
@@ -214,7 +214,7 @@ def main():
 
 
 def render_all(todo, bdir):
-    crops = bdir / "crops"
+    crops = Path(cc.crops_dir(BATCH_ID))
     ok = fail = 0
     for i, r in enumerate(todo):
         render, loc, cand = render_block(r)

@@ -55,7 +55,7 @@ def load_rows():
     scores = {r["image_id"]: r["label"]["score"]
               for r in (json.loads(l) for l in (bdir / "images.jsonl").read_text().splitlines() if l.strip())}
     draw = {d["image_id"]: d for d in (json.loads(l) for l in DRAW.read_text().splitlines() if l.strip())}
-    vivid = bdir / "vivid"
+    vivid = Path(cc.vivid_dir(BATCH_ID))
     out = []
     for iid, lab in scores.items():
         d = draw[iid]

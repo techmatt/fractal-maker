@@ -44,12 +44,14 @@ sys.path.insert(0, str(ROOT / "tools" / "corpus"))
 
 from corpus_common import (read_jsonl, write_jsonl, render_corpus_crop,    # noqa: E402
                            render_recipe_stamp)
+import corpus_common as cc                                                # noqa: E402
 from verify_render_path import check_batch                                # noqa: E402
 
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
+BATCH_ID = "2026-07-05_gather_v6"
 BATCH_DIR = ROOT / "data" / "label_corpus" / "batches" / "2026-07-05_gather_v6"
 IMAGES = BATCH_DIR / "images.jsonl"
-CROPS = BATCH_DIR / "crops"
+CROPS = Path(cc.crops_dir(BATCH_ID))
 SCORE3 = ROOT / "data" / "palettes" / "score3_colormaps.json"
 
 # --- locked label-crop spec (matches the batch's render_defaults exactly) ---

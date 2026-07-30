@@ -287,6 +287,31 @@ def batch_dir(batch_id: str) -> str:
     return os.path.join(BATCHES_DIR, batch_id)
 
 
+# --- relocated crop-tree seam ----------------------------------------------
+# A label-corpus batch's crop trees (`crops/` = the model-facing canonical crop,
+# `vivid/` = the blue/orange companion the labeler judges from) are REGENERABLE bulk
+# (a pure function of the row's render block via render-one) relocated OUT of the
+# working tree behind `tools/corpus/artifacts.py`, exactly like the aug-cache and
+# discovery-scratch families. EVERY reader and writer of a batch's crops/vivid MUST
+# form the path through these two helpers, so (a) the crop-path string is built in one
+# place and (b) the artifacts resolver maps it to wherever the bytes actually live.
+# Hand-joining "crops"/"vivid" onto a batch dir bypasses the resolver and silently
+# reads/writes the (empty, post-move) in-tree path — the silent-zero hazard that a
+# training run cannot distinguish from success. See
+# docs/design/label_corpus_relocation.md.
+import artifacts as _artifacts  # sibling under tools/corpus (which is on sys.path — we are it)
+
+
+def crops_dir(batch_id: str) -> str:
+    """Resolved path to a batch's canonical crop dir (relocated out of the working tree)."""
+    return str(_artifacts.resolve(f"data/label_corpus/batches/{batch_id}/crops"))
+
+
+def vivid_dir(batch_id: str) -> str:
+    """Resolved path to a batch's vivid (blue/orange) companion crop dir (relocated)."""
+    return str(_artifacts.resolve(f"data/label_corpus/batches/{batch_id}/vivid"))
+
+
 # ===========================================================================
 # The canonical location-corpus label-crop render path.
 #

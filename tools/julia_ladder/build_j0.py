@@ -27,6 +27,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "corpus"))
+import corpus_common as cc  # noqa: E402
 BIN = ROOT / "target" / "release" / "fractal-generator.exe"
 MANIFEST = ROOT / "data" / "v4" / "manifest.jsonl"
 BATCH_ID = "julia_ladder_j0"
@@ -34,7 +36,7 @@ BATCH_DIR = ROOT / "data" / "label_corpus" / "batches" / BATCH_ID
 WORK = BATCH_DIR / "_work"
 PREVIEW_DIR = WORK / "previews"
 GD_DIR = WORK / "gd"
-CROPS_DIR = BATCH_DIR / "crops"
+CROPS_DIR = Path(cc.crops_dir(BATCH_ID))
 
 # --- generation params (LOCKED) ---
 ROOT_FW = 3.0                  # guided-descend --julia-root-fw base scale (z-plane)

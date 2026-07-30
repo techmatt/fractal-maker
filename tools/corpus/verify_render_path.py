@@ -37,6 +37,7 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))            # tools/corpus/
+import corpus_common as cc                                                # noqa: E402
 from corpus_common import (CANONICAL_CROP_RECIPE, DEFAULT_CROP_JPGQ,       # noqa: E402
                            render_corpus_crop, read_jsonl)
 
@@ -91,7 +92,7 @@ def check_batch(batch_dir, k: int = DEFAULT_K, seed: int = DEFAULT_SEED,
     non-reproducible), or if the recipe stamp is present but non-canonical."""
     batch_dir = Path(batch_dir)
     rows = read_jsonl(str(batch_dir / "images.jsonl"))
-    crops = batch_dir / "crops"
+    crops = Path(cc.crops_dir(batch_dir.name))
     have = [r for r in rows if (crops / f"{r['image_id']}.jpg").exists()]
     if not have:
         raise AssertionError(f"no crops found under {crops}")
