@@ -1,5 +1,11 @@
 """v2 cross-batch row loader — the eval-split helper's view of the label corpus.
 
+NOT RUNNABLE ON THE CURRENT CORPUS. `load_corpus_rows` requires a per-row
+`provenance.seed_index` (for its CV/holdout grouping) that crop-bearing batches added
+after v3 do not carry, so it raises on the current store; it fed `train_v2`/`train_v3`
+only, both superseded by v8. The live labeled reader is `corpus_reader.iter_labeled`. The
+symbol stays importable because `train_v2` is still the helper module for the train_v* chain.
+
 This is the ONLY place provenance is read. The split between what the *model*
 sees and what the *grouping* sees is the corpus contract (v2 prompt):
 
@@ -104,9 +110,24 @@ def load_corpus_rows(corpus_dir: str | None = None,
             if not jpg.exists():
                 raise FileNotFoundError(f"corpus crop missing: {jpg}")
             wid = prov.get("walk_id")
+            si = prov.get("seed_index")
+            if si is None:
+                # This v2/v3 loader keys CV/holdout grouping on a per-row seed_index (see
+                # module docstring). The crop-bearing batches added after v3 (minibrot /
+                # anchor / revisit / interior / gcf …) do NOT carry one, so load_corpus_rows
+                # is not runnable on the current corpus. Fail loudly, naming the gap, instead
+                # of dying on a cryptic int(None) TypeError. Use corpus_reader.iter_labeled —
+                # the version-blind reader the v8 pipeline uses — instead. (This loader fed
+                # train_v2/train_v3 only, both superseded by v8.)
+                raise ValueError(
+                    f"load_corpus_rows: batch {batch_id!r} row {image_id!r} has no "
+                    f"provenance.seed_index — this v2/v3 loader is not runnable on the current "
+                    f"corpus (post-v3 batches omit seed_index). It fed train_v2/train_v3 only; "
+                    f"use corpus_reader.iter_labeled (the reader the v8 pipeline uses) instead."
+                )
             rows.append(CorpusRow(
                 jpg=jpg, label=int(score), image_id=image_id, batch_id=batch_id,
-                seed_index=int(prov.get("seed_index")),
+                seed_index=int(si),
                 walk_id=(int(wid) if wid is not None else None),
                 black_fraction=bf,
                 palette=r["render"].get("palette", ""),

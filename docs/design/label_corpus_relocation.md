@@ -90,25 +90,47 @@ Enumerated 2026-07-29 (label corpus only — `data/wallpaper_corpus`,
 `data/label_crops` feed are **separate** stores with their own relocation story and are
 explicitly out of scope):
 
-- **34 distinct Python construction statements** (counting a `crops`+`vivid` pair in one
-  statement as one): **18 readers, 16 writers**. (At per-literal granularity across Python
-  + the browser JS + the Rust `--crops-dir` sink the count is ~60 occurrences — the "62
-  sites" figure from the earlier scratch analysis counted at that finer grain. The
-  load-bearing conclusion below is identical either way.)
-- **23** of the 34 already derive the batch dir via `cc.batch_dir(<id>)`; the rest build it
-  from a module-level literal, a CLI path arg, or the `CORPUS_DIR`/`BATCHES_DIR` glob's
-  `dirname`. Every one of them can route through an id-based seam once the bare `batch_id`
-  is extracted (`os.path.basename` of the batch dir), which is a trivial edit at each site.
+- **30 in-scope Python sites** were migrated — 34 distinct crops/vivid construction
+  statements across them (a few sites build a `crops`+`vivid` pair, or touch the tree in
+  both a build and a report/verify stage): roughly 18 read, 16 write. An earlier scratch
+  analysis put the figure at **62**. Record both so the next reader isn't left reconciling
+  them: **62** counted at per-literal granularity (each `crops`/`vivid` string, plus the
+  browser JS and the Rust `--crops-dir` sink, tallied separately); **30** is the count of
+  Python files actually migrated under the crops/vivid-only scope. The load-bearing
+  conclusion is identical either way.
+- **How the scope was verified — the part worth keeping.** The first enumeration was
+  delegated, and it **missed 3 in-scope sites** (`tools/eda/scale_2x2_{build_batch,
+  label_analysis,labelbatch}.py`, all label-corpus readers/writers). They were caught **not
+  by rechecking that enumeration** but by a **second, independent method**: a base-dir sweep
+  for every file that *both* constructs a `crops`/`vivid` path *and* references a
+  `data/label_corpus` base. Generalize this past the migration: **establish a scope by two
+  methods that fail differently and trust their union — never one list rechecked against
+  itself.** A single missed reader is the whole silent-zero failure mode, and re-running the
+  method that missed it will miss it again.
+- Most sites already derive the batch dir via `cc.batch_dir(<id>)`; the rest build it from a
+  module-level literal, a CLI path arg, or the `CORPUS_DIR`/`BATCHES_DIR` glob's `dirname`,
+  and route through the id-based seam once the bare `batch_id` is extracted
+  (`os.path.basename` of the batch dir) — a trivial edit at each site.
 
-**Two are load-bearing** — they are the classifier's actual view of the store, and a
-silent zero here is the catastrophic case:
+**The one reader that is actually load-bearing — `tools/corpus/corpus_reader.py::iter_labeled`.**
+This is the version-blind labeled reader the **v8 pipeline actually uses**: the anchor set
+(`tools/scoring/active_ckpt`), `query_sampler`, and the batch builders all consume it. It
+resolves labels through `label_store` (merged score ELSE registered sidecar) and now yields
+crop paths through the seam. A silent zero here is *the* catastrophic case, so it is the
+primary subject of the census gate (§5, and the invariant below).
 
-1. `tools/corpus/corpus_reader.py::iter_labeled` (line 58) — the version-blind trainer
-   reader. `crops_dir = os.path.join(batch_dir, "crops")`.
-2. `classifier/corpus_data.py::load_corpus_rows` (line 92) — the v2 eval-split loader.
-   Same construction; it *raises* `FileNotFoundError` on a missing crop, so post-move it
-   would fail loudly rather than train on zero — but only if it is exercised, which is why
-   the gate (§5) runs the loader explicitly.
+**`classifier/corpus_data.py::load_corpus_rows` is NOT runnable on the current corpus** —
+do not read it as a live loader (an earlier draft of this doc wrongly named it a second
+load-bearing reader; that is the misleading direction, because a dead loader documented as
+critical is what the next person protects and reasons around). It requires a
+`provenance.seed_index` on every row (it keys CV/holdout grouping on it), and **no
+crop-bearing batch added after v3 carries one**, so it raises before returning; on the full
+corpus it raises even earlier — a `FileNotFoundError` on the loose0 batch, whose crops were
+never materialized in the store. It fed `train_v2`/`train_v3` only, both superseded by v8.
+Its single crop-path construction was migrated to the seam identically to `iter_labeled`'s,
+and the loader was made to **fail loudly** naming the missing `seed_index` (in place of the
+prior cryptic `int(None)` `TypeError`) — the message is its documentation. The census gate
+(§5) therefore exercises `iter_labeled`, never this loader.
 
 Two more readers are the most likely *silent*-miss sites because they never call
 `cc.batch_dir` (so a naive "grep for `cc.batch_dir` + `/crops`" sweep skips them):
