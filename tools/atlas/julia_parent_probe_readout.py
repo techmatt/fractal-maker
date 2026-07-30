@@ -102,7 +102,7 @@ def reconcile(rows, summary, unit):
     # ledger admissions (distinct q3) tie to harvest_log admitted rows.
     led = ROOT_led(unit)
     if led is not None:
-        adm_led = sum(1 for r in led if r.get("distinct") and r.get("decoded_class") == 3)
+        adm_led = sum(1 for r in led if r.get("distinct") and (r.get("decoded_class") or 0) >= 3)
         if adm_led != st["n_admit"]:
             problems.append(f"ledger admits {adm_led} != harvest_log admitted {st['n_admit']}")
     if problems:

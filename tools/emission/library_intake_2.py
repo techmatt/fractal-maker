@@ -269,7 +269,7 @@ def write_report(recon, anchor, occ, sheet_paths, phx, measure, c1_distinct):
       "no wallpapers were produced.** Reuses campaign1_intake's primitives verbatim.\n")
 
     w("## 1. Counts + reconciliation\n")
-    w("Admission predicate (`descriptor.load_admitted`): current-decode (v7) ∧ `decoded_class==3` "
+    w("Admission predicate (`descriptor.load_admitted`): current-decode ∧ `decoded_class>=3` "
       "∧ `guard_pass` ∧ `distinct`. Cross-ledger union dedups by row `id`. The re-decoded phoenix "
       "grid is at t_good=0.45; classic phoenix is current-decoded at 0.45.\n")
     w("| ledger | rows_in | admitted | rejected | dedup_dropped | reject reasons |")

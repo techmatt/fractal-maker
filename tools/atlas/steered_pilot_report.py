@@ -42,7 +42,7 @@ def admitted_q3(rows: list[dict]) -> list[dict]:
     """Distinct (coord-deduped) admitted q3 outcomes — the primary yield unit, identical
     definition for both arms (guard-passed, decoded class 3, distinct)."""
     return [r for r in rows if r.get("distinct") and r.get("guard_pass", True)
-            and r.get("decoded_class") == 3]
+            and (r.get("decoded_class") or 0) >= 3]
 
 
 def active_minutes(run_dir: Path, fallback_min: float) -> float:
@@ -69,7 +69,7 @@ def depth_hist(rows: list[dict]) -> Counter:
 
 def coord_dup_rate(rows: list[dict]) -> tuple[int, int]:
     """Among guard-passed decoded-q3 outcomes, how many were coord-dups (not distinct)."""
-    q3 = [r for r in rows if r.get("guard_pass", True) and r.get("decoded_class") == 3]
+    q3 = [r for r in rows if r.get("guard_pass", True) and (r.get("decoded_class") or 0) >= 3]
     dup = sum(1 for r in q3 if not r.get("distinct"))
     return dup, len(q3)
 

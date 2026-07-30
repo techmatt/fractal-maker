@@ -60,16 +60,32 @@ def pick_device(device: str | None = None) -> str:
         "mps" if torch.backends.mps.is_available() else "cpu")
 
 
-def corn_decode(p_notbad: float, p_good: float, t_good: float = 0.5) -> int:
-    """Canonical v5 CORN hard-class decode -> {1, 2, 3} (bad / okay / good).
+def corn_decode(p_notbad: float, p_good: float, t_good: float = 0.5,
+                p_great: float | None = None, t_great: float = 0.5) -> int:
+    """Canonical CORN hard-class decode -> {1, 2, 3} (bad / okay / good), or {1..4} when the
+    head's third cutpoint is supplied (bad / okay / good / great).
 
-    The two ordinal sigmoids are the cumulative rank probabilities
-    ``p_notbad = sigma(l0) = P(class >= 2)`` and ``p_good = sigma(l1) = P(class >= 3)``.
+    The ordinal sigmoids are the cumulative rank probabilities
+    ``p_notbad = sigma(l0) = P(class >= 2)``, ``p_good = sigma(l1) = P(class >= 3)`` and — on a
+    K=4 head (v8+) — ``p_great = sigma(l2) = P(class >= 4)``.
     Rank-consistent hard class = ``1 + #{cumulative probs >= threshold}``. This is NOT
-    recoverable from the summed ``E[ord] = p_notbad + p_good`` scalar (two frames with
-    equal E[ord] can decode to different classes), so callers pass the two
+    recoverable from the summed ``E[ord] = sum sigma(l_k)`` scalar (two frames with
+    equal E[ord] can decode to different classes), so callers pass the
     probabilities and MUST NOT threshold the score. Single source of truth for the
     decode; reuse it, don't reimplement the >= threshold counting inline.
+
+    ``p_great=None`` (the default) is the K=3 decode, BYTE-IDENTICAL to the historical
+    two-probability form — every v5..v7-era caller stays put and can still only reach class 3.
+    A K=4 caller passes the third probability and can reach class 4. ``t_great`` stays at its
+    natural cutpoint 0.5 and gets NO per-family calibration (see
+    data/v8/t_good_derivation.json ``no_class4_threshold``): only the q3 operating point is
+    swept per partition, because only q3 gates admission.
+
+    Note the rule COUNTS thresholds met rather than chaining them, which is how it has always
+    worked — so a frame with ``p_great >= t_great`` but ``p_good < t_good`` decodes to 3, not 4.
+    CORN's cumulative probabilities are not guaranteed monotone (see the monotonicity check in
+    tools/v6/threshold_sweep.py), and counting degrades such a frame by one rank rather than
+    promoting it on the strength of a cutpoint whose predecessor it failed.
 
     ``t_good`` is the q3 (rank-3) operating point on ``p_good``. It defaults to 0.5,
     which is BYTE-IDENTICAL to the historical decode — every existing caller stays put.
@@ -80,11 +96,25 @@ def corn_decode(p_notbad: float, p_good: float, t_good: float = 0.5) -> int:
     because ``p_notbad >= p_good`` is not guaranteed — see the monotonicity check in
     tools/v6/threshold_sweep.py — but a class-1 has ``p_notbad < 0.5`` and is capped at
     ``1 + 0 + 1 = 2`` regardless, i.e. it can reach class-2 but not class-3)."""
-    return 1 + int(p_notbad >= 0.5) + int(p_good >= t_good)
+    cls = 1 + int(p_notbad >= 0.5) + int(p_good >= t_good)
+    if p_great is not None:
+        cls += int(p_great >= t_great)
+    return cls
 
 
 class Scorer:
-    """v3 model + deploy transform, exposing the full CORN triple per frame."""
+    """CORN ordinal head + deploy transform, exposing the cumulative probabilities per frame.
+
+    **K is read off the checkpoint** (``config["num_classes"]``), not assumed: v1..v7 are K=3
+    (2 cutpoints), v8+ is K=4 (3 cutpoints). Building the head at the wrong K raises a
+    state-dict shape mismatch on load rather than scoring wrongly, so a version flip cannot
+    quietly degrade here — but it also means the K=3-shaped accessors below must stay honest
+    about what they drop. ``score_pils``/``score_paths`` return the historical
+    ``(score, p_notbad, p_good)`` triple for every K, where ``score`` is the FULL
+    ``sum sigma(l_k)`` rank score in ``[0, K-1]`` (so a K=4 score is in [0,3], not [0,2]) and
+    the third cutpoint is simply not surfaced. A caller that needs class-4 capability uses
+    ``score_pils_k``/``score_paths_k``, which return every cumulative probability.
+    """
 
     def __init__(self, model_path: str, device: str | None = None):
         self.device = pick_device(device)
@@ -93,9 +123,11 @@ class Scorer:
         cfg = ckpt["config"]
         if cfg["target"] != "ordinal":
             raise SystemExit(f"expected ordinal head, got target={cfg['target']!r}")
+        self.k = int(cfg.get("num_classes", 3))    # tiers; the head emits k-1 cutpoint logits
         model = build_model(
             target=cfg["target"], drop_rate=cfg.get("drop_rate", 0.2),
             drop_path_rate=cfg.get("drop_path_rate", 0.1), pretrained=False,
+            num_classes=self.k,
         )
         model.load_state_dict(ckpt["state_dict"])
         self.model = model.eval().to(self.device)
@@ -106,8 +138,9 @@ class Scorer:
         self.cfg = cfg
 
     @torch.no_grad()
-    def score_pils(self, imgs: list[Image.Image]):
-        """Returns (score[0,2], p_notbad, p_good) numpy arrays, one row per image."""
+    def score_pils_k(self, imgs: list[Image.Image]):
+        """Returns (score, P) where P is (N, k-1) cumulative probs [P(>=2), P(>=3), ...] and
+        score = P.sum(axis=1) = ``score_from_logits``, in [0, k-1]."""
         x = torch.stack([self.transform(im) for im in imgs]).to(self.device)
         if self.device != "cpu":
             with torch.autocast(device_type=self.device.split(":")[0]):
@@ -115,21 +148,23 @@ class Scorer:
         else:
             logits = self.model(x)
         logits = logits.float().cpu()
-        p_notbad = torch.sigmoid(logits[:, 0]).numpy()  # P(rank>=1) = P(label>=2)
-        p_good = torch.sigmoid(logits[:, 1]).numpy()     # P(rank>=2) = P(label>=3)
-        score = p_notbad + p_good                        # score_from_logits, [0,2]
-        return score, p_notbad, p_good
+        P = torch.sigmoid(logits).numpy()            # (N, k-1) cumulative rank probs
+        return P.sum(axis=1), P
 
-    def score_paths(self, paths, batch_size: int = 64):
-        """Score JPGs on disk. Returns list of (score, p_notbad, p_good)."""
+    def score_pils(self, imgs: list[Image.Image]):
+        """Returns (score, p_notbad, p_good) numpy arrays, one row per image. K=3 shape; on a
+        K=4 head the third cutpoint is dropped (use `score_pils_k` to keep it)."""
+        score, P = self.score_pils_k(imgs)
+        return score, P[:, 0], P[:, 1]
+
+    def _score_buffered(self, paths, batch_size, fn):
         out = []
         buf: list[Image.Image] = []
 
         def flush():
             if not buf:
                 return
-            s, nb, g = self.score_pils(buf)
-            out.extend(zip(s.tolist(), nb.tolist(), g.tolist()))
+            out.extend(fn(buf))
             buf.clear()
 
         for p in paths:
@@ -140,6 +175,22 @@ class Scorer:
                 flush()
         flush()
         return out
+
+    def score_paths(self, paths, batch_size: int = 64):
+        """Score JPGs on disk. Returns list of (score, p_notbad, p_good)."""
+        def fn(buf):
+            s, nb, g = self.score_pils(buf)
+            return list(zip(s.tolist(), nb.tolist(), g.tolist()))
+        return self._score_buffered(paths, batch_size, fn)
+
+    def score_paths_k(self, paths, batch_size: int = 64):
+        """Score JPGs on disk, keeping every cutpoint. Returns list of
+        ``(score, p_ge2, p_ge3, ...)`` tuples of length k (1 + the k-1 cumulative probs), so a
+        K=4 head yields 4-tuples and a K=3 head yields the same 3-tuples `score_paths` does."""
+        def fn(buf):
+            s, P = self.score_pils_k(buf)
+            return [(float(sv), *(float(v) for v in row)) for sv, row in zip(s.tolist(), P)]
+        return self._score_buffered(paths, batch_size, fn)
 
 
 def read_exact(stream, n: int) -> bytes | None:

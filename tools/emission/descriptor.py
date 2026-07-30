@@ -58,18 +58,23 @@ NEAR_DUP_THRESHOLD = 0.974
 # --------------------------------------------------------------------------- #
 # Source-aware admission quality predicate.
 #
-# The default emission source is a DISCOVERY ledger whose locations were found BY v7
-# (the guided-descend reward is v7's q3 verdict), so `decoded_class==3` is both the
+# The default emission source is a DISCOVERY ledger whose locations were found BY the active
+# scorer (the guided-descend reward is its q3 verdict), so `decoded_class>=3` is both the
 # selection signal and the admission gate — self-consistent. A FLOOR source is
-# different: its locations were selected by a quality signal ORTHOGONAL to v7 (e.g. the
-# q4 goodness field, which is blind to v7 and to the window labels). Gating those on
-# v7's own `decoded_class==3` would let v7 silently veto locations it never chose — the
-# exact wrong thing. So a floor source is admitted on a v7 BADNESS FLOOR (reject clear
+# different: its locations were selected by a quality signal ORTHOGONAL to the scorer (e.g. the
+# q4 goodness field, which is blind to the scorer and to the window labels). Gating those on
+# the scorer's own q3 verdict would let it silently veto locations it never chose — the
+# exact wrong thing. So a floor source is admitted on a BADNESS FLOOR (reject clear
 # junk, `p_notbad >= FLOOR_PNOTBAD`) and the human does the quality pick downstream.
 # Guard + distinct + current-decode still apply to EVERY source. See
 # docs/design/q4_harvest_emission.md.
+#
+# The q3 gate is `>= 3`, NOT `== 3`. Since v8 the head is K=4 and a ledger row can decode to
+# class 4; `== 3` would let the intake reject precisely the best locations the discovery
+# pipeline exists to find, and it would do so silently — a class-4 row looks like any other
+# non-admitted row downstream.
 FLOOR_ADMIT_SOURCES = frozenset({"q4_harvest"})
-FLOOR_PNOTBAD = 0.5   # v7 floor: p_notbad = sigma(l0) = P(class>=2); reject clear badness
+FLOOR_PNOTBAD = 0.5   # badness floor: p_notbad = sigma(l0) = P(class>=2); reject clear badness
 
 
 def source_tag_of(row: dict) -> str | None:
@@ -79,12 +84,12 @@ def source_tag_of(row: dict) -> str | None:
 
 
 def admit_quality(row: dict) -> bool:
-    """Source-aware quality predicate. A FLOOR_ADMIT_SOURCES row admits on the v7 badness
-    floor (`p_notbad >= FLOOR_PNOTBAD`); every other source on the q3 gate
-    (`decoded_class == 3`). Guard/distinct/current are checked by the caller."""
+    """Source-aware quality predicate. A FLOOR_ADMIT_SOURCES row admits on the badness
+    floor (`p_notbad >= FLOOR_PNOTBAD`); every other source on the q3+ gate
+    (`decoded_class >= 3`). Guard/distinct/current are checked by the caller."""
     if source_tag_of(row) in FLOOR_ADMIT_SOURCES:
         return (row.get("p_notbad") or 0.0) >= FLOOR_PNOTBAD
-    return row.get("decoded_class") == 3
+    return (row.get("decoded_class") or 0) >= 3
 
 # auto_maxiter policy (mirror tools/scoring/active_ckpt.py — replicated here to keep this
 # module torch-free; it is a pure function of fw).

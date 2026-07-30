@@ -220,7 +220,10 @@ def reframe_location(
     loc = as_location(loc)
     tiles = Path(workdir if workdir is not None
                  else OUT_DIR / "_scratch" / f"loc_{seed}") / "tiles"
-    score_cache: dict[str, tuple] = {}   # tile_name -> (score, p_notbad, p_good); dedups shared center
+    # tile_name -> (score, p_ge2, p_ge3[, p_ge4]) — the head's FULL cutpoint tuple (K-aware,
+    # `score_paths_k`), so a K=4 scorer's third probability survives to the trace and from
+    # there to the ledger. Dedups the shared center tile between the two search steps.
+    score_cache: dict[str, tuple] = {}
 
     def ensure_scored(cands: list[dict]) -> list[tuple]:
         need = [c for c in cands if _tile_name(c) not in score_cache]
@@ -239,10 +242,16 @@ def reframe_location(
                 raise SystemExit(f"reframe render failed ({len(fails)}) "
                                  f"[{_tile_name(c)}]: {err}")
         if need:
-            triples = scorer.score_paths([tiles / _tile_name(c) for c in need])
-            for c, t in zip(need, triples):
+            rows = scorer.score_paths_k([tiles / _tile_name(c) for c in need])
+            for c, t in zip(need, rows):
                 score_cache[_tile_name(c)] = tuple(float(x) for x in t)
         return [score_cache[_tile_name(c)] for c in cands]
+
+    def probs(s: tuple) -> dict:
+        """Trace probability block for one scored candidate. `p_ge4` is present-and-None on a
+        K=3 head rather than absent, so a trace reader never has to guess whether the key is
+        missing because the head can't express class 4 or because the writer forgot it."""
+        return {"p_notbad": s[1], "p_good": s[2], "p_ge4": (s[3] if len(s) > 3 else None)}
 
     # Step 1 -- fw ladder at center; pick best fw.
     fw_cands = [_candidate(loc, fac, 0.0, 0.0) for fac in FW_FACS]
@@ -261,11 +270,10 @@ def reframe_location(
         "render": {"w": w, "h": h, "ss": ss, "palette": PALETTE, "jpg_quality": JPG_Q,
                    "n_renders": len(score_cache)},
         "fw_ladder": [{"fw_factor": FW_FACS[i], "fw": fw_cands[i]["fw"],
-                       "score": fw_scores[i][0], "p_notbad": fw_scores[i][1],
-                       "p_good": fw_scores[i][2]} for i in range(len(FW_FACS))],
+                       "score": fw_scores[i][0], **probs(fw_scores[i])}
+                      for i in range(len(FW_FACS))],
         "best_fw_factor": best_fac,
-        "recenter": [{"dx": c["dx"], "dy": c["dy"], "score": s[0],
-                      "p_notbad": s[1], "p_good": s[2]}
+        "recenter": [{"dx": c["dx"], "dy": c["dy"], "score": s[0], **probs(s)}
                      for c, s in zip(rc_cands, rc_scores)],
         "chosen": {"fw_factor": best_fac, "dx": chosen["dx"], "dy": chosen["dy"]},
         "original_score": fw_scores[ORIG_COL][0],

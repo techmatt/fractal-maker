@@ -177,7 +177,11 @@ class GuardedScorer:
 
     score_paths guards each tile that has a co-located field sidecar: a failing tile
     is forced to GUARD_SENTINEL (the v5 forward is skipped for it); passing tiles keep
-    the exact v5 triple. Tiles with no sidecar pass through unguarded."""
+    the exact v5 triple. Tiles with no sidecar pass through unguarded.
+
+    `score_paths_k` is the K-aware twin (see score_lib.Scorer): same guarding, but the
+    sentinel widens to the head's cutpoint count so a K=4 caller gets uniform tuple shapes
+    from guarded and unguarded tiles alike."""
 
     def __init__(self, scorer):
         self._scorer = scorer
@@ -199,8 +203,16 @@ class GuardedScorer:
     def cfg(self):
         return self._scorer.cfg
 
+    @property
+    def k(self):
+        """Tier count of the wrapped head (3 for v1..v7, 4 for v8+)."""
+        return getattr(self._scorer, "k", 3)
+
     def score_pils(self, imgs):
         return self._scorer.score_pils(imgs)
+
+    def score_pils_k(self, imgs):
+        return self._scorer.score_pils_k(imgs)
 
     def _guard_of(self, path) -> str | None:
         """None if the tile passes (or has no field sidecar); else the fail reason."""
@@ -210,24 +222,28 @@ class GuardedScorer:
         stats = field_measures(load_field(fp).values)
         return guard_fail(stats.interior_frac, stats.field_std)
 
-    def score_paths(self, paths, batch_size: int = 64):
-        """Score JPGs; a tile whose co-located field fails the guard returns the
-        sentinel triple (GUARD_SENTINEL, 0.0, 0.0) without a v5 forward."""
+    def _guarded(self, paths, batch_size, score_fn, sentinel):
         paths = list(paths)
         fails = {i: self._guard_of(p) for i, p in enumerate(paths)}
         keep = [i for i in range(len(paths)) if fails[i] is None]
         scored = {}
         if keep:
-            triples = self._scorer.score_paths([paths[i] for i in keep], batch_size=batch_size)
-            for i, t in zip(keep, triples):
+            rows = score_fn([paths[i] for i in keep], batch_size=batch_size)
+            for i, t in zip(keep, rows):
                 scored[i] = tuple(float(x) for x in t)
-        out = []
-        for i in range(len(paths)):
-            if fails[i] is None:
-                out.append(scored[i])
-            else:
-                out.append((GUARD_SENTINEL, 0.0, 0.0))
-        return out
+        return [scored[i] if fails[i] is None else sentinel for i in range(len(paths))]
+
+    def score_paths(self, paths, batch_size: int = 64):
+        """Score JPGs; a tile whose co-located field fails the guard returns the
+        sentinel triple (GUARD_SENTINEL, 0.0, 0.0) without a v5 forward."""
+        return self._guarded(paths, batch_size, self._scorer.score_paths,
+                             (GUARD_SENTINEL, 0.0, 0.0))
+
+    def score_paths_k(self, paths, batch_size: int = 64):
+        """K-aware score_paths: k-tuples (score, p_ge2, p_ge3[, p_ge4]); a guard-failing tile
+        returns (GUARD_SENTINEL, 0.0, ...) of the same width, never a short tuple."""
+        return self._guarded(paths, batch_size, self._scorer.score_paths_k,
+                             (GUARD_SENTINEL,) + (0.0,) * (self.k - 1))
 
 
 def make_guarded_scorer(model_path: str = SCORER_PATH, device: str | None = None) -> GuardedScorer:

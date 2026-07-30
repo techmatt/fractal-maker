@@ -65,7 +65,7 @@ USHIKI = {"c_re": 0.5667, "c_im": 0.0, "p_re": -0.5, "p_im": 0.0, "zm1_re": 0.0,
 def band_of(o: dict, t_good: float) -> str:
     if not o.get("guard_pass"):
         return "REJECT"
-    if o.get("decoded_class") == 3:
+    if (o.get("decoded_class") or 0) >= 3:
         return "HIGH" if float(o["p_good"]) >= HIGH_CUT else "Q3"
     return "SUB"
 

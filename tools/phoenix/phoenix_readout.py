@@ -71,7 +71,7 @@ def intake_check(ledger: list[dict]) -> dict:
     id_ok = 0
     for r in ledger:
         cur = cc.is_current_decoded(r)
-        q3 = r.get("decoded_class") == 3
+        q3 = (r.get("decoded_class") or 0) >= 3
         gp = bool(r.get("guard_pass"))
         dist = bool(r.get("distinct"))
         has_id = all(r.get(k) is not None for k in

@@ -379,7 +379,7 @@ def new_fresh_q3(ledger: Path, start_line: int) -> list[dict]:
             if i < start_line or not line.strip():
                 continue
             d = json.loads(line)
-            if cc.is_current_decoded(d) and d.get("guard_pass") and d.get("decoded_class") == 3:
+            if cc.is_current_decoded(d) and d.get("guard_pass") and (d.get("decoded_class") or 0) >= 3:
                 rows.append(d)
     return rows
 

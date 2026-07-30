@@ -276,7 +276,7 @@ def select_fresh(seed, count, reused_sources):
             # 100% v5, and after a checkpoint flip every prior-version row is stale too, so
             # without this the "fresh machine-q3" pool is dominated by non-current verdicts.
             if not cc.is_current_decoded(d):
-                if (d.get("decoded_class") == 3 and d.get("guard_pass")
+                if ((d.get("decoded_class") or 0) >= 3 and d.get("guard_pass")
                         and d.get("family") in DEG2_FAMILIES):
                     n_excl_v5 += 1
                 continue

@@ -54,7 +54,7 @@ def build(run: Path) -> str:
       f"(prior_rows={summary.get('prior_rows')})._\n")
 
     # --- admissions this run (from the ledger: distinct==True q3 rows) ---
-    adm = [r for r in rows if r.get("distinct") and r.get("decoded_class") == 3]
+    adm = [r for r in rows if r.get("distinct") and (r.get("decoded_class") or 0) >= 3]
     adm_by_part = Counter(r.get("family", "mandelbrot") for r in adm)
     w(f"**Admissions (distinct q3): {len(adm)}** — "
       + ", ".join(f"{p} {adm_by_part.get(p,0)}" for p in

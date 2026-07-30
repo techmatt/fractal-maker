@@ -80,7 +80,7 @@ def load_rows():
                      "z_class": r["provenance"]["z_class"], "stratum": r["provenance"]["stratum"],
                      "p_good": float((allo.get(iid) or {}).get("p_good",
                                      r["provenance"].get("p_good") or 0.0)),
-                     "admitted": iid in allo and (allo[iid].get("decoded_class") == 3
+                     "admitted": iid in allo and ((allo[iid].get("decoded_class") or 0) >= 3
                                                   and allo[iid].get("guard_pass")),
                      "render": r["render"]})
     return rows

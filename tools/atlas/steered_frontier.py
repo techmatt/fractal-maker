@@ -1113,10 +1113,15 @@ class SteeredFrontier:
                     for i, c in enumerate(checks)}
             for fut in cf.as_completed(futs):
                 fut.result()
-        triples = self.scorer.score_paths([str(t) for t in tiles])
-        for c, (eord, nb, pg) in zip(checks, triples):
+        # K-aware (`score_paths_k`): on a K=4 head the third cutpoint comes back too, so the
+        # confirmation decode can reach class 4 instead of being capped at 3 by the reader.
+        rows_k = self.scorer.score_paths_k([str(t) for t in tiles])
+        for c, row in zip(checks, rows_k):
+            eord, nb, pg = row[0], row[1], row[2]
+            pg4 = row[3] if len(row) > 3 else None
             c["canon_nb"], c["canon_pg"], c["canon_eord"] = float(nb), float(pg), float(eord)
-            c["canon_decoded"] = corn_decode(nb, pg, ps.t_good_for(c["partition"]))
+            c["canon_pge4"] = None if pg4 is None else float(pg4)
+            c["canon_decoded"] = corn_decode(nb, pg, ps.t_good_for(c["partition"]), pg4)
 
         # 2. reframe + admit the canonical-q3 confirmations. Cheap pre-reframe dedup:
         # reframe only nudges the center by <=0.25*fw and fw by <=1.41x, so a candidate
@@ -1125,7 +1130,7 @@ class SteeredFrontier:
         for c in checks:
             admitted = False
             reframe_decoded = None
-            if c["canon_decoded"] == 3:
+            if c["canon_decoded"] >= 3:          # q3+ — a canonical class-4 confirms too
                 self.totals["canonical_q3"] += 1
                 pre_distinct, _ = ps.is_distinct(c["cx"], c["cy"], c["fw"],
                                                  self.clouds.get(c["partition"], []), ps.DEDUP_K,
@@ -1142,10 +1147,10 @@ class SteeredFrontier:
         wd = cdir / f"reframe_n{c['node_id']}"
         res = reframe.reframe_location(loc, scorer=self.scorer, seed=0, workdir=wd, workers=ps.WORKERS)
         guard_pass = res.score > guard.GUARD_SENTINEL + 1e-6
-        nb, pg = ps._chosen_probs(res)
+        nb, pg, pg4 = ps._chosen_probs(res)
         t_good = ps.t_good_for(c["partition"])
-        decoded = corn_decode(nb, pg, t_good) if guard_pass else None
-        is_q3 = guard_pass and decoded == 3
+        decoded = corn_decode(nb, pg, t_good, pg4) if guard_pass else None
+        is_q3 = guard_pass and (decoded or 0) >= 3   # q3+ — class 4 admits too
         ocx, ocy, ofw = float(res.cx), float(res.cy), float(res.fw)
         distinct, dup_of = (False, None)
         if is_q3:
@@ -1168,7 +1173,7 @@ class SteeredFrontier:
             outcome_cx=ocx, outcome_cy=ocy, outcome_fw=ofw,
             k3=float(res.score), raw_top3=[float(c["cheap_eord"])],
             reached_depth=int(c["depth"]),
-            decoded_class=decoded, p_notbad=nb, p_good=pg, t_good=t_good,
+            decoded_class=decoded, p_notbad=nb, p_good=pg, p_ge4=pg4, t_good=t_good,
             distinct=distinct, dup_of=dup_of,
             guard_pass=guard_pass, guard_fail=None if guard_pass else "sentinel",
             cheap_pgood=c["cheap_pgood"], canon_pgood=c["canon_pg"], branch=c["branch"],
@@ -1222,6 +1227,7 @@ class SteeredFrontier:
                 julia_c_im=(None if jc is None else str(jc[1])),
                 cheap_pgood=c["cheap_pgood"], cheap_eord=c["cheap_eord"],
                 canon_nb=c.get("canon_nb"), canon_pgood=c.get("canon_pg"),
+                canon_pge4=c.get("canon_pge4"),   # third cutpoint (None on a K=3 head)
                 canon_decoded=c.get("canon_decoded"), reframe_decoded=reframe_decoded,
                 admitted=bool(admitted), tau_h=self.tau_h[c["partition"]],
                 precanon_dup=precanon_dup, mix_source=c.get("mix_source"),
@@ -1349,7 +1355,7 @@ class SteeredFrontier:
         if not led.exists():
             raise SystemExit(f"--dive-source has no outcome_ledger.jsonl: {led}")
         rows = [json.loads(l) for l in open(led, encoding="utf-8") if l.strip()]
-        adm = [r for r in rows if r.get("distinct") and r.get("decoded_class") == 3]
+        adm = [r for r in rows if r.get("distinct") and (r.get("decoded_class") or 0) >= 3]
         if not adm:
             raise SystemExit(f"no distinct-q3 admissions in {led}")
         return adm
@@ -1460,7 +1466,7 @@ class SteeredFrontier:
         # the ledger is the durable source of truth; re-sync the admitted counter to it so a
         # resume across a mid-dive boundary can't leave the stat lagging the real admissions.
         self.totals["admitted"] = sum(
-            1 for r in self.ledger.rows if r.get("distinct") and r.get("decoded_class") == 3)
+            1 for r in self.ledger.rows if r.get("distinct") and (r.get("decoded_class") or 0) >= 3)
         print(f"[dive-resume] {st['done_idx']}/{len(st['plan'])} dives done, "
               f"active {self.active_s/60:.1f}m, admitted {self.totals['admitted']}", flush=True)
         return st["plan"], st["done_idx"]

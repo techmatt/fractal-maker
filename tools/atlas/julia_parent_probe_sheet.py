@@ -91,7 +91,7 @@ def main():
 
     adm = []
     for r in led:
-        if r.get("family") == "julia:mandelbrot" and r.get("distinct") and r.get("decoded_class") == 3:
+        if r.get("family") == "julia:mandelbrot" and r.get("distinct") and (r.get("decoded_class") or 0) >= 3:
             mix = src_by_xy.get((round(float(r["seed_cx"]), 10), round(float(r["seed_cy"]), 10)))
             adm.append(dict(
                 uid=f"adm_{r['id']}", c_re=r["julia_c_re"], c_im=r["julia_c_im"],

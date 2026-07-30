@@ -296,7 +296,7 @@ def main(argv=None):
 
     # Stage D — finalize: ledger = q3 rows from rescored.jsonl
     rows = [json.loads(l) for l in rescored_path.read_text(encoding="utf-8").splitlines() if l.strip()]
-    q3 = [r for r in rows if r.get("guard_pass") and r.get("decoded_class") == 3]
+    q3 = [r for r in rows if r.get("guard_pass") and (r.get("decoded_class") or 0) >= 3]
     with open(RUN_DIR / "outcome_ledger.jsonl", "w", encoding="utf-8") as f:
         for r in q3:
             f.write(json.dumps(r) + "\n")

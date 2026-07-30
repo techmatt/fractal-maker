@@ -7,7 +7,7 @@ two campaign-1 ledgers so the library's type x morph occupancy reflects the camp
 runs NO colorize / gating / pooling / selection and writes NO wallpapers.
 
 Reuses the production intake primitives verbatim (tools/emission/descriptor.py):
-  * `load_admitted`         — current-decode ∧ decoded_class==3 ∧ guard_pass ∧ distinct
+  * `load_admitted`         — current-decode ∧ decoded_class>=3 ∧ guard_pass ∧ distinct
   * `location_of`           — ledger row -> canonical Location (julia c carried)
   * `library_annotate`      — 640x360 ss2 smooth field -> robust-z tanh morph gray
   * `colored_clip`          — CLIP vit_base_patch16_clip_224.openai embedding
@@ -90,8 +90,8 @@ def _reject_reason(row) -> str | None:
     descriptor.load_admitted's short-circuit order."""
     if not cc.is_current_decoded(row):
         return "not_current_decode"
-    if row.get("decoded_class") != 3:
-        return "decoded_class!=3"
+    if (row.get("decoded_class") or 0) < 3:
+        return "decoded_class<3"
     if not row.get("guard_pass"):
         return "guard_fail"
     if not row.get("distinct"):
@@ -435,7 +435,7 @@ def write_report(recon, anchor, occ, sheet_paths):
 
     w("## 1. Counts + reconciliation\n")
     w("Admission predicate (as implemented, `descriptor.load_admitted`): current-decode "
-      "(v7) ∧ `decoded_class==3` ∧ `guard_pass` ∧ `distinct`. Cross-ledger union dedups "
+      "∧ `decoded_class>=3` ∧ `guard_pass` ∧ `distinct`. Cross-ledger union dedups "
       "by row `id`.\n")
     w("| ledger | rows_in | admitted | rejected | dedup_dropped | reject reasons |")
     w("|---|--:|--:|--:|--:|---|")
