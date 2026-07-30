@@ -44,11 +44,39 @@ Per-partition `t_good` thresholds are **calibrated to a specific score scale**. 
 head's `p_good` distribution shifts, so **reusing old cuts silently starves recall**.
 Re-derive every version:
 
-- **F2-argmax** (recall-weighted — discarding a good location costs more than admitting
-  a bad one), only where the slice has **≥15 positives**.
-- Expose in-sample optimism with **leave-one-out / OOF**.
-- **Fall back to baseline (no invented value)** for undecidable partitions.
+- **F_beta-argmax** over a `p_good` grid, tie-break toward higher `t`, only where the
+  slice has **≥15 positives**. `beta` is chosen per partition — see below.
+- Expose in-sample optimism with **leave-one-out / OOF**, and report the argmax
+  **plateau width**: tie-breaking high puts the adopted `t` at the plateau's upper edge by
+  construction, so the plateau is the only honest read on how knife-edged the pick is.
+- **Fall back to baseline for undecidable partitions, and stamp them UNCALIBRATED.** A
+  baseline 0.50 and a derived 0.50 are the same character sequence in a config file; the
+  distinction has to be carried explicitly or it is lost. See
+  `production_seeder.T_GOOD_UNCALIBRATED`.
 
-(Example durable outcome now in code: `T_GOOD_OVERRIDES["mandelbrot"] = 0.51`,
-re-derived via F0.5 with steered_run2 blind labels; phoenix 0.45 via F2-argmax on the
-grid — the *values* live in `production_seeder.py`, the *method* lives here.)
+### The objective is per-family, and the axis is supply
+
+> **Weight recall where supply is scarce, weight precision where supply is abundant.**
+
+A false admit costs the same everywhere — one bad location wasting one render and one
+human glance. What differs by family is the cost of a **miss**. Mandelbrot supply is
+effectively unlimited: a missed mandelbrot costs nothing because the next hunt finds more,
+so mandelbrot is derived **precision-weighted (F0.5)**. `julia:multibrot` supply saturates,
+so a missed one is gone, and those are derived **recall-weighted (F2)**.
+
+This is why a *uniform* objective is wrong rather than merely blunt. Uniform-F2 on
+mandelbrot lands at `t=0.14`, precision 0.292 — roughly three and a half bad locations
+admitted per good one, on the largest family in the corpus. v7 reached a split objective
+by a different route (blind-label evidence that F2 over-admitted on mandelbrot); the
+supply argument is the general form of that, and it survives the arrival of the v8
+mandelbrot eval floor, which removed the *evidentiary* reason for the v7 exception but not
+the *economic* one.
+
+Future derivations inherit the principle, not the numbers. Where in-sample and OOF
+disagree, prefer the OOF-honest choice and **say so in the report**.
+
+(Current durable outcome: the v8 table in `production_seeder.T_GOOD_OVERRIDES` —
+mandelbrot 0.85 via F0.5, `julia:multibrot{3,4,5}` 0.39/0.14/0.20 via F2, five partitions
+UNCALIBRATED. The *values* live in `production_seeder.py`, the *derivation* in
+`tools/v8/derive_t_good_v8.py` → `data/v8/t_good_derivation.json`, and
+`tools/v8/test_derive_t_good_v8.py` holds the two in agreement. The *method* lives here.)

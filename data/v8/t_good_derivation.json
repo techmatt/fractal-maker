@@ -1,95 +1,249 @@
 {
-  "objective": "F2-argmax (recall-weighted), tie-break higher t",
+  "objective": "per-partition F_beta-argmax, tie-break higher t",
+  "objective_principle": "Weight recall where supply is SCARCE, weight precision where supply is ABUNDANT. A false admit costs the same everywhere; the cost of a MISS is what differs by family. Mandelbrot is effectively unlimited (a miss costs nothing, the next hunt finds more) -> F0.5. julia:multibrot supply saturates (a miss costs real money) -> F2.",
+  "objective_by_partition": {
+    "mandelbrot": "F0.5",
+    "julia:multibrot3": "F2",
+    "julia:multibrot4": "F2",
+    "julia:multibrot5": "F2"
+  },
+  "default_objective": "F2",
   "decode": "keeper(label>=3) iff P(>=2)>=0.5 AND P(>=3)>=t",
   "baseline": 0.5,
   "min_pos": 15,
   "no_class4_threshold": true,
+  "class4_decode": "natural cutpoint P(>=4) >= 0.5, no per-family calibration",
   "native_multibrot_tightening": "NOT adopted (fork-scheduled proposals left on record)",
+  "eval_slice": "data/v8/eval_scores_v8.jsonl",
+  "model": "v8",
   "derived": {
     "julia:multibrot3": {
-      "t": 0.39,
-      "precision": 0.5135,
-      "recall": 1.0,
-      "f2": 0.8407,
-      "tp": 19,
-      "fp": 18,
-      "fn": 0,
       "n": 54,
       "pos": 19,
-      "f2_oof": 0.8036,
-      "objective": "F2-argmax"
+      "objective": "F2",
+      "beta": 2.0,
+      "objective_rationale": "recall-weighted (supply scarce)",
+      "t_good": 0.39,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.62,
+          "precision": 0.5625,
+          "recall": 0.9474,
+          "fbeta": 0.6122,
+          "tp": 18,
+          "fp": 14,
+          "fn": 1,
+          "plateau": [
+            0.58,
+            0.62
+          ],
+          "plateau_steps": 5,
+          "beta": 0.5,
+          "fbeta_oof": 0.6122
+        },
+        "F2": {
+          "t": 0.39,
+          "precision": 0.5135,
+          "recall": 1.0,
+          "fbeta": 0.8407,
+          "tp": 19,
+          "fp": 18,
+          "fn": 0,
+          "plateau": [
+            0.34,
+            0.39
+          ],
+          "plateau_steps": 6,
+          "beta": 2.0,
+          "fbeta_oof": 0.8036
+        }
+      }
     },
     "julia:multibrot4": {
-      "t": 0.14,
-      "precision": 0.5455,
-      "recall": 1.0,
-      "f2": 0.8571,
-      "tp": 24,
-      "fp": 20,
-      "fn": 0,
       "n": 51,
       "pos": 24,
-      "f2_oof": 0.7971,
-      "objective": "F2-argmax"
+      "objective": "F2",
+      "beta": 2.0,
+      "objective_rationale": "recall-weighted (supply scarce)",
+      "t_good": 0.14,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.81,
+          "precision": 0.75,
+          "recall": 0.625,
+          "fbeta": 0.7212,
+          "tp": 15,
+          "fp": 5,
+          "fn": 9,
+          "plateau": [
+            0.73,
+            0.81
+          ],
+          "plateau_steps": 9,
+          "beta": 0.5,
+          "fbeta_oof": 0.6466
+        },
+        "F2": {
+          "t": 0.14,
+          "precision": 0.5455,
+          "recall": 1.0,
+          "fbeta": 0.8571,
+          "tp": 24,
+          "fp": 20,
+          "fn": 0,
+          "plateau": [
+            0.13,
+            0.14
+          ],
+          "plateau_steps": 2,
+          "beta": 2.0,
+          "fbeta_oof": 0.7971
+        }
+      }
     },
     "julia:multibrot5": {
-      "t": 0.2,
-      "precision": 0.6774,
-      "recall": 0.9545,
-      "f2": 0.8824,
-      "tp": 21,
-      "fp": 10,
-      "fn": 1,
       "n": 39,
       "pos": 22,
-      "f2_oof": 0.813,
-      "objective": "F2-argmax"
+      "objective": "F2",
+      "beta": 2.0,
+      "objective_rationale": "recall-weighted (supply scarce)",
+      "t_good": 0.2,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.71,
+          "precision": 0.8333,
+          "recall": 0.6818,
+          "fbeta": 0.7979,
+          "tp": 15,
+          "fp": 3,
+          "fn": 7,
+          "plateau": [
+            0.67,
+            0.71
+          ],
+          "plateau_steps": 5,
+          "beta": 0.5,
+          "fbeta_oof": 0.7778
+        },
+        "F2": {
+          "t": 0.2,
+          "precision": 0.6774,
+          "recall": 0.9545,
+          "fbeta": 0.8824,
+          "tp": 21,
+          "fp": 10,
+          "fn": 1,
+          "plateau": [
+            0.2,
+            0.2
+          ],
+          "plateau_steps": 1,
+          "beta": 2.0,
+          "fbeta_oof": 0.813
+        }
+      }
     },
     "mandelbrot": {
-      "t": 0.14,
-      "precision": 0.2917,
-      "recall": 0.5385,
-      "f2": 0.4605,
-      "tp": 14,
-      "fp": 34,
-      "fn": 12,
       "n": 526,
       "pos": 26,
-      "f2_oof": 0.4605,
-      "objective": "F2-argmax"
+      "objective": "F0.5",
+      "beta": 0.5,
+      "objective_rationale": "precision-weighted (supply abundant)",
+      "t_good": 0.85,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.85,
+          "precision": 0.5714,
+          "recall": 0.1538,
+          "fbeta": 0.3704,
+          "tp": 4,
+          "fp": 3,
+          "fn": 22,
+          "plateau": [
+            0.79,
+            0.85
+          ],
+          "plateau_steps": 7,
+          "beta": 0.5,
+          "fbeta_oof": 0.3
+        },
+        "F2": {
+          "t": 0.14,
+          "precision": 0.2917,
+          "recall": 0.5385,
+          "fbeta": 0.4605,
+          "tp": 14,
+          "fp": 34,
+          "fn": 12,
+          "plateau": [
+            0.02,
+            0.14
+          ],
+          "plateau_steps": 13,
+          "beta": 2.0,
+          "fbeta_oof": 0.4605
+        }
+      }
     }
   },
-  "baseline_partitions": {
+  "uncalibrated": {
     "julia:mandelbrot": {
       "n": 0,
       "pos": 0,
       "t_good": 0.5,
+      "status": "UNCALIBRATED",
       "reason": "no unbiased eval slice"
     },
     "multibrot3": {
       "n": 0,
       "pos": 0,
       "t_good": 0.5,
+      "status": "UNCALIBRATED",
       "reason": "no unbiased eval slice"
     },
     "multibrot4": {
       "n": 0,
       "pos": 0,
       "t_good": 0.5,
+      "status": "UNCALIBRATED",
       "reason": "no unbiased eval slice"
     },
     "multibrot5": {
       "n": 0,
       "pos": 0,
       "t_good": 0.5,
+      "status": "UNCALIBRATED",
       "reason": "no unbiased eval slice"
     },
     "phoenix": {
       "n": 0,
       "pos": 0,
       "t_good": 0.5,
+      "status": "UNCALIBRATED",
       "reason": "no unbiased eval slice"
     }
   },
-  "note": "REPORT ONLY \u2014 production_seeder.T_GOOD_OVERRIDES is unchanged. mandelbrot now derives from the loose0_v3 floor (was an F0.5+steered exception in v7); julia:multibrot{3,4,5} derive from the census. Everything else is baseline."
+  "adopted": {
+    "julia:multibrot3": 0.39,
+    "julia:multibrot4": 0.14,
+    "julia:multibrot5": 0.2,
+    "mandelbrot": 0.85
+  },
+  "notes": [
+    "julia:multibrot3: F0.5 picks t=0.62 vs F2 t=0.39 \u2014 objective choice is load-bearing, not cosmetic",
+    "julia:multibrot3: adopted F2 in-sample 0.841 vs OOF 0.804 (gap +0.037) \u2014 threshold overfit at n=54, pos=19; the OOF value is the honest one",
+    "julia:multibrot4: F0.5 picks t=0.81 vs F2 t=0.14 \u2014 objective choice is load-bearing, not cosmetic",
+    "julia:multibrot4: adopted F2 in-sample 0.857 vs OOF 0.797 (gap +0.060) \u2014 threshold overfit at n=51, pos=24; the OOF value is the honest one",
+    "julia:multibrot4: adopted t=0.14 sits on a 2-step plateau \u2014 knife-edge, re-derive rather than nudge",
+    "julia:multibrot5: F0.5 picks t=0.71 vs F2 t=0.20 \u2014 objective choice is load-bearing, not cosmetic",
+    "julia:multibrot5: adopted F2 in-sample 0.882 vs OOF 0.813 (gap +0.069) \u2014 threshold overfit at n=39, pos=22; the OOF value is the honest one",
+    "julia:multibrot5: adopted t=0.20 sits on a 1-step plateau \u2014 knife-edge, re-derive rather than nudge",
+    "mandelbrot: F0.5 picks t=0.85 vs F2 t=0.14 \u2014 objective choice is load-bearing, not cosmetic",
+    "mandelbrot: adopted F0.5 in-sample 0.370 vs OOF 0.300 (gap +0.070) \u2014 threshold overfit at n=526, pos=26; the OOF value is the honest one"
+  ],
+  "note": "ADOPTED \u2014 production_seeder.T_GOOD_OVERRIDES mirrors `adopted`, and the `uncalibrated` partitions are named in production_seeder.T_GOOD_UNCALIBRATED (they RUN at the baseline but were never derived; the two 0.50s must stay distinguishable). tools/v8/test_derive_t_good_v8.py holds them in agreement."
 }

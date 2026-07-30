@@ -305,50 +305,85 @@ def julia_partition(fam: str) -> str:
 # Every value is stamped per outcome row (`t_good`) so the ledger self-describes across
 # the mixed-threshold eras.
 #
-# Provenance: ALL values below are the v7 F2-argmax sweep, derived in
-# docs/design/classifier_retrain_protocol.md §4 (tools/v7/derive_t_good.py, v7 labeled eval slice; F2 =
-# recall-weighted, the prospecting loop wants to stop discarding good locations). These
-# REPLACE the v6 table wholesale — v7's p_good distribution is markedly more compressed,
-# so every v6 cut (0.24 / 0.30) sat far up v7's tail and starved recall. Each value sits
-# on an F2 plateau (not a knife-edge); see the findings doc for per-partition n/positives,
-# in-sample vs leave-one-out F2, and the eval-set leak the julia:multibrot cuts carry.
+# THRESHOLDS ARE SCALE-BOUND. Every value below is the **v8** derivation
+# (tools/v8/derive_t_good_v8.py -> data/v8/t_good_derivation.json, the unbiased v8 eval
+# slice data/v8/eval_scores_v8.jsonl). They REPLACE the v7 table wholesale: v8's p_good
+# distribution is its own scale, so a v7 cut carried forward would be a number with no
+# meaning. tools/v8/test_derive_t_good_v8.py holds this table to the derivation artifact,
+# so the two cannot drift apart silently.
 #
-# EXCEPTION — mandelbrot is 0.51, re-derived F0.5 (precision-weighted) with the steered_run2
-# blind labels folded in (docs/design/classifier_retrain_protocol.md §4). The blind read scored
-# 0/16 mandelbrot admissions good, so the F2 0.14 bar demonstrably over-admits on this family;
-# 0.51 admits 0/16 of those human-rejected tiles. Family-specific tightening (precedent:
-# phoenix 0.18->0.50); the julia families keep their F2 cuts (blind slices too small to move).
+# OBJECTIVE IS PER-FAMILY, and the reason is SUPPLY, not model behaviour:
+#   **weight recall where supply is scarce, weight precision where supply is abundant.**
+# A false admit costs the same everywhere; the cost of a MISS is what differs. Mandelbrot
+# is effectively unlimited — a missed mandelbrot costs nothing, the next hunt finds more —
+# so mandelbrot derives at F0.5 (precision-weighted). julia:multibrot supply saturates, so
+# a miss there costs real money, and those derive at F2 (recall-weighted). Uniform-F2 on
+# mandelbrot lands at t=0.14 / precision 0.292: roughly three and a half bad locations per
+# good one, on the largest family in the corpus. v7's split objective was right for a
+# reason the new mandelbrot eval floor does not remove. See
+# docs/design/classifier_retrain_protocol.md §4.
 #
-# NOT listed, deliberately (-> baseline 0.50, see findings doc):
-#   native multibrot3/4/5      — uncalibrated, 0 eval positives in either direction; no
-#                                invented value.
+#   partition          obj     n  pos      t   prec    rec      F  F_OOF   plateau
+#   mandelbrot        F0.5   526   26   0.85  0.571  0.154  0.370  0.300  [0.79,0.85]
+#   julia:multibrot3    F2    54   19   0.39  0.513  1.000  0.841  0.804  [0.34,0.39]
+#   julia:multibrot4    F2    51   24   0.14  0.545  1.000  0.857  0.797  [0.13,0.14]
+#   julia:multibrot5    F2    39   22   0.20  0.677  0.955  0.882  0.813  [0.20,0.20]
 #
-# phoenix — 0.45, the v7 F2-argmax derived from the 500-label Phase-B grid batch
-# (docs/design/phoenix_seed_sampler_spec.md §8, tools/phoenix/phoenix_label_analysis.py:
-# t*=0.45, F2_in 0.724 / F2_oof 0.689, n_pos=77 >= 15 sufficiency floor). This SUPERSEDES
-# the earlier "undecidable -> baseline" call: the grid batch closed the zero-coverage gap
-# (v7 ranks varied phoenix AUC 0.86). t*=0.45 is on an F2 plateau (0.724 vs baseline-0.50's
-# 0.707, within noise); we adopt the derived optimum rather than the baseline so the grid
-# re-decode + classic supply mint at the label-certified operating point. The old v6-era
-# provisional 0.18 (never a v7 override; it lived only in the grid harness default) admitted
-# ~everything (in-batch precision 0.19) and is retired.
+# Read the OOF column: every julia:multibrot cut is threshold-overfit at small n (in-sample
+# F2 0.84/0.86/0.88 vs OOF 0.80/0.80/0.81), and mb4/mb5 sit on 2-step and 1-step plateaus.
+# They are the honest optimum available at this n, not a stable one — re-derive on more
+# labels, do NOT hand-nudge. Mandelbrot's F0.5 optimum spans [0.79, 0.85] and the protocol's
+# tie-break-toward-higher-t lands it at 0.85, one grid step below a cliff (0.86 drops a true
+# positive: F0.5 0.370 -> 0.300). The cliff is on the TIGHTER side of a fixed threshold, so
+# nothing drifts across it at runtime; it is a statement about how fragile the estimate is,
+# which the OOF gap (0.370 -> 0.300) already says.
+#
+# NO class-4 threshold: class 4 decodes at its natural cutpoint P(>=4) >= 0.5 with no
+# per-family calibration (score_lib.corn_decode t_great). NO native-multibrot tightening.
 # =========================================================================== #
 T_GOOD_BASELINE = 0.50    # conservative default for every unswept / undecidable partition
 T_GOOD_OVERRIDES = {
-    "mandelbrot": 0.51,        # F0.5 re-derive w/ steered_run2 labels (was 0.14 F2; see docs/design/classifier_retrain_protocol.md §4)
-    "julia:mandelbrot": 0.22,  # v7 F2 sweep (n=178, pos=25)
-    "julia:multibrot3": 0.25,  # v7 F2 sweep, census-144 slice (n=54, pos=21)
-    "julia:multibrot4": 0.17,  # v7 F2 sweep, census-144 slice (n=51, pos=24)
-    "julia:multibrot5": 0.10,  # v7 F2 sweep, census-144 slice (n=39, pos=22)
-    "phoenix": 0.45,           # v7 F2-argmax on the 500-label Phase-B grid (docs/design/phoenix_seed_sampler_spec.md §8)
+    "mandelbrot": 0.85,        # v8 F0.5-argmax, loose0_v3 floor (n=526, pos=26) — supply abundant
+    "julia:multibrot3": 0.39,  # v8 F2-argmax, census slice (n=54, pos=19) — supply scarce
+    "julia:multibrot4": 0.14,  # v8 F2-argmax, census slice (n=51, pos=24) — supply scarce
+    "julia:multibrot5": 0.20,  # v8 F2-argmax, census slice (n=39, pos=22) — supply scarce
 }
+
+# UNCALIBRATED — these partitions RUN at T_GOOD_BASELINE but were never DERIVED under v8:
+# the v8 eval slice has zero rows for them. A baseline 0.50 and a derived 0.50 are
+# indistinguishable as a bare number, and six months from now nobody remembers which is
+# which — so the distinction lives here explicitly rather than in absence-from-a-table.
+# Their v7 overrides (julia:mandelbrot 0.22, phoenix 0.45) are RETIRED, not carried: they
+# were cuts on v7's p_good scale and mean nothing on v8's.
+#
+# PHOENIX IS THE ONE TO WATCH: 573 v8 training locations and the only partition where
+# class 4 outnumbers class 3, yet no unbiased eval whatsoever. It is running on a
+# conservative default, not on evidence.
+T_GOOD_UNCALIBRATED = frozenset({
+    "julia:mandelbrot",   # v7 had 0.22 (n=178, pos=25); no v8 eval rows
+    "multibrot3",         # never calibrated in any version
+    "multibrot4",
+    "multibrot5",
+    "phoenix",            # v7 had 0.45 (Phase-B grid); no v8 eval rows
+})
 
 
 def t_good_for(partition: str) -> float:
-    """q3 p_good threshold for a cloud partition (family+degree). Swept partitions get
+    """q3 p_good threshold for a cloud partition (family+degree). Derived partitions get
     their own value from T_GOOD_OVERRIDES; everything else -> 0.50 (baseline). See the
     block above for per-partition provenance."""
     return T_GOOD_OVERRIDES.get(partition, T_GOOD_BASELINE)
+
+
+def t_good_status(partition: str) -> str:
+    """"DERIVED" | "UNCALIBRATED" | "UNKNOWN" for `partition`'s t_good — the thing a bare
+    0.50 cannot tell you. UNCALIBRATED is a named partition running on the baseline;
+    UNKNOWN is a partition nobody has classified either way (a new family)."""
+    if partition in T_GOOD_OVERRIDES:
+        return "DERIVED"
+    if partition in T_GOOD_UNCALIBRATED:
+        return "UNCALIBRATED"
+    return "UNKNOWN"
 
 
 # flags        : extra guided-descend CLI flags (family/julia grammar; [] for mandelbrot).
@@ -602,12 +637,23 @@ def append_probe_rejects(rows: list[dict]):
 
 
 # =========================================================================== #
-# The q3 outcome cloud — reconstruct from the durable ledger (cross-run coverage
-# state). Keep guard_pass && decoded_class == 3 rows, deduped by 1.5*max(fw).
+# The q3+ outcome cloud — reconstruct from the durable ledger (cross-run coverage
+# state). Keep guard_pass && decoded_class >= 3 rows, deduped by 1.5*max(fw).
 # =========================================================================== #
+def is_q3plus(row: dict) -> bool:
+    """The admission predicate: a decoded class at or above the q3 bar.
+
+    `>= 3`, not `== 3`. Since v8 the head is K=4 and a row can decode to class 4; an
+    `== 3` test would silently drop exactly the best locations the pipeline exists to
+    find — out of the coverage cloud, out of the dedup/repel machinery, out of emission.
+    Rows predating `decoded_class` (None) and guard-failed rows (None) are excluded, as
+    ever — there is no historical backfill."""
+    return (row.get("decoded_class") or 0) >= 3
+
+
 def build_cloud(rows: list[dict], family: str) -> list[dict]:
-    """One position per distinct q3 place *within the active `family` partition*:
-    row family == `family` && guard_pass && decoded_class == 3, deduped by 1.5*max(fw).
+    """One position per distinct q3+ place *within the active `family` partition*:
+    row family == `family` && guard_pass && decoded_class >= 3, deduped by 1.5*max(fw).
     Order-stable: the earliest distinct row wins a dedup cluster, matching the live-harvest
     add order.
 
@@ -621,7 +667,7 @@ def build_cloud(rows: list[dict], family: str) -> list[dict]:
     for r in rows:
         if r.get("family", "mandelbrot") != family:
             continue
-        if r.get("guard_pass", True) and r.get("decoded_class") == 3:
+        if r.get("guard_pass", True) and is_q3plus(r):
             # identity-aware dedup: within a julia/phoenix partition, distinct-parameter
             # outcomes are distinct PLACES (the over-kill fix — z-only dedup collapsed them
             # into one cloud point). Julia keys on seed c; phoenix on (c,p,z_{-1}).
@@ -634,12 +680,15 @@ def build_cloud(rows: list[dict], family: str) -> list[dict]:
 
 def cloud_diagnostic(rows: list[dict], cloud: list[dict], family: str) -> dict:
     """Startup summary scoped to the active `family` partition: partition rows, guard_pass
-    count, class-1/2/3 split among guard-clean *decoded* partition rows (pre-decoded_class
-    rows are not counted), and the distinct q3 cloud size after dedup."""
+    count, class-1/2/3/4 split among guard-clean *decoded* partition rows (pre-decoded_class
+    rows are not counted), and the distinct q3+ cloud size after dedup.
+
+    The split spans 1..4 since v8: a K=4 head's class-4 rows would otherwise vanish from the
+    startup summary, and the summary is where a run's decode distribution is first eyeballed."""
     fam_rows = [r for r in rows if r.get("family", "mandelbrot") == family]
     guard_clean = [r for r in fam_rows
                    if r.get("guard_pass", True) and r.get("decoded_class") is not None]
-    split = {c: sum(1 for r in guard_clean if r["decoded_class"] == c) for c in (1, 2, 3)}
+    split = {c: sum(1 for r in guard_clean if r["decoded_class"] == c) for c in (1, 2, 3, 4)}
     n_undecoded = sum(1 for r in fam_rows
                       if r.get("guard_pass", True) and r.get("decoded_class") is None)
     return {"family": family, "total_rows": len(rows), "partition_rows": len(fam_rows),
@@ -870,15 +919,20 @@ def run_phoenix_descent(seed: int, workdir: Path, n_walks: int) -> Path:
     return pool
 
 
-def _chosen_probs(res) -> tuple[float, float]:
-    """CORN (p_notbad, p_good) of a reframe winner's chosen frame — pulled from the
-    reframe trace (already computed when k3 was scored; no extra render/forward)."""
+def _chosen_probs(res) -> tuple[float, float, float | None]:
+    """CORN (p_notbad, p_good, p_ge4) of a reframe winner's chosen frame — pulled from the
+    reframe trace (already computed when k3 was scored; no extra render/forward).
+
+    `p_ge4` = P(class>=4), the third cutpoint, None on a K=3 head. It is threaded all the way
+    to the ledger row: without it NO ledger row could ever decode to class 4, and flipping a
+    q4-capable head into a pipeline that cannot record q4 would defeat the point of the flip."""
     ch = res.trace["chosen"]
     for rc in res.trace["recenter"]:
         if rc["dx"] == ch["dx"] and rc["dy"] == ch["dy"]:
-            return float(rc["p_notbad"]), float(rc["p_good"])
+            pg4 = rc.get("p_ge4")
+            return float(rc["p_notbad"]), float(rc["p_good"]), (None if pg4 is None else float(pg4))
     # unreachable (chosen is always one of the recenter candidates); degrade to class-1.
-    return 0.0, 0.0
+    return 0.0, 0.0, None
 
 
 def harvest_walk_reward(scorer, wid, frames, workers, scratch, loc_of=_mand_location):
@@ -902,7 +956,7 @@ def harvest_walk_reward(scorer, wid, frames, workers, scratch, loc_of=_mand_loca
     # the parent's raw frames, not a q3 ADMISSION decode, so it stays byte-identical and
     # is not routed through the per-degree t_good (which gates only the committed outcome).
     n_frames_q2plus = sum(1 for (_, nb, g) in triples if corn_decode(nb, g) >= 2)
-    n_frames_q3 = sum(1 for (_, nb, g) in triples if corn_decode(nb, g) == 3)
+    n_frames_q3 = sum(1 for (_, nb, g) in triples if corn_decode(nb, g) >= 3)
     # Run-scoped guard observability (pure read of the raw scores — changes nothing):
     # a raw frame that scored GUARD_SENTINEL was pushed out of top-3 contention as
     # degenerate. `frames_gated` counts them; the salvage-breakdown classifier uses it.
@@ -928,13 +982,13 @@ def harvest_walk_reward(scorer, wid, frames, workers, scratch, loc_of=_mand_loca
             best = (float(res.score), res, int(fr["idx"]))
 
     reward_k3, res, k3_idx = best
-    p_notbad, p_good = _chosen_probs(res)
+    p_notbad, p_good, p_ge4 = _chosen_probs(res)
     reached = max(int(f["depth"]) for f in frames)
     return {
         "reward_k3": reward_k3, "reward_k1": reward_k1, "raw_top3": raw_top3,
         "reached_depth": reached, "k3_argmax_idx": k3_idx,
         "outcome_cx": float(res.cx), "outcome_cy": float(res.cy), "outcome_fw": float(res.fw),
-        "p_notbad": p_notbad, "p_good": p_good,
+        "p_notbad": p_notbad, "p_good": p_good, "p_ge4": p_ge4,
         "frames_gated": frames_gated, "n_frames": len(frames),
         "n_frames_q2plus": n_frames_q2plus, "n_frames_q3": n_frames_q3,
     }
@@ -1263,8 +1317,8 @@ def _run(args, fam: FamilyResolved):
             # be a q3 cloud member.
             guard_pass = rew["reward_k3"] > guard.GUARD_SENTINEL + 1e-6
             t_good = t_good_for(fam.partition)   # per-degree q3 operating point
-            decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good) if guard_pass else None
-            is_q3 = guard_pass and decoded == 3
+            decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good, rew.get("p_ge4")) if guard_pass else None
+            is_q3 = guard_pass and (decoded or 0) >= 3    # q3+ — class 4 admits too
             if is_q3:
                 distinct, dup_of = is_distinct(rew["outcome_cx"], rew["outcome_cy"],
                                                rew["outcome_fw"], cloud, DEDUP_K)
@@ -1293,7 +1347,8 @@ def _run(args, fam: FamilyResolved):
                 # CORN cumulative probs of the k3 winner + the per-degree t_good used to
                 # decode them. Stamped so the ledger self-describes (mixed-era decodes) and
                 # the harvest-monitor can build the p_good/p_notbad histograms.
-                "p_notbad": rew["p_notbad"], "p_good": rew["p_good"], "t_good": t_good,
+                "p_notbad": rew["p_notbad"], "p_good": rew["p_good"], "p_ge4": rew.get("p_ge4"),
+                "t_good": t_good,
                 "distinct": distinct, "dup_of": dup_of,
                 "guard_pass": guard_pass, "guard_fail": None if guard_pass else "sentinel",
             }
@@ -1357,8 +1412,8 @@ def _run(args, fam: FamilyResolved):
                         # guard verdict / decode / q3 — EXACTLY as the parent loop does.
                         jguard_pass = jrew["reward_k3"] > guard.GUARD_SENTINEL + 1e-6
                         jt_good = t_good_for(julia_part)   # per-degree q3 operating point
-                        jdecoded = corn_decode(jrew["p_notbad"], jrew["p_good"], jt_good) if jguard_pass else None
-                        jis_q3 = jguard_pass and jdecoded == 3
+                        jdecoded = corn_decode(jrew["p_notbad"], jrew["p_good"], jt_good, jrew.get("p_ge4")) if jguard_pass else None
+                        jis_q3 = jguard_pass and (jdecoded or 0) >= 3   # q3+
                         # distinctness is on `c` (the parameter), NOT the z-plane spot:
                         # multiple q3 walks at the same c collapse to one found-point.
                         if jis_q3:
@@ -1388,7 +1443,7 @@ def _run(args, fam: FamilyResolved):
                             "reached_depth": jrew["reached_depth"],
                             "decoded_class": jdecoded,
                             "p_notbad": jrew["p_notbad"], "p_good": jrew["p_good"],
-                            "t_good": jt_good,
+                            "p_ge4": jrew.get("p_ge4"), "t_good": jt_good,
                             "distinct": jdistinct, "dup_of": jdup_of,
                             "guard_pass": jguard_pass,
                             "guard_fail": None if jguard_pass else "sentinel",
@@ -1518,7 +1573,7 @@ def _run(args, fam: FamilyResolved):
 def _gather(args, fam: FamilyResolved):
     """Guard-OFF gathering harvest for one c-plane class (+ optional --julia-hook). Raw
     v5 scoring; guard would-pass verdict logged per outcome as a prior; density rejection
-    keyed on decoded_class == 3 alone (guard is off); durable per-class ledger + full
+    keyed on decoded_class >= 3 alone (guard is off); durable per-class ledger + full
     walks.jsonl; NO image/feature dumps. Byte-independent of production discovery (its
     own GATHER_DIR/<partition> subtree)."""
     smoke = args.smoke
@@ -1631,12 +1686,12 @@ def _gather(args, fam: FamilyResolved):
             rew = harvest_walk_reward(scorer, wid, frames, WORKERS,
                                       scratch / f"reward_b{batch_i:03d}", loc_of)
             t_good = t_good_for(fam.partition)   # per-degree q3 operating point
-            decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good)
+            decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good, rew.get("p_ge4"))
             oid = f"{fam.id_tag}_{run_ts}_{seq:06d}"; seq += 1
             verdict, gstats = outcome_guard_verdict(
                 rew["outcome_cx"], rew["outcome_cy"], rew["outcome_fw"],
                 gf_dir / f"{oid}.field.bin", family=fam.render_family, c=fam.c)
-            is_q3 = decoded == 3
+            is_q3 = (decoded or 0) >= 3                   # q3+ — class 4 admits too
             distinct, dup_of = (is_distinct(rew["outcome_cx"], rew["outcome_cy"],
                                             rew["outcome_fw"], cloud, DEDUP_K)
                                 if is_q3 else (False, None))
@@ -1649,7 +1704,8 @@ def _gather(args, fam: FamilyResolved):
                 "outcome_fw": rew["outcome_fw"], "k3": rew["reward_k3"],
                 "raw_top3": rew["raw_top3"], "reached_depth": rew["reached_depth"],
                 "decoded_class": decoded,
-                "p_notbad": rew["p_notbad"], "p_good": rew["p_good"], "t_good": t_good,
+                "p_notbad": rew["p_notbad"], "p_good": rew["p_good"], "p_ge4": rew.get("p_ge4"),
+                "t_good": t_good,
                 # guard would-pass verdict — a recorded PRIOR, never a gate in gather.
                 "guard_verdict": verdict, "guard_pass": verdict == "pass",
                 "interior_frac": gstats.interior_frac, "field_std": gstats.field_std,
@@ -1686,13 +1742,13 @@ def _gather(args, fam: FamilyResolved):
                             scorer, jwid, jframes, WORKERS,
                             scratch / f"jreward_b{batch_i:03d}_w{wid:04d}", jloc_of)
                         jt_good = t_good_for(julia_part)   # per-degree q3 operating point
-                        jdecoded = corn_decode(jrew["p_notbad"], jrew["p_good"], jt_good)
+                        jdecoded = corn_decode(jrew["p_notbad"], jrew["p_good"], jt_good, jrew.get("p_ge4"))
                         joid = f"j{fam.id_tag}_{run_ts}_{seq:06d}"; seq += 1
                         jverdict, jgstats = outcome_guard_verdict(
                             jrew["outcome_cx"], jrew["outcome_cy"], jrew["outcome_fw"],
                             gf_dir / f"{joid}.field.bin", family=julia_render_family,
                             c=(str(jc[0]), str(jc[1])))
-                        jis_q3 = jdecoded == 3
+                        jis_q3 = (jdecoded or 0) >= 3                  # q3+
                         jdistinct, jdup_of = (is_distinct(jc[0], jc[1], jc_fw, julia_cloud, DEDUP_K)
                                               if jis_q3 else (False, None))
                         jrow = {
@@ -1707,7 +1763,7 @@ def _gather(args, fam: FamilyResolved):
                             "k3": jrew["reward_k3"], "raw_top3": jrew["raw_top3"],
                             "reached_depth": jrew["reached_depth"], "decoded_class": jdecoded,
                             "p_notbad": jrew["p_notbad"], "p_good": jrew["p_good"],
-                            "t_good": jt_good,
+                            "p_ge4": jrew.get("p_ge4"), "t_good": jt_good,
                             "guard_verdict": jverdict, "guard_pass": jverdict == "pass",
                             "interior_frac": jgstats.interior_frac, "field_std": jgstats.field_std,
                             "distinct": jdistinct, "dup_of": jdup_of,
@@ -1835,7 +1891,7 @@ def _gather_phoenix(args):
             rew = harvest_walk_reward(scorer, wid, frames, WORKERS,
                                       scratch / f"reward_r{rnd:03d}", loc_of)
             t_good = t_good_for("phoenix")   # phoenix -> baseline (not in the swept eval)
-            decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good)
+            decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good, rew.get("p_ge4"))
             oid = f"ph_{run_ts}_{seq:06d}"; seq += 1
             verdict, gstats = outcome_guard_verdict(
                 rew["outcome_cx"], rew["outcome_cy"], rew["outcome_fw"],
@@ -1847,7 +1903,8 @@ def _gather_phoenix(args):
                 "outcome_fw": rew["outcome_fw"], "k3": rew["reward_k3"],
                 "raw_top3": rew["raw_top3"], "reached_depth": rew["reached_depth"],
                 "decoded_class": decoded,
-                "p_notbad": rew["p_notbad"], "p_good": rew["p_good"], "t_good": t_good,
+                "p_notbad": rew["p_notbad"], "p_good": rew["p_good"], "p_ge4": rew.get("p_ge4"),
+                "t_good": t_good,
                 "guard_verdict": verdict, "guard_pass": verdict == "pass",
                 "interior_frac": gstats.interior_frac, "field_std": gstats.field_std,
                 # Parameter-point identity (fixed Ushiki plane -> the legacy defaults).
@@ -1969,8 +2026,8 @@ def _run_phoenix(args):
             # Guard verdict: k3 collapses to the sentinel iff EVERY framing of the top-3
             # failed the guard. A guarded outcome carries decoded_class=None (never q3).
             guard_pass = rew["reward_k3"] > guard.GUARD_SENTINEL + 1e-6
-            decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good) if guard_pass else None
-            is_q3 = guard_pass and decoded == 3
+            decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good, rew.get("p_ge4")) if guard_pass else None
+            is_q3 = guard_pass and (decoded or 0) >= 3    # q3+ — class 4 admits too
             oid = f"ph_{run_ts}_{seq:06d}"; seq += 1
             row = {
                 "id": oid, "ts": run_ts, "family": "phoenix", "descend_mode": "phoenix",
@@ -1978,7 +2035,8 @@ def _run_phoenix(args):
                 "outcome_fw": rew["outcome_fw"], "k3": rew["reward_k3"],
                 "raw_top3": rew["raw_top3"], "reached_depth": rew["reached_depth"],
                 "decoded_class": decoded,
-                "p_notbad": rew["p_notbad"], "p_good": rew["p_good"], "t_good": t_good,
+                "p_notbad": rew["p_notbad"], "p_good": rew["p_good"], "p_ge4": rew.get("p_ge4"),
+                "t_good": t_good,
                 # No spatial cloud for a single fixed plane: `distinct` mirrors is_q3 for
                 # schema parity; near-dup pile-up is collapsed downstream by
                 # build_fresh_discovery's key-dedup + family-balanced round-robin.
@@ -2050,9 +2108,9 @@ def _finalize(run_ts: str):
     dup = [r for r in rows if not r.get("distinct")]
     totals = {"walked": len(rows), "harvested_distinct": len(distinct),
               "q3_dup": sum(1 for r in rows if not r.get("distinct")
-                            and r.get("guard_pass", True) and r.get("decoded_class") == 3),
+                            and r.get("guard_pass", True) and is_q3plus(r)),
               "not_q3": sum(1 for r in rows if r.get("guard_pass", True)
-                            and r.get("decoded_class") not in (None, 3)),
+                            and r.get("decoded_class") is not None and not is_q3plus(r)),
               "guarded": sum(1 for r in rows if not r.get("guard_pass", True))}
     summary = {"ts": run_ts, "finalized_from_ledger": True, "family": partition, "totals": totals,
                "cumulative": {"q3_cloud_size": len(cloud), "scored_rows": len(all_rows)},
@@ -2093,7 +2151,7 @@ def main():
     ap.add_argument("--gather", action="store_true",
                     help="guard-OFF oversampling harvest for the v6 label pass: raw v5 scoring "
                          "(degenerate frames survive), guard would-pass verdict logged per outcome "
-                         "as a PRIOR (not a gate), density rejection keyed on decoded_class==3 alone, "
+                         "as a PRIOR (not a gate), density rejection keyed on decoded_class>=3 alone, "
                          "durable per-class GATHER_DIR/<class> ledger + full walks.jsonl, NO image/"
                          "feature dumps. Honors --family / --julia-hook / --phoenix / --budget / --smoke.")
     ap.add_argument("--run-phoenix", action="store_true",
