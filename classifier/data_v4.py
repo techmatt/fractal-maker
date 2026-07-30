@@ -14,9 +14,15 @@ cache that has Julia rows and reuses this verbatim.
 
 The deploy-canonical eval view is the single render with
 `palette==twilight_shifted, aa_level==antialiased(ss4), scale==1.0, shift_id==center`;
-`palette_renders` returns the 6 ss4/center/scale-1.0 renders (one per palette) for the
+`palette_renders` returns the ss4/center/scale-1.0 renders (one per palette) for the
 palette-invariance test; `aa_twin` returns the aliased twilight/1.0/center render for
 the AA-invariance spot-check.
+
+The per-location palette **count and the always-present palette names** are not
+hardcoded: they are derived from the recipe's `aug_roster.json` (next to the cache
+manifest) and validated against the manifest, so a recipe change is data, not a code
+edit. v4..v7 baked 6 palettes per location; v8b bakes 4 (2 fixed — the deploy-matched
+`twilight_shifted` and the vivid `blue_orange` companion — plus 2 drawn per location).
 """
 from __future__ import annotations
 
@@ -56,6 +62,29 @@ class Render:
     aa_level: str  # "aliased" | "antialiased"
 
 
+@dataclass(frozen=True)
+class PaletteSpec:
+    """The recipe's per-location palette expectation, derived from `aug_roster.json`.
+    `expected_count` = len(always) + drawn_per_location; `always` = the palettes every
+    location must carry (the deploy instrument + vivid companion)."""
+    expected_count: int
+    always: tuple[str, ...]
+
+
+def load_palette_spec(cache_path) -> "PaletteSpec | None":
+    """Read the per-location palette expectation from the recipe metadata that sits next
+    to the cache manifest (`<cache_dir>/aug_roster.json`). Returns None when no roster is
+    present (pre-v8 caches never shipped one) — `palette_renders` then reports that the
+    recipe is missing rather than silently accepting any count."""
+    roster = Path(cache_path).parent / "aug_roster.json"
+    if not roster.exists():
+        return None
+    pal = json.loads(roster.read_text())["palettes"]
+    always = tuple(pal["always"])
+    return PaletteSpec(expected_count=len(always) + int(pal["drawn_per_location"]),
+                       always=always)
+
+
 @dataclass
 class Loc:
     location_id: int
@@ -66,6 +95,8 @@ class Loc:
     biased: bool        # True == v3-mined (down-weighted in the sampler)
     fractal_type: str
     renders: list[Render] = field(default_factory=list)
+    # recipe palette expectation (set by load_locations); None for a roster-less cache.
+    palette_spec: "PaletteSpec | None" = None
 
     # --- eval view selectors (read straight off the cache axes) ---
     def _pick(self, palette=None, aa=None, scale=None, shift=None):
@@ -83,10 +114,27 @@ class Loc:
         return got[0]
 
     def palette_renders(self) -> list[Render]:
-        """The 6 ss4 renders (one per palette), canonical scale + center — the
-        palette-invariance battery."""
+        """The ss4 renders (one per palette), canonical scale + center — the palette-
+        invariance battery. The expected count and the always-present palette names come
+        from the recipe (`aug_roster.json`), not a literal, so a recipe change is data.
+
+        Still rejects a genuinely malformed location: the count must match the recipe, the
+        palettes must be distinct (no duplicated render), and every always-palette (the
+        deploy instrument + vivid companion) must be present."""
+        spec = self.palette_spec
+        assert spec is not None, (
+            f"loc {self.location_id}: palette_renders needs the recipe palette spec "
+            f"(aug_roster.json beside the cache manifest); none was loaded")
         got = list(self._pick(aa="antialiased", scale=CANON_SCALE, shift=CANON_SHIFT))
-        assert len(got) == 6, f"loc {self.location_id}: {len(got)} ss4 palette renders"
+        palettes = [r.palette for r in got]
+        distinct = set(palettes)
+        assert len(distinct) == len(got), (
+            f"loc {self.location_id}: duplicated palette in ss4 renders: {sorted(palettes)}")
+        assert len(got) == spec.expected_count, (
+            f"loc {self.location_id}: {len(got)} ss4 palette renders "
+            f"(recipe expects {spec.expected_count})")
+        missing = [p for p in spec.always if p not in distinct]
+        assert not missing, f"loc {self.location_id}: missing always-palette(s) {missing}"
         return sorted(got, key=lambda r: r.palette)
 
     def aa_twin(self) -> Render:
@@ -98,7 +146,8 @@ class Loc:
 
 def load_locations(cache_path: Path = DEFAULT_CACHE,
                    verify_paths: bool = True) -> list[Loc]:
-    """Group the cache manifest into base locations (42 renders each)."""
+    """Group the cache manifest into base locations (one Loc per location_id)."""
+    spec = load_palette_spec(cache_path)   # recipe palette expectation (None pre-v8)
     by_id: dict[int, Loc] = {}
     for line in Path(cache_path).read_text().splitlines():
         if not line.strip():
@@ -111,6 +160,7 @@ def load_locations(cache_path: Path = DEFAULT_CACHE,
                 location_id=lid, label=int(r["label"]), split=r["split"],
                 group_id=int(r["group_id"]), source=r["source"],
                 biased=bool(r["biased"]), fractal_type=r["fractal_type"],
+                palette_spec=spec,
             )
         else:  # sanity: per-location metadata must agree across its 42 rows
             assert loc.label == int(r["label"]) and loc.split == r["split"] \
