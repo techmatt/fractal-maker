@@ -46,6 +46,7 @@ import tools.studies.steered_pilot_morph as spm            # noqa: E402  loc_of_
 import prescreen                                            # noqa: E402  embed_paths (v7 penultimate)
 import production_seeder as ps                              # noqa: E402  outcome_feature (missing v7)
 from score_lib import Scorer                                # noqa: E402
+from tools.ranker import scorer as rk                       # noqa: E402  PINNED penultimate ckpt
 from tools.curation.colored_clip import load_clip, embed_clip  # noqa: E402
 
 OUT_DIR = ROOT / "data" / "ranker" / "pref_loc_v0"
@@ -193,12 +194,21 @@ def build_prior(scorer, rng) -> dict:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--with-prior", action="store_true")
-    ap.add_argument("--scorer", default=str(ps.SCORER_PATH))
+    # PINNED to the v7 penultimate (tools/ranker/scorer.PENULTIMATE_CKPT), NOT
+    # production_seeder.SCORER_PATH: that resolves to active_ckpt.ACTIVE_CKPT, so a discovery-gate
+    # flip would silently rebuild pref_loc_v1's frozen features under the new head — same 1280-D
+    # shape, so nothing would error, and the head's certification would quietly stop describing
+    # the deployed object. Overriding this flag is a REFIT and needs re-certification.
+    ap.add_argument("--scorer", default=str(rk.PENULTIMATE_CKPT))
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"scorer (v7 penultimate): {args.scorer}", flush=True)
+    print(f"scorer ({rk.PENULTIMATE_VERSION} penultimate, PINNED): {args.scorer}", flush=True)
+    if Path(args.scorer).resolve() != rk.PENULTIMATE_CKPT.resolve():
+        print(f"  WARNING: --scorer overrides the pin ({rk.PENULTIMATE_CKPT}). Features built "
+              f"under a different head are a REFIT of pref_loc_v1, not a rebuild — the existing "
+              f"head's weights and certification do not transfer.", flush=True)
     scorer = Scorer(args.scorer)
     print("loading CLIP (vit_base_patch16_clip_224.openai) ...", flush=True)
     clip_model, clip_tf = load_clip()

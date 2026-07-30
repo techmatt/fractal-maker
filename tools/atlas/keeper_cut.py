@@ -7,15 +7,31 @@ the `p_good` cut that maximizes **F0.5** against the human labels, so a "keeper"
 are confident a human would call good. NOTHING gates on it — admission stays at the discovery
 `t_good`. Keeper status is a *report-time* filter on the persisted canonical `p_good`:
 
-    keeper(row) := corn_decode(row.p_notbad, row.p_good, keeper_cut_for(partition)) == 3
+    keeper(row) := corn_decode(row.p_notbad, row.p_good, keeper_cut_for(partition)) >= 3
 
-Derived exactly like the discovery table (`tools/v7/derive_t_good.py`), from the frozen v7 eval
-slice `data/classifier/v7/eval_scores_v7.jsonl` (label/​fractal_type/​v7 probs inline, already
-label_store-resolved + cross-checked by that script), with two changes: the objective is F0.5
-(beta=0.5) instead of F2, and the julia:multibrot* slices use the census (`source ==
-"prospect_census"`) per Option A. A partition with < MIN_POS positives is UNCALIBRATED and falls
-back to the discovery baseline 0.50, flagged. Prediction uses `corn_decode` (the fixed
+Derived exactly like the discovery table (`tools/v8/derive_t_good_v8.py`), from the frozen v8
+eval slice `data/v8/eval_scores_v8.jsonl` (label / fractal_type / v8 cumulative probs inline,
+frozen by tools/v8/eval_v8.py), with one change: the objective is F0.5 (beta=0.5) rather than the
+discovery table's per-family choice. A partition with < MIN_POS positives is UNCALIBRATED and
+falls back to the discovery baseline 0.50, flagged. Prediction uses `corn_decode` (the fixed
 `p_notbad>=0.5` gate AND `p_good>=t`), matching how an admitted keeper decodes.
+
+RECUT AGAINST v8 (was the v7 slice). Two substantive changes beyond the model:
+
+  * The population is now DURABLE. The v7 cuts were derived from
+    `data/classifier/v7/eval_scores_v7.jsonl`, which was gitignored, was never committed, and
+    is GONE — so `derive()` could not run and the committed constant's provenance stamp named a
+    population that no longer existed. `data/v8/eval_scores_v8.jsonl` is `paths.durable()` and
+    committed, so this derivation is re-runnable and its stamp is checkable.
+  * A KEEPER IS `label >= 3`, NOT `label == 3`. Under v7's 1..3 labels those were the same
+    predicate. Under v8's 1..4 they are not: `== 3` would score every class-4 location — the
+    best locations in the corpus — as a keeper NEGATIVE, which would push the precision-weighted
+    cut in exactly the wrong direction.
+
+The v8 slice covers two partitions (the julia:multibrot census and the mandelbrot loose0_v3
+floor); julia:mandelbrot and phoenix, which v7 could calibrate, now fall to UNCALIBRATED. That
+is a real loss of coverage and it is reported as such rather than papered over with a v7 value
+carried onto a v8 scale.
 
   uv run python tools/atlas/keeper_cut.py            # print table + write data/atlas/keeper_cuts.json
 """
@@ -33,7 +49,11 @@ sys.path.insert(0, str(ROOT / "tools" / "atlas"))
 from score_lib import corn_decode                    # noqa: E402
 from production_seeder import T_GOOD_BASELINE         # noqa: E402
 
-EVAL = ROOT / "data" / "classifier" / "v7" / "eval_scores_v7.jsonl"
+EVAL = ROOT / "data" / "v8" / "eval_scores_v8.jsonl"
+# Column prefix of the scorer whose probabilities the slice carries. eval_v8 writes
+# `v8_p_ge2` / `v8_p_ge3` / `v8_p_ge4`; the v7-era slice wrote `v7_p_not_bad` / `v7_p_good`.
+# Derived from the slice's own filename so the two cannot disagree.
+EVAL_VERSION = "v8"
 OUT = ROOT / "data" / "atlas" / "keeper_cuts.json"
 
 # fractal_type (Rust kind_str) -> ledger partition key (mirrors derive_t_good.FT2FAM).
@@ -56,7 +76,11 @@ def read_jsonl(p):
 
 
 def load_triples(eval_path: Path = EVAL) -> dict:
-    """{partition: [(p_notbad, p_good, is_pos)]}. julia:multibrot* -> census-only (Option A)."""
+    """{partition: [(p_notbad, p_good, is_pos)]}. julia:multibrot* -> census-only (Option A).
+
+    `is_pos` is `label >= 3` — a class-4 location is emphatically a keeper. Under v7's 1..3
+    labels `== 3` was the same predicate; under v8's 1..4 it would score the best locations in
+    the corpus as negatives."""
     parts: dict = defaultdict(list)
     for r in read_jsonl(eval_path):
         part = FT2FAM.get(r["fractal_type"])
@@ -64,14 +88,15 @@ def load_triples(eval_path: Path = EVAL) -> dict:
             continue
         if part.startswith("julia:multibrot") and r.get("source") != "prospect_census":
             continue
-        parts[part].append((r["v7_p_not_bad"], r["v7_p_good"], r["label"] == 3))
+        parts[part].append((r[f"{EVAL_VERSION}_p_ge2"], r[f"{EVAL_VERSION}_p_ge3"],
+                            r["label"] >= 3))
     return parts
 
 
 def confusion(rows, t):
     tp = fp = fn = 0
     for nb, g, pos in rows:
-        pred = corn_decode(nb, g, t) == 3
+        pred = corn_decode(nb, g, t) >= 3
         if pred and pos:
             tp += 1
         elif pred and not pos:
@@ -107,7 +132,7 @@ def loo_f(rows):
         rest = rows[:i] + rows[i + 1:]
         t = best_t(rest)
         nb, g, pos = rows[i]
-        pred = corn_decode(nb, g, t) == 3
+        pred = corn_decode(nb, g, t) >= 3
         if pred and pos:
             tp += 1
         elif pred and not pos:
@@ -152,7 +177,10 @@ def keeper_cut_for(partition: str, cuts: dict) -> float:
 
 
 def is_keeper(partition: str, p_notbad: float, p_good: float, cuts: dict) -> bool:
-    return corn_decode(p_notbad, p_good, keeper_cut_for(partition, cuts)) == 3
+    """`>= 3`: the keeper cut moves the q3 boundary only, so a row that decodes above it is a
+    keeper. (Called without the third probability the decode caps at 3 anyway — `>= 3` keeps it
+    correct if a caller ever passes one.)"""
+    return corn_decode(p_notbad, p_good, keeper_cut_for(partition, cuts)) >= 3
 
 
 def write(cuts: dict, path: Path = OUT):
@@ -165,11 +193,12 @@ def write(cuts: dict, path: Path = OUT):
 
 
 # The scorer version the cuts were derived from is fixed by the derivation code path itself:
-# EVAL lives under data/classifier/<version>/, and load_triples reads that version's inline
-# probabilities. So the model stamp is CHEAPLY DETERMINABLE here (not a history dig) — it is
-# whichever version owns EVAL. A concrete `model` string is a VERIFIED stamp the test holds to
-# the active checkpoint; `model=None` would mean "unverified" (not currently the case).
-EVAL_MODEL_VERSION = EVAL.parent.name   # "v7" — dir under data/classifier/ owning the eval slice
+# `load_triples` reads EVAL_VERSION-prefixed columns out of EVAL. So the model stamp is
+# CHEAPLY DETERMINABLE here (not a history dig) — it is whichever version's columns were read.
+# A concrete `model` string is a VERIFIED stamp the test holds to the active checkpoint;
+# `model=None` would mean "unverified" (not currently the case, and no longer NEEDED to be:
+# the v8 population is durable, so the derivation is re-runnable and the stamp is checkable).
+EVAL_MODEL_VERSION = EVAL_VERSION       # scorer whose inline probabilities the slice carries
 
 
 def provenance_stamp() -> dict:
@@ -182,10 +211,13 @@ def provenance_stamp() -> dict:
         model=EVAL_MODEL_VERSION,
         verified=True,
         population=eval_rel,
-        detail="frozen eval slice; julia:multibrot* census-only (source=='prospect_census') per Option A",
+        durable_population=True,
+        detail=("frozen eval slice (paths.durable, committed); julia:multibrot* census-only "
+                "(source=='prospect_census') per Option A; keeper positive = label >= 3"),
         basis=(f"model + population named by the derivation code path: keeper_cut.load_triples reads "
-               f"{EVAL_MODEL_VERSION}_p_not_bad/{EVAL_MODEL_VERSION}_p_good from EVAL ({eval_rel}); "
-               f"not inferred from history"),
+               f"{EVAL_MODEL_VERSION}_p_ge2/{EVAL_MODEL_VERSION}_p_ge3 from EVAL ({eval_rel}); "
+               f"not inferred from history. The population is committed, so `derive()` re-runs and "
+               f"this stamp is verifiable rather than asserted."),
     )
 
 

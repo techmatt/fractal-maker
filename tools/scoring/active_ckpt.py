@@ -53,9 +53,18 @@ PALETTE = "twilight_shifted"           # v4/v5 deploy-canonical palette
 # checkpoint from here. Flip ACTIVE_CKPT and the whole gate moves; nothing else hardcodes
 # a version. The load path is version-agnostic (score_lib.Scorer reads mean/std/head from
 # the checkpoint's own config), so only this string changes between versions.
-ACTIVE_CKPT = "data/classifier/v7/model_best.pt"    # v7 unified location classifier (LIVE)
-# Rollback: point ACTIVE_CKPT back at v6 (the one-flip rollback anchor, the role v5 held)
-# to restore the prior gate; v5 remains the deeper rollback.
+ACTIVE_CKPT = "data/classifier/v8/model_best.pt"    # v8 unified location classifier (LIVE)
+# v8 is the first K=4 head: it emits THREE cutpoint logits (P>=2, P>=3, P>=4) where v5..v7
+# emitted two, so it can decode class 4. The load path stays version-agnostic — score_lib.Scorer
+# reads num_classes/mean/std/geometry off the checkpoint's own config — but a K=3-shaped consumer
+# that hardcoded two logits will now fail loudly on the state-dict shape rather than mis-score.
+# Rollback: point ACTIVE_CKPT back at v7 (the one-flip rollback anchor, the role v6 held) to
+# restore the prior gate; v6/v5 remain the deeper rollbacks. A rollback must also revert the
+# per-partition t_good table (production_seeder.T_GOOD_OVERRIDES) and the keeper cut
+# (data/atlas/keeper_cuts.json) — those thresholds are calibrated to v8's p_good scale and are
+# meaningless on v7's. tools/atlas/test_steered_frontier.py holds keeper_cuts to the active
+# version, so a rollback that forgets goes red rather than silent.
+V7_CKPT_ROLLBACK = "data/classifier/v7/model_best.pt"
 V6_CKPT_ROLLBACK = "data/classifier/v6/model_best.pt"
 V5_CKPT_ROLLBACK = "data/classifier/v5/model_best.pt"
 DEFAULT_MODEL = ACTIVE_CKPT             # unified location-quality model (== ACTIVE_CKPT)

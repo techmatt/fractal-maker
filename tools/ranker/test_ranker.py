@@ -97,3 +97,48 @@ def test_bt_pairwise_learns_direction():
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# =========================================================================== #
+# The frozen feature extractor is PINNED, not resolved through the active checkpoint.
+#
+# pref_loc_v1's W was fit on v7-penultimate features. v8 shares the backbone, so a v8
+# penultimate is also 1280-D: repointing the extractor would pass every shape check and
+# return confident nonsense while the head's certification kept being quoted. These pin
+# that the ranker's feature path cannot move when the discovery gate flips.
+# =========================================================================== #
+def test_ranker_penultimate_is_pinned_not_the_active_checkpoint():
+    import sys as _s
+    _s.path.insert(0, str(ROOT / "tools" / "scoring"))
+    import active_ckpt
+    from tools.ranker import scorer as rk
+
+    assert rk.PENULTIMATE_VERSION == "v7", (
+        "pref_loc_v1's features are pinned to the v7 penultimate; changing this pin is a REFIT "
+        "and needs re-certification, not an edit")
+    assert rk.PENULTIMATE_CKPT.exists(), f"pinned extractor missing: {rk.PENULTIMATE_CKPT}"
+    # The point of the pin: it must NOT track the live gate. (If a future version legitimately
+    # aligns them, this assertion is what makes that a deliberate decision rather than a drift.)
+    assert Path(active_ckpt.ACTIVE_CKPT).parent.name != rk.PENULTIMATE_VERSION, (
+        "the ranker pin now equals the active checkpoint — if that is intended (a certified "
+        "refit under the active head), say so here explicitly; do not let it happen silently")
+
+
+def test_ranker_feature_paths_do_not_resolve_through_production_seeder():
+    # A grep-level guard on the two sites that DID resolve through ACTIVE_CKPT. Source-level
+    # because the failure is at construction time behind a lazy import + a GPU load, so a
+    # behavioural test would need a checkpoint and a CUDA context to notice.
+    for rel in ("tools/ranker/build_features.py", "tools/ranker/score_locations.py"):
+        src = (ROOT / rel).read_text(encoding="utf-8")
+        assert "ps.SCORER_PATH" not in src, (
+            f"{rel} resolves the ranker's feature extractor through production_seeder."
+            f"SCORER_PATH (== active_ckpt.ACTIVE_CKPT) — a gate flip would silently repoint "
+            f"pref_loc_v1's frozen features. Use tools.ranker.scorer.PENULTIMATE_CKPT.")
+
+
+def test_penultimate_scorer_refuses_to_fall_back_when_the_pin_is_missing(monkeypatch, tmp_path):
+    import pytest
+    from tools.ranker import scorer as rk
+    monkeypatch.setattr(rk, "PENULTIMATE_CKPT", tmp_path / "absent.pt")
+    with pytest.raises(SystemExit, match="PINNED"):
+        rk.penultimate_scorer()

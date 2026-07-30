@@ -102,9 +102,11 @@ TRACKED_CANARIES = [
     # blindspot: labels live ONLY in images.jsonl (no scores.json exists).
     "data/label_corpus/batches/2026-07-12_blindspot_v6reject_v1/images.jsonl",
     # Committed classifier weights (force-tracked; not reproducible under GPU float
-    # nondeterminism, so no rebuild path). v7 is the LIVE deployed model; v6 is the
-    # one-flip rollback anchor (the role v5 held before the v7 promotion); v5 stays as
-    # the deeper rollback. Every other v{2..4} weight is gitignored under data/*.
+    # nondeterminism, so no rebuild path). v8 is the LIVE deployed model; v7 is the
+    # one-flip rollback anchor (the role v6 held before the v8 promotion) AND the frozen
+    # penultimate the pref_loc_v1 ranker is pinned to; v6/v5 are the deeper rollbacks.
+    # Every other v{2..4} weight is gitignored under data/*.
+    "data/classifier/v8/model_best.pt",
     "data/classifier/v7/model_best.pt",
     "data/classifier/v6/model_best.pt",
     "data/classifier/v5/model_best.pt",

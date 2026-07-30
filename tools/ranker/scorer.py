@@ -35,6 +35,53 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL = ROOT / "data" / "ranker" / "pref_loc_v1" / "model.npz"
 
+# =========================================================================== #
+# FROZEN FEATURE EXTRACTOR — PINNED, deliberately NOT the active checkpoint.
+#
+# `RankerScorer.load()` itself resolves nothing but the affine head in the .npz — it never
+# touches a checkpoint. The exposure was one layer out, in the two places that BUILD the `v7`
+# feature block: `build_features.py --scorer` defaulted to `production_seeder.SCORER_PATH`, and
+# `score_locations._ensure_stack` constructed `Scorer(ps.SCORER_PATH)`. Both resolve to
+# `active_ckpt.ACTIVE_CKPT`, so flipping the discovery gate silently repointed the ranker's
+# frozen features at the new head.
+#
+# That failure would have been SILENT, which is what makes it worth a pin rather than a comment.
+# pref_loc_v1's W was fit on v7-penultimate features; v8 shares the backbone
+# (mobilenetv4_conv_medium), so a v8 penultimate is also 1280-D and every shape check, every
+# standardize, every dot product would succeed. The head would just be applying v7-fit weights
+# to a differently-organized feature space and returning confident nonsense — and its
+# certification (3-batch LOBO meanSp +0.436) would no longer describe the deployed object at
+# all, while still being quoted as if it did.
+#
+# So it is pinned to the v7 penultimate, with NO refit. A refit is a separate, deliberate act
+# that must be re-certified; it is not something a discovery-gate flip is allowed to perform as
+# a side effect. When a refit does happen, move this pin and re-certify in the same change.
+PENULTIMATE_CKPT = ROOT / "data" / "classifier" / "v7" / "model_best.pt"
+PENULTIMATE_VERSION = PENULTIMATE_CKPT.parent.name          # "v7"
+# The feature-block name in `sets` this checkpoint produces. Kept equal to the version token so
+# a future refit cannot move one without the other going visibly inconsistent.
+PENULTIMATE_BLOCK = PENULTIMATE_VERSION
+
+
+def penultimate_scorer():
+    """The PINNED frozen feature extractor for the deployed ranker head.
+
+    Every ranker-side caller must build its `Scorer` through here rather than through
+    `production_seeder.SCORER_PATH` / `active_ckpt.ACTIVE_CKPT`. Raises rather than falling
+    back if the pinned weight is missing — a ranker silently scoring on a different head is
+    worse than a ranker that does not run."""
+    import sys as _sys
+    if str(ROOT / "tools" / "mining") not in _sys.path:
+        _sys.path.insert(0, str(ROOT / "tools" / "mining"))
+    from score_lib import Scorer
+    if not PENULTIMATE_CKPT.exists():
+        raise SystemExit(
+            f"ranker feature extractor missing: {PENULTIMATE_CKPT}. pref_loc_v1's features are "
+            f"PINNED to the {PENULTIMATE_VERSION} penultimate (see PENULTIMATE_CKPT) and must "
+            f"not fall back to the active checkpoint — that would silently repoint the frozen "
+            f"features and void the head's certification.")
+    return Scorer(str(PENULTIMATE_CKPT))
+
 
 class RankerScorer:
     def __init__(self, mean, scale, W, b, sets, head, reg, use_prior):

@@ -209,6 +209,22 @@ TAU_H_CAMPAIGN_FLOOR = {
 # here so the derivation no longer depends on a file that can vanish with `rm -r scratch/*`. The live
 # study path still overrides these whenever the records are regenerated; the campaign floors in
 # TAU_H_CAMPAIGN_FLOOR apply on top either way (they only ever raise).
+#
+# VERSION-STAMPED, AND THE MISMATCH IS FATAL. tau_h is a cut on the CHEAP-render p_good of a
+# specific head: the fidelity study that produced these numbers ran under v7
+# (tools/studies/descent_score_fidelity.py, which resolves its scorer through ACTIVE_CKPT),
+# and TAU_H_CAMPAIGN_FLOOR was raised from v7-era campaign harvest logs. On a different head
+# the cheap p_good distribution is a different distribution and these are numbers about
+# nothing. Vendored constants are exactly the kind of thing that keeps returning a confident
+# stale answer after a head change — nothing about a float says which model it describes — so
+# `derive_tau_h` FAILS LOUDLY when the stamp does not match the active version rather than
+# quietly gating a campaign at a threshold from the previous scorer.
+#
+# Re-derivation is deliberately NOT done here: it happens from the harvest logs at campaign
+# launch (tools/atlas/tau_h_retained_readout.py builds both axes of the curve from
+# harvest_log.jsonl). Until then the loud failure is the correct state — emission is dark
+# after a flip anyway, so nothing is blocked that was not already waiting on a discovery run.
+TAU_H_FIDELITY_BASE_MODEL = "v7"
 TAU_H_FIDELITY_BASE = {
     "mandelbrot": 0.20102782547473907,
     "multibrot3": 0.20102782547473907,
@@ -259,6 +275,12 @@ def _derive_tau_h_base_from_records(partitions: list[str], keep: float) -> dict:
     return base
 
 
+def _active_scorer_version() -> str:
+    """The live scorer version, from the single source of truth (tools/scoring/active_ckpt)."""
+    import active_ckpt
+    return active_ckpt.ACTIVE_VERSION
+
+
 def derive_tau_h(partitions: list[str], keep=0.90) -> dict:
     """Per-partition harvest cut, campaign floors applied.
 
@@ -266,10 +288,30 @@ def derive_tau_h(partitions: list[str], keep=0.90) -> dict:
     re-run); otherwise it falls back to the vendored `TAU_H_FIDELITY_BASE` — the launch-critical
     path must NOT depend on the disposable `scratch/descent_score_fidelity_records.json`. A partition
     with neither a record-derived nor a vendored base fails loudly and immediately (naming the
-    regenerator) rather than aborting deep in a frontier run."""
+    regenerator) rather than aborting deep in a frontier run.
+
+    The vendored fallback is additionally GATED ON THE MODEL VERSION it was derived under
+    (`TAU_H_FIDELITY_BASE_MODEL`): tau_h is a cut on a specific head's cheap p_good, so serving
+    a v7-derived constant to a v8 gate is serving a number about nothing. That path raises
+    instead. The LIVE record-derived path is not gated — if the study has been re-run, it was
+    run under the active checkpoint by construction."""
     if FIDELITY_RECORDS.exists():
         base = _derive_tau_h_base_from_records(partitions, keep)
     else:
+        active = _active_scorer_version()
+        if active != TAU_H_FIDELITY_BASE_MODEL:
+            raise SystemExit(
+                f"tau_h derivation: the vendored TAU_H_FIDELITY_BASE was derived under "
+                f"{TAU_H_FIDELITY_BASE_MODEL} but the active scorer is {active} "
+                f"(tools/scoring/active_ckpt.ACTIVE_CKPT). tau_h is a cut on the CHEAP-render "
+                f"p_good of a SPECIFIC head — a {TAU_H_FIDELITY_BASE_MODEL} cut on a {active} "
+                f"gate is a number about nothing, and TAU_H_CAMPAIGN_FLOOR is "
+                f"{TAU_H_FIDELITY_BASE_MODEL}-era too.\n"
+                f"  Re-derive at campaign launch from the harvest logs "
+                f"(tools/atlas/tau_h_retained_readout.py builds both axes of the curve), or "
+                f"re-run tools/studies/descent_score_fidelity.py under {active} to regenerate "
+                f"{FIDELITY_RECORDS.name}. Then update TAU_H_FIDELITY_BASE + "
+                f"TAU_H_FIDELITY_BASE_MODEL together — never one without the other.")
         base = {p: TAU_H_FIDELITY_BASE.get(p) for p in partitions}
         missing = sorted(p for p, v in base.items() if v is None)
         if missing:

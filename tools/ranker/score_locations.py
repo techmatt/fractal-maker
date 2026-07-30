@@ -10,8 +10,9 @@ ranking, emission feed ordering, dive-result sorting — see the HARD SCOPE box 
      `data/ranker/pref_loc_v0/features.npz` covers every steered_run2 + dive
      admission, so scoring those is a pure cache hit with no render; ELSE
   2. rendering the twilight_shifted canonical tile (`spm.render_colored` — the exact
-     recipe `features.npz` was built on) and computing v7 (prescreen penultimate) +
-     colored (CLIP), caching the result so a resume never recomputes.
+     recipe `features.npz` was built on) and computing v7 (prescreen penultimate, PINNED —
+     `scorer.penultimate_scorer`, never the active checkpoint) + colored (CLIP), caching the
+     result so a resume never recomputes.
 
 RANKS AN ALREADY-PRODUCED SET. This must never be called on the generation side
 (frontier priority / dive-start / production seeding); doing so is the failure mode
@@ -30,12 +31,14 @@ for _p in (ROOT, ROOT / "tools" / "atlas", ROOT / "tools" / "mining", ROOT / "to
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from tools.ranker.scorer import RankerScorer  # noqa: E402
+from tools.ranker.scorer import (  # noqa: E402
+    RankerScorer, penultimate_scorer, PENULTIMATE_BLOCK, PENULTIMATE_VERSION,
+)
 
 DEFAULT_FEATURES = ROOT / "data" / "ranker" / "pref_loc_v0" / "features.npz"
 # Blocks this helper knows how to recompute on a cache miss. If a future deploy adds
 # 'morph' to `sets`, teach `_compute` the morph_gray recipe before wiring — asserted below.
-COMPUTABLE = ("v7", "colored")
+COMPUTABLE = (PENULTIMATE_BLOCK, "colored")   # PENULTIMATE_BLOCK == "v7" (pinned extractor)
 
 
 def rank_percentiles(scores: dict) -> dict:
@@ -93,10 +96,11 @@ class LocationRanker:
     def _ensure_stack(self):
         if self._stack is not None:
             return self._stack
-        import production_seeder as ps                       # noqa: E402
-        from score_lib import Scorer                          # noqa: E402
         from tools.curation.colored_clip import load_clip     # noqa: E402
-        scorer = Scorer(str(ps.SCORER_PATH))
+        # PINNED to the v7 penultimate, NOT production_seeder.SCORER_PATH / ACTIVE_CKPT: the
+        # deployed head's W was fit on v7 features and a gate flip must not repoint them. See
+        # the PENULTIMATE_CKPT block in scorer.py for why this failure would be silent.
+        scorer = penultimate_scorer()
         clip_model, clip_tf = load_clip()
         self._stack = (scorer, clip_model, clip_tf)
         return self._stack
@@ -113,8 +117,9 @@ class LocationRanker:
             tile.parent.mkdir(parents=True, exist_ok=True)
             spm.render_colored(spm.loc_of_row(row), tile)
         feat = {}
-        if "v7" in self.sets:
-            feat["v7"] = prescreen.embed_paths(v7_scorer, [tile])[0].astype(np.float64)
+        if PENULTIMATE_BLOCK in self.sets:
+            feat[PENULTIMATE_BLOCK] = prescreen.embed_paths(
+                v7_scorer, [tile])[0].astype(np.float64)
         if "colored" in self.sets:
             feat["colored"] = embed_clip(clip_model, clip_tf,
                                          [Image.open(tile)])[0].astype(np.float64)

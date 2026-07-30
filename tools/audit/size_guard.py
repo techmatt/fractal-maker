@@ -199,28 +199,35 @@ REGISTRY: list[Entry] = [
     Entry("data/calibration/maxiter_diag/", RELOCATE, ARTIFACTS, "ignored",
           "maxiter diagnostic renders; regenerable (the frozen energy_calibration.json "
           "metric bins are tiny and stay tracked)"),
-    # Build cache-manifests + plans: regenerable byte-identical via build_plan, but
-    # read through hardcoded ROOT/data/vN/ paths (see repo_size_audit Phase 1).
-    Entry("data/v4/", RELOCATE, ARTIFACTS, "ignored",
-          "v4 build cache-manifest + plan + montage (regenerable via build_plan; "
-          "superseded version)"),
-    Entry("data/v5/", RELOCATE, ARTIFACTS, "ignored",
-          "v5 build cache-manifest + julia plan (regenerable via build_plan)"),
-    Entry("data/v6/", RELOCATE, ARTIFACTS, "ignored",
-          "v6 build cache-manifest + gather plan (regenerable via build_plan)"),
-    Entry("data/v7/", RELOCATE, ARTIFACTS, "ignored",
-          "v7 build cache-manifest + plan (regenerable via build_plan; active version)"),
+    # NOTE — the four `data/v4/`..`data/v7/` build-cache lines that used to sit here are
+    # DELETED, not left stale. Those caches are gone and will never exist again (the
+    # manifests/plans they covered were wiped 2026-07-25 and are unrebuildable; the v8 build
+    # is the durable replacement, covered by the KEEP line above). A registry line for a path
+    # that can never come back is not an allowlist, it is a fossil — and 19 stale lines is how
+    # the soft stale-report gets tuned out. Do NOT resurrect them for a future data/v9/: give
+    # v9 its own line describing v9.
+    #
+    # The stale-entry report stays a WARNING and must not be promoted to a failure:
+    # `data/v8/` was legitimately empty before its build, so a hard fail on emptiness would
+    # put the guard red during ordinary work — which is the other way guards get tuned out.
+    # Emptiness cannot distinguish not-yet-built from dead, so warn-then-prune is correct and
+    # the judgement stays with the human.
 
     # === RELOCATE -> precious-store — irreplaceable trained binaries (.pt) ======
     # Not GPU-reproducible (float nondeterminism), so no rebuild path. Active +
-    # rollback anchors move to the precious store; the v5/v6/v7 weights are CANARY
+    # rollback anchors move to the precious store; the classifier weights are CANARY
     # paths — their eventual move needs a deliberate test_tracked_artifacts update.
+    Entry("data/classifier/v8/", RELOCATE, PRECIOUS, "tracked",
+          "v8 model_best.pt — LIVE deployed discovery-gate weight (K=4 ordinal head; the "
+          "first version that can decode class 4). CANARY.", canary=True),
     Entry("data/classifier/v7/", RELOCATE, PRECIOUS, "tracked",
-          "v7 model_best.pt — LIVE deployed discovery-gate weight. CANARY.", canary=True),
+          "v7 model_best.pt — one-flip rollback anchor (the role v6 held before the v8 "
+          "promotion); ALSO the frozen penultimate the pref_loc_v1 ranker's features are "
+          "pinned to, so this weight is load-bearing beyond rollback. CANARY.", canary=True),
     Entry("data/classifier/v6/", RELOCATE, PRECIOUS, "tracked",
-          "v6 model_best.pt — one-flip rollback anchor. CANARY.", canary=True),
+          "v6 model_best.pt — deeper rollback anchor. CANARY.", canary=True),
     Entry("data/classifier/v5/", RELOCATE, PRECIOUS, "tracked",
-          "v5 model_best.pt — deeper rollback anchor. CANARY.", canary=True),
+          "v5 model_best.pt — deepest rollback anchor. CANARY.", canary=True),
     Entry("data/wallpaper_head/", RELOCATE, PRECIOUS, "ignored",
           "trained wallpaper-quality heads (v1/v2/v3 .pt) — not GPU-reproducible; "
           "active + rollback -> precious-store, older versions curate to trash at move"),

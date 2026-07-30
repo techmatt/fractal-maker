@@ -363,17 +363,23 @@ def test_location_of_partition_mapping():
 # --------------------------------------------------------------------------- #
 # ACCEPTANCE — current-decode rejects an old-ledger v6 row.
 # --------------------------------------------------------------------------- #
-def _row(id, ver, dc=3, guard=True, distinct=True):
+def _row(id, ver=None, dc=3, guard=True, distinct=True):
+    """A ledger row. `ver=None` means the CURRENT scorer version, resolved from the single
+    source of truth (tools/scoring/active_ckpt) rather than hardcoded — these tests are about
+    stale-decode semantics, so pinning the live version in them just breaks the suite at every
+    flip for no signal."""
     return {"id": id, "family": "mandelbrot", "outcome_cx": -0.5, "outcome_cy": 0.1,
             "outcome_fw": 0.03, "decoded_class": dc, "guard_pass": guard,
-            "distinct": distinct, "scorer_version": ver}
+            "distinct": distinct,
+            "scorer_version": cc.active_scorer_version() if ver is None else ver}
 
 
-def test_v6_row_rejected(tmp_path):
-    assert cc.active_scorer_version() == "v7"    # environment sanity: current is v7
+def test_stale_scorer_version_rows_rejected(tmp_path):
+    cur = cc.active_scorer_version()
+    assert cur and cur not in ("v6", "v5")   # sanity: the tokens below really are stale
     led = tmp_path / "outcome_ledger.jsonl"
     led.write_text("\n".join(json.dumps(r) for r in [
-        _row("cur", "v7"), _row("old", "v6"), _row("older", "v5"),
+        _row("cur"), _row("old", "v6"), _row("older", "v5"),
     ]) + "\n", encoding="utf-8")
 
     # soft form: stale rows silently skipped, only the current row admitted.
@@ -515,10 +521,10 @@ def test_release_floor_per_head_boundary(tmp_path):
 def test_multi_ledger_intake_dedup_and_source_tag(tmp_path):
     l1 = tmp_path / "a.jsonl"
     l2 = tmp_path / "b.jsonl"
-    l1.write_text(json.dumps(_row("shared", "v7")) + "\n"
-                  + json.dumps(_row("only_a", "v7")) + "\n", encoding="utf-8")
-    l2.write_text(json.dumps(_row("shared", "v7")) + "\n"      # dup id across ledgers
-                  + json.dumps(_row("only_b", "v7")) + "\n", encoding="utf-8")
+    l1.write_text(json.dumps(_row("shared")) + "\n"
+                  + json.dumps(_row("only_a")) + "\n", encoding="utf-8")
+    l2.write_text(json.dumps(_row("shared")) + "\n"      # dup id across ledgers
+                  + json.dumps(_row("only_b")) + "\n", encoding="utf-8")
     eng = B.EmissionDiversity(_args(tmp_path, ledger=[str(l1), str(l2)]))
     rows = eng._load_all_admitted()
     ids = [r["id"] for r in rows]
@@ -531,7 +537,7 @@ def test_intake_raises_on_run_scoped_id_collision(tmp_path):
     """Same id, DIFFERENT location across ledgers = run-scoped-id collision: RAISE, don't
     silently drop a distinct wallpaper (union-by-id would). Same id + same location dedups."""
     def _at(id, cx):
-        r = _row(id, "v7")
+        r = _row(id)
         r["outcome_cx"] = cx
         return r
     l1 = tmp_path / "a.jsonl"

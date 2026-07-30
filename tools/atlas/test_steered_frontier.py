@@ -9,6 +9,7 @@ reproduce the pilot priority exactly, plus the F0.5 keeper-cut metric math.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -94,11 +95,45 @@ def test_fbeta_beta_half_formula():
     assert abs(f - expect) < 1e-9
 
 
+def test_keeper_cuts_rederive_matches_the_committed_constant():
+    """The re-derivation drift gate, RESTORED now that its input is durable.
+
+    This check was retired in the v7 era for a good reason: `kc.derive()` read
+    `data/classifier/v7/eval_scores_v7.jsonl`, which was gitignored, was never committed, and
+    is gone — so the check skip-plumbed itself quiet and was a gate that could never fire. The
+    v8 recut moved the population to `data/v8/eval_scores_v8.jsonl`, which is `paths.durable()`
+    and committed, so the reason to retire it no longer holds and the gate comes back: the
+    committed constant must be exactly what the derivation code produces from the committed
+    slice. A hand-edited threshold, a changed objective, or a changed keeper-positive predicate
+    all surface here instead of silently shipping."""
+    assert kc.EVAL.exists(), f"{kc.EVAL} missing — the keeper population must stay durable"
+    fresh = kc.derive()
+    committed = json.loads(kc.OUT.read_text(encoding="utf-8"))["cuts"]
+    assert set(fresh) == set(committed)
+    for part in fresh:
+        assert float(fresh[part]["t"]) == float(committed[part]["t"]), (
+            f"{part}: re-derived t={fresh[part]['t']} != committed {committed[part]['t']} — "
+            f"re-run tools/atlas/keeper_cut.py")
+        assert fresh[part]["calibrated"] == committed[part]["calibrated"], part
+        assert fresh[part]["pos"] == committed[part]["pos"], part
+
+
+def test_keeper_positive_is_label_ge_3_not_eq_3():
+    # Under v8's 1..4 labels a class-4 location is the BEST kind of keeper. Scoring it as a
+    # negative would push the precision-weighted cut in exactly the wrong direction, and the
+    # v7-era `label == 3` predicate did precisely that once class 4 existed.
+    rows = kc.read_jsonl(kc.EVAL)
+    assert any(r["label"] == 4 for r in rows), "no class-4 rows — this test would be vacuous"
+    triples = kc.load_triples()
+    n_pos = sum(1 for rs in triples.values() for _, _, pos in rs if pos)
+    n_ge3 = sum(1 for r in rows if r["label"] >= 3 and kc.FT2FAM.get(r["fractal_type"]))
+    assert n_pos == n_ge3 > sum(1 for r in rows if r["label"] == 3)
+
+
 def test_keeper_cuts_committed_shape_partitions_and_provenance():
     # LIVE gate on the committed report-only constant data/atlas/keeper_cuts.json — the thing
-    # actually consumed (steered_run2_*/keeper_calibrate read it via kc.load_keeper_cuts). Runs
-    # with no dead-machinery input: it does NOT re-derive (kc.derive needs the gitignored v7 eval
-    # slice) and does NOT re-assert threshold VALUES (those stand as committed). It guards the
+    # actually consumed (steered_run2_*/keeper_calibrate read it via kc.load_keeper_cuts). It
+    # does NOT re-assert threshold VALUES (the re-derivation test above does that). It guards the
     # three things that would silently rot the constant: parseable shape, live partition coverage,
     # and a provenance stamp whose named model is the active checkpoint.
     import json
@@ -123,7 +158,7 @@ def test_keeper_cuts_committed_shape_partitions_and_provenance():
 
     # (3) provenance — must carry a stamp naming the model + population the cuts came from. A stamp
     # that NAMES a model must name the ACTIVE checkpoint; a null model is an accepted "unverified"
-    # stamp (used only if the basis were not cheaply determinable — it is, so today model=='v7').
+    # stamp (used only if the basis were not cheaply determinable — it is, so today model=='v8').
     prov = doc["provenance"]
     assert prov["population"], "provenance must name the population the cuts were derived from"
     model = prov.get("model")
@@ -266,7 +301,10 @@ def test_morph_memory_roundtrip_persists_window(tmp_path):
 def test_derive_tau_h_falls_back_to_vendored_base_when_records_absent(monkeypatch, tmp_path):
     # With the disposable records file gone, derive_tau_h must NOT SystemExit — it uses the
     # vendored base and still returns a floored tau_h for every production partition.
+    # The version gate is satisfied explicitly here so THIS test stays about the fallback;
+    # the gate itself is tested separately below.
     monkeypatch.setattr(sf, "FIDELITY_RECORDS", tmp_path / "records_do_not_exist.json")
+    monkeypatch.setattr(sf, "_active_scorer_version", lambda: sf.TAU_H_FIDELITY_BASE_MODEL)
     parts = list(sf.TAU_H_FIDELITY_BASE)
     tau = sf.derive_tau_h(parts)
     assert set(tau) == set(parts)
@@ -284,8 +322,39 @@ def test_derive_tau_h_loud_fail_for_unvendored_partition_when_records_absent(mon
     # regenerator — immediately, not deep in a frontier run.
     import pytest
     monkeypatch.setattr(sf, "FIDELITY_RECORDS", tmp_path / "records_do_not_exist.json")
+    monkeypatch.setattr(sf, "_active_scorer_version", lambda: sf.TAU_H_FIDELITY_BASE_MODEL)
     with pytest.raises(SystemExit, match="descent_score_fidelity"):
         sf.derive_tau_h(["mandelbrot", "julia:bogus_unvendored"])
+
+
+def test_vendored_tau_h_is_version_stamped_and_refuses_a_foreign_head(monkeypatch, tmp_path):
+    """The vendored base must never quietly serve a stale value after a head change.
+
+    tau_h is a cut on the CHEAP-render p_good of a specific scorer; nothing about a float says
+    which model it describes, which is exactly why a vendored constant survives a version flip
+    looking authoritative. The stamp + this gate make the mismatch fatal instead."""
+    import pytest
+    assert isinstance(sf.TAU_H_FIDELITY_BASE_MODEL, str) and sf.TAU_H_FIDELITY_BASE_MODEL
+    monkeypatch.setattr(sf, "FIDELITY_RECORDS", tmp_path / "records_do_not_exist.json")
+    monkeypatch.setattr(sf, "_active_scorer_version", lambda: "v99_some_future_head")
+    with pytest.raises(SystemExit, match="derived under"):
+        sf.derive_tau_h(["mandelbrot"])
+
+
+def test_live_fidelity_records_bypass_the_version_gate(monkeypatch, tmp_path):
+    """A re-run study was run under the ACTIVE checkpoint by construction, so the live
+    record-derived path is not gated — only the vendored fallback is. Otherwise re-deriving
+    correctly would still be blocked by a stamp describing the constant it replaced."""
+    recs = tmp_path / "records.json"
+    recs.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(sf, "FIDELITY_RECORDS", recs)
+    monkeypatch.setattr(sf, "_active_scorer_version", lambda: "v99_some_future_head")
+    # base below mandelbrot's campaign floor (0.269), so the floor's raise is observable
+    monkeypatch.setattr(sf, "_derive_tau_h_base_from_records",
+                        lambda parts, keep: {p: 0.10 for p in parts})
+    tau = sf.derive_tau_h(["mandelbrot", "julia:multibrot3"])
+    assert tau["julia:multibrot3"] == 0.10                     # no gate, no raise
+    assert tau["mandelbrot"] == sf.TAU_H_CAMPAIGN_FLOOR["mandelbrot"]   # floor still applies
 
 
 # =========================================================================== #
