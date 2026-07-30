@@ -12,6 +12,18 @@ second launcher on the same port fails to bind instead of silently co-hosting. I
 port is already held, it advances to the next free port (up to --max-scan) and prints the port it
 actually bound — so you always get exactly one clean host and know its URL.
 
+Relocated label-corpus crops
+----------------------------
+The label-corpus crop trees (``data/label_corpus/batches/*/{crops,vivid}/``) were moved OUT of
+the working tree behind ``tools/corpus/artifacts.py`` (see docs/design/label_corpus_relocation.md),
+so a plain repo-root static server would 404 them. The labeler page (``corpus_label.html``) still
+builds the in-tree URL ``data/label_corpus/batches/<id>/crops/<img>.jpg`` — a client-side string a
+Python seam cannot reach — so this server resolves it **transparently**: any request whose path is
+a relocated crop/vivid file is served from ``artifacts.resolve`` instead of the served root. A
+per-request ``?crops=<dir>`` override serves the crop's file from ``<dir>`` instead (point the page
+at an alternate crops folder without moving files or setting ``FRACTAL_ARTIFACTS_ROOT``). Everything
+else — the page, ``images.jsonl``, ``batch.json`` (all still in-tree) — is served unchanged.
+
 Run (from anywhere):
   uv run python tools/viz/serve.py [--port 8010] [--bind 127.0.0.1] [--root <dir>]
 """
@@ -21,11 +33,41 @@ import argparse
 import functools
 import http.server
 import os
+import re
 import socket
 import socketserver
 import sys
+from urllib.parse import parse_qs, unquote, urlsplit
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+sys.path.insert(0, os.path.join(ROOT, "tools", "corpus"))
+import artifacts as _artifacts  # noqa: E402  (the single relocated-artifact resolver)
+
+# data/label_corpus/batches/<batch_id>/(crops|vivid)/<rest...> — the relocated crop families.
+_CROP_RE = re.compile(
+    r"^data/label_corpus/batches/[^/]+/(?:crops|vivid)/(?P<rest>.+)$")
+
+
+class CorpusHandler(http.server.SimpleHTTPRequestHandler):
+    """Static handler that transparently serves relocated label-corpus crops from the
+    artifacts root (and honours a ``?crops=<dir>`` per-request override), leaving every
+    other path — page, images.jsonl, batch.json — to the default in-tree mapping."""
+
+    def translate_path(self, path):
+        split = urlsplit(path)
+        rel = unquote(split.path).lstrip("/").replace("\\", "/")
+        m = _CROP_RE.match(rel)
+        if m is None:
+            return super().translate_path(path)         # normal in-tree file
+        override = parse_qs(split.query).get("crops", [None])[0]
+        if override:
+            # serve the crop file straight out of the override dir (basename join is safe:
+            # `rest` is a single filename in this store, but normpath-guard anyway).
+            fname = os.path.basename(m.group("rest"))
+            return os.path.normpath(os.path.join(override, fname))
+        if _artifacts.is_relocated(rel):
+            return str(_artifacts.resolve(rel))          # relocated -> artifacts root
+        return super().translate_path(path)              # (not yet moved) in-tree fallback
 
 
 class ExclusiveTCPServer(socketserver.TCPServer):
@@ -50,7 +92,7 @@ def main() -> None:
                     help="if --port is busy, try this many ports upward (0 = fail fast)")
     a = ap.parse_args()
 
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(a.root))
+    handler = functools.partial(CorpusHandler, directory=str(a.root))
     last_err = None
     for port in range(a.port, a.port + max(a.max_scan, 0) + 1):
         try:
