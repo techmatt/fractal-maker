@@ -1,0 +1,808 @@
+{
+  "note": "DERIVED, pool-relative, regenerated on every enumeration run. A LOWER BOUND on true neighbour density: it counts only nuclei this scan found. Same-degree only (different degrees are different parameter planes).",
+  "radius_window_scales": 20.0,
+  "size_window_decades": 1.0,
+  "n_atoms": 200,
+  "neighbors": {
+    "mt2b79c6dcaea3": {
+      "n_comparable_within_20w": 17,
+      "nearest_comparable_dist_over_w": 0.0
+    },
+    "mt6d294291c682": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 57.7032
+    },
+    "mt38790793ccfe": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 40.1523
+    },
+    "mt874a5d0182b5": {
+      "n_comparable_within_20w": 7,
+      "nearest_comparable_dist_over_w": 5.6001
+    },
+    "mt8497e5a02545": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 22.6811
+    },
+    "mt1646973450cc": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 66.9375
+    },
+    "mt2d2144efabc9": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 313.7036
+    },
+    "mt60e16bb0a45f": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 153.4645
+    },
+    "mt9edb12331d5e": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 1934.7915
+    },
+    "mta52232eaae7a": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 11838881.1155
+    },
+    "mt6e0b1c67cdb0": {
+      "n_comparable_within_20w": 17,
+      "nearest_comparable_dist_over_w": 0.0
+    },
+    "mt22bf5d1b9356": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 13.196
+    },
+    "mt6d41e756e101": {
+      "n_comparable_within_20w": 8,
+      "nearest_comparable_dist_over_w": 2.1424
+    },
+    "mta5d231da8996": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 29.8134
+    },
+    "mtd64d580ec902": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 3629.1616
+    },
+    "mte211e36012c2": {
+      "n_comparable_within_20w": 17,
+      "nearest_comparable_dist_over_w": 0.0
+    },
+    "mt6e4bdfdf2928": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 3797.8956
+    },
+    "mt2f4fb1886a73": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 114.0559
+    },
+    "mtc847d57b039f": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 33.3804
+    },
+    "mtcb69475af66a": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 104.0844
+    },
+    "mtd26d113f8cc3": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 81.0552
+    },
+    "mte3f0c180c87c": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 260.7503
+    },
+    "mt3a6e89cc4e44": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 3642410.1171
+    },
+    "mtc5b3810fbe3b": {
+      "n_comparable_within_20w": 17,
+      "nearest_comparable_dist_over_w": 2.4806
+    },
+    "mt48e5cd4d8806": {
+      "n_comparable_within_20w": 10,
+      "nearest_comparable_dist_over_w": 2.5221
+    },
+    "mtfa2e2847da68": {
+      "n_comparable_within_20w": 2,
+      "nearest_comparable_dist_over_w": 8.3396
+    },
+    "mtc08f89f2cbdc": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 14.9653
+    },
+    "mt56812c5a5b97": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 52.7748
+    },
+    "mta4a8a913bc14": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 133.7684
+    },
+    "mt0d539c040166": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 294.0511
+    },
+    "mt6b65b56da11a": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 602.2591
+    },
+    "mtd263cc664d81": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 1132.9832
+    },
+    "mt8e218bfe3a9c": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 6145.4084
+    },
+    "mt1354c23eaf79": {
+      "n_comparable_within_20w": 17,
+      "nearest_comparable_dist_over_w": 0.6144
+    },
+    "mt0e4e5652910c": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 14.292
+    },
+    "mte49d1eb4fafb": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 34.8822
+    },
+    "mt4d15b2e2da2f": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 84.5761
+    },
+    "mt4280334ed3d4": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 1435.8073
+    },
+    "mt344f2d112715": {
+      "n_comparable_within_20w": 7,
+      "nearest_comparable_dist_over_w": 2.6024
+    },
+    "mt14228da9b8c6": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 173149.8539
+    },
+    "mt34bb3fdda190": {
+      "n_comparable_within_20w": 18,
+      "nearest_comparable_dist_over_w": 5.4522
+    },
+    "mted5c7c3e1037": {
+      "n_comparable_within_20w": 8,
+      "nearest_comparable_dist_over_w": 4.7
+    },
+    "mtadc2be08a52f": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 231.6827
+    },
+    "mtc84629c4ad49": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 6953.3576
+    },
+    "mtec737f5b932d": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 86779.7525
+    },
+    "mta811568b01d0": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 980971.548
+    },
+    "mtdb36749034b6": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 10866468.4997
+    },
+    "mtac434a6cb7a4": {
+      "n_comparable_within_20w": 17,
+      "nearest_comparable_dist_over_w": 2.4806
+    },
+    "mt3822f88ab61c": {
+      "n_comparable_within_20w": 2,
+      "nearest_comparable_dist_over_w": 8.7817
+    },
+    "mtf6bb89896181": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 28.0967
+    },
+    "mt766c6023a00d": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 193.1079
+    },
+    "mt5f1428835ed3": {
+      "n_comparable_within_20w": 17,
+      "nearest_comparable_dist_over_w": 0.6144
+    },
+    "mtae10591382be": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 257.7126
+    },
+    "mteb67a7577224": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 103.2954
+    },
+    "mted9b8bc3d617": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 117.6598
+    },
+    "mt99d171944f94": {
+      "n_comparable_within_20w": 2,
+      "nearest_comparable_dist_over_w": 6.2911
+    },
+    "mt3ef78e1576c8": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 50.3594
+    },
+    "mte102b7b587dd": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 115.3207
+    },
+    "mtaa16756a6c57": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 1127.3435
+    },
+    "mt96f41e9f8a5f": {
+      "n_comparable_within_20w": 6,
+      "nearest_comparable_dist_over_w": 4.229
+    },
+    "mt3b12f4f26a0c": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 58.6837
+    },
+    "mt92b9e83c3d9b": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 2300.4885
+    },
+    "mtbc053c2d46fb": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 78.6353
+    },
+    "mtc5bcad022874": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 6448526.8413
+    },
+    "mtf0a1cfdd9ac4": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 146.5013
+    },
+    "mt96ef078571a7": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 3732.3854
+    },
+    "mt431236982afe": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 46061.4307
+    },
+    "mt8ad9fc13ab0b": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 23.9648
+    },
+    "mt869f695dbbed": {
+      "n_comparable_within_20w": 7,
+      "nearest_comparable_dist_over_w": 2.6024
+    },
+    "mt929cc91b5cf1": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 27.3755
+    },
+    "mt49bab47d3c27": {
+      "n_comparable_within_20w": 10,
+      "nearest_comparable_dist_over_w": 2.5221
+    },
+    "mtda9125d5907d": {
+      "n_comparable_within_20w": 5,
+      "nearest_comparable_dist_over_w": 4.229
+    },
+    "mt64bee2959f38": {
+      "n_comparable_within_20w": 18,
+      "nearest_comparable_dist_over_w": 5.4522
+    },
+    "mt4e44fb27950e": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 40.2431
+    },
+    "mt80a537477a6f": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 8.6035
+    },
+    "mt4856dd3a5ef1": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 37.9492
+    },
+    "mte44b8cf23e09": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 25.1282
+    },
+    "mt8ae54cd8c997": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 115.3207
+    },
+    "mtee206a6ed107": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 506.0766
+    },
+    "mt4cccad6f84c7": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 1527.6778
+    },
+    "mtad596a859f38": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 13.196
+    },
+    "mt42a0af2a525b": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 29.8134
+    },
+    "mt96fdafbd68a7": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 202.5596
+    },
+    "mt67181adfafab": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 87.1351
+    },
+    "mt9f5560149636": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 59.3854
+    },
+    "mt0e2e3c705518": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 199.3969
+    },
+    "mt14ae79828424": {
+      "n_comparable_within_20w": 5,
+      "nearest_comparable_dist_over_w": 2.6788
+    },
+    "mtc1a9666639d8": {
+      "n_comparable_within_20w": 5,
+      "nearest_comparable_dist_over_w": 4.9727
+    },
+    "mtdb946a55d75a": {
+      "n_comparable_within_20w": 10,
+      "nearest_comparable_dist_over_w": 2.4097
+    },
+    "mt9f3c2e8210ba": {
+      "n_comparable_within_20w": 2,
+      "nearest_comparable_dist_over_w": 4.3734
+    },
+    "mt02f3def20ae1": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 50.9778
+    },
+    "mtf622d070a092": {
+      "n_comparable_within_20w": 5,
+      "nearest_comparable_dist_over_w": 4.9727
+    },
+    "mt46f6f0ed53aa": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 59.2524
+    },
+    "mt091a09f9aa3b": {
+      "n_comparable_within_20w": 10,
+      "nearest_comparable_dist_over_w": 2.4097
+    },
+    "mt24f9ec712b7e": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 27.4384
+    },
+    "mt024c402797f2": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 9.8122
+    },
+    "mt25a6290cbedc": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 71.9501
+    },
+    "mt09411a6bf18b": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 10.0227
+    },
+    "mt291766f15d63": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 228.2074
+    },
+    "mt8f3207b6cee6": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 3173.4749
+    },
+    "mt18e5aa659fba": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 84895.2628
+    },
+    "mt43236a486791": {
+      "n_comparable_within_20w": 6,
+      "nearest_comparable_dist_over_w": 2.6788
+    },
+    "mt6b70ff51d7ec": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 19.7792
+    },
+    "mtb4b20061da61": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 248.9287
+    },
+    "mtd54c65c283e3": {
+      "n_comparable_within_20w": 8,
+      "nearest_comparable_dist_over_w": 5.9878
+    },
+    "mt8ba6d259ac2c": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 8.9205
+    },
+    "mt9f3f5242e58b": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 56.8009
+    },
+    "mt058cc555455c": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 34376.3207
+    },
+    "mtcf4687d6867b": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 5.9961
+    },
+    "mt758f8ac14f24": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 10.0719
+    },
+    "mtfee795d12212": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 55.9649
+    },
+    "mt94367187c657": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 23.6048
+    },
+    "mtcfc27f908bdd": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 10.0173
+    },
+    "mt970d1a5608b8": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 21.6366
+    },
+    "mtcb1e87d02651": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 142.8033
+    },
+    "mt4de00d927847": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 1142931.395
+    },
+    "mta1db8f277857": {
+      "n_comparable_within_20w": 2,
+      "nearest_comparable_dist_over_w": 15.9279
+    },
+    "mte32a2d8f1368": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 23.6152
+    },
+    "mte0d0bf69ecb8": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 10.0719
+    },
+    "mta2ad1afc90b5": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 55.9649
+    },
+    "mt16468885700e": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 16.3638
+    },
+    "mtdf6c77f703aa": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 4.8993
+    },
+    "mtde91d73f2c49": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 20.4921
+    },
+    "mtd6166b8bbea5": {
+      "n_comparable_within_20w": 11,
+      "nearest_comparable_dist_over_w": 7.7464
+    },
+    "mtb506ee1df9b0": {
+      "n_comparable_within_20w": 8,
+      "nearest_comparable_dist_over_w": 5.9878
+    },
+    "mtecb13bb29c6e": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 840.4267
+    },
+    "mtf7090d2ac714": {
+      "n_comparable_within_20w": 11,
+      "nearest_comparable_dist_over_w": 3.2407
+    },
+    "mtf941ddba3f1d": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 554.6461
+    },
+    "mt26a3e304ff36": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 18.4272
+    },
+    "mt5223b486a966": {
+      "n_comparable_within_20w": 4,
+      "nearest_comparable_dist_over_w": 1.6693
+    },
+    "mta58b909ce96d": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 13.9589
+    },
+    "mt524d29d59cf5": {
+      "n_comparable_within_20w": 5,
+      "nearest_comparable_dist_over_w": 1.2257
+    },
+    "mtcce5f059aad1": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 17.7267
+    },
+    "mt6d3e9684e34c": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 14426.5428
+    },
+    "mt5b5451d930d8": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 10.4054
+    },
+    "mte933026a456b": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 2305.734
+    },
+    "mt096c1bee4756": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 105.6103
+    },
+    "mt9a833d14c321": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 59.7539
+    },
+    "mt041e2bf27260": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 7.5514
+    },
+    "mtf89eb7ad797f": {
+      "n_comparable_within_20w": 8,
+      "nearest_comparable_dist_over_w": 2.8467
+    },
+    "mtd2f3b9ba5051": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 19.2186
+    },
+    "mt0e641bb8e45c": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 2.6761
+    },
+    "mt5f852fc87e05": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 26.7406
+    },
+    "mt28ae53873c34": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 3.9163
+    },
+    "mt788a45b52cb1": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 21.6829
+    },
+    "mte164c7e7972d": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 4772.1895
+    },
+    "mt49b375aad608": {
+      "n_comparable_within_20w": 8,
+      "nearest_comparable_dist_over_w": 2.6962
+    },
+    "mt9ff8f95e0c5a": {
+      "n_comparable_within_20w": 3,
+      "nearest_comparable_dist_over_w": 13.0174
+    },
+    "mt8b225e0fdf3c": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 37.0651
+    },
+    "mt4a754e651d93": {
+      "n_comparable_within_20w": 2,
+      "nearest_comparable_dist_over_w": 5.843
+    },
+    "mt59646d73183e": {
+      "n_comparable_within_20w": 2,
+      "nearest_comparable_dist_over_w": 11.2541
+    },
+    "mtbc93788a53b5": {
+      "n_comparable_within_20w": 6,
+      "nearest_comparable_dist_over_w": 7.3227
+    },
+    "mt89ec92449cbe": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 44.789
+    },
+    "mt83a0d2d869bf": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 2402.6675
+    },
+    "mtab19d4a181b8": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 210.5055
+    },
+    "mt322748aef64d": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 1186.0402
+    },
+    "mt474165959264": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 17.554
+    },
+    "mt7dba37f1c86a": {
+      "n_comparable_within_20w": 11,
+      "nearest_comparable_dist_over_w": 2.5246
+    },
+    "mtebddbcda7d48": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 74.1236
+    },
+    "mt71f5282f2e61": {
+      "n_comparable_within_20w": 12,
+      "nearest_comparable_dist_over_w": 1.0231
+    },
+    "mt56cf21295074": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 78.6447
+    },
+    "mtdaf0d0085c75": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 123.2744
+    },
+    "mt32957c3d6b23": {
+      "n_comparable_within_20w": 6,
+      "nearest_comparable_dist_over_w": 5.1373
+    },
+    "mt6bb09e88f0c5": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 261.3409
+    },
+    "mt80a0482ac3f6": {
+      "n_comparable_within_20w": 4,
+      "nearest_comparable_dist_over_w": 7.3318
+    },
+    "mt2418e8b6a221": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 56.9302
+    },
+    "mt5fd92ea0c57b": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 624.9375
+    },
+    "mtb31ada87b70a": {
+      "n_comparable_within_20w": 8,
+      "nearest_comparable_dist_over_w": 9.1436
+    },
+    "mt966b9b039af5": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 48.2522
+    },
+    "mtff5f8f0c634c": {
+      "n_comparable_within_20w": 6,
+      "nearest_comparable_dist_over_w": 5.089
+    },
+    "mt1429999681bc": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 81.1446
+    },
+    "mt563cfec89f01": {
+      "n_comparable_within_20w": 12,
+      "nearest_comparable_dist_over_w": 1.0231
+    },
+    "mt87ffeb74b637": {
+      "n_comparable_within_20w": 3,
+      "nearest_comparable_dist_over_w": 3.7777
+    },
+    "mt2a448d3172fe": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 37077.4499
+    },
+    "mt9f719da43a68": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 17.4784
+    },
+    "mt4b2688ea73e4": {
+      "n_comparable_within_20w": 2,
+      "nearest_comparable_dist_over_w": 10.5559
+    },
+    "mt9c5331a9c9de": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 6.4328
+    },
+    "mtcf5cab260646": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 51.4943
+    },
+    "mt0bb672bfe49a": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 24.1017
+    },
+    "mt902b2b3823cf": {
+      "n_comparable_within_20w": 5,
+      "nearest_comparable_dist_over_w": 3.8696
+    },
+    "mtfd5f5d0a9672": {
+      "n_comparable_within_20w": 9,
+      "nearest_comparable_dist_over_w": 1.4886
+    },
+    "mt9444e1fef700": {
+      "n_comparable_within_20w": 3,
+      "nearest_comparable_dist_over_w": 8.7683
+    },
+    "mtd1d76977b828": {
+      "n_comparable_within_20w": 3,
+      "nearest_comparable_dist_over_w": 6.4768
+    },
+    "mt45a21c0ef33a": {
+      "n_comparable_within_20w": 4,
+      "nearest_comparable_dist_over_w": 8.2132
+    },
+    "mt5413efc5fb16": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 398.1661
+    },
+    "mtb363ff966ebb": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 908.8942
+    },
+    "mt5dc0d498274b": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 931.0735
+    },
+    "mt2f489328e97c": {
+      "n_comparable_within_20w": 7,
+      "nearest_comparable_dist_over_w": 0.9692
+    },
+    "mt82194429c40a": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 4819.8315
+    },
+    "mtf0d43105c4eb": {
+      "n_comparable_within_20w": 13,
+      "nearest_comparable_dist_over_w": 8.5443
+    },
+    "mt6cd2e4513acf": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 112.1974
+    },
+    "mt31a7cfd4c071": {
+      "n_comparable_within_20w": 10,
+      "nearest_comparable_dist_over_w": 6.8976
+    },
+    "mtd90fd2bafca0": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 5.9432
+    },
+    "mtfb10dfdfe9ee": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 9.1588
+    },
+    "mtffa4d4ef65d1": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 24.5414
+    },
+    "mt5cc5d8e98ca0": {
+      "n_comparable_within_20w": 2,
+      "nearest_comparable_dist_over_w": 7.3016
+    },
+    "mte0ee61ccf902": {
+      "n_comparable_within_20w": 1,
+      "nearest_comparable_dist_over_w": 2.8445
+    },
+    "mt3cd4fb90496b": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 66.0431
+    },
+    "mtde8d74e8dbeb": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 3537.0513
+    },
+    "mt39995e442f80": {
+      "n_comparable_within_20w": 0,
+      "nearest_comparable_dist_over_w": 53.4528
+    }
+  }
+}

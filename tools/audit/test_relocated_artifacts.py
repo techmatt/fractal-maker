@@ -212,9 +212,10 @@ def test_label_corpus_labels_and_lookalikes_stay_in_tree():
 
 
 def test_tripwire_fires_on_synthetic_descent_harness_crops(tmp_path):
-    """The tripwire FIRES on descent-harness crops/vivid bombed in-tree (a tools/descent
-    emit that bypassed store's artifacts-routed crop paths), while the durable text
-    records beside them (emits.jsonl / selection.json / verified_bad.json) stay in-tree."""
+    """The tripwire FIRES on descent-harness crops/vivid/thumbs bombed in-tree (a
+    tools/descent emit or triage tile that bypassed the artifacts-routed image paths),
+    while the durable text records beside them (emits.jsonl / selection.json /
+    verified_bad.json / triage/*.jsonl) stay in-tree."""
     assert _scan_in_tree_offenders(tmp_path) == []
     crop = tmp_path / "data/descent_harness/crops" / "d2_p03_001__e1.jpg"
     crop.parent.mkdir(parents=True)
@@ -225,31 +226,46 @@ def test_tripwire_fires_on_synthetic_descent_harness_crops(tmp_path):
     vivid.parent.mkdir(parents=True)
     vivid.write_bytes(b"x")
     assert any("descent_harness/vivid" in o for o in _scan_in_tree_offenders(tmp_path))
+    # the triage wall's thumbnails are the same class (3 per atom over a pool headed
+    # past 1000) and trip it the same way
+    thumb = tmp_path / "data/descent_harness/thumbs" / "mt0123456789ab__x4.png"
+    thumb.parent.mkdir(parents=True)
+    thumb.write_bytes(b"x")
+    assert any("descent_harness/thumbs" in o for o in _scan_in_tree_offenders(tmp_path))
     # the durable text records must NOT trip it (they legitimately stay in-tree)
     (tmp_path / "data/descent_harness/emits.jsonl").write_bytes(b"x")
     (tmp_path / "data/descent_harness/selection.json").write_bytes(b"x")
+    (tmp_path / "data/descent_harness/triage").mkdir(parents=True)
+    (tmp_path / "data/descent_harness/triage/verdicts.jsonl").write_bytes(b"x")
     crop.unlink()
     vivid.unlink()
+    thumb.unlink()
     assert _scan_in_tree_offenders(tmp_path) == []
 
 
 def test_descent_harness_crop_class_maps_under_artifacts_root():
-    """Any data/descent_harness/{crops,vivid} relocates by pattern; the records stay
-    in-tree, and a `crops_staging`-style sibling component must not match."""
+    """Any data/descent_harness/{crops,vivid,thumbs} relocates by pattern; the records
+    stay in-tree, and a `crops_staging`-style sibling component must not match."""
     root = A.artifacts_root()
     for rel in [
         "data/descent_harness/crops/d2_p03_001__e1.jpg",
         "data/descent_harness/vivid/d2_p03_001__e1.jpg",
+        "data/descent_harness/thumbs/mt0123456789ab__x4.png",
         "data/descent_harness/crops",                       # the dir itself
+        "data/descent_harness/thumbs",
     ]:
         assert A._is_descent_harness_crop(A._norm(rel)), rel
         assert A.is_relocated(rel), rel
         assert A.resolve(rel) == root / rel, rel
     for rel in [
         "data/descent_harness/selection.json",
+        "data/descent_harness/selection_triage.json",
         "data/descent_harness/emits.jsonl",
         "data/descent_harness/verified_bad.json",
-        "data/descent_harness/crops_staging/x.jpg",         # component != crops/vivid
+        "data/descent_harness/triage/pool.jsonl",           # the triage records
+        "data/descent_harness/triage/verdicts.jsonl",
+        "data/descent_harness/crops_staging/x.jpg",         # component != crops/vivid/thumbs
+        "data/descent_harness/thumbs_staging/x.png",
     ]:
         assert not A._is_descent_harness_crop(A._norm(rel)), rel
         assert not A.is_relocated(rel), rel

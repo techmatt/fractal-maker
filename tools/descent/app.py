@@ -16,6 +16,7 @@ Run:  uv run python tools/descent/app.py
 from __future__ import annotations
 
 import base64
+import os
 import shutil
 import sys
 import threading
@@ -610,6 +611,16 @@ if __name__ == "__main__":
     if not rc.RENDER_BIN.exists():
         sys.exit(f"render binary not found: {rc.RENDER_BIN}")
     store._ensure_dirs()
+    # `--selection <path>` (or the DESCENT_SELECTION env var) swaps the atom set —
+    # notably for `selection_triage.json`, the triage wall's accept-set. ATOMS is built
+    # at import, so re-load it here once the flag has been read.
+    if "--selection" in sys.argv:
+        sel = sys.argv[sys.argv.index("--selection") + 1]
+        ATOMS = {a["id"]: a for a in store.load_selection(store.REPO_ROOT / sel
+                                                          if not Path(sel).is_absolute() else sel)}
+        print(f"selection: {sel}")
+    elif os.environ.get("DESCENT_SELECTION"):
+        print(f"selection: {os.environ['DESCENT_SELECTION']}")
     if "--smoke" in sys.argv:
         smoke()
         sys.exit(0)

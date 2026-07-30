@@ -82,16 +82,19 @@ __pycache__/
 # (degree,band) atom selection + a train/eval split that later descent crops inherit.
 # Impossible to reproduce identically across future sourcing runs -> committed by path.
 !/data/minibrot_roster/
-# Minibrot descent harness (tools/descent/, prompts/descent_harness_build.md):
-# the durable human records — selection subset, per-emit solution lineages, and
-# verified-bad verdicts — are irreplaceable choices, committed by exact path. The
-# emitted canonical+vivid crop PAIRS are label-corpus-bound bulk that relocates
-# OUT of the tree via tools/corpus/artifacts.resolve (like every other corpus
-# crop), so their dirs are re-ignored below — mirrors the label_corpus stanza and
-# artifacts._is_descent_harness_crop. (Thumbnails/nav previews live in scratch/.)
+# Minibrot descent harness (tools/descent/, prompts/descent_harness_build.md +
+# prompts/minibrot_triage_wall.md): the durable human records — selection subset,
+# per-emit solution lineages, verified-bad verdicts, and the triage wall's
+# accept/reject verdicts + its atom pool — are irreplaceable choices, committed by
+# exact path. The IMAGE families (emitted canonical+vivid crop pairs, triage-wall
+# thumbnails) are regenerable bulk that relocates OUT of the tree via
+# tools/corpus/artifacts.resolve (like every other corpus crop), so their dirs are
+# re-ignored below — mirrors the label_corpus stanza and
+# artifacts._is_descent_harness_crop. (Nav previews live in scratch/.)
 !/data/descent_harness/
 /data/descent_harness/crops/
 /data/descent_harness/vivid/
+/data/descent_harness/thumbs/
 !/data/palettes/
 /data/palettes/*
 !/data/palettes/clean_colormaps.json

@@ -29,9 +29,9 @@ path), the discovery-scratch *class* (any ``data/discovery/**/scratch`` tree,
 matched by pattern so no per-campaign registration is ever needed), and the
 label-corpus crop *class* (any ``data/label_corpus/batches/*/{crops,vivid}`` tree,
 matched the same way — see ``_is_label_corpus_crop`` and
-``docs/design/label_corpus_relocation.md``), and the descent-harness crop *class* (any
-``data/descent_harness/{crops,vivid}`` tree — see ``_is_descent_harness_crop``), nothing
-else.
+``docs/design/label_corpus_relocation.md``), and the descent-harness image *class* (any
+``data/descent_harness/{crops,vivid,thumbs}`` tree — see ``_is_descent_harness_crop``),
+nothing else.
 """
 from __future__ import annotations
 
@@ -111,24 +111,29 @@ def _is_label_corpus_crop(r: str) -> bool:
     )
 
 
+DESCENT_HARNESS_IMAGE_DIRS = ("crops", "vivid", "thumbs")
+
+
 def _is_descent_harness_crop(r: str) -> bool:
-    """True iff ``r`` (normalized repo-relative) is the descent harness's ``crops/`` or
-    ``vivid/`` tree (``data/descent_harness/{crops,vivid}/**``) — the emitted canonical +
-    vivid crop pairs (``tools/descent/``). These images are destined for the label corpus
-    and this set grows from 40 atoms to 163, so they relocate OUT of the working tree
-    exactly like ``_is_label_corpus_crop``. The durable text records
-    (``emits.jsonl``/``selection.json``/``verified_bad.json``) sit directly under
-    ``data/descent_harness/`` and stay in-tree because they are not under a
-    ``crops``/``vivid`` component. Matched as a CLASS by pattern (component-exact on
-    ``crops``/``vivid``) so a sibling like ``.../crops_staging`` does NOT match; mirrors the
-    ``/data/descent_harness/{crops,vivid}/`` .gitignore stanzas and the reappearance
-    tripwire in ``tools/audit/test_relocated_artifacts.py``."""
+    """True iff ``r`` (normalized repo-relative) is one of the descent harness's IMAGE
+    trees (``data/descent_harness/{crops,vivid,thumbs}/**``) — the emitted canonical +
+    vivid crop pairs and the triage-wall thumbnails (``tools/descent/``). All three are
+    regenerable bulk (a pure function of a stored record), and all three grow without
+    bound — the crop set from 40 atoms to 163, the thumbnail set 3 per atom over a
+    triage pool headed past 1000 — so they relocate OUT of the working tree exactly
+    like ``_is_label_corpus_crop``. The durable text records
+    (``emits.jsonl``/``selection.json``/``verified_bad.json`` and
+    ``triage/{pool,verdicts}.jsonl``) sit under ``data/descent_harness/`` and stay
+    in-tree because they are not under one of those components. Matched as a CLASS by
+    pattern (component-exact) so a sibling like ``.../crops_staging`` does NOT match;
+    mirrors the ``/data/descent_harness/{crops,vivid,thumbs}/`` .gitignore stanzas and
+    the reappearance tripwire in ``tools/audit/test_relocated_artifacts.py``."""
     parts = r.split("/")
     return (
         len(parts) >= 3
         and parts[0] == "data"
         and parts[1] == "descent_harness"
-        and parts[2] in ("crops", "vivid")
+        and parts[2] in DESCENT_HARNESS_IMAGE_DIRS
     )
 
 

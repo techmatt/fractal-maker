@@ -1,0 +1,38 @@
+{
+  "cursor": 120,
+  "totals": {
+    "solves": 2160,
+    "no_converge": 1798,
+    "kept": 200,
+    "not_minimal": 88,
+    "duplicate": 74
+  },
+  "schedule": {
+    "schedule_version": 1,
+    "degrees": [
+      2,
+      3,
+      4,
+      5
+    ],
+    "seed_ang": 96,
+    "seed_rad": 12,
+    "period_min": 3,
+    "period_max": 20,
+    "margin_min_decades": 1.0,
+    "dedup_dps": 22,
+    "nucleus_dps": 60,
+    "newton_steps": 60,
+    "total_tasks": 4608
+  },
+  "last_run_id": "20260730T082437",
+  "updated_at": "2026-07-30T08:25:01",
+  "last_run": {
+    "run_id": "20260730T082437",
+    "tasks": 112,
+    "seconds": 24.19,
+    "atoms_added": 174,
+    "cursor_from": 8,
+    "cursor_to": 120
+  }
+}

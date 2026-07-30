@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Minibrot Triage Wall</title>
+<style>
+  :root { --bg:#0d0d0d; --panel:#181818; --fg:#ddd; --accent:#6cf; --muted:#888;
+          --good:#5c9; --bad:#e66; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:13px/1.4 system-ui, sans-serif; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg);
+           border-bottom:1px solid #2a2a2a; padding:6px 14px;
+           display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  header h1 { font-size:14px; margin:0; font-weight:600; color:var(--accent); }
+  .keys { color:var(--muted); font-size:11px; }
+  .keys b { color:var(--fg); background:#262626; border:1px solid #383838;
+            border-radius:3px; padding:0 4px; font-weight:600; }
+  .prog { margin-left:auto; font-size:12px; font-variant-numeric:tabular-nums; }
+  .prog .a { color:var(--good); } .prog .r { color:var(--bad); }
+
+  section { padding:10px 14px; }
+  h2 { margin:0 0 6px; font-size:11px; color:var(--muted); font-weight:600;
+       text-transform:uppercase; letter-spacing:.05em; }
+  .refbar { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; }
+  .refgroup { border:1px solid #262626; border-radius:5px; padding:6px; background:var(--panel); }
+  .refgroup .name { font-size:11px; color:var(--muted); margin-bottom:4px; }
+  .refrow { display:flex; gap:6px; }
+  .refcell { text-align:center; }
+  .refcell img { width:190px; aspect-ratio:16/9; display:block; background:#000;
+                 border-radius:3px; object-fit:cover; }
+  .refcell span { font-size:10px; color:var(--muted); }
+  .refcell.def span { color:var(--accent); }
+
+  #wall { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
+          gap:6px; }
+  .tile { position:relative; border:2px solid #222; border-radius:4px; overflow:hidden;
+          background:#000; cursor:pointer; aspect-ratio:16/9; }
+  .tile img { width:100%; height:100%; display:block; object-fit:cover; background:#000; }
+  .tile.cur { border-color:var(--accent); box-shadow:0 0 0 2px rgba(102,204,255,.35); }
+  .tile.accept { border-color:var(--good); }
+  .tile.reject { border-color:var(--bad); }
+  .tile.reject img { opacity:.28; }
+  .mark { position:absolute; top:3px; left:4px; font-size:15px; font-weight:700;
+          line-height:1; text-shadow:0 0 4px #000; }
+  .mark.accept { color:var(--good); } .mark.reject { color:var(--bad); }
+  .sc { position:absolute; bottom:2px; right:4px; font-size:10px; color:#bbb;
+        background:rgba(0,0,0,.55); border-radius:3px; padding:0 3px; }
+  .pager { display:flex; gap:8px; align-items:center; margin-top:10px; color:var(--muted); }
+  button { background:#222; color:var(--fg); border:1px solid #3a3a3a; border-radius:4px;
+           padding:3px 9px; cursor:pointer; font:inherit; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.35; cursor:not-allowed; }
+  #toast { position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+           background:#1d2430; border:1px solid var(--accent); padding:7px 13px;
+           border-radius:6px; display:none; z-index:9; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Minibrot Triage Wall</h1>
+  <span class="keys">
+    <b>A</b> accept &middot; <b>R</b> reject &middot; <b>B</b>/<b>&larr;</b> back &middot;
+    <b>&rarr;</b> skip &middot; <b>U</b> clear &middot; <b>1</b>/<b>2</b>/<b>3</b> scale &middot;
+    <b>click</b> cycles scale
+  </span>
+  <span class="prog" id="prog"></span>
+</header>
+
+<section>
+  <h2>Reference &mdash; known-good at the same 1&times; / 4&times; / 16&times; ladder</h2>
+  <div class="refbar" id="refbar"></div>
+</section>
+
+<section>
+  <h2 id="wallhead">Wall</h2>
+  <div id="wall"></div>
+  <div class="pager">
+    <button id="prev">&larr; prev page</button>
+    <span id="pagelabel"></span>
+    <button id="next">next page &rarr;</button>
+    <button id="tofirst" style="margin-left:14px">jump to first un-triaged</button>
+  </div>
+</section>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const SESSION = Math.random().toString(36).slice(2, 10);
+
+let SCALES = [1, 4, 16], DEFAULT_SCALE = 4, PAGE_SIZE = 60;
+let page = 0, pages = 1, tiles = [], cursor = 0;
+const scaleOf = {};            // tile id -> currently displayed scale
+
+function toast(m){ const t=$("#toast"); t.textContent=m; t.style.display="block";
+  clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none", 2200); }
+
+async function post(url, body){
+  const r = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"},
+                             body: JSON.stringify(body||{})});
+  const j = await r.json().catch(()=>({error:"bad response"}));
+  if(!r.ok || j.error){ toast(j.error || ("error "+r.status)); throw new Error(j.error||r.status); }
+  return j;
+}
+
+function showProgress(p){
+  pages = p.pages; PAGE_SIZE = p.page_size; SCALES = p.scales; DEFAULT_SCALE = p.default_scale;
+  $("#prog").innerHTML =
+    `<span class="a">${p.accepted} accept</span> &middot; ` +
+    `<span class="r">${p.rejected} reject</span> &middot; ` +
+    `${p.judged}/${p.total} judged`;
+  $("#pagelabel").textContent = `page ${page+1} / ${pages}`;
+  $("#prev").disabled = page <= 0;
+  $("#next").disabled = page >= pages - 1;
+}
+
+// ---- reference row ----
+function buildRefs(refs){
+  const bar = $("#refbar"); bar.innerHTML = "";
+  refs.forEach(r => {
+    const g = document.createElement("div"); g.className = "refgroup";
+    let cells = "";
+    SCALES.forEach(s => {
+      cells += `<div class="refcell${s===DEFAULT_SCALE?" def":""}">` +
+               `<img loading="lazy" src="/tile/${r.id}/${s}">` +
+               `<span>${s}&times;${s===DEFAULT_SCALE?" (wall default)":""}</span></div>`;
+    });
+    g.innerHTML = `<div class="name">${r.label}</div><div class="refrow">${cells}</div>`;
+    bar.appendChild(g);
+  });
+}
+
+// ---- wall ----
+function tileEl(t, i){
+  const d = document.createElement("div");
+  d.className = "tile" + (t.verdict ? " " + t.verdict : "");
+  d.dataset.id = t.id; d.dataset.i = i;
+  const sc = scaleOf[t.id] || DEFAULT_SCALE;
+  d.innerHTML =
+    `<img loading="lazy" src="/tile/${t.id}/${sc}" alt="">` +
+    (t.verdict ? `<div class="mark ${t.verdict}">${t.verdict==="accept"?"✓":"✗"}</div>` : "") +
+    `<div class="sc">${sc}×</div>`;
+  d.onclick = () => { setCursor(i); cycleScale(t.id); };
+  return d;
+}
+
+function renderWall(){
+  const w = $("#wall"); w.innerHTML = "";
+  tiles.forEach((t, i) => w.appendChild(tileEl(t, i)));
+  $("#wallhead").textContent =
+    `Wall — tiles ${page*PAGE_SIZE+1}–${page*PAGE_SIZE+tiles.length}`;
+  paintCursor();
+}
+
+function paintCursor(){
+  document.querySelectorAll(".tile").forEach(el =>
+    el.classList.toggle("cur", +el.dataset.i === cursor));
+  // instant, not smooth: at ~1 tile/second a smooth scroll never settles
+  const el = document.querySelector(".tile.cur");
+  if(el) el.scrollIntoView({block:"nearest", behavior:"auto"});
+}
+
+function setCursor(i){ cursor = Math.max(0, Math.min(tiles.length-1, i)); paintCursor(); }
+
+function repaintTile(i){
+  const old = document.querySelector(`.tile[data-i="${i}"]`);
+  if(!old) return;
+  const fresh = tileEl(tiles[i], i);
+  old.replaceWith(fresh);
+  paintCursor();
+}
+
+function cycleScale(id){
+  const cur = scaleOf[id] || DEFAULT_SCALE;
+  scaleOf[id] = SCALES[(SCALES.indexOf(cur) + 1) % SCALES.length];
+  const i = tiles.findIndex(t => t.id === id);
+  if(i >= 0) repaintTile(i);
+}
+
+function setScale(id, s){ scaleOf[id] = s; const i = tiles.findIndex(t => t.id === id);
+  if(i >= 0) repaintTile(i); }
+
+async function loadPage(p, opts){
+  const j = await post("/api/page", {page: p});
+  page = j.page; tiles = j.tiles;
+  showProgress(j.progress);
+  renderWall();
+  setCursor(opts && opts.cursor != null ? opts.cursor : 0);
+}
+
+// ---- verdicts ----
+async function verdict(v){
+  const t = tiles[cursor], at = cursor, atPage = page;
+  if(!t) return;
+  t.verdict = v;                       // optimistic: the eye must not wait on disk
+  repaintTile(at);
+  advance();
+  try {
+    const j = await post("/api/verdict", {atom_id: t.id, verdict: v, session_id: SESSION});
+    showProgress(j.progress);
+  } catch(_) {
+    t.verdict = null;                                  // roll back on a failed write
+    if(page === atPage) repaintTile(at);
+  }
+}
+
+async function advance(){
+  if(cursor < tiles.length - 1){ setCursor(cursor + 1); return; }
+  if(page < pages - 1){ await loadPage(page + 1); toast(`page ${page+1} / ${pages}`); return; }
+  toast("end of wall");
+}
+
+async function back(){
+  if(cursor > 0){ setCursor(cursor - 1); return; }
+  if(page > 0){ await loadPage(page - 1, {cursor: PAGE_SIZE - 1}); }
+}
+
+window.addEventListener("keydown", async e => {
+  if(e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if(k === "a")                      { e.preventDefault(); verdict("accept"); }
+  else if(k === "r" || k === "x")    { e.preventDefault(); verdict("reject"); }
+  else if(k === "b" || k === "arrowleft")  { e.preventDefault(); back(); }
+  else if(k === "arrowright")        { e.preventDefault(); advance(); }
+  else if(k === "u")                 { e.preventDefault(); verdictClear(); }
+  else if(k === "1" || k === "2" || k === "3"){
+    e.preventDefault();
+    const t = tiles[cursor]; if(t) setScale(t.id, SCALES[+k - 1]);
+  }
+});
+
+async function verdictClear(){
+  const t = tiles[cursor];
+  if(!t) return;
+  t.verdict = null; repaintTile(cursor);
+  const j = await post("/api/verdict", {atom_id: t.id, verdict: null, session_id: SESSION});
+  showProgress(j.progress);
+}
+
+$("#prev").onclick = () => loadPage(page - 1);
+$("#next").onclick = () => loadPage(page + 1);
+$("#tofirst").onclick = async () => { await boot(true); };
+
+async function boot(jump){
+  const st = await post("/api/state");
+  showProgress(st.progress);
+  buildRefs(st.references);
+  const idx = st.resume_index || 0;
+  await loadPage(Math.floor(idx / st.progress.page_size),
+                 {cursor: idx % st.progress.page_size});
+  if(jump) toast("jumped to first un-triaged tile");
+}
+boot(false);
+</script>
+</body>
+</html>

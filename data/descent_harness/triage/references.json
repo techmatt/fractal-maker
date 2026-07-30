@@ -1,0 +1,44 @@
+{
+  "note": "Known-good material rendered through the SAME framing ladder as the wall (1x/4x/16x of base_scale, vivid blue_orange, nav fidelity). base_scale is chosen so the 4x tile IS the canonical known-good frame.",
+  "references": [
+    {
+      "id": "ref_eye",
+      "label": "minibrot eye",
+      "cx": "-0.746339",
+      "cy": "0.112242",
+      "degree": 2,
+      "canonical_fw": 0.000583,
+      "source": "src/render_one.rs RenderOneArgs defaults (--cx/--cy/--fw)",
+      "note": "render-one's default VIEW, not a nucleus: Newton finds no nucleus within ~1e-4 of this center, so base_scale is derived as canonical_fw/4 rather than from an atom instrument.",
+      "nucleus": false,
+      "base_scale": "1.4575000000e-04",
+      "family": "mandelbrot",
+      "scales": [
+        1,
+        4,
+        16
+      ]
+    },
+    {
+      "id": "ref_mb19",
+      "label": "mb19_p35",
+      "cx": "-0.74977483272365342795786040375088960",
+      "cy": "0.10761724352653678278696798751738616",
+      "degree": 2,
+      "period": 35,
+      "canonical_fw": 8.069624e-10,
+      "source": "data/q4_window_corpus/batches/2026-07-23_q4_g_aimed/windows.jsonl (minibrot_id mb19_p35); scratch/q4_stage1/minibrots.json is gone",
+      "note": "a true nucleus: base_scale is its atom instrument's window_scale.",
+      "nucleus": true,
+      "base_scale": "2.0174060071e-10",
+      "log10_abs_A": 9.695207,
+      "f64_margin_deploy_decades": 0.1976,
+      "family": "mandelbrot",
+      "scales": [
+        1,
+        4,
+        16
+      ]
+    }
+  ]
+}

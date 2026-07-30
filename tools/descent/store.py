@@ -5,7 +5,11 @@ These records capture human choices nothing can regenerate, so they are
 **durable** (committed under `data/descent_harness/`, negated out of the
 `/data/*` gitignore by exact path):
 
-  * `selection.json`  — the data-driven 40-atom subset (built by build_selection.py)
+  * `selection.json`  — the data-driven 40-atom subset (built by build_selection.py).
+                        `selection_triage.json` (the triage wall's accept-set) is an
+                        alternative in the same schema, chosen via `DESCENT_SELECTION`.
+  * `triage/`         — the triage wall's durable pool + accept/reject verdicts
+                        (see triage_store.py)
   * `emits.jsonl`     — one row per emitted q3/q4 solution, with its full descent
                         lineage and the render blocks needed to reproduce the crop
   * `verified_bad.json` — per-atom "no easy q3/q4 here" verdicts (reversible)
@@ -22,6 +26,7 @@ byte-reproducible corpus-crop path), so a re-render from a stored record's
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 from pathlib import Path
@@ -123,8 +128,23 @@ def rel(p) -> str:
 # --------------------------------------------------------------------------- #
 # selection
 # --------------------------------------------------------------------------- #
-def load_selection() -> list[dict]:
-    doc = json.loads(SELECTION.read_text())
+def selection_path() -> Path:
+    """Which selection file the harness opens.
+
+    Defaults to the roster-drawn 40-atom `selection.json`. The `DESCENT_SELECTION`
+    env var (repo-relative or absolute) points it at another file in the same schema —
+    notably `selection_triage.json`, the accept-set from the triage wall
+    (`tools/descent/build_triage_selection.py`). The original file is never replaced,
+    so the 40-atom study stays reproducible."""
+    override = os.environ.get("DESCENT_SELECTION")
+    if not override:
+        return SELECTION
+    p = Path(override)
+    return p if p.is_absolute() else REPO_ROOT / p
+
+
+def load_selection(path=None) -> list[dict]:
+    doc = json.loads(Path(path or selection_path()).read_text())
     return doc["atoms"]
 
 
