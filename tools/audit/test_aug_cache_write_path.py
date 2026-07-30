@@ -4,9 +4,9 @@ r"""End-to-end exercise of the aug_cache WRITE path (resolver -> Rust batch).
 The write path had never been run for real, and the first classifier rebuild should
 not be its first test. The path is two seams stitched together:
 
-  1. `tools/v{5,6,7}/build_plan.emit_location` sets each plan row's `out` to
+  1. `tools/v*/build_plan.emit_location` sets each plan row's `out` to
      `artifacts.resolve(<repo-relative>)`, which for a relocated family
-     (`data/v7/aug_cache/...`) maps under ARTIFACTS_ROOT (out of the working tree).
+     (`data/v8/aug_cache/...`) maps under ARTIFACTS_ROOT (out of the working tree).
   2. The Rust `v4-render-batch` executor writes each rendered JPEG to `spec.out`
      VERBATIM (src/v4_cache.rs) — it does no resolving of its own.
 
@@ -15,8 +15,8 @@ tree" depends entirely on step 1 feeding the right `out` to step 2. This test dr
 both against a throwaway ARTIFACTS_ROOT with a 2-row plan (one Mandelbrot = settled
 path, one julia_multibrot3 = smooth path), then asserts:
 
-  * the JPEGs materialize under ARTIFACTS_ROOT/data/v7/aug_cache/... (routed), and
-  * NOTHING appears under the in-tree data/v7/aug_cache (did not bomb the tree).
+  * the JPEGs materialize under ARTIFACTS_ROOT/data/v8/aug_cache/... (routed), and
+  * NOTHING appears under the in-tree data/v8/aug_cache (did not bomb the tree).
 
 The reappearance tripwire's quiet/fire behavior is covered separately and cheaply in
 test_relocated_artifacts.py; this is the heavy render half.
@@ -42,9 +42,11 @@ COLORMAPS = REPO_ROOT / "data" / "palettes" / "clean_colormaps.json"
 sys.path.insert(0, str(REPO_ROOT / "tools" / "corpus"))
 import artifacts as A  # noqa: E402
 
-# A relocated (out-of-tree) cache prefix — the v7 post-freeze cache that has never
-# actually been written. Kept in lockstep with A.RELOCATED_PREFIXES.
-REL_PREFIX = "data/v7/aug_cache"
+# A relocated (out-of-tree) cache prefix. Uses the LIVE v8 cache family (v4..v7 were
+# deleted and their literals dropped from A.RELOCATED_PREFIXES). The render lands under a
+# THROWAWAY ARTIFACTS_ROOT (monkeypatched below), so it never touches the real v8 cache.
+# Kept in lockstep with A.RELOCATED_PREFIXES.
+REL_PREFIX = "data/v8/aug_cache"
 
 
 def _plan_rows():

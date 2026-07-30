@@ -103,10 +103,12 @@ REGISTRY = [
      "the manifest + the render core, under a byte-identical recipe-parity gate", N,
      "MISMATCH-adjacent: regenerable in principle, but only from the manifest above, "
      "which is gone. Not population-defining itself."),
-    ("data/v{4,5,6,7}/aug_cache*/", "classifier/train_v*.py + build_plan.py", BULK,
+    ("data/v8/aug_cache/", "classifier/train_v*.py + tools/v8/build_plan.py", BULK,
      "full render compute under the recipe-parity gate", N,
-     "OK. Correctly bulk() — relocated to ARTIFACTS_ROOT, 243k files out-of-tree, and the "
-     "reappearance tripwire (test_relocated_artifacts.py) holds it there."),
+     "OK. Correctly bulk() — the LIVE cache (171,384 tiles) relocated to ARTIFACTS_ROOT, "
+     "and the reappearance tripwire (test_relocated_artifacts.py) holds it there. The "
+     "v4..v7 caches were DELETED (commit 7068839) and their RELOCATED_PREFIXES literals "
+     "dropped — dead machinery for caches that will never exist again."),
     ("data/classifier/v{5,6,7}/model_best.pt", "classifier/train_v{5,6,7}.py", DUR_F,
      "a full GPU retrain — which needs the v7 manifest above (gone)", N,
      "MISMATCH (fragile). Tracked via LFS force-add, but the PATH is gitignored, so "
@@ -164,9 +166,12 @@ REGISTRY = [
      "     scheduler_trace.jsonl, distinct_looks.npz, saturation.jsonl", "steered_frontier.py", UND,
      "rebuildable from the ledger + generator (crash-safety is by ledger-replay)", N,
      "OK. Deliberately ignored run-internal overlays, each with a .gitignore rationale."),
-    ("data/discovery/campaign2/{breadth,dive}/scratch/", "steered_frontier.py", BULK,
-     "re-render from the ledger", N,
-     "OK. Correctly bulk() — 317k files out-of-tree via RELOCATED_PREFIXES."),
+    ("data/discovery/**/scratch/", "steered_frontier.py", BULK,
+     "nothing — completed-campaign discovery scratch, no named future use", N,
+     "RECLAIMED. campaign2 breadth/dive scratch (317k files / ~46 GB) was deleted. "
+     "steered_frontier.py now declares this class bulk() at its write site, and the "
+     "resolver relocates any data/discovery/**/scratch by PATTERN (not a per-campaign "
+     "literal), so a future campaign is born out-of-tree with no registry edit."),
 
     # ---------------- corpora + configs: the well-classified majority -------------
     ("data/label_corpus/batches/*/{images.jsonl,batch.json,scores.json}",

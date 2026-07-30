@@ -65,14 +65,18 @@ __pycache__/
 # library (reproducible from palette_lib/build_sheet.py — see CLAUDE.md
 # "Persistent-store convention").
 #
-# NOTE (storage restructure): the regenerable file-count bombs — data/v{4,5,6,7}/
-# aug_cache* and data/discovery/campaign2/{breadth,dive}/scratch — were physically
-# RELOCATED out of the tree to ARTIFACTS_ROOT (default sibling
-# ../fractal-maker-artifacts, env FRACTAL_ARTIFACTS_ROOT); readers/writers route
-# through tools/corpus/artifacts.py. No .gitignore lines were dead: those families
-# were only ever ignored by the blanket `/data/*` and `/data/discovery/**/scratch/`
-# rules below, which remain load-bearing for OTHER in-tree paths and also serve as a
-# backstop (any accidental in-tree rebuild stays un-committable).
+# NOTE (storage restructure): regenerable file-count bombs are RELOCATED out of the
+# tree to ARTIFACTS_ROOT (default sibling ../fractal-maker-artifacts, env
+# FRACTAL_ARTIFACTS_ROOT); readers/writers route through tools/corpus/artifacts.py.
+# Two families: the LIVE data/v8/aug_cache (a literal in RELOCATED_PREFIXES; the
+# v4..v7 caches were deleted and their literals dropped), and the discovery-scratch
+# CLASS — any data/discovery/**/scratch tree — matched by pattern, so a new campaign
+# relocates with no registry edit (steered_frontier.py declares it bulk() at its write
+# site). campaign2 breadth/dive scratch (317k files / ~45 GB) was reclaimed. No
+# .gitignore lines are dead: these families were only ever ignored by the blanket
+# `/data/*` and `/data/discovery/**/scratch/` rules below, which remain load-bearing
+# for OTHER in-tree paths and also serve as a backstop (any accidental in-tree rebuild
+# stays un-committable).
 /data/*
 # Durable minibrot roster (tools/sourcing/build_minibrot_roster.py): records a per-
 # (degree,band) atom selection + a train/eval split that later descent crops inherit.

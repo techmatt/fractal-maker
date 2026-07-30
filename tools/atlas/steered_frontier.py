@@ -63,6 +63,9 @@ sys.path.insert(0, str(ROOT / "tools" / "atlas"))
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
 sys.path.insert(0, str(ROOT / "tools" / "mining"))
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+sys.path.insert(0, str(ROOT / "tools"))
+
+import paths as _paths                   # noqa: E402  (storage-class helper: bulk() -> out-of-tree)
 
 # production_seeder wires its own sub-imports (prescreen / reframe / guard / score_lib /
 # active_ckpt) and owns the constants, root pipeline, near-dup machinery, guard, and the
@@ -500,10 +503,27 @@ class RunLedger:
 # The driver.
 # --------------------------------------------------------------------------- #
 class SteeredFrontier:
+    def _bulk_scratch(self) -> Path:
+        """``<run_dir>/scratch`` as a bulk() path: routed out-of-tree via the resolver
+        when run_dir is inside the repo, so a discovery run's scratch is born under
+        ARTIFACTS_ROOT. A run_dir that is already outside the repo is left untouched
+        (``<run_dir>/scratch``) — nothing to relocate."""
+        try:
+            rel = self.run_dir.relative_to(ROOT)
+        except ValueError:
+            return self.run_dir / "scratch"     # run_dir already out-of-tree
+        return _paths.bulk(rel.as_posix() + "/scratch")
+
     def __init__(self, args):
         self.args = args
         self.run_dir = Path(args.run_dir).resolve()
-        self.scratch = self.run_dir / "scratch"
+        # Per-run render/field scratch is a file-count bomb (campaign2 breadth/dive were
+        # 317k files / ~45 GB). Declare it bulk() HERE, at the write site, so it is BORN
+        # out-of-tree — not written in-tree and moved by hand afterward as campaign2's was.
+        # paths.bulk() routes any data/discovery/**/scratch under ARTIFACTS_ROOT via the
+        # single resolver, so a new campaign needs no registry line at all; a run whose
+        # run_dir is already out-of-tree (or under scratch/) keeps <run_dir>/scratch.
+        self.scratch = self._bulk_scratch()
         self.state_path = self.run_dir / "state.json"
         self.stop_path = self.run_dir / "STOP"
         self.harvest_log = self.run_dir / "harvest_log.jsonl"

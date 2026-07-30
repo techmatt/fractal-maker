@@ -65,10 +65,13 @@ def test_durable_mkparents_only_after_assertion(tmp_path, monkeypatch):
 
 def test_bulk_routes_relocated_family_out_of_tree():
     """bulk() delegates to the ARTIFACTS_ROOT resolver — a relocated family lands
-    out-of-tree, not re-materialized in the source tree."""
-    got = P.bulk("data/v4/aug_cache/x.npz")
-    assert "aug_cache" in str(got)
-    assert REPO_ROOT not in got.parents, f"relocated bulk path {got} is still in-tree"
+    out-of-tree, not re-materialized in the source tree. Covers both the live v8
+    aug-cache literal and the discovery-scratch class (matched by pattern)."""
+    for rel, needle in [("data/v8/aug_cache/x.npz", "aug_cache"),
+                        ("data/discovery/campaign3/breadth/scratch/x.jpg", "scratch")]:
+        got = P.bulk(rel)
+        assert needle in str(got)
+        assert REPO_ROOT not in got.parents, f"relocated bulk path {got} is still in-tree"
 
 
 def test_bulk_leaves_non_relocated_in_tree():
