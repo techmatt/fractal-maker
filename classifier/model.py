@@ -78,8 +78,9 @@ def score_from_logits(logits: torch.Tensor, target: str) -> torch.Tensor:
     return torch.sigmoid(logits).view(-1)         # binary: σ(logit), in [0, 1]
 
 
-def compute_loss(logits: torch.Tensor, labels123: torch.Tensor, target: str) -> torch.Tensor:
+def compute_loss(logits: torch.Tensor, labels123: torch.Tensor, target: str,
+                 num_classes: int = 3) -> torch.Tensor:
     if target == "ordinal":
-        ranks = (labels123 - 1).long()            # {1,2,3} -> {0,1,2}
-        return corn_loss(logits, ranks, num_classes=3)
+        ranks = (labels123 - 1).long()            # {1..K} -> {0..K-1}
+        return corn_loss(logits, ranks, num_classes=num_classes)
     return binary_loss(logits, labels123)

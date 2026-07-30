@@ -10,21 +10,21 @@
   "population": {
     "labeled_crops": 8467,
     "labeled_locations": 7151,
-    "manifest_rows": 7141,
+    "manifest_rows": 7117,
     "groups": 4930,
     "gid_offset": 8000000,
-    "train": 6997,
-    "eval": 144,
+    "train": 6447,
+    "eval": 670,
     "class_train": {
-      "1": 4634,
-      "2": 1441,
-      "3": 635,
+      "1": 4273,
+      "2": 1278,
+      "3": 609,
       "4": 287
     },
     "class_eval": {
-      "1": 23,
-      "2": 56,
-      "3": 43,
+      "1": 361,
+      "2": 218,
+      "3": 69,
       "4": 22
     },
     "per_family": {
@@ -53,8 +53,8 @@
         "4": 24
       },
       "mandelbrot": {
-        "1": 3165,
-        "2": 588,
+        "1": 3142,
+        "2": 587,
         "3": 289,
         "4": 83
       },
@@ -104,15 +104,340 @@
       "julia_ladder_j0": 1000
     }
   },
-  "split_rule": "Group first (union-find partitioned by (fractal_type, c-bucket)), then split per GROUP: a group containing a census location -> eval, else train. The census (prospect run-1 base-rate julia:multibrot) is the only registered eval-eligible source and is forced 100% eval. assign_split is FAIL-CLOSED: an unregistered batch classifies biased -> train.",
-  "eval_is_census_only": "Eval is the census-144 and nothing else. loose0_v3 is registered UNBIASED but train-side, matching v7 \u2014 moving it to eval would change the instrument the paired v7<->v8 comparison is pre-registered on (protocol \u00a73, n~144). No batch was added to an eval list to enlarge the slice; that is the one move the fail-closed rule forbids.",
-  "eval_power_note": "144 eval locations out of 7141 (2.0%). This is thin for a 4-class ordinal head and it is a KNOWN limit, not an oversight: it is the only unbiased-given-descent draw in existence (run-1 ledger exhausted). Per protocol \u00a73 a null result here means 'label more', not 'model failed' \u2014 and the class-4 count inside the eval slice is the binding constraint on measuring the new tier at all.",
+  "split_rule": "Group first (union-find partitioned by (fractal_type, c-bucket)), then split per GROUP: a group containing a FORCED-EVAL location -> eval, else train. Two registered eval-eligible instruments, both forced 100% eval: the CENSUS (prospect run-1 base-rate julia:multibrot, 144 loc \u2014 the pinned primary) and the MANDELBROT FLOOR (loose0_v3 base-rate flat-generate, 526 loc \u2014 additive secondary, Matt's call 2026-07-29). assign_split is FAIL-CLOSED: an unregistered batch classifies biased -> train.",
+  "mandelbrot_eval_floor": "loose0_v3 (2026-06-23_flat_generate) is now eval-eligible: 526 unbiased base-rate mandelbrot locations moved train->eval so the mandelbrot slice (59% of the corpus) has a non-regression instrument the julia:multibrot census cannot provide. This REVERSES the prior eval_is_census_only stance on the record. It qualifies because the disqualifying bias is MODEL-DRIVEN selection (candidates a model retained), not an unbiased draw. The census-144 is untouched and stays the pinned primary; Gate 6 still reproduces it location-for-location. The paired v7<->v8 census comparison is unaffected \u2014 the floor is a separate, secondary read.",
+  "eval_power_note": "670 eval locations out of 7117 (9.4%): 144 census (julia:multibrot) + 526 floor (mandelbrot). The census remains the only unbiased-given-DESCENT draw; the floor is unbiased base-rate over the native mandelbrot plane. Per protocol \u00a73 a null result on the census still means 'label more', not 'model failed'; the floor is powered for the bulk mandelbrot classes (q3 pos=26) but carries 0 class-4.",
+  "loc_id_stability": "7117 of 7117 loc_ids preserved from the prior manifest, 0 new. loc_id is NOT re-enumerated: the 171,384-tile aug cache is keyed on it (plan seeds every draw on 'v8b-aug|<loc_id>' and writes tiles under aug_cache/<loc_id>/). The re-split's surviving population is a strict subset of the prior manifest (loose0_v3 flips train->eval in place; 24 biased mandelbrot neighbours are dropped), so every survivor keeps its prior id and every cache tile stays valid with zero re-render. build_plan.py regenerates plan.jsonl + cache_manifest.jsonl consistently from these ids.",
   "multi_batch_locations": "616 locations are contributed by >1 batch (600 shared by the two scale_* batches, 8 anchor/roster, 8 gather/native-band). v7 asserted one batch per location, which only held because it looked at post-freeze rows. biased = OR over batches, eval_eligible = AND \u2014 conservative on both.",
   "phoenix_family_params": "Location identity is location.Location.key(), which includes family_params (phoenix p_re/p_im/zm1_re/zm1_im). The 500 phoenix_grid locations vary p and z_-1 per row; v7's tuple key omitted them, which would collapse distinct locations and render every phoenix cache tile at the Rust default Ushiki spot. Those keys are carried into the manifest row and the render plan. v8 is the first manifest to contain phoenix.",
   "dropped_biased_in_forced_eval_group": {
-    "count": 10,
-    "why": "A forced-eval (census) group that also holds a biased location cannot satisfy census-100%-eval + 0-biased-in-eval + 0-group-straddle at once. Keeping the biased neighbour in train would leak the eval neighbourhood into training, so it is dropped from the manifest.",
+    "count": 34,
+    "by_fractal_type": {
+      "julia_multibrot3": 10,
+      "mandelbrot": 24
+    },
+    "why": "A forced-eval group (census OR mandelbrot-floor) that also holds a biased location cannot satisfy forced-100%-eval + 0-biased-in-eval + 0-group-straddle at once. Keeping the biased neighbour in train would leak the eval neighbourhood into training, so it is dropped. The 24 mandelbrot drops are NEW (base-rate floor locations chaining to guided-descent neighbours); the 10 julia_multibrot3 are the pre-existing jm3_band census conflict, unchanged.",
     "locations": [
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.052202239476687895",
+        "cy": "0.6530785439639304",
+        "fw": "0.020129405883550066",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-07-12_blindspot_v6reject_v1"
+        ],
+        "group_id": 8000066
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7302280993771931",
+        "cy": "-0.21523013751531272",
+        "fw": "0.00831791525101414",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7288417801686907",
+        "cy": "-0.21384381830681037",
+        "fw": "0.00831791525101414",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7312096133768128",
+        "cy": "-0.2162116515149324",
+        "fw": "0.00831791525101414",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.3738510434941183",
+        "cy": "0.6599763895272843",
+        "fw": "0.007100269463234195",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000106
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.37251588876810127",
+        "cy": "0.6589372631484126",
+        "fw": "0.007274758201140728",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000106
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.3777262726723306",
+        "cy": "0.6557726660893494",
+        "fw": "0.008345906862037632",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000106
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.4765734078917922",
+        "cy": "-0.5971422979865149",
+        "fw": "0.01864974014621652",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000111
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.1405646079938638",
+        "cy": "-0.8719206503942228",
+        "fw": "0.014491151851802565",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000112
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.3409277905013649",
+        "cy": "-0.5113213155124943",
+        "fw": "0.017017563434335845",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000113
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.3351957706782975",
+        "cy": "-0.5109268593011472",
+        "fw": "0.014696329996913726",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000113
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.01039584126040535",
+        "cy": "-0.653296115178306",
+        "fw": "0.017496955515103503",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.009990682135203679",
+        "cy": "-0.6478813926708532",
+        "fw": "0.016595254322723435",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.015797344438534356",
+        "cy": "-0.6564999937157059",
+        "fw": "0.015170436623483873",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.026323104324476265",
+        "cy": "-0.6523361783034691",
+        "fw": "0.014292821221927944",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.007418843866574114",
+        "cy": "-0.6424257467000308",
+        "fw": "0.013834505005201399",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-1.3540425290255775",
+        "cy": "-0.058325275041514746",
+        "fw": "0.014832318244368856",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000121
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.39091160445086415",
+        "cy": "-0.3688866660426195",
+        "fw": "0.017084107939967702",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000129
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7183952785588381",
+        "cy": "-0.22905910512836158",
+        "fw": "0.010325479730229617",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8000154
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.6437219719139099",
+        "cy": "0.37975497974476075",
+        "fw": "0.015915186012000912",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000155
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-1.2493398314912227",
+        "cy": "-0.07296657178028607",
+        "fw": "0.013892417562227215",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000157
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7614524606843265",
+        "cy": "-0.08496026442928359",
+        "fw": "0.007577509231680098",
+        "c_re": null,
+        "c_im": null,
+        "label": 2,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000161
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7636790594608687",
+        "cy": "-0.08505224922624866",
+        "fw": "0.004483386210126114",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-07-12_blindspot_v6reject_v1"
+        ],
+        "group_id": 8000161
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.42257192752358974",
+        "cy": "-0.2084071894826743",
+        "fw": "0.009510247344558269",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000172
+      },
       {
         "fractal_type": "julia_multibrot3",
         "cx": "0.0",
@@ -354,8 +679,8 @@
       "draw_scope": "PER LOCATION, not per crop \u2014 all 4 palettes share the location's 3 geometries, so 24 tiles rest on 6 distinct escape-time fields",
       "exposure_per_drawable_palette": {
         "min": 185,
-        "max": 246,
-        "mean": 213.2
+        "max": 245,
+        "mean": 212.4
       }
     },
     "geometry": {

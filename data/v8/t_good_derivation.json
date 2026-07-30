@@ -1,0 +1,95 @@
+{
+  "objective": "F2-argmax (recall-weighted), tie-break higher t",
+  "decode": "keeper(label>=3) iff P(>=2)>=0.5 AND P(>=3)>=t",
+  "baseline": 0.5,
+  "min_pos": 15,
+  "no_class4_threshold": true,
+  "native_multibrot_tightening": "NOT adopted (fork-scheduled proposals left on record)",
+  "derived": {
+    "julia:multibrot3": {
+      "t": 0.39,
+      "precision": 0.5135,
+      "recall": 1.0,
+      "f2": 0.8407,
+      "tp": 19,
+      "fp": 18,
+      "fn": 0,
+      "n": 54,
+      "pos": 19,
+      "f2_oof": 0.8036,
+      "objective": "F2-argmax"
+    },
+    "julia:multibrot4": {
+      "t": 0.14,
+      "precision": 0.5455,
+      "recall": 1.0,
+      "f2": 0.8571,
+      "tp": 24,
+      "fp": 20,
+      "fn": 0,
+      "n": 51,
+      "pos": 24,
+      "f2_oof": 0.7971,
+      "objective": "F2-argmax"
+    },
+    "julia:multibrot5": {
+      "t": 0.2,
+      "precision": 0.6774,
+      "recall": 0.9545,
+      "f2": 0.8824,
+      "tp": 21,
+      "fp": 10,
+      "fn": 1,
+      "n": 39,
+      "pos": 22,
+      "f2_oof": 0.813,
+      "objective": "F2-argmax"
+    },
+    "mandelbrot": {
+      "t": 0.14,
+      "precision": 0.2917,
+      "recall": 0.5385,
+      "f2": 0.4605,
+      "tp": 14,
+      "fp": 34,
+      "fn": 12,
+      "n": 526,
+      "pos": 26,
+      "f2_oof": 0.4605,
+      "objective": "F2-argmax"
+    }
+  },
+  "baseline_partitions": {
+    "julia:mandelbrot": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "reason": "no unbiased eval slice"
+    },
+    "multibrot3": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "reason": "no unbiased eval slice"
+    },
+    "multibrot4": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "reason": "no unbiased eval slice"
+    },
+    "multibrot5": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "reason": "no unbiased eval slice"
+    },
+    "phoenix": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "reason": "no unbiased eval slice"
+    }
+  },
+  "note": "REPORT ONLY \u2014 production_seeder.T_GOOD_OVERRIDES is unchanged. mandelbrot now derives from the loose0_v3 floor (was an F0.5+steered exception in v7); julia:multibrot{3,4,5} derive from the census. Everything else is baseline."
+}

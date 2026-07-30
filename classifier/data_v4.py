@@ -275,4 +275,6 @@ def make_weighted_sampler(train_locs: list[Loc], beta: float = 0.4,
 def hist(locs: list[Loc]) -> dict[int, int]:
     from collections import Counter
     c = Counter(l.label for l in locs)
-    return {k: c.get(k, 0) for k in (1, 2, 3)}
+    # 1..4: v8 extended the scale to 4; earlier versions never emitted a 4 so this is a
+    # superset-safe change (a 1..3 corpus reports 4:0).
+    return {k: c.get(k, 0) for k in (1, 2, 3, 4)}

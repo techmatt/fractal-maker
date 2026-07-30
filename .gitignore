@@ -247,6 +247,14 @@ __pycache__/
 # so if either source is ever edited the cache becomes unattributable in exactly the way
 # the v4..v7 caches were. Committed for that reason.
 !/data/v8/colormaps.json
+# v8 EVAL products — DURABLE by exact path. eval_scores_v8.jsonl is the frozen per-location
+# eval slice the keeper cut is recut against; the previous slice's NON-durability is the whole
+# reason a provenance stamp had to be nulled (data/v7/t_good_derivation.json was cleared and
+# gone). eval_results_v8.json is the acceptance battery; t_good_derivation.json is the derived
+# per-partition threshold report. Committed so none can be silently regenerated or wiped.
+!/data/v8/eval_scores_v8.jsonl
+!/data/v8/eval_results_v8.json
+!/data/v8/t_good_derivation.json
 # Backstop only — the v8 aug cache is bulk() and resolves out-of-tree through
 # artifacts.RELOCATED_PREFIXES. If it ever reappears here it stays un-committable.
 /data/v8/aug_cache/

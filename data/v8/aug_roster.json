@@ -101,8 +101,8 @@
     "draw_scope": "PER LOCATION, not per crop \u2014 all 4 palettes share the location's 3 geometries, so 24 tiles rest on 6 distinct escape-time fields",
     "exposure_per_drawable_palette": {
       "min": 185,
-      "max": 246,
-      "mean": 213.2
+      "max": 245,
+      "mean": 212.4
     }
   },
   "geometry": {
@@ -166,32 +166,7 @@
     "note": "v4-render-batch defaults, unchanged from v4..v7"
   },
   "executor_note": "the plan shares 4 palettes per escape-time field, but v4-render-batch renders each row independently, so that sharing is NOT exploited today \u2014 see marginal_cost below",
-  "marginal_cost": {
-    "locations": 64,
-    "ss": 1,
-    "note": "same locations, same seeds, all three plans",
-    "arms": {
-      "base": {
-        "tiles": 256,
-        "wall_s": 8.53,
-        "s_per_tile": 0.0333
-      },
-      "pal": {
-        "tiles": 384,
-        "wall_s": 11.64,
-        "s_per_tile": 0.0303
-      },
-      "geo": {
-        "tiles": 384,
-        "wall_s": 11.38,
-        "s_per_tile": 0.0296
-      }
-    },
-    "marginal_s_per_palette_tile": 0.0243,
-    "marginal_s_per_geometry_tile": 0.0223,
-    "palette_over_geometry_ratio": 1.091,
-    "interpretation": "ratio ~1.0 => the executor re-iterates per palette, so a palette slot costs the same as a geometry slot and the plan's field-sharing is unexploited. ratio ~0 => palettes are near-free (recolor batching is live)."
-  },
+  "marginal_cost": null,
   "reuse_audit": {
     "prior_cache_trees_on_disk": [],
     "prior_cache_location_dirs": 0,

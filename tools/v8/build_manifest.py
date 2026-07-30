@@ -21,8 +21,18 @@ identically and forced 100% to eval. GATE 6 asserts it, location for location. T
 row order, is the instrument the v7 comparison runs on.
 
 Provenance of individual prior training samples is deliberately NOT traced: the corpus is
-treated as one population. `loc_id` is a fresh dense index over this build only, and carries
-no cross-version meaning.
+treated as one population. `loc_id` is dense over this build and carries no cross-version
+meaning — but it IS preserved from the immediately-prior v8 manifest when one exists, because
+the 171,384-tile aug cache is keyed on it (see load_prior_loc_ids). A re-split that keeps the
+same population must not renumber, or every cached tile silently points at the wrong location.
+
+THE MANDELBROT EVAL FLOOR (Matt's call, 2026-07-29)
+---------------------------------------------------
+A SECOND forced-eval instrument joins the census: loose0_v3, the unbiased base-rate
+flat-generate draw over the native mandelbrot plane (526 loc). It gives the mandelbrot slice
+— 59% of the corpus — a non-regression instrument the julia:multibrot census cannot. An
+unbiased base-rate draw is not model-driven selection, so it is eval-eligible. The census-144
+is untouched and stays the pinned primary (Gate 6 unchanged); the floor is additive.
 
 WHAT IS DIFFERENT FROM v7's BUILD
 ---------------------------------
@@ -100,15 +110,24 @@ FAM2FT = {
 # --------------------------------------------------------------------------- #
 
 # The one unbiased-given-descent draw that exists: prospect run-1 base-rate. Its
-# julia:multibrot rows are the CENSUS = the eval instrument (forced 100% eval). Its
+# julia:multibrot rows are the CENSUS = the primary eval instrument (forced 100% eval). Its
 # native-plane rows are descent-screened, so they are biased -> train.
 CENSUS_BATCHES = {"2026-07-17_prospect_run1_baserate_R_v1",
                   "2026-07-17_prospect_run1_baserate_v1"}
-# Unbiased but train-side: the v5-era flat re-labels. Unbiased selection, but it is not
-# an eval-eligible instrument (v7 kept it in train and the comparison depends on that).
-UNBIASED_TRAIN_BATCHES = {"2026-06-23_flat_generate_loose0_v3"}
+# The MANDELBROT EVAL FLOOR (Matt's call, 2026-07-29). loose0_v3 is the unbiased base-rate
+# flat-generate draw over the mandelbrot plane (526 locations). Registering it eval-eligible
+# gives the mandelbrot slice — 59% of the corpus — a regression instrument it otherwise
+# lacks: the census is julia:multibrot only. It qualifies because the bias that disqualifies
+# an eval population is *model-driven* selection (candidates a model liked), and an unbiased
+# base-rate draw is not that. This REVERSES the prior eval_is_census_only decision on the
+# record; it is a SECONDARY, additive instrument — the census-144 slice below is untouched
+# and stays the pinned primary. Both are forced 100% eval by the same group rule.
+FLOOR_BATCHES = {"2026-06-23_flat_generate_loose0_v3"}
+# Unbiased but train-side (none currently: loose0_v3 moved to FLOOR_BATCHES above). Kept as
+# the registry slot for a future unbiased-but-not-eval batch; empty is the fail-closed state.
+UNBIASED_TRAIN_BATCHES = set()
 
-N_CENSUS_EXPECTED = 144            # the pre-registered eval slice (protocol §3, n~144)
+N_CENSUS_EXPECTED = 144            # the pre-registered census eval slice (protocol §3, n~144)
 
 
 class UF:
@@ -218,8 +237,10 @@ def classify_batch(batch_id, ft):
     """(eval_eligible, biased, source) for one (batch, fractal_type). FAIL-CLOSED."""
     if batch_id in CENSUS_BATCHES:
         if ft.startswith("julia_multibrot"):
-            return True, False, "prospect_census"     # the eval instrument
+            return True, False, "prospect_census"     # the primary eval instrument
         return False, True, "prospect_native"         # native-plane, descent-screened
+    if batch_id in FLOOR_BATCHES:
+        return True, False, "loose0_v3_floor"         # unbiased base-rate -> mandelbrot eval floor
     if batch_id in UNBIASED_TRAIN_BATCHES:
         return False, False, "loose0_v3"              # unbiased, train-side
     return False, True, "biased:" + batch_id          # FAIL CLOSED
@@ -236,6 +257,10 @@ def classify_location(d):
     d["eval_eligible"] = all(c[0] for c in cls)
     d["census"] = (d["ft"].startswith("julia_multibrot")
                    and any(b in CENSUS_BATCHES for b in d["batches"]))
+    d["floor"] = any(b in FLOOR_BATCHES for b in d["batches"])
+    # forced_eval drives the split (below). Both instruments force their group 100% eval by
+    # the SAME rule; a biased neighbour chained into a forced group is dropped either way.
+    d["forced_eval"] = d["census"] or d["floor"]
     d["source"] = "+".join(sorted({c[2] for c in cls}))
 
 
@@ -284,24 +309,27 @@ def assign_groups(locs):
 def assign_split_by_group(locs):
     """Split assigned PER GROUP, so a group can never straddle.
 
-    A group goes to EVAL iff it contains a census location. That is the whole eval rule:
-    the census is the only registered eval-eligible source, and it is forced 100% eval
-    because it is the instrument the v7 comparison runs on. Everything else is train.
+    A group goes to EVAL iff it contains a FORCED-EVAL location — a census
+    (julia:multibrot) location OR a mandelbrot-floor (loose0_v3) location. Both are
+    unbiased-given-selection instruments and are forced 100% eval; everything else is
+    train. The two never share a group (they live in disjoint fractal_type partitions),
+    so the census-144 slice is reproduced location-for-location regardless of the floor.
 
     A forced-eval group that also contains a BIASED location is the one genuine conflict
-    (v7 hit it: two census julia_multibrot4 locations chained through the c-bucket to
-    model-band-selected neighbours). Three constraints collide there — census 100% eval,
-    zero biased-in-eval, zero group straddle — and only one resolution satisfies all
-    three: DROP the biased neighbours from the manifest. Keeping them in train would leak
-    the eval neighbourhood into training, which is exactly what the group unit exists to
-    prevent. They are counted and named in build_metadata, never silently discarded.
-    Returns (kept, dropped)."""
+    (v7 hit it on the census side: two census julia_multibrot4 locations chained through
+    the c-bucket to model-band-selected neighbours; the floor hits it on the mandelbrot
+    side, where base-rate flat locations chain to guided-descent neighbours). Three
+    constraints collide there — forced 100% eval, zero biased-in-eval, zero group
+    straddle — and only one resolution satisfies all three: DROP the biased neighbours
+    from the manifest. Keeping them in train would leak the eval neighbourhood into
+    training, which is exactly what the group unit exists to prevent. They are counted and
+    named in build_metadata, never silently discarded. Returns (kept, dropped)."""
     by_gid = defaultdict(list)
     for d in locs:
         by_gid[d["group_id"]].append(d)
     kept, dropped = [], []
     for _gid, members in by_gid.items():
-        if any(m["census"] for m in members):
+        if any(m["forced_eval"] for m in members):
             for m in members:
                 if m["biased"]:
                     m["split"] = None
@@ -343,6 +371,34 @@ def ident(r):
             tuple(r.get(k) for k in loc_mod.family_param_keys(r["fractal_type"])))
 
 
+def ident_of_loc(d):
+    """Identity of a kept location dict — matches ident() over the row it becomes."""
+    return (d["ft"], d["cx"], d["cy"], d["fw"], d["c_re"], d["c_im"],
+            tuple(d["fparams"].get(k) for k in loc_mod.family_param_keys(d["ft"])))
+
+
+def load_prior_loc_ids():
+    """Read the CURRENT data/v8/manifest.jsonl (if present) as {identity: loc_id}.
+
+    loc_id STABILITY is load-bearing: the 171,384-tile augmentation cache is keyed on
+    loc_id (the plan seeds every palette/geometry draw on f"v8b-aug|{loc_id}" and writes
+    each tile under aug_cache/<loc_id>/), so a rebuild that renumbers rows would silently
+    point every tile at the wrong location. This re-split flips loose0_v3 train->eval and
+    drops 24 newly-conflicting biased neighbours; the surviving population is a SUBSET of
+    the prior manifest, so preserving each survivor's prior loc_id keeps every cache tile
+    valid with zero re-render. A fresh checkout with no prior manifest falls back to a
+    dense index (the original from-scratch behaviour)."""
+    src = ROOT / OUT
+    if not src.exists():
+        return None
+    prior = {}
+    for line in src.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            r = json.loads(line)
+            prior[ident(r)] = int(r["loc_id"])
+    return prior
+
+
 # --------------------------------------------------------------------------- #
 def main():
     locs, n_crops, per_batch, overlay_changed, rev_labeled = load_all_labeled()
@@ -352,12 +408,32 @@ def main():
     ngroups = assign_groups(all_locs)
     kept, dropped = assign_split_by_group(all_locs)
 
-    # Deterministic row order: family, then coordinates. loc_id is a fresh dense index
-    # over THIS build; it carries no cross-version meaning (there is no prefix to inherit).
+    # Deterministic row order: family, then coordinates.
     kept.sort(key=lambda d: (d["ft"], d["cx"], d["cy"], d["fw"],
                              d["c_re"] or "", d["c_im"] or "",
                              json.dumps(d["fparams"], sort_keys=True)))
-    rows = [row_of(d, i) for i, d in enumerate(kept)]
+
+    # loc_id assignment. PRESERVE the prior manifest's identity->loc_id map (the cache is
+    # keyed on it — see load_prior_loc_ids); only fall back to a dense index on a fresh
+    # checkout with no prior manifest. Any kept location missing from the prior map is a
+    # NEW location and gets a fresh id past the prior max — this re-split adds none (the
+    # population is a strict subset), so preserved_new is asserted 0 below.
+    prior = load_prior_loc_ids()
+    if prior is None:
+        rows = [row_of(d, i) for i, d in enumerate(kept)]
+        preserved, preserved_new = 0, len(kept)
+    else:
+        next_id = max(prior.values()) + 1
+        rows, preserved, new_ids = [], 0, []
+        for d in kept:
+            key = ident_of_loc(d)
+            if key in prior:
+                rows.append(row_of(d, prior[key])); preserved += 1
+            else:
+                rows.append(row_of(d, next_id)); new_ids.append(next_id); next_id += 1
+        preserved_new = len(new_ids)
+        assert len({r["loc_id"] for r in rows}) == len(rows), \
+            "loc_id assignment produced duplicate ids"
 
     tr = [r for r in rows if r["split"] == "train"]
     ev = [r for r in rows if r["split"] == "eval"]
@@ -370,6 +446,9 @@ def main():
     print(f"  amendment overlay bound  : {overlay_changed} crops carry a revised label")
     print(f"  dropped (biased in a forced-eval group): {len(dropped)}")
     print(f"  manifest rows            : {len(rows)}")
+    print(f"  loc_id                   : {preserved} preserved from prior manifest, "
+          f"{preserved_new} new"
+          + ("" if prior is None else f" (prior had {len(prior)} rows)"))
     print(f"    TRAIN {fmt_hist(Counter(r['label'] for r in tr), len(tr))}")
     print(f"    EVAL  {fmt_hist(Counter(r['label'] for r in ev), len(ev))}")
     print("\n  by (source, split, biased):")
@@ -421,14 +500,17 @@ def main():
     assert not biased_eval, f"GATE 4 FAIL: {len(biased_eval)} biased rows in eval"
     print(f"  [ 4] 0 biased-in-eval              OK (eval is unbiased by construction)")
 
-    # Gate 5: the forced assignment holds — every census location is in eval, and eval
-    # contains nothing but census locations.
+    # Gate 5: the forced assignment holds — every forced-eval location (census OR floor)
+    # is in eval, and eval contains nothing but forced-eval locations.
     census = [d for d in kept if d["census"]]
-    assert all(d["split"] == "eval" for d in census), "GATE 5 FAIL: a census location is not eval"
-    assert all(d["census"] for d in kept if d["split"] == "eval"), \
-        "GATE 5 FAIL: a non-census location reached eval"
-    print(f"  [ 5] forced assignment holds       OK ({len(census)} census -> eval, "
-          f"eval == census)")
+    floor = [d for d in kept if d["floor"]]
+    forced = [d for d in kept if d["forced_eval"]]
+    assert all(d["split"] == "eval" for d in forced), \
+        "GATE 5 FAIL: a forced-eval location is not eval"
+    assert all(d["forced_eval"] for d in kept if d["split"] == "eval"), \
+        "GATE 5 FAIL: a non-forced-eval location reached eval"
+    print(f"  [ 5] forced assignment holds       OK ({len(census)} census + {len(floor)} floor "
+          f"= {len(forced)} -> eval, eval == forced)")
 
     # Gate 6: THE INSTRUMENT GATE — replaces the (impossible) frozen-prefix byte gate.
     # The eval slice must be exactly the julia:multibrot locations of the two prospect
@@ -537,23 +619,38 @@ def main():
         },
         "split_rule": (
             "Group first (union-find partitioned by (fractal_type, c-bucket)), then split "
-            "per GROUP: a group containing a census location -> eval, else train. The "
-            "census (prospect run-1 base-rate julia:multibrot) is the only registered "
-            "eval-eligible source and is forced 100% eval. assign_split is FAIL-CLOSED: "
-            "an unregistered batch classifies biased -> train."),
-        "eval_is_census_only": (
-            "Eval is the census-144 and nothing else. loose0_v3 is registered UNBIASED but "
-            "train-side, matching v7 — moving it to eval would change the instrument the "
-            "paired v7<->v8 comparison is pre-registered on (protocol §3, n~144). No batch "
-            "was added to an eval list to enlarge the slice; that is the one move the "
-            "fail-closed rule forbids."),
+            "per GROUP: a group containing a FORCED-EVAL location -> eval, else train. Two "
+            "registered eval-eligible instruments, both forced 100% eval: the CENSUS "
+            "(prospect run-1 base-rate julia:multibrot, 144 loc — the pinned primary) and "
+            "the MANDELBROT FLOOR (loose0_v3 base-rate flat-generate, 526 loc — additive "
+            "secondary, Matt's call 2026-07-29). assign_split is FAIL-CLOSED: an "
+            "unregistered batch classifies biased -> train."),
+        "mandelbrot_eval_floor": (
+            "loose0_v3 (2026-06-23_flat_generate) is now eval-eligible: 526 unbiased "
+            "base-rate mandelbrot locations moved train->eval so the mandelbrot slice (59% "
+            "of the corpus) has a non-regression instrument the julia:multibrot census "
+            "cannot provide. This REVERSES the prior eval_is_census_only stance on the "
+            "record. It qualifies because the disqualifying bias is MODEL-DRIVEN selection "
+            "(candidates a model retained), not an unbiased draw. The census-144 is "
+            "untouched and stays the pinned primary; Gate 6 still reproduces it "
+            "location-for-location. The paired v7<->v8 census comparison is unaffected — "
+            "the floor is a separate, secondary read."),
         "eval_power_note": (
-            f"{len(ev)} eval locations out of {len(rows)} ({100*len(ev)/max(len(rows),1):.1f}%). "
-            "This is thin for a 4-class ordinal head and it is a KNOWN limit, not an "
-            "oversight: it is the only unbiased-given-descent draw in existence (run-1 "
-            "ledger exhausted). Per protocol §3 a null result here means 'label more', not "
-            "'model failed' — and the class-4 count inside the eval slice is the binding "
-            "constraint on measuring the new tier at all."),
+            f"{len(ev)} eval locations out of {len(rows)} ({100*len(ev)/max(len(rows),1):.1f}%): "
+            f"{len(census)} census (julia:multibrot) + {len(floor)} floor (mandelbrot). The "
+            "census remains the only unbiased-given-DESCENT draw; the floor is unbiased "
+            "base-rate over the native mandelbrot plane. Per protocol §3 a null result on "
+            "the census still means 'label more', not 'model failed'; the floor is powered "
+            "for the bulk mandelbrot classes (q3 pos=26) but carries 0 class-4."),
+        "loc_id_stability": (
+            f"{preserved} of {len(rows)} loc_ids preserved from the prior manifest, "
+            f"{preserved_new} new. loc_id is NOT re-enumerated: the 171,384-tile aug cache "
+            "is keyed on it (plan seeds every draw on 'v8b-aug|<loc_id>' and writes tiles "
+            "under aug_cache/<loc_id>/). The re-split's surviving population is a strict "
+            "subset of the prior manifest (loose0_v3 flips train->eval in place; 24 biased "
+            "mandelbrot neighbours are dropped), so every survivor keeps its prior id and "
+            "every cache tile stays valid with zero re-render. build_plan.py regenerates "
+            "plan.jsonl + cache_manifest.jsonl consistently from these ids."),
         "multi_batch_locations": (
             "616 locations are contributed by >1 batch (600 shared by the two scale_* "
             "batches, 8 anchor/roster, 8 gather/native-band). v7 asserted one batch per "
@@ -568,10 +665,14 @@ def main():
             "the first manifest to contain phoenix."),
         "dropped_biased_in_forced_eval_group": {
             "count": len(dropped),
-            "why": ("A forced-eval (census) group that also holds a biased location cannot "
-                    "satisfy census-100%-eval + 0-biased-in-eval + 0-group-straddle at "
-                    "once. Keeping the biased neighbour in train would leak the eval "
-                    "neighbourhood into training, so it is dropped from the manifest."),
+            "by_fractal_type": dict(sorted(Counter(d["ft"] for d in dropped).items())),
+            "why": ("A forced-eval group (census OR mandelbrot-floor) that also holds a "
+                    "biased location cannot satisfy forced-100%-eval + 0-biased-in-eval + "
+                    "0-group-straddle at once. Keeping the biased neighbour in train would "
+                    "leak the eval neighbourhood into training, so it is dropped. The 24 "
+                    "mandelbrot drops are NEW (base-rate floor locations chaining to "
+                    "guided-descent neighbours); the 10 julia_multibrot3 are the "
+                    "pre-existing jm3_band census conflict, unchanged."),
             "locations": [
                 {"fractal_type": d["ft"], "cx": d["cx"], "cy": d["cy"], "fw": d["fw"],
                  "c_re": d["c_re"], "c_im": d["c_im"], "label": d["label"],

@@ -1,0 +1,86 @@
+{
+  "score_key": "sum_sigma (rank score)",
+  "v7_census_q3_reference": 0.705,
+  "noninf_margin": 0.05,
+  "census_q3": {
+    "name": "census-144 q3",
+    "n": 144,
+    "thr": 3,
+    "n_pos": 65,
+    "auc_v7": 0.7001,
+    "auc_v7_ci95": [
+      0.6104,
+      0.7828
+    ],
+    "auc_v8": 0.7509,
+    "auc_v8_ci95": [
+      0.671,
+      0.8278
+    ],
+    "delta_v8_minus_v7": 0.0508,
+    "delong_z": -1.371,
+    "delong_p": 0.1704,
+    "v8_vs_reference": 0.0459,
+    "non_inferior_verdict": "NON-INFERIOR"
+  },
+  "mandelbrot_floor_q3": {
+    "name": "mandelbrot-floor q3",
+    "n": 526,
+    "thr": 3,
+    "n_pos": 26,
+    "auc_v7": 0.8854,
+    "auc_v7_ci95": [
+      0.8045,
+      0.9459
+    ],
+    "auc_v8": 0.8677,
+    "auc_v8_ci95": [
+      0.7886,
+      0.9341
+    ],
+    "delta_v8_minus_v7": -0.0177,
+    "delong_z": 0.936,
+    "delong_p": 0.3492,
+    "verdict": "non-inferior",
+    "note": "v7 TRAINED on these locations -> its AUC here is flattered; the comparison is biased against v8 (conservative for a regression check). A v8 shortfall here is ambiguous, not damning."
+  },
+  "class4_descriptive": {
+    "n_census": 144,
+    "n_class4": 22,
+    "auc_v8_q4_vs_rest": 0.813,
+    "auc_v8_q4_by_pnext": 0.7936,
+    "note": "Descriptive only, NOT gating. 22 class-4 census loc, all julia:multibrot. Native-multibrot class-4 is EXTRAPOLATION: mb4 has 5 class-4 training loc, mb3 has 9 (build_metadata per_family).",
+    "class4_by_family": {
+      "julia_multibrot3": 6,
+      "julia_multibrot4": 8,
+      "julia_multibrot5": 8
+    }
+  },
+  "palette_invariance": {
+    "n_census": 144,
+    "held_out_palettes": [
+      "cet_cyclic_wrwbw_40_90_c42",
+      "cet_diverging_bwr_40_95_c42",
+      "cet_linear_bmw_5_95_c86",
+      "cet_linear_kry_5_98_c75",
+      "cet_linear_protanopic_deuteranopic_kbw_5_98_c40",
+      "cmr.ocean",
+      "cmr.seasons",
+      "cmr.viola"
+    ],
+    "instrument": "twilight_shifted",
+    "spearman_twilight_vs_heldout": {
+      "cet_cyclic_wrwbw_40_90_c42": 0.767,
+      "cet_diverging_bwr_40_95_c42": 0.8614,
+      "cet_linear_bmw_5_95_c86": 0.8563,
+      "cet_linear_kry_5_98_c75": 0.919,
+      "cet_linear_protanopic_deuteranopic_kbw_5_98_c40": 0.8992,
+      "cmr.ocean": 0.955,
+      "cmr.seasons": 0.9355,
+      "cmr.viola": 0.9746
+    },
+    "mean_spearman": 0.896,
+    "pooled_spearman": 0.8871,
+    "note": "twilight_shifted remains the pinned instrument for every number above; this is additive. High rho => palette-broad training bought presentation independence; low rho is a genuine negative result, not a failure to bury."
+  }
+}
