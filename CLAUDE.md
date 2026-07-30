@@ -207,6 +207,14 @@ The fixed base defaults are `scratch/renders/` (bare render) and `scratch/strips
     `tools/v8/render_cache.py` runs `WORKERS = 6` on exactly this basis (measured 12.1
     tiles/s at 6 threads vs 7.0 at 3, 5.94 cores busy, desktop unaffected) — do not
     "correct" it to 4.
+  - **The default for ONE `fractal-generator.exe` is 7 threads at BELOW_NORMAL**, committed
+    as `corpus_common.DEFAULT_ENGINE_THREADS` + `default_engine_env()` /
+    `default_creationflags()` (pinned by `tools/corpus/test_engine_launch_defaults.py`). Don't
+    restate it by hand in a prompt or a new script — call the helpers, and the pair moves in
+    one place. The two knobs belong together: the thread count buys throughput, the priority
+    class buys interactivity. **Multiple parallel engine processes is a separate case with no
+    standing number** — size it for the actual N and pass `threads=` explicitly; don't invent
+    a universal figure and don't inherit the per-process 7.
 - Matt is expert (graphics + ML PhD) — be terse and precise; skip basics.
 - Module docs (`//!`) carry the real design rationale; read them before changing a module.
 

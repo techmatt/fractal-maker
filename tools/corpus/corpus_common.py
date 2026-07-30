@@ -321,11 +321,44 @@ DEFAULT_CROP_JPGQ = 90
 # revisit/...); a manual single render via `cargo run` is unaffected.
 BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
 
+# Rayon worker threads for ONE engine process. Committed here so it stops being carried by hand
+# in prompts and stops drifting run to run.
+#
+# 7 of the box's 12 logical cores, at BELOW_NORMAL. The pairing is the point: the thread count
+# buys throughput and the priority class buys interactivity, and either alone is wrong. 7 leaves
+# real headroom for the desktop and for the Python/GPU side of a scoring run, while BELOW_NORMAL
+# means even the 7 yield to foreground work rather than merely being outnumbered by it.
+#
+# THIS NUMBER IS FOR ONE PROCESS. Threads inside a single process are NOT the thing CLAUDE.md's
+# max-4 rule caps — that rule is about concurrent heavyweight `fractal-generator.exe` processes,
+# each of which carries its own rayon pool, plan/corpus scan and resident colormap LUTs. A
+# caller that fans out N engine processes must size threads itself against 12 cores and pass
+# `threads=`; there is deliberately NO standing number for that case, because the right answer
+# depends on N and on what else the fan-out is doing (tools/v8/render_cache.py's 6 and
+# render_mode_pilot's 4x3 are each measured for their own shape — do not "unify" them to this).
+DEFAULT_ENGINE_THREADS = 7
+
 
 def default_creationflags() -> int:
     """The default subprocess creation flags for an engine launch: BELOW_NORMAL priority on
     win32, 0 elsewhere. Shared so every launcher gets the same low-priority default."""
     return BELOW_NORMAL_PRIORITY_CLASS if sys.platform == "win32" else 0
+
+
+def default_engine_env(env: dict | None = None, threads: int | None = None) -> dict:
+    """Environment for a SINGLE engine launch: `env` (default `os.environ`) plus
+    `RAYON_NUM_THREADS`.
+
+    Pairs with `default_creationflags()` — 7 threads at BELOW_NORMAL is the committed default
+    for one `fractal-generator.exe`. Pass `threads=` explicitly when fanning out multiple engine
+    processes (see DEFAULT_ENGINE_THREADS); an explicit RAYON_NUM_THREADS already in `env` is
+    respected and never overwritten, so a caller's own choice always wins."""
+    out = dict(os.environ if env is None else env)
+    out.setdefault("RAYON_NUM_THREADS",
+                   str(DEFAULT_ENGINE_THREADS if threads is None else int(threads)))
+    if threads is not None:
+        out["RAYON_NUM_THREADS"] = str(int(threads))
+    return out
 
 
 def default_bin() -> str:
@@ -345,7 +378,8 @@ def _location_mod():
 
 def render_corpus_crop(render: dict, out_path, *, palette_source, bin_path=None,
                        jpg_quality: int = DEFAULT_CROP_JPGQ, cwd=None,
-                       creationflags: int | None = None, timeout=None) -> str:
+                       creationflags: int | None = None, timeout=None,
+                       threads: int | None = None, env: dict | None = None) -> str:
     """Render ONE location-corpus label crop the canonical way and return `out_path`.
 
     `render` is a version-invariant render block (`RENDER_KEYS`, optionally the
@@ -361,6 +395,10 @@ def render_corpus_crop(render: dict, out_path, *, palette_source, bin_path=None,
     loc = loc_mod.from_render_block(render)
     # None => the low-priority default (BELOW_NORMAL on win32); an explicit value (incl. 0) wins.
     cflags = default_creationflags() if creationflags is None else creationflags
+    # 7 threads at BELOW_NORMAL: the committed single-process engine default. A fan-out caller
+    # passes `threads=` (see DEFAULT_ENGINE_THREADS) rather than inheriting a per-process number
+    # that assumes it has the box to itself.
+    cenv = default_engine_env(env, threads)
     binp = str(bin_path) if bin_path is not None else default_bin()
     cmd = [binp, "render-one", *loc_mod.render_one_flags(loc),
            "--cx", str(render["cx"]), "--cy", str(render["cy"]), "--fw", str(render["fw"]),
@@ -370,7 +408,7 @@ def render_corpus_crop(render: dict, out_path, *, palette_source, bin_path=None,
            "--palette", str(render["palette"]), "--colormaps", str(palette_source),
            "--jpg-quality", str(jpg_quality), "--out", str(out_path)]
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True,
-                       creationflags=cflags, timeout=timeout)
+                       creationflags=cflags, timeout=timeout, env=cenv)
     if r.returncode != 0 or not os.path.exists(out_path):
         raise RuntimeError(
             f"render_corpus_crop failed for {out_path} "
