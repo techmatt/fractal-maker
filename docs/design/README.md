@@ -17,6 +17,7 @@ the render core and pipeline; these docs go a level deeper on specific decisions
 | [render_coloring_surface.md](render_coloring_surface.md) | The two coloring algorithms, three palette namespaces, the silent density fork, the open corpus-coloring hazard (P4), and why the OKLab ports must not be merged. |
 | [discovery_pipeline.md](discovery_pipeline.md) | The guided-descend walk + reward split, the freshness-prior/dive incompatibility, and the distinct-look deficit scheduler (incl. julia routing). |
 | [storage_classes.md](storage_classes.md) | The durability contract: the four storage classes, why a missing `scratch/` artifact is not data loss, that durability is claimed only by `durable()` at the write site, and the no-bulk-in-tree rule (traversal cost, not repo size) with its write-site + size-guard enforcement. |
+| [label_corpus_relocation.md](label_corpus_relocation.md) | Relocating the label corpus's `crops/`+`vivid/` bulk (3,822 files, ~72% of the working tree) out of tree behind `artifacts.resolve`: why the scope is crops/vivid only (labels stay tracked in-tree), the silent-zero hazard across 34 construction sites (2 load-bearing readers), the seam, and the staged move + before/after `(image_id,score)` gate. |
 
 **Two sourcing docs, one boundary — pick by depth regime.** `deep_zoom_sourcing.md` is
 the **deep, beyond-f64 tier** (perturbation, ∂M-tracking, deep-center production) and is
