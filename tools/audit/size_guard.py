@@ -163,9 +163,13 @@ REGISTRY: list[Entry] = [
     # (present/render-one). The tracked scores.json / images.jsonl labels + ledgers
     # are tiny and STAY in-tree (guarded by test_tracked_artifacts.py); only the crop
     # bulk relocates. `_work/` preview+staging subtrees are dead intermediates.
-    Entry("data/label_corpus/", RELOCATE, ARTIFACTS, "mixed",
-          "batch crops (regenerable via present/render-one) + dead `_work/` preview "
-          "& crop-staging; tracked scores.json/images.jsonl labels stay in-tree"),
+    Entry("data/label_corpus/", KEEP, None, "tracked",
+          "batch crops (crops/+vivid/, 3,822 files) RELOCATED out-of-tree behind "
+          "artifacts.resolve — the label-corpus crop class, docs/design/"
+          "label_corpus_relocation.md. The only over-threshold content left in-tree is the "
+          "tracked v2filtered images.jsonl (1.4 MB of per-row provenance): an irreplaceable "
+          "human-label referent (CANARY) with no smaller form, which stays. CANARY.",
+          canary=True),
     Entry("data/wallpaper_corpus/", RELOCATE, ARTIFACTS, "mixed",
           "wallpaper batch crops (regenerable); tracked images.jsonl/ledgers stay"),
     Entry("data/render_mode_corpus/", RELOCATE, ARTIFACTS, "mixed",

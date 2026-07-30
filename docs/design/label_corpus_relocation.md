@@ -58,10 +58,12 @@ the resolver honor it:
 - **`.gitignore`** ignores `/data/label_corpus/batches/*/crops/` and `.../vivid/` while
   negating `!/data/label_corpus/` — i.e. the batch root is committed, the crop trees are
   not. (The same stanza block also ignores `_work/` and `sanity_contact_sheet.html`.)
-- **The size-guard registry** (`tools/audit/size_guard.py`) carries one line:
-  `data/label_corpus/` → `RELOCATE → artifacts`, reason "batch crops (regenerable via
-  present/render-one) … tracked scores.json/images.jsonl labels stay in-tree". That line
-  is the pending-move marker; it becomes stale (a soft warning) once the move lands.
+- **The size-guard registry** (`tools/audit/size_guard.py`) carried one line:
+  `data/label_corpus/` → `RELOCATE → artifacts`, reason "batch crops … labels stay
+  in-tree". Once the move lands that disposition flips to **KEEP**, not stale: the crops
+  leave the tree, but one tracked label file — the v2filtered `images.jsonl`, 1.4 MB of
+  per-row provenance — still trips the ≥1 MiB rule and legitimately stays in-tree, so the
+  entry is reworded to cover exactly that remaining KEEP-class violator.
 - **The crop-rebuild contract** (`corpus_common.render_corpus_crop`, `CORPUS_SCHEMA.md`):
   every crop is a byte-reproducible function of its `images.jsonl` render block through
   `render-one --palette … --colormaps …`. Regenerable ⇒ `artifacts` tier ⇒ out of tree.

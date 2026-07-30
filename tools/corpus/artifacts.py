@@ -25,8 +25,11 @@ volume). The relocated tree mirrors the repo-relative layout exactly:
 
 Non-relocated paths resolve in-tree, unchanged. This module is deliberately
 additive and narrow: it relocates the live aug-cache family (a fixed versioned
-path) plus the discovery-scratch *class* (any ``data/discovery/**/scratch`` tree,
-matched by pattern so no per-campaign registration is ever needed), nothing else.
+path), the discovery-scratch *class* (any ``data/discovery/**/scratch`` tree,
+matched by pattern so no per-campaign registration is ever needed), and the
+label-corpus crop *class* (any ``data/label_corpus/batches/*/{crops,vivid}`` tree,
+matched the same way — see ``_is_label_corpus_crop`` and
+``docs/design/label_corpus_relocation.md``), nothing else.
 """
 from __future__ import annotations
 
@@ -79,6 +82,33 @@ def _is_discovery_scratch(r: str) -> bool:
     )
 
 
+def _is_label_corpus_crop(r: str) -> bool:
+    """True iff ``r`` (normalized repo-relative) is a label-corpus batch's ``crops/`` or
+    ``vivid/`` tree — the regenerable label-crop bulk (a pure function of each row's
+    render block via render-one) relocated OUT of the working tree. It was 3,822 files
+    (~72% of the working tree) before the move; see
+    ``docs/design/label_corpus_relocation.md``.
+
+    Matched as a CLASS by pattern rather than a per-batch literal, exactly like
+    ``_is_discovery_scratch``: a new batch relocates the same way with no registry edit,
+    so a forgotten registration fails toward out-of-tree (conservative), never toward a
+    silent bulk in the source tree. The batch builders declare the class by routing their
+    crop writes through ``corpus_common.crops_dir``/``vivid_dir`` (which call ``resolve``);
+    this predicate is what makes that routing relocate. Mirrors the
+    ``/data/label_corpus/batches/*/{crops,vivid}/`` .gitignore stanzas. Component-exact on
+    ``crops``/``vivid``, so a sibling like ``.../crops_staging`` does NOT match — and the
+    tracked labels (``images.jsonl``/``scores.json``/``batch.json``) stay in-tree because
+    they are not under a ``crops``/``vivid`` component."""
+    parts = r.split("/")
+    return (
+        len(parts) >= 5
+        and parts[0] == "data"
+        and parts[1] == "label_corpus"
+        and parts[2] == "batches"
+        and parts[4] in ("crops", "vivid")
+    )
+
+
 def artifacts_root() -> Path:
     """Root under which relocated artifacts live (env override or repo sibling)."""
     env = os.environ.get(ARTIFACTS_ENV)
@@ -97,11 +127,12 @@ def _norm(rel) -> str:
 
 def is_relocated(rel) -> bool:
     """True iff ``rel`` (repo-relative) belongs to a relocated family: a literal
-    aug-cache prefix, or any discovery-scratch tree (matched by class, not by literal)."""
+    aug-cache prefix, any discovery-scratch tree, or any label-corpus crop/vivid tree
+    (the latter two matched by class, not by literal)."""
     r = _norm(rel)
     if any(r == p or r.startswith(p + "/") for p in RELOCATED_PREFIXES):
         return True
-    return _is_discovery_scratch(r)
+    return _is_discovery_scratch(r) or _is_label_corpus_crop(r)
 
 
 def resolve(rel) -> Path:

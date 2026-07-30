@@ -78,6 +78,20 @@ def _scan_in_tree_offenders(repo_root: Path) -> list[str]:
                     n = _count_files(full)
                     if n:
                         offenders.append(f"{rel} has {n}+ files in-tree at {full}")
+    # label-corpus crop class: walk data/label_corpus/batches for in-tree crops/vivid dirs
+    # with files. Same conservative rule — a crop tree that reappears in-tree (a batch
+    # builder that bypassed corpus_common.crops_dir/vivid_dir) is caught here even for a
+    # batch id never registered anywhere.
+    lc = repo_root / "data" / "label_corpus" / "batches"
+    if lc.exists():
+        for root, dirs, _files in os.walk(lc):
+            for d in dirs:
+                full = Path(root) / d
+                rel = full.relative_to(repo_root).as_posix()
+                if A._is_label_corpus_crop(rel):
+                    n = _count_files(full)
+                    if n:
+                        offenders.append(f"{rel} has {n}+ files in-tree at {full}")
     return offenders
 
 
@@ -126,6 +140,63 @@ def test_tripwire_fires_on_synthetic_discovery_scratch(tmp_path):
     (tmp_path / "data/discovery/campaign3/breadth" / "outcome_ledger.jsonl").write_bytes(b"x")
     planted.unlink()
     assert _scan_in_tree_offenders(tmp_path) == []
+
+
+def test_tripwire_fires_on_synthetic_label_corpus_crops(tmp_path):
+    """The tripwire FIRES on a NEW batch's crops/vivid bombed in-tree — with NO registry
+    line naming that batch. Same payoff as the discovery-scratch class test: matching the
+    label-corpus crop family by pattern means a batch builder that bypasses
+    corpus_common.crops_dir (re-materializing crops in-tree) is caught conservatively,
+    even for a batch id the resolver has never seen."""
+    assert _scan_in_tree_offenders(tmp_path) == []
+    victim = "data/label_corpus/batches/2099-01-01_never_seen/crops"    # unregistered batch
+    assert not any(victim.startswith(p) for p in A.RELOCATED_PREFIXES)
+    planted = tmp_path / victim / "0_center_pal.jpg"
+    planted.parent.mkdir(parents=True)
+    planted.write_bytes(b"x")
+    offenders = _scan_in_tree_offenders(tmp_path)
+    assert any("never_seen" in o and "crops" in o for o in offenders), offenders
+    # vivid companion trips it too
+    vivid = tmp_path / "data/label_corpus/batches/2099-01-01_never_seen/vivid" / "0.jpg"
+    vivid.parent.mkdir(parents=True)
+    vivid.write_bytes(b"x")
+    assert any("vivid" in o for o in _scan_in_tree_offenders(tmp_path))
+    # the tracked labels beside the crops must NOT trip it — they legitimately stay in-tree
+    (tmp_path / "data/label_corpus/batches/2099-01-01_never_seen/images.jsonl").write_bytes(b"x")
+    (tmp_path / "data/label_corpus/batches/2099-01-01_never_seen/scores.json").write_bytes(b"x")
+    planted.unlink()
+    vivid.unlink()
+    assert _scan_in_tree_offenders(tmp_path) == []
+
+
+def test_label_corpus_crop_class_maps_under_artifacts_root():
+    """Any data/label_corpus/batches/*/{crops,vivid} relocates by pattern — no registry
+    line required, including a batch never seen before."""
+    root = A.artifacts_root()
+    for rel in [
+        "data/label_corpus/batches/2026-07-26_minibrot_roster_v2/crops/0_center_pal.jpg",
+        "data/label_corpus/batches/2026-07-26_minibrot_roster_v2/vivid/0_center_pal.jpg",
+        "data/label_corpus/batches/some_future_batch/crops",       # unregistered; dir itself
+    ]:
+        assert A._is_label_corpus_crop(A._norm(rel)), rel
+        assert A.is_relocated(rel), rel
+        assert A.resolve(rel) == root / rel, rel
+
+
+def test_label_corpus_labels_and_lookalikes_stay_in_tree():
+    """The tracked labels + batch root stay in-tree; only crops/vivid relocate, and a
+    `crops_staging`-style sibling component must not match the crop class."""
+    for rel in [
+        "data/label_corpus/batches/b/images.jsonl",
+        "data/label_corpus/batches/b/scores.json",
+        "data/label_corpus/batches/b/batch.json",
+        "data/label_corpus/batches/b/blind.jsonl",
+        "data/label_corpus/batches/b/crops_staging/x.jpg",         # component != crops/vivid
+        "data/label_corpus/CORPUS_SCHEMA.md",
+    ]:
+        assert not A._is_label_corpus_crop(A._norm(rel)), rel
+        assert not A.is_relocated(rel), rel
+        assert A.resolve(rel) == A.REPO_ROOT / rel, rel
 
 
 def test_relocated_prefixes_map_under_artifacts_root():
