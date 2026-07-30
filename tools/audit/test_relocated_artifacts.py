@@ -92,6 +92,18 @@ def _scan_in_tree_offenders(repo_root: Path) -> list[str]:
                     n = _count_files(full)
                     if n:
                         offenders.append(f"{rel} has {n}+ files in-tree at {full}")
+    # descent-harness crop class: walk data/descent_harness for in-tree crops/vivid dirs
+    # with files (a tools/descent emit that bypassed store's artifacts-routed crop paths).
+    dh = repo_root / "data" / "descent_harness"
+    if dh.exists():
+        for root, dirs, _files in os.walk(dh):
+            for d in dirs:
+                full = Path(root) / d
+                rel = full.relative_to(repo_root).as_posix()
+                if A._is_descent_harness_crop(rel):
+                    n = _count_files(full)
+                    if n:
+                        offenders.append(f"{rel} has {n}+ files in-tree at {full}")
     return offenders
 
 
@@ -195,6 +207,51 @@ def test_label_corpus_labels_and_lookalikes_stay_in_tree():
         "data/label_corpus/CORPUS_SCHEMA.md",
     ]:
         assert not A._is_label_corpus_crop(A._norm(rel)), rel
+        assert not A.is_relocated(rel), rel
+        assert A.resolve(rel) == A.REPO_ROOT / rel, rel
+
+
+def test_tripwire_fires_on_synthetic_descent_harness_crops(tmp_path):
+    """The tripwire FIRES on descent-harness crops/vivid bombed in-tree (a tools/descent
+    emit that bypassed store's artifacts-routed crop paths), while the durable text
+    records beside them (emits.jsonl / selection.json / verified_bad.json) stay in-tree."""
+    assert _scan_in_tree_offenders(tmp_path) == []
+    crop = tmp_path / "data/descent_harness/crops" / "d2_p03_001__e1.jpg"
+    crop.parent.mkdir(parents=True)
+    crop.write_bytes(b"x")
+    offenders = _scan_in_tree_offenders(tmp_path)
+    assert any("descent_harness/crops" in o for o in offenders), offenders
+    vivid = tmp_path / "data/descent_harness/vivid" / "d2_p03_001__e1.jpg"
+    vivid.parent.mkdir(parents=True)
+    vivid.write_bytes(b"x")
+    assert any("descent_harness/vivid" in o for o in _scan_in_tree_offenders(tmp_path))
+    # the durable text records must NOT trip it (they legitimately stay in-tree)
+    (tmp_path / "data/descent_harness/emits.jsonl").write_bytes(b"x")
+    (tmp_path / "data/descent_harness/selection.json").write_bytes(b"x")
+    crop.unlink()
+    vivid.unlink()
+    assert _scan_in_tree_offenders(tmp_path) == []
+
+
+def test_descent_harness_crop_class_maps_under_artifacts_root():
+    """Any data/descent_harness/{crops,vivid} relocates by pattern; the records stay
+    in-tree, and a `crops_staging`-style sibling component must not match."""
+    root = A.artifacts_root()
+    for rel in [
+        "data/descent_harness/crops/d2_p03_001__e1.jpg",
+        "data/descent_harness/vivid/d2_p03_001__e1.jpg",
+        "data/descent_harness/crops",                       # the dir itself
+    ]:
+        assert A._is_descent_harness_crop(A._norm(rel)), rel
+        assert A.is_relocated(rel), rel
+        assert A.resolve(rel) == root / rel, rel
+    for rel in [
+        "data/descent_harness/selection.json",
+        "data/descent_harness/emits.jsonl",
+        "data/descent_harness/verified_bad.json",
+        "data/descent_harness/crops_staging/x.jpg",         # component != crops/vivid
+    ]:
+        assert not A._is_descent_harness_crop(A._norm(rel)), rel
         assert not A.is_relocated(rel), rel
         assert A.resolve(rel) == A.REPO_ROOT / rel, rel
 

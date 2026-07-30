@@ -10,13 +10,18 @@ Run:  uv run python tools/explorer/app.py
 """
 import base64
 import hashlib
-import subprocess
 import sys
 import tempfile
 from decimal import Decimal, getcontext
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
+
+# Shared pixel→plane math + render-one invocation (extracted so the coordinate
+# math exists ONCE; see tools/explorer/render_core.py). The descent harness
+# imports the same module — a divergence here would mislocate emitted solutions.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import render_core as rc  # noqa: E402
 
 # Plenty of guard digits for deep-zoom decimal coordinate math.
 getcontext().prec = 60
@@ -102,42 +107,22 @@ PALETTES = load_palette_names()
 
 
 # ---------------------------------------------------------------------------
-# Coordinate math (Decimal)
+# Coordinate math (Decimal) — delegated to the shared render_core module. The
+# thin wrappers preserve the historical NAV_W/NAV_H defaults and the STATE-aware
+# maxiter override at the call sites while the math itself lives in one place.
 # ---------------------------------------------------------------------------
 def click_to_world(px, py, ctr_x, ctr_y, fw, w=NAV_W, h=NAV_H):
-    """Pixel (top-left origin) on a panel -> complex-plane point (Decimal)."""
-    fw = Decimal(fw)
-    W, H = Decimal(w), Decimal(h)
-    fh = fw * H / W
-    fx = Decimal(px) / W - Decimal("0.5")
-    fy = Decimal(py) / H - Decimal("0.5")
-    world_x = Decimal(ctr_x) + fx * fw
-    world_y = Decimal(ctr_y) - fy * fh   # screen-y down, imaginary up
-    return world_x, world_y
+    return rc.click_to_world(px, py, ctr_x, ctr_y, fw, w, h)
 
 
-# ---------------------------------------------------------------------------
-# maxiter (depth-aware)
-# ---------------------------------------------------------------------------
 def auto_maxiter(fw):
-    if STATE["maxiter_override"] is not None:
-        return STATE["maxiter_override"]
-    fw = Decimal(fw)
-    fw_home = M_HOME[2]
-    ratio = fw_home / fw if fw > 0 else Decimal(1)
-    # log2(ratio)
-    import math
-    lz = math.log2(float(ratio)) if ratio > 0 else 0.0
-    val = MAXITER_BASE * (1.0 + MAXITER_K * lz)
-    return int(max(MAXITER_MIN, min(MAXITER_MAX, val)))
+    return rc.auto_maxiter(fw, STATE["maxiter_override"])
 
 
 # ---------------------------------------------------------------------------
 # Render (shell out to the render-one binary)
 # ---------------------------------------------------------------------------
-def _dec(x):
-    """Decimal -> plain decimal string (no scientific notation)."""
-    return format(Decimal(x), "f")
+_dec = rc.dec_str
 
 
 def render(panel, ctr_x, ctr_y, fw, maxiter, w, h, ss, julia_c=None):
@@ -153,19 +138,11 @@ def render(panel, ctr_x, ctr_y, fw, maxiter, w, h, ss, julia_c=None):
         return _render_cache[key]
 
     out = TMPDIR / f"{key}.png"
-    cmd = [
-        str(RENDER_BIN), "render-one",
-        "--cx", _dec(ctr_x), "--cy", _dec(ctr_y), "--fw", _dec(fw),
-        "--width", str(w), "--height", str(h), "--supersample", str(ss),
-        "--palette", palette, "--colormaps", str(COLORMAPS),
-        "--maxiter", str(maxiter), "--out", str(out),
-    ]
-    if julia_c is not None:
-        cmd += ["--julia", "--c", _dec(julia_c[0]), _dec(julia_c[1])]
-
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise RuntimeError(f"render failed: {proc.stderr or proc.stdout}")
+    argv = rc.render_one_argv(
+        ctr_x, ctr_y, fw, maxiter, w, h, ss, palette, COLORMAPS, out,
+        julia_c=julia_c,
+    )
+    rc.run_render_one(argv, out)
 
     b64 = base64.b64encode(out.read_bytes()).decode()
     url = f"data:image/png;base64,{b64}"

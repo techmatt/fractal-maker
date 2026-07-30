@@ -29,7 +29,9 @@ path), the discovery-scratch *class* (any ``data/discovery/**/scratch`` tree,
 matched by pattern so no per-campaign registration is ever needed), and the
 label-corpus crop *class* (any ``data/label_corpus/batches/*/{crops,vivid}`` tree,
 matched the same way — see ``_is_label_corpus_crop`` and
-``docs/design/label_corpus_relocation.md``), nothing else.
+``docs/design/label_corpus_relocation.md``), and the descent-harness crop *class* (any
+``data/descent_harness/{crops,vivid}`` tree — see ``_is_descent_harness_crop``), nothing
+else.
 """
 from __future__ import annotations
 
@@ -109,6 +111,27 @@ def _is_label_corpus_crop(r: str) -> bool:
     )
 
 
+def _is_descent_harness_crop(r: str) -> bool:
+    """True iff ``r`` (normalized repo-relative) is the descent harness's ``crops/`` or
+    ``vivid/`` tree (``data/descent_harness/{crops,vivid}/**``) — the emitted canonical +
+    vivid crop pairs (``tools/descent/``). These images are destined for the label corpus
+    and this set grows from 40 atoms to 163, so they relocate OUT of the working tree
+    exactly like ``_is_label_corpus_crop``. The durable text records
+    (``emits.jsonl``/``selection.json``/``verified_bad.json``) sit directly under
+    ``data/descent_harness/`` and stay in-tree because they are not under a
+    ``crops``/``vivid`` component. Matched as a CLASS by pattern (component-exact on
+    ``crops``/``vivid``) so a sibling like ``.../crops_staging`` does NOT match; mirrors the
+    ``/data/descent_harness/{crops,vivid}/`` .gitignore stanzas and the reappearance
+    tripwire in ``tools/audit/test_relocated_artifacts.py``."""
+    parts = r.split("/")
+    return (
+        len(parts) >= 3
+        and parts[0] == "data"
+        and parts[1] == "descent_harness"
+        and parts[2] in ("crops", "vivid")
+    )
+
+
 def artifacts_root() -> Path:
     """Root under which relocated artifacts live (env override or repo sibling)."""
     env = os.environ.get(ARTIFACTS_ENV)
@@ -127,12 +150,13 @@ def _norm(rel) -> str:
 
 def is_relocated(rel) -> bool:
     """True iff ``rel`` (repo-relative) belongs to a relocated family: a literal
-    aug-cache prefix, any discovery-scratch tree, or any label-corpus crop/vivid tree
-    (the latter two matched by class, not by literal)."""
+    aug-cache prefix, any discovery-scratch tree, any label-corpus crop/vivid tree, or
+    any descent-harness crop/vivid tree (the last three matched by class, not by literal)."""
     r = _norm(rel)
     if any(r == p or r.startswith(p + "/") for p in RELOCATED_PREFIXES):
         return True
-    return _is_discovery_scratch(r) or _is_label_corpus_crop(r)
+    return (_is_discovery_scratch(r) or _is_label_corpus_crop(r)
+            or _is_descent_harness_crop(r))
 
 
 def resolve(rel) -> Path:

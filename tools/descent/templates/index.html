@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Minibrot Descent Harness</title>
+<style>
+  :root { --bg:#0e0e0e; --panel:#191919; --fg:#ddd; --accent:#6cf; --muted:#888;
+          --good:#7e7; --warn:#fd6; --bad:#e77; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:13px/1.4 system-ui, sans-serif; }
+  header { padding:7px 14px; display:flex; align-items:center; gap:16px;
+           border-bottom:1px solid #333; }
+  header h1 { font-size:14px; margin:0; font-weight:600; color:var(--accent); }
+  .layout { display:grid; grid-template-columns:300px 1fr 320px; gap:12px;
+            padding:12px; align-items:start; }
+  .col { background:var(--panel); border:1px solid #2a2a2a; border-radius:6px;
+         padding:10px; }
+  h2 { margin:0 0 8px; font-size:12px; color:var(--muted); font-weight:600;
+       text-transform:uppercase; letter-spacing:.04em; }
+
+  /* library */
+  #lib { max-height:82vh; overflow-y:auto; }
+  .deg-group { margin-bottom:10px; }
+  .deg-head { color:var(--muted); font-size:11px; margin:6px 0 4px; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+  .tile { position:relative; border:2px solid #2a2a2a; border-radius:4px;
+          overflow:hidden; cursor:pointer; background:#000; }
+  .tile.sel { border-color:var(--accent); }
+  .tile img { width:100%; display:block; aspect-ratio:16/9; object-fit:cover;
+              background:#000; }
+  .tile .cap { position:absolute; left:0; right:0; bottom:0; padding:2px 4px;
+               font-size:10px; background:rgba(0,0,0,.6); display:flex;
+               justify-content:space-between; }
+  .badge { position:absolute; top:3px; right:3px; font-size:10px; padding:1px 5px;
+           border-radius:8px; background:#333; }
+  .badge.solved { background:#243; color:var(--good); }
+  .badge.vbad { background:#412; color:var(--bad); }
+  .badge.visited { background:#334; color:var(--accent); }
+  .split-e { color:var(--warn); }
+
+  /* viewport */
+  .canvas-box { position:relative; width:720px; height:405px; margin:0 auto;
+                user-select:none; }
+  .canvas-box img { width:720px; height:405px; display:block; cursor:crosshair;
+                    background:#000; border-radius:3px; }
+  #box { position:absolute; border:1.5px solid var(--accent);
+         background:rgba(102,204,255,.12); pointer-events:none; display:none; }
+  .spinner { position:absolute; inset:0; background:rgba(0,0,0,.5); display:none;
+             align-items:center; justify-content:center; color:var(--accent); }
+  .spinner.on { display:flex; }
+  .coord { font-family:monospace; font-size:11px; color:var(--muted);
+           margin-top:6px; word-break:break-all; }
+  .navrow { display:flex; gap:8px; align-items:center; margin-top:8px;
+            flex-wrap:wrap; justify-content:center; }
+  select, button { background:#222; color:var(--fg); border:1px solid #444;
+                   border-radius:4px; padding:4px 8px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.emit4 { border-color:#4a7; }
+  button.emit3 { border-color:#a94; }
+  .hint { color:var(--muted); font-size:11px; }
+
+  /* right column */
+  #vividwrap img { width:100%; border-radius:4px; display:block; background:#000; }
+  .swap { display:flex; gap:6px; margin:6px 0; }
+  .swap button { flex:1; font-size:11px; }
+  .sol { display:flex; align-items:center; gap:6px; padding:4px;
+         border:1px solid #2a2a2a; border-radius:4px; margin-bottom:4px; }
+  .sol img { width:64px; aspect-ratio:16/9; object-fit:cover; border-radius:3px;
+             background:#000; cursor:pointer; }
+  .sol .meta { flex:1; font-size:11px; }
+  .sol .del { color:var(--bad); cursor:pointer; font-size:11px; }
+  .stat { display:flex; justify-content:space-between; font-size:11px;
+          color:var(--muted); }
+  .vbad-toggle.on { background:#412; border-color:var(--bad); color:var(--bad); }
+  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+           background:#223; border:1px solid var(--accent); padding:8px 14px;
+           border-radius:6px; display:none; z-index:9; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Minibrot Descent Harness</h1>
+  <span class="hint">click = recenter+zoom · shift/right-click = recenter only ·
+    drag = box-zoom (16:9)</span>
+  <span id="atom-label" class="hint" style="margin-left:auto"></span>
+</header>
+
+<div class="layout">
+  <!-- LIBRARY -->
+  <div class="col">
+    <h2>Library · <span id="lib-count"></span></h2>
+    <div id="lib"></div>
+  </div>
+
+  <!-- VIEWPORT -->
+  <div class="col">
+    <h2 id="vp-head">Viewport</h2>
+    <div class="canvas-box">
+      <img id="view" draggable="false">
+      <div id="box"></div>
+      <div class="spinner" id="spin">rendering…</div>
+    </div>
+    <div class="coord" id="coord"></div>
+    <div class="navrow">
+      <label class="hint">zoom</label>
+      <select id="zoom"><option>2</option><option>3</option><option>4</option></select>
+      <button id="undo">↶ undo</button>
+      <button id="tobase">⤒ base</button>
+      <span class="hint" id="depth"></span>
+    </div>
+    <div class="navrow">
+      <button id="renderq">Render quality (640×360 ss2)</button>
+      <button id="emit4" class="emit4" disabled>emit as q4</button>
+      <button id="emit3" class="emit3" disabled>emit as q3</button>
+    </div>
+    <div class="hint" id="qhint" style="text-align:center;margin-top:4px"></div>
+  </div>
+
+  <!-- SIDE -->
+  <div class="col">
+    <h2>Judging preview (vivid)</h2>
+    <div id="vividwrap"><img id="vivid"></div>
+    <div class="swap">
+      <button id="show-vivid" disabled>vivid</button>
+      <button id="show-canon" disabled>canonical (stored)</button>
+    </div>
+
+    <h2 style="margin-top:12px">Solutions</h2>
+    <div id="sols" class="hint">—</div>
+
+    <h2 style="margin-top:12px">Verdict</h2>
+    <button id="vbad" class="vbad-toggle" disabled>mark “verified bad”</button>
+
+    <h2 style="margin-top:12px">Session activity</h2>
+    <div class="stat"><span>active time</span><span id="a-time">–</span></div>
+    <div class="stat"><span>box descents</span><span id="a-box">–</span></div>
+    <div class="stat"><span>deepest zoom</span><span id="a-zoom">–</span></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let ATOM = null;           // current atom id
+let LAST = {};             // last state payload
+let QUAL = {vivid:null, canon:null};
+
+function toast(m){ const t=$("#toast"); t.textContent=m; t.style.display="block";
+  clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none",3000); }
+function spin(on){ $("#spin").classList.toggle("on",on); }
+
+async function post(url, body){
+  const r = await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body||{})});
+  const j = await r.json().catch(()=>({error:"bad response"}));
+  if(!r.ok || j.error){ toast(j.error || ("error "+r.status)); throw new Error(j.error||r.status); }
+  return j;
+}
+
+// ---- library ----
+async function loadLibrary(){
+  const {atoms,total} = await post("/library");
+  $("#lib-count").textContent = total;
+  const byDeg = {};
+  atoms.forEach(a => (byDeg[a.degree] ||= []).push(a));
+  const lib = $("#lib"); lib.innerHTML = "";
+  Object.keys(byDeg).sort().forEach(deg => {
+    const g = document.createElement("div"); g.className="deg-group";
+    g.innerHTML = `<div class="deg-head">degree ${deg}</div>`;
+    const grid = document.createElement("div"); grid.className="grid";
+    byDeg[deg].forEach(a => grid.appendChild(tile(a)));
+    g.appendChild(grid); lib.appendChild(g);
+  });
+}
+function badge(a){
+  if(a.emit_count>0) return `<span class="badge solved">solved(${a.emit_count})</span>`;
+  if(a.verified_bad) return `<span class="badge vbad">bad</span>`;
+  if(a.touched) return `<span class="badge visited">seen</span>`;
+  return "";
+}
+function tile(a){
+  const d = document.createElement("div");
+  d.className = "tile" + (a.id===ATOM?" sel":"");
+  d.dataset.id = a.id;
+  d.innerHTML =
+    `<img loading="lazy" src="/thumb/${a.id}">`+
+    badge(a)+
+    `<div class="cap"><span>${a.id}</span>`+
+    `<span class="${a.split==='eval'?'split-e':''}">${a.split[0]}</span></div>`;
+  d.onclick = () => openAtom(a.id);
+  return d;
+}
+
+// ---- open / apply ----
+async function openAtom(id){
+  spin(true);
+  try {
+    const s = await post("/open",{atom_id:id});
+    ATOM = id;
+    document.querySelectorAll(".tile").forEach(t=>t.classList.toggle("sel",t.dataset.id===id));
+    $("#atom-label").textContent = `${s.atom.id} · degree ${s.atom.degree} · ${s.atom.family} · ${s.atom.split}`;
+    $("#view").src = s.img;
+    QUAL = {vivid:null, canon:null};
+    $("#vivid").src = ""; $("#show-vivid").disabled=$("#show-canon").disabled=true;
+    apply(s);
+  } finally { spin(false); }
+}
+
+function apply(s){
+  LAST = s;
+  $("#coord").textContent = `cx ${s.coord.cx}\ncy ${s.coord.cy}\nfw ${s.coord.fw}`;
+  $("#depth").textContent = `zoom ×${s.depth_from_base.toPrecision(4)} from base`;
+  $("#emit4").disabled = !s.quality_ready;
+  $("#emit3").disabled = !s.quality_ready;
+  $("#qhint").textContent = s.quality_ready
+    ? "quality render matches this view — emit enabled"
+    : "render quality before emitting (emit = the shown image)";
+  $("#vbad").disabled = false;
+  $("#vbad").classList.toggle("on", s.verified_bad);
+  $("#vbad").textContent = s.verified_bad ? "verified bad ✓ (click to undo)" : "mark “verified bad”";
+  $("#a-time").textContent = s.activity.active_seconds + "s";
+  $("#a-box").textContent = s.activity.box_descents;
+  $("#a-zoom").textContent = "×" + s.activity.deepest_zoom;
+  renderSols(s.solutions);
+  // refresh this tile's badge
+  loadLibrary();
+}
+
+function renderSols(sols){
+  const el = $("#sols");
+  if(!sols.length){ el.innerHTML = "<span class='hint'>none yet</span>"; return; }
+  el.innerHTML = "";
+  sols.forEach(x => {
+    const row = document.createElement("div"); row.className="sol";
+    row.innerHTML =
+      `<img src="/file/${x.vivid_crop}" title="restore this view">`+
+      `<div class="meta">q${x.class} · ${x.steps} steps · fw ${x.fw}</div>`+
+      `<span class="del">✕</span>`;
+    row.querySelector("img").onclick = () => restore(x.emit_id);
+    row.querySelector(".del").onclick = () => del(x.emit_id);
+    el.appendChild(row);
+  });
+}
+
+// ---- nav interactions ----
+const img = $("#view"), boxEl = $("#box");
+let drag = null;
+function pxOf(e){ const r=img.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*img.naturalWidth/r.width,
+          y:(e.clientY-r.top)*img.naturalHeight/r.height,
+          dx:e.clientX-r.left, dy:e.clientY-r.top}; }
+
+img.addEventListener("contextmenu", e=>e.preventDefault());
+img.addEventListener("mousedown", e => {
+  if(!ATOM) return;
+  e.preventDefault();
+  const p = pxOf(e);
+  drag = {down:p, recenter: e.button===2||e.shiftKey};
+});
+window.addEventListener("mousemove", e => {
+  if(!drag) return;
+  const p = pxOf(e);
+  const rx = Math.abs(p.dx - drag.down.dx);         // horizontal radius (display px)
+  if(rx < 3){ boxEl.style.display="none"; return; }
+  const ry = rx * 9/16;
+  boxEl.style.display="block";
+  boxEl.style.left = (drag.down.dx - rx)+"px";
+  boxEl.style.top  = (drag.down.dy - ry)+"px";
+  boxEl.style.width = (2*rx)+"px";
+  boxEl.style.height= (2*ry)+"px";
+});
+window.addEventListener("mouseup", async e => {
+  if(!drag) return;
+  const start = drag; drag = null; boxEl.style.display="none";
+  if(!ATOM) return;
+  const p = pxOf(e);
+  const distPx = Math.abs(p.x - start.down.x);
+  spin(true);
+  try {
+    let s;
+    if(distPx < 5){   // fell through to a click
+      s = await post("/nav_click",{atom_id:ATOM, px:start.down.x, py:start.down.y,
+            recenter_only:start.recenter, zoom:parseInt($("#zoom").value)});
+    } else {
+      s = await post("/nav_box",{atom_id:ATOM, down_px:start.down.x, down_py:start.down.y,
+            cur_px:p.x});
+    }
+    $("#view").src = s.img; clearQual(); apply(s);
+  } catch(_){} finally { spin(false); }
+});
+
+function clearQual(){ QUAL={vivid:null,canon:null};
+  $("#show-vivid").disabled=$("#show-canon").disabled=true; }
+
+$("#undo").onclick   = () => nav("/undo");
+$("#tobase").onclick = () => nav("/to_base");
+async function nav(url){ if(!ATOM) return; spin(true);
+  try{ const s=await post(url,{atom_id:ATOM}); $("#view").src=s.img; clearQual(); apply(s);}
+  finally{ spin(false);} }
+
+// ---- quality + emit ----
+$("#renderq").onclick = async () => {
+  if(!ATOM) return; spin(true);
+  $("#renderq").disabled=true;
+  try {
+    const s = await post("/quality",{atom_id:ATOM});
+    QUAL = {vivid:s.vivid_img, canon:s.canonical_img};
+    $("#vivid").src = QUAL.vivid;
+    $("#show-vivid").disabled=$("#show-canon").disabled=false;
+    apply(s);
+    toast("quality rendered — vivid shown, canonical will be stored");
+  } finally { spin(false); $("#renderq").disabled=false; }
+};
+$("#show-vivid").onclick = () => { if(QUAL.vivid) $("#vivid").src=QUAL.vivid; };
+$("#show-canon").onclick = () => { if(QUAL.canon) $("#vivid").src=QUAL.canon; };
+
+$("#emit4").onclick = () => emit(4);
+$("#emit3").onclick = () => emit(3);
+async function emit(k){
+  if(!ATOM) return; spin(true);
+  try {
+    const s = await post("/emit",{atom_id:ATOM, class:k});
+    apply(s);
+    toast(`emitted ${s.emitted} as q${k}`);
+  } finally { spin(false); }
+}
+
+async function restore(emit_id){ if(!ATOM) return; spin(true);
+  try{ const s=await post("/solution/restore",{atom_id:ATOM,emit_id});
+    $("#view").src=s.img; clearQual(); apply(s); toast("view restored — re-render quality to re-emit"); }
+  finally{ spin(false);} }
+async function del(emit_id){ if(!ATOM) return;
+  const s=await post("/solution/delete",{atom_id:ATOM,emit_id}); apply(s); toast("solution deleted"); }
+
+$("#vbad").onclick = async () => {
+  if(!ATOM) return;
+  const s = await post("/verified_bad",{atom_id:ATOM, value: !LAST.verified_bad});
+  apply(s);
+};
+
+loadLibrary();
+</script>
+</body>
+</html>
