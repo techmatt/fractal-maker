@@ -65,7 +65,7 @@ def render_tile(tile_id: str, scale: int, geom: dict, *, threads=THREADS_PER_WOR
                               ts.THUMB_W, ts.THUMB_H, ts.THUMB_SS,
                               ts.THUMB_PALETTE, ts.THUMB_COLORMAPS, out,
                               family=geom["family"])
-    rc.run_render_one(argv, out, low_priority=True, threads=threads)
+    rc.run_render_one(argv, out, threads=threads)
     return out
 
 

@@ -18,7 +18,9 @@ number, with the population it is true *of*. `[verdict: who]` — a judgement ca
 - `minibrot_sourcing.md` owns the stage-1 screen `G`, the atom roster and the `A`
   feasibility cut. `[code: docs/design/minibrot_sourcing.md]`
 - `storage_classes.md` owns the durability contract the `data/orbital/` artifacts sit
-  under. `[code: docs/design/storage_classes.md]`
+  under, and its mechanism half `artifacts_resolver.md` owns the size-guard `KEEP`
+  disposition on `data/orbital/` and the canary on the convergence ladder.
+  `[code: docs/design/{storage_classes,artifacts_resolver}.md]`
 
 ---
 
@@ -127,19 +129,42 @@ crossings half. Every `radial_range` number in evidence (§4, §5) lives in
 `measure_both` over tools/ returns `rescore_lib.py` and `measure_convergence_ladder.py`
 only]`
 
-**`rescore_lib.scoring_maxiter` has no caller at all**, and today returns a different cap
-than the one the `scratch/rescore/` evidence was computed under: that evidence used the
-fitted 24×-of-legacy-production envelope clamped at 67000 (`scoring_cap.json`, which
-stayed in `scratch/` and was never adopted); the committed module finds no
-`scoring_cap.json` beside it and falls back to 8× of the **raised** production cap —
-200000 at `fw = 8e-10` against production's 42165. `[code: tools/orbital/rescore_lib.py;
-scratch/rescore/scoring_cap.json; verified by running `rescore_lib.py` as `__main__`]`
+**`rescore_lib.scoring_maxiter` was DELETED on 2026-07-31.** It had no caller at all, and
+it returned a different cap than the one the `scratch/rescore/` evidence was computed
+under: that evidence used the fitted 24×-of-legacy-production envelope clamped at 67000
+(`scoring_cap.json`, which stayed in `scratch/` and was never adopted), while the
+committed module found no `scoring_cap.json` beside it and fell back to 8× of the
+**raised** production cap — 200000 at `fw = 8e-10` against production's 42165. A dead
+function returning a wrong number is a trap for its first real caller, and the alternative
+(giving it a caller) would have meant adopting a policy that was deliberately never
+adopted. The deletion is pinned so it does not return by reflex.
+`[code: tools/orbital/rescore_lib.py module docstring;
+test_rescore_lib.py::test_the_dead_scoring_cap_policy_is_gone]`
 
 **Nothing downstream consumes any of this.** No sourcing, descent, corpus or classifier
 code reads `data/orbital/`; the only tracked references to it are the size-guard
 disposition and the tracked-artifact canary list. The screen is run by hand and its output
 is read by a human. `[code: grep `data/orbital` over tools/ src/ tests/ → `tools/audit/size_guard.py`,
 `tests/test_tracked_artifacts.py`]`
+
+### `radial_range` is UNPROMOTED, not retired — and deliberately so
+
+**Verdict: do not promote it.** `radial_range` is **not load-bearing yet**. It is
+committed code with no consumer and no committed output, and all of its evidence sits in
+disposable `scratch/`. Nothing downstream reads `data/orbital/` **at all** — the screen is
+run by hand — so wiring `range` in would be building for a consumer that does not exist.
+`[code: as the paragraph above]` `[verdict: Matt]`
+
+**Unpromoted, not retired.** The distinction is the point, and it is different from the
+one `cycles_spanned` / `falloff_extent` / `radial_rings_p90` got in §4: those *failed* and
+should not be retried. `range` is sound — its validation record is in §4, its two-axis
+reading in §5 — and the promotion is cheap the day something consumes the screen. What is
+missing is a consumer, not a measure. `[verdict: Matt]`
+
+Promotion, when it happens, is: have `field_metrics` compute it on the `measure_field`
+path (today only `rescore_lib.ring_measures` does), record it in `measures.jsonl` /
+`screen_scores.jsonl` under the same cap-policy stamping as `radial_rings`, and note that
+the committed records predate it — a re-measurement, not a backfill. `[verdict: Matt]`
 
 ## 4. Validation record
 
@@ -231,12 +256,17 @@ On eight high-filigree residual atoms the same locations read 124.5–152.5 `rin
 and 587.5–952.0 at 320×180. `[measured: 319 paired atoms; 8 residual atoms in
 scratch/rescore/eye_vs_residual.json]`
 
-⇒ **`range` is the better screening statistic, `rings` the better validation statistic** —
-`range` because it is the less resolution-sensitive of the two and the one that keeps its
-meaning when the cheap geometry is what you can afford; `rings` because it is the one both
-references pass. **Record the split rather than collapsing it: absolute scores are never
-comparable across resolutions in either measure** (mb19: 80.5 at 320×180, 20.5 at 64×36),
-only orderings are. `[verdict: Matt]` `[measured: as above]`
+⇒ **On this evidence `range` is the better screening statistic and `rings` the better
+validation statistic** — `range` because it is the less resolution-sensitive of the two
+and the one that keeps its meaning when the cheap geometry is what you can afford; `rings`
+because it is the one both references pass. **Read this as a measured property of the two
+measures, not as a direction to use `range` for screening.** It was measured on 319
+doubly-measured atoms whose `range` values live entirely in disposable `scratch/`, and
+`range` has no consumer to direct (see §3, "unpromoted, not retired") — the deployed
+screen computes `rings` alone. **Record the split rather than collapsing it: absolute
+scores are never comparable across resolutions in either measure** (mb19: 80.5 at 320×180,
+20.5 at 64×36), only orderings are. `[measured: 319 paired atoms,
+scratch/rescore/ — scratch, not committed]` `[verdict: Matt]`
 
 ## 6. Relationship to period and to depth
 
@@ -370,7 +400,8 @@ orbital scores into sourcing (§3); `G`'s pipeline is untouched. `[code: as §3]
 
 ## 10. Test surface
 
-`tools/orbital/test_orbital.py`, 19 tests, all passing. `[code: verified by running it]`
+`tools/orbital/test_orbital.py` (19 tests) + `tools/orbital/test_rescore_lib.py`
+(23 tests), all passing. `[code: verified by running them]`
 
 **Differential / behavioural** — these assert a *relation*, so they survive re-measurement:
 - ring count scales with dynamic range (`hi > lo × 5`), a flat field scores 0, a central
@@ -394,10 +425,21 @@ is the intent:
   the day a rendered quantity is added to the enumeration, the stamping disposition is
   re-decided on purpose.
 
+**`test_rescore_lib.py` closed the two modules that had no coverage** (added 2026-07-31):
+the crossings equality that used to live only in `rescore_lib.py`'s unrun `__main__`
+self-check, `radial_range` itself (span in colour cycles, flat field, max-segment-not-sum
+across an interior island, and the dithering ray that racks crossings without span — the
+measured basis of §5's two-axis reading), the deletion of `scoring_maxiter`, and the
+ladder's cap-policy parameterization plus the pure `analyze_ladder` / `stratified_sample`
+paths. All synthetic numpy — no engine, no GPU.
+
 **Gaps, stated because a reader will assume otherwise:**
-- **`rescore_lib.py` and `measure_convergence_ladder.py` have no pytest coverage.** The
-  equality of the two crossings implementations is asserted only by `rescore_lib.py`'s
-  `__main__` self-check, which no suite runs. `radial_range` has no test at all.
+- **`ladder_for_atom` / `measure_both` / `dump_field` are not covered.** Each spawns the
+  engine per cap step (9 steps × 32 atoms), so covering them means a live-binary test or
+  mocking the subprocess — which would assert the mock. Not cheap; stated rather than
+  implied.
+- **`load_reachable_pool` is not covered.** Its logic is a join plus one `fw` filter, and
+  pinning it would pin the committed pool's contents.
 - **The `radial_rings_p90` failure at ×4 is not pinned** (§4).
 - `test_measure_keeps_no_field_files` spawns the real engine — it is the only test here
   that needs `target/release/fractal-generator.exe`.

@@ -10,27 +10,32 @@ producer of a durable artifact is not scratch. Left in `scratch/` it would have
 been one `rm -r scratch/*` away from making the x8 figure unreproducible in
 principle as well as in practice.
 
-Two things live here:
+One thing lives here: a **single-pass, same-rays** computation of BOTH ring
+measures, `radial_rings` (median colour-cycle *crossings*) and `radial_range`
+(median *monotone range*), in one ray walk so the two see byte-identical rays.
+What each measures, why the pair is not redundant, and where they disagree:
+**`docs/design/orbital_field_metrics.md`** §§1,5.
 
-  * A **scoring-only cap policy** `scoring_maxiter(fw)`, decoupled from the
-    production `render_core.auto_maxiter` (which governs corpus crops and must
-    NOT move). Its parameters would be read from a `scoring_cap.json` beside this
-    module; none exists and none ever will, so it always falls back to the fixed
-    8x-of-production multiple. That is deliberate, and it is the correction to a
-    belief worth naming: `converge.py` FIT a 24x / clamp-67000 "scoring envelope"
-    and wrote it to `scratch/rescore/scoring_cap.json`, and nothing outside that
-    scratch dir ever read it. **`tools/orbital/` has never run a 24x policy** —
-    it measures at 1x through `rc.auto_maxiter`. See docs/design/auto_maxiter.md.
+DELETED on 2026-07-31: a scoring-only cap policy `scoring_maxiter(fw)` (plus
+`prod_maxiter` and the `scoring_cap.json` loader beside it). It had no caller
+anywhere in the tree, and the number it returned was not the one the
+`scratch/rescore/` evidence was computed under: that evidence used a fitted
+24x-of-legacy-production envelope clamped at 67000, while the committed module found
+no `scoring_cap.json` and fell back to 8x of the **raised** production cap — 200000
+at `fw = 8e-10` against production's 42165. A dead function returning a wrong number
+is a trap for its first real caller, and giving it a caller would have meant adopting
+a scoring cap policy that was deliberately never adopted.
 
-  * A **single-pass, same-rays** computation of BOTH ring measures, `radial_rings`
-    (median colour-cycle *crossings*) and `radial_range` (median *monotone range*),
-    in one ray walk so the two see byte-identical rays. What each measures, why the
-    pair is not redundant, and where they disagree:
-    **`docs/design/orbital_field_metrics.md`** §§1,5.
+The belief that made it look load-bearing is worth keeping even though the code is
+gone: `converge.py` FIT that 24x / clamp-67000 envelope and wrote it to
+`scratch/rescore/scoring_cap.json`, nothing outside that scratch dir ever read it,
+and it became a stated property of the system anyway. **`tools/orbital/` has never
+run a 24x policy** — it measures at 1x through `rc.auto_maxiter`. See
+docs/design/auto_maxiter.md and docs/design/storage_classes.md ("a proposal must
+never leave scratch/ as a fact").
 """
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -44,54 +49,8 @@ for p in (REPO_ROOT / "tools" / "orbital", REPO_ROOT / "tools" / "explorer",
     sys.path.insert(0, str(p))
 
 import field_metrics as fm     # noqa: E402  (reused: dump_field, _crossings, DENSITY, geoms)
-import render_core as rc       # noqa: E402  (production auto_maxiter — reference only)
 
 DENSITY = fm.DENSITY
-CAP_JSON = HERE / "scoring_cap.json"
-
-
-# --------------------------------------------------------------------------- #
-# scoring cap policy (decoupled from production auto_maxiter)
-# --------------------------------------------------------------------------- #
-def prod_maxiter(fw) -> int:
-    """The production cap — reference only, never applied to a corpus crop here."""
-    return rc.auto_maxiter(fw)
-
-
-def _cap_params() -> dict:
-    if CAP_JSON.exists():
-        return json.loads(CAP_JSON.read_text(encoding="utf-8"))
-    # pre-convergence fallback: 8x production, generous clamp.
-    return {"policy": "fallback", "mult_of_prod": 8.0, "clamp_max": 200000}
-
-
-def scoring_maxiter(fw) -> int:
-    """Scoring-only iteration cap as a function of frame width.
-
-    Policy is data-driven: converge.py fits it and writes scoring_cap.json.
-    Supported shapes:
-      * {"policy":"logform","base":B,"k":K,"fw_home":3.0,"clamp_min":..,"clamp_max":..}
-          maxiter = B*(1 + K*log2(fw_home/fw)), clamped.  (production functional form,
-          larger coefficient / base)
-      * {"policy":"mult_of_prod","mult_of_prod":M,"clamp_max":..}
-          maxiter = M * production_auto_maxiter(fw)
-      * {"policy":"fallback",...}  same as mult_of_prod.
-    """
-    import math
-    p = _cap_params()
-    pol = p.get("policy")
-    if pol == "logform":
-        fwf = float(fw)
-        home = float(p.get("fw_home", 3.0))
-        ratio = home / fwf if fwf > 0 else 1.0
-        lz = math.log2(ratio) if ratio > 0 else 0.0
-        val = float(p["base"]) * (1.0 + float(p["k"]) * lz)
-        val = max(float(p.get("clamp_min", 200)), min(float(p.get("clamp_max", 200000)), val))
-        return int(val)
-    # mult_of_prod / fallback
-    m = float(p.get("mult_of_prod", 8.0))
-    val = m * rc.auto_maxiter(fw)
-    return int(min(float(p.get("clamp_max", 200000)), val))
 
 
 # --------------------------------------------------------------------------- #
@@ -150,8 +109,13 @@ def ring_measures(field: np.ndarray, *, n_rays=fm.N_RAYS) -> dict:
 
 def measure_both(cx, cy, fw, maxiter, *, family="mandelbrot",
                  width=fm.MEASURE_W, height=fm.MEASURE_H, ss=fm.MEASURE_SS,
-                 threads=3, tmpdir=None) -> dict:
-    """Dump one field at `maxiter` and return both measures + a few field stats."""
+                 threads=None, tmpdir=None) -> dict:
+    """Dump one field at `maxiter` and return both measures + a few field stats.
+
+    `threads=None` takes the committed single-process engine default
+    (`corpus_common.DEFAULT_ENGINE_THREADS`, paired with BELOW_NORMAL). A caller that
+    fans out engine processes must size and pass its own — there is no standing number
+    for that case."""
     import tempfile
     with tempfile.TemporaryDirectory(dir=tmpdir) as td:
         out = Path(td) / "f.bin"
@@ -168,26 +132,30 @@ def measure_both(cx, cy, fw, maxiter, *, family="mandelbrot",
 
 
 # --------------------------------------------------------------------------- #
-# self-check: crossings from ring_measures must match fm.radial_rings exactly
+# self-check fixture: crossings from ring_measures must match fm.radial_rings exactly.
+# The assertion itself now lives in tools/orbital/test_rescore_lib.py (a `__main__`
+# self-check no suite runs is a memory of a test, not a test); this stays because the
+# synthetic ramp field it builds is the fixture both the test and a hand-run share.
 # --------------------------------------------------------------------------- #
-def _selfcheck():
-    rng = np.random.default_rng(0)
-    for inner in (300.0, 2000.0, 8000.0):
-        fy = (np.arange(180) + 0.5) / 180 - 0.5
-        fx = (np.arange(320) + 0.5) / 320 - 0.5
-        r = np.sqrt(fx[None, :] ** 2 + (fy[:, None] * (180 / 320)) ** 2)
-        r /= r.max()
-        f = (inner + (100.0 - inner) * r).astype("f4")
-        f[r < 0.1] = np.nan
-        f += rng.normal(0, 3, f.shape).astype("f4")
-        want = fm.radial_rings(f)
-        got = ring_measures(f)
-        assert abs(got["radial_rings"] - want[0]) < 1e-9, (got["radial_rings"], want[0])
-        assert abs(got["radial_rings_p90"] - want[1]) < 1e-9
-    print("selfcheck OK — ring_measures crossings == fm.radial_rings")
+def selfcheck_field(inner: float, *, seed: int = 0) -> np.ndarray:
+    """A 320x180 radial ramp from `inner` at the centre to 100 at the corner, with a
+    circular NaN interior island and light noise — enough structure that crossings and
+    span are both nonzero and that segment handling is exercised."""
+    rng = np.random.default_rng(seed)
+    fy = (np.arange(180) + 0.5) / 180 - 0.5
+    fx = (np.arange(320) + 0.5) / 320 - 0.5
+    r = np.sqrt(fx[None, :] ** 2 + (fy[:, None] * (180 / 320)) ** 2)
+    r /= r.max()
+    f = (inner + (100.0 - inner) * r).astype("f4")
+    f[r < 0.1] = np.nan
+    return f + rng.normal(0, 3, f.shape).astype("f4")
 
 
 if __name__ == "__main__":
-    _selfcheck()
-    print("scoring_maxiter fallback @ fw=8e-10:", scoring_maxiter(8e-10),
-          "  prod:", prod_maxiter(8e-10))
+    for inner in (300.0, 2000.0, 8000.0):
+        f = selfcheck_field(inner)
+        want, got = fm.radial_rings(f), ring_measures(f)
+        assert abs(got["radial_rings"] - want[0]) < 1e-9, (got["radial_rings"], want[0])
+        assert abs(got["radial_rings_p90"] - want[1]) < 1e-9
+    print("selfcheck OK — ring_measures crossings == fm.radial_rings "
+          "(the committed assertion is tools/orbital/test_rescore_lib.py)")

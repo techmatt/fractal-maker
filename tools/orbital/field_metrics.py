@@ -129,9 +129,15 @@ FIELD_TIMEOUT_S = 60
 # field dump
 # --------------------------------------------------------------------------- #
 def dump_field(cx, cy, fw, maxiter, out: Path, *, width=MEASURE_W, height=MEASURE_H,
-               ss=MEASURE_SS, family="mandelbrot", threads=3,
+               ss=MEASURE_SS, family="mandelbrot", threads=None,
                timeout=FIELD_TIMEOUT_S) -> tuple[np.ndarray, dict]:
-    """Render the smooth escape-time field and return `(array[h, w], sidecar)`."""
+    """Render the smooth escape-time field and return `(array[h, w], sidecar)`.
+
+    `threads=None` means the committed single-process engine default
+    (`corpus_common.DEFAULT_ENGINE_THREADS` = 7, paired with BELOW_NORMAL priority) — a
+    lone `dump_field` should not have to restate it. The fan-out callers here
+    (`measure_atoms`, `screen_pool`, `measure_convergence_ladder`) pass `threads=THREADS`
+    explicitly, which is required of them: the per-process 7 assumes it has the box."""
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     argv = [str(rc.RENDER_BIN), "render-one",
@@ -285,9 +291,11 @@ def measure_field(field: np.ndarray) -> dict:
 
 
 def measure_location(cx, cy, fw, maxiter, *, width=MEASURE_W, height=MEASURE_H,
-                     ss=MEASURE_SS, family="mandelbrot", threads=3,
+                     ss=MEASURE_SS, family="mandelbrot", threads=None,
                      tmpdir=None, maxiter_policy=None) -> dict:
     """Dump one field and measure it. The .bin is transient — nothing is kept.
+
+    `threads=None` -> the committed single-process engine default (see `dump_field`).
 
     The result carries `POLICY_KEY`: the iteration-cap policy `maxiter` was sized
     under. `maxiter_policy=None` means the LIVE production policy, which is true for

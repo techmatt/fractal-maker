@@ -50,11 +50,19 @@ Two independent things live here:
                     precious-store irreplaceable binaries (trained .pt weights)
                     trash          dead / superseded
 
+     Orthogonal to the disposition, an entry may be marked `forward=True` — a LIVE
+     FORWARD DECLARATION. Nothing over-threshold is there now, but a committed writer
+     can still put it there, and the line is the disposition that write lands under.
+     The test is *can anything still write here*, and the costs are lopsided: a kept
+     dead line costs one config line; a pruned live one costs a red build at the worst
+     moment, with the disposition re-decided under time pressure.
+
 The guard test (`tests/test_repo_size_guard.py`) fails on any flagged violator not
-covered by a registry entry (new bloat caught from today), and REPORTS (does not
-fail) any registry entry that no longer has over-threshold content (a nudge to
-delete the line). As things relocate, their RELOCATE lines come out; when only KEEP
-lines remain, every in-tree exception is explicit and reviewed.
+covered by a registry entry (new bloat caught from today), and ALSO fails on any entry
+that has no over-threshold content and is not marked `forward` — i.e. a line nobody
+classified. Both are actionable in one edit, so neither is a standing warning. As things
+relocate, their RELOCATE lines come out; when only KEEP lines remain, every in-tree
+exception is explicit and reviewed.
 
 This module MOVES / DELETES / COMMITS NOTHING. It scans and reports.
 
@@ -80,12 +88,15 @@ DIR_THRESHOLD = 100 * 1024 * 1024       # ~100 MB — many-small-file catch
 
 # --- BULK rule (c) thresholds: storage_classes.md rule 5, "no bulk in-tree" ---
 # Chosen against the measured shape of THIS tree, not picked round:
-#   * FILE COUNT 2,000. The whole non-excluded working tree is ~5.2k files. A single
-#     subtree holding 2k is already ~40% of everything a recursive walk has to visit,
-#     and it is two orders of magnitude below the bombs that made `grep -r` take >120s
-#     (152k / 42k / 27k / 22k aug-cache dirs; 317k discovery scratch) — i.e. low enough
-#     to fire long before the tree is unusable, high enough that no source or metadata
-#     directory here comes close (largest today: tools/ at 504).
+#   * FILE COUNT 2,000. Sized against the tree as it was when the rule landed: ~5.2k
+#     non-excluded files, so a single 2k subtree was already ~40% of everything a
+#     recursive walk had to visit. (Re-measured 2026-07-31: 1,638 non-excluded files
+#     against 1,334 tracked — the relocations landed, so 2,000 is now MORE than the whole
+#     tree and the rule fires only on a genuine bomb. Dated rather than silently updated:
+#     a threshold's rationale is a record of what was true when it was chosen.) It is two
+#     orders of magnitude below the bombs that made `grep -r` take >120s (152k / 42k / 27k
+#     / 22k aug-cache dirs; 317k discovery scratch) — low enough to fire long before the
+#     tree is unusable, high enough that no source or metadata directory comes close.
 #   * BYTES 500 MB. Rule (a) already catches single blobs at 1 MiB and rule (b) catches
 #     small-file aggregates at 100 MB, so this is not a lower bound on "large" — it is
 #     the point at which a directory is unambiguously a DATA STORE rather than source
@@ -125,13 +136,20 @@ class Entry:
     """One registry line. `prefix` is a repo-relative POSIX path; dir prefixes end
     with '/'. A violator is COVERED by this entry iff its path == prefix or starts
     with prefix (dir violators carry a trailing '/', so prefix matching is exact at
-    the path-segment boundary)."""
+    the path-segment boundary).
+
+    `forward` marks a LIVE FORWARD DECLARATION: nothing over-threshold is there right
+    now, but a committed writer can still put it there, and this line is the disposition
+    that write lands under. It is the answer to a question emptiness cannot answer —
+    not-yet-built vs dead — and it is why the stale report can be a hard assertion
+    instead of a standing warning. Every entry must be one or the other."""
     prefix: str
     disposition: str                 # KEEP | RELOCATE
     tier: str | None                 # None for KEEP; artifacts|precious-store|trash
     tracked: str                     # 'tracked' | 'ignored' | 'mixed'
     reason: str
     canary: bool = False             # covers a canaried path (move needs a canary update)
+    forward: bool = False            # live forward declaration (see docstring)
 
     def label(self) -> str:
         return self.disposition if self.disposition == KEEP else f"{RELOCATE} -> {self.tier}"
@@ -199,16 +217,19 @@ REGISTRY: list[Entry] = [
     Entry("data/wallpaper_corpus/", RELOCATE, ARTIFACTS, "mixed",
           "wallpaper batch crops (regenerable); tracked images.jsonl/ledgers stay"),
     Entry("data/render_mode_corpus/", RELOCATE, ARTIFACTS, "mixed",
-          "render-mode batch crops (regenerable via present); tracked manifests stay"),
-    Entry("data/label_crops/", RELOCATE, ARTIFACTS, "ignored",
-          "early loose label-crop feed (loose0_v2/v3); regenerable render output"),
-    Entry("data_large/label_crops/", RELOCATE, ARTIFACTS, "ignored",
-          "loose0 crop feed; regenerable render output (tracked data_large/README stays)"),
+          "render-mode batch crops (regenerable via present); tracked manifests stay. "
+          "FORWARD: empty today, but tools/render_mode_pilot/{render_batch,"
+          "render_scale_batch}.py write crops straight to data/render_mode_corpus/batches/"
+          "<id>/ IN-TREE (they do not route through artifacts.resolve), and the v1 "
+          "render-mode head they feed is the LIVE strange-mode gate.", forward=True),
     Entry("data/queries/", RELOCATE, ARTIFACTS, "mixed",
           "query-assembler field/colormap renders + scorer caches (regenerable via "
           "tools/queries); tracked queries/labels/*.json preference tiers stay"),
     Entry("data/library/", RELOCATE, ARTIFACTS, "mixed",
-          "field_cache render bulk (regenerable); tracked library_records.jsonl stays"),
+          "field_cache render bulk (regenerable); tracked library_records.jsonl stays. "
+          "FORWARD: only the one tracked record is there today, but "
+          "tools/phoenix/phoenix_label_diversity.py still writes its retained field cache "
+          "to data/library/field_cache/ in-tree.", forward=True),
     Entry("data/root_field/", RELOCATE, ARTIFACTS, "ignored",
           "root8k f32 score-field cache (4x 256 MB); regenerable via the Rust dump "
           "(src/root_field.rs CACHE_DIR) — needs the Rust-side artifacts resolver first"),
@@ -217,31 +238,48 @@ REGISTRY: list[Entry] = [
           "logs); tracked ledgers/pools/outcome_feats provenance stays in-tree"),
     Entry("dramatic_palettes/", RELOCATE, ARTIFACTS, "mixed",
           "viz_render + viz_render_winners render sheets (regenerable); tracked "
-          "palette definitions stay"),
-    Entry("data/mining/", RELOCATE, ARTIFACTS, "mixed",
-          "mining prospect renders (run1); regenerable via tools/mining"),
+          "palette definitions stay. FORWARD: only the 20 tracked palette definitions are "
+          "there today, but tools/palettes/{viz_render,viz_render_winners,viz_batches}.py "
+          "all default their sheet output to dramatic_palettes/<viz*>/ in-tree.",
+          forward=True),
     Entry("data/guided_descend/", RELOCATE, ARTIFACTS, "mixed",
-          "render/field caches (atlas_probe_step0, run5, julia_test_bulb); "
-          "regenerable via present/enrich (tiny pool.jsonl pools stay)"),
+          "render/field caches; regenerable via present/enrich (tiny pool.jsonl pools "
+          "stay). FORWARD: empty today, but this is the HEAD of the live corpus pipeline — "
+          "`guided-descend --out` defaults to data/guided_descend/run4 (src/guided_descend.rs) "
+          "and `enrich --pool` reads data/guided_descend/run5/pool.jsonl (src/enrich.rs). "
+          "The next run repopulates it in-tree.", forward=True),
     Entry("data/ranker/", RELOCATE, ARTIFACTS, "ignored",
-          "frozen-feature location-ranker fits + feature caches (pref_loc_v0/v1, "
-          "campaign1); regenerable — logistic on committed frozen features"),
-    Entry("data/calibration/maxiter_diag/", RELOCATE, ARTIFACTS, "ignored",
-          "maxiter diagnostic renders; regenerable (the frozen energy_calibration.json "
-          "metric bins are tiny and stay tracked)"),
+          "frozen-feature location-ranker fits + feature caches; regenerable — logistic "
+          "on committed frozen features. FORWARD: empty today, but tools/ranker/"
+          "train_eval{,_v1}.py write pref_loc_v0/v1 {model,metrics,features}.npz there and "
+          "tools/atlas/campaign1_manifest.py persists data/ranker/campaign1/features.npz; "
+          "the deployed pref_loc_v1 head is read from this path by tools/ranker/scorer.py.",
+          forward=True),
     # NOTE — the four `data/v4/`..`data/v7/` build-cache lines that used to sit here are
     # DELETED, not left stale. Those caches are gone and will never exist again (the
     # manifests/plans they covered were wiped 2026-07-25 and are unrebuildable; the v8 build
     # is the durable replacement, covered by the KEEP line above). A registry line for a path
     # that can never come back is not an allowlist, it is a fossil — and 19 stale lines is how
-    # the soft stale-report gets tuned out. Do NOT resurrect them for a future data/v9/: give
-    # v9 its own line describing v9.
+    # a soft stale-report gets tuned out. Do NOT resurrect them for a future data/v10/: give
+    # v10 its own line describing v10.
     #
-    # The stale-entry report stays a WARNING and must not be promoted to a failure:
-    # `data/v8/` was legitimately empty before its build, so a hard fail on emptiness would
-    # put the guard red during ordinary work — which is the other way guards get tuned out.
-    # Emptiness cannot distinguish not-yet-built from dead, so warn-then-prune is correct and
-    # the judgement stays with the human.
+    # Nine more lines were pruned on 2026-07-31 for the same reason, after each was tested
+    # against "can anything still WRITE here?": data/label_crops/, data_large/label_crops/
+    # (readers only — src/palette_probe.rs and tests/occupancy_parity.rs consume them, nothing
+    # emits them), data/mining/ (the render bulk moved to scratch/mining/deploy_tail; only
+    # sub-threshold JSON configs are still written under data/mining/),
+    # data/calibration/maxiter_diag/ (the `maxiter-diag` subcommand was culled in P2 — only
+    # two Rust comments still name it), data/classifier/{v2,v3,v4,v5_seed1}/ (superseded
+    # weights, already deleted from disk; the retrain protocol gives a retrain its OWN version
+    # dir — v9 did exactly that rather than overwrite v8 — so a superseded version is never
+    # rebuilt in place), and data/focus_diag/ (no producer anywhere in the tree).
+    #
+    # POLICY CHANGE (2026-07-31): the stale-entry report was a WARNING, on the argument that
+    # `data/v8/` was legitimately empty before its build and emptiness "cannot distinguish
+    # not-yet-built from dead". `Entry.forward` now makes exactly that distinction, so the
+    # premise no longer holds and tests/test_repo_size_guard.py asserts it HARD: every entry
+    # either covers over-threshold content or is marked `forward=True`. A soft red that fires
+    # on every run is a guard that gets trained out; 15 permanently-warning lines was that.
 
     # === RELOCATE -> precious-store — irreplaceable trained binaries (.pt) ======
     # Not GPU-reproducible (float nondeterminism), so no rebuild path. Active +
@@ -272,18 +310,11 @@ REGISTRY: list[Entry] = [
           "trained render-mode (strange-mode gate) head v1 .pt — not GPU-reproducible"),
 
     # === RELOCATE -> trash — dead / superseded ================================
-    Entry("data/classifier/v2/", RELOCATE, TRASH, "ignored",
-          "superseded classifier v2 weight — won't be retrained"),
-    Entry("data/classifier/v3/", RELOCATE, TRASH, "ignored",
-          "superseded classifier v3 weight — won't be retrained"),
-    Entry("data/classifier/v4/", RELOCATE, TRASH, "ignored",
-          "superseded classifier v4 weight — won't be retrained"),
-    Entry("data/classifier/v5_seed1/", RELOCATE, TRASH, "ignored",
-          "v5 seed-1 diagnostic variant — not the live checkpoint, disposable"),
-    Entry("data/focus_diag/", RELOCATE, TRASH, "ignored",
-          "focus-diagnostic scratch (orbit-space field .npy dumps); dead, regenerable"),
     Entry("scratchpad/", RELOCATE, TRASH, "ignored",
-          "canonical disposable temp dir — nothing large should persist here"),
+          "canonical disposable temp dir — nothing large should persist here. FORWARD by "
+          "construction: it is the ONE directory whose whole purpose is to receive "
+          "unannounced writes, so it is empty in exactly the state we want and the line is "
+          "the standing disposition for whatever lands next.", forward=True),
 ]
 
 
@@ -309,6 +340,9 @@ class ScanResult:
     # populated by check_registry:
     uncovered: list[Violator] = field(default_factory=list)
     stale: list[Entry] = field(default_factory=list)
+    # entries with no over-threshold content that are MARKED as live forward declarations
+    # (Entry.forward). Reported for information; never counted stale.
+    forward: list[Entry] = field(default_factory=list)
 
     @property
     def violators(self) -> list[Violator]:
@@ -440,8 +474,14 @@ def covering_entry(rel: str, registry: list[Entry] = REGISTRY) -> Entry | None:
 
 
 def check_registry(res: ScanResult, registry: list[Entry] = REGISTRY) -> ScanResult:
-    """Fill res.uncovered (violators no entry covers) and res.stale (entries covering
-    no current violator)."""
+    """Fill res.uncovered (violators no entry covers), res.stale (unmarked entries
+    covering no current violator) and res.forward (empty entries deliberately marked as
+    live forward declarations).
+
+    The split is the whole point: emptiness alone cannot tell not-yet-built from dead, so
+    an unsplit "stale" list is a permanent warning nobody acts on. `Entry.forward` is the
+    human judgement — *can anything still write here* — recorded once, which leaves
+    `res.stale` meaning only "nobody classified this", i.e. something to fix."""
     covered_prefixes: set[str] = set()
     uncovered: list[Violator] = []
     for v in res.violators:
@@ -451,7 +491,9 @@ def check_registry(res: ScanResult, registry: list[Entry] = REGISTRY) -> ScanRes
         else:
             covered_prefixes.add(e.prefix)
     res.uncovered = sorted(uncovered, key=lambda v: -v.size)
-    res.stale = [e for e in registry if e.prefix not in covered_prefixes]
+    empty = [e for e in registry if e.prefix not in covered_prefixes]
+    res.stale = [e for e in empty if not e.forward]
+    res.forward = [e for e in empty if e.forward]
     return res
 
 
@@ -527,9 +569,15 @@ def _report(repo: Path) -> int:
             print(f"  {human(v.size):>9}  {v.rel}")
     else:
         print("OK: every violator is covered by a registry entry.")
+    if res.forward:
+        print(f"\nLIVE FORWARD DECLARATIONS ({len(res.forward)}) — empty now, but a committed "
+              f"writer can still land here; the line is what that write's disposition is:")
+        for e in res.forward:
+            print(f"  {e.prefix:<40} [{e.label()}]")
     if res.stale:
-        print(f"\nSTALE REGISTRY ENTRIES ({len(res.stale)}) — no over-threshold content, "
-              f"delete the line:")
+        print(f"\nSTALE REGISTRY ENTRIES ({len(res.stale)}) — no over-threshold content and "
+              f"NOT marked as a forward declaration. Either delete the line (nothing can "
+              f"write there any more) or mark it forward=True:")
         for e in res.stale:
             print(f"  {e.prefix}")
     else:
@@ -546,7 +594,8 @@ def _check(repo: Path) -> int:
             print(f"  {human(v.size):>9}  {v.rel}", file=sys.stderr)
         return 1
     print(f"PASS: {len(res.violators)} violators, all covered; "
-          f"{len(res.stale)} stale entr{'y' if len(res.stale)==1 else 'ies'}.")
+          f"{len(res.stale)} stale entr{'y' if len(res.stale)==1 else 'ies'}, "
+          f"{len(res.forward)} live forward declaration(s).")
     return 0
 
 

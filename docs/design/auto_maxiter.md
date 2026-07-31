@@ -75,9 +75,14 @@ and no 67000 clamp anywhere under `tools/orbital/`.**
 Where the belief came from, since it was specific enough to be worth naming: the
 convergence study *fitted* a scoring-only envelope of `mult_of_prod = 24.0,
 clamp_max = 67000` — "ceil(max conv/prod ratio) × production cap" — and wrote it to
-`scratch/rescore/scoring_cap.json`. Nothing outside that scratch directory ever read it,
-and `rescore_lib.scoring_maxiter` falls back to a fixed ×8 in its absence. It was a
-**proposal that was never adopted**, in a file that was never committed.
+`scratch/rescore/scoring_cap.json`. Nothing outside that scratch directory ever read it.
+It was a **proposal that was never adopted**, in a file that was never committed — and it
+became a stated property of the system anyway, which is the failure
+`docs/design/storage_classes.md` names as "a proposal must never leave `scratch/` as a
+fact". The loader that would have read it, `rescore_lib.scoring_maxiter`, had no caller
+and in the file's absence returned ×8 of the **raised** production cap (200000 at
+`fw = 8e-10` against production's 42165) — a dead function returning a wrong number. It
+was deleted on 2026-07-31; `tools/orbital/test_rescore_lib.py` pins the deletion.
 
 This matters beyond bookkeeping: because `tools/orbital/` measures through the *live*
 production constants, the whole measurement stack **followed the raise silently**. Every
@@ -128,12 +133,21 @@ Every figure in the table above reproduces from it exactly: **32 atoms, fw 3.31e
 0.756, 0 not converged, ratio mean 7.688, median 8.0, max 24.0.** The ×8 rests on
 committed evidence, not on a memory of a measurement.
 
-⚠ **It is not reproducible by re-running the producer**, and the artifact is stamped
-`maxiter_policy_token: ""` to say so. Every ratio in it is a multiple of the *legacy*
-production cap; `rc.auto_maxiter` now returns ~8× what it did when the ladder was walked,
-so a fresh run measures convergence against the new policy and would report ratios near 1.
-That is a different measurement, not a refutation — and it is why the file is durable
-rather than regenerable.
+⚠ **It is not reproducible by re-running the producer at its defaults**, and the artifact
+is stamped `maxiter_policy_token: ""` to say so. Every ratio in it is a multiple of the
+*legacy* production cap; the live policy now returns ~8× what it did when the ladder was
+walked, so a default run measures convergence against the new policy and would report
+ratios near 1. That is a different measurement, not a refutation — and it is why the file
+is durable rather than regenerable.
+
+Since 2026-07-31 the producer takes the cap policy as a **parameter** rather than reading
+the live constants, so the legacy measurement is repeatable
+(`measure_convergence_ladder.py --legacy-policy` → `(500, 0.30, 200, 8000)`) and a
+deliberate re-measurement under the raised cap is possible. Output is stamped with its
+policy token and defaults to `scratch/orbital/`; writing a non-legacy measurement over the
+committed artifact is refused, because the two are different quantities and not versions
+of one. The committed artifact is unchanged.
+`[code: tools/orbital/measure_convergence_ladder.py; tools/orbital/test_rescore_lib.py]`
 
 **Corroborating independent evidence:** `data/orbital/maxiter_stability.json` (n=24, at ×1
 / ×2 / ×4) shows `radial_rings` still climbing at ×4 — 45.0 → 55.25 → 60.75 — with no sign

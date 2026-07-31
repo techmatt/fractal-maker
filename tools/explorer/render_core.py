@@ -128,14 +128,19 @@ def render_one_argv(cx, cy, fw, maxiter, w, h, ss, palette, colormaps, out,
     return argv
 
 
-def run_render_one(argv, out, *, low_priority=False, threads=None):
+def run_render_one(argv, out, *, low_priority=True, threads=None):
     """Run a `render-one` argv, raising on failure; returns the output `Path`.
 
-    `low_priority=False` (the explorer default) reproduces the historical launch
-    exactly: no custom env, no creation flags. `low_priority=True` (the descent
-    default) launches through the committed engine defaults (BELOW_NORMAL +
-    RAYON_NUM_THREADS) so a browse session yields to interactive work. Neither
-    affects the rendered bytes (the render is deterministic in thread count).
+    The DEFAULT is the committed engine default: `RAYON_NUM_THREADS=7` at BELOW_NORMAL
+    (`corpus_common.default_engine_env` / `default_creationflags`), so a caller gets it
+    without restating it. Flipped from `low_priority=False` on 2026-07-31 — every caller
+    but one was already passing `low_priority=True`, i.e. the default was the exception.
+
+    `low_priority=False` is the one real exception and must be passed explicitly: the
+    explorer's render IS the foreground work, so demoting it would make it lose to any
+    background batch. Neither setting affects the rendered bytes (the render is
+    deterministic in thread count). `threads=` overrides the per-process 7 — required of
+    any caller that fans out engine processes.
     """
     env = None
     creationflags = 0

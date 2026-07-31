@@ -142,7 +142,10 @@ def render(panel, ctr_x, ctr_y, fw, maxiter, w, h, ss, julia_c=None):
         ctr_x, ctr_y, fw, maxiter, w, h, ss, palette, COLORMAPS, out,
         julia_c=julia_c,
     )
-    rc.run_render_one(argv, out)
+    # The explorer's render IS the foreground work a human is waiting on, so it opts OUT
+    # of the committed BELOW_NORMAL engine default (see rc.run_render_one). This is the
+    # one such caller; everything else takes the default.
+    rc.run_render_one(argv, out, low_priority=False)
 
     b64 = base64.b64encode(out.read_bytes()).decode()
     url = f"data:image/png;base64,{b64}"

@@ -7,18 +7,21 @@ file can bloat the tree while invisible to git) and flags every file >= 1 MiB an
 every many-small-file directory >= ~100 MB, then checks each flagged violator against
 the `REGISTRY` allowlist.
 
-Two assertions with different severities:
+Two hard assertions:
 
-  * HARD FAIL — any flagged violator not covered by a registry entry. This catches
-    NEW bloat the moment it lands: add 300 MB of un-registered crops and this goes
-    red, naming the path. To make it green you either delete the bloat or add a
-    deliberate registry line stating why it stays. (Proven to go red on purpose:
-    drop a >=1 MiB file outside the excluded prefixes → fail → remove → green.)
+  * Any flagged violator not covered by a registry entry. This catches NEW bloat the
+    moment it lands: add 300 MB of un-registered crops and this goes red, naming the
+    path. To make it green you either delete the bloat or add a deliberate registry
+    line stating why it stays. (Proven to go red on purpose: drop a >=1 MiB file
+    outside the excluded prefixes → fail → remove → green.)
 
-  * SOFT REPORT — a registry entry that no longer covers any over-threshold content
-    (its bulk relocated / was deleted). Emitted as a warning, NOT a failure: it's a
-    nudge to delete the stale line, and the guard fully enforces only once every
-    RELOCATE line is gone and just KEEP lines remain.
+  * Any registry entry that covers no over-threshold content AND is not marked
+    `forward=True`. This was a warning until 2026-07-31, on the argument that
+    emptiness cannot distinguish not-yet-built from dead (`data/v8/` was legitimately
+    empty before its build). `Entry.forward` now records that distinction explicitly —
+    *can anything still write here* — so the premise is gone and the check is hard. It
+    had been firing on 15 lines every run, which is how a soft red gets trained out.
+    Fixing it is a one-line edit either way: prune the line, or mark it forward.
 
 This runs under default `pytest`: filesystem walk + `git` only, no release binary,
 no GPU, no corpus reads. Companion to `test_tracked_artifacts.py` (which guards
@@ -26,7 +29,6 @@ no GPU, no corpus reads. Companion to `test_tracked_artifacts.py` (which guards
 """
 import importlib.util
 import sys
-import warnings
 from pathlib import Path
 
 import pytest
@@ -145,14 +147,71 @@ def test_excluded_prefixes_are_not_bulk_flagged(tmp_path):
     assert size_guard.scan(tmp_path).bulk_violators == []
 
 
-def test_report_stale_registry_entries(result):
-    """SOFT: warn (do not fail) on registry entries that no longer cover any
-    over-threshold content — a nudge to delete the line as relocations land."""
+def test_every_empty_entry_is_classified(result):
+    """HARD: an entry covering nothing must say WHY — pruned, or marked forward.
+
+    `res.stale` now means only "nobody classified this line", which is a defect with a
+    one-line fix. The judgement it demands is *can anything still write here*: yes ->
+    `forward=True` (a live forward declaration, e.g. data/guided_descend/, which the
+    Rust `guided-descend --out` default repopulates); no -> delete the line, the way the
+    v4..v7 cache lines were deleted."""
     if result.stale:
-        stale = ", ".join(e.prefix for e in result.stale)
-        warnings.warn(
-            f"{len(result.stale)} stale size-guard registry entr"
-            f"{'y' if len(result.stale) == 1 else 'ies'} (no over-threshold content — "
-            f"delete the line(s)): {stale}",
-            stacklevel=2,
+        stale = "\n".join(f"    {e.prefix:<40} [{e.label()}]" for e in result.stale)
+        pytest.fail(
+            f"{len(result.stale)} unclassified size-guard registry entr"
+            f"{'y' if len(result.stale) == 1 else 'ies'} — no over-threshold content and "
+            f"not marked as a live forward declaration:\n{stale}\n"
+            "For each, ask: can anything still WRITE here?\n"
+            "  yes -> keep the line and set forward=True, stating which writer and why;\n"
+            "  no  -> delete the line (and its regeneration machinery), as the v4..v7\n"
+            "         cache lines were deleted.\n"
+            "Do NOT set forward=True just to make this green — that is how the warning\n"
+            "this replaced stopped meaning anything."
         )
+
+
+def test_forward_declarations_are_not_reported_stale(tmp_path):
+    """The mechanism, on a synthetic tree: two identical empty entries, one marked
+    forward, and only the unmarked one is stale. Without this the `forward` flag could
+    silently stop being honoured and the hard check above would just go quiet."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_bytes(b"x" * 100)      # nothing over threshold
+    registry = [
+        size_guard.Entry("data/dead/", size_guard.RELOCATE, size_guard.TRASH, "ignored",
+                         "producer retired"),
+        size_guard.Entry("data/live/", size_guard.RELOCATE, size_guard.ARTIFACTS, "ignored",
+                         "empty now; the builder still writes here", forward=True),
+    ]
+    res = size_guard.check_registry(size_guard.scan(tmp_path), registry=registry)
+    assert [e.prefix for e in res.stale] == ["data/dead/"]
+    assert [e.prefix for e in res.forward] == ["data/live/"]
+
+
+def test_a_forward_entry_that_gains_content_is_neither(tmp_path):
+    """A forward declaration is about the EMPTY state only: once its writer actually
+    lands bulk there, the entry is covering content and drops out of both lists — the
+    disposition it declared is now doing real work."""
+    leaf = tmp_path / "data" / "live"
+    leaf.mkdir(parents=True)
+    (leaf / "blob.bin").write_bytes(b"x" * (size_guard.FILE_THRESHOLD + 1))
+    registry = [
+        size_guard.Entry("data/live/", size_guard.RELOCATE, size_guard.ARTIFACTS, "ignored",
+                         "empty now; the builder still writes here", forward=True),
+    ]
+    res = size_guard.check_registry(size_guard.scan(tmp_path), registry=registry)
+    assert res.uncovered == []
+    assert res.stale == [] and res.forward == []
+
+
+def test_forward_entries_are_the_minority_and_each_says_why(result):
+    """Guard the guard from the other side: `forward` is an escape hatch, so it must
+    stay a deliberate, argued minority rather than a blanket applied to the registry.
+    Each marked entry must name its writer in the reason text (the word FORWARD)."""
+    marked = [e for e in size_guard.REGISTRY if e.forward]
+    assert marked, "no forward declarations — did the flag stop being used?"
+    assert len(marked) < len(size_guard.REGISTRY) / 2, (
+        f"{len(marked)}/{len(size_guard.REGISTRY)} entries are forward declarations; the "
+        f"flag is meant to be the exception, not the default disposition")
+    unargued = [e.prefix for e in marked if "FORWARD" not in e.reason]
+    assert not unargued, (
+        f"forward-marked entries whose reason does not state the live writer: {unargued}")

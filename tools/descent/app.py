@@ -77,7 +77,7 @@ def render_nav(atom, cx, cy, fw) -> str:
                               NAV_PALETTE, rc.CLEAN_COLORMAPS, out,
                               family=atom["family"])
     with _engine_sem:
-        rc.run_render_one(argv, out, low_priority=True)
+        rc.run_render_one(argv, out)
     return _b64(out, "image/png")
 
 
@@ -93,7 +93,7 @@ def render_thumb(atom) -> Path:
                               NAV_PALETTE, rc.CLEAN_COLORMAPS, out,
                               family=atom["family"])
     with _engine_sem:
-        rc.run_render_one(argv, out, low_priority=True)
+        rc.run_render_one(argv, out)
     return out
 
 
