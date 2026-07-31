@@ -75,12 +75,19 @@ def read_jsonl(p):
     return [json.loads(l) for l in Path(p).read_text(encoding="utf-8").splitlines() if l.strip()]
 
 
-def load_triples(eval_path: Path = EVAL) -> dict:
+def load_triples(eval_path: Path = EVAL, version: str = None) -> dict:
     """{partition: [(p_notbad, p_good, is_pos)]}. julia:multibrot* -> census-only (Option A).
 
     `is_pos` is `label >= 3` — a class-4 location is emphatically a keeper. Under v7's 1..3
     labels `== 3` was the same predicate; under v8's 1..4 it would score the best locations in
-    the corpus as negatives."""
+    the corpus as negatives.
+
+    `version` selects the column prefix (`<version>_p_ge2` / `_p_ge3`) and defaults to
+    `EVAL_VERSION`, so every existing call is byte-unchanged. It exists so a NEW eval slice
+    can be recut through this exact derivation instead of a copy of it — the slice a
+    re-render produces carries its own version's columns, and a copied deriver is how two
+    thresholds that are supposed to be comparable stop being comparable."""
+    ver = version or EVAL_VERSION
     parts: dict = defaultdict(list)
     for r in read_jsonl(eval_path):
         part = FT2FAM.get(r["fractal_type"])
@@ -88,8 +95,7 @@ def load_triples(eval_path: Path = EVAL) -> dict:
             continue
         if part.startswith("julia:multibrot") and r.get("source") != "prospect_census":
             continue
-        parts[part].append((r[f"{EVAL_VERSION}_p_ge2"], r[f"{EVAL_VERSION}_p_ge3"],
-                            r["label"] >= 3))
+        parts[part].append((r[f"{ver}_p_ge2"], r[f"{ver}_p_ge3"], r["label"] >= 3))
     return parts
 
 
@@ -142,9 +148,9 @@ def loo_f(rows):
     return prf_beta(tp, fp, fn)
 
 
-def derive(eval_path: Path = EVAL) -> dict:
+def derive(eval_path: Path = EVAL, version: str = None) -> dict:
     """{partition: {t, calibrated, n, pos, prec, rec, f, oof_f}}. Uncalibrated => baseline, flagged."""
-    parts = load_triples(eval_path)
+    parts = load_triples(eval_path, version)
     out = {}
     for part in sorted(set(list(parts) + list(FT2FAM.values()))):
         rows = parts.get(part, [])
@@ -183,12 +189,13 @@ def is_keeper(partition: str, p_notbad: float, p_good: float, cuts: dict) -> boo
     return corn_decode(p_notbad, p_good, keeper_cut_for(partition, cuts)) >= 3
 
 
-def write(cuts: dict, path: Path = OUT):
+def write(cuts: dict, path: Path = OUT, eval_path: Path = None, version: str = None):
     path.parent.mkdir(parents=True, exist_ok=True)
-    eval_rel = str(EVAL.relative_to(ROOT)).replace("\\", "/")
+    ep = eval_path or EVAL
+    eval_rel = str(Path(ep).relative_to(ROOT)).replace("\\", "/")
     path.write_text(json.dumps(dict(
         objective="F0.5", beta=BETA, min_pos=MIN_POS, baseline=T_GOOD_BASELINE,
-        eval=eval_rel, provenance=provenance_stamp(), cuts=cuts,
+        eval=eval_rel, provenance=provenance_stamp(ep, version), cuts=cuts,
     ), indent=2), encoding="utf-8")
 
 
@@ -201,12 +208,16 @@ def write(cuts: dict, path: Path = OUT):
 EVAL_MODEL_VERSION = EVAL_VERSION       # scorer whose inline probabilities the slice carries
 
 
-def provenance_stamp() -> dict:
+def provenance_stamp(eval_path: Path = None, version: str = None) -> dict:
     """Where these cuts came from, established from the derivation code path (not git history).
 
     `model` names the scorer version whose probabilities were the derivation input; `population`
-    is the frozen eval slice it read. Both are named by the code, so the stamp is verified."""
-    eval_rel = str(EVAL.relative_to(ROOT)).replace("\\", "/")
+    is the frozen eval slice it read. Both are named by the code, so the stamp is verified.
+    Defaults reproduce the v8 stamp exactly; the arguments exist so a recut against a newer
+    slice stamps THAT slice's model rather than inheriting this module's constant."""
+    ep = eval_path or EVAL
+    EVAL_MODEL_VERSION = version or globals()["EVAL_MODEL_VERSION"]
+    eval_rel = str(Path(ep).relative_to(ROOT)).replace("\\", "/")
     return dict(
         model=EVAL_MODEL_VERSION,
         verified=True,
