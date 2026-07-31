@@ -163,6 +163,50 @@ Each is a **known** divergence, listed here so it is a decision rather than a mi
 of them is revived for new production output, it must be pointed at
 `active_ckpt.auto_maxiter` first.
 
+## ⚠ What the raise actually changes, in pixels
+
+The ×8 measurement above was taken on the **smooth field dump**
+(`render-one --dump-field` → `tools/orbital/field_metrics.radial_rings`). The corpus render
+path is a **different surface**: `v4-render-batch` colours through
+`generate::color_params()` — smooth channel at density 0.004, interior black, sqrt trap
+curve — into a 512×288 q85 JPEG. A cap that moves a field statistic does not automatically
+move the JPEG a classifier reads, and here it partly does not.
+
+Measured by `tools/v9/measure_cap_effect.py` (60 deploy-canonical tiles — twilight_shifted,
+identity geometry, ss2 — stratified over fw deciles, so the pooled number is the corpus
+number; a q85 channel delta ≤ 2 is counted as encoder noise):
+
+| comparison | what it answers | % pixels changed | tiles that moved at all |
+|---|---|---|---|
+| `old_auto` → `new_auto` | the **deploy / label-crop** path | **10.2 %** | 30/60 |
+| `flat8000` → `new_auto` | what a cache **re-render** buys training | **3.3 %** | 19/60 |
+| `old_auto` → `flat8000` | the **pre-existing** train-vs-label gap | **10.0 %** | 30/60 |
+
+Read the third row first. **The training tiles were already ahead of the crops the human
+judged.** Flat-8000 already sat above `old_auto` almost everywhere, so ~98 % of the
+deploy-path gain (10.0 of 10.2 points) was *already present in the aug cache* before this
+raise. The raise's effect on the corpus is therefore lopsided:
+
+* **The deploy path gains a lot** — 10.2 % of pixels on a canonical crop, and the effect is
+  strongest in the SHALLOW deciles (7–9: 14–21 % of pixels), where `old_auto`'s base of 500
+  bit hardest. This is the real win, and it is the fix for every future label crop and
+  every production render.
+* **The training inputs gain much less** — 3.3 % pooled, and 41 of 60 tiles do not change
+  by a single pixel. A retrain on the re-rendered cache is therefore expected to land
+  *inside* a non-inferiority band rather than above it. That is a prediction, not an
+  excuse: it was measured before the retrain, not after it.
+
+Two further facts worth keeping:
+
+* **Convergence at 8000 is common.** On a deep mandelbrot tile (fw ≈ 2.0e-7) the render is
+  bit-identical at 8000, 32,606 and 67,000, while dropping to 2,000 moves 2.45 % of pixels.
+  The frame is cap-sensitive; it is simply already saturated at 8000. Any claim that "the
+  corpus is clipped" must name which cap it means.
+* **The effect is not monotone in depth on this surface.** Decile 8 (fw ≥ 0.31) shows 0.0 %
+  for `flat8000 → new_auto` and 16.8 % for `old_auto → new_auto`. What matters is how many
+  pixels have an escape time *between* the two caps, and that is a property of the
+  structure in frame, not of the magnification.
+
 ## Consequences of a cap change (the checklist)
 
 A cap change is not a local edit. It moves:
