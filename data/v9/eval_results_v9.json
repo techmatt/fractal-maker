@@ -1,0 +1,146 @@
+{
+  "score_key": "sum_sigma (rank score)",
+  "arms": {
+    "primary_a": "v8 on v8 (old, flat-8000) renders \u2014 DEPLOYED SYSTEM",
+    "primary_b": "v9 on v9 (new, raised-cap) renders \u2014 CANDIDATE SYSTEM",
+    "diagnostic": "v8 on v9 (new) renders \u2014 train/deploy mismatch"
+  },
+  "pre_registered": {
+    "v8_census_q3": 0.751,
+    "v8_floor_q3": 0.868,
+    "v8_class4": 0.813,
+    "v8_palette_mean_spearman": 0.896,
+    "v8_palette_range": [
+      0.767,
+      0.975
+    ],
+    "noninf_margin": 0.05,
+    "claim": "non-inferiority, not superiority (label noise on the >=3 boundary)"
+  },
+  "census_q3": {
+    "name": "census-144 q3",
+    "n": 144,
+    "thr": 3,
+    "n_pos": 65,
+    "arm_a": "v8-on-old",
+    "arm_b": "v9-on-new",
+    "auc_a": 0.7509,
+    "auc_a_ci95": [
+      0.671,
+      0.8278
+    ],
+    "auc_b": 0.739,
+    "auc_b_ci95": [
+      0.6533,
+      0.8183
+    ],
+    "delta_b_minus_a": -0.0119,
+    "delong_z": 0.378,
+    "delong_p": 0.7058,
+    "v9_vs_reference": -0.012,
+    "non_inferior_verdict": "NON-INFERIOR"
+  },
+  "mandelbrot_floor_q3": {
+    "name": "mandelbrot-floor q3",
+    "n": 526,
+    "thr": 3,
+    "n_pos": 26,
+    "arm_a": "v8-on-old",
+    "arm_b": "v9-on-new",
+    "auc_a": 0.8677,
+    "auc_a_ci95": [
+      0.7886,
+      0.9341
+    ],
+    "auc_b": 0.8845,
+    "auc_b_ci95": [
+      0.8217,
+      0.9394
+    ],
+    "delta_b_minus_a": 0.0168,
+    "delong_z": -0.739,
+    "delong_p": 0.4599,
+    "v9_vs_reference": 0.0165,
+    "verdict": "non-inferior",
+    "note": "Unlike the v7-vs-v8 floor comparison, this one is SYMMETRIC: v8 and v9 both trained on these locations, so neither arm is flattered."
+  },
+  "diagnostic_v8_on_new": {
+    "name": "census-144 q3 (diagnostic)",
+    "n": 144,
+    "thr": 3,
+    "n_pos": 65,
+    "arm_a": "v8-on-old",
+    "arm_b": "v8-on-new",
+    "auc_a": 0.7509,
+    "auc_a_ci95": [
+      0.671,
+      0.8278
+    ],
+    "auc_b": 0.7509,
+    "auc_b_ci95": [
+      0.671,
+      0.8278
+    ],
+    "delta_b_minus_a": 0.0,
+    "delong_z": 0.0,
+    "delong_p": 1.0,
+    "interpretation": "AGREE (negative): neither the inputs alone nor the system improved on this instrument.",
+    "delta_inputs_only": 0.0,
+    "delta_system": -0.0119,
+    "note": "DIAGNOSTIC ONLY \u2014 never gating."
+  },
+  "class4_descriptive": {
+    "n_census": 144,
+    "n_class4": 22,
+    "auc_v9_q4_vs_rest": 0.6882,
+    "auc_v9_q4_by_pnext": 0.6006,
+    "auc_v8_q4_vs_rest_on_old": 0.813,
+    "v8_reference": 0.813,
+    "note": "Descriptive only, NOT gating. Class-4 census locations are all julia:multibrot; native-multibrot class-4 remains extrapolation.",
+    "class4_by_family": {
+      "julia_multibrot3": 6,
+      "julia_multibrot4": 8,
+      "julia_multibrot5": 8
+    }
+  },
+  "palette_invariance": {
+    "n_census": 144,
+    "held_out_palettes": [
+      "cet_cyclic_wrwbw_40_90_c42",
+      "cet_diverging_bwr_40_95_c42",
+      "cet_linear_bmw_5_95_c86",
+      "cet_linear_kry_5_98_c75",
+      "cet_linear_protanopic_deuteranopic_kbw_5_98_c40",
+      "cmr.ocean",
+      "cmr.seasons",
+      "cmr.viola"
+    ],
+    "instrument": "twilight_shifted",
+    "rendered_at_cap": "auto_maxiter(fw) \u2014 the live policy, per row",
+    "spearman_twilight_vs_heldout": {
+      "cet_cyclic_wrwbw_40_90_c42": 0.7049,
+      "cet_diverging_bwr_40_95_c42": 0.8432,
+      "cet_linear_bmw_5_95_c86": 0.9142,
+      "cet_linear_kry_5_98_c75": 0.9388,
+      "cet_linear_protanopic_deuteranopic_kbw_5_98_c40": 0.904,
+      "cmr.ocean": 0.9722,
+      "cmr.seasons": 0.9472,
+      "cmr.viola": 0.9776
+    },
+    "mean_spearman": 0.9002,
+    "range": [
+      0.7049,
+      0.9776
+    ],
+    "pooled_spearman": 0.8976,
+    "v8_reference": {
+      "mean": 0.896,
+      "range": [
+        0.767,
+        0.975
+      ]
+    },
+    "delta_vs_v8": 0.0042,
+    "verdict": "consistent with v8"
+  }
+}

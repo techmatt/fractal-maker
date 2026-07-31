@@ -316,6 +316,38 @@ __pycache__/
 # artifacts.RELOCATED_PREFIXES. If it ever reappears here it stays un-committable.
 /data/v9/aug_cache/
 
+# ---------------------------------------------------------------------------
+# v9 classifier weights — DURABLE by exact path, and by NEGATION rather than by
+# force-add. data/classifier/v2..v8 are ignored by the blanket /data/* rule and were
+# force-added (`git add -f`), which works but leaves no rule saying they belong: a
+# fresh clone's `git add -A` would not re-add them and nothing would notice. v9
+# declares them the way data/v8 and data/v9 declare theirs — by exact path, checkable
+# with `git check-ignore --no-index`, and picked up by the derived canary in
+# tests/test_tracked_artifacts.py (BUILD_PREFIX_RE matches data/classifier/v<N>/ too).
+#
+# The re-include chain has to walk down: git cannot re-include a file whose parent
+# directory is still excluded, so each level is opened and then re-narrowed. The
+# `/data/classifier/*` line keeps v2..v8 exactly as ignored as they are today — they
+# are already tracked, and ignore rules do not touch tracked files.
+!/data/classifier/
+/data/classifier/*
+# v5 is force-added AND carries its own literal .gitattributes LFS line, which made the
+# wiring incoherent once the canary started reading `data/classifier/v<N>/` paths: LFS was
+# configured for a path no rule re-included, so git would never have been handed the
+# content on a fresh add. v5 is a documented rollback anchor (active_ckpt.V5_CKPT_ROLLBACK),
+# it is already tracked, and this negation just makes the rule match the reality.
+!/data/classifier/v5/
+/data/classifier/v5/*
+!/data/classifier/v5/model_best.pt
+!/data/classifier/v9/
+/data/classifier/v9/*
+# The trained head itself (LFS), plus the two small records that say what produced it.
+# model_last.pt is deliberately NOT tracked: selection is on best, and a second 34 MB
+# LFS object per version buys nothing.
+!/data/classifier/v9/model_best.pt
+!/data/classifier/v9/config.json
+!/data/classifier/v9/metrics.json
+
 # Large regeneratable datasets (see data_large/README.md)
 /data_large/*
 !/data_large/README.md

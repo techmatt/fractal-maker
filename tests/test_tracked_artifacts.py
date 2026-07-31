@@ -190,12 +190,12 @@ def test_canary_tracked(path):
 # form reports any force-added path as not-ignored regardless of the rules, which is how a
 # real false-accept got through on the v7 checkpoint; `--no-index` evaluates the rules alone.
 # --------------------------------------------------------------------------- #
-# Matches ANY versioned classifier-build tree (`data/v8/`, `data/v9/`, ...) rather than a
-# single hard-coded version. The whole point of deriving this set from the .gitignore
+# Matches ANY versioned build tree — the corpus side (`data/v8/`, `data/v9/`, ...) AND the
+# weights side (`data/classifier/v9/`, ...) — rather than a single hard-coded version. The whole point of deriving this set from the .gitignore
 # negations is that it tracks the wiring instead of being maintained alongside it; a
 # literal "data/v8/" would have silently stopped covering the build the moment v9 landed,
 # which is the same failure the static list has and the reason this section exists.
-BUILD_PREFIX_RE = re.compile(r"^data/v\d+/")
+BUILD_PREFIX_RE = re.compile(r"^data/(?:classifier/)?v\d+/")
 
 
 def _is_build_path(rel: str) -> bool:

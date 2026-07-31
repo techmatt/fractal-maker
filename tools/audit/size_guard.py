@@ -231,6 +231,13 @@ REGISTRY: list[Entry] = [
     # Not GPU-reproducible (float nondeterminism), so no rebuild path. Active +
     # rollback anchors move to the precious store; the classifier weights are CANARY
     # paths — their eventual move needs a deliberate test_tracked_artifacts update.
+    Entry("data/classifier/v9/", RELOCATE, PRECIOUS, "tracked",
+          "v9 model_best.pt — the v8 recipe retrained verbatim on the corpus re-rendered "
+          "at the raised iteration cap (docs/design/auto_maxiter.md). BUILT, NOT DEPLOYED: "
+          "ACTIVE_CKPT still names v8, and the flip is its own pass. Unlike v2..v8 these "
+          "weights are declared by an exact-path .gitignore negation rather than a "
+          "force-add, so a plain `git add` reaches them. model_last.pt is deliberately "
+          "untracked (selection is on best). CANARY.", canary=True),
     Entry("data/classifier/v8/", RELOCATE, PRECIOUS, "tracked",
           "v8 model_best.pt — LIVE deployed discovery-gate weight (K=4 ordinal head; the "
           "first version that can decode class 4). CANARY.", canary=True),

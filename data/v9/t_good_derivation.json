@@ -1,0 +1,272 @@
+{
+  "objective": "per-partition F_beta-argmax, tie-break higher t",
+  "objective_by_partition": {
+    "mandelbrot": "F0.5",
+    "julia:multibrot3": "F2",
+    "julia:multibrot4": "F2",
+    "julia:multibrot5": "F2"
+  },
+  "objective_unchanged_from_v8": true,
+  "objective_unchanged_rationale": "Re-deriving on a different objective would confound 'the cap moved' with 'the objective moved'. Same F0.5/F2 assignment as v8, deliberately.",
+  "default_objective": "F2",
+  "decode": "keeper(label>=3) iff P(>=2)>=0.5 AND P(>=3)>=t",
+  "baseline": 0.5,
+  "min_pos": 15,
+  "no_class4_threshold": true,
+  "class4_decode": "natural cutpoint P(>=4) >= 0.5, no per-family calibration",
+  "eval_slice": "data/v9/eval_scores_v9.jsonl",
+  "model": "v9",
+  "derived": {
+    "julia:multibrot3": {
+      "n": 54,
+      "pos": 19,
+      "objective": "F2",
+      "beta": 2.0,
+      "objective_rationale": "recall-weighted (supply scarce)",
+      "t_good": 0.34,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.88,
+          "precision": 0.8889,
+          "recall": 0.4211,
+          "fbeta": 0.7273,
+          "tp": 8,
+          "fp": 1,
+          "fn": 11,
+          "plateau": [
+            0.88,
+            0.88
+          ],
+          "plateau_steps": 1,
+          "beta": 0.5,
+          "fbeta_oof": 0.5063
+        },
+        "F2": {
+          "t": 0.34,
+          "precision": 0.5588,
+          "recall": 1.0,
+          "fbeta": 0.8636,
+          "tp": 19,
+          "fp": 15,
+          "fn": 0,
+          "plateau": [
+            0.33,
+            0.34
+          ],
+          "plateau_steps": 2,
+          "beta": 2.0,
+          "fbeta_oof": 0.787
+        }
+      }
+    },
+    "julia:multibrot4": {
+      "n": 51,
+      "pos": 24,
+      "objective": "F2",
+      "beta": 2.0,
+      "objective_rationale": "recall-weighted (supply scarce)",
+      "t_good": 0.1,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.93,
+          "precision": 0.7778,
+          "recall": 0.5833,
+          "fbeta": 0.7292,
+          "tp": 14,
+          "fp": 4,
+          "fn": 10,
+          "plateau": [
+            0.93,
+            0.93
+          ],
+          "plateau_steps": 1,
+          "beta": 0.5,
+          "fbeta_oof": 0.7292
+        },
+        "F2": {
+          "t": 0.1,
+          "precision": 0.5581,
+          "recall": 1.0,
+          "fbeta": 0.8633,
+          "tp": 24,
+          "fp": 19,
+          "fn": 0,
+          "plateau": [
+            0.1,
+            0.1
+          ],
+          "plateau_steps": 1,
+          "beta": 2.0,
+          "fbeta_oof": 0.8333
+        }
+      }
+    },
+    "julia:multibrot5": {
+      "n": 39,
+      "pos": 22,
+      "objective": "F2",
+      "beta": 2.0,
+      "objective_rationale": "recall-weighted (supply scarce)",
+      "t_good": 0.22,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.22,
+          "precision": 0.6774,
+          "recall": 0.9545,
+          "fbeta": 0.7192,
+          "tp": 21,
+          "fp": 10,
+          "fn": 1,
+          "plateau": [
+            0.19,
+            0.22
+          ],
+          "plateau_steps": 4,
+          "beta": 0.5,
+          "fbeta_oof": 0.6884
+        },
+        "F2": {
+          "t": 0.22,
+          "precision": 0.6774,
+          "recall": 0.9545,
+          "fbeta": 0.8824,
+          "tp": 21,
+          "fp": 10,
+          "fn": 1,
+          "plateau": [
+            0.19,
+            0.22
+          ],
+          "plateau_steps": 4,
+          "beta": 2.0,
+          "fbeta_oof": 0.8475
+        }
+      }
+    },
+    "mandelbrot": {
+      "n": 526,
+      "pos": 26,
+      "objective": "F0.5",
+      "beta": 0.5,
+      "objective_rationale": "precision-weighted (supply abundant)",
+      "t_good": 0.29,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.29,
+          "precision": 0.4074,
+          "recall": 0.4231,
+          "fbeta": 0.4104,
+          "tp": 11,
+          "fp": 16,
+          "fn": 15,
+          "plateau": [
+            0.29,
+            0.29
+          ],
+          "plateau_steps": 1,
+          "beta": 0.5,
+          "fbeta_oof": 0.1471
+        },
+        "F2": {
+          "t": 0.04,
+          "precision": 0.3488,
+          "recall": 0.5769,
+          "fbeta": 0.5102,
+          "tp": 15,
+          "fp": 28,
+          "fn": 11,
+          "plateau": [
+            0.04,
+            0.04
+          ],
+          "plateau_steps": 1,
+          "beta": 2.0,
+          "fbeta_oof": 0.4795
+        }
+      }
+    }
+  },
+  "uncalibrated": {
+    "julia:mandelbrot": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "status": "UNCALIBRATED",
+      "reason": "no unbiased eval slice"
+    },
+    "multibrot3": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "status": "UNCALIBRATED",
+      "reason": "no unbiased eval slice"
+    },
+    "multibrot4": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "status": "UNCALIBRATED",
+      "reason": "no unbiased eval slice"
+    },
+    "multibrot5": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "status": "UNCALIBRATED",
+      "reason": "no unbiased eval slice"
+    },
+    "phoenix": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "status": "UNCALIBRATED",
+      "reason": "no unbiased eval slice"
+    }
+  },
+  "adopted": {
+    "julia:multibrot3": 0.34,
+    "julia:multibrot4": 0.1,
+    "julia:multibrot5": 0.22,
+    "mandelbrot": 0.29
+  },
+  "vs_v8": {
+    "julia:multibrot3": {
+      "v8": 0.39,
+      "v9": 0.34,
+      "delta": -0.05
+    },
+    "julia:multibrot4": {
+      "v8": 0.14,
+      "v9": 0.1,
+      "delta": -0.04
+    },
+    "julia:multibrot5": {
+      "v8": 0.2,
+      "v9": 0.22,
+      "delta": 0.02
+    },
+    "mandelbrot": {
+      "v8": 0.85,
+      "v9": 0.29,
+      "delta": -0.56
+    }
+  },
+  "notes": [
+    "julia:multibrot3: F0.5 picks t=0.88 vs F2 t=0.34 \u2014 objective choice is load-bearing",
+    "julia:multibrot3: adopted F2 in-sample 0.864 vs OOF 0.787 (gap +0.077) \u2014 threshold overfit at n=54, pos=19; the OOF value is the honest one",
+    "julia:multibrot3: adopted t=0.34 sits on a 2-step plateau \u2014 knife-edge, re-derive rather than nudge",
+    "julia:multibrot4: F0.5 picks t=0.93 vs F2 t=0.10 \u2014 objective choice is load-bearing",
+    "julia:multibrot4: adopted F2 in-sample 0.863 vs OOF 0.833 (gap +0.030) \u2014 threshold overfit at n=51, pos=24; the OOF value is the honest one",
+    "julia:multibrot4: adopted t=0.10 sits on a 1-step plateau \u2014 knife-edge, re-derive rather than nudge",
+    "julia:multibrot5: adopted F2 in-sample 0.882 vs OOF 0.848 (gap +0.035) \u2014 threshold overfit at n=39, pos=22; the OOF value is the honest one",
+    "mandelbrot: F0.5 picks t=0.29 vs F2 t=0.04 \u2014 objective choice is load-bearing",
+    "mandelbrot: adopted F0.5 in-sample 0.410 vs OOF 0.147 (gap +0.263) \u2014 threshold overfit at n=526, pos=26; the OOF value is the honest one",
+    "mandelbrot: adopted t=0.29 sits on a 1-step plateau \u2014 knife-edge, re-derive rather than nudge"
+  ],
+  "status": "STAGED \u2014 NOT adopted into production_seeder.T_GOOD_OVERRIDES",
+  "note": "STAGED, not adopted. production_seeder.T_GOOD_OVERRIDES stays calibrated to v8's p_good scale while v8 is the deployed scorer \u2014 a v9 cut on a v8 gate is a number about nothing, in exactly the way a v7 cut on a v8 gate was. The mirror happens with the ACTIVE_CKPT flip, in its own pass, conditional on the pre-registered bar."
+}

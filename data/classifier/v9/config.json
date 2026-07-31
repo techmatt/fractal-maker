@@ -1,0 +1,66 @@
+{
+  "target": "ordinal",
+  "num_classes": 4,
+  "geometry": "stretch",
+  "epochs": 40,
+  "batch_size": 32,
+  "backbone_lr": 0.0002,
+  "head_lr": 0.001,
+  "weight_decay": 0.05,
+  "drop_rate": 0.2,
+  "drop_path_rate": 0.1,
+  "patience": 40,
+  "seed": 0,
+  "num_workers": 4,
+  "amp": "off",
+  "grad_clip": 1.0,
+  "no_jpeg_aug": false,
+  "beta_biased": 0.4,
+  "class_balance": "sqrt",
+  "black_thresh": 0.3,
+  "src_dims": [
+    512,
+    288
+  ],
+  "target_dims": [
+    384,
+    224
+  ],
+  "init": "imagenet_backbone_fresh (NOT warm-started from v8); recipe read verbatim from the v8 checkpoint config",
+  "loss": "CORN ordinal (K-1=3)",
+  "sampler": "per-location WeightedRandomSampler(w_class[sqrt] x w_group[1/group] x w_source[beta])",
+  "selection": "max eval not-bad AP (rank by sigma(logit0)); patience==epochs (full schedule)",
+  "eval_split_is_val": true,
+  "cache_manifest": "data/v9/cache_manifest.jsonl",
+  "recipe_vs_v7": "IDENTICAL recipe read from v7 config; only delta = 1..4 head (3 cutpoints)",
+  "backbone": "mobilenetv4_conv_medium.e250_r384_in12k",
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "interpolation": "bicubic",
+  "input_size": [
+    3,
+    384,
+    384
+  ],
+  "corpus_version": "v9",
+  "recipe_vs_v8": "IDENTICAL \u2014 every hyperparameter is v8's own config value. The ONLY change is the corpus underneath: the same 7,117 locations re-rendered at the raised iteration cap.",
+  "maxiter_policy": {
+    "base": 4000,
+    "k": 0.3,
+    "min": 200,
+    "max": 67000,
+    "fw_home": 3.0,
+    "applied": "per plan row, auto_maxiter(fw_slot)",
+    "supersedes": "flat maxiter=8000 on every v4..v8 tile"
+  },
+  "cap_doc": "docs/design/auto_maxiter.md",
+  "best_epoch": 36
+}
