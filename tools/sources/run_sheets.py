@@ -168,6 +168,86 @@ def ship_sheet(source_id, title, one_line, blurb, atoms, stats, *, extra_desc=No
             "desc": desc, "path": str(p), "atoms": usable}
 
 
+def rebuild_only(*, render_workers=4, force=True, log=log) -> int:
+    """Re-render every sheet's tiles at the CURRENT geometry and rewrite the HTML —
+    without re-enumerating anything. The atom populations and their descriptors are
+    durable and unchanged; only the presentation moves, so re-running the sources would
+    be waste (and would redraw a different sample)."""
+    ss.ensure_dirs()
+    log(f"rebuild: tiles at {ss.TILE_W}x{ss.TILE_H} ss{ss.TILE_SS}, "
+        f"rows of {len(ss.SCALES)} ({'/'.join(str(s) + 'x' for s in ss.SCALES)})")
+    log("references")
+    rt.ensure_reference_tiles(log=log, force=force)
+    entries = []
+    titles = {s: (ti, o, b) for s, ti, o, b in PLAN}
+    for sid in ss.built_sources():
+        meta = ss.load_meta(sid)
+        population = ss.load_atoms(sid)
+        # RE-DERIVE the sample from the durable population rather than reusing the
+        # previous run's `sheet_ids`. `span_by_depth` is deterministic, so this
+        # reproduces the original draw exactly — and it is idempotent, which reusing
+        # sheet_ids is NOT: a rebuild narrows that list by whatever failed to render, so
+        # a bad pass (two rebuilds racing, say) ratchets a sheet toward empty and the
+        # next rebuild cannot recover it. Two concurrent rebuilds did exactly that here,
+        # taking three sheets to 0 atoms.
+        shown = al.span_by_depth(population, SHEET_N)
+        if not shown:
+            continue
+        ti, one, blurb = titles.get(sid, (meta.get("title", sid),
+                                          meta.get("one_line", ""), meta.get("blurb", "")))
+        log(f"[{sid}] {len(shown)} atoms")
+        res = rt.render_atoms(shown, force=force, workers=render_workers, log=log)
+        usable = [a for a in shown if a["id"] not in set(res["unusable"])]
+        desc = al.describe(usable)
+        extra, notes = None, ""
+        st = meta.get("source_stats", {})
+        if sid == "complete_low_n":
+            th = st.get("theorem_satellites", {})
+            shp = st.get("shipped_periods", [])
+            short2 = st.get("attempted_but_short", [])
+            extra = [("completeness",
+                      f'COMPLETE population for periods {min(shp)}–{max(shp)}' if shp else "—"),
+                     ("attempted but short (NOT on this sheet)",
+                      ", ".join(f'n={r["period"]} ({r["distinct"]}/{r["expected_total"]})'
+                                for r in short2) or "none"),
+                     ("primitive / satellite (EXACT, from the counting theorem)",
+                      f'{th.get("complete_satellites")} of {th.get("complete_total")} '
+                      f'= {th.get("satellite_frac", 0):.0%} satellite')]
+        if len(population) < 100:
+            notes = (f"<br><b>Short sheet:</b> this source produced only {len(population)} atoms. "
+                     f"Not padded from any other source.")
+        meta["descriptors"] = desc
+        meta["framing"] = {"scales": list(ss.SCALES), "default_scale": ss.DEFAULT_SCALE,
+                           "width": ss.TILE_W, "height": ss.TILE_H, "ss": ss.TILE_SS,
+                           "palette": ss.TILE_PALETTE, "layout": "row-of-3"}
+        meta["sheet_ids"] = [a["id"] for a in usable]
+        ss.write_json(ss.meta_path(sid), meta)
+        pth = sh.build_sheet(sid, meta.get("title", ti), meta.get("blurb", blurb),
+                             usable, desc, extra_desc=extra, notes=notes)
+        log(f"   -> {pth}")
+        entries.append({"source_id": sid, "title": meta.get("title", ti),
+                        "one_line": meta.get("one_line", one), "desc": desc,
+                        "atoms": usable})
+    # blind wall over everything shown
+    allat = [a for e in entries for a in e["atoms"]]
+    random.Random(20260730).shuffle(allat)
+    if allat:
+        d = al.describe(allat)
+        sh.build_sheet("blind_all", "Blind interleaved wall — all sources shuffled",
+                       "Every rendered atom from every sheet, shuffled, source hidden. "
+                       "Costs no extra rendering and preserves an unbiased per-atom rate. "
+                       "Secondary to the per-source sheets.",
+                       allat, d, notes="<br>Source is hidden by construction; the mapping "
+                                       "lives in each source's meta.json.", shuffled=True)
+        entries.append({"source_id": "blind_all", "title": "Blind interleaved wall",
+                        "one_line": "All sources shuffled, source hidden.",
+                        "desc": d, "atoms": []})
+    skipped = [{"source_id": "douady_tuning", "reason": TUNING_NOTE}]
+    pth = rebuild_index(entries, skipped)
+    log(f"INDEX: {pth}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -177,7 +257,16 @@ def main(argv=None) -> int:
                     help="comma-separated source ids to build")
     ap.add_argument("--skip-blind", action="store_true")
     ap.add_argument("--render-workers", type=int, default=4)
+    ap.add_argument("--no-force", action="store_true",
+                    help="with --rebuild-only: keep tiles that already exist at the "
+                         "current geometry instead of re-rendering them")
+    ap.add_argument("--rebuild-only", action="store_true",
+                    help="re-render tiles at the current geometry and rewrite the sheets; "
+                         "no enumeration, no re-sampling")
     args = ap.parse_args(argv)
+    if args.rebuild_only:
+        return rebuild_only(render_workers=args.render_workers,
+                            force=not args.no_force)
 
     globals()["SHEET_N"] = args.sheet_n
     only = set(args.only.split(",")) if args.only else None

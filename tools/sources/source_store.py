@@ -42,14 +42,25 @@ INDEX_JSON = ROOT / "index.json"
 TILES_REL = "data/minibrot_sources/tiles"            # bulk, out-of-tree
 SHEETS_REL = "data/minibrot_sources/sheets"
 
-# Framing is IMPORTED from the triage wall, not restated — identical framing across
-# every sheet is the only thing that makes the sources comparable, so there must be
-# exactly one definition of it. (`test_sources.py` pins this.)
-SCALES = ts.SCALES                   # (1, 4, 16)
+# What makes the sources comparable is that every sheet uses the SAME framing: the same
+# scale ladder and the same palette. Those are IMPORTED from the triage wall so there is
+# exactly one definition and they cannot drift apart.
+SCALES = ts.SCALES                   # (1, 4, 16) — the ladder, shared
 DEFAULT_SCALE = ts.DEFAULT_SCALE     # 4
-TILE_W, TILE_H, TILE_SS = ts.THUMB_W, ts.THUMB_H, ts.THUMB_SS
-TILE_PALETTE = ts.THUMB_PALETTE      # "blue_orange"
+TILE_PALETTE = ts.THUMB_PALETTE      # "blue_orange", shared
 TILE_COLORMAPS = ts.THUMB_COLORMAPS
+
+# PIXEL geometry is the sheets' own, and deliberately differs from the wall's. The wall
+# is a dense keyboard-driven grid tuned for ~1 s per tile, so it wants small thumbnails;
+# a sheet is read at leisure and shows all three ladder rungs side by side, so it wants
+# them bigger. 640x360 ss1 carries the SAME sample count as the wall's 320x180 ss2
+# (230k), so it is exactly as cheap to render while giving 2x the linear detail — the
+# trade is a little more aliasing for twice the resolution.
+#
+# This is a presentation choice and touches nothing that makes sheets comparable: the
+# ladder, the palette and the frame widths are unchanged, so a 4x tile still frames
+# exactly what it framed before.
+TILE_W, TILE_H, TILE_SS = 640, 360, 1
 
 _io_lock = threading.RLock()
 

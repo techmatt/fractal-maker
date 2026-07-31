@@ -241,10 +241,11 @@
       16
     ],
     "default_scale": 4,
-    "width": 320,
-    "height": 180,
-    "ss": 2,
-    "palette": "blue_orange"
+    "width": 640,
+    "height": 360,
+    "ss": 1,
+    "palette": "blue_orange",
+    "layout": "row-of-3"
   },
   "built_at": "2026-07-30T16:28:17"
 }

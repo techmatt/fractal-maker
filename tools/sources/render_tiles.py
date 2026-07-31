@@ -121,11 +121,16 @@ def reference_atoms() -> list[dict]:
             for r in _ts.load_references()]
 
 
-def ensure_reference_tiles(log=print) -> dict:
+def ensure_reference_tiles(log=print, *, force=False) -> dict:
     """Render the references into the source-sheet tile root (they also exist under the
-    descent harness, but a sheet addresses tiles by a relative path beside itself)."""
+    descent harness, but a sheet addresses tiles by a relative path beside itself).
+
+    `force` must be threaded through: when the sheet geometry changes, the reference
+    tiles have to move with it. They did not, once — the atom tiles re-rendered at
+    640x360 while the references silently stayed at 320x180, so the row that exists to
+    be compared against was drawn at half the size of everything it is compared with."""
     refs = reference_atoms()
     if not refs:
         log("    WARNING: no references found — run build_triage_pool.py --refs-only")
         return {"ok": [], "unusable": [], "failures": [], "seconds": 0.0}
-    return render_atoms(refs, log=log)
+    return render_atoms(refs, log=log, force=force)

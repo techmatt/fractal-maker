@@ -417,22 +417,22 @@
     {
       "source_id": "misiurewicz",
       "title": "7 \u00b7 Misiurewicz-anchored",
-      "n": 135,
+      "n": 128,
       "desc": {
-        "n": 135,
+        "n": 128,
         "shape_available": false,
-        "atom_domain_divides_period_n": 35,
+        "atom_domain_divides_period_n": 34,
         "period_min": 4,
         "period_med": 13,
         "period_max": 32,
         "log10_abs_A_min": 2.07,
-        "log10_abs_A_med": 6.8,
-        "log10_abs_A_max": 11.07,
+        "log10_abs_A_med": 6.76,
+        "log10_abs_A_max": 10.71,
         "atom_size_max": "8.483e-03",
-        "atom_size_min": "8.469e-12",
-        "deploy_margin_min": -1.18,
-        "deploy_margin_med": 3.09,
-        "n_below_feasibility_floor": 35,
+        "atom_size_min": "1.968e-11",
+        "deploy_margin_min": -0.81,
+        "deploy_margin_med": 3.14,
+        "n_below_feasibility_floor": 28,
         "on_real_axis_n": 4,
         "depth_histogram": [
           {
@@ -478,7 +478,76 @@
           {
             "lo": 8,
             "hi": 99,
-            "n": 46
+            "n": 39
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "blind_all",
+      "title": "Blind interleaved wall",
+      "n": 665,
+      "desc": {
+        "n": 665,
+        "shape_available": false,
+        "atom_domain_divides_period_n": 224,
+        "period_min": 2,
+        "period_med": 15,
+        "period_max": 74,
+        "log10_abs_A_min": 0.3,
+        "log10_abs_A_med": 4.49,
+        "log10_abs_A_max": 10.71,
+        "atom_size_max": "5.000e-01",
+        "atom_size_min": "1.968e-11",
+        "deploy_margin_min": -0.81,
+        "deploy_margin_med": 5.4,
+        "n_below_feasibility_floor": 38,
+        "on_real_axis_n": 31,
+        "depth_histogram": [
+          {
+            "lo": 0,
+            "hi": 1,
+            "n": 12
+          },
+          {
+            "lo": 1,
+            "hi": 2,
+            "n": 50
+          },
+          {
+            "lo": 2,
+            "hi": 3,
+            "n": 119
+          },
+          {
+            "lo": 3,
+            "hi": 4,
+            "n": 92
+          },
+          {
+            "lo": 4,
+            "hi": 5,
+            "n": 121
+          },
+          {
+            "lo": 5,
+            "hi": 6,
+            "n": 83
+          },
+          {
+            "lo": 6,
+            "hi": 7,
+            "n": 83
+          },
+          {
+            "lo": 7,
+            "hi": 8,
+            "n": 47
+          },
+          {
+            "lo": 8,
+            "hi": 99,
+            "n": 58
           }
         ]
       }

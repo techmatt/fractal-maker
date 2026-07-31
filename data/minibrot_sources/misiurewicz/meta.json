@@ -134,30 +134,23 @@
     "mt837e765d4184",
     "mtee5cd4b7ff05",
     "mt381954a2f7b6",
-    "mt7b4017f1b456",
-    "mtd33d67f5916b",
-    "mt36a6aaab91a3",
-    "mt860fac2f68bd",
-    "mta44c8f452420",
-    "mt2bc5caecdf81",
-    "mte80c1a9f5e58",
-    "mtb4f48d903240"
+    "mt7b4017f1b456"
   ],
   "descriptors": {
-    "n": 135,
+    "n": 128,
     "shape_available": false,
-    "atom_domain_divides_period_n": 35,
+    "atom_domain_divides_period_n": 34,
     "period_min": 4,
     "period_med": 13,
     "period_max": 32,
     "log10_abs_A_min": 2.07,
-    "log10_abs_A_med": 6.8,
-    "log10_abs_A_max": 11.07,
+    "log10_abs_A_med": 6.76,
+    "log10_abs_A_max": 10.71,
     "atom_size_max": "8.483e-03",
-    "atom_size_min": "8.469e-12",
-    "deploy_margin_min": -1.18,
-    "deploy_margin_med": 3.09,
-    "n_below_feasibility_floor": 35,
+    "atom_size_min": "1.968e-11",
+    "deploy_margin_min": -0.81,
+    "deploy_margin_med": 3.14,
+    "n_below_feasibility_floor": 28,
     "on_real_axis_n": 4,
     "depth_histogram": [
       {
@@ -203,7 +196,7 @@
       {
         "lo": 8,
         "hi": 99,
-        "n": 46
+        "n": 39
       }
     ]
   },
@@ -446,10 +439,11 @@
       16
     ],
     "default_scale": 4,
-    "width": 320,
-    "height": 180,
-    "ss": 2,
-    "palette": "blue_orange"
+    "width": 640,
+    "height": 360,
+    "ss": 1,
+    "palette": "blue_orange",
+    "layout": "row-of-3"
   },
   "built_at": "2026-07-30T16:45:33"
 }

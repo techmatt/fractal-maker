@@ -48,32 +48,86 @@ BIN = REPO_ROOT / "target" / "release" / "fractal-generator.exe"
 # --------------------------------------------------------------------------- #
 # framing: identical across sheets, and identical to the triage wall
 # --------------------------------------------------------------------------- #
-def test_framing_constants_are_the_wall_s():
-    """One definition of framing, imported — not a second copy that can drift."""
+def test_the_comparability_framing_is_shared_with_the_wall():
+    """What makes the sources comparable is the LADDER and the PALETTE — imported from
+    the triage wall so there is one definition. Pixel geometry is deliberately not
+    shared (see below)."""
     assert ss.SCALES == ts.SCALES == (1, 4, 16)
     assert ss.DEFAULT_SCALE == ts.DEFAULT_SCALE == 4
-    assert (ss.TILE_W, ss.TILE_H, ss.TILE_SS) == (ts.THUMB_W, ts.THUMB_H, ts.THUMB_SS)
     assert ss.TILE_PALETTE == ts.THUMB_PALETTE == "blue_orange"
     assert ss.TILE_COLORMAPS == ts.THUMB_COLORMAPS
 
 
-def test_tile_argv_matches_the_triage_wall_byte_for_byte(tmp_path):
-    """A source-sheet tile and a triage-wall tile of the SAME atom must be the same
-    render command — otherwise no sheet is comparable to the wall or to another sheet."""
-    atom = {"id": "mt000000000000", "cx": "-0.75", "cy": "0.1",
-            "window_scale": "1.0000000000e-04", "family": "mandelbrot"}
+def test_sheet_geometry_is_its_own_and_costs_the_same_as_the_wall_s():
+    """Sheets render bigger than the wall on purpose: the wall is a dense keyboard grid
+    tuned for ~1 s per tile, a sheet is read at leisure with all three rungs side by
+    side. 640x360 ss1 carries the SAME sample count as the wall's 320x180 ss2, so the
+    change buys 2x linear detail for zero extra render cost — that equality is the
+    justification, so it is pinned."""
+    assert (ss.TILE_W, ss.TILE_H, ss.TILE_SS) == (640, 360, 1)
+    sheet_samples = ss.TILE_W * ss.TILE_H * ss.TILE_SS ** 2
+    wall_samples = ts.THUMB_W * ts.THUMB_H * ts.THUMB_SS ** 2
+    assert sheet_samples == wall_samples, (sheet_samples, wall_samples)
+    assert ss.TILE_W == 2 * ts.THUMB_W and ss.TILE_H == 2 * ts.THUMB_H
+
+
+def test_every_sheet_renders_at_one_geometry(tmp_path):
+    """The load-bearing invariant: two atoms on two different sheets must produce the
+    same render command apart from their coordinates. One geometry, one palette, one
+    ladder — otherwise no sheet is comparable to another."""
+    import render_core as rc
+    a = {"id": "mt000000000000", "cx": "-0.75", "cy": "0.1",
+         "window_scale": "1.0000000000e-04", "family": "mandelbrot"}
+    b = {**a, "id": "mt111111111111", "cx": "-0.5", "cy": "0.6"}
     for scale in ss.SCALES:
-        out = tmp_path / f"t{scale}.png"
-        mine = rt.tile_argv(atom, scale, out)
-        geom = {"cx": atom["cx"], "cy": atom["cy"],
-                "base": atom["window_scale"], "family": atom["family"]}
-        fw = ts.frame_width(geom["base"], scale)
-        import render_core as rc
-        theirs = rc.render_one_argv(geom["cx"], geom["cy"], f"{fw:.17e}",
-                                    rc.auto_maxiter(fw), ts.THUMB_W, ts.THUMB_H,
-                                    ts.THUMB_SS, ts.THUMB_PALETTE, ts.THUMB_COLORMAPS,
-                                    out, family=geom["family"])
-        assert mine == theirs, f"scale {scale}: sheet argv diverged from the wall's"
+        av = rt.tile_argv(a, scale, tmp_path / "a.png")
+        bv = rt.tile_argv(b, scale, tmp_path / "b.png")
+        strip = lambda v: [x for i, x in enumerate(v)                      # noqa: E731
+                           if v[i - 1] not in ("--cx", "--cy", "--out")
+                           and x not in ("--cx", "--cy", "--out")]
+        assert strip(av) == strip(bv), f"scale {scale}: two atoms rendered differently"
+        # ...and the geometry in that command is the sheet geometry
+        assert av[av.index("--width") + 1] == str(ss.TILE_W)
+        assert av[av.index("--supersample") + 1] == str(ss.TILE_SS)
+        assert av[av.index("--palette") + 1] == ss.TILE_PALETTE
+        # ...and the frame width is exactly `scale` x the atom's own size
+        fw = float(av[av.index("--fw") + 1])
+        assert fw == pytest.approx(float(a["window_scale"]) * scale, rel=1e-9)
+
+
+def test_reference_tiles_render_at_the_same_geometry_as_atom_tiles(tmp_path):
+    """The reference row exists to be compared against, so it must be drawn at the same
+    size as what it is compared with. It once was not: a geometry change re-rendered
+    every atom tile at 640x360 and left the references at 320x180, because
+    `ensure_reference_tiles` did not thread `force` through."""
+    import inspect
+    src = inspect.getsource(rt.ensure_reference_tiles)
+    assert "force=force" in src, "ensure_reference_tiles must pass force to render_atoms"
+    refs = rt.reference_atoms()
+    assert refs, "no references — run build_triage_pool.py --refs-only"
+    for r in refs:
+        for scale in ss.SCALES:
+            argv = rt.tile_argv(r, scale, tmp_path / "r.png")
+            assert argv[argv.index("--width") + 1] == str(ss.TILE_W)
+            assert argv[argv.index("--height") + 1] == str(ss.TILE_H)
+            assert argv[argv.index("--supersample") + 1] == str(ss.TILE_SS)
+
+
+def test_rebuild_rederives_the_sample_instead_of_narrowing_it():
+    """A rebuild must be idempotent. Reusing the previous run's `sheet_ids` is not: each
+    pass drops whatever failed to render, so a bad pass ratchets a sheet toward empty and
+    no later rebuild can recover it. Two concurrent rebuilds did exactly that, taking
+    three sheets to 0 atoms — the sample is now re-derived from the durable population."""
+    import inspect
+    src = inspect.getsource(__import__("run_sheets").rebuild_only)
+    assert "span_by_depth" in src
+    assert 'meta.get("sheet_ids"' not in src, "rebuild must not seed from stored sheet_ids"
+
+
+def test_span_by_depth_is_deterministic():
+    """Which is what makes re-deriving the sample safe."""
+    pop = _fake(400)
+    assert [a["id"] for a in al.span_by_depth(pop, 150)] ==            [a["id"] for a in al.span_by_depth(list(reversed(pop)), 150)]
 
 
 def test_frame_width_is_scale_times_atom_size():
@@ -240,17 +294,59 @@ def test_sheet_has_no_per_tile_metadata(tmp_path, monkeypatch):
                   "dedup_key": "x,y", "abs_A": 1e4})
     p = sh.build_sheet("t", "T", "b", atoms, al.describe(atoms))
     doc = p.read_text(encoding="utf-8")
-    tiles = re.findall(r'<div class="tile"[^>]*>.*?</div>\s*</div>', doc, re.S)
     body = doc.split('<div id="wall">', 1)[1]
     for leak in ("period", "log10_abs_A", "dedup_key", "satellite", "abs_A",
                  "window_scale", "-0.75", "probe", "atom_domain"):
         assert leak not in body, f"per-tile region leaks {leak!r}"
-    # a tile carries an opaque id and nothing else
-    for t in re.findall(r'data-id="([^"]+)"', body):
-        assert re.fullmatch(r"mt[0-9a-f]{12}", t), t
-    # ...while the HEADER does carry the aggregate mix (that is the point)
-    head = doc.split('<div id="wall">', 1)[0]
+    for tid in re.findall(r"/tiles/([^_]+)__", body):
+        assert re.fullmatch(r"mt[0-9a-f]{12}", tid), tid
+    head = doc.split('<div class="colhead">', 1)[0]
     assert "log10|A|" in head and "depth histogram" in head and "atom size" in head
+
+
+def test_every_atom_gets_one_row_showing_all_three_rungs(tmp_path, monkeypatch):
+    """All three ladder rungs on screen at once, one row per atom — comparing 1x against
+    16x must not be a memory test, which is what click-to-cycle made it."""
+    monkeypatch.setenv("FRACTAL_ARTIFACTS_ROOT", str(tmp_path))
+    atoms = _fake(7)
+    for a in atoms:                       # every rung available
+        for s in ss.SCALES:
+            q = ss.tile_path(a["id"], s)
+            q.parent.mkdir(parents=True, exist_ok=True)
+            q.write_bytes(b"x")
+    doc = sh.build_sheet("t3", "T", "b", atoms, al.describe(atoms)).read_text(encoding="utf-8")
+    body = doc.split('<div id="wall">', 1)[1]
+    assert body.count('class="row"') == len(atoms)
+    assert body.count('class="cell') == len(atoms) * len(ss.SCALES)
+    assert "cell na" not in body
+    for a in atoms:
+        for s in ss.SCALES:
+            assert f'{a["id"]}__x{s}.png' in body
+    assert "<script" not in doc, "the sheet should need no JavaScript"
+    assert doc.count('class="colhead"') == 1 and "the sheet frame" in doc
+
+
+def test_a_rung_that_cannot_render_becomes_an_empty_cell_not_a_broken_image(tmp_path,
+                                                                            monkeypatch):
+    """The deepest atoms clear the f64 wall at 4x and 16x but not at 1x, where the frame
+    is four times narrower. That atom still earns its row on the rungs that rendered, and
+    the missing rung must not show as a broken image."""
+    monkeypatch.setenv("FRACTAL_ARTIFACTS_ROOT", str(tmp_path))
+    atoms = _fake(3)
+    for a in atoms:
+        for s in ss.SCALES:
+            if s == 1:
+                continue                   # 1x unavailable, as at the wall
+            q = ss.tile_path(a["id"], s)
+            q.parent.mkdir(parents=True, exist_ok=True)
+            q.write_bytes(b"x")
+    doc = sh.build_sheet("t4", "T", "b", atoms, al.describe(atoms)).read_text(encoding="utf-8")
+    body = doc.split('<div id="wall">', 1)[1]
+    assert body.count('class="row"') == len(atoms)          # rows survive
+    assert body.count("cell na") == len(atoms)              # exactly the 1x rung
+    for a in atoms:
+        assert f'{a["id"]}__x1.png' not in body             # no broken <img>
+        assert f'{a["id"]}__x4.png' in body
 
 
 def test_sheet_image_paths_are_relative_to_the_sheet(tmp_path, monkeypatch):

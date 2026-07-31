@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-"""Build a source sheet: one HTML page, ~150 tiles at identical framing, plus the
-per-sheet aggregate descriptor mix in the header.
+"""Build a source sheet: one HTML page, **one row per atom showing all three ladder rungs
+(1x / 4x / 16x) side by side**, plus the per-sheet aggregate descriptor mix in the header.
 
 The header/tile split is the point. Matt judges the sheet **as a whole**, so
 "this sheet is 90% satellites" and the depth histogram belong at the top — they are
@@ -18,7 +18,6 @@ resolves and the page opens by double-click with no path fixing.
 from __future__ import annotations
 
 import html
-import json
 import sys
 from pathlib import Path
 
@@ -55,36 +54,29 @@ h2{margin:16px 0 6px;font-size:11px;color:var(--muted);text-transform:uppercase;
 .refgroup .nm{font-size:11px;color:var(--muted);margin-bottom:4px}
 .refrow{display:flex;gap:5px}
 .refcell{text-align:center}
-.refcell img{width:150px;aspect-ratio:16/9;display:block;background:#000;border-radius:3px}
+.refcell img{width:300px;aspect-ratio:16/9;display:block;background:#000;border-radius:3px}
 .refcell span{font-size:9px;color:var(--muted)}
 .refcell.def span{color:var(--accent)}
-#wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:5px;
-      padding:12px 16px}
-.tile{position:relative;border:1px solid #222;border-radius:3px;overflow:hidden;
-      background:#000;cursor:pointer;aspect-ratio:16/9}
-.tile img{width:100%;height:100%;display:block;object-fit:cover;background:#000}
-.tile .sc{position:absolute;bottom:1px;right:3px;font-size:9px;color:#ccc;
-          background:rgba(0,0,0,.55);border-radius:2px;padding:0 3px;opacity:0;
-          transition:opacity .12s}
-.tile:hover .sc{opacity:1}
+#wall{padding:12px 16px}
+.colhead{display:flex;gap:6px;position:sticky;top:0;background:var(--bg);
+         padding:6px 16px 4px;border-bottom:1px solid #222;z-index:4}
+.colhead div{flex:1 1 0;max-width:480px;font-size:11px;color:var(--muted);
+             text-transform:uppercase;letter-spacing:.06em}
+.colhead div.def{color:var(--accent)}
+.row{display:flex;gap:6px;margin-bottom:6px}
+.cell{flex:1 1 0;max-width:480px;position:relative;border:1px solid #222;
+      border-radius:3px;overflow:hidden;background:#000;aspect-ratio:16/9}
+.cell img{width:100%;height:100%;display:block;object-fit:cover;background:#000}
+.cell .sc{position:absolute;bottom:2px;right:4px;font-size:10px;color:#ccc;
+          background:rgba(0,0,0,.5);border-radius:2px;padding:0 4px}
+.cell.def{border-color:#3a4a58}
+.cell.na{display:flex;align-items:center;justify-content:center;border-style:dashed;border-color:#333}
+.nab{font-size:10px;color:#666;text-align:center;padding:0 8px}
 a{color:var(--accent)}
 """
 
-JS = """
-const SCALES = %SCALES%, DEF = %DEF%;
-document.querySelectorAll('.tile').forEach(t=>{
-  t.dataset.s = DEF;
-  t.onclick = () => {
-    const i = (SCALES.indexOf(+t.dataset.s) + 1) %% SCALES.length;
-    t.dataset.s = SCALES[i];
-    t.querySelector('img').src = '../tiles/' + t.dataset.id + '__x' + SCALES[i] + '.png';
-    t.querySelector('.sc').textContent = SCALES[i] + '\\u00d7';
-    t.querySelector('.sc').style.opacity = 1;
-  };
-});
-"""
-
-
+# No JavaScript: every rung of the ladder is on screen at once, so there is nothing to
+# click. (The earlier click-to-cycle sheet made comparing 1x against 16x a memory test.)
 def _hist_html(hist: list[dict]) -> str:
     top = max([h["n"] for h in hist] + [1])
     out = []
@@ -134,19 +126,36 @@ def _refs_html() -> str:
     return '<div class="refs">' + "".join(out) + "</div>"
 
 
+def _cell(a: dict, s: int) -> str:
+    """One ladder rung. A rung whose tile does not exist renders as an empty cell rather
+    than a broken image: the deepest atoms clear the f64 wall at 4x and 16x but not at
+    1x, where the frame is four times narrower and the pixel spacing four times finer.
+    That is the same empirical render boundary the sheets keep everywhere else — the atom
+    still earns its row on the rungs that did render."""
+    klass = "cell def" if s == ss.DEFAULT_SCALE else "cell"
+    src = f'../tiles/{a["id"]}__x{s}.png'
+    if not ss.tile_path(a["id"], s).exists():
+        return (f'<div class="{klass} na"><div class="nab">{s}&times; unavailable &mdash; '
+                f'below the f64 render floor at this frame</div></div>')
+    return (f'<div class="{klass}"><a href="{src}" target="_blank">'
+            f'<img loading="lazy" src="{src}" alt=""></a>'
+            f'<div class="sc">{s}&times;</div></div>')
+
+
 def build_sheet(source_id: str, title: str, blurb: str, atoms: list[dict],
                 desc: dict, *, extra_desc=None, notes: str = "",
                 shuffled: bool = False) -> Path:
-    """Write one sheet. `atoms` are already the sampled, render-verified set."""
+    """Write one sheet: **one row per atom, all three ladder rungs side by side.**
+
+    Every rung visible at once rather than cycled on click — comparing 1x against 16x
+    should not be a memory test, and the whole point of the ladder is the comparison."""
     ss.ensure_dirs()
-    tiles = "".join(
-        f'<div class="tile" data-id="{a["id"]}">'
-        f'<img loading="lazy" src="../tiles/{a["id"]}__x{ss.DEFAULT_SCALE}.png" alt="">'
-        f'<div class="sc">{ss.DEFAULT_SCALE}&times;</div></div>'
-        for a in atoms)
-    js = (JS.replace("%SCALES%", json.dumps(list(ss.SCALES)))
-            .replace("%DEF%", str(ss.DEFAULT_SCALE))
-            .replace("%%", "%"))
+    head = "".join(
+        f'<div class="{"def" if s == ss.DEFAULT_SCALE else ""}">{s}&times;'
+        f'{" &mdash; the sheet frame" if s == ss.DEFAULT_SCALE else ""}</div>'
+        for s in ss.SCALES)
+    rows = "".join('<div class="row">' + "".join(_cell(a, s) for s in ss.SCALES)
+                   + '</div>' for a in atoms)
     doc = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <title>{html.escape(title)}</title><style>{CSS}</style></head><body>
@@ -158,14 +167,14 @@ def build_sheet(source_id: str, title: str, blurb: str, atoms: list[dict],
   {_hist_html(desc.get("depth_histogram", []))}
 </header>
 {"" if shuffled else _refs_html()}
-<div id="wall">{tiles}</div>
+<div class="colhead">{head}</div>
+<div id="wall">{rows}</div>
 <div class="note" style="padding:0 16px 24px">
-  Every tile: <b>4&times; the atom's own size</b>, vivid <code>blue_orange</code>,
-  navigation fidelity &mdash; identical across all sheets. <b>Click a tile</b> to
-  cycle 4&times; &rarr; 16&times; &rarr; 1&times;. No per-tile metadata by design.
+  One row per atom: <b>1&times; / 4&times; / 16&times; the atom's own size</b>, vivid
+  <code>blue_orange</code>, navigation fidelity &mdash; identical across all sheets.
+  Click any image for it full-size. No per-tile metadata by design.
   {notes}
 </div>
-<script>{js}</script>
 </body></html>
 """
     p = ss.sheet_path(source_id)
