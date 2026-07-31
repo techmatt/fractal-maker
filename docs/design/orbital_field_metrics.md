@@ -287,12 +287,17 @@ ratios, the screen's resume load (before the screening budget is spent) and the 
 distribution/keep-top aggregation.
 `[code: tools/orbital/field_metrics.py::require_one_policy and its four call sites]`
 
-**The enumeration is deliberately unstamped.** `screen_pool.jsonl` holds Newton nuclei
-from `atom_lib.solve_nucleus` (mpmath); `cx/cy/window_scale/period/log10_abs_A/
-f64_margin_deploy_decades` are analytic properties of the atom, no field is rendered and
-no cap is consulted, so a token there would be a false provenance claim. Pinned in both
-directions. `[code: tools/orbital/stamp_cap_policy.py;
-test_orbital.py::test_the_enumeration_is_not_stamped_with_a_cap_policy]`
+**The enumeration is deliberately unstamped, and that is not an oversight.**
+`screen_pool.jsonl` holds Newton nuclei from `atom_lib.solve_nucleus` (mpmath);
+`cx/cy/window_scale/period/log10_abs_A/f64_margin_deploy_decades` are analytic properties
+of the atom — nothing on that path renders a field or reads an iteration cap, so a cap
+token there would assert a dependence that does not exist. **A false provenance claim is
+worse than none**, which is why the missing stamp is the correct state and not a gap to be
+closed. The test pins it **in both directions**: the day a rendered quantity is added to
+the enumeration it goes red and the disposition gets re-decided on purpose, rather than a
+later reader "fixing" it the wrong way. `[code: tools/orbital/stamp_cap_policy.py;
+test_orbital.py::test_the_enumeration_is_not_stamped_with_a_cap_policy — which also pins
+the file's exact key set]`
 
 **Every committed score record is stamped legacy**, and `stamp_cap_policy.py --check`
 re-asserts it. `[code: tools/orbital/stamp_cap_policy.py;
@@ -302,13 +307,21 @@ different quantity and must not be appended to those files — the resume guard 
 this. `[code: tools/orbital/screen_pool.py::screen]`
 
 **The ×8 raise itself is corroborated in-repo but is not this doc's claim.** The 32-atom
-ladder (`data/orbital/maxiter_convergence_ladder.json`, producer
-`measure_convergence_ladder.py`, ratio median 8.0 / max 24.0, 32/32 converged) and the
-independent `maxiter_stability.json` (n=24, `radial_rings` 45.0 → 55.25 → 60.75 across
-×1/×2/×4, still climbing with no plateau) are owned by `auto_maxiter.md`. Re-running the
-ladder producer does **not** reproduce the artifact: every ratio in it is a multiple of the
-legacy production cap. `[code: docs/design/auto_maxiter.md; data/orbital/maxiter_convergence_ladder.json;
-tools/orbital/measure_convergence_ladder.py]`
+ladder — `data/orbital/maxiter_convergence_ladder.json`, producer
+`measure_convergence_ladder.py`, convergent-cap ratio **mean 7.688 / median 8.0 / max
+24.0** over 32 atoms with **0 unconverged** — and the independent `maxiter_stability.json`
+(n=24, `radial_rings` 45.0 → 55.25 → 60.75 across ×1/×2/×4, still climbing with no
+plateau) are owned by `auto_maxiter.md`. `[measured: 32 atoms stratified over the pool's
+fw range + both references; data/orbital/maxiter_convergence_ladder.json]`
+
+**Carry the ladder's warning whenever you cite it.** It is stamped legacy-policy
+(`maxiter_policy_token: ""`) and re-running its producer does **not** reproduce it: every
+ratio in it is a multiple of the *pre-raise* production cap, so a fresh run measures
+convergence against the raised policy and would report ratios near 1. That is a different
+measurement, not a refutation — which is why the file is durable rather than regenerable,
+and why it is canaried. `[code: data/orbital/maxiter_convergence_ladder.json
+(`not_reproducible_under_current_policy: true`); tools/orbital/measure_convergence_ladder.py;
+tests/test_tracked_artifacts.py]`
 
 ## 8. What the instrument is blind to
 
@@ -399,19 +412,15 @@ is the intent:
    correct claim is that ~1.2% of the pool is wall-blocked and the deep tail
    (`log10|A|` > 11.79) is *entirely* wall-blocked, while ~852 failures in the committed
    run are unexplained and did not reproduce. §8.
-2. **"The convergence measurement that justified the ×8 raise is not a committed
-   artifact."** No longer true — the cleanup pass promoted it to
-   `data/orbital/maxiter_convergence_ladder.json` with its producer, and it is canaried.
-   §7, and `auto_maxiter.md` owns it. `[code: tests/test_tracked_artifacts.py]`
-3. **Screen-resolution validation figures.** "Spearman 0.873, 17/20 top-decile" is not
+2. **Screen-resolution validation figures.** "Spearman 0.873, 17/20 top-decile" is not
    reproducible from the tree — its producer was never committed. The reproducible
    equivalent over the 319 doubly-measured atoms is 0.857 (legacy) / 0.853 (clean cap),
    28/31 and 29/31. §4.
-4. **"Top-100 overlap 12%, top-300 37.3%, top-1000 75.7%" for `rings` vs period** is a
+3. **"Top-100 overlap 12%, top-300 37.3%, top-1000 75.7%" for `rings` vs period** is a
    legacy-cap figure; under the clean cap the same population gives 9%, 38.7%, 74.6%. §6.
-5. **"The per-source ranking under `rings` was byte-identical before and after the
+4. **"The per-source ranking under `rings` was byte-identical before and after the
    rescore."** The *ordering* is identical rank-for-rank; every value moves (e.g. `atlas`
    108.25 → 197.25). §5.
-6. **"`range` is the better screening statistic"** stands, but not because `range` is
+5. **"`range` is the better screening statistic"** stands, but not because `range` is
    resolution-stable: it is ×4.3 median full-res/screen against `rings`' ×6.0. Neither is
    resolution-invariant. §5.
