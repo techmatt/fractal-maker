@@ -84,13 +84,18 @@ def test_no_source_file_targets_the_retired_directory():
     )
 
 
-def test_claude_md_routes_findings_text_to_docs_design():
+def test_claude_md_routes_analysis_text_at_a_live_destination():
     """The recurrence's root cause: CLAUDE.md still told every run to write findings into
-    the directory that had just been retired. Assert the instruction points at the live
-    location — positively, so the retirement can still be NAMED in the same sentence."""
+    the directory that had just been retired. Assert the instruction points at a live
+    location — positively, so the retirement can still be NAMED in the same sentence.
+
+    The positive phrase moved once already (the blanket "findings text goes to
+    `docs/design/`" became the ownership test, because routing *everything* there is what
+    put one-off repo measurements in the curated layer). It is matched loosely — on the
+    routing clause, not a whole sentence — so a rewording does not go red for free."""
     t = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    assert "Findings/analysis text goes to `docs/design/`" in t, (
-        "CLAUDE.md no longer routes findings/analysis text at docs/design/")
+    assert "belongs in `docs/design/`" in t, (
+        "CLAUDE.md no longer routes analysis text at a live docs/design/ destination")
     assert "text goes to `docs/findings/`" not in t, (
         "CLAUDE.md still routes findings text at the retired docs/findings/")
 
@@ -114,6 +119,27 @@ def test_every_file_under_docs_is_tracked(tracked_docs):
         + "\nIf it is a generated view (contact sheet, render, plot), write it under "
           "scratch/<builder>/ and keep the builder committed; do NOT add a docs/ "
           "ignore rule. If it is prose, `git add` it."
+    )
+
+
+def test_repo_root_holds_no_loose_prose(tracked_docs):
+    """CLAUDE.md's generated-output convention says "the root holds only source, config,
+    docs, and committed assets/" — and until now nothing measured it, while four loose
+    analysis documents (`repo_analysis.md`, `repo_size_audit.md`, `repo_structure_audit.md`
+    and their successor) accumulated at the root and were read as current. A doc at the root
+    is outside the `docs/` guards above by construction, so it gets no tracked-ness check, no
+    index row, and no owner.
+
+    Scope: prose only. The rest of the convention (no generated binaries or data at the root)
+    is still unenforced, and CLAUDE.md says so rather than implying a check that isn't here."""
+    allowed = {"CLAUDE.md", "README.md"}
+    stray = sorted(p.name for p in REPO_ROOT.glob("*.md") if p.name not in allowed)
+    assert not stray, (
+        "loose .md at the repo root: " + ", ".join(stray)
+        + "\nThe root holds only source, config and committed assets. Analysis that drove a "
+          "change goes to scratch/ (extract what survives into the docs/design/ doc that "
+          "already owns the subject); a doc something in the code owns goes to docs/design/ "
+          "with an index row in its README."
     )
 
 

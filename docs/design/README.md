@@ -22,6 +22,24 @@ the render core and pipeline; these docs go a level deeper on specific decisions
 | [orbital_field_metrics.md](orbital_field_metrics.md) | The ring measures `radial_rings` / `radial_range` (`tools/orbital/`): what they compute, the validation record incl. the failures (`cycles_spanned`, `falloff_extent`, p90), the span-vs-oscillation two-axis reading, the screening/validation resolution split, the cap-provenance axis, and what the instrument is blind to. |
 | [label_corpus_relocation.md](label_corpus_relocation.md) | Relocating the label corpus's `crops/`+`vivid/` bulk (3,822 files, ~72% of the working tree) out of tree behind `artifacts.resolve`: why the scope is crops/vivid only (labels stay tracked in-tree), the silent-zero hazard across 34 construction sites (2 load-bearing readers), the seam, and the staged move + before/after `(image_id,score)` gate. |
 | [minibrot_maneuvers.md](minibrot_maneuvers.md) | Minibrot moves as candidate MOVES inside a descent (`tools/atlas/minibrot_maneuvers.py`): the two operators (`snap_to_nucleus(k)` / `lateral_to_sibling`) and why five collapse to two, the superattracting-argmin correction that makes the atom-domain probe work, unavailability as the normal case, the reserved frontier FLOOR (of available) vs the probability used only as a cost governor, and the provenance a later read needs. |
+| [atom_instrument.md](atom_instrument.md) | The atom instrument `A` (`deep_center_finder.atom_instrument`): the recursion for size / orientation / required precision, and the f64-wall predictor derived from it. |
+| [label_rubric.md](label_rubric.md) | The 1–4 human quality scale, cited by every corpus batch builder: the one question a labeler answers, judge-from-the-vivid-render rule, and class 4 as a fourth tier that ranks the top of "good" without moving the `>=3` emit floor. **Class-4 aesthetic criteria are a stub** pending the anchor pass. |
+| [deferred_recalibration.md](deferred_recalibration.md) | Four recalibrations designed but deliberately unbuilt (v8 head retrain, ranker growth, location blind reads, mining-head calibration), the release-review gate that unparks them, and where to start on each. |
+| [v8_training.md](v8_training.md) | The v8 train-split population read off `data/v8/manifest.jsonl`: locations per (fractal partition × quality class), and the ×24 augmentation-tile expansion under the v8b recipe. |
+| [beautiful_perf_report.md](beautiful_perf_report.md) | Why the `beautiful` field dump ran ~35× the `f64` twin — `iterate_orbit` is **field-agnostic** and accumulated every coloring field per iteration — and the `iterate_orbit_needs`/`FieldNeeds` field-gate that fixed it. |
+| [q4_multibrot_transfer.md](q4_multibrot_transfer.md) | Whether the degree-2-fitted q4 stage-1 screen transfers to d3/d4/d5 multibrot minibrots: it does, but only after removing rotational-copy pseudo-replication and period mismatch, and one headline claim did not survive. Imported read-only as the deployed OOD mask. |
+| [q4_harvest_emission.md](q4_harvest_emission.md) | Wiring the q4 tight harvest (`tools/studies/q4_harvest_tight.py`, G-gated framings) into emission as a first-class source through intake → cells/deficit → colorize → gate/pool → select. |
+| [julia_parent_sourcing_probe.md](julia_parent_sourcing_probe.md) | **Negative result.** Sourcing julia roots from the c-diverse near-∂M sampler does NOT reduce `precanon_dup` (93.6% vs 90.3% baseline): the churn is intra-`c` z-plane self-saturation, not cross-parent c-crowding. |
+| [prio_terms_park_note.md](prio_terms_park_note.md) | Park note for `prio_terms.jsonl` (one row per *pushed* candidate, incl. the never-admitted majority): what it is, where it lives, why it is retained unprocessed. |
+| [interior_feature_bakeoff.md](interior_feature_bakeoff.md) | *Dated readout (2026-07-27).* Is interior mass, not degree, the real quality axis? Re-derived over the 487 roster-v2 labels. |
+| [interior_band_batch_v1.md](interior_band_batch_v1.md) | *Dated readout (2026-07-27).* Interior-band label-batch build notes plus two bake-off follow-ups answered off data already on disk. Nothing deployed changed. |
+| [minibrot_roster_v2_pilot.md](minibrot_roster_v2_pilot.md) | *Dated readout (2026-07-26).* The durable minibrot roster v2 (degree × period-band cells, per-cell selection so degree is not confounded with depth) and its pilot harvest. |
+| [minibrot_roster_v2_readout.md](minibrot_roster_v2_readout.md) | *Dated readout (2026-07-27).* Does stage-1 `G` mean anything on minibrot fields? Weak yes as a coarse gate, firm no as a ranker — **degree** is what predicts the label. |
+| [minibrot_label_batch_v2.md](minibrot_label_batch_v2.md) | *Dated readout (2026-07-26).* Build notes for the 487-crop two-arm minibrot batch: realized draw, accept-limited positive arm, per-arm eval/train split. |
+| [nucleus_seeding_and_atom_A.md](nucleus_seeding_and_atom_A.md) | *Dated readout.* How `deep_center_finder` actually seeds nuclei as-built (a grid/ring `c₀` draw and plain scalar Newton — no root census), plus min\|z\| scope and the cache-source axis. §2 became `atom_instrument.md`. |
+| [closeout_pre_distillation_2026-07-25.md](closeout_pre_distillation_2026-07-25.md) | *Dated readout (2026-07-25).* A verification-only window; §1's dormant re-derivation gate was **superseded the same day** by a live committed-constant gate on `keeper_cuts.json`. |
+| [migration_to_fractal_maker.md](migration_to_fractal_maker.md) | *Dated readout (2026-07-24).* The `fractal-generator` → `fractal-maker` repo migration: what moved, what was verified, and what had not been carried over. |
+| [walk_era_julia_resolution_audit.md](walk_era_julia_resolution_audit.md) | *Dated readout.* Did anything live consume walk-era julia rows through the old (wrong) `descriptor.location_of`? **Verdict: the record is clean**, no regeneration required. |
 
 **Two sourcing docs, one boundary — pick by depth regime.** `deep_zoom_sourcing.md` is
 the **deep, beyond-f64 tier** (perturbation, ∂M-tracking, deep-center production) and is
@@ -32,28 +50,20 @@ doc's boundary note names those explicitly. If you want roster / screen / pre-fi
 window-label content, read `minibrot_sourcing.md`; if you want precision, the
 perturbation tier or deep-center production, read `deep_zoom_sourcing.md`.
 
-**The table above indexes 15 of the 33 docs here** (measured 2026-07-31,
-`grep -c '^| \[' README.md` vs `ls docs/design/*.md`). The other 18 fall in two groups, and
-listing them is the point — an unindexed doc is invisible, which is how one rots unnoticed.
+**The table indexes all 33 docs here** — every file gets a row, because an unindexed doc is
+invisible, which is how one rots unnoticed. A new doc lands with its row or it does not land.
+`[measured: 33 docs, 33 rows; 2026-07-31]`
+`[cmd: ls docs/design/*.md | grep -vc README; grep -c '^| \[' docs/design/README.md]`
 
-**Dated readouts** (a run's numbers, not a timeless rule) also live here — there is nowhere
-else. They are named for the run and carry their own date: `interior_feature_bakeoff.md`,
-`interior_band_batch_v1.md`, `minibrot_roster_v2_{pilot,readout}.md`,
-`minibrot_label_batch_v2.md`, `nucleus_seeding_and_atom_A.md`,
-`closeout_pre_distillation_2026-07-25.md`, `migration_to_fractal_maker.md`,
-`walk_era_julia_resolution_audit.md`. **Note the tension with "What belongs here" below:**
-this is a declared carve-out for exactly the category the test excludes, and it covers ~9 of
-33 docs. Whether the carve-out should exist is an open decision, not a settled rule.
-
-**Indexed by neither the table nor that list** — nine docs, recorded here so they are at
-least findable: `atom_instrument.md` (the `A` instrument: size / orientation / required
-precision / f64-wall predictor — owned by `deep_center_finder.atom_instrument`),
-`label_rubric.md` (the 1–4 labeling rubric, cited from the corpus batch builders),
-`deferred_recalibration.md` (four recalibrations designed but deliberately unbuilt, with
-their unpark triggers), `v8_training.md` (the v8 train-split population, read off
-`data/v8/manifest.jsonl`), `beautiful_perf_report.md` (why the `beautiful` field dump was
-~35× the `f64` twin, and the field-gate that fixed it), `q4_harvest_emission.md`,
-`q4_multibrot_transfer.md`, `julia_parent_sourcing_probe.md`, `prio_terms_park_note.md`.
+**The dated-readouts carve-out is withdrawn.** This README used to declare that "dated
+readouts (a run's numbers, not a timeless rule) also live here — there is nowhere else",
+naming nine documents. That was a standing exception for exactly the category the test below
+excludes, and it is what made a one-off repo snapshot look at home in the curated layer.
+There *is* somewhere else: analysis goes to `scratch/`, what survives is extracted into the
+doc that owns the subject, and the analysis is deleted — the pattern `repo_analysis.md`
+demonstrated. **The nine dated readouts (marked *Dated readout* in the table) do not pass the
+test and are extract-then-delete candidates. None has been acted on**; each still holds
+findings nothing else carries, and extraction is per-document judgement, not a sweep.
 
 ## What belongs here
 

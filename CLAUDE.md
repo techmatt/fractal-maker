@@ -4,17 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Rust engine for generating orbit-trap Mandelbrot/Julia fractal images as wallpapers. The long-term goal is mass-generating strong fractals under quality gates with a human picking favorites — palettes are the first-class concern. The **render core** (precision backends, separable coloring, palette system) is settled; the active workstream is the corpus → label → classifier pipeline (see "Corpus & classifier pipeline" below). The early navigation/diagnostic probes (descend, navigate, search, buffet, wallpaper, and the energy-metric scoring experiments) were retired in the P2 subcommand cull once the guided-descend → present/enrich → label flow superseded them.
+A Rust engine for generating orbit-trap Mandelbrot/Julia fractal images as wallpapers. The long-term goal is mass-generating strong fractals under quality gates with a human picking favorites — palettes are the first-class concern. The **render core** (precision backends, separable coloring, palette system) is settled; the active workstream is the corpus → label → classifier pipeline (see "Corpus & classifier pipeline" below). The early navigation/diagnostic probes were retired in the P2 subcommand cull once that flow superseded them; `cargo run -- --help` is the live subcommand list.
 
 ## Commands
 
 ```bash
-cargo build --release            # always build release — debug is ~50-200x slower for iteration
-cargo test                       # all integration tests (tests/*.rs) + unit tests
-cargo test --test perturbation   # one test file
-cargo test to_f64_matches        # one test by name substring
+cargo build --release            # always release — debug is ~50-200x slower
+cargo test                       # tests/*.rs + unit tests; --test <file> or a name substring narrows
 
-# Single render (no subcommand → render one PNG):
+# Single render (no subcommand → one PNG):
 cargo run --release -- --center-re -0.743643887 --center-im 0.131825904 \
   --frame-width 1e-6 --maxiter 2000 --width 1920 --output out.png
 
@@ -22,42 +20,28 @@ cargo run --release -- --center-re -0.743643887 --center-im 0.131825904 \
 cargo run --release -- sheet --builtins "default cubehelix viridis" --output sheet.png
 ```
 
-Long renders / descents should be backgrounded; release builds put deep production-res renders in seconds.
+Background long renders / descents; release builds do deep production-res renders in seconds.
 
-**Windows exe-lock note.** While a long run is executing, the OS file-locks
-`target/release/fractal-generator.exe`, so a concurrent `cargo build --release`
-fails with `Access is denied (os error 5)`. To build/iterate while a background
-run holds the exe, build into an isolated target dir:
-`CARGO_TARGET_DIR=target-test cargo build --release` (run
-`target-test/release/fractal-generator.exe`). `cargo build --release --lib` also
-compile-checks without touching the exe. `target-*/` is gitignored.
+**Windows exe-lock note.** A running binary file-locks
+`target/release/fractal-generator.exe`, so a concurrent `cargo build --release` fails with
+`Access is denied (os error 5)`. Build into an isolated dir instead —
+`CARGO_TARGET_DIR=target-test cargo build --release` (`target-*/` is gitignored) — or
+`cargo build --release --lib`, which compile-checks without touching the exe.
 
-**Compile-time model + build lanes.** A full incremental `cargo build --release`
-is **~100s** on this machine, and that cost is almost entirely codegen, not the
-frontend: the `[profile.release]` in `Cargo.toml` is tuned for *render
-throughput* (`opt-level=3`, `lto="thin"`, `codegen-units=1`), so every edit
-re-optimizes the whole crate as a single LLVM unit with no parallelism. Measured
-breakdown of one edit→rebuild: `cargo check --release` ≈ **3s** (type/borrow-check
-only, no codegen) vs the full ~100s. Pick the lightest lane that answers your
-question:
-- **Inner loop — just "does it compile?":** `cargo check --release` (~3s) or
-  `cargo build --release --lib`. This is the default during a refactor; reach for
-  it before a full build. (Use `--release` check so it shares the release
-  dependency artifacts already on disk — a bare `cargo check` rebuilds deps in the
-  `dev` profile, ~15s the first time.)
-- **Need a runnable binary fast (smoke-test, eyeball a render):**
-  `cargo build --profile quick` (~16s incremental; `lto=false`,
-  `codegen-units=16`). Binary lands at **`target/quick/fractal-generator.exe`**,
-  not `target/release/`. Runtime is ~10-30% slower (the per-pixel kernel loses
-  cross-module inlining), so it's for correctness/visual checks, **not** perf
-  timing.
-- **Production renders, batch reproducibility, perf timing:**
-  `cargo build --release` (~100s). The `release` profile is load-bearing for
-  render speed — don't relax it; the `quick` lane exists so you don't have to.
+**Build lanes.** The `release` profile is tuned for *render throughput*
+(`opt-level=3`, `lto="thin"`, `codegen-units=1`), so a full incremental build is **~100s**
+— almost all codegen, one LLVM unit, no parallelism. Pick the lightest lane:
+- **"Does it compile?"** — `cargo check --release` (**~3s**) or `cargo build --release
+  --lib`. The default during a refactor. Keep `--release` so it shares the release
+  dependency artifacts (a bare `cargo check` rebuilds deps in `dev`, ~15s first time).
+- **Runnable binary fast** (smoke-test, eyeball a render) — `cargo build --profile quick`
+  (~16s incremental) → **`target/quick/fractal-generator.exe`**. ~10-30% slower at runtime
+  (the per-pixel kernel loses cross-module inlining): correctness checks, **not** perf timing.
+- **Production renders, batch reproducibility, perf timing** — `cargo build --release`.
+  Don't relax the profile; the `quick` lane exists so you don't have to.
 
-`cargo test` builds the test binaries under the `release`/`dev` profile you pass
-it (`cargo test --release` reuses the release artifacts). The test suite itself
-runs in seconds; the cost is the compile, so the same lane logic applies.
+`cargo test` compiles under whichever profile you pass (`--release` reuses release
+artifacts); the suite runs in seconds, so the same lane logic applies.
 
 ## Architecture
 
@@ -67,8 +51,7 @@ Two deliberate seams structure everything (`src/lib.rs` is the module root; `src
 - `F64Backend` — plain f64 escape time. Fast, accurate only while pixel spacing stays clear of f64 epsilon (~1e-13 of |c|, i.e. ~1e12 magnification at production resolution).
 - `PerturbationBackend` — single high-precision reference orbit at the frame center (stored as f64 projections, since orbit *values* stay O(1)) plus per-pixel f64 deltas with **Zhuoran rebasing**. Clean far past where f64 quantizes; v1 cap ~1e300 magnification (where f64 deltas underflow). Glitch detection is a per-pixel underflow flag, not Pauldelbrot detection.
 - `JuliaBackend` — base-scale Julia (`z₀ = pixel`, fixed `c`); always shallow, so never needs perturbation. Intentionally skips DE (`de = 0`).
-
-Backend auto-selection is by pixel spacing (`PERTURB_SPACING = 1e-13`); `--backend f64|perturb|auto` overrides.
+- Auto-selection is by pixel spacing (`PERTURB_SPACING = 1e-13`); `--backend f64|perturb|auto` overrides.
 
 **2. Separable coloring (`coloring::shade`): `PixelSample` → linear-RGB.** Iteration emits a small `PixelSample` record (smooth iter, DE, trap_min, trap_phase, escaped/glitched); coloring is a **pure** map over it, so **re-coloring never re-iterates**. This is what makes the contact sheet and palette experimentation cheap. Channel validity matters: `smooth_iter`/`de` are exterior-only; `trap_min`/`trap_phase` are valid for *every* pixel (interior included), which is how orbit traps fill the interior instead of dead black.
 
@@ -87,7 +70,7 @@ Memory: the SS buffer is ~48 B × out_w × out_h × ss² (~470 MB at 1920×1280 
 - `palette_io.rs` — `.ugr` (UltraFractal, multi-block) and `.map` (Fractint) loaders → sRGB8 stops. The resolver dispatches a `--palette` spec: built-in name or path by extension.
 - `sheet.rs` — contact sheet: iterate one location once, re-shade across N palettes (multi-block `.ugr` → one tile per block). Burns a swatch strip + index per tile.
 - `font.rs` — hand-rolled bitmap font for on-image labels (no font crate).
-- `energy.rs` — pixel-space corpus metric (the `calibrate` subcommand; the six scoring-experiment subcommands it once hosted were retired in the P2 cull). Per image: center-crop 16:9 → 2560×1440 → OKLab forward-diff edge-energy → per-area pooling at 4 scales (16/8/4/2) → frozen equal-count (quantile) histograms (`NBINS=12`/scale). Distance = `distance()` = Σ per-scale 1-D EMD (`emd1d` = Σ|CDF₁−CDF₂|). `calibrate` freezes the bins over the corpus and writes the artifact. **Reuse `Signature`/`FrozenBins`/`distance`/`emd1d`/`kmeans`/`occupancy`/`region_energies`/`tile_energy` — don't reimplement.** The artifact's per-image histograms are parseable (hand-rolled `parse_artifact`, still consumed by `generate`), so corpus-side experiments load 746 signatures from disk instead of re-running the slow 2560×1440 pass. k-means archetype centroids/membership are **not** persisted — recompute via `kmeans(..., seed)` (default seed 0 matches the calibrate cluster sheet).
+- `energy.rs` — pixel-space image measures, two halves with different liveness. **Live:** `occupancy` / `tile_energy` / `region_energies` (OKLab forward-diff edge energy pooled on a grid) — the content/occupancy gate both `guided_descend` and `enrich` call; reuse, never reimplement. **Parked:** the `calibrate` subcommand and the corpus-distance metric it freezes (4-scale quantile histograms, `distance` = Σ per-scale 1-D EMD via `emd1d`, `kmeans` archetypes) have **no live caller** — nothing under `tools/` invokes `calibrate` or `generate`, and `generate` is the sole reader of the tracked artifact (`energy::ARTIFACT_PATH`, last written 2026-06-21).
 
 ## Validation pattern
 
@@ -98,14 +81,19 @@ The f64 backend is the **ground truth** for perturbation: shallow renders from b
 The active workstream (the render core above is "done enough"). Goal: a labeled
 corpus that trains an aesthetic classifier across every generator version's output.
 
-**The flow.**
-`guided-descend` → `data/guided_descend/<run>/pool.jsonl` (one candidate location
-per row: cx/cy/fw + idx + provenance) → **either** `present` (zoom/composition
-batches) **or** `enrich` (v2-filtered center batches) → a batch under
-`data/label_corpus/batches/<batch_id>/` (schema: `data/label_corpus/CORPUS_SCHEMA.md`)
-→ label in `tools/viz/corpus_label.html` (exports `scores.json`, merged into
-`images.jsonl` labels by `tools/corpus/merge_scores.py`) → `classifier/` trains by
-**unioning every batch blind to provenance**.
+**The flow.** Two live entry paths, one shared tail (what drives what: `tools/README.md`).
+**Discovery** — `tools/atlas/production_seeder.py` (or `steered_frontier.py`, the
+classifier-steered variant) drives `guided-descend` → `data/guided_descend/<run>/pool.jsonl`
+(one candidate per row: cx/cy/fw + idx + provenance) → scored in memory (bridge below),
+selected, rendered. **Roster** — `tools/sourcing/build_{minibrot,interior_band,gcf_arm}_batch.py`
+draw from a durable roster and render via `render-one`. Both land a batch under
+`data/label_corpus/batches/<batch_id>/` (schema: `data/label_corpus/CORPUS_SCHEMA.md`) → label
+in `tools/viz/corpus_label.html` (exports `scores.json`, merged by
+`tools/corpus/merge_scores.py`; revisions go to the amendment stream via
+`merge_amendments.py`) → `classifier/` trains by **unioning every batch blind to provenance**
+(`corpus_reader.py`). The `present` subcommand still builds zoom/composition batches and the
+schema still names it a crop-rebuild path, but **no live tool invokes it** — `render-one` is
+what runs today.
 
 **The label corpus contract** (full spec: `CORPUS_SCHEMA.md`). Each `images.jsonl`
 row has three independent blocks. `render` is **version-invariant** — the identical
@@ -114,56 +102,69 @@ cx/cy/fw as decimal strings, and is the *only* thing the classifier sees (it's a
 pure function → `crops/<image_id>.jpg`, rebuildable via `present`/`render-one`).
 `provenance` is **version-tagged**, free to differ/be null across batches
 (`PROVENANCE_KEYS`); it feeds the bias loop only and **never enters training**.
-`label.score ∈ {null,1,2,3}` (bad/okay/good); `null → value` is the ONE allowed
-mutation anywhere in the store — a merge that would change a non-null score warns
-and refuses.
+`label.score ∈ {null,1,2,3,4}` (bad/okay/good/exceptional; rubric
+`docs/design/label_rubric.md` — class 4 ranks the top of "good" and does **not** move the
+`>=3` emit floor). `null → value` is the ONE allowed mutation to an **original** label; a
+merge that would change a non-null score warns and refuses. A *revision* is no exception —
+it goes to the amendment stream (`labels/<revision>.json`, `merge_amendments.py`) and is
+read back via `label_store.resolve_score`, leaving the original byte-identical.
 
-**The classifier** (`classifier/`, pkg). Weights/metrics in
-`data/classifier/{v2…v6}/` (gitignored under the `data/*` rule). v2+ is a CORN
-**ordinal** head (K−1=2 rank-consistent logits) on
-`mobilenetv4_conv_medium.e250_r384_in12k`. Deploy transform =
-`classifier.data.Transform(train=False)`: the deterministic **1280×720 → 384×224
-bicubic stretch + normalize** mirror of `present.rs`'s JPG path (no jitter/flips).
-`model.score_from_logits` returns `Σ σ(logit_k)` ∈ [0,2] — the monotone rank score
-used for AP. **P(not-bad) = σ(logit₀)** (= P(rank≥1) = P(label≥2)). Black-gate
-parity with the Rust render path: accept iff `black_fraction < 0.30`
+**The classifier** (`classifier/`, pkg). Weights/metrics in `data/classifier/v5…v9/`,
+**git-LFS tracked in-tree — NOT gitignored** (`.gitattributes` + exact-path `.gitignore`
+negation; guarded by `tests/test_tracked_artifacts.py` and the size-guard registry). A weight
+file is a tracked artifact, not scratch. **Never hardcode a version** — the live pin is
+`tools/scoring/active_ckpt.ACTIVE_CKPT` (v8 today; v9 built but staged, not adopted), read by
+41 modules. Every version is a CORN **ordinal** head on
+`mobilenetv4_conv_medium.e250_r384_in12k` emitting K−1 rank-consistent logits; **K is
+per-version — read `data/classifier/<v>/config.json`** (K=3 through v7, labels 1–3; K=4 from
+v9, labels 1–4). Deploy transform = `classifier.data.Transform(train=False)`: the
+deterministic **1280×720 → 384×224 bicubic stretch + normalize** mirror of `present.rs`'s JPG
+path (no jitter/flips). `model.score_from_logits` returns `Σ σ(logit_k)` ∈ [0,K−1] — the
+monotone rank score used for AP. **P(not-bad) = σ(logit₀)** (= P(rank≥1) = P(label≥2)).
+Black-gate parity with the Rust render path: accept iff `black_fraction < 0.30`
 (`BLACK_THRESH`, strict `<`).
 
 **The in-memory scoring bridge** (`enrich` subcommand, `src/enrich.rs`).
-`enrich --mode score` iterates each guided-descend pool location once at the label
-geometry, recolors under K seeded score-3 palettes, and streams each recolored RGB
-frame to **stdout** as a raw record (16-byte LE header `idx,ki,w,h` then `w*h*3`
-RGB bytes); `tools/corpus/enrich_score.py` reads the stream and scores every frame
-with v2 through the exact deploy transform — so 10k+ scoring passes never write
-crops to disk. Only the ~1.1k selected `(location, argmax-palette)` rows are
-rendered to JPG (`enrich --mode render`, full ss4 Lanczos3 wallpaper quality).
+`enrich --mode score` iterates each pool location once at the label geometry, recolors under
+N seeded palettes, and streams each recolored RGB frame to **stdout** as a raw record
+(16-byte LE header `idx,ki,w,h` then `w*h*3` RGB bytes); the Python side scores every frame
+through the exact deploy transform — so 10k+ scoring passes never write crops to disk. Only
+the selected `(location, argmax-palette)` rows are rendered to JPG (`enrich --mode render`,
+ss4 Lanczos3 wallpaper quality). Two readers of that stream: the live one is the library
+`tools/mining/score_lib.py::run_enrich_score` (driven by `tools/mining/harvest.py`);
+`tools/corpus/enrich_score.py` is the standalone CLI sibling. Both default to a checkpoint
+that **no longer exists on disk** (v2 / v3 — `data/classifier/` holds v5…v9), so pass
+`--model` explicitly or resolve through `ACTIVE_CKPT`.
 
 ## Conventions
 
-> **Commit prompt work to `main`. Do not create branches unless explicitly asked to.** A
-> production config change sitting on an unmerged branch looks applied and isn't, and that
-> failure is silent — the τ_h floor raise was staged on `closeout-batch-tau-h` and had no effect
-> until it landed on `main`. Standing rule, not a one-off: commit directly to `main` (branch only
-> on an explicit request).
+> **Commit prompt work to `main`; branch only on an explicit request.** A production config
+> change sitting on an unmerged branch looks applied and isn't, and the failure is silent — the
+> τ_h floor raise was staged on `closeout-batch-tau-h` and had no effect until it landed.
 
-> **Generated-output convention.** All generated artifacts — renders, strips, contact sheets, guided-descend/calibration JSON, logs, demo fixtures — are written under the single `scratch/` tree, never the repo root. The root holds only source, config, docs, and committed `assets/`. `scratch/` is gitignored (except `.gitkeep`), so the entire working corpus wipes with one `rm -r scratch/*` without touching anything tracked. **New subcommands MUST default their output under `scratch/<subcommand>/` and MUST NOT write to the repo root.**
+> **Generated-output convention.** Every generated artifact — renders, strips, sheets, run JSON, logs, fixtures — goes under the single `scratch/` tree, never the repo root; the root holds only source, config, docs and committed `assets/`. `scratch/` is gitignored (except `.gitkeep`), so the whole working corpus wipes with one `rm -r scratch/*` without touching anything tracked. **New subcommands MUST default their output under `scratch/<subcommand>/`.** Enforcement is partial: `tests/test_docs_tree.py` guards the prose half (no loose `.md` at the root beyond `CLAUDE.md`/`README.md` — four analysis docs had accumulated there); **nothing checks the root for generated binaries or data**, so that half is convention only.
 
 The fixed base defaults are `scratch/renders/` (bare render) and `scratch/strips/` (sheet); every other subcommand writes under its own `scratch/<subcommand>/`. Use `crate::ensure_parent_dir(path)?` before any top-level `save`/`fs::write` so a no-flag default writes its dir on a fresh checkout.
 
-> **Scratchpad is not a dependency tier.** `scratchpad/` is the canonical *disposable temp*
-> dir (gitignored). **If a file is imported from outside `scratchpad/`, or it's the only
-> thing that produces a durable artifact, it isn't scratch — promote it to `tools/` (or
-> delete it).** Findings/analysis text goes to `docs/design/`, committed — **`docs/findings/`
-> is RETIRED and must not be recreated** (`tests/test_docs_tree.py` enforces both that it is
-> gone and that no source writes to it). `scratchpad/`
-> must never be on anyone's dependency path — nothing tracked may import from it or read a
-> non-regenerable artifact out of it. (This rule exists because `scratchpad/visual_dup/embed.py`
-> was load-bearing production code — the whole morph_clip dedup axis depended on it — living
-> in a dir whose name said it didn't matter; it was never committed, vanished, and cost a
-> formula sweep to recover.) **Tests and harnesses belong in the suite, not `scratchpad/`** —
-> if it's worth running twice, it's worth committing (default suite for a normal test,
-> `slow`-marked for an opt-in / destructive one). A test CI never runs and git never sees is a
-> memory of a test, not a test. Mechanically checkable — the two greps below must both stay empty:
+> **Where analysis text goes.** A document belongs in `docs/design/` **only if something in the
+> code owns it and it stays true as the code changes.** A measurement of a transient state owns
+> nothing and is false the moment the work it drove succeeds: analysis goes to `scratch/`, what
+> survives is extracted into the design doc that already owns the subject, and the analysis is
+> deleted. Two corollaries — a **maintained index** passes (the directory owns it; a missing line
+> is a visible omission), and a measurement that does survive **carries its date and the command
+> that produced it**. **`docs/findings/` is RETIRED and must not be recreated**
+> (`tests/test_docs_tree.py` enforces that it is gone, that no source names it as a write target,
+> and that every file under `docs/` is tracked).
+
+> **Neither scratch tree is a dependency tier — and it fails in both directions.** `scratchpad/`
+> is the disposable temp dir (gitignored, currently empty); `scratch/` the disposable output
+> tree. **If a file is imported from outside `scratchpad/`, or is the only thing producing a
+> durable artifact, it isn't scratch — promote it to `tools/` or delete it**
+> (`scratchpad/visual_dup/embed.py` was load-bearing, uncommitted, vanished, cost a formula sweep
+> to recover). **Tests belong in the suite** — default, or `slow`-marked if opt-in/destructive; a
+> test git never sees is a memory of a test. And **nothing load-bearing lives in `scratch/`**:
+> evidence must leave it the moment it justifies a durable decision, and a proposal computed
+> there must never leave it as a fact about the system. The two greps below must stay empty:
 >
 > ```bash
 > # (a) nothing outside scratchpad imports a scratchpad module:
@@ -172,87 +173,82 @@ The fixed base defaults are `scratch/renders/` (bare render) and `scratch/strips
 > grep -rnE "savez|write_text|open\([^)]*['\"]w" --include="*.py" scratchpad/ | grep -iE "data/|STORE"
 > ```
 
-> **Persistent-store convention (`data/`).** `scratch/` is *disposable* — anything that must survive `rm -r scratch/*` lives under `data/` instead (committed, NOT gitignored). Use this for **load-bearing artifacts that are part of a metric's definition** and that you don't want silently regenerated: e.g. `data/calibration/energy_calibration.json` (the `calibrate` frozen quantile bins + per-image histograms — see `energy::ARTIFACT_PATH`). Regenerable *views* (PNG sheets) stay in `scratch/`. When something reads such an artifact back, expose the default path as a `pub const` (e.g. `energy::ARTIFACT_PATH`) shared by writer and reader rather than re-deriving the string.
+> **Persistent-store convention (`data/`).** Anything that must survive `rm -r scratch/*` lives
+> under `data/`. **Declare the class at the write site** through `tools/paths.py`
+> (`scratch()` / `bulk()` / `durable()`) — never hand-build the path. The contract (which class,
+> and why) is [`docs/design/storage_classes.md`](docs/design/storage_classes.md); the mechanism
+> (`ARTIFACTS_ROOT` resolver, size-guard registry, LFS + `.gitignore` negation) is
+> [`artifacts_resolver.md`](docs/design/artifacts_resolver.md). Rust side: expose a read-back
+> path as a `pub const` shared by writer and reader (e.g. `energy::ARTIFACT_PATH`).
 
-> **Projecting a long run's wall clock.** **A sample that is unbiased for mean per-tile
-> cost is NOT unbiased for a run whose expensive work is contiguous.** Cost per unit and
-> cost of the run are different estimands: the first needs a representative sample, the
-> second also needs the *order* the work is done in. The v9 cache render was projected
-> from a stratified-over-`fw`-deciles sample — correctly unbiased per tile — and missed by
-> **1.65×**, because `plan.jsonl` is emitted in **family order** and the deepest, most
-> expensive bulk sits late in the file. A uniformly-random sample of a sorted list still
-> tells you nothing about when the slow part arrives. Either sample **in run order**
-> (prefix-weighted, or a contiguous block from each region of the file), or state plainly
-> that the figure is a mean-cost estimate and not an ETA.
->
-> Companion, and the more important half in practice: **reproject from the observed
-> decaying rate; never restate the original ETA.** Once a run is underway its own
-> throughput is a far better instrument than any pre-run sample — and when the expensive
-> work is contiguous, the observed rate *decays*, so a projection must be re-fitted from
-> recent throughput rather than from the run-to-date average (which is dominated by the
-> cheap early work). Repeating the original estimate while the rate visibly falls is how a
-> run reports "20 minutes left" for two hours.
+> **Projecting a long run's wall clock.** **A sample unbiased for mean per-unit cost is NOT
+> unbiased for a run whose expensive work is contiguous** — cost-per-unit and cost-of-run are
+> different estimands, and the second also needs the *order* the work is done in. Sample **in run
+> order** (prefix-weighted, or a contiguous block per region of the file), or say plainly it is a
+> mean-cost estimate and not an ETA: the v9 cache render missed by **1.65×** on a
+> correctly-unbiased `fw`-decile sample, because `plan.jsonl` is emitted in family order with the
+> deep bulk late. Then **reproject from the observed decaying rate; never restate the original
+> ETA** — a run's own throughput beats any pre-run sample, and refit from *recent* throughput,
+> not the run-to-date average (dominated by cheap early work). Restating the first estimate while
+> the rate visibly falls is how a run reports "20 minutes left" for two hours.
 
-> **Adding a subcommand.** The per-subcommand `Args` struct (+ its `impl
-> { resolved_* }` helpers) lives **in the subcommand's own module**, next to its
-> `run_*` (the P0 `cli.rs` decomposition moved every struct out of `cli.rs`). Four
-> edit sites: (1) the `#[derive(Args)]` struct in the subcommand's module (e.g.
-> `EnrichArgs` in `src/enrich.rs`, `CalibrateArgs` in `src/energy.rs`),
-> `use`-importing any shared groups it flattens from `cli`
-> (`crate::cli::{LocationArgs, ShadeArgs, PaletteSelectArgs, BackendChoice,
-> parse_complex}`); (2) a `Command` enum variant in `cli.rs` referencing it by path
-> (`Enrich(crate::enrich::EnrichArgs)`); (3) `src/main.rs` `use` + dispatch arm;
-> (4) `src/lib.rs` `pub mod`. **`cli.rs` keeps only** the shared cross-cutting types
-> (`BackendChoice`, `LocationArgs`, `ShadeArgs`, `PaletteSelectArgs`, `Cli`,
-> `Command`, `parse_complex`). New subcommands MUST default outputs under
-> `scratch/<subcommand>/` (disposable) or `data/<subcommand>/` (load-bearing artifacts)
-> — never the repo root. Keep `#[derive(Args)]`/`#[arg(...)]` attributes and all
-> default values/flag names stable (batch reproducibility depends on them).
+> **Four rules, each earned by a failure.**
+> - **A verification tool that cannot reach its authority reports UNKNOWN, not absent.** `git lfs
+>   prune --verify-remote` called objects missing from the remote when it could not authenticate
+>   to ask — and "missing" is the one condition under which you must not prune.
+> - **Never characterize a failure population from a truncated error log.** A persisted
+>   `errs[:10]` described a 19.5% failure class that was really ~1.2%: the fastest-returning
+>   failure arrives first.
+> - **A backstop longer than the job's budget is not a backstop.** A 900 s per-unit timeout in a
+>   15-minute run lets one hung unit double the wall clock while the budget logic believes it is
+>   inside its cap.
+> - **Derive state in code; freeze it in records.** A generator must read the state it reports
+>   from the state itself — a hardcoded `True` is how a metadata file outlives what it records.
+>   A committed record may keep what was true when written (`storage_classes.md`).
+
+> **Adding a subcommand.** The per-subcommand `Args` struct (+ its `impl { resolved_* }` helpers)
+> lives **in the subcommand's own module**, next to its `run_*`. Four edit sites: (1) the
+> `#[derive(Args)]` struct there (e.g. `EnrichArgs` in `src/enrich.rs`), `use`-importing whatever
+> shared groups it flattens from `cli`; (2) a `Command` variant in `cli.rs` referencing it by path
+> (`Enrich(crate::enrich::EnrichArgs)`); (3) `src/main.rs` `use` + dispatch arm; (4) `src/lib.rs`
+> `pub mod`. **`cli.rs` keeps only** the cross-cutting types (`BackendChoice`, `LocationArgs`,
+> `ShadeArgs`, `PaletteSelectArgs`, `Cli`, `Command`, `parse_complex`). Default outputs under
+> `scratch/<subcommand>/` or `data/<subcommand>/`, never the repo root, and keep flag
+> names/defaults stable (batch reproducibility depends on them).
 
 - Deps are kept minimal and pure-Rust (no C deps): clap, num-complex, rayon, image (png/jpeg/webp), astro-float. The JSON logs (guided-descend pool, generate manifest, calibration artifact) are hand-rolled rather than pulling in serde.
-- **Max 4 concurrent PROCESSES. In-process threads are not capped at 4.** The limit is
-  about how many heavyweight OS processes contend at once, not how much parallelism one
-  process uses — 4+ simultaneous `fractal-generator.exe` instances make the desktop
-  unusable, because each carries its own rayon pool, its own plan/corpus scan and its own
-  resident colormap LUTs. One process running many threads is a different resource shape
-  and does not have that effect.
-  - **Capped at 4:** `ProcessPoolExecutor` `max_workers`, subprocess fan-out, any
-    `WORKERS` constant that spawns child processes, and `ThreadPoolExecutor` when each
-    thread drives a subprocess (that is process concurrency wearing a thread pool's
-    clothes).
-  - **NOT capped at 4:** worker threads inside a single process — `RAYON_NUM_THREADS`,
-    a rayon pool in the Rust binary. Size those against the box's **12 logical cores** and
-    run long jobs at `BELOW_NORMAL_PRIORITY_CLASS` so they yield to interactive work.
-    `tools/v8/render_cache.py` runs `WORKERS = 6` on exactly this basis (measured 12.1
-    tiles/s at 6 threads vs 7.0 at 3, 5.94 cores busy, desktop unaffected) — do not
-    "correct" it to 4.
-  - **The default for ONE `fractal-generator.exe` is 7 threads at BELOW_NORMAL**, committed
-    as `corpus_common.DEFAULT_ENGINE_THREADS` + `default_engine_env()` /
-    `default_creationflags()` (pinned by `tools/corpus/test_engine_launch_defaults.py`). Don't
-    restate it by hand in a prompt or a new script — call the helpers, and the pair moves in
-    one place. The two knobs belong together: the thread count buys throughput, the priority
-    class buys interactivity. **Multiple parallel engine processes is a separate case with no
-    standing number** — size it for the actual N and pass `threads=` explicitly; don't invent
-    a universal figure and don't inherit the per-process 7.
+- **Max 4 concurrent PROCESSES. In-process threads are not capped at 4.** The limit is how
+  many heavyweight OS processes contend, not how much parallelism one uses: 4+ simultaneous
+  `fractal-generator.exe` make the desktop unusable (each carries its own rayon pool,
+  plan/corpus scan and resident LUTs); one process with many threads does not.
+  - **Capped at 4:** `ProcessPoolExecutor` `max_workers`, subprocess fan-out, any `WORKERS`
+    constant that spawns children, and `ThreadPoolExecutor` when each thread drives a
+    subprocess (process concurrency in a thread pool's clothes).
+  - **NOT capped at 4:** threads inside one process — `RAYON_NUM_THREADS`, the Rust binary's
+    pool. Size against the box's **12 logical cores** and run long jobs at
+    `BELOW_NORMAL_PRIORITY_CLASS`. `tools/v8/render_cache.py` runs `WORKERS = 6` on this basis
+    (12.1 tiles/s at 6 vs 7.0 at 3, desktop unaffected) — do not "correct" it to 4.
+  - **One `fractal-generator.exe` defaults to 7 threads at BELOW_NORMAL** — call
+    `corpus_common.DEFAULT_ENGINE_THREADS` + `default_engine_env()` /
+    `default_creationflags()` (pinned by `tools/corpus/test_engine_launch_defaults.py`) rather
+    than restating the pair; throughput and interactivity move together. **Multiple parallel
+    engine processes has no standing number** — size for the actual N, pass `threads=`
+    explicitly, and don't inherit the per-process 7.
 - Matt is expert (graphics + ML PhD) — be terse and precise; skip basics.
 - Module docs (`//!`) carry the real design rationale; read them before changing a module.
 
 ## Python / uv
 
-The Rust engine is the core; Python is the ML/analysis side (corpus tooling, the
-aesthetic classifier, palette experiments). **Use `uv` for all Python, not bare
-`python`/`pip`/conda.** The project env is declared in root `pyproject.toml` +
-`uv.lock` (both committed); `.venv/` is gitignored and regenerable with `uv sync`.
+The Rust engine is the core; Python is the ML/analysis side (corpus tooling, the aesthetic
+classifier, palette experiments). **Use `uv` for all Python, not bare `python`/`pip`/conda** —
+the global `python` on PATH is base conda with no torch. Env is root `pyproject.toml` +
+`uv.lock` (both committed); `.venv/` is gitignored and regenerable with `uv sync`. Run with
+`uv run python …`, add deps with `uv add <pkg>`.
 
-- Run things with **`uv run python …`** (or `uv run <tool>`) — never the global
-  `python` on PATH (that's base conda, no torch). Add deps with `uv add <pkg>`.
-- **GPU stack:** torch is the **cu124** build (`torch==2.6.0`,
-  `torchvision==0.21.0`) pulled from the `pytorch-cu124` index pinned in
-  `pyproject.toml` — not PyPI's CPU default. CUDA runs on the local RTX 2060 SUPER
-  (8 GB). `timm`, `scikit-learn`, `Pillow`, `numpy` round out the classifier stack.
-- Versions are pinned to match the `video-to-photo` project so uv's global cache
-  hardlinks the wheels (a full `uv sync` is seconds, no multi-GB torch download).
-  Keep them in lockstep when bumping.
-- The classifier lives in `classifier/`; its weights/metrics go to
-  `data/classifier/v1/` (gitignored under the `data/*` rule — expected for
-  weights/scratch).
+- **GPU stack:** torch is the **cu124** build (`torch==2.6.0`, `torchvision==0.21.0`) from the
+  `pytorch-cu124` index pinned in `pyproject.toml`, not PyPI's CPU default; CUDA runs on the
+  local RTX 2060 SUPER (8 GB). `timm`, `scikit-learn`, `Pillow`, `numpy` round it out.
+- Versions are pinned in lockstep with the `video-to-photo` project so uv's global cache
+  hardlinks the wheels (a full `uv sync` is seconds, not a multi-GB torch download).
+- There is **no package root** — imports work by `sys.path` mutation, so a module's position
+  is load-bearing (`tools/README.md` §"Two standing facts").
