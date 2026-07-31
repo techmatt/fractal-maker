@@ -286,6 +286,70 @@ def nucleus_dedup_key(c, degree, dps):
 
 
 # ---------------------------------------------------------------------------
+# Read-time canonicalization (the dedup-noise defect, fixed at CONSUME).
+#
+# `nucleus_dedup_key` rounds to `dps` SIGNIFICANT digits, so a real-axis nucleus
+# whose imaginary part is Newton noise (~1e-40, differing per seed path) stringifies
+# to a DIFFERENT key on every solve — the same atom enters a population many times.
+# `atom_lib.snap` already fixes this on the WRITE path for new source-sheet atoms, but
+# the committed roster and triage pool were written before that and carry the latent
+# duplication in their stored keys/ids, which MUST NOT be rewritten (verdicts key on
+# the id). So the fix is applied here, at read: re-parse the stored decimal-string
+# coords at full precision, snap the axis-noise component to exact zero, and re-form the
+# sector-canonical key. `SNAP_EPS`/`snap_near_zero` mirror `atom_lib.SNAP_EPS`/`snap`
+# (the write-side copy) by value; kept separate so the read helper carries no
+# dependency on the source-sheet module that consumes it.
+# ---------------------------------------------------------------------------
+SNAP_EPS = mp.mpf("1e-20")
+
+
+def snap_near_zero(c):
+    """Zero a coordinate component below `SNAP_EPS` (axis Newton-noise, not structure).
+    A genuine off-axis nucleus is separated from the axis by something of order its own
+    structure scale, never 1e-20; real-axis nuclei have an imaginary part of exactly 0."""
+    c = mp.mpc(c)
+    re = mp.mpf(0) if abs(c.real) < SNAP_EPS else c.real
+    im = mp.mpf(0) if abs(c.imag) < SNAP_EPS else c.imag
+    return mp.mpc(re, im)
+
+
+def snapped_dedup_key(cx, cy, degree, dps):
+    """Read-time canonical dedup key from STORED decimal-string coords `cx`/`cy`.
+    Parses at full precision, snaps axis-noise to exact zero, then forms the same
+    sector-canonical rounded key as `nucleus_dedup_key`. This is what collapses the
+    per-solve noise copies that the stored key does not."""
+    with mp.workdps(max(mp.mp.dps, dps + 15)):
+        c = snap_near_zero(mp.mpc(mp.mpf(str(cx)), mp.mpf(str(cy))))
+        return ",".join(nucleus_dedup_key(c, degree, dps))
+
+
+def collapse_population(rows, *, dps, degree_default=2, cx_key="cx", cy_key="cy",
+                        degree_key="degree", id_key="id"):
+    """Collapse a population by its READ-TIME snapped key, keeping the FIRST row of each
+    group (file order). Pure — the input list and the stored files are untouched.
+
+    Returns `(kept, dropped, id_map)`:
+      * `kept`    — one row per distinct snapped atom, first-seen wins.
+      * `dropped` — the redundant rows (the duplicate count is `len(dropped)`).
+      * `id_map`  — {dropped_row_id: kept_row_id} for every collapsed row, so an
+        id-keyed sidecar (e.g. triage verdicts) can be re-pointed rather than orphaned.
+    """
+    seen = {}          # snapped_key -> kept row
+    kept, dropped, id_map = [], [], {}
+    for r in rows:
+        deg = int(r.get(degree_key, degree_default))
+        k = snapped_dedup_key(r[cx_key], r[cy_key], deg, dps)
+        if k in seen:
+            dropped.append(r)
+            if id_key in r and id_key in seen[k]:
+                id_map[r[id_key]] = seen[k][id_key]
+        else:
+            seen[k] = r
+            kept.append(r)
+    return kept, dropped, id_map
+
+
+# ---------------------------------------------------------------------------
 # Atom instrument `A` — size, orientation, and required precision, from the same
 # recursion Newton already runs. With the nucleus c0 and period n:
 #

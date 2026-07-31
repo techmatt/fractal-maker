@@ -47,10 +47,17 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "corpus"))
+sys.path.insert(0, str(REPO_ROOT / "tools" / "sourcing"))
 sys.path.insert(0, str(HERE))
 
 import artifacts as _artifacts   # noqa: E402  (the out-of-tree resolver seam)
 import store                     # noqa: E402  (palette constants; the emit store next door)
+import deep_center_finder as dcf  # noqa: E402  (shared read-time dedup canonicalization)
+
+# The significant-digit rounding the stored dedup_key/id was built at
+# (build_minibrot_roster.DEDUP_DPS). The read-time snapped key must round at the SAME
+# width so a snapped real-axis nucleus lands on the stored key of its noise-free sibling.
+DEDUP_DPS = 22
 
 # --------------------------------------------------------------------------- #
 # paths
@@ -134,6 +141,65 @@ def load_pool() -> list[dict]:
 
 def pool_ids() -> set[str]:
     return {a["id"] for a in load_pool()}
+
+
+def load_pool_canonical(verdicts: dict | None = None):
+    """Read-time-deduped pool. The stored `pool.jsonl` is append-only and UNCHANGED;
+    this collapses the per-solve real-axis Newton-noise copies of one atom (distinct
+    stored `dedup_key` -> distinct `mt…` id -> the same atom sitting in the pool more
+    than once) at read, via `dcf.snapped_dedup_key`.
+
+    Verdict safety — pass `verdicts` (`load_verdicts()`), which keys on the noise-derived
+    id, and the collapse never loses one:
+      * a group whose merged rows carry MORE THAN ONE DISTINCT verdict is a CONFLICT:
+        it is left UNCOLLAPSED (all its rows kept) and reported in `conflicts`, so
+        nothing is auto-resolved and no human judgement is dropped;
+      * otherwise the group collapses to its first row and `id_map` re-points the merged
+        ids to the survivor, so a verdict on a dropped id carries to the kept one.
+
+    Returns `(rows, id_map, conflicts)`. `conflicts` is a list of
+    `{"snapped_key", "ids": {id: verdict}}` (empty when every merge is verdict-clean).
+    """
+    verdicts = {} if verdicts is None else verdicts
+    raw = load_pool()
+    # group by snapped key, preserving file order for first-wins
+    groups: dict[str, list[dict]] = {}
+    order: list[str] = []
+    for a in raw:
+        k = dcf.snapped_dedup_key(a["cx"], a["cy"], int(a.get("degree", 2)), DEDUP_DPS)
+        if k not in groups:
+            groups[k] = []
+            order.append(k)
+        groups[k].append(a)
+
+    rows, id_map, conflicts = [], {}, []
+    for k in order:
+        g = groups[k]
+        if len(g) == 1:
+            rows.append(g[0])
+            continue
+        distinct_verdicts = {verdicts[a["id"]] for a in g if a["id"] in verdicts}
+        if len(distinct_verdicts) > 1:                 # conflict: leave the group alone
+            conflicts.append({"snapped_key": k,
+                              "ids": {a["id"]: verdicts.get(a["id"]) for a in g}})
+            rows.extend(g)
+            continue
+        keep = g[0]                                    # verdict-clean: collapse, first wins
+        rows.append(keep)
+        for a in g[1:]:
+            id_map[a["id"]] = keep["id"]
+    return rows, id_map, conflicts
+
+
+def verdict_for_canonical(verdicts: dict, id_map: dict) -> dict:
+    """Verdict lookup that follows a `load_pool_canonical` `id_map`: a survivor inherits a
+    verdict recorded on any of the ids that collapsed into it (verdict-clean by
+    construction — conflicting groups are never collapsed, so never appear in `id_map`)."""
+    out = dict(verdicts)
+    for dropped_id, keep_id in id_map.items():
+        if dropped_id in verdicts and keep_id not in out:
+            out[keep_id] = verdicts[dropped_id]
+    return out
 
 
 def append_atoms(rows: list[dict]) -> int:

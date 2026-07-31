@@ -18,11 +18,16 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "tools" / "sourcing"))
+import deep_center_finder as dcf   # noqa: E402  (shared read-time dedup canonicalization)
+
 ROSTER = REPO_ROOT / "data" / "minibrot_roster" / "roster.jsonl"
 OUT = REPO_ROOT / "data" / "descent_harness" / "selection.json"
+DEDUP_DPS = 22       # matches build_minibrot_roster.DEDUP_DPS (the width the keys were built at)
 
 DEGREES = [2, 3, 4, 5]
 PER_DEGREE = 10
@@ -36,6 +41,10 @@ KEEP = ("id", "degree", "period", "split", "family", "cx", "cy", "fw",
 
 def load_admitted():
     rows = [json.loads(l) for l in ROSTER.read_text().splitlines() if l.strip()]
+    # Read-time dedup: collapse the real-axis Newton-noise copies of one atom (distinct
+    # stored dedup_key per solve) so a duplicated nucleus is not over-drawn into the
+    # selection. Applied to the whole population, first-row-wins, before the admitted cut.
+    rows, _dropped, _ = dcf.collapse_population(rows, dps=DEDUP_DPS)
     return [r for r in rows if r.get("admitted")]
 
 

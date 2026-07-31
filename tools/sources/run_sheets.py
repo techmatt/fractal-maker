@@ -89,7 +89,7 @@ def log(msg=""):
 
 
 def overlap_matrix(built: list[str]) -> dict:
-    ids = {s: {a["id"] for a in ss.load_atoms(s)} for s in built}
+    ids = {s: {a["id"] for a in ss.load_atoms_canonical(s)} for s in built}
     mat = {i: {j: len(ids[i] & ids[j]) if i != j else len(ids[i]) for j in built}
            for i in built}
     return {"sources": built, "matrix": mat}
@@ -182,7 +182,7 @@ def rebuild_only(*, render_workers=4, force=True, log=log) -> int:
     titles = {s: (ti, o, b) for s, ti, o, b in PLAN}
     for sid in ss.built_sources():
         meta = ss.load_meta(sid)
-        population = ss.load_atoms(sid)
+        population = ss.load_atoms_canonical(sid)
         # RE-DERIVE the sample from the durable population rather than reusing the
         # previous run's `sheet_ids`. `span_by_depth` is deterministic, so this
         # reproduces the original draw exactly — and it is idempotent, which reusing

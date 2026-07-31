@@ -32,8 +32,13 @@ REPO_ROOT = HERE.parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "corpus"))
 sys.path.insert(0, str(REPO_ROOT / "tools" / "descent"))
 
+sys.path.insert(0, str(REPO_ROOT / "tools" / "sourcing"))
+
 import artifacts as _artifacts     # noqa: E402
 import triage_store as ts          # noqa: E402
+import deep_center_finder as dcf   # noqa: E402  (shared read-time dedup canonicalization)
+
+DEDUP_DPS = 22       # matches build_minibrot_roster.DEDUP_DPS / atom_lib.DEDUP_DPS
 
 ROOT = REPO_ROOT / "data" / "minibrot_sources"      # durable, in-tree
 OVERLAP = ROOT / "overlap.json"
@@ -111,6 +116,15 @@ def load_atoms(source_id: str) -> list[dict]:
     if not p.exists():
         return []
     return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+
+
+def load_atoms_canonical(source_id: str) -> list[dict]:
+    """`load_atoms` with the read-time dedup applied: collapse the real-axis Newton-noise
+    copies of one atom (first-row-wins) so a population count and the overlap matrix
+    reflect distinct atoms. A guard for these sources — they are already snapped on the
+    WRITE path (`atom_lib.make_atom`), so pre-fix rows are the only ones this catches."""
+    kept, _dropped, _ = dcf.collapse_population(load_atoms(source_id), dps=DEDUP_DPS)
+    return kept
 
 
 def write_atoms(source_id: str, atoms: list[dict]) -> Path:

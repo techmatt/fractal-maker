@@ -314,5 +314,106 @@ def test_durable_records_are_not_gitignored():
         paths.durable(rel)          # raises DurabilityError if git would drop it
 
 
+# --------------------------------------------------------------------------- #
+# read-time dedup of real-axis Newton-noise copies (the consume-side fix)
+# --------------------------------------------------------------------------- #
+import mpmath as mp                       # noqa: E402
+import deep_center_finder as dcf          # noqa: E402
+
+
+@pytest.fixture
+def restore_triage_store():
+    """`_redirect` permanently repoints `triage_store` module globals at a tmp dir with no
+    teardown; snapshot + restore them so a redirected test cannot leak a deleted path into
+    a later test file (e.g. `test_sources`' reference loader reads `ts.REFERENCES`)."""
+    attrs = ("TRIAGE_DIR", "POOL", "VERDICTS", "ENUM_STATE", "REFERENCES", "NEIGHBORS")
+    saved = {a: getattr(ts, a) for a in attrs}
+    saved_env = os.environ.get("FRACTAL_ARTIFACTS_ROOT")
+    try:
+        yield
+    finally:
+        for a, v in saved.items():
+            setattr(ts, a, v)
+        if saved_env is None:
+            os.environ.pop("FRACTAL_ARTIFACTS_ROOT", None)
+        else:
+            os.environ["FRACTAL_ARTIFACTS_ROOT"] = saved_env
+
+
+def _axis_dup_rows():
+    """Three sibling rows for ONE real-axis nucleus, each with a different Newton-noise
+    imaginary tail (so distinct stored dedup_key -> distinct `mt…` id), plus one
+    unrelated off-axis atom. Built through the real key/id functions, no `snap`, exactly
+    as the pre-fix write path produced them."""
+    mp.mp.dps = 80
+    cx = "-1.3107026413368328835635707974121808"
+    noise = ["0.0", "2.4439490907996837456415835145708942e-150",
+             "4.1676726552845202814550876517573002e-162"]
+    rows = []
+    for cy in noise:
+        key = ",".join(dcf.nucleus_dedup_key(mp.mpc(mp.mpf(cx), mp.mpf(cy)), 2, ts.DEDUP_DPS))
+        rows.append({"id": ts.atom_id(2, key), "degree": 2, "period": 4,
+                     "family": "mandelbrot", "cx": cx, "cy": cy, "fw": "1e-3",
+                     "window_scale": "2.5e-4", "dedup_key": key,
+                     "f64_margin_deploy_decades": 3.0, "f64_margin_field_decades": 4.0})
+    off = "0.35277690561250861882966838891343329"
+    offy = "-0.35267856477628614081660023405873145"
+    key = ",".join(dcf.nucleus_dedup_key(mp.mpc(mp.mpf(off), mp.mpf(offy)), 2, ts.DEDUP_DPS))
+    rows.append({"id": ts.atom_id(2, key), "degree": 2, "period": 5,
+                 "family": "mandelbrot", "cx": off, "cy": offy, "fw": "1e-3",
+                 "window_scale": "2.5e-4", "dedup_key": key,
+                 "f64_margin_deploy_decades": 3.0, "f64_margin_field_decades": 4.0})
+    return rows
+
+
+def test_collapse_population_keeps_first_and_counts_dups():
+    rows = _axis_dup_rows()
+    kept, dropped, id_map = dcf.collapse_population(rows, dps=ts.DEDUP_DPS)
+    assert len(kept) == 2 and len(dropped) == 2      # 3 axis siblings -> 1, plus the off-axis
+    assert kept[0]["id"] == rows[0]["id"]            # first-row-wins
+    assert set(id_map) == {rows[1]["id"], rows[2]["id"]}
+    assert set(id_map.values()) == {rows[0]["id"]}   # both point at the survivor
+
+
+def test_load_pool_canonical_collapses_and_carries_a_verdict(tmp_path, restore_triage_store):
+    _redirect(tmp_path)
+    rows = _axis_dup_rows()
+    ts.append_atoms(rows)
+    # a verdict on a row that the collapse DROPS must survive on the kept survivor
+    ts.append_verdict(rows[1]["id"], "accept")
+    pool, id_map, conflicts = ts.load_pool_canonical(ts.load_verdicts())
+    assert conflicts == []
+    assert len(pool) == 2                             # collapsed
+    v = ts.verdict_for_canonical(ts.load_verdicts(), id_map)
+    assert v[rows[0]["id"]] == "accept"              # carried from the dropped sibling
+    # and the selection builder sees exactly one accepted atom, not three
+    doc = bts.build()
+    assert doc["n_accepted"] == 1 and doc["pool_size"] == 2
+
+
+def test_load_pool_canonical_leaves_conflicting_verdicts_alone(tmp_path, restore_triage_store):
+    _redirect(tmp_path)
+    rows = _axis_dup_rows()
+    ts.append_atoms(rows)
+    ts.append_verdict(rows[0]["id"], "accept")
+    ts.append_verdict(rows[1]["id"], "reject")        # conflict on the same atom
+    pool, id_map, conflicts = ts.load_pool_canonical(ts.load_verdicts())
+    assert len(conflicts) == 1
+    assert conflicts[0]["ids"] == {rows[0]["id"]: "accept", rows[1]["id"]: "reject",
+                                   rows[2]["id"]: None}
+    # left uncollapsed: all three siblings still present, nothing remapped
+    ids = {a["id"] for a in pool}
+    assert {rows[0]["id"], rows[1]["id"], rows[2]["id"]} <= ids
+    assert id_map == {}
+
+
+def test_snapped_key_leaves_off_axis_atoms_alone():
+    mp.mp.dps = 80
+    k_raw = ",".join(dcf.nucleus_dedup_key(
+        mp.mpc(mp.mpf("-0.12256117"), mp.mpf("0.74486177")), 2, ts.DEDUP_DPS))
+    k_snap = dcf.snapped_dedup_key("-0.12256117", "0.74486177", 2, ts.DEDUP_DPS)
+    assert k_raw == k_snap                            # a genuine imag part is never snapped
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

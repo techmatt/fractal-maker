@@ -50,8 +50,17 @@ def split_for(atom_id: str, train_frac: float = TRAIN_FRAC) -> str:
 
 
 def build(train_frac: float = TRAIN_FRAC) -> dict:
-    pool = {a["id"]: a for a in ts.load_pool()}
-    verdicts = ts.load_verdicts()
+    raw_verdicts = ts.load_verdicts()
+    # Read-time dedup: collapse the real-axis Newton-noise copies of one atom so a
+    # triple-counted nucleus is not over-weighted in the selection/splits. Verdict-safe:
+    # a survivor inherits any verdict on a merged id; a group with CONFLICTING verdicts is
+    # left uncollapsed and reported (never auto-resolved).
+    pool_rows, id_map, conflicts = ts.load_pool_canonical(raw_verdicts)
+    for c in conflicts:
+        print(f"WARNING conflicting verdicts on merged atom {c['snapped_key']}: {c['ids']} "
+              f"— left uncollapsed, resolve by re-verdicting one in the wall", file=sys.stderr)
+    verdicts = ts.verdict_for_canonical(raw_verdicts, id_map)
+    pool = {a["id"]: a for a in pool_rows}
     accepted = [pool[i] for i in pool if verdicts.get(i) == "accept"]
     accepted.sort(key=lambda a: a["id"])
     atoms = [{
@@ -61,7 +70,10 @@ def build(train_frac: float = TRAIN_FRAC) -> dict:
         "f64_margin_deploy_decades": a["f64_margin_deploy_decades"],
         "f64_margin_field_decades": a["f64_margin_field_decades"],
     } for a in accepted]
-    n_rej = sum(1 for v in verdicts.values() if v == "reject")
+    # counts over the CANONICAL pool (the remapped verdicts dict can list both a dropped
+    # id and its survivor, so tally by pool id, not by verdict-dict length).
+    n_rej = sum(1 for i in pool if verdicts.get(i) == "reject")
+    n_untriaged = sum(1 for i in pool if i not in verdicts)
     return {
         "source_pool": ts.rel(ts.POOL),
         "source_verdicts": ts.rel(ts.VERDICTS),
@@ -71,7 +83,7 @@ def build(train_frac: float = TRAIN_FRAC) -> dict:
         "pool_size": len(pool),
         "n_accepted": len(atoms),
         "n_rejected": n_rej,
-        "n_untriaged": len(pool) - len(verdicts),
+        "n_untriaged": n_untriaged,
         "note": ("Accepted set from the minibrot triage wall (tools/descent/triage_app.py). "
                  "Additional to data/descent_harness/selection.json, which is left in place. "
                  "The rejected atoms are the negative class and live in the verdict log, not "
