@@ -548,3 +548,77 @@ def test_unit_timeout_is_clamped_by_the_remaining_budget():
     # being slow (this is the branch that keeps the clamp from becoming a zero timeout).
     o = types.SimpleNamespace(budget_s=900.0, active_s=100000.0)
     assert sf.SteeredFrontier.unit_timeout_s(o) == float(sf.MIN_UNIT_TIMEOUT_S)
+
+
+# =========================================================================== #
+# set_below_normal_priority — the call must actually SUCCEED, and a failure must
+# be reportable.
+# =========================================================================== #
+@pytest.mark.skipif(sys.platform != "win32", reason="win32 priority path")
+def test_below_normal_priority_actually_succeeds_and_restores():
+    """The pseudo-handle regression, pinned. `GetCurrentProcess` returns (HANDLE)-1; without
+    `restype = c_void_p` ctypes truncates it to a 32-bit int and `SetPriorityClass` rejects
+    the call — so the driver printed a failure (or worse, "err 0") while every child kept
+    running at NORMAL and stole the desktop. Assert the real return value, not the plumbing.
+
+    Restores the original class so a test run does not leave the pytest process demoted."""
+    import ctypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.GetCurrentProcess.restype = ctypes.c_void_p
+    k32.GetPriorityClass.argtypes = [ctypes.c_void_p]
+    k32.GetPriorityClass.restype = ctypes.c_uint
+    k32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+    k32.SetPriorityClass.restype = ctypes.c_int
+    before = k32.GetPriorityClass(k32.GetCurrentProcess())
+    try:
+        assert sf.set_below_normal_priority() == "BELOW_NORMAL"
+        import corpus_common as cc
+        assert k32.GetPriorityClass(k32.GetCurrentProcess()) == cc.BELOW_NORMAL_PRIORITY_CLASS
+    finally:
+        if before:
+            k32.SetPriorityClass(k32.GetCurrentProcess(), before)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="win32 priority path")
+def test_the_failure_branch_can_report_a_real_error_code():
+    """`ctypes.windll.kernel32` is a cached library object built WITHOUT use_last_error, so
+    on it `ctypes.get_last_error()` always reads 0 and the helper's failure branch could only
+    ever print "FAILED (err 0)" — a silent failure wearing a report. The helper now opens its
+    own `WinDLL(..., use_last_error=True)`; this pins that that is what makes an error code
+    observable, by forcing a genuine failure on an invalid handle."""
+    import ctypes
+    shared = ctypes.windll.kernel32
+    shared.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+    shared.SetPriorityClass.restype = ctypes.c_int
+    ctypes.set_last_error(0)
+    assert shared.SetPriorityClass(ctypes.c_void_p(0), 0x00004000) == 0     # fails
+    assert ctypes.get_last_error() == 0, "the cached windll DID populate get_last_error"
+
+    private = ctypes.WinDLL("kernel32", use_last_error=True)
+    private.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+    private.SetPriorityClass.restype = ctypes.c_int
+    assert private.SetPriorityClass(ctypes.c_void_p(0), 0x00004000) == 0    # fails
+    assert ctypes.get_last_error() == 6   # ERROR_INVALID_HANDLE
+
+
+def test_the_priority_helper_is_not_duplicated_anywhere():
+    """The loose end this closes: if the ctypes priority path had been COPIED into other
+    drivers, each copy would have carried the truncation and every one of their run records'
+    "BELOW_NORMAL" claims would have been false. There is exactly one definition, and every
+    other BELOW_NORMAL site goes through `creationflags` on subprocess (a CreateProcess flag,
+    which never involved a handle). Keep it that way: share this function, don't re-derive it."""
+    import subprocess
+    repo = Path(__file__).resolve().parents[2]
+    files = subprocess.run(["git", "ls-files", "*.py"], cwd=repo, capture_output=True,
+                           text=True, check=True).stdout.split()
+    self_rel = Path(__file__).resolve().relative_to(repo).as_posix()
+    hits = []
+    for rel in files:
+        if rel == self_rel:
+            continue
+        t = (repo / rel).read_text(encoding="utf-8", errors="ignore")
+        if "SetPriorityClass" in t:
+            hits.append(rel)
+    assert hits == ["tools/atlas/steered_frontier.py"], (
+        "SetPriorityClass appears outside the one helper — a copy carries the "
+        f"pseudo-handle truncation with it: {hits}")

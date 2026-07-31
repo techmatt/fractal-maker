@@ -2143,7 +2143,14 @@ def set_below_normal_priority() -> str:
     try:
         import ctypes
         from corpus_common import BELOW_NORMAL_PRIORITY_CLASS
-        k32 = ctypes.windll.kernel32
+        # A PRIVATE kernel32 handle, with `use_last_error=True`. Two reasons, both about
+        # the failure path rather than the success path:
+        #   * `ctypes.windll.kernel32` is a process-global CACHED library object, so the
+        #     restype/argtypes below would mutate it for every other user in the process.
+        #   * that cached object is created WITHOUT use_last_error, so
+        #     `ctypes.get_last_error()` always reads 0 — the old error branch could only
+        #     ever print "FAILED (err 0)", which is a silent failure wearing a report.
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         # restypes/argtypes are load-bearing: GetCurrentProcess returns the pseudo-handle
         # (HANDLE)-1, and without c_void_p ctypes truncates it to a 32-bit int that
         # SetPriorityClass rejects — the call then "fails" for a reason nothing reports.

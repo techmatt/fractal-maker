@@ -139,7 +139,20 @@ def _tile_name(c: dict) -> str:
     return f"c{ci}_dx{c['dx']:+.2f}_dy{c['dy']:+.2f}.jpg"
 
 
-def _render(loc: Location, c: dict, out: Path, w: int, h: int, ss: int) -> tuple[bool, str]:
+def _render(loc: Location, c: dict, out: Path, w: int, h: int, ss: int,
+            *, timeout: float | None = None) -> tuple[bool, str]:
+    """Render one framing candidate. Returns `(ok, err)` — that contract is load-bearing
+    (`step0_reanalysis` and `build_prospect_baserate` import this function directly).
+
+    `timeout=None` (the default) is the historical behaviour, byte-identical: with no
+    bound `subprocess.run` cannot raise and the tolerance path below is unreachable. A
+    caller running under a wall-clock cap passes a bound so ONE hung `render-one` cannot
+    park an unattended run forever — the same backstop `prescreen._render` and
+    `steered_frontier.expand_group` were given. On expiry `subprocess.TimeoutExpired`
+    PROPAGATES rather than being folded into `(False, err)`: a timeout is not a render
+    failure (the geometry may be fine, the box merely wedged), and `reframe_location`
+    treats the two differently — a failure is fatal, a timeout drops one candidate.
+    """
     out.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         str(BIN), "render-one",
@@ -150,18 +163,19 @@ def _render(loc: Location, c: dict, out: Path, w: int, h: int, ss: int) -> tuple
         "--out", str(out),
     ]
     cmd += loc_mod.render_one_flags(loc)   # --family (+ --julia/--c, --p) via the one builder
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     ok = r.returncode == 0 and out.exists()
     if not ok:
         return ok, r.stderr[-300:]
     if DUMP_GUARD_FIELD:
-        fok, ferr = _dump_guard_field(loc, c, out, w, h, ss)
+        fok, ferr = _dump_guard_field(loc, c, out, w, h, ss, timeout=timeout)
         if not fok:
             return False, f"guard field: {ferr}"
     return True, ""
 
 
-def _dump_guard_field(loc: Location, c: dict, out: Path, w: int, h: int, ss: int) -> tuple[bool, str]:
+def _dump_guard_field(loc: Location, c: dict, out: Path, w: int, h: int, ss: int,
+                      *, timeout: float | None = None) -> tuple[bool, str]:
     """Dump the raw smooth field co-located with a tile (`<out>.field.bin`) at the SAME
     geometry/fidelity, so a guarded scorer can gate the tile. `render-one --dump-field`
     exits before coloring, so this touches no colored output. Only called when
@@ -190,7 +204,10 @@ def _dump_guard_field(loc: Location, c: dict, out: Path, w: int, h: int, ss: int
         "--supersample", str(ss), "--maxiter", str(c["maxiter"]),
         "--dump-field", str(fbin), "--dump-field-source", src,
     ] + loc_mod.render_one_flags(loc)
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    # Bounded by the SAME timeout as the colored render: the guard field is a second
+    # subprocess per tile, so leaving it unbounded would leave the hang this backstop
+    # exists to stop. TimeoutExpired propagates (see `_render`).
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     ok = r.returncode == 0 and fbin.exists()
     return ok, ("" if ok else r.stderr[-300:])
 
@@ -205,6 +222,7 @@ def reframe_location(
     w: int = RENDER_W,
     h: int = RENDER_H,
     ss: int = RENDER_SS,
+    timeout: float | None = None,
 ) -> ReframeResult:
     """Best coarse reframe of `loc` within the bounded window (see module docstring).
 
@@ -213,9 +231,30 @@ def reframe_location(
     seed    = recorded in the trace for reproducibility; the bounded search itself is
               deterministic (no stochastic component -- seed is reserved for the
               downstream palette/emission step that is out of scope here).
+    timeout = per-render hard backstop in seconds, or None (default) for unbounded.
 
     Returns ReframeResult(cx, cy, fw, score, trace): geometry only + the reframed
     E[ord] + the fw-ladder / recenter scores for sheets/debug.
+
+    WHY `timeout` EXISTS, AND WHAT IT COSTS. This function spawns up to 12 `render-one`
+    processes per location and was the last unbounded one on the discovery path (the
+    `--expand` call and `prescreen._render` were bounded during the maneuvers work), so
+    it was the remaining way an unattended run hangs forever. `timeout=None` keeps that
+    behaviour byte-identical — with no bound `subprocess.run` cannot raise, so none of
+    the tolerance below can execute.
+
+    With a bound set, a timed-out candidate leaves **no tile on disk**, so it cannot be
+    scored and is DROPPED from the argmax (recorded in `trace["timed_out"]`) rather than
+    aborting the whole location. Two cases stay fatal, because tolerating them would
+    silently break this function's contract:
+
+      * the ORIGINAL framing (fw x1.0, recenter 0,0) timed out — the returned score is
+        only a valid cross-location re-ranking key because the input framing is always
+        in the search space and therefore bounds the result from below. Lose that rung
+        and MONOTONE-NON-DECREASING is no longer true, and a caller has no way to tell.
+      * every rung of the fw ladder timed out — there is nothing to pick.
+
+    A non-timeout render FAILURE is untouched: still fatal, exactly as before.
     """
     loc = as_location(loc)
     tiles = Path(workdir if workdir is not None
@@ -224,59 +263,100 @@ def reframe_location(
     # `score_paths_k`), so a K=4 scorer's third probability survives to the trace and from
     # there to the ledger. Dedups the shared center tile between the two search steps.
     score_cache: dict[str, tuple] = {}
+    # Candidates whose render timed out: no tile on disk, so unscorable. Keyed by tile
+    # name so the two search steps agree about which framings are gone.
+    timed_out: dict[str, dict] = {}
 
-    def ensure_scored(cands: list[dict]) -> list[tuple]:
-        need = [c for c in cands if _tile_name(c) not in score_cache]
+    def ensure_scored(cands: list[dict]) -> list[tuple | None]:
+        """Score every candidate, returning one entry per input candidate — `None` where
+        the render timed out and left no tile. Only reachable when `timeout` is set."""
+        need = [c for c in cands
+                if _tile_name(c) not in score_cache and _tile_name(c) not in timed_out]
         to_render = [c for c in need if not (tiles / _tile_name(c)).exists()]
         if to_render:
             fails = []
             with cf.ThreadPoolExecutor(max_workers=workers) as ex:
-                futs = {ex.submit(_render, loc, c, tiles / _tile_name(c), w, h, ss): c
+                futs = {ex.submit(_render, loc, c, tiles / _tile_name(c), w, h, ss,
+                                  timeout=timeout): c
                         for c in to_render}
                 for fut in cf.as_completed(futs):
-                    ok, err = fut.result()
+                    c = futs[fut]
+                    try:
+                        ok, err = fut.result()
+                    except subprocess.TimeoutExpired:
+                        # Unreachable while timeout is None. The tile does not exist and
+                        # never will, so drop the candidate instead of killing the run.
+                        timed_out[_tile_name(c)] = c
+                        continue
                     if not ok:
-                        fails.append((futs[fut], err))
+                        fails.append((c, err))
             if fails:
                 c, err = fails[0]
                 raise SystemExit(f"reframe render failed ({len(fails)}) "
                                  f"[{_tile_name(c)}]: {err}")
-        if need:
-            rows = scorer.score_paths_k([tiles / _tile_name(c) for c in need])
-            for c, t in zip(need, rows):
+        scorable = [c for c in need if _tile_name(c) not in timed_out]
+        if scorable:
+            rows = scorer.score_paths_k([tiles / _tile_name(c) for c in scorable])
+            for c, t in zip(scorable, rows):
                 score_cache[_tile_name(c)] = tuple(float(x) for x in t)
-        return [score_cache[_tile_name(c)] for c in cands]
+        return [score_cache.get(_tile_name(c)) for c in cands]
 
-    def probs(s: tuple) -> dict:
+    def probs(s: tuple | None) -> dict:
         """Trace probability block for one scored candidate. `p_ge4` is present-and-None on a
         K=3 head rather than absent, so a trace reader never has to guess whether the key is
-        missing because the head can't express class 4 or because the writer forgot it."""
+        missing because the head can't express class 4 or because the writer forgot it. A
+        timed-out candidate (`s is None`) reports every probability as None beside
+        `timed_out: True`, so a hole in the trace is never read as a zero score."""
+        if s is None:
+            return {"p_notbad": None, "p_good": None, "p_ge4": None, "timed_out": True}
         return {"p_notbad": s[1], "p_good": s[2], "p_ge4": (s[3] if len(s) > 3 else None)}
+
+    def _argmax(cands, scores):
+        """Index of the best-scoring candidate, ignoring timed-out (None) entries."""
+        live = [i for i in range(len(cands)) if scores[i] is not None]
+        if not live:
+            raise SystemExit(
+                f"reframe: every candidate render timed out at {timeout}s "
+                f"({loc.family} cx={loc.cx} fw={loc.fw}) — nothing to pick")
+        return max(live, key=lambda i: scores[i][0])
 
     # Step 1 -- fw ladder at center; pick best fw.
     fw_cands = [_candidate(loc, fac, 0.0, 0.0) for fac in FW_FACS]
     fw_scores = ensure_scored(fw_cands)
-    best_ci = max(range(len(FW_FACS)), key=lambda i: fw_scores[i][0])
+    if fw_scores[ORIG_COL] is None:
+        # See the docstring: without the input framing in the search space the returned
+        # score is not a valid cross-location key, and the caller cannot detect that.
+        raise SystemExit(
+            f"reframe: the ORIGINAL framing (fw x1.0, recenter 0,0) timed out at "
+            f"{timeout}s ({loc.family} cx={loc.cx} fw={loc.fw}) — monotone-"
+            f"non-decreasing no longer holds, so refusing to return a reframe")
+    best_ci = _argmax(fw_cands, fw_scores)
     best_fac = FW_FACS[best_ci]
 
-    # Step 2 -- recenter at best fw; the (best_fw, center) tile is cached from step 1.
+    # Step 2 -- recenter at best fw; the (best_fw, center) tile is cached from step 1,
+    # so at least one recenter candidate is always scorable here.
     rc_cands = [_candidate(loc, best_fac, dx, dy) for dy in RECENTER for dx in RECENTER]
     rc_scores = ensure_scored(rc_cands)
-    best_j = max(range(len(rc_cands)), key=lambda i: rc_scores[i][0])
+    best_j = _argmax(rc_cands, rc_scores)
     chosen, chosen_sc = rc_cands[best_j], rc_scores[best_j]
 
     trace = {
         "seed": seed,
         "render": {"w": w, "h": h, "ss": ss, "palette": PALETTE, "jpg_quality": JPG_Q,
-                   "n_renders": len(score_cache)},
+                   "n_renders": len(score_cache), "timeout_s": timeout},
         "fw_ladder": [{"fw_factor": FW_FACS[i], "fw": fw_cands[i]["fw"],
-                       "score": fw_scores[i][0], **probs(fw_scores[i])}
+                       "score": (fw_scores[i][0] if fw_scores[i] else None),
+                       **probs(fw_scores[i])}
                       for i in range(len(FW_FACS))],
         "best_fw_factor": best_fac,
-        "recenter": [{"dx": c["dx"], "dy": c["dy"], "score": s[0], **probs(s)}
+        "recenter": [{"dx": c["dx"], "dy": c["dy"],
+                      "score": (s[0] if s else None), **probs(s)}
                      for c, s in zip(rc_cands, rc_scores)],
         "chosen": {"fw_factor": best_fac, "dx": chosen["dx"], "dy": chosen["dy"]},
         "original_score": fw_scores[ORIG_COL][0],
+        # Empty list when nothing timed out (i.e. always, under the default timeout=None).
+        "timed_out": [{"fw_factor": c["fw_factor"], "dx": c["dx"], "dy": c["dy"]}
+                      for c in timed_out.values()],
     }
     return ReframeResult(cx=chosen["cx"], cy=chosen["cy"], fw=chosen["fw"],
                          score=chosen_sc[0], trace=trace)

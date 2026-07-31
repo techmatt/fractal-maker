@@ -214,7 +214,7 @@ wheels = [
 ]
 
 [[package]]
-name = "fractal-generator-ml"
+name = "fractal-maker-ml"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

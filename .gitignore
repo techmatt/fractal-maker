@@ -348,9 +348,11 @@ __pycache__/
 !/data/classifier/v9/config.json
 !/data/classifier/v9/metrics.json
 
-# Large regeneratable datasets (see data_large/README.md)
-/data_large/*
-!/data_large/README.md
+# data_large/ was deleted 2026-07-31 (repo-hygiene pass): it held one README and no
+# data, and its name collided with data/. Regenerable bulk goes out of tree via
+# ARTIFACTS_ROOT (docs/design/artifacts_resolver.md), not a second top-level store.
+# Two tracked files still NAME data_large/ paths whose corpus is already absent:
+# tests/occupancy_parity.rs (#[ignore]d) and tools/viz/complexity_sort.html.
 /dramatic_palettes/artist-fractals
 /dramatic_palettes/viz_render/
 /dramatic_palettes/densified/

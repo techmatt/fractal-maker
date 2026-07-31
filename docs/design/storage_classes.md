@@ -117,9 +117,29 @@ later step in the same piece of work depends on — belongs in memory, or in a n
 under `ARTIFACTS_ROOT`, not in a tree whose contract is "deleting this at any time is
 correct and requires no notice". An approved render staged in `scratch/` between rendering
 it and committing it is a violation of this contract even though re-rendering costs
-seconds: the cost of the loss is not the render, it is the approval.
-`[verdict: Matt]` `[unverified — no committed code path does this staging today; the
-nearest live instance is a *proposal* left in scratch, below]`
+seconds: the cost of the loss is not the render, it is the approval. `[verdict: Matt]`
+
+**This is not hypothetical — the descent harness does exactly it, today.** This clause was
+carried as `[unverified — no committed code path does this staging today]`; that was wrong,
+and the correction is the whole point of the clause. `tools/descent/app.py` stages the
+approval in `scratch/` across a human-length window:
+
+1. `POST /quality` renders the label-crop-quality canonical + vivid pair to
+   `scratch/descent_harness/quality/` (`store.QUALITY_DIR`).
+2. Matt looks at the vivid companion and decides. **That judgement is the artifact**; the
+   render is worth seconds and the judgement is worth the session.
+3. `POST /emit` `shutil.copyfile`s those two files out of `scratch/` into the durable
+   store — the comment there reads *"approve == saved, no re-render"*, which is precisely
+   the guarantee `scratch/` does not offer.
+
+The session dict holds only the two **paths**, not the bytes, so nothing can re-supply
+them. `/emit` validates that the *session* entry exists but never that the *files* do, so
+a `rm -r scratch/*` between steps 1 and 2 does not produce the harness's own
+`"quality render missing; re-render"` 400 — it produces an unhandled `FileNotFoundError`
+from `copyfile`, i.e. a 500 with the approval lost. The class is still `scratch()` in the
+tree; correcting that is a harness change, not a doc change, and is not done here.
+`[code: tools/descent/app.py::{quality,emit}; tools/descent/store.py::QUALITY_DIR]`
+`[verified 2026-07-31 by reading both handlers]`
 
 **Nothing load-bearing may live in `scratch/`, and it fails in two directions.**
 
@@ -191,6 +211,66 @@ rationale carried "the whole non-excluded working tree is ~5.2k files" long afte
 had fallen to 1,638. The rule that follows: if a generator can compute it, compute it; if
 it is a record, date it. `[code: tools/phoenix/redecode_grid.py;
 tools/audit/size_guard.py]` `[measured: 1,638 non-excluded working-tree files, 2026-07-31]`
+
+## Known exceptions the contract does not cover
+
+The four classes are exhaustive over what `tools/paths.py` writes. They are **not**
+exhaustive over the tree. Recording the gaps here so the contract stops silently
+disagreeing with what is on disk — an unstated exception reads as an oversight, and the
+next pass either "fixes" it or trips over it.
+
+- **`labels/` — durable corpus metadata living outside the durable store.** 45 flat
+  `.json` files (+1 stray `.md`, `cc_julia_dup_audit.md`), 448 KB, git-tracked and **not**
+  gitignored, under three competing naming schemes: 30 bare (`location_labels.json`), 15
+  `amend_<date>_…`, 1 `<date>_…`. Substantively these are `durable` — hand labels
+  recording a human judgement that cannot be re-observed — but they are reached through
+  `label_store.LABELS_DIR` (`os.path.join(ROOT, "labels")`), not `paths.durable()`, so
+  **no `durable()` write-time gitignore assertion ever runs over them** and they are
+  invisible to the class the tree would otherwise put them in.
+
+  *Why they are still there, and why that is defensible for now:* `label_store.py` already
+  owns the harder half of the problem — `SIDECAR_LABELS` (batch_id → sidecar filename),
+  `FOREIGN_LABEL_FILES` (files sitting here that belong to a *different* corpus and must
+  not be read), and `SIDECAR_OWNER` (the join rule that stops cross-contamination when one
+  sidecar is shared by two batches). 30 modules reference the directory. `disk_audit.py`
+  additionally protects it with `Rule(r"^labels/", NEVER, …)` — deliberately **by path
+  prefix and registry-independent**, its comment noting that keying off `SIDECAR_LABELS`
+  would make an unregistered sidecar (which has already happened twice) look deletable. So
+  relocating the tree silently drops that protection unless the pattern moves with it. The
+  exception is a *naming and reach* problem, not a durability risk today.
+
+  *What would close it:* route the sidecars through `paths.durable()` and fold the
+  directory under `data/labels/`, moving the `disk_audit` prefix rule and the `label_store`
+  registries in the same commit. Not attempted in the 2026-07-31 hygiene pass — 46 files
+  with 30 referencing modules and a location-keyed protection rule is a seam, not a
+  cleanup. `[code: tools/corpus/label_store.py::{LABELS_DIR,SIDECAR_LABELS,SIDECAR_OWNER,
+  FOREIGN_LABEL_FILES}; tools/audit/disk_audit.py `Rule(r"^labels/", NEVER)`]`
+  `[measured: 46 tracked files / 448 KB, 2026-07-31, `git ls-files labels/` + `du -sh labels/`]`
+
+- **`data/root_field/*.f32` — bulk regenerable inside the durable store.** 8 files, 1.1 GB,
+  untracked; an expensive-but-deterministic cache, i.e. textbook `bulk()`. It sits in-tree
+  because the resolver is Python-only and this path is a **Rust** constant
+  (`src/root_field.rs::CACHE_DIR = "data/root_field"`); relocating it needs a Rust-side
+  `ARTIFACTS_ROOT` twin. Deliberately out of scope of the 2026-07-31 pass, which named it a
+  seam rather than a cleanup. `[code: src/root_field.rs::CACHE_DIR]`
+  `[measured: 8 files / 1.1 GB, 2026-07-31, `du -sh data/root_field`]`
+
+- **Views committed into the durable store — and this one is not a convention question.**
+  Eight `pool_sheet.html` files under `data/atlas/round{1,2}/*/`, 2.6 MB. They read as
+  "regenerable views in the wrong class", but they are worse than that: every one is
+  **dangling**. Each references `tiles/tile_NNNN.png` by relative path; no `tiles/`
+  directory exists in the tree, none resolves out-of-tree (`data/atlas/` is not in
+  `artifacts.RELOCATED_PREFIXES`), and the builder that wrote them went with the atlas
+  round-1/round-2 cluster when it was deleted — `prescreen.py`'s docstring is what survived
+  of it. So they are neither viewable nor rebuildable: 8 pages of broken images.
+
+  *Recommendation: the files give way, not the convention.* The durable content of those
+  rounds is `pool.jsonl` / `walks.jsonl` / `REPORT.md`, which stay and are unaffected.
+  Deleting the sheets is not a `scratch/`-vs-`data/` reclassification — there is nothing to
+  reclassify, because nothing can regenerate them. **Not acted on unilaterally** in the
+  2026-07-31 pass. `[code: data/atlas/round1/arm1_pool/pool_sheet.html `src="tiles/…"`;
+  tools/atlas/prescreen.py module docstring]` `[measured: 8 files / 2.6 MB, 0 tiles present,
+  2026-07-31]`
 
 ## Where this is enforced
 

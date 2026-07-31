@@ -1,7 +1,7 @@
 [project]
-name = "fractal-generator-ml"
+name = "fractal-maker-ml"
 version = "0.1.0"
-description = "Python ML tooling for the fractal-generator aesthetic classifier (finetune stage of the generate→present→label→finetune→bias loop)."
+description = "Python ML tooling for the fractal-maker aesthetic classifier (finetune stage of the generate→present→label→finetune→bias loop)."
 requires-python = ">=3.12,<3.14"
 dependencies = [
     # Pinned to the versions already in uv's global cache (from C:\Code\video-to-photo)
@@ -34,6 +34,14 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+# The suite's extent, stated rather than emergent. Without this a bare `pytest`
+# collects from the CWD downward, so what runs depends on where you invoked it.
+# These five dirs are the complete set of locations holding tracked test files
+# (verified 2026-07-31: `git ls-files | grep -E '(^|/)(test_[^/]*\.py|[^/]*_test\.py|conftest\.py)$'`
+# → tools 64, tests 7, classifier 2, palette_lib 1, palette_extractor 1).
+# Python tests are co-located with their code; `tests/` additionally holds the Rust
+# integration tests (`tests/*.rs`), which cargo requires there and pytest ignores.
+testpaths = ["tests", "tools", "classifier", "palette_lib", "palette_extractor"]
 markers = [
     # Opt-in slow tests (e.g. the guard 81-set re-render tripwire, which renders 81
     # tiles through the live f64 field path). Exclude with: pytest -m "not slow".
