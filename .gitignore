@@ -104,6 +104,10 @@ __pycache__/
 !/data/minibrot_sources/
 /data/minibrot_sources/tiles/
 /data/minibrot_sources/sheets/
+# Orbital-falloff measures (tools/orbital/, prompts/orbital_falloff_criterion.md):
+# per-atom field metrics keyed by the shared content-hash atom id, plus the maxiter
+# stability check and the validation outcome. Small, load-bearing text -> committed.
+!/data/orbital/
 !/data/palettes/
 /data/palettes/*
 !/data/palettes/clean_colormaps.json

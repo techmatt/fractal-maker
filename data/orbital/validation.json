@@ -1,0 +1,50 @@
+{
+  "n_refs": 2,
+  "n_triage": 200,
+  "measures": {
+    "cycles_spanned": {
+      "eye": 8.3316,
+      "mb19": 9.8649,
+      "triage_max": 9.3195,
+      "triage_p99": 5.826971999999997,
+      "triage_median": 1.7132,
+      "refs_above_all_triage": false,
+      "triage_atoms_at_or_above_eye": 1,
+      "triage_atoms_at_or_above_mb19": 0,
+      "separates": false
+    },
+    "radial_rings": {
+      "eye": 146.5,
+      "mb19": 80.5,
+      "triage_max": 51.5,
+      "triage_p99": 42.51999999999998,
+      "triage_median": 12.0,
+      "refs_above_all_triage": true,
+      "triage_atoms_at_or_above_eye": 0,
+      "triage_atoms_at_or_above_mb19": 0,
+      "separates": true
+    },
+    "radial_rings_p90": {
+      "eye": 198.0,
+      "mb19": 197.4,
+      "triage_max": 120.0,
+      "triage_p99": 105.74599999999997,
+      "triage_median": 39.1,
+      "refs_above_all_triage": true,
+      "triage_atoms_at_or_above_eye": 0,
+      "triage_atoms_at_or_above_mb19": 0,
+      "separates": true
+    },
+    "falloff_extent": {
+      "eye": 0.20004,
+      "mb19": 0.31435,
+      "triage_max": 0.34293,
+      "triage_p99": 0.3287828999999999,
+      "triage_median": 0.24291,
+      "refs_above_all_triage": false,
+      "triage_atoms_at_or_above_eye": 144,
+      "triage_atoms_at_or_above_mb19": 8,
+      "separates": false
+    }
+  }
+}

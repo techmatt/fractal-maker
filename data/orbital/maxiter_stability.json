@@ -1,0 +1,28 @@
+{
+  "n": 24,
+  "per_multiplier": [
+    {
+      "maxiter_mult": 1.0,
+      "cycles_spanned": 6.3937,
+      "radial_rings": 45.0,
+      "falloff_extent": 0.2715
+    },
+    {
+      "maxiter_mult": 2.0,
+      "cycles_spanned": 6.5153,
+      "radial_rings": 55.25,
+      "falloff_extent": 0.2715
+    },
+    {
+      "maxiter_mult": 4.0,
+      "cycles_spanned": 6.6018,
+      "radial_rings": 60.75,
+      "falloff_extent": 0.2715
+    }
+  ],
+  "worst_drift": {
+    "cycles_spanned": 0.3982,
+    "radial_rings": 0.6015,
+    "falloff_extent": 0.1631
+  }
+}
