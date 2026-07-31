@@ -103,8 +103,13 @@ def test_existing_keys_byte_identical():
         # identity key == the pre-slot 6-tuple, joined the same way (empty params append nothing)
         old = "|".join("" if v is None else str(v) for v in _old_loc_key(canon))
         assert canon.key() == old, (canon.family, canon.key(), old)
-        # field-cache filename unchanged (this is what would orphan the cache if it moved)
-        assert aq._field_key(canon) == _old_field_key(canon), canon.key()
+        # field-cache filename unchanged (this is what would orphan the cache if it moved).
+        # Evaluated at the LEGACY cap policy: `_old_field_key` is the pre-slot formula,
+        # which predates the cap axis, so the comparable key is the one the legacy policy
+        # produces. That the LIVE policy moves the stem is deliberate and is asserted by
+        # test_field_key_moves_with_cap_policy — not something this test should mask.
+        assert aq._field_key(canon, maxiter_policy=loc_mod.LEGACY_MAXITER_POLICY) == \
+            _old_field_key(canon), canon.key()
 
 
 def test_existing_families_are_only_m_j():
@@ -161,22 +166,51 @@ def test_field_source_token_semantics():
     assert loc_mod.field_source_token("f64") == "f64"
 
 
+def test_maxiter_policy_token_semantics():
+    """The iteration-CAP axis (docs/design/auto_maxiter.md).
+
+    Same shape as the two tokens above: the LEGACY policy appends nothing, so every
+    stem dumped before the 2026-07-31 raise is byte-identical and no cached field is
+    orphaned by adding the axis; anything else keys disjointly."""
+    assert loc_mod.maxiter_policy_token(loc_mod.LEGACY_MAXITER_POLICY) == ""
+    assert loc_mod.LEGACY_MAXITER_POLICY == (500, 0.30, 200, 8000)
+    # the ADOPTED policy is not the legacy one, so it carries a token
+    live = loc_mod.current_maxiter_policy()
+    assert live != loc_mod.LEGACY_MAXITER_POLICY, \
+        "the cap raise did not land in active_ckpt — this test is vacuous"
+    assert loc_mod.maxiter_policy_token(live) == "mi4000k0.3c200-67000"
+    # every constant is in the token: perturb each of the four in turn, all distinct
+    toks = {loc_mod.maxiter_policy_token(p) for p in (
+        (4000, 0.30, 200, 67000), (4001, 0.30, 200, 67000),
+        (4000, 0.31, 200, 67000), (4000, 0.30, 201, 67000),
+        (4000, 0.30, 200, 67001))}
+    assert len(toks) == 5
+
+
 # Known input, frozen pre-token stems (computed on the live smooth path). These
 # literals are the invariant: if a key edit moves the smooth stem, every cached
 # field is orphaned — this test must fail before that ships.
+#
+# They are pinned at the LEGACY cap policy, which is what they were computed under
+# and what every field on disk before 2026-07-31 was dumped at. Passing
+# `maxiter_policy=LEGACY` is not a way to keep an old oracle green: it is the
+# statement that the old fields keep their old names. The live policy MUST move the
+# stem, and `test_field_key_moves_with_cap_policy` asserts exactly that.
 _KNOWN = loc_mod.Location(family="mandelbrot", cx="-0.743643887",
                           cy="0.131825904", fw="1e-6", maxiter=2000)
+_LEGACY = loc_mod.LEGACY_MAXITER_POLICY
 _BEAM_SMOOTH = "mandelbrot_90d714081a89180f"
 _EMIT_SMOOTH = "mandelbrot_3c882a9fb29412d4_2560x1440ss4"
 
 
 def test_field_key_smooth_parity_beam():
     # default and explicit "smooth" both reproduce the frozen pre-token stem.
-    assert aq._field_key(_KNOWN) == _BEAM_SMOOTH
-    assert aq._field_key(_KNOWN, "smooth") == _BEAM_SMOOTH
-    assert aq._field_key(_KNOWN, None) == _BEAM_SMOOTH
+    assert aq._field_key(_KNOWN, maxiter_policy=_LEGACY) == _BEAM_SMOOTH
+    assert aq._field_key(_KNOWN, "smooth", maxiter_policy=_LEGACY) == _BEAM_SMOOTH
+    assert aq._field_key(_KNOWN, None, maxiter_policy=_LEGACY) == _BEAM_SMOOTH
     # distinct modes -> distinct stems, pairwise disjoint (incl. vs smooth).
-    stems = {aq._field_key(_KNOWN, m) for m in (None, "smooth", "tia", "stripe", "curvature")}
+    stems = {aq._field_key(_KNOWN, m, maxiter_policy=_LEGACY)
+             for m in (None, "smooth", "tia", "stripe", "curvature")}
     assert len(stems) == 4  # {smooth, tia, stripe, curvature}
     assert _BEAM_SMOOTH in stems
 
@@ -184,33 +218,74 @@ def test_field_key_smooth_parity_beam():
 def test_field_key_source_parity_beam():
     # default `beautiful` source (None / explicit) leaves the frozen smooth stem
     # byte-identical — no cached field is orphaned by adding the source axis.
-    assert aq._field_key(_KNOWN, None, None) == _BEAM_SMOOTH
-    assert aq._field_key(_KNOWN, "smooth", "beautiful") == _BEAM_SMOOTH
+    assert aq._field_key(_KNOWN, None, None, _LEGACY) == _BEAM_SMOOTH
+    assert aq._field_key(_KNOWN, "smooth", "beautiful", _LEGACY) == _BEAM_SMOOTH
     # f64 source keys DISJOINTLY (its constant-offset field must not collide).
-    assert aq._field_key(_KNOWN, None, "f64") != _BEAM_SMOOTH
+    assert aq._field_key(_KNOWN, None, "f64", _LEGACY) != _BEAM_SMOOTH
     # the source axis is orthogonal to the mode axis: smooth/beautiful, smooth/f64,
     # tia/beautiful, tia/f64 are four distinct stems.
-    quad = {aq._field_key(_KNOWN, m, s)
+    quad = {aq._field_key(_KNOWN, m, s, _LEGACY)
             for m in (None, "tia") for s in (None, "f64")}
     assert len(quad) == 4
+
+
+def test_field_key_moves_with_cap_policy():
+    """The §3 bracket, both sides.
+
+    (a) an old-cap and a new-cap key must DIFFER — otherwise a field iterated to the
+        old clipped cap is served silently under the raised one; and
+    (b) two same-cap keys must be unchanged from today's value — the legacy policy
+        still reproduces the frozen literal, so the axis orphans nothing.
+
+    Run on both the beam and the emit stem, since they hash the parts in different
+    orders and a token appended to only one of them is the failure this catches."""
+    import importlib
+    sys.path.insert(0, os.path.join(_TOOLS, "wallpaper"))
+    ev = importlib.import_module("emit_v1")
+    new = loc_mod.current_maxiter_policy()
+    assert new != _LEGACY, "cap raise absent — the bracket below would be vacuous"
+
+    # (a) old != new, on every stem builder that keys a field
+    assert aq._field_key(_KNOWN, maxiter_policy=_LEGACY) != \
+        aq._field_key(_KNOWN, maxiter_policy=new)
+    assert ev._emit_field_stem(_KNOWN, maxiter_policy=_LEGACY) != \
+        ev._emit_field_stem(_KNOWN, maxiter_policy=new)
+    # ...and the LIVE default (no argument) is the new-cap key, not the old one —
+    # without this the token could be plumbed but never actually reached.
+    assert aq._field_key(_KNOWN) == aq._field_key(_KNOWN, maxiter_policy=new)
+    assert ev._emit_field_stem(_KNOWN) == ev._emit_field_stem(_KNOWN, maxiter_policy=new)
+
+    # (b) same cap -> same key, and equal to today's committed literal
+    assert aq._field_key(_KNOWN, maxiter_policy=_LEGACY) == \
+        aq._field_key(_KNOWN, maxiter_policy=_LEGACY) == _BEAM_SMOOTH
+    assert ev._emit_field_stem(_KNOWN, maxiter_policy=_LEGACY) == \
+        ev._emit_field_stem(_KNOWN, maxiter_policy=_LEGACY) == _EMIT_SMOOTH
+
+    # the cap axis is orthogonal to mode and source: 2 policies x 2 modes x 2 sources
+    # are eight distinct stems, so no combination aliases onto another.
+    oct_ = {aq._field_key(_KNOWN, m, s, p)
+            for p in (_LEGACY, new) for m in (None, "tia") for s in (None, "f64")}
+    assert len(oct_) == 8
 
 
 def test_field_key_smooth_parity_emit():
     import importlib
     sys.path.insert(0, os.path.join(_TOOLS, "wallpaper"))
     ev = importlib.import_module("emit_v1")   # lazy: keeps torch off the collection path
-    assert ev._emit_field_stem(_KNOWN) == _EMIT_SMOOTH
-    assert ev._emit_field_stem(_KNOWN, "smooth") == _EMIT_SMOOTH
-    assert ev._emit_field_stem(_KNOWN, None) == _EMIT_SMOOTH
-    stems = {ev._emit_field_stem(_KNOWN, m) for m in (None, "smooth", "tia", "stripe", "curvature")}
+    K = dict(maxiter_policy=_LEGACY)
+    assert ev._emit_field_stem(_KNOWN, **K) == _EMIT_SMOOTH
+    assert ev._emit_field_stem(_KNOWN, "smooth", **K) == _EMIT_SMOOTH
+    assert ev._emit_field_stem(_KNOWN, None, **K) == _EMIT_SMOOTH
+    stems = {ev._emit_field_stem(_KNOWN, m, **K)
+             for m in (None, "smooth", "tia", "stripe", "curvature")}
     assert len(stems) == 4
     assert _EMIT_SMOOTH in stems
     # field-SOURCE axis: default `beautiful` keeps the frozen emit stem byte-identical;
     # f64 keys disjointly, orthogonal to the mode axis.
-    assert ev._emit_field_stem(_KNOWN, None, field_source=None) == _EMIT_SMOOTH
-    assert ev._emit_field_stem(_KNOWN, "smooth", field_source="beautiful") == _EMIT_SMOOTH
-    assert ev._emit_field_stem(_KNOWN, None, field_source="f64") != _EMIT_SMOOTH
-    quad = {ev._emit_field_stem(_KNOWN, m, field_source=s)
+    assert ev._emit_field_stem(_KNOWN, None, field_source=None, **K) == _EMIT_SMOOTH
+    assert ev._emit_field_stem(_KNOWN, "smooth", field_source="beautiful", **K) == _EMIT_SMOOTH
+    assert ev._emit_field_stem(_KNOWN, None, field_source="f64", **K) != _EMIT_SMOOTH
+    quad = {ev._emit_field_stem(_KNOWN, m, field_source=s, **K)
             for m in (None, "tia") for s in (None, "f64")}
     assert len(quad) == 4
 
@@ -317,8 +392,10 @@ def main():
         test_cache_key_noncollision,
         test_field_mode_token_semantics,
         test_field_source_token_semantics,
+        test_maxiter_policy_token_semantics,
         test_field_key_smooth_parity_beam,
         test_field_key_source_parity_beam,
+        test_field_key_moves_with_cap_policy,
         test_field_key_smooth_parity_emit,
         test_from_render_block_families,
         test_sidecar_phoenix_p_survives,

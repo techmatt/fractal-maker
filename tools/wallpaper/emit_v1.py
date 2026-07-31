@@ -250,7 +250,8 @@ def _parity_check(rows, p_ge3, ssum):
 # ===========================================================================
 # 4. Emit — full-res render_candidate (Recipe 2) for each selected winner.
 # ===========================================================================
-def _emit_field_stem(loc, field_mode=None, spec=CANON_SPEC, field_source=None):
+def _emit_field_stem(loc, field_mode=None, spec=CANON_SPEC, field_source=None,
+                     maxiter_policy=None):
     """Filename stem for `loc`'s emit field dump (pure, no I/O — the parity gate
     tests this directly, so `field_mode` stays the 2nd positional arg; `spec` defaults
     to the canon geometry, keeping the frozen 2560x1440ss4 smooth stem byte-identical).
@@ -269,6 +270,10 @@ def _emit_field_stem(loc, field_mode=None, spec=CANON_SPEC, field_source=None):
     suffix = f"|{tok}" if tok else ""
     stok = loc_mod.field_source_token(field_source)
     suffix += f"|{stok}" if stok else ""
+    # iteration-CAP policy token — legacy policy appends nothing (frozen stems stay
+    # byte-identical), any other policy keys disjointly. See docs/design/auto_maxiter.md.
+    ptok = loc_mod.maxiter_policy_token(maxiter_policy)
+    suffix += f"|{ptok}" if ptok else ""
     geom = f"{spec.width}x{spec.height}ss{spec.ss}"
     h = hashlib.sha1(f"{loc.key()}|{geom}|{loc.maxiter}{suffix}".encode()).hexdigest()[:16]
     return f"{loc.family}_{h}_{geom}"

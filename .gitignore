@@ -285,6 +285,37 @@ __pycache__/
 # artifacts.RELOCATED_PREFIXES. If it ever reappears here it stays un-committable.
 /data/v8/aug_cache/
 
+# ---------------------------------------------------------------------------
+# v9 classifier build — DURABLE by exact path, same discipline as v8 above.
+#
+# v9 is the v8 corpus RE-RENDERED at the raised iteration cap
+# (docs/design/auto_maxiter.md): same manifest, same split, same loc_ids, same 24-slot
+# recipe — only the cap moved, and it moved from a flat 8000 to the per-row production
+# policy. It has no manifest.jsonl or eval_slice.jsonl of its own ON PURPOSE: it reads
+# v8's, and build_metadata.json records that file's sha256, so "same corpus" is a
+# checked claim rather than a duplicated file that can drift.
+#
+# Re-included BY EXACT PATH, not by directory, for the v8 reason: a bare `!/data/v9/`
+# would also re-include an accidental in-tree aug_cache/ rebuild.
+!/data/v9/
+/data/v9/*
+!/data/v9/build_metadata.json
+!/data/v9/plan.jsonl
+!/data/v9/cache_manifest.jsonl
+!/data/v9/aug_roster.json
+# The merged render library the v9 tiles were coloured through — asserted byte-identical
+# to v8's at build time, but committed anyway for v8's reason: a plan row names a palette
+# and nothing else records which stops that name resolved to.
+!/data/v9/colormaps.json
+# v9 EVAL products — the frozen per-location eval slice the keeper cut is recut against,
+# the acceptance battery, and the derived per-partition threshold report.
+!/data/v9/eval_scores_v9.jsonl
+!/data/v9/eval_results_v9.json
+!/data/v9/t_good_derivation.json
+# Backstop only — the v9 aug cache is bulk() and resolves out-of-tree through
+# artifacts.RELOCATED_PREFIXES. If it ever reappears here it stays un-committable.
+/data/v9/aug_cache/
+
 # Large regeneratable datasets (see data_large/README.md)
 /data_large/*
 !/data_large/README.md

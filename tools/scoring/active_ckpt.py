@@ -80,9 +80,20 @@ DEFAULT_SS = 4                          # ss4 = v4/v5 deploy-canonical antialias
 FW_LOG2_STEPS = [-1.0, -0.5, 0.0, 0.5, 1.0]   # 0.5x .. 2x, anchor centered (5 cols)
 RECENTER = [-0.25, 0.0, 0.25]                 # dx,dy in fractions of the fw step (3x3=9 rows)
 
-# --- auto_maxiter: native fw-dependent policy (mirror tools/explorer/app.py) ---
+# --- auto_maxiter: native fw-dependent policy (PRODUCTION; see docs/design/auto_maxiter.md) ---
+# base 500 -> 4000 and clamp 8000 -> 67000 on 2026-07-31. Measured on 32 atoms spanning
+# fw 3.3e-10..0.76, each walked up a cap ladder until radial_rings stopped moving (all 32
+# converged): the convergent cap is a near-constant MULTIPLE of the old policy — mean 7.7,
+# median 8.0, max 24 — so the fw SHAPE (k) was right and the BASE was 8x too low. The old
+# 8000 clamp was never binding (old-policy max over the v8 manifest was 5424), so the clamp
+# rises only to stop re-clipping the raised base; 67000 is non-binding over that manifest
+# (new max 43,397). RESIDUAL: x8 covers the median, the measured tail runs to x24 — the most
+# decorated material stays somewhat clipped. Median-clean, not clean.
+#
+# tools/explorer/render_core.py carries an independent copy of these four constants; the two
+# are pinned to agree by tools/scoring/test_maxiter_policy.py.
 FW_HOME = 3.0
-MAXITER_BASE, MAXITER_K, MAXITER_MIN, MAXITER_MAX = 500, 0.30, 200, 8000
+MAXITER_BASE, MAXITER_K, MAXITER_MIN, MAXITER_MAX = 4000, 0.30, 200, 67000
 
 
 def auto_maxiter(fw: float) -> int:

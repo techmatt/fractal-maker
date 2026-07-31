@@ -33,11 +33,17 @@ CLEAN_COLORMAPS = REPO_ROOT / "data" / "palettes" / "clean_colormaps.json"
 
 # maxiter escalation policy (mirror of the historical explorer / active_ckpt policy):
 #   maxiter = base * (1 + k * log2(fw_home / fw)), clamped to [min, max].
+# base 500 -> 4000, clamp 8000 -> 67000 on 2026-07-31; k and min unchanged. The rationale,
+# the 32-atom measurement and the residual live in docs/design/auto_maxiter.md — do not
+# change these four numbers without reading it. This is an independent COPY of
+# tools/scoring/active_ckpt.py's constants (that module is production, this one is the
+# shared explorer/descent navigation cap); tools/scoring/test_maxiter_policy.py pins the
+# two to agree, so an edit here that is not mirrored there goes red.
 FW_HOME = Decimal("3.0")
-MAXITER_BASE = 500
+MAXITER_BASE = 4000
 MAXITER_K = 0.30
 MAXITER_MIN = 200
-MAXITER_MAX = 8000
+MAXITER_MAX = 67000
 
 
 # ---------------------------------------------------------------------------

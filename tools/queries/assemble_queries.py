@@ -46,7 +46,7 @@ OUT_RECORDS = OUT_QUERIES / "records"
 # Field cache — one ss2 dump per unique location, reused everywhere.
 # ---------------------------------------------------------------------------
 
-def _field_key(ref, field_mode=None, field_source=None):
+def _field_key(ref, field_mode=None, field_source=None, maxiter_policy=None):
     """Stable filename stem for a location's ss2/eval field dump.
 
     Keyed on the canonical location (family + geometry + family_params) so
@@ -80,6 +80,13 @@ def _field_key(ref, field_mode=None, field_source=None):
     stok = loc_mod.field_source_token(field_source)
     if stok:
         parts.append(stok)
+    # iteration-CAP policy token (`loc_mod.maxiter_policy_token`): the legacy
+    # (500, 0.30, 200, 8000) policy appends nothing — every stem dumped before the
+    # 2026-07-31 raise is byte-identical — while any other policy keys disjointly, so
+    # a field cached at the old cap can never be served under the new one.
+    ptok = loc_mod.maxiter_policy_token(maxiter_policy)
+    if ptok:
+        parts.append(ptok)
     h = hashlib.sha1("|".join(parts).encode()).hexdigest()[:16]
     return f"{fam}_{h}"
 

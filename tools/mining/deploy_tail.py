@@ -219,11 +219,16 @@ def _color_params(emit_params: dict) -> dict:
     }
 
 
-def _field_stem(loc, mode, w, h, ss):
+def _field_stem(loc, mode, w, h, ss, maxiter_policy=None):
     """Field-dump stem carrying the render-mode token (loc_mod.field_mode_token) so a
-    strange pure-field dump can never collide with the cached SMOOTH field."""
+    strange pure-field dump can never collide with the cached SMOOTH field, and the
+    iteration-CAP policy token (loc_mod.maxiter_policy_token) so a field dumped under
+    the old cap can never be served under the new one (docs/design/auto_maxiter.md).
+    Both are empty for the legacy value, so existing stems are byte-identical."""
     tok = loc_mod.field_mode_token(mode)
     suffix = f"|{tok}" if tok else ""
+    ptok = loc_mod.maxiter_policy_token(maxiter_policy)
+    suffix += f"|{ptok}" if ptok else ""
     h16 = hashlib.sha1(f"{loc.key()}|{w}x{h}ss{ss}|{loc.maxiter}{suffix}".encode()).hexdigest()[:16]
     return f"{loc.family}_{h16}_{w}x{h}ss{ss}__{mode}"
 

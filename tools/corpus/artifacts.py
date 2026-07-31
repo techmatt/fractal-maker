@@ -59,6 +59,13 @@ RELOCATED_PREFIXES = (
     # v8: registered BEFORE the first render, not after 170k files have landed in the
     # tree (storage_classes.md rule 5 — a new bulk family is born out-of-tree).
     "data/v8/aug_cache",
+    # v9: the same corpus re-rendered at the raised iteration cap
+    # (docs/design/auto_maxiter.md). A SEPARATE tree rather than a re-render in place,
+    # because v4-render-batch resumes by skipping existing outputs — re-rendering into
+    # v8's tree would skip all 170,808 old-cap tiles and silently produce nothing, and
+    # the alternative (deleting them) throws away the only rollback anchor. Registered
+    # before the first render, same rule as v8.
+    "data/v9/aug_cache",
 )
 
 

@@ -196,6 +196,65 @@ def field_source_token(source) -> str:
 
 
 # ---------------------------------------------------------------------------
+# The iteration-CAP axis (`docs/design/auto_maxiter.md`). The field stems already
+# hash the location's `maxiter` VALUE, but that value is a number a caller supplies
+# — a stored library row carries the cap it was built under, a re-derived one
+# carries today's. Two renders of one location under two POLICIES can therefore
+# present the same value-shaped key, and a field dumped at the old cap is served
+# silently under the new one, with no crash and every downstream statistic quietly
+# shifted. That is the `--dump-field-source` failure a second time, so it is closed
+# the same way: the effective policy becomes part of the key.
+#
+# Load-bearing invariant, identical to the two tokens above: the token is the EMPTY
+# string for the LEGACY policy, so every stem dumped before 2026-07-31 is
+# byte-identical to the pre-token scheme and no cached field is orphaned by adding
+# the axis. Only a policy that differs from the legacy four constants carries a
+# token.
+# ---------------------------------------------------------------------------
+LEGACY_MAXITER_POLICY = (500, 0.30, 200, 8000)   # (base, k, min, max) — v4..v8
+
+
+def _active_ckpt():
+    """`tools/scoring/active_ckpt` — the production policy's single source of truth.
+
+    Lazy + registered under the canonical module name, so a caller that later does a
+    plain `import active_ckpt` (most of tools/ puts tools/scoring on sys.path) gets
+    THIS module object rather than a second copy with its own constants."""
+    import sys
+    mod = sys.modules.get("active_ckpt")
+    if mod is None:
+        import importlib.util
+        from pathlib import Path
+        src = Path(__file__).resolve().parents[1] / "scoring" / "active_ckpt.py"
+        spec = importlib.util.spec_from_file_location("active_ckpt", src)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["active_ckpt"] = mod
+        spec.loader.exec_module(mod)
+    return mod
+
+
+def current_maxiter_policy() -> tuple:
+    """The live `(base, k, min, max)` production cap policy."""
+    m = _active_ckpt()
+    return (m.MAXITER_BASE, m.MAXITER_K, m.MAXITER_MIN, m.MAXITER_MAX)
+
+
+def maxiter_policy_token(policy=None) -> str:
+    """Field-identity token for the effective iteration-cap policy.
+
+    `policy` is `(base, k, min, max)`; `None` resolves the live production policy.
+    `""` for `LEGACY_MAXITER_POLICY` (so pre-raise stems are byte-identical);
+    otherwise a compact, order-stable rendering of the four constants, so two
+    distinct policies key pairwise-disjointly at one geometry."""
+    if policy is None:
+        policy = current_maxiter_policy()
+    base, k, lo, hi = policy
+    if (int(base), float(k), int(lo), int(hi)) == LEGACY_MAXITER_POLICY:
+        return ""
+    return f"mi{int(base)}k{float(k):g}c{int(lo)}-{int(hi)}"
+
+
+# ---------------------------------------------------------------------------
 # The ONE render-one flag builder. Five cases (Step 3 of the prompt):
 #   mandelbrot   -> --family mandelbrot
 #   julia        -> --family mandelbrot --julia --c <c_re> <c_im>   (unchanged mechanism)

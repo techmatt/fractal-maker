@@ -69,6 +69,12 @@ struct Spec {
     ss: u32,
     filter: DownsampleFilter,
     out: String,
+    /// Per-row iteration cap. `None` ⇒ fall back to `--maxiter`, which is what every
+    /// pre-v9 plan does (they carry no `maxiter` field), so those plans stay
+    /// byte-reproducible. A v9+ plan carries the production `auto_maxiter(fw)` per
+    /// row, so a cache tile and its deploy-time crop resolve the SAME cap — see
+    /// `docs/design/auto_maxiter.md`.
+    maxiter: Option<u32>,
     /// Render family (from `fractal_type`; absent ⇒ Mandelbrot).
     kind: FamilyKind,
     /// Fixed parameter `c` (decimal strings) for the dynamical families
@@ -97,6 +103,11 @@ fn parse_spec(line: &str) -> Result<Spec, String> {
     let ss = jsonl::field_usize(line, "ss").ok_or("missing ss")? as u32;
     let filter = parse_filter(&jsonl::field_str(line, "filter").ok_or("missing filter")?)?;
     let out = jsonl::field_str(line, "out").ok_or("missing out")?;
+    let maxiter = match jsonl::field_usize(line, "maxiter") {
+        Some(0) => return Err("maxiter must be > 0".into()),
+        Some(n) => Some(n as u32),
+        None => None,
+    };
     // Family coupling from `fractal_type` (absent ⇒ Mandelbrot). Dynamical families
     // carry `c_re`/`c_im` (fixed parameter); a `julia*` row missing `c` is a loud
     // error, not a silent fallback (would poison the cache with mis-rendered tiles).
@@ -135,7 +146,7 @@ fn parse_spec(line: &str) -> Result<Spec, String> {
             ))
         }
     };
-    Ok(Spec { cx, cy, fw, palette, ss, filter, out, kind, c, p, z1 })
+    Ok(Spec { cx, cy, fw, palette, ss, filter, out, maxiter, kind, c, p, z1 })
 }
 
 pub fn run_v4_render_batch(args: &V4RenderBatchArgs) -> Result<(), String> {
@@ -180,10 +191,23 @@ pub fn run_v4_render_batch(args: &V4RenderBatchArgs) -> Result<(), String> {
     let channels = coloring::required_channels(&params);
     let trap = Trap { shape: TrapShape::Point, center: Complex::new(0.0, 0.0), radius: 1.0 };
 
+    // Report the cap the plan will ACTUALLY use, not just the flag: a plan whose rows
+    // carry their own maxiter makes `--maxiter` a fallback, and a log line that reported
+    // only the flag would describe a cap most tiles never see.
+    let n_own = specs.iter().filter(|s| s.maxiter.is_some()).count();
+    let cap_desc = if n_own == 0 {
+        format!("maxiter {} (flag, all rows)", args.maxiter)
+    } else {
+        let lo = specs.iter().filter_map(|s| s.maxiter).min().unwrap_or(0);
+        let hi = specs.iter().filter_map(|s| s.maxiter).max().unwrap_or(0);
+        format!(
+            "maxiter per-row {lo}..{hi} on {n_own}/{total} rows (flag {} on the rest)",
+            args.maxiter
+        )
+    };
     eprintln!(
-        "v4-render-batch: {total} renders, {} palettes, maxiter {}, q{}",
+        "v4-render-batch: {total} renders, {} palettes, {cap_desc}, q{}",
         distinct.len(),
-        args.maxiter,
         args.jpg_quality
     );
 
@@ -210,7 +234,7 @@ pub fn run_v4_render_batch(args: &V4RenderBatchArgs) -> Result<(), String> {
             trap,
             args.width,
             args.height,
-            args.maxiter,
+            spec.maxiter.unwrap_or(args.maxiter),
             args.jpg_quality,
         ) {
             Ok(()) => {}
@@ -395,7 +419,11 @@ pub struct V4RenderBatchArgs {
     #[arg(long, default_value_t = 288)]
     pub height: u32,
 
-    /// Maximum iterations / orbit cap — matches the render-one wallpaper lock.
+    /// Maximum iterations / orbit cap — the **fallback** for a plan row that carries no
+    /// `maxiter` of its own. Every v4..v8 plan is such a plan, so this default is what
+    /// those caches were rendered at: a FLAT 8000 regardless of `fw`, never through
+    /// `auto_maxiter`. Keep it at 8000 so those plans stay byte-reproducible; a v9+ plan
+    /// overrides it per row with the production cap. See `docs/design/auto_maxiter.md`.
     #[arg(long, default_value_t = 8000)]
     pub maxiter: u32,
 

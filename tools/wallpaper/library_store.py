@@ -174,12 +174,16 @@ def load_library_embeddings(emb_base: Path = EMB_BASE, shards_dir: Path = EMB_SH
 # =========================================================================== #
 # Field-cache key (canonical: location.field_mode_token + geometry tokens).
 # =========================================================================== #
-def field_stem(loc, mode: str, w: int, h: int, ss: int) -> str:
+def field_stem(loc, mode: str, w: int, h: int, ss: int, maxiter_policy=None) -> str:
     """Canonical retained-field stem — the SAME scheme deploy_tail keys its token'd dumps by
     (family + sha1(key|geom|maxiter|mode-token) + geom + mode). smooth-mode token is empty, so
     the smooth field keys identically to every other smooth-field consumer (no parallel cache)."""
     tok = loc_mod.field_mode_token(mode)
     suffix = f"|{tok}" if tok else ""
+    # iteration-CAP policy token — legacy policy appends nothing (existing stems stay
+    # byte-identical), any other policy keys disjointly. See docs/design/auto_maxiter.md.
+    ptok = loc_mod.maxiter_policy_token(maxiter_policy)
+    suffix += f"|{ptok}" if ptok else ""
     h16 = hashlib.sha1(
         f"{loc.key()}|{w}x{h}ss{ss}|{loc.maxiter}{suffix}".encode()).hexdigest()[:16]
     return f"{loc_mod.family_of(loc)}_{h16}_{w}x{h}ss{ss}__{mode}"

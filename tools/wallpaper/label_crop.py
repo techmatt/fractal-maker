@@ -57,7 +57,14 @@ def ensure_label_field(loc, fields_dir=DEFAULT_FIELDS_DIR):
     maxiter), so callers may keep separate caches (e.g. the ss2 rerender)."""
     fields_dir = Path(fields_dir)
     fields_dir.mkdir(parents=True, exist_ok=True)
-    h = hashlib.sha1(f"{loc.key()}|{LABEL_W}x{LABEL_H}ss{LABEL_SS}|{loc.maxiter}".encode()).hexdigest()[:16]
+    # iteration-CAP policy token — empty for the legacy policy (existing stems stay
+    # byte-identical), disjoint for any other, so a field dumped under the old cap is
+    # never served under the new one. See docs/design/auto_maxiter.md.
+    ptok = loc_mod.maxiter_policy_token()
+    suffix = f"|{ptok}" if ptok else ""
+    h = hashlib.sha1(
+        f"{loc.key()}|{LABEL_W}x{LABEL_H}ss{LABEL_SS}|{loc.maxiter}{suffix}".encode()
+    ).hexdigest()[:16]
     stem = f"{loc.family}_{h}_{LABEL_W}x{LABEL_H}ss{LABEL_SS}"
     bin_path = fields_dir / f"{stem}.bin"
     json_path = fields_dir / f"{stem}.json"
