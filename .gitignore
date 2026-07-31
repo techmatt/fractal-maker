@@ -95,6 +95,15 @@ __pycache__/
 /data/descent_harness/crops/
 /data/descent_harness/vivid/
 /data/descent_harness/thumbs/
+# Minibrot source sheets (tools/sources/, prompts/minibrot_source_sheets.md): the
+# nuclei lists + descriptors are a durable computed population everything downstream
+# keys off, committed by exact path. The rendered tiles and the sheet HTML are
+# regenerable-but-expensive bulk that relocates OUT of the tree via
+# tools/corpus/artifacts.resolve (artifacts._is_minibrot_source_bulk), so their dirs
+# are re-ignored below.
+!/data/minibrot_sources/
+/data/minibrot_sources/tiles/
+/data/minibrot_sources/sheets/
 !/data/palettes/
 /data/palettes/*
 !/data/palettes/clean_colormaps.json

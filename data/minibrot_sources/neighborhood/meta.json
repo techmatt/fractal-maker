@@ -1,0 +1,123 @@
+{
+  "source_id": "neighborhood",
+  "title": "3 \u00b7 Neighbourhood expansion",
+  "one_line": "Discs probed around each sheet-2 nucleus, at comparable and smaller scale.",
+  "blurb": "Tests whether richness is locally correlated \u2014 an assumption made everywhere and never checked. Probe radii are measured in units of the parent's own window scale, so 'nearby' means the same thing for a shallow parent and a deep one.",
+  "degree": 2,
+  "sheet_n": 22,
+  "population_n": 22,
+  "sheet_ids": [
+    "mt3f428d180661",
+    "mt1354c23eaf79",
+    "mt64bee2959f38",
+    "mted5c7c3e1037",
+    "mt4be0a72b4746",
+    "mtb804f1ab16ef",
+    "mt9e230ea5ca2e",
+    "mt2959fcacdcae",
+    "mtb2a634f1f507",
+    "mt50dc436d4536",
+    "mteaa642f66db0",
+    "mt712347299bb0",
+    "mtb63c326110a2",
+    "mte63790d2a6f4",
+    "mtd455874aa5f3",
+    "mt9e2c7f5cb453",
+    "mt40cc3bb41e2b",
+    "mtf04a902b859a",
+    "mtc68b31959611",
+    "mtcc8d8537f947",
+    "mt747a140997b6",
+    "mtc01fec0c750d"
+  ],
+  "descriptors": {
+    "n": 22,
+    "shape_available": false,
+    "atom_domain_divides_period_n": 15,
+    "period_min": 2,
+    "period_med": 21,
+    "period_max": 46,
+    "log10_abs_A_min": 0.3,
+    "log10_abs_A_med": 3.09,
+    "log10_abs_A_max": 8.02,
+    "atom_size_max": "5.000e-01",
+    "atom_size_min": "9.634e-09",
+    "deploy_margin_min": 1.88,
+    "deploy_margin_med": 7.09,
+    "n_below_feasibility_floor": 0,
+    "on_real_axis_n": 1,
+    "depth_histogram": [
+      {
+        "lo": 0,
+        "hi": 1,
+        "n": 2
+      },
+      {
+        "lo": 1,
+        "hi": 2,
+        "n": 2
+      },
+      {
+        "lo": 2,
+        "hi": 3,
+        "n": 7
+      },
+      {
+        "lo": 3,
+        "hi": 4,
+        "n": 1
+      },
+      {
+        "lo": 4,
+        "hi": 5,
+        "n": 3
+      },
+      {
+        "lo": 5,
+        "hi": 6,
+        "n": 5
+      },
+      {
+        "lo": 6,
+        "hi": 7,
+        "n": 1
+      },
+      {
+        "lo": 7,
+        "hi": 8,
+        "n": 0
+      },
+      {
+        "lo": 8,
+        "hi": 99,
+        "n": 1
+      }
+    ]
+  },
+  "source_stats": {
+    "parents": 60,
+    "probes": 360,
+    "hit_parent": 317,
+    "no_nucleus_near_seed": 1,
+    "seconds": 146.8
+  },
+  "render": {
+    "seconds": 3.4,
+    "unusable": [],
+    "failures": [],
+    "n_failures": 0
+  },
+  "framing": {
+    "scales": [
+      1,
+      4,
+      16
+    ],
+    "default_scale": 4,
+    "width": 320,
+    "height": 180,
+    "ss": 2,
+    "palette": "blue_orange"
+  },
+  "built_at": "2026-07-30T16:48:14"
+}

@@ -1,0 +1,76 @@
+{
+  "sources": [
+    "probe",
+    "label_seeded",
+    "neighborhood",
+    "atlas",
+    "complete_low_n",
+    "descent",
+    "misiurewicz"
+  ],
+  "matrix": {
+    "probe": {
+      "probe": 261,
+      "label_seeded": 0,
+      "neighborhood": 3,
+      "atlas": 3,
+      "complete_low_n": 49,
+      "descent": 34,
+      "misiurewicz": 32
+    },
+    "label_seeded": {
+      "probe": 0,
+      "label_seeded": 122,
+      "neighborhood": 1,
+      "atlas": 1,
+      "complete_low_n": 0,
+      "descent": 0,
+      "misiurewicz": 0
+    },
+    "neighborhood": {
+      "probe": 3,
+      "label_seeded": 1,
+      "neighborhood": 22,
+      "atlas": 2,
+      "complete_low_n": 4,
+      "descent": 3,
+      "misiurewicz": 0
+    },
+    "atlas": {
+      "probe": 3,
+      "label_seeded": 1,
+      "neighborhood": 2,
+      "atlas": 42,
+      "complete_low_n": 4,
+      "descent": 3,
+      "misiurewicz": 1
+    },
+    "complete_low_n": {
+      "probe": 49,
+      "label_seeded": 0,
+      "neighborhood": 4,
+      "atlas": 4,
+      "complete_low_n": 52,
+      "descent": 11,
+      "misiurewicz": 14
+    },
+    "descent": {
+      "probe": 34,
+      "label_seeded": 0,
+      "neighborhood": 3,
+      "atlas": 3,
+      "complete_low_n": 11,
+      "descent": 260,
+      "misiurewicz": 8
+    },
+    "misiurewicz": {
+      "probe": 32,
+      "label_seeded": 0,
+      "neighborhood": 0,
+      "atlas": 1,
+      "complete_low_n": 14,
+      "descent": 8,
+      "misiurewicz": 186
+    }
+  }
+}

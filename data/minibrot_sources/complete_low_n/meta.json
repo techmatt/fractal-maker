@@ -1,0 +1,287 @@
+{
+  "source_id": "complete_low_n",
+  "title": "5 \u00b7 Low-n complete enumeration",
+  "one_line": "EVERY component of exact period n, for n up to the tractable limit.",
+  "blurb": "A complete population rather than a sample, so its descriptor mix is a fact, not an estimate. Completeness is proved by counting: the number of period-n components is fixed by sum_{d|n} nu(d) = 2^(n-1), and the scan stops at exactly that count.",
+  "degree": 2,
+  "sheet_n": 52,
+  "population_n": 52,
+  "sheet_ids": [
+    "mt3f428d180661",
+    "mt1354c23eaf79",
+    "mt5f1428835ed3",
+    "mt2b79c6dcaea3",
+    "mtac434a6cb7a4",
+    "mtc5b3810fbe3b",
+    "mt34bb3fdda190",
+    "mt64bee2959f38",
+    "mt6d41e756e101",
+    "mted5c7c3e1037",
+    "mt48e5cd4d8806",
+    "mt49bab47d3c27",
+    "mt344f2d112715",
+    "mt869f695dbbed",
+    "mt96f41e9f8a5f",
+    "mtda9125d5907d",
+    "mt1b42a432ec26",
+    "mt5babd38c7e8c",
+    "mt0e4e5652910c",
+    "mt99d171944f94",
+    "mt74d0eb0515dd",
+    "mt3822f88ab61c",
+    "mt3b12f4f26a0c",
+    "mt74c877ab8495",
+    "mt8ad9fc13ab0b",
+    "mte49d1eb4fafb",
+    "mt55bfd05a6d04",
+    "mtfa2e2847da68",
+    "mt22bf5d1b9356",
+    "mtad596a859f38",
+    "mt30e0d3e88a73",
+    "mtae10591382be",
+    "mt4e44fb27950e",
+    "mt63224d739eb9",
+    "mtdeafc11cec64",
+    "mt00cbfcf7b6d4",
+    "mt3ef78e1576c8",
+    "mte44b8cf23e09",
+    "mtaede500de8b2",
+    "mtf6bb89896181",
+    "mt67181adfafab",
+    "mtf0a1cfdd9ac4",
+    "mt4d15b2e2da2f",
+    "mt6529cf977dd5",
+    "mt29ad206bce93",
+    "mt6214267494d0",
+    "mt5726d2100163",
+    "mt8ae54cd8c997",
+    "mte102b7b587dd",
+    "mtb67ef98e0f7b",
+    "mtbd14b8649332",
+    "mtc62e3a3aeb31"
+  ],
+  "descriptors": {
+    "n": 52,
+    "shape_available": false,
+    "atom_domain_divides_period_n": 27,
+    "period_min": 2,
+    "period_med": 6,
+    "period_max": 6,
+    "log10_abs_A_min": 0.3,
+    "log10_abs_A_med": 2.52,
+    "log10_abs_A_max": 5.45,
+    "atom_size_max": "5.000e-01",
+    "atom_size_min": "3.562e-06",
+    "deploy_margin_min": 4.44,
+    "deploy_margin_med": 7.43,
+    "n_below_feasibility_floor": 0,
+    "on_real_axis_n": 12,
+    "depth_histogram": [
+      {
+        "lo": 0,
+        "hi": 1,
+        "n": 4
+      },
+      {
+        "lo": 1,
+        "hi": 2,
+        "n": 13
+      },
+      {
+        "lo": 2,
+        "hi": 3,
+        "n": 17
+      },
+      {
+        "lo": 3,
+        "hi": 4,
+        "n": 13
+      },
+      {
+        "lo": 4,
+        "hi": 5,
+        "n": 4
+      },
+      {
+        "lo": 5,
+        "hi": 6,
+        "n": 1
+      },
+      {
+        "lo": 6,
+        "hi": 7,
+        "n": 0
+      },
+      {
+        "lo": 7,
+        "hi": 8,
+        "n": 0
+      },
+      {
+        "lo": 8,
+        "hi": 99,
+        "n": 0
+      }
+    ]
+  },
+  "source_stats": {
+    "poly_seconds": 0.0,
+    "polish_degenerate_or_not_minimal_n1": 1,
+    "polish_no_converge_n8": 18,
+    "polish_degenerate_or_not_minimal_n8": 24,
+    "per_period": [
+      {
+        "period": 1,
+        "expected": 1,
+        "roots": 1,
+        "distinct": 0,
+        "complete": false,
+        "seconds": 0.0
+      },
+      {
+        "period": 2,
+        "expected": 1,
+        "roots": 1,
+        "distinct": 1,
+        "complete": true,
+        "seconds": 0.0
+      },
+      {
+        "period": 3,
+        "expected": 3,
+        "roots": 3,
+        "distinct": 3,
+        "complete": true,
+        "seconds": 0.0
+      },
+      {
+        "period": 4,
+        "expected": 6,
+        "roots": 6,
+        "distinct": 6,
+        "complete": true,
+        "seconds": 0.0
+      },
+      {
+        "period": 5,
+        "expected": 15,
+        "roots": 15,
+        "distinct": 15,
+        "complete": true,
+        "seconds": 0.0
+      },
+      {
+        "period": 6,
+        "expected": 27,
+        "roots": 27,
+        "distinct": 27,
+        "complete": true,
+        "seconds": 0.0
+      },
+      {
+        "period": 7,
+        "expected": 63,
+        "roots": 63,
+        "distinct": 55,
+        "complete": false,
+        "seconds": 0.2
+      },
+      {
+        "period": 8,
+        "expected": 120,
+        "roots": 120,
+        "distinct": 66,
+        "complete": false,
+        "seconds": 0.6
+      }
+    ],
+    "shipped_periods": [
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "attempted_but_short": [
+      {
+        "period": 7,
+        "distinct": 55,
+        "expected_total": 63
+      },
+      {
+        "period": 8,
+        "distinct": 66,
+        "expected_total": 120
+      }
+    ],
+    "theorem_satellites": {
+      "per_period": [
+        {
+          "period": 2,
+          "found": 1,
+          "expected_total": 1,
+          "complete": true,
+          "satellites_expected": 1,
+          "primitives_expected": 0
+        },
+        {
+          "period": 3,
+          "found": 3,
+          "expected_total": 3,
+          "complete": true,
+          "satellites_expected": 2,
+          "primitives_expected": 1
+        },
+        {
+          "period": 4,
+          "found": 6,
+          "expected_total": 6,
+          "complete": true,
+          "satellites_expected": 3,
+          "primitives_expected": 3
+        },
+        {
+          "period": 5,
+          "found": 15,
+          "expected_total": 15,
+          "complete": true,
+          "satellites_expected": 4,
+          "primitives_expected": 11
+        },
+        {
+          "period": 6,
+          "found": 27,
+          "expected_total": 27,
+          "complete": true,
+          "satellites_expected": 7,
+          "primitives_expected": 20
+        }
+      ],
+      "complete_total": 52,
+      "complete_satellites": 17,
+      "satellite_frac": 0.327,
+      "note": "Exact, from sum_{q|n,q<n} phi(n/q)*nu(q) over the periods that came out COMPLETE. Counts satellites; does not identify which atoms they are (no verified classifier \u2014 see the module docstring)."
+    },
+    "seconds": 0.9,
+    "method": "exact period-n polynomial Q_n (deg = nu(n)) -> companion-matrix roots -> Newton polish; complete by construction, count-verified"
+  },
+  "render": {
+    "seconds": 0.0,
+    "unusable": [],
+    "failures": [],
+    "n_failures": 0
+  },
+  "framing": {
+    "scales": [
+      1,
+      4,
+      16
+    ],
+    "default_scale": 4,
+    "width": 320,
+    "height": 180,
+    "ss": 2,
+    "palette": "blue_orange"
+  },
+  "built_at": "2026-07-30T17:02:59"
+}

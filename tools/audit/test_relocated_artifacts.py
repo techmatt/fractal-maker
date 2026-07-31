@@ -104,6 +104,17 @@ def _scan_in_tree_offenders(repo_root: Path) -> list[str]:
                     n = _count_files(full)
                     if n:
                         offenders.append(f"{rel} has {n}+ files in-tree at {full}")
+    # minibrot source-sheet class: tiles/ and sheets/ under data/minibrot_sources.
+    msrc = repo_root / "data" / "minibrot_sources"
+    if msrc.exists():
+        for root, dirs, _files in os.walk(msrc):
+            for d in dirs:
+                full = Path(root) / d
+                rel = full.relative_to(repo_root).as_posix()
+                if A._is_minibrot_source_bulk(rel):
+                    n = _count_files(full)
+                    if n:
+                        offenders.append(f"{rel} has {n}+ files in-tree at {full}")
     return offenders
 
 
@@ -270,6 +281,45 @@ def test_descent_harness_crop_class_maps_under_artifacts_root():
         assert not A._is_descent_harness_crop(A._norm(rel)), rel
         assert not A.is_relocated(rel), rel
         assert A.resolve(rel) == A.REPO_ROOT / rel, rel
+
+
+def test_minibrot_source_bulk_maps_under_artifacts_root():
+    """The source-sheet tiles and sheet HTML relocate by pattern; the durable nuclei
+    lists and descriptors beside them stay in-tree."""
+    root = A.artifacts_root()
+    for rel in [
+        "data/minibrot_sources/tiles/mt0123456789ab__x4.png",
+        "data/minibrot_sources/sheets/probe.html",
+        "data/minibrot_sources/sheets/index.html",
+        "data/minibrot_sources/tiles",
+    ]:
+        assert A._is_minibrot_source_bulk(A._norm(rel)), rel
+        assert A.is_relocated(rel), rel
+        assert A.resolve(rel) == root / rel, rel
+    for rel in [
+        "data/minibrot_sources/probe/atoms.jsonl",
+        "data/minibrot_sources/probe/meta.json",
+        "data/minibrot_sources/overlap.json",
+        "data/minibrot_sources/index.json",
+        "data/minibrot_sources/tiles_staging/x.png",      # component != tiles/sheets
+    ]:
+        assert not A._is_minibrot_source_bulk(A._norm(rel)), rel
+        assert not A.is_relocated(rel), rel
+        assert A.resolve(rel) == A.REPO_ROOT / rel, rel
+
+
+def test_tripwire_fires_on_synthetic_minibrot_source_bulk(tmp_path):
+    """A sheet run that bypassed the resolver and wrote tiles in-tree is caught, while
+    the durable nuclei lists beside them are not."""
+    assert _scan_in_tree_offenders(tmp_path) == []
+    tile = tmp_path / "data/minibrot_sources/tiles" / "mt0123456789ab__x4.png"
+    tile.parent.mkdir(parents=True)
+    tile.write_bytes(b"x")
+    assert any("minibrot_sources/tiles" in o for o in _scan_in_tree_offenders(tmp_path))
+    (tmp_path / "data/minibrot_sources/probe").mkdir(parents=True)
+    (tmp_path / "data/minibrot_sources/probe/atoms.jsonl").write_bytes(b"x")
+    tile.unlink()
+    assert _scan_in_tree_offenders(tmp_path) == []
 
 
 def test_relocated_prefixes_map_under_artifacts_root():

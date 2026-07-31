@@ -1,0 +1,570 @@
+{
+  "sheets": [
+    {
+      "source_id": "probe",
+      "title": "1 \u00b7 Probe sampling, unstratified",
+      "n": 150,
+      "desc": {
+        "n": 150,
+        "shape_available": false,
+        "atom_domain_divides_period_n": 54,
+        "period_min": 3,
+        "period_med": 8,
+        "period_max": 24,
+        "log10_abs_A_min": 0.72,
+        "log10_abs_A_med": 3.9,
+        "log10_abs_A_max": 8.06,
+        "atom_size_max": "1.889e-01",
+        "atom_size_min": "8.778e-09",
+        "deploy_margin_min": 1.84,
+        "deploy_margin_med": 6.07,
+        "n_below_feasibility_floor": 0,
+        "on_real_axis_n": 11,
+        "depth_histogram": [
+          {
+            "lo": 0,
+            "hi": 1,
+            "n": 2
+          },
+          {
+            "lo": 1,
+            "hi": 2,
+            "n": 21
+          },
+          {
+            "lo": 2,
+            "hi": 3,
+            "n": 24
+          },
+          {
+            "lo": 3,
+            "hi": 4,
+            "n": 33
+          },
+          {
+            "lo": 4,
+            "hi": 5,
+            "n": 37
+          },
+          {
+            "lo": 5,
+            "hi": 6,
+            "n": 16
+          },
+          {
+            "lo": 6,
+            "hi": 7,
+            "n": 11
+          },
+          {
+            "lo": 7,
+            "hi": 8,
+            "n": 5
+          },
+          {
+            "lo": 8,
+            "hi": 99,
+            "n": 1
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "label_seeded",
+      "title": "2 \u00b7 Labeled-location seed",
+      "n": 121,
+      "desc": {
+        "n": 121,
+        "shape_available": false,
+        "atom_domain_divides_period_n": 40,
+        "period_min": 15,
+        "period_med": 42,
+        "period_max": 64,
+        "log10_abs_A_min": 2.33,
+        "log10_abs_A_med": 5.99,
+        "log10_abs_A_max": 10.6,
+        "atom_size_max": "4.718e-03",
+        "atom_size_min": "2.523e-11",
+        "deploy_margin_min": -0.71,
+        "deploy_margin_med": 3.9,
+        "n_below_feasibility_floor": 5,
+        "on_real_axis_n": 0,
+        "depth_histogram": [
+          {
+            "lo": 0,
+            "hi": 1,
+            "n": 0
+          },
+          {
+            "lo": 1,
+            "hi": 2,
+            "n": 0
+          },
+          {
+            "lo": 2,
+            "hi": 3,
+            "n": 8
+          },
+          {
+            "lo": 3,
+            "hi": 4,
+            "n": 2
+          },
+          {
+            "lo": 4,
+            "hi": 5,
+            "n": 26
+          },
+          {
+            "lo": 5,
+            "hi": 6,
+            "n": 25
+          },
+          {
+            "lo": 6,
+            "hi": 7,
+            "n": 32
+          },
+          {
+            "lo": 7,
+            "hi": 8,
+            "n": 19
+          },
+          {
+            "lo": 8,
+            "hi": 99,
+            "n": 9
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "neighborhood",
+      "title": "3 \u00b7 Neighbourhood expansion",
+      "n": 22,
+      "desc": {
+        "n": 22,
+        "shape_available": false,
+        "atom_domain_divides_period_n": 15,
+        "period_min": 2,
+        "period_med": 21,
+        "period_max": 46,
+        "log10_abs_A_min": 0.3,
+        "log10_abs_A_med": 3.09,
+        "log10_abs_A_max": 8.02,
+        "atom_size_max": "5.000e-01",
+        "atom_size_min": "9.634e-09",
+        "deploy_margin_min": 1.88,
+        "deploy_margin_med": 7.09,
+        "n_below_feasibility_floor": 0,
+        "on_real_axis_n": 1,
+        "depth_histogram": [
+          {
+            "lo": 0,
+            "hi": 1,
+            "n": 2
+          },
+          {
+            "lo": 1,
+            "hi": 2,
+            "n": 2
+          },
+          {
+            "lo": 2,
+            "hi": 3,
+            "n": 7
+          },
+          {
+            "lo": 3,
+            "hi": 4,
+            "n": 1
+          },
+          {
+            "lo": 4,
+            "hi": 5,
+            "n": 3
+          },
+          {
+            "lo": 5,
+            "hi": 6,
+            "n": 5
+          },
+          {
+            "lo": 6,
+            "hi": 7,
+            "n": 1
+          },
+          {
+            "lo": 7,
+            "hi": 8,
+            "n": 0
+          },
+          {
+            "lo": 8,
+            "hi": 99,
+            "n": 1
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "atlas",
+      "title": "4 \u00b7 Atlas mining",
+      "n": 42,
+      "desc": {
+        "n": 42,
+        "shape_available": false,
+        "atom_domain_divides_period_n": 17,
+        "period_min": 2,
+        "period_med": 25,
+        "period_max": 74,
+        "log10_abs_A_min": 0.3,
+        "log10_abs_A_med": 2.82,
+        "log10_abs_A_max": 10.4,
+        "atom_size_max": "5.000e-01",
+        "atom_size_min": "3.969e-11",
+        "deploy_margin_min": -0.51,
+        "deploy_margin_med": 7.09,
+        "n_below_feasibility_floor": 1,
+        "on_real_axis_n": 1,
+        "depth_histogram": [
+          {
+            "lo": 0,
+            "hi": 1,
+            "n": 3
+          },
+          {
+            "lo": 1,
+            "hi": 2,
+            "n": 0
+          },
+          {
+            "lo": 2,
+            "hi": 3,
+            "n": 23
+          },
+          {
+            "lo": 3,
+            "hi": 4,
+            "n": 6
+          },
+          {
+            "lo": 4,
+            "hi": 5,
+            "n": 5
+          },
+          {
+            "lo": 5,
+            "hi": 6,
+            "n": 1
+          },
+          {
+            "lo": 6,
+            "hi": 7,
+            "n": 2
+          },
+          {
+            "lo": 7,
+            "hi": 8,
+            "n": 1
+          },
+          {
+            "lo": 8,
+            "hi": 99,
+            "n": 1
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "complete_low_n",
+      "title": "5 \u00b7 Low-n complete enumeration",
+      "n": 52,
+      "desc": {
+        "n": 52,
+        "shape_available": false,
+        "atom_domain_divides_period_n": 27,
+        "period_min": 2,
+        "period_med": 6,
+        "period_max": 6,
+        "log10_abs_A_min": 0.3,
+        "log10_abs_A_med": 2.52,
+        "log10_abs_A_max": 5.45,
+        "atom_size_max": "5.000e-01",
+        "atom_size_min": "3.562e-06",
+        "deploy_margin_min": 4.44,
+        "deploy_margin_med": 7.43,
+        "n_below_feasibility_floor": 0,
+        "on_real_axis_n": 12,
+        "depth_histogram": [
+          {
+            "lo": 0,
+            "hi": 1,
+            "n": 4
+          },
+          {
+            "lo": 1,
+            "hi": 2,
+            "n": 13
+          },
+          {
+            "lo": 2,
+            "hi": 3,
+            "n": 17
+          },
+          {
+            "lo": 3,
+            "hi": 4,
+            "n": 13
+          },
+          {
+            "lo": 4,
+            "hi": 5,
+            "n": 4
+          },
+          {
+            "lo": 5,
+            "hi": 6,
+            "n": 1
+          },
+          {
+            "lo": 6,
+            "hi": 7,
+            "n": 0
+          },
+          {
+            "lo": 7,
+            "hi": 8,
+            "n": 0
+          },
+          {
+            "lo": 8,
+            "hi": 99,
+            "n": 0
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "descent",
+      "title": "6 \u00b7 Descent-found",
+      "n": 150,
+      "desc": {
+        "n": 150,
+        "shape_available": false,
+        "atom_domain_divides_period_n": 37,
+        "period_min": 3,
+        "period_med": 20,
+        "period_max": 48,
+        "log10_abs_A_min": 0.72,
+        "log10_abs_A_med": 4.27,
+        "log10_abs_A_max": 9.96,
+        "atom_size_max": "1.889e-01",
+        "atom_size_min": "1.086e-10",
+        "deploy_margin_min": -0.07,
+        "deploy_margin_med": 5.63,
+        "n_below_feasibility_floor": 4,
+        "on_real_axis_n": 2,
+        "depth_histogram": [
+          {
+            "lo": 0,
+            "hi": 1,
+            "n": 1
+          },
+          {
+            "lo": 1,
+            "hi": 2,
+            "n": 14
+          },
+          {
+            "lo": 2,
+            "hi": 3,
+            "n": 27
+          },
+          {
+            "lo": 3,
+            "hi": 4,
+            "n": 26
+          },
+          {
+            "lo": 4,
+            "hi": 5,
+            "n": 28
+          },
+          {
+            "lo": 5,
+            "hi": 6,
+            "n": 20
+          },
+          {
+            "lo": 6,
+            "hi": 7,
+            "n": 21
+          },
+          {
+            "lo": 7,
+            "hi": 8,
+            "n": 6
+          },
+          {
+            "lo": 8,
+            "hi": 99,
+            "n": 7
+          }
+        ]
+      }
+    },
+    {
+      "source_id": "misiurewicz",
+      "title": "7 \u00b7 Misiurewicz-anchored",
+      "n": 135,
+      "desc": {
+        "n": 135,
+        "shape_available": false,
+        "atom_domain_divides_period_n": 35,
+        "period_min": 4,
+        "period_med": 13,
+        "period_max": 32,
+        "log10_abs_A_min": 2.07,
+        "log10_abs_A_med": 6.8,
+        "log10_abs_A_max": 11.07,
+        "atom_size_max": "8.483e-03",
+        "atom_size_min": "8.469e-12",
+        "deploy_margin_min": -1.18,
+        "deploy_margin_med": 3.09,
+        "n_below_feasibility_floor": 35,
+        "on_real_axis_n": 4,
+        "depth_histogram": [
+          {
+            "lo": 0,
+            "hi": 1,
+            "n": 0
+          },
+          {
+            "lo": 1,
+            "hi": 2,
+            "n": 0
+          },
+          {
+            "lo": 2,
+            "hi": 3,
+            "n": 13
+          },
+          {
+            "lo": 3,
+            "hi": 4,
+            "n": 11
+          },
+          {
+            "lo": 4,
+            "hi": 5,
+            "n": 18
+          },
+          {
+            "lo": 5,
+            "hi": 6,
+            "n": 15
+          },
+          {
+            "lo": 6,
+            "hi": 7,
+            "n": 16
+          },
+          {
+            "lo": 7,
+            "hi": 8,
+            "n": 16
+          },
+          {
+            "lo": 8,
+            "hi": 99,
+            "n": 46
+          }
+        ]
+      }
+    }
+  ],
+  "skipped": [
+    {
+      "source_id": "douady_tuning",
+      "reason": "8 \u00b7 Douady tuning was deliberately not attempted: it needs a known-good ancestor to tune from, and these sheets are what produce that."
+    }
+  ],
+  "overlap": {
+    "sources": [
+      "probe",
+      "label_seeded",
+      "neighborhood",
+      "atlas",
+      "complete_low_n",
+      "descent",
+      "misiurewicz"
+    ],
+    "matrix": {
+      "probe": {
+        "probe": 261,
+        "label_seeded": 0,
+        "neighborhood": 3,
+        "atlas": 3,
+        "complete_low_n": 49,
+        "descent": 34,
+        "misiurewicz": 32
+      },
+      "label_seeded": {
+        "probe": 0,
+        "label_seeded": 122,
+        "neighborhood": 1,
+        "atlas": 1,
+        "complete_low_n": 0,
+        "descent": 0,
+        "misiurewicz": 0
+      },
+      "neighborhood": {
+        "probe": 3,
+        "label_seeded": 1,
+        "neighborhood": 22,
+        "atlas": 2,
+        "complete_low_n": 4,
+        "descent": 3,
+        "misiurewicz": 0
+      },
+      "atlas": {
+        "probe": 3,
+        "label_seeded": 1,
+        "neighborhood": 2,
+        "atlas": 42,
+        "complete_low_n": 4,
+        "descent": 3,
+        "misiurewicz": 1
+      },
+      "complete_low_n": {
+        "probe": 49,
+        "label_seeded": 0,
+        "neighborhood": 4,
+        "atlas": 4,
+        "complete_low_n": 52,
+        "descent": 11,
+        "misiurewicz": 14
+      },
+      "descent": {
+        "probe": 34,
+        "label_seeded": 0,
+        "neighborhood": 3,
+        "atlas": 3,
+        "complete_low_n": 11,
+        "descent": 260,
+        "misiurewicz": 8
+      },
+      "misiurewicz": {
+        "probe": 32,
+        "label_seeded": 0,
+        "neighborhood": 0,
+        "atlas": 1,
+        "complete_low_n": 14,
+        "descent": 8,
+        "misiurewicz": 186
+      }
+    }
+  },
+  "index_html": "C:\\Code\\fractal-maker-artifacts\\data\\minibrot_sources\\sheets\\index.html"
+}

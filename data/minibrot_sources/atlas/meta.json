@@ -1,0 +1,152 @@
+{
+  "source_id": "atlas",
+  "title": "4 \u00b7 Atlas mining",
+  "one_line": "Nuclei under the repo's hand-curated named locations, plus neighbourhood fill.",
+  "blurb": "Decades of human curation we have never mined. The named supply is small (there is no mandelbrot_named_seeds.json; the curated set is source constants), so the sheet is filled by expanding neighbourhoods around the curated hits \u2014 the split is in the header.",
+  "degree": 2,
+  "sheet_n": 42,
+  "population_n": 42,
+  "sheet_ids": [
+    "mt3f428d180661",
+    "mt1354c23eaf79",
+    "mt5f1428835ed3",
+    "mt99d171944f94",
+    "mt6cee532eb42b",
+    "mtc628c7161548",
+    "mt18ae366554cc",
+    "mt143ddf7fd663",
+    "mt4387f91e469d",
+    "mteb629a003f57",
+    "mt4e66b0eaf09e",
+    "mt4b9934ec644e",
+    "mt2cf2d2eb627c",
+    "mtcd87afa2be24",
+    "mt39cc343bc180",
+    "mtf6cb55b9344a",
+    "mte91dc92c4a82",
+    "mt75ca0fd5b8ac",
+    "mt54101d571405",
+    "mt760e38328703",
+    "mt3092ccbed6d0",
+    "mt74cbf75a1c1a",
+    "mtc03ccf249ffb",
+    "mt62be31655467",
+    "mt01efde733686",
+    "mtede091ab53fc",
+    "mta3c24c7a9b92",
+    "mt7180db1a914e",
+    "mtdfb2314490ca",
+    "mt7a36da658b33",
+    "mt08334edee2c4",
+    "mt91a31e406c3b",
+    "mt711eb585fd13",
+    "mt0fbec381d92f",
+    "mt8e102ba1f66a",
+    "mtc5287b928453",
+    "mt464e3d9543dd",
+    "mt425185363f46",
+    "mt4058e41d3302",
+    "mt070ed19c81e4",
+    "mt12bdad55f24f",
+    "mtc0344001e97b"
+  ],
+  "descriptors": {
+    "n": 42,
+    "shape_available": false,
+    "atom_domain_divides_period_n": 17,
+    "period_min": 2,
+    "period_med": 25,
+    "period_max": 74,
+    "log10_abs_A_min": 0.3,
+    "log10_abs_A_med": 2.82,
+    "log10_abs_A_max": 10.4,
+    "atom_size_max": "5.000e-01",
+    "atom_size_min": "3.969e-11",
+    "deploy_margin_min": -0.51,
+    "deploy_margin_med": 7.09,
+    "n_below_feasibility_floor": 1,
+    "on_real_axis_n": 1,
+    "depth_histogram": [
+      {
+        "lo": 0,
+        "hi": 1,
+        "n": 3
+      },
+      {
+        "lo": 1,
+        "hi": 2,
+        "n": 0
+      },
+      {
+        "lo": 2,
+        "hi": 3,
+        "n": 23
+      },
+      {
+        "lo": 3,
+        "hi": 4,
+        "n": 6
+      },
+      {
+        "lo": 4,
+        "hi": 5,
+        "n": 5
+      },
+      {
+        "lo": 5,
+        "hi": 6,
+        "n": 1
+      },
+      {
+        "lo": 6,
+        "hi": 7,
+        "n": 2
+      },
+      {
+        "lo": 7,
+        "hi": 8,
+        "n": 1
+      },
+      {
+        "lo": 8,
+        "hi": 99,
+        "n": 1
+      }
+    ]
+  },
+  "source_stats": {
+    "curated_supply": 14,
+    "curated_no_converge": 2,
+    "curated_degenerate_or_not_minimal": 4,
+    "curated_no_nucleus_near_seed": 1,
+    "curated_nuclei": 7,
+    "expansion": {
+      "parents": 7,
+      "probes": 287,
+      "hit_parent": 135,
+      "no_nucleus_near_seed": 4,
+      "seconds": 94.2
+    },
+    "expanded_nuclei": 35,
+    "seconds": 95.2
+  },
+  "render": {
+    "seconds": 4.3,
+    "unusable": [],
+    "failures": [],
+    "n_failures": 0
+  },
+  "framing": {
+    "scales": [
+      1,
+      4,
+      16
+    ],
+    "default_scale": 4,
+    "width": 320,
+    "height": 180,
+    "ss": 2,
+    "palette": "blue_orange"
+  },
+  "built_at": "2026-07-30T16:49:58"
+}

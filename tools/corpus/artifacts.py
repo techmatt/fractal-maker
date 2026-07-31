@@ -137,6 +137,25 @@ def _is_descent_harness_crop(r: str) -> bool:
     )
 
 
+def _is_minibrot_source_bulk(r: str) -> bool:
+    """True iff ``r`` is the minibrot source-sheet bulk: ``data/minibrot_sources/tiles``
+    (3 scales x ~150 atoms x 8 sources) or ``data/minibrot_sources/sheets`` (the HTML
+    pages, written beside the tiles so a sheet addresses them by a plain relative path
+    and opens by double-click). Both are regenerable-but-expensive, so they relocate OUT
+    of the working tree exactly like the descent-harness images; the durable nuclei lists
+    and descriptors sit directly under ``data/minibrot_sources/<source>/`` and stay
+    in-tree because they are not under a ``tiles``/``sheets`` component. Matched as a
+    CLASS by pattern (component-exact), mirroring the
+    ``/data/minibrot_sources/{tiles,sheets}/`` .gitignore stanzas."""
+    parts = r.split("/")
+    return (
+        len(parts) >= 3
+        and parts[0] == "data"
+        and parts[1] == "minibrot_sources"
+        and parts[2] in ("tiles", "sheets")
+    )
+
+
 def artifacts_root() -> Path:
     """Root under which relocated artifacts live (env override or repo sibling)."""
     env = os.environ.get(ARTIFACTS_ENV)
@@ -155,13 +174,14 @@ def _norm(rel) -> str:
 
 def is_relocated(rel) -> bool:
     """True iff ``rel`` (repo-relative) belongs to a relocated family: a literal
-    aug-cache prefix, any discovery-scratch tree, any label-corpus crop/vivid tree, or
-    any descent-harness crop/vivid tree (the last three matched by class, not by literal)."""
+    aug-cache prefix, any discovery-scratch tree, any label-corpus crop/vivid tree,
+    any descent-harness image tree, or the minibrot source-sheet tiles/sheets bulk
+    (the last four matched by class, not by literal)."""
     r = _norm(rel)
     if any(r == p or r.startswith(p + "/") for p in RELOCATED_PREFIXES):
         return True
     return (_is_discovery_scratch(r) or _is_label_corpus_crop(r)
-            or _is_descent_harness_crop(r))
+            or _is_descent_harness_crop(r) or _is_minibrot_source_bulk(r))
 
 
 def resolve(rel) -> Path:

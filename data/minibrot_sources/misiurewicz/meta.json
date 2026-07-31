@@ -1,0 +1,455 @@
+{
+  "source_id": "misiurewicz",
+  "title": "7 \u00b7 Misiurewicz-anchored",
+  "one_line": "Nuclei found in the neighbourhood of preperiodic points.",
+  "blurb": "Misiurewicz points stay on the boundary at every scale, so their neighbourhoods are dense in small components. The question is whether the nuclei living there differ in kind from what a plain scan finds.",
+  "degree": 2,
+  "sheet_n": 135,
+  "population_n": 186,
+  "sheet_ids": [
+    "mt99d171944f94",
+    "mt3822f88ab61c",
+    "mte49d1eb4fafb",
+    "mt4c4904a9a394",
+    "mtf3f8ee48bc73",
+    "mt30e0d3e88a73",
+    "mtae10591382be",
+    "mt0f021e7228a2",
+    "mt45d35349a48c",
+    "mt63224d739eb9",
+    "mt42a0af2a525b",
+    "mt903234d35add",
+    "mtbbd2aa9e431d",
+    "mtdeafc11cec64",
+    "mt2ab4de5671eb",
+    "mt91f4fd5fbc3e",
+    "mt88c11dee4f3d",
+    "mtaede500de8b2",
+    "mtf6bb89896181",
+    "mt184f8afef62a",
+    "mtc014b80127d0",
+    "mt4d15b2e2da2f",
+    "mte05205a56897",
+    "mt29ad206bce93",
+    "mted60220225f9",
+    "mte12acc3aeeac",
+    "mt8ae54cd8c997",
+    "mt091b4a0f502e",
+    "mt69f6de1abeec",
+    "mt94ab7d038a70",
+    "mt3a287852136c",
+    "mta056e401307d",
+    "mtb52327250172",
+    "mtd7b2ac98d9a7",
+    "mtf39fa24c359b",
+    "mt810eed0ac5d8",
+    "mt56da929b2925",
+    "mt9223f70aa8be",
+    "mtcd21e57e9cff",
+    "mt181841bae2b6",
+    "mt35a4c6d29418",
+    "mt6af3d748e5d5",
+    "mtd8df9d6943cb",
+    "mtd62a375f90ea",
+    "mtee206a6ed107",
+    "mt0b9a2d2c8a13",
+    "mt9f2df10367bf",
+    "mt07ab662cb216",
+    "mt4cbac4cdb2fd",
+    "mt95e794df6060",
+    "mt90ca7aeb5f97",
+    "mtfbb7c20da342",
+    "mta86584807cd7",
+    "mtfdcd70d9eed6",
+    "mt043e8f28d238",
+    "mt681e217687db",
+    "mt6874054c76f9",
+    "mt62750c1879fd",
+    "mt099b9945a3f1",
+    "mt955789374fc8",
+    "mt00029e7936e0",
+    "mtad1520a6a7f6",
+    "mt015827899d9a",
+    "mtb87997c5cf07",
+    "mta8193caeb8a3",
+    "mt933d8c451867",
+    "mte1840ffcae17",
+    "mt011f1cf17017",
+    "mt96baa4970689",
+    "mt525ed6addfff",
+    "mtdd9f2677b89f",
+    "mtcf4854f041aa",
+    "mt8708e7b20529",
+    "mt13c331cfe7ee",
+    "mt55e02afa49d4",
+    "mta088c95bd95e",
+    "mte0821ca77bc8",
+    "mteaecfe068951",
+    "mt526422fdd8ec",
+    "mtbe190577dcdb",
+    "mtbfe011d82b11",
+    "mtb77e66629935",
+    "mte30f534a9444",
+    "mta729e747ea2d",
+    "mte6a914d9884c",
+    "mt94d606936fe4",
+    "mt47970aff6591",
+    "mt3ad3f99ea1c5",
+    "mt5364576dafaa",
+    "mtc3f418157b42",
+    "mtd1ec72ab7548",
+    "mtd14bb9577288",
+    "mtc6a775a6700c",
+    "mtbaaa9e27f764",
+    "mt054d8197c57f",
+    "mt12a236c8e027",
+    "mtbb7824d1414a",
+    "mt47eaea6227e2",
+    "mte608d91227ac",
+    "mt645360d5cbeb",
+    "mt24a25f42754e",
+    "mtfccdc85d652a",
+    "mt9b1c333cefa9",
+    "mta78c8e6ba976",
+    "mtdb09ad1b63c3",
+    "mt36523ff35ae5",
+    "mt86ab667dd6be",
+    "mtf370a70f8e40",
+    "mt9f452b0e5c54",
+    "mt905434ea22e4",
+    "mtac5a276fa1aa",
+    "mta063fa681da1",
+    "mt3fe77b25d0b4",
+    "mt94a5c0db9045",
+    "mt426d31c1b710",
+    "mt9efc9d495fcf",
+    "mt8105f5108d7e",
+    "mt93bea70f3eb6",
+    "mt2125767a3f7a",
+    "mt4e13f992ed06",
+    "mt756a44c0f6ee",
+    "mteb66e55bbdbb",
+    "mt1101d6f96b12",
+    "mtde6a11b2c7b5",
+    "mt837e765d4184",
+    "mtee5cd4b7ff05",
+    "mt381954a2f7b6",
+    "mt7b4017f1b456",
+    "mtd33d67f5916b",
+    "mt36a6aaab91a3",
+    "mt860fac2f68bd",
+    "mta44c8f452420",
+    "mt2bc5caecdf81",
+    "mte80c1a9f5e58",
+    "mtb4f48d903240"
+  ],
+  "descriptors": {
+    "n": 135,
+    "shape_available": false,
+    "atom_domain_divides_period_n": 35,
+    "period_min": 4,
+    "period_med": 13,
+    "period_max": 32,
+    "log10_abs_A_min": 2.07,
+    "log10_abs_A_med": 6.8,
+    "log10_abs_A_max": 11.07,
+    "atom_size_max": "8.483e-03",
+    "atom_size_min": "8.469e-12",
+    "deploy_margin_min": -1.18,
+    "deploy_margin_med": 3.09,
+    "n_below_feasibility_floor": 35,
+    "on_real_axis_n": 4,
+    "depth_histogram": [
+      {
+        "lo": 0,
+        "hi": 1,
+        "n": 0
+      },
+      {
+        "lo": 1,
+        "hi": 2,
+        "n": 0
+      },
+      {
+        "lo": 2,
+        "hi": 3,
+        "n": 13
+      },
+      {
+        "lo": 3,
+        "hi": 4,
+        "n": 11
+      },
+      {
+        "lo": 4,
+        "hi": 5,
+        "n": 18
+      },
+      {
+        "lo": 5,
+        "hi": 6,
+        "n": 15
+      },
+      {
+        "lo": 6,
+        "hi": 7,
+        "n": 16
+      },
+      {
+        "lo": 7,
+        "hi": 8,
+        "n": 16
+      },
+      {
+        "lo": 8,
+        "hi": 99,
+        "n": 46
+      }
+    ]
+  },
+  "source_stats": {
+    "mis_solves": 288,
+    "mis_no_converge": 226,
+    "mis_not_minimal": 27,
+    "misiurewicz_points": 35,
+    "probes": 525,
+    "no_nucleus_near_seed": 25,
+    "seconds": 20.6
+  },
+  "render": {
+    "seconds": 49.8,
+    "unusable": [
+      "mt00b14b2983bf",
+      "mt07d34b26b05d",
+      "mt20018b1ffa76",
+      "mt20756f8aaa8b",
+      "mt289e0297404f",
+      "mt2a4b1e9cea4d",
+      "mt3d4f942dbd3b",
+      "mt51f31b3fdb41",
+      "mt56a20f4936db",
+      "mt589cca7e634f",
+      "mt5952630a1a47",
+      "mt9aab9553b648",
+      "mta23627b6a0db",
+      "mtb8328b3d4e9c",
+      "mtc95a48ea77e7"
+    ],
+    "failures": [
+      {
+        "id": "mt837e765d4184",
+        "scale": 1,
+        "error": "error: pixel spacing 8.641e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mtee5cd4b7ff05",
+        "scale": 1,
+        "error": "error: pixel spacing 7.372e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt381954a2f7b6",
+        "scale": 1,
+        "error": "error: pixel spacing 6.604e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt7b4017f1b456",
+        "scale": 1,
+        "error": "error: pixel spacing 6.149e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mtd33d67f5916b",
+        "scale": 1,
+        "error": "error: pixel spacing 4.522e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt36a6aaab91a3",
+        "scale": 1,
+        "error": "error: pixel spacing 4.364e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt860fac2f68bd",
+        "scale": 1,
+        "error": "error: pixel spacing 4.312e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mta44c8f452420",
+        "scale": 1,
+        "error": "error: pixel spacing 3.636e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt2bc5caecdf81",
+        "scale": 1,
+        "error": "error: pixel spacing 3.303e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mte80c1a9f5e58",
+        "scale": 1,
+        "error": "error: pixel spacing 2.801e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mtb4f48d903240",
+        "scale": 1,
+        "error": "error: pixel spacing 2.647e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt07d34b26b05d",
+        "scale": 1,
+        "error": "error: pixel spacing 2.408e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt07d34b26b05d",
+        "scale": 4,
+        "error": "error: pixel spacing 9.632e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt00b14b2983bf",
+        "scale": 1,
+        "error": "error: pixel spacing 2.288e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt00b14b2983bf",
+        "scale": 4,
+        "error": "error: pixel spacing 9.151e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt9aab9553b648",
+        "scale": 1,
+        "error": "error: pixel spacing 2.152e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt9aab9553b648",
+        "scale": 4,
+        "error": "error: pixel spacing 8.609e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt5952630a1a47",
+        "scale": 1,
+        "error": "error: pixel spacing 1.858e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt5952630a1a47",
+        "scale": 4,
+        "error": "error: pixel spacing 7.431e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mtb8328b3d4e9c",
+        "scale": 1,
+        "error": "error: pixel spacing 1.743e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mtb8328b3d4e9c",
+        "scale": 4,
+        "error": "error: pixel spacing 6.972e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt56a20f4936db",
+        "scale": 1,
+        "error": "error: pixel spacing 1.650e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt56a20f4936db",
+        "scale": 4,
+        "error": "error: pixel spacing 6.600e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt289e0297404f",
+        "scale": 1,
+        "error": "error: pixel spacing 1.454e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt289e0297404f",
+        "scale": 4,
+        "error": "error: pixel spacing 5.816e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt20018b1ffa76",
+        "scale": 1,
+        "error": "error: pixel spacing 1.331e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt20018b1ffa76",
+        "scale": 4,
+        "error": "error: pixel spacing 5.325e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt51f31b3fdb41",
+        "scale": 1,
+        "error": "error: pixel spacing 1.114e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt51f31b3fdb41",
+        "scale": 4,
+        "error": "error: pixel spacing 4.456e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mtc95a48ea77e7",
+        "scale": 1,
+        "error": "error: pixel spacing 1.024e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mtc95a48ea77e7",
+        "scale": 4,
+        "error": "error: pixel spacing 4.094e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt3d4f942dbd3b",
+        "scale": 1,
+        "error": "error: pixel spacing 9.804e-15 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt3d4f942dbd3b",
+        "scale": 4,
+        "error": "error: pixel spacing 3.922e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt589cca7e634f",
+        "scale": 1,
+        "error": "error: pixel spacing 8.617e-15 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt589cca7e634f",
+        "scale": 4,
+        "error": "error: pixel spacing 3.447e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mta23627b6a0db",
+        "scale": 1,
+        "error": "error: pixel spacing 2.939e-15 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mta23627b6a0db",
+        "scale": 4,
+        "error": "error: pixel spacing 1.176e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mta23627b6a0db",
+        "scale": 16,
+        "error": "error: pixel spacing 4.703e-14 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt2a4b1e9cea4d",
+        "scale": 1,
+        "error": "error: pixel spacing 2.388e-15 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      },
+      {
+        "id": "mt2a4b1e9cea4d",
+        "scale": 4,
+        "error": "error: pixel spacing 9.553e-15 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shallower frame width."
+      }
+    ],
+    "n_failures": 44
+  },
+  "framing": {
+    "scales": [
+      1,
+      4,
+      16
+    ],
+    "default_scale": 4,
+    "width": 320,
+    "height": 180,
+    "ss": 2,
+    "palette": "blue_orange"
+  },
+  "built_at": "2026-07-30T16:45:33"
+}
