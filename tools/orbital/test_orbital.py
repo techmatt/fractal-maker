@@ -1,5 +1,7 @@
 """Acceptance for the orbital-falloff criterion
-(`prompts/orbital_falloff_criterion.md`).
+(`prompts/orbital_falloff_criterion.md`; the measures' validity record, including which
+of these brackets are differential and where the coverage gaps are, is
+`docs/design/orbital_field_metrics.md`).
 
 The measures exist to be *falsifiable*, so most of these tests pin outcomes rather than
 implementation — including the outcomes that came back negative. A measure that fails

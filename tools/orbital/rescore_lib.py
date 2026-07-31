@@ -22,15 +22,11 @@ Two things live here:
     scratch dir ever read it. **`tools/orbital/` has never run a 24x policy** —
     it measures at 1x through `rc.auto_maxiter`. See docs/design/auto_maxiter.md.
 
-  * A **single-pass, same-rays** computation of BOTH ring measures:
-      - `radial_rings`  — median colour-cycle *crossings* along 64 rays
-        (identical geometry & primitive to `field_metrics.radial_rings`; the
-        per-segment crossing count reuses `fm._crossings` verbatim).
-      - `radial_range`  — median, over the same rays, of the *monotone range*
-        (max-min) of `smooth_iter` along the ray, in cycle units. A noisy ray
-        oscillating across one boundary racks up crossings without spanning any
-        range; a genuinely rich ray does both.
-    Computed in one ray walk so the two measures see byte-identical rays.
+  * A **single-pass, same-rays** computation of BOTH ring measures, `radial_rings`
+    (median colour-cycle *crossings*) and `radial_range` (median *monotone range*),
+    in one ray walk so the two see byte-identical rays. What each measures, why the
+    pair is not redundant, and where they disagree:
+    **`docs/design/orbital_field_metrics.md`** §§1,5.
 """
 from __future__ import annotations
 

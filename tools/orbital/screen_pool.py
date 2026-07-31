@@ -15,9 +15,9 @@ Two phases, both resumable and both capped by a wall-clock budget:
     content hash, so the pool dedups against itself and cross-references the triage pool
     and the source sheets for free.
   * **Screen** — one `render-one --dump-field` per atom at 64x36 (~2 ms of compute,
-    ~76 ms wall including process spawn), then `radial_rings`. Validated against the
-    320x180 measure at spearman 0.87, with the reference/triage separation intact at
-    screening resolution.
+    ~76 ms wall including process spawn), then `radial_rings`. What the screening
+    resolution is and is not good for (it ranks like 320x180; absolute scores are NOT
+    comparable across resolutions): `docs/design/orbital_field_metrics.md` §§2,4,5.
 
 Run:  uv run python tools/orbital/screen_pool.py --target 10000
 """

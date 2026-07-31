@@ -1,19 +1,9 @@
 #!/usr/bin/env python
 """Measure the **orbital radius / slow-falloff** property of a judging frame.
 
-The observation this implements: around `mb19_p35` at 4x the island sits inside
-concentric shells of decoration that fade outward gradually, and `minibroteye` shows the
-same thing as dense spiral filigree — while a typical triage tile is a large black
-component wearing a thin filigree skin on a background spanning barely a couple of colour
-cycles.
-
-The mechanism is in the render path, not in the eye. `coloring::shade` computes
-`t = smooth_iter * density + offset` and wraps it, with `density = 0.025` fixed
-(`ShadeArgs` default, `src/cli.rs`). So **one colour cycle is 40 iterations everywhere,
-independent of depth**: a frame whose escape-time field spans thousands of iterations
-gets tens of rings, and a shallow atom's frame spans a couple of hundred and gets a flat
-gradient. The property is therefore the *dynamic range and radial profile of the smooth
-escape-time field across the judging frame*, and it is measurable directly.
+What these measures are, what they were validated against, which of them FAILED, and
+what they are blind to: **`docs/design/orbital_field_metrics.md`**. Do not restate any
+of it here.
 
 Fields come from `render-one --dump-field --dump-field-source f64`: raw little-endian
 f32, row-major, NaN where the pixel did not escape. **Source `f64` is deliberate** — it
@@ -21,23 +11,9 @@ is the fast escape-time backend's smooth channel, i.e. the one the actual render
 shades from. It carries a constant offset relative to the `beautiful` kernel, which is
 irrelevant here because every measure below is built from *differences* of the field.
 
-The measures, all over the 4x frame:
-
-  * ``cycles_spanned``  (p95 - p05) * density. The headline number: how many colour
-    cycles the frame's escape-time field spans.
-  * ``radial_rings``    rays from the frame centre outward, counting colour-cycle
-    crossings along each; the median. The most literal reading of "how many rings do you
-    cross going out".
-  * ``falloff_extent``  the radial span, in frame widths, over which the binned median
-    smooth value descends from its inner plateau to background. Slow falloff = large;
-    a thin skin on a black blob = near zero.
-  * ``interior_fraction`` plus its radial distribution.
-
-A per-pixel **atom-domain shell index** (the k minimising |z_k| along the orbit) is NOT
-cheaply available: `--dump-field` serializes exactly one scalar coloring mode, and the
-mode list (smooth / stripe / tia / curvature / trap_* / velocity / de / ...) has no
-atom-domain member, so there is no kernel to ask for it. Adding one means a new coloring
-mode in the Rust renderer. Skipped and reported, as instructed.
+Emitted per field by `measure_field`: `cycles_spanned`, `radial_rings` (+ `_p90`),
+`falloff_extent`, `interior_fraction` and its radial profile. `radial_rings` is the one
+that survived validation; the others are recorded as failures.
 """
 from __future__ import annotations
 
@@ -64,30 +40,15 @@ CYCLE_ITERS = 1.0 / DENSITY         # 40
 
 
 # --------------------------------------------------------------------------- #
-# The iteration-CAP provenance axis (`docs/design/auto_maxiter.md`)
+# The iteration-CAP provenance axis.
+# Why it exists and what it covers: `docs/design/orbital_field_metrics.md` §7
+# (cap policy itself: `docs/design/auto_maxiter.md`).
 #
-# Every measure in this module is computed off a RENDERED FIELD, and every caller
-# sizes that field's cap with `rc.auto_maxiter(fw)` at 1x. `auto_maxiter` reads the
-# live production constants, so when the cap policy was raised on 2026-07-31 this
-# whole module FOLLOWED IT SILENTLY: the same location, screened before and after,
-# returns different `radial_rings` with nothing in the record to say why. Iteration
-# cap is the one input that moves these numbers by construction — a cap that clips
-# escape times depresses `cycles_spanned` and `radial_rings` directly, which is the
-# very thing `maxiter_stability.json` was written to measure.
-#
-# So the cap policy becomes part of every score record, closed the same way the
-# field-cache key closed it (`loc_mod.maxiter_policy_token`, reused verbatim rather
-# than re-derived): the token is the EMPTY string for the legacy policy, so a reader
-# that predates this axis sees exactly what it saw before, and a record with the key
-# ABSENT is legacy by the same invariant.
-#
-# What this does NOT cover, deliberately: `data/orbital/screen_pool.jsonl`. That file
-# is the ENUMERATION (Newton nuclei via `atom_lib.solve_nucleus` -> mpmath, at
-# NEWTON_STEPS), and `cx/cy/window_scale/log10_abs_A/f64_margin_deploy_decades` are
-# analytic properties of the atom. No rendered field, no iteration cap, nothing for a
-# cap token to be true about — stamping it would assert a dependence that does not
-# exist. `test_orbital.py::test_the_enumeration_is_not_stamped_with_a_cap_policy`
-# pins that distinction so it is not re-litigated in either direction.
+# The load-bearing invariant, restated here because code depends on it: the token is
+# the EMPTY string for the legacy policy, and a record with the key ABSENT is legacy
+# by the same invariant — so records written before this axis existed read correctly
+# instead of raising. `loc_mod.maxiter_policy_token` is reused verbatim rather than
+# re-derived, so there is one definition of the axis.
 # --------------------------------------------------------------------------- #
 POLICY_KEY = "maxiter_policy_token"
 LEGACY_POLICY_TOKEN = ""            # loc_mod.LEGACY_MAXITER_POLICY == (500, .30, 200, 8000)

@@ -61,6 +61,10 @@ Read plainly: **G is a weak gate and a dead ranker.** Its accepts average *below
 
 **11% of what G rejects is good** — 27 of 250 sub-cutoff crops scored ≥3. Hunting outside the accepts pays.
 
+**Superseded at sourcing by the orbital ring measures** (`orbital_field_metrics.md`), which
+own that verdict and the evidence for it. G's numbers above stand; do not invest further in
+G. Nothing is wired — the supersession is a judgement, not a pipeline change.
+
 ### 3.2 Diagnosis — what G actually measures
 
 The accepts that scored 1–2 share one look: a lone crisp filament in a flat field. G is an **edge-energy statistic with no occupancy term**, and dendrites maximise edge per unit area. G is not broken; it is measuring something anticorrelated with the target inside its own accept region.

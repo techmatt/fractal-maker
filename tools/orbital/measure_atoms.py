@@ -3,9 +3,8 @@
 triage-wall atoms, the full source-sheet populations, and the two references.
 
 No wall-fidelity re-rendering — each atom's 4x judging frame is re-dumped as a raw
-scalar field at 320x180 ss1, which the engine produces in ~28 ms. (The colour PNGs the
-sheets already hold cannot be used: the palette wraps `t` mod 1, so a tile pins
-`smooth_iter` only modulo 40 iterations, which is exactly the quantity being measured.)
+scalar field at 320x180 ss1 (why a rendered tile cannot be reused, and what the
+validation below established: `docs/design/orbital_field_metrics.md`).
 
 Also runs the **maxiter stability check**: a cap low enough to clip escape times would
 depress `cycles_spanned` artificially, so a sample is re-measured at 2x and 4x maxiter

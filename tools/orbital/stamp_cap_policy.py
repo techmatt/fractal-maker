@@ -2,18 +2,12 @@
 """One-shot, idempotent, re-checkable: stamp every COMMITTED orbital score record with
 the iteration-cap policy it was actually computed under.
 
-Why this exists. `tools/orbital/` sizes every field dump with `rc.auto_maxiter(fw)` at
-1x, and `auto_maxiter` reads the LIVE production constants. So when the cap policy was
-raised on 2026-07-31 (`docs/design/auto_maxiter.md`) this measurement stack followed the
-raise silently — same code, same locations, different numbers, and nothing in the tree
-recording which side of the raise any committed score sits on. That provenance is
-recoverable exactly once: right now, while "everything committed predates the raise" is
-still a true and checkable statement (`git log` puts every one of these files at
-2026-07-30, the day before). After the next measurement run it is gone for good.
+Why this exists, and what a cross-policy comparison does:
+`docs/design/orbital_field_metrics.md` §7 (cap policy itself: `auto_maxiter.md`).
 
-So: every existing record is stamped LEGACY, which is what it is. `field_metrics` stamps
-new records with the live policy at write time, and every comparison/aggregation refuses
-to mix two policies (`fm.require_one_policy`).
+Every existing record is stamped LEGACY, which is what it is. `field_metrics` stamps new
+records with the live policy at write time, and every comparison/aggregation refuses to
+mix two policies (`fm.require_one_policy`).
 
 What gets stamped, and what deliberately does not
 -------------------------------------------------
