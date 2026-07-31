@@ -20,6 +20,15 @@ Checks (all ABORT on failure):
            eval_slice (identity set equality), and each keeps its prior loc_id.
   COUNTS   every manifest loc_id has exactly SLOTS(=24) plan rows and 24 tiles on disk.
 
+PRECONDITION (as of 2026-07-31): the v8 aug cache was DELETED — 12.13 GB / 171,384 tiles
+reclaimed once v9 was trained and evaluated. Both the FORWARD tiles-on-disk check and the
+BACKWARD cache->disk check therefore fail against an empty tree, and that is not a bug in
+this script: it is a gate that runs immediately before a v8 train, and a v8 train now
+begins by REGENERATING the cache (`uv run python tools/v8/render_cache.py`, ~4.7 h at 6
+workers, from the committed data/v8/{plan,cache_manifest,aug_roster,colormaps}). Run this
+after that rebuild, not before. This script is not collected by pytest, so the deletion
+left the suite green.
+
 Usage:
   uv run python tools/v8/verify_cache_alignment.py --prior-plan <backup/plan.jsonl> \
        --prior-eval <backup/eval_slice.jsonl>

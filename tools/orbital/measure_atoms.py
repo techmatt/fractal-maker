@@ -122,7 +122,15 @@ def stability_check(atoms, n=24, log=_log) -> dict:
         by = {g["id"]: g for g in got}
         rows.append((mult, by))
     base = rows[0][1]
-    report = {"n": len(sample), "per_multiplier": [], "worst_drift": {}}
+    # Every ratio below compares a 4x-cap measure against the 1x one. The MULTIPLIER
+    # is the thing under test; the cap POLICY underneath it must be one and the same,
+    # or the drift number is measuring the policy raise instead of the multiplier.
+    policy = fm.require_one_policy(
+        *[(f"maxiter_mult={m}", list(by.values())) for m, by in rows],
+        what="the maxiter-stability drift ratios")
+    report = {"n": len(sample), fm.POLICY_KEY: policy,
+              "maxiter_policy": fm.describe_policy(policy),
+              "per_multiplier": [], "worst_drift": {}}
     for mult, by in rows:
         vals = {k: [] for k in ("cycles_spanned", "radial_rings", "falloff_extent")}
         for i, b in base.items():
@@ -153,7 +161,14 @@ MEASURES = ("cycles_spanned", "radial_rings", "radial_rings_p90", "falloff_exten
 def validate(rows: list[dict], log=_log) -> dict:
     refs = [r for r in rows if "reference" in r["groups"]]
     triage = [r for r in rows if "triage" in r["groups"] and "reference" not in r["groups"]]
-    out = {"n_refs": len(refs), "n_triage": len(triage), "measures": {}}
+    # The verdict below IS a comparison — "both references rank above ALL triage atoms".
+    # Two cap policies across those two populations would make it meaningless (and could
+    # manufacture or destroy the separation on its own), so refuse the mix outright.
+    policy = fm.require_one_policy(("references", refs), ("triage", triage),
+                                   what="the reference-vs-triage separation verdict")
+    out = {"n_refs": len(refs), "n_triage": len(triage),
+           fm.POLICY_KEY: policy, "maxiter_policy": fm.describe_policy(policy),
+           "measures": {}}
     log(f"\nVALIDATION — {len(refs)} references vs {len(triage)} triage atoms, at 4x")
     log(f"  {'measure':20s}{'eye':>10s}{'mb19':>10s}{'triage max':>12s}"
         f"{'triage p99':>11s}{'triage med':>11s}  verdict")

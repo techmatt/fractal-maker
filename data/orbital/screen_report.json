@@ -370,5 +370,7 @@
       "id": "mt3352822ecf89",
       "error": "error: pixel spacing 1.709e-15 is inside f64's quantization regime \u00e2\u20ac\u201d render-one is the shallow f64 wallpaper path (perturbation/floatexp deferred). Use a shal"
     }
-  ]
+  ],
+  "maxiter_policy_token": "",
+  "maxiter_policy": "legacy (base=500, k=0.3, clamp 200-8000)"
 }

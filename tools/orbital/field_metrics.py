@@ -56,10 +56,106 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "corpus"))
 
 import render_core as rc      # noqa: E402
 import corpus_common as cc    # noqa: E402
+import location as loc_mod    # noqa: E402
 
 # The render path's shading constant. One colour cycle == 1/DENSITY iterations.
 DENSITY = 0.025                     # src/cli.rs ShadeArgs::density default
 CYCLE_ITERS = 1.0 / DENSITY         # 40
+
+
+# --------------------------------------------------------------------------- #
+# The iteration-CAP provenance axis (`docs/design/auto_maxiter.md`)
+#
+# Every measure in this module is computed off a RENDERED FIELD, and every caller
+# sizes that field's cap with `rc.auto_maxiter(fw)` at 1x. `auto_maxiter` reads the
+# live production constants, so when the cap policy was raised on 2026-07-31 this
+# whole module FOLLOWED IT SILENTLY: the same location, screened before and after,
+# returns different `radial_rings` with nothing in the record to say why. Iteration
+# cap is the one input that moves these numbers by construction — a cap that clips
+# escape times depresses `cycles_spanned` and `radial_rings` directly, which is the
+# very thing `maxiter_stability.json` was written to measure.
+#
+# So the cap policy becomes part of every score record, closed the same way the
+# field-cache key closed it (`loc_mod.maxiter_policy_token`, reused verbatim rather
+# than re-derived): the token is the EMPTY string for the legacy policy, so a reader
+# that predates this axis sees exactly what it saw before, and a record with the key
+# ABSENT is legacy by the same invariant.
+#
+# What this does NOT cover, deliberately: `data/orbital/screen_pool.jsonl`. That file
+# is the ENUMERATION (Newton nuclei via `atom_lib.solve_nucleus` -> mpmath, at
+# NEWTON_STEPS), and `cx/cy/window_scale/log10_abs_A/f64_margin_deploy_decades` are
+# analytic properties of the atom. No rendered field, no iteration cap, nothing for a
+# cap token to be true about — stamping it would assert a dependence that does not
+# exist. `test_orbital.py::test_the_enumeration_is_not_stamped_with_a_cap_policy`
+# pins that distinction so it is not re-litigated in either direction.
+# --------------------------------------------------------------------------- #
+POLICY_KEY = "maxiter_policy_token"
+LEGACY_POLICY_TOKEN = ""            # loc_mod.LEGACY_MAXITER_POLICY == (500, .30, 200, 8000)
+
+
+class MaxiterPolicyMixError(RuntimeError):
+    """Two orbital score records computed under different iteration-cap policies were
+    about to be compared or pooled. They are not commensurable — the cap moves the
+    measure — so this raises instead of returning a number that silently mixes them."""
+
+
+def policy_token(policy=None) -> str:
+    """The token for `policy` (`None` -> the LIVE production policy). Thin pass-through
+    to `loc_mod.maxiter_policy_token` so there is one definition of the axis."""
+    return loc_mod.maxiter_policy_token(policy)
+
+
+def record_policy(rec: dict) -> str:
+    """The cap policy a score record was computed under. A MISSING key means legacy —
+    the same empty-string invariant the field-cache stems use, so records written
+    before this axis existed read correctly instead of raising."""
+    return rec.get(POLICY_KEY) or LEGACY_POLICY_TOKEN
+
+
+def describe_policy(token: str) -> str:
+    """Human name for a token, for error messages. The legacy policy's token is the
+    empty string, which would otherwise print as nothing at all."""
+    if token == LEGACY_POLICY_TOKEN:
+        b, k, lo, hi = loc_mod.LEGACY_MAXITER_POLICY
+        return f"legacy (base={b}, k={k}, clamp {lo}-{hi})"
+    return token
+
+
+def require_one_policy(*groups, what: str = "these records") -> str:
+    """Assert every record across `groups` shares one cap policy; return that token.
+
+    `groups` are iterables of score records, optionally `(label, records)` pairs so the
+    error can say WHICH side carried which policy. Raises `MaxiterPolicyMixError`
+    naming both policies and their counts. Call this at every point that COMPARES or
+    POOLS orbital scores — a percentile over a resumed file, a reference-vs-population
+    verdict, a drift ratio across maxiter multipliers."""
+    seen: dict[str, dict] = {}
+    for i, g in enumerate(groups):
+        if isinstance(g, tuple) and len(g) == 2 and isinstance(g[0], str):
+            label, recs = g
+        else:
+            label, recs = f"group{i}", g
+        for r in recs or ():
+            e = seen.setdefault(record_policy(r), {"n": 0, "labels": [], "ids": []})
+            e["n"] += 1
+            if label not in e["labels"]:
+                e["labels"].append(label)
+            if len(e["ids"]) < 3 and r.get("id"):
+                e["ids"].append(r["id"])
+    if len(seen) <= 1:
+        return next(iter(seen), policy_token())
+    lines = []
+    for tok, e in sorted(seen.items()):
+        lines.append(f"    {describe_policy(tok)!r}: {e['n']} record(s) "
+                     f"from {', '.join(e['labels'])}"
+                     + (f" (e.g. {', '.join(e['ids'])})" if e["ids"] else ""))
+    raise MaxiterPolicyMixError(
+        f"orbital scores span {len(seen)} iteration-cap policies — refusing to "
+        f"compare/pool {what}:\n" + "\n".join(lines) + "\n"
+        "These numbers are not commensurable: the cap is an input to every field "
+        "measure (see docs/design/auto_maxiter.md). Re-measure one side under the "
+        "other's policy, or compare within a policy only."
+    )
 
 MEASURE_W, MEASURE_H, MEASURE_SS = 320, 180, 1     # validation fidelity
 SCREEN_W, SCREEN_H, SCREEN_SS = 64, 36, 1          # screening fidelity
@@ -229,8 +325,13 @@ def measure_field(field: np.ndarray) -> dict:
 
 def measure_location(cx, cy, fw, maxiter, *, width=MEASURE_W, height=MEASURE_H,
                      ss=MEASURE_SS, family="mandelbrot", threads=3,
-                     tmpdir=None) -> dict:
-    """Dump one field and measure it. The .bin is transient — nothing is kept."""
+                     tmpdir=None, maxiter_policy=None) -> dict:
+    """Dump one field and measure it. The .bin is transient — nothing is kept.
+
+    The result carries `POLICY_KEY`: the iteration-cap policy `maxiter` was sized
+    under. `maxiter_policy=None` means the LIVE production policy, which is true for
+    every caller here (they all pass `rc.auto_maxiter(fw)`); pass the four constants
+    explicitly if the cap came from somewhere else."""
     with tempfile.TemporaryDirectory(dir=tmpdir) as td:
         out = Path(td) / "f.bin"
         field, side = dump_field(cx, cy, fw, maxiter, out, width=width, height=height,
@@ -238,4 +339,5 @@ def measure_location(cx, cy, fw, maxiter, *, width=MEASURE_W, height=MEASURE_H,
         m = measure_field(field)
         m["maxiter"] = int(maxiter)
         m["dims"] = [side["width"], side["height"], side["supersample"]]
+        m[POLICY_KEY] = policy_token(maxiter_policy)
         return m

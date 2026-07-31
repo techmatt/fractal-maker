@@ -46,5 +46,7 @@
       "triage_atoms_at_or_above_mb19": 8,
       "separates": false
     }
-  }
+  },
+  "maxiter_policy_token": "",
+  "maxiter_policy": "legacy (base=500, k=0.3, clamp 200-8000)"
 }

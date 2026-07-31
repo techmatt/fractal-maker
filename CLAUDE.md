@@ -174,6 +174,25 @@ The fixed base defaults are `scratch/renders/` (bare render) and `scratch/strips
 
 > **Persistent-store convention (`data/`).** `scratch/` is *disposable* — anything that must survive `rm -r scratch/*` lives under `data/` instead (committed, NOT gitignored). Use this for **load-bearing artifacts that are part of a metric's definition** and that you don't want silently regenerated: e.g. `data/calibration/energy_calibration.json` (the `calibrate` frozen quantile bins + per-image histograms — see `energy::ARTIFACT_PATH`). Regenerable *views* (PNG sheets) stay in `scratch/`. When something reads such an artifact back, expose the default path as a `pub const` (e.g. `energy::ARTIFACT_PATH`) shared by writer and reader rather than re-deriving the string.
 
+> **Projecting a long run's wall clock.** **A sample that is unbiased for mean per-tile
+> cost is NOT unbiased for a run whose expensive work is contiguous.** Cost per unit and
+> cost of the run are different estimands: the first needs a representative sample, the
+> second also needs the *order* the work is done in. The v9 cache render was projected
+> from a stratified-over-`fw`-deciles sample — correctly unbiased per tile — and missed by
+> **1.65×**, because `plan.jsonl` is emitted in **family order** and the deepest, most
+> expensive bulk sits late in the file. A uniformly-random sample of a sorted list still
+> tells you nothing about when the slow part arrives. Either sample **in run order**
+> (prefix-weighted, or a contiguous block from each region of the file), or state plainly
+> that the figure is a mean-cost estimate and not an ETA.
+>
+> Companion, and the more important half in practice: **reproject from the observed
+> decaying rate; never restate the original ETA.** Once a run is underway its own
+> throughput is a far better instrument than any pre-run sample — and when the expensive
+> work is contiguous, the observed rate *decays*, so a projection must be re-fitted from
+> recent throughput rather than from the run-to-date average (which is dominated by the
+> cheap early work). Repeating the original estimate while the rate visibly falls is how a
+> run reports "20 minutes left" for two hours.
+
 > **Adding a subcommand.** The per-subcommand `Args` struct (+ its `impl
 > { resolved_* }` helpers) lives **in the subcommand's own module**, next to its
 > `run_*` (the P0 `cli.rs` decomposition moved every struct out of `cli.rs`). Four

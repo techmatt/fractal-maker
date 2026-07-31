@@ -57,7 +57,11 @@ ARTIFACTS_ENV = "FRACTAL_ARTIFACTS_ROOT"
 # in-tree.
 RELOCATED_PREFIXES = (
     # v8: registered BEFORE the first render, not after 170k files have landed in the
-    # tree (storage_classes.md rule 5 — a new bulk family is born out-of-tree).
+    # tree (storage_classes.md rule 5 — a new bulk family is born out-of-tree). The tree
+    # itself was DELETED on 2026-07-31 (12.13 GB / 171,384 tiles) once v9 was trained; the
+    # prefix STAYS, because a v8 rebuild from the committed data/v8/plan.jsonl must land
+    # out-of-tree exactly as the first render did. Dropping the literal — as was done for
+    # v4..v7 — would be right only if v8 could never be rebuilt.
     "data/v8/aug_cache",
     # v9: the same corpus re-rendered at the raised iteration cap
     # (docs/design/auto_maxiter.md). A SEPARATE tree rather than a re-render in place,

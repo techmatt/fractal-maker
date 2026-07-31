@@ -76,6 +76,14 @@ TRACKED_CANARIES = [
     # Hand-picked reference fixtures (the test locations + palette selection).
     "data/test_renders.json",
     "data/test_palettes.json",
+    # The 32-atom maxiter convergence ladder — the raw evidence the production cap's
+    # base 500 -> 4000 (x8) rests on (docs/design/auto_maxiter.md). Unregenerable in the
+    # strict sense the list requires: its producer survives
+    # (tools/orbital/measure_convergence_ladder.py) but every ratio in it is a multiple
+    # of the LEGACY production cap, and re-running it now measures against the RAISED cap
+    # — a different quantity, not a rebuild. Promoted out of scratch/ on 2026-07-31,
+    # where a routine `rm -r scratch/*` would have taken it.
+    "data/orbital/maxiter_convergence_ladder.json",
     # Hand-labeled palette-preference tier stores.
     "data/queries/labels/coldstart_v2.json",
     "data/queries/labels/warmstart_v1.json",

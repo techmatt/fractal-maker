@@ -24,5 +24,7 @@
     "cycles_spanned": 0.3982,
     "radial_rings": 0.6015,
     "falloff_extent": 0.1631
-  }
+  },
+  "maxiter_policy_token": "",
+  "maxiter_policy": "legacy (base=500, k=0.3, clamp 200-8000)"
 }

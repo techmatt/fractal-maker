@@ -38,6 +38,34 @@ q3-vs-rest AUC on the eval slice (e.g. n≈144 ⇒ ~AUC 0.68 as the bar). Then:
 - Distinguish **eval *power*** (needs more labels) from **train *signal*** (a new
   positive class can be learnable yet unprovable on a small eval).
 
+> **Before pre-registering a bar, verify the instrument's inputs actually change.**
+>
+> Pre-registration protects against moving the bar after seeing the numbers. It does
+> **not** protect against a bar that cannot see the intervention at all — and that
+> failure looks exactly like success. A "NON-INFERIOR" verdict computed on inputs
+> identical to the baseline's is *true and empty*: it reports retrain-to-retrain
+> variance and says nothing about the change under test.
+>
+> **The cheap check is a pixel/byte delta on the eval slice, computed *before* the
+> run.** Hash the eval-slice tiles under both conditions and count how many differ. If
+> the answer is zero, the instrument is blind and the bar must be rebuilt on a slice
+> whose inputs move — *before* spending the training run, not after.
+>
+> **Why:** v9 (the cap-raise retrain, `auto_maxiter.md`) passed its pre-registered
+> PRIMARY arm — census-144 AUC 0.7509 → 0.7390, p = 0.706, NON-INFERIOR — and the
+> verdict was worthless. All 144 census tiles were **byte-identical** between the v8
+> and v9 caches: the census is entirely `julia:multibrot3/4/5`, already converged at
+> maxiter 8000, so raising the cap changed nothing there. The tell was a diagnostic
+> arm returning *exactly* 0.0000. **An exact zero is not a null result — it is a
+> measurement of nothing**, and it should be treated as a failed instrument check
+> rather than a clean baseline.
+>
+> **How to apply:** when the intervention is a *render-path* change (cap, coloring,
+> AA, resolution) rather than a data or architecture change, the eval slice's
+> composition decides whether the experiment is answerable. Diff the slice's rendered
+> inputs first; pick the slice to include material the change actually moves; and rank
+> the arm whose inputs moved as PRIMARY, not SECONDARY.
+
 ## 4. `t_good` decode thresholds are scale-bound — re-derive every version
 
 Per-partition `t_good` thresholds are **calibrated to a specific score scale**. A new

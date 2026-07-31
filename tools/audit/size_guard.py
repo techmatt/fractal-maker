@@ -165,6 +165,22 @@ REGISTRY: list[Entry] = [
           "prospect-library CLIP embeddings (embeddings.npz, tracked): unregenerable "
           "except value-approximate under a verdict-sensitive threshold. CANARY.",
           canary=True),
+    Entry("data/orbital/", KEEP, None, "tracked",
+          "DISPOSITION: KEEP — orbital screen. The >=1 MiB violator is "
+          "screen_pool.jsonl (1.2 MB, 4,669 rows), and it carries the ENUMERATION "
+          "itself — each row is a Newton-solved nucleus (35-digit cx/cy, period, "
+          "window_scale, log10|A|), i.e. phase 1 of tools/orbital/screen_pool.py, not "
+          "a derived view over a pool committed elsewhere. There IS no other copy of "
+          "this pool. Two reasons it stays: (1) enumeration runs ~25x the cost of "
+          "screening, so this file is the expensive half of the pipeline in 1.2 MB; "
+          "(2) it is not even reproducible on demand — enumeration is wall-clock "
+          "budgeted and resumable (--enum-budget), so the exact atom set is a function "
+          "of how long the run got, not of the seed alone. Same shape as the "
+          "data/label_corpus/ precedent: one tracked file over the per-file rule, no "
+          "traversal cost (6 files in the dir), content expensive-to-impossible to "
+          "regenerate. The derived half (screen_scores.jsonl, 766 KB) is under the "
+          "threshold and is regenerable from this pool; registered at the dir prefix "
+          "so it does not flake the guard when the pool grows.", canary=False),
 
     # === RELOCATE -> artifacts — regenerable bulk (rebuildable render/cache) ====
     # Human-label corpora: the CROP JPGs are a pure function of render coords

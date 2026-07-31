@@ -5,6 +5,30 @@ showed it was under-provisioned, the adopted raise, and the residual that raise 
 cover. Named for the function, not the concept: the policy has no config file, it is a
 handful of module constants and a five-line closed form, replicated at several sites.
 
+> ### ⚠ Corrections (2026-07-31)
+>
+> This document was first written from a model of the system that the follow-on work
+> then **disproved**. The corrections are folded into the sections below and marked
+> **[CORRECTION]** where they land, rather than silently rewritten — an argument whose
+> premises changed is worth being able to re-read. In summary:
+>
+> 1. **The augmentation cache never used `auto_maxiter`.** Not for v4, not for v8. Every
+>    training tile was rendered at a flat 8000. The training cache and the deploy path
+>    have therefore **never** agreed on the cap — a pre-existing skew, not one this raise
+>    introduced. → *The aug-cache flat cap*
+> 2. **`tools/orbital/` does not run a 24×/clamp-67000 policy.** It measures at **1×**,
+>    through `rc.auto_maxiter`. No such constant exists anywhere in the tree.
+>    → *Where it lives*
+> 3. **The raise's largest effect on the corpus is one nobody predicted:** it *shrank*
+>    v8's own train/deploy skew, from 10.0 % to 3.3 % of pixels. v8 is better aligned
+>    now than it was before the change. → *What the raise actually changes, in pixels*
+> 4. **The 32-atom ladder was found and is now committed.** It had been sitting in the
+>    disposable `scratch/` tree. → *The measurement*
+> 5. **v9 is trained, evaluated, staged — and deliberately not deployed.**
+>    → *Why v9 is shelved*
+> 6. **The label corpus holds two render regimes, and new batches will be a third.**
+>    → *…and the label corpus is mixed the same way*
+
 ## The form
 
 ```
@@ -32,7 +56,7 @@ raise edits:
 | site | role |
 |---|---|
 | `tools/scoring/active_ckpt.auto_maxiter` | **production.** The label-crop / corpus-crop / discovery-render cap. `tools/descent/store.py`, `build_native_multibrot_band.py`, `rescore_gather_mb4_v7.py`, and every `tools/wallpaper/build_*.py` import it. |
-| `tools/explorer/render_core.auto_maxiter` | the shared explorer + descent **navigation** cap; `tools/orbital/` measures through it. |
+| `tools/explorer/render_core.auto_maxiter` | the shared explorer + descent **navigation** cap; `tools/orbital/` measures through it, **at 1×**. |
 
 They are two independent copies of the same numbers, so they are pinned to agree by
 `tools/scoring/test_maxiter_policy.py`. Three further copies exist and are **not**
@@ -41,6 +65,26 @@ import), `tools/emission/descriptor.py`, `tools/julia_ladder/build_j0.py`,
 `tools/studies/q4_neighborhood_sweep.py` — see "Sites deliberately left alone" below.
 
 The **augmentation cache does not use this policy at all**; see "The aug-cache flat cap".
+
+**[CORRECTION] `tools/orbital/` measures at 1×, not 24×.** Both
+`tools/orbital/screen_pool.py` and `tools/orbital/measure_atoms.py` size every field dump
+as `rc.auto_maxiter(fw)` with no multiplier (`measure_atoms`'s `maxiter_mult` defaults to
+`1.0`; the ×2/×4 passes exist only inside `stability_check`). **There is no 24× constant
+and no 67000 clamp anywhere under `tools/orbital/`.**
+
+Where the belief came from, since it was specific enough to be worth naming: the
+convergence study *fitted* a scoring-only envelope of `mult_of_prod = 24.0,
+clamp_max = 67000` — "ceil(max conv/prod ratio) × production cap" — and wrote it to
+`scratch/rescore/scoring_cap.json`. Nothing outside that scratch directory ever read it,
+and `rescore_lib.scoring_maxiter` falls back to a fixed ×8 in its absence. It was a
+**proposal that was never adopted**, in a file that was never committed.
+
+This matters beyond bookkeeping: because `tools/orbital/` measures through the *live*
+production constants, the whole measurement stack **followed the raise silently**. Every
+committed orbital score predates it and is not comparable to anything measured from here
+on. That is now mechanical rather than remembered — each score record carries a
+`maxiter_policy_token`, the committed ones are stamped legacy, and any comparison or
+aggregation across two policies raises (`field_metrics.require_one_policy`).
 
 ## The measurement
 
@@ -69,11 +113,31 @@ Three things follow, and they are the whole argument:
    boundary the aesthetic classifier exists to resolve. Every crop in the label corpus and
    every production render was made under a clipped cap.
 
-**Corroborating committed evidence:** `data/orbital/maxiter_stability.json` (n=24, at ×1 /
-×2 / ×4) shows `radial_rings` still climbing at ×4 — 45.0 → 55.25 → 60.75 — with no sign
-of a plateau. It is consistent with, and independent of, the ×8 ladder above. The 32-atom
-convergence ladder itself was a session measurement and is not a committed artifact; this
-table is its record.
+**[CORRECTION] The ladder is a committed artifact after all.** It was previously recorded
+here as an uncommitted session measurement, with this table as its only record. It was
+found intact in the disposable tree (`scratch/rescore/converge.json`) and promoted on
+2026-07-31:
+
+| | |
+|---|---|
+| artifact | **`data/orbital/maxiter_convergence_ladder.json`** (45 KB, durable, tracked) |
+| producer | **`tools/orbital/measure_convergence_ladder.py`** (+ `rescore_lib.py`), promoted from `scratch/rescore/` |
+| contents | 32 atoms × the multiplier ladder `[1, 2, 4, 8, 12, 16, 24, 32, 48]`, each point carrying `maxiter`, `rings`, `cycles_spanned`, `escaped_px`, plus per-atom `conv_mult` / `conv_maxiter` / `converged` |
+
+Every figure in the table above reproduces from it exactly: **32 atoms, fw 3.31e-10 …
+0.756, 0 not converged, ratio mean 7.688, median 8.0, max 24.0.** The ×8 rests on
+committed evidence, not on a memory of a measurement.
+
+⚠ **It is not reproducible by re-running the producer**, and the artifact is stamped
+`maxiter_policy_token: ""` to say so. Every ratio in it is a multiple of the *legacy*
+production cap; `rc.auto_maxiter` now returns ~8× what it did when the ladder was walked,
+so a fresh run measures convergence against the new policy and would report ratios near 1.
+That is a different measurement, not a refutation — and it is why the file is durable
+rather than regenerable.
+
+**Corroborating independent evidence:** `data/orbital/maxiter_stability.json` (n=24, at ×1
+/ ×2 / ×4) shows `radial_rings` still climbing at ×4 — 45.0 → 55.25 → 60.75 — with no sign
+of a plateau. Consistent with, and methodologically independent of, the ×8 ladder.
 
 ## The adopted policy, and why 4000
 
@@ -110,10 +174,16 @@ decorated locations should start here and not re-derive it.
 
 ## The aug-cache flat cap (a separate, pre-existing axis)
 
+**[CORRECTION]** This section replaces the original document's assumption that the
+training cache was rendered through `auto_maxiter` like everything else. It was not, and
+never was.
+
 `v4-render-batch` (`src/v4_cache.rs`) renders **every** plan row at a single
-`--maxiter`, defaulting to **8000**, and `data/v8/plan.jsonl` carries no per-row maxiter.
-So the v4…v8 augmentation caches were rendered at a **flat 8000 regardless of `fw`** — not
-through `auto_maxiter` at all. Consequences, which were never written down:
+`--maxiter`, defaulting to **8000**, and **no v4–v8 plan carries a per-row cap** — not
+just v8's. So every v4…v8 augmentation cache was rendered at a **flat 8000 regardless of
+`fw`**, never touching `auto_maxiter`. The training cache was therefore roughly **10× over
+production on shallow locations and short only on deep ones**. Consequences, which were
+never written down:
 
 * Shallow training tiles were rendered at ~10× the cap their deploy-time crop used
   (flat 8000 vs ~800), and deep tiles at ~1.5× (flat 8000 vs ~5400). The training cache and
@@ -143,6 +213,14 @@ This does **not** contaminate training — the classifier trains on aug-cache ti
 judged some locations through a flat-8000 crop and others through an old-`auto_maxiter`
 crop, so the two groups were presented at systematically different clip levels. Out of
 scope for the cap raise, recorded here so it is not rediscovered as a surprise.
+
+**[CORRECTION] and there will be a third regime.** The two above are *flat 8000* (4,880
+crops) and *old-`auto_maxiter`* (3,587 crops across 1,038 distinct values). Every batch
+labeled from 2026-07-31 onward is rendered at **new-`auto_maxiter`**, which is neither.
+Stated as one line of fact with **no action implied** — this is not a call to re-render
+the corpus, and the classifier still never sees `render.maxiter`. It is here so that the
+next person who counts distinct caps in the label store finds three groups and an
+explanation, rather than three groups and a mystery.
 
 ## Sites deliberately left alone
 
@@ -196,6 +274,28 @@ raise. The raise's effect on the corpus is therefore lopsided:
   *inside* a non-inferiority band rather than above it. That is a prediction, not an
   excuse: it was measured before the retrain, not after it.
 
+### [CORRECTION] The consequence the table was not read for: v8's skew *shrank*
+
+Read the three rows as a pair of before/after states and a result falls out that the
+original framing missed entirely. v8's training tiles are flat-8000 and did not move; what
+moved is the **deploy** cap, `old_auto → new_auto`:
+
+| | training input | deploy render | **train/deploy skew** |
+|---|---|---|---|
+| before the raise | flat 8000 | `old_auto` | **10.0 %** of pixels |
+| after the raise | flat 8000 | `new_auto` | **3.3 %** of pixels |
+
+⇒ **The raise cut v8's own train/deploy skew from 10.0 % to 3.3 %, as a side effect.**
+Nothing about v8 was retrained, re-rendered or re-tuned; raising the deploy cap moved the
+deploy path *toward* the flat-8000 tiles v8 was trained on. **v8 is better aligned now
+than it was before the change** — the opposite of the usual expectation that changing a
+production constant degrades the deployed model until it is retrained.
+
+This is the single most decision-relevant number in the document, because it removes the
+urgency from the v9 flip (see below). It is also a reminder that "the training gain is
+3.3 %" and "the deploy gain is 10.2 %" are not competing measurements of one thing: they
+are two different comparisons, and the *difference* between them is the skew.
+
 Two further facts worth keeping:
 
 * **Convergence at 8000 is common.** On a deep mandelbrot tile (fw ≈ 2.0e-7) the render is
@@ -206,6 +306,44 @@ Two further facts worth keeping:
   for `flat8000 → new_auto` and 16.8 % for `old_auto → new_auto`. What matters is how many
   pixels have an escape time *between* the two caps, and that is a property of the
   structure in frame, not of the magnification.
+
+## [CORRECTION] Why v9 is shelved
+
+v9 — the v8 corpus re-rendered at the raised cap — is **trained, evaluated, and staged.
+It is deliberately not deployed.** `ACTIVE_CKPT` remains `data/classifier/v8/model_best.pt`,
+`keeper_cuts_v9.json` remains unadopted, and the re-derived thresholds sit staged beside
+the live v8 gate rather than replacing it. This is a decision, not an unfinished step, and
+it needs recording because everything about the artifact says "ready".
+
+**Reason 1 — the pre-registered instrument could not see the change.** The eval bar was
+committed at `2171bbc`, before the numbers existed, exactly as it should have been. v9
+passed its PRIMARY arm: census-144 q3 AUC 0.7509 → 0.7390, delta −0.0119, DeLong p = 0.706,
+**NON-INFERIOR**. But the diagnostic arm returned v8-on-new = v8-on-old = **exactly
+0.0000**, and an exact zero is not a null result — it is a measurement of nothing. **All
+144 census canonical tiles are byte-identical between the v8 and v9 caches.** The census is
+entirely `julia:multibrot3/4/5`, whose fields are already converged at 8000 (higher degree
+escapes faster), so raising the cap to 3,400–24,811 changes those tiles not at all. The
+PRIMARY verdict is therefore *true and empty*: −0.0119 is retrain-to-retrain variance on
+identical inputs, and "NON-INFERIOR" on it says **nothing whatsoever about the cap**. (The
+same applies to the class-4 read, 0.813 → 0.688: all 22 class-4 locations are census.)
+
+The only arm whose inputs actually moved is the SECONDARY mandelbrot floor — 357 of 526
+canonical tiles changed — which went **+0.0168, the right direction, not significant**.
+That is the honest read on the cap, and the pre-registered hierarchy ranks it second.
+
+**Reason 2 — there is no urgency, and the skew table above is why.** The raise *shrank*
+v8's train/deploy skew from 10.0 % to 3.3 %. The usual argument for flipping quickly —
+"production moved, the deployed model is now stale against it" — runs backwards here: v8
+got **better** aligned when the cap went up. Shipping a model whose only measured advantage
+is +0.0168 on a secondary arm, to replace one that just improved for free, in exchange for
+re-deriving every downstream threshold on a moved score distribution, is a bad trade at
+this moment.
+
+**When the flip happens.** At the **next retrain — after the supply run, on new labels** —
+where the corpus has genuinely changed and a fresh eval slice can carry census tiles whose
+inputs actually move under the cap. v9's weights and staged thresholds stay exactly where
+they are until then. The lesson generalizes and is recorded as an operating rule: *before
+pre-registering a bar, verify the instrument's inputs actually change.*
 
 ## Consequences of a cap change (the checklist)
 

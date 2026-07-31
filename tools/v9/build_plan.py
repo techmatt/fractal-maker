@@ -23,7 +23,10 @@ resolve the same number.
 WHY A NEW TREE RATHER THAN A RE-RENDER IN PLACE. `v4-render-batch` resumes by skipping any
 row whose output exists, so re-rendering into `data/v8/aug_cache` would skip all 170,808
 old-cap tiles and silently produce nothing; the alternative is deleting 12.1 GB of tiles
-that are the only rollback anchor. A mixed-cap corpus is poison in the same way a
+that were, at the time, the standing rollback anchor. (Which is what eventually happened,
+on 2026-07-31 — but AFTER v9 was trained and evaluated, and only because v8's cache is
+attributable and regenerable from its committed manifest. Deleting it up front would have
+left no v8 at all while v9 was unproven.) A mixed-cap corpus is poison in the same way a
 mixed-decode readout is, and a fresh tree cannot contain an old-cap tile by construction.
 Same argument the classifier version-id gets: if the re-rendered cache ships as "v8", no
 predicate can separate old-v8 tiles from new-v8 tiles.
@@ -131,7 +134,13 @@ ROSTER_OUT = "data/v9/aug_roster.json"
 PLAN_OUT = "data/v9/plan.jsonl"
 CACHE_MANIFEST_OUT = "data/v9/cache_manifest.jsonl"
 V9_CACHE_DIR = "data/v9/aug_cache"          # repo-relative; bulk() resolves it out-of-tree
-V8_CACHE_DIR = "data/v8/aug_cache"          # the old-cap tree, kept as the rollback anchor
+# The old-cap tree. It WAS the rollback anchor while v9 was being built; it was DELETED
+# on 2026-07-31 once v9 was trained and evaluated (12.13 GB / 171,384 tiles reclaimed).
+# Rollback is now a REBUILD, not a restore: data/v8/{plan,cache_manifest,aug_roster,
+# colormaps,manifest}.jsonl are all committed, so `tools/v8/render_cache.py` regenerates
+# the tree byte-for-byte in ~4.7 h at 6 workers. The constant stays because the reuse
+# audit and the resolver prefix are still keyed on it.
+V8_CACHE_DIR = "data/v8/aug_cache"
 
 # --------------------------------------------------------------------------- #
 # The v8b recipe
@@ -308,10 +317,16 @@ def audit_reuse() -> dict:
             "coordinates, same palette, same filename — DIFFERENT field. Reusing one would "
             "put an old-cap tile in a new-cap corpus, which is the exact failure this "
             "rebuild exists to remove, so the v9 tree is a separate directory and the v8 "
-            "tree is left intact as the rollback anchor. (The v4..v7 caches were deleted "
+            "tree was a separate directory. (The v4..v7 caches were deleted "
             "on 2026-07-29, commit 7068839 — 243,477 JPGs no surviving cache_manifest "
-            "could attribute to a location.)"),
-        "v8_tree_retained_as_rollback": True,
+            "could attribute to a location.) The v8 tree was ITSELF deleted on "
+            "2026-07-31, after v9 was trained and evaluated: unlike v4..v7 it is fully "
+            "attributable and regenerable from its committed manifest, so rollback is a "
+            "~4.7 h rebuild rather than a restore."),
+        # DERIVED, not asserted. This used to be a hardcoded True, which is exactly how a
+        # metadata file outlives the fact it records — it stayed True across the deletion
+        # that made it false. Read the disk instead.
+        "v8_tree_retained_as_rollback": paths.bulk(V8_CACHE_DIR).exists(),
     }
 
 
@@ -678,7 +693,9 @@ def main() -> None:
     n_p = sum(1 for p in plan_rows if "p_re" in p)
     print(f"  rows carrying c: {n_c}   rows carrying phoenix p/z-1: {n_p}")
     print(f"  cache root     : {paths.bulk(V9_CACHE_DIR)}  (bulk, out-of-tree)")
-    print(f"  v8 cache root  : {paths.bulk(V8_CACHE_DIR)}  (LEFT INTACT — rollback anchor)")
+    _v8 = paths.bulk(V8_CACHE_DIR)
+    print(f"  v8 cache root  : {_v8}  "
+          f"({'on disk' if _v8.exists() else 'DELETED 2026-07-31 — rebuild from data/v8/plan.jsonl'})")
 
     if a.dry_run:
         print("\n--dry-run: nothing written.")

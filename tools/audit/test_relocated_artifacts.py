@@ -377,10 +377,14 @@ def test_non_relocated_paths_resolve_in_tree():
 def test_live_aug_caches_are_registered():
     """Both live aug-cache trees are literals in RELOCATED_PREFIXES.
 
-    v9 (the v8 corpus re-rendered at the raised iteration cap) is a SECOND live tree, not
-    a replacement: v8's 12.1 GB is retained as the rollback anchor. Registration must
-    happen BEFORE the first render — storage_classes.md rule 5, a new bulk family is born
-    out-of-tree — so this asserts the registry rather than the disk."""
+    v9 (the v8 corpus re-rendered at the raised iteration cap) was built as a SECOND live
+    tree rather than a replacement, with v8's 12.1 GB held as the rollback anchor; v8's
+    tree was then deleted on 2026-07-31, once v9 was trained and evaluated. Its prefix
+    stays registered regardless: a rebuild from the committed data/v8/plan.jsonl must land
+    out-of-tree exactly as the first render did. Registration must happen BEFORE the first
+    render — storage_classes.md rule 5, a new bulk family is born out-of-tree — so this
+    asserts the registry rather than the disk, which is why deleting the tiles leaves it
+    green."""
     assert "data/v8/aug_cache" in A.RELOCATED_PREFIXES
     assert "data/v9/aug_cache" in A.RELOCATED_PREFIXES
     assert A.is_relocated("data/v9/aug_cache/7116/twilight_shifted__id__s1.0000__sh0.0000__ss2.jpg")

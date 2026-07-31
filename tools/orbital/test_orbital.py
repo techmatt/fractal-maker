@@ -152,6 +152,138 @@ def test_the_measures_that_failed_are_recorded_as_failed():
 
 
 # --------------------------------------------------------------------------- #
+# the iteration-CAP provenance axis (docs/design/auto_maxiter.md)
+#
+# `tools/orbital/` sizes every field with `rc.auto_maxiter(fw)`, which reads the LIVE
+# production constants — so this stack followed the 2026-07-31 cap raise silently.
+# These brackets pin all three halves: the token rides on the record, a same-policy
+# comparison is unaffected, a cross-policy one raises, and the guard is actually
+# REACHED on the live path rather than merely defined.
+# --------------------------------------------------------------------------- #
+POOL = REPO_ROOT / "data" / "orbital" / "screen_pool.jsonl"
+SCREEN_SCORES = REPO_ROOT / "data" / "orbital" / "screen_scores.jsonl"
+
+
+def _rows(p):
+    return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+
+
+def test_missing_token_reads_as_legacy():
+    """The load-bearing back-compat invariant, same as the field-cache stems: a record
+    written before this axis existed is LEGACY, not 'unknown'. If this flipped, every
+    pre-2026-07-31 record would start raising against itself."""
+    assert fm.record_policy({}) == fm.LEGACY_POLICY_TOKEN == ""
+    assert fm.record_policy({fm.POLICY_KEY: ""}) == fm.LEGACY_POLICY_TOKEN
+    assert "legacy" in fm.describe_policy("").lower()
+    # ...and the live policy is NOT legacy, or this whole axis is vacuous.
+    assert fm.policy_token() != fm.LEGACY_POLICY_TOKEN
+
+
+def test_same_policy_comparison_is_unaffected():
+    """Half one of the bracket: within one policy nothing changed. Two same-token
+    groups pool cleanly and return that token — including the all-legacy case, which
+    is what every committed file is."""
+    legacy = [{"id": "a"}, {"id": "b", fm.POLICY_KEY: ""}]
+    assert fm.require_one_policy(("refs", legacy[:1]), ("triage", legacy[1:])) == ""
+    live = fm.policy_token()
+    now = [{"id": "c", fm.POLICY_KEY: live}, {"id": "d", fm.POLICY_KEY: live}]
+    assert fm.require_one_policy(("a", now), ("b", now)) == live
+    assert fm.require_one_policy([]) == fm.policy_token()      # empty pools cleanly
+
+
+def test_cross_policy_comparison_raises_naming_both():
+    """Half two: mixing raises, and the message NAMES both policies — an error that
+    says only 'policy mismatch' would leave you guessing which side to re-measure."""
+    old = [{"id": "old1"}, {"id": "old2"}]
+    new = [{"id": "new1", fm.POLICY_KEY: fm.policy_token()}]
+    with pytest.raises(fm.MaxiterPolicyMixError) as ei:
+        fm.require_one_policy(("committed", old), ("this run", new),
+                              what="the separation verdict")
+    msg = str(ei.value)
+    assert "legacy" in msg and fm.policy_token() in msg
+    assert "committed" in msg and "this run" in msg
+    assert "2 record(s)" in msg and "1 record(s)" in msg
+    assert "the separation verdict" in msg
+
+
+def test_the_guard_is_reached_on_the_live_validate_path():
+    """Defining a guard nobody calls is the failure mode this test exists to refuse.
+    Drive the REAL `measure_atoms.validate` — the function that emits validation.json —
+    with a reference measured under one policy and triage under another, and assert it
+    refuses. Rows carry every field validate reads, so it fails at the GUARD, not
+    incidentally on a KeyError."""
+    import measure_atoms as ma
+
+    def row(i, groups, tok=None):
+        r = {"id": i, "groups": groups, "label": i,
+             **{k: 5.0 for k in ma.MEASURES}}
+        if tok is not None:
+            r[fm.POLICY_KEY] = tok
+        return r
+
+    ref, tri = row("r", ["reference"]), row("t", ["triage"])
+    assert ma.validate([ref, tri], log=lambda *_: None)[fm.POLICY_KEY] == ""  # same: fine
+    with pytest.raises(fm.MaxiterPolicyMixError):
+        ma.validate([ref, row("t", ["triage"], fm.policy_token())], log=lambda *_: None)
+
+
+def test_the_guard_is_reached_on_the_live_screen_resume_path(tmp_path, monkeypatch):
+    """The other live path, and the one that actually bites: `screen()` RESUMES from an
+    existing scores file and appends. Across the raise that silently writes one file
+    holding two populations, so the guard must fire on the resume load — before the
+    screening budget is spent, not after.
+
+    Driven against a planted scores file rather than the committed one, so the bracket
+    keeps testing the guard after the day `screen_scores.jsonl` is legitimately
+    re-measured under the live policy."""
+    import paths
+    import screen_pool as sp
+
+    fake = tmp_path / "screen_scores.jsonl"
+    monkeypatch.setattr(paths, "durable", lambda rel, **kw: fake)
+
+    # (a) resumed rows are LEGACY, this run is live -> refuse, before any screening.
+    fake.write_text(json.dumps({"id": "old", "radial_rings": 5.0}) + "\n", encoding="utf-8")
+    calls = []
+    with pytest.raises(fm.MaxiterPolicyMixError) as ei:
+        sp.screen([], log=lambda *a: calls.append(a))
+    assert calls, "guard must fire AFTER the resume log line, i.e. on the real path"
+    assert "legacy" in str(ei.value) and fm.policy_token() in str(ei.value)
+
+    # (b) same file stamped with THIS run's policy -> resumes normally, no raise.
+    fake.write_text(json.dumps({"id": "old", "radial_rings": 5.0,
+                                fm.POLICY_KEY: fm.policy_token()}) + "\n", encoding="utf-8")
+    scored, errs, _ = sp.screen([], log=lambda *_: None)
+    assert [r["id"] for r in scored] == ["old"] and not errs
+
+
+def test_committed_score_records_are_stamped():
+    """Every committed orbital SCORE record states the policy it was computed under.
+    All of them are legacy: git puts these files at 2026-07-30, the raise at 07-31."""
+    import stamp_cap_policy as scp
+    assert scp.audit(check=True)["jsonl"], "nothing audited — paths moved?"
+    for rel, s in scp.audit(check=True)["jsonl"].items():
+        assert s["needed_stamp"] == 0, f"{rel}: {s['needed_stamp']} unstamped rows"
+    for rel in (MEASURES, SCREEN_SCORES):
+        if rel.exists():
+            assert all(fm.record_policy(r) == "" for r in _rows(rel))
+
+
+@pytest.mark.skipif(not POOL.exists(), reason="pool not enumerated")
+def test_the_enumeration_is_not_stamped_with_a_cap_policy():
+    """`screen_pool.jsonl` is the ENUMERATION, not a score: Newton nuclei from
+    `atom_lib.solve_nucleus` (mpmath), whose fields are analytic properties of the atom.
+    Nothing on that path renders a field or reads an iteration cap, so a cap token there
+    would be a FALSE provenance claim. Pinned in both directions — the day someone adds
+    a rendered quantity to the pool, this goes red and the disposition gets re-decided
+    on purpose."""
+    rows = _rows(POOL)
+    assert rows and not any(fm.POLICY_KEY in r for r in rows)
+    assert set(rows[0]) == {"id", "period", "cx", "cy", "window_scale", "family",
+                            "degree", "log10_abs_A", "f64_margin_deploy_decades"}
+
+
+# --------------------------------------------------------------------------- #
 # screening resolution
 # --------------------------------------------------------------------------- #
 def test_screen_geometry_is_much_cheaper_than_measure_geometry():

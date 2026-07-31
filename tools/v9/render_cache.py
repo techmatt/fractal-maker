@@ -12,7 +12,9 @@ Two things differ from the v8 supervisor and both matter:
   * **A SEPARATE cache tree.** Resume works by skipping any row whose output exists, so
     pointing this at v8's tree would skip all 170,808 old-cap tiles and silently render
     nothing. A fresh tree also makes a mixed-cap corpus impossible by construction rather
-    than by discipline, and leaves v8's 12.1 GB intact as the rollback anchor.
+    than by discipline, and left v8's 12.1 GB intact as the rollback anchor for the
+    duration of the build. (v8's tree was deleted on 2026-07-31, once v9 was trained and
+    evaluated — regenerable from data/v8/plan.jsonl, ~4.7 h at 6 workers.)
 
 Measured (tools/v9/estimate_cap_cost.py, 60 locations x 24 slots stratified over fw
 deciles): 0.1218 s/tile at 6 workers, a 1.22x cost ratio against the old flat cap.

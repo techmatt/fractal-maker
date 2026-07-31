@@ -151,6 +151,13 @@ def screen(rows, *, workers=WORKERS, log=_log, time_budget=None) -> list[dict]:
                 scored.append(r)
                 done_ids.add(r["id"])
         log(f"  resuming: {len(done_ids)} already screened")
+        # Fail BEFORE spending the screening budget, not after. Rows resumed from disk
+        # were measured under whatever cap policy was live when they were written; the
+        # rows we are about to append carry today's. Appending across the raise would
+        # write one file holding two incommensurable populations.
+        fm.require_one_policy((f"resumed from {SCORES}", scored),
+                              ("this run", [{fm.POLICY_KEY: fm.policy_token()}]),
+                              what="resumed screen scores against this run's cap policy")
     todo = [r for r in rows if r["id"] not in done_ids]
     log(f"  screening {len(todo)} atoms at {fm.SCREEN_W}x{fm.SCREEN_H} ss{fm.SCREEN_SS}")
     t0, n = time.time(), [0]
@@ -172,7 +179,10 @@ def screen(rows, *, workers=WORKERS, log=_log, time_budget=None) -> list[dict]:
                    "radial_rings": m["radial_rings"],
                    "radial_rings_p90": m["radial_rings_p90"],
                    "cycles_spanned": m["cycles_spanned"],
-                   "interior_fraction": m["interior_fraction"]}
+                   "interior_fraction": m["interior_fraction"],
+                   # the iteration-cap policy this score was measured under; every
+                   # aggregation below refuses to mix two of them.
+                   fm.POLICY_KEY: m[fm.POLICY_KEY]}
             with lock:
                 scored.append(row)
                 fh.write(json.dumps(row) + "\n")
@@ -223,6 +233,12 @@ def main(argv=None) -> int:
     print("\nphase 2 — screen")
     scored, errs, el = screen(rows, workers=args.workers, time_budget=args.screen_budget)
 
+    # The aggregation guard: percentiles, the implied floor and the keep-top ranking
+    # below are all cross-atom comparisons, so they must be within ONE cap policy.
+    import field_metrics as fm
+    policy = fm.require_one_policy(("screened", scored),
+                                   what="the screen distribution and keep-top ranking")
+
     v = np.array([s["radial_rings"] for s in scored], dtype=float)
     pct = [1, 5, 10, 25, 50, 75, 90, 95, 99]
     dist = {f"p{p}": round(float(np.percentile(v, p)), 1) for p in pct}
@@ -231,6 +247,10 @@ def main(argv=None) -> int:
     rep = {
         "measure": "radial_rings (median colour-cycle crossings over 64 rays)",
         "screen_geometry": [64, 36, 1],
+        # Provenance, not decoration: every number below is only comparable to another
+        # report carrying the same token (docs/design/auto_maxiter.md).
+        fm.POLICY_KEY: policy,
+        "maxiter_policy": fm.describe_policy(policy),
         "pool_n": len(rows), "scored_n": len(scored), "failed_n": len(errs),
         "screen_seconds": round(el, 1),
         "screen_rate_atoms_per_s": round(len(scored) / max(1e-9, el), 1),
