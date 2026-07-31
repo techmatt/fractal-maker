@@ -151,6 +151,34 @@ why that pool is a **candidate** list and nothing more:
   (`#[ignore]`d) and `tools/viz/complexity_sort.html` still name `data_large/…` paths
   whose corpus was already absent.
 
+## Two standing facts about this directory's shape
+
+Both are why the index above is hand-maintained rather than generated, so they belong here
+rather than in a doc about storage or coloring.
+
+- **There is no package root, and imports work by `sys.path` mutation.** `pyproject.toml`
+  declares dependencies only — no build backend, no packages, no `src` layout — so every
+  module is run *both* as `uv run python tools/<sub>/<mod>.py` and collected by pytest, and
+  imports are position-dependent. `tools/_bootstrap.py` exists to centralize it, and covers
+  **4 paths** (`tools/`, `palettes`, `corpus`, `queries`) with **3 importers**; its own
+  docstring says the rest "still carry their own inserts — migrating them is a follow-up."
+  The reasoning is sound — real packages would break `python tools/x/y.py` invocation — but
+  the current state is the worst of both: a centralizing module almost nothing uses, and a
+  convention every new file re-derives. This is also the direct cause of method A above
+  being hard: there is no dotted name to resolve against.
+  `[measured: 305 of 439 tracked .py (69%) call sys.path.insert directly; _bootstrap has 3
+  importers; 2026-07-31]` `[cmd: git ls-files '*.py' | xargs grep -l 'sys.path.insert' | wc -l;
+  grep -rlE '^\s*(import|from)\s+_bootstrap' --include='*.py' tools/ | wc -l]`
+- **The `tools/vN/` families are copy-forward, not parameterized — and that is a standing
+  recommendation to retire.** `build_plan.py` exists **6 times** (`v4`…`v9`),
+  `build_manifest.py` **4 times**, `render_cache.py` and `verify_cache_alignment.py` twice
+  each. Crucially the reuse is *textual*: v5/v6 only **mention** `tools/v4/build_plan.py` in
+  a docstring ("MUST match verbatim"), so nothing enforces the recipe parity the comment
+  claims, and the next version adds a 7th copy. One parameterized driver taking the
+  generation as an argument would replace the family. Unexecuted; inherited from the deleted
+  `repo_structure_audit.md`, which is where it was first raised.
+  `[cmd: git ls-files 'tools/v*/*.py' | xargs -n1 basename | sort | uniq -c | sort -rn]`
+
 ## Method
 
 ```bash
@@ -160,7 +188,11 @@ git ls-files tools/ | awk -F/ 'NF>2{print $2} NF==2{print "(top-level)"}' | sort
 git ls-files tools/ | grep '\.py$' | xargs grep -l '__main__' | wc -l
 ```
 
-Methods A and B are implemented by the throwaway scripts described above (import
-resolution against each file's own `sys.path.insert` targets; path-literal extraction
-cross-checked against `git ls-files`). They are analysis, not machinery — re-derive them
-if the counts need refreshing, and re-stamp the date at the top of this file when you do.
+Methods A and B were one-off analysis scripts, not committed machinery — deliberately, since
+a liveness index is read by a human and decided by a human. **They no longer exist**, so
+refreshing the counts means re-deriving them from the description above: resolve each import
+to a *file* (dotted path first, then the importer's own directory, then its
+`sys.path.insert` targets, then a `spec_from_file_location` pass); and extract path literals
+under a committed root, keeping those that co-occur with a write call. Re-stamp the date at
+the top of this file when you do. **The per-directory counts are the perishable part of this
+document; the one-line-per-subdirectory index is the part worth maintaining.**

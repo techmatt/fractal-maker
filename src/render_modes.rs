@@ -199,8 +199,8 @@ pub enum Field {
     /// sum (the percentile-stretch absorbs the scale).
     ///
     /// **Redundant with `smooth` — `niche`, deprecated for render-mode exploration.**
-    /// Added with the UF-algorithm reconstruction (`uf_coloring_algorithms.md`) as a
-    /// formula-agnostic smooth-alternative, *before* `smooth` was promoted the canonical
+    /// Added with the UF-algorithm reconstruction (`docs/design/render_coloring_surface.md`
+    /// §6) as a formula-agnostic smooth-alternative, *before* `smooth` was promoted canonical
     /// base carrier, so the overlap is by design. Empirically this field is monotone with
     /// `smooth` (Spearman ≥ 0.999 across all 8 pilot families ⇒ beam-equivalent under the
     /// gamma/transfer/n_cycles freedom), so its render-mode-pilot rasters were pixel-dupes

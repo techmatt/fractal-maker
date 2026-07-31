@@ -56,6 +56,25 @@ imports `tools/corpus/artifacts.py` and calls its `resolve`, because a second
 `ARTIFACTS_ROOT` resolver is a second answer to "where does this live".
 `[code: tools/paths.py::bulk]`
 
+*Known layering inversion in that delegation:* the **general** helper (`tools/paths.py`,
+whose scope is the whole tree) depends on the **more specific** one
+(`tools/corpus/artifacts.py`, named for one subsystem). Delegating is still right — one
+resolver — but the direction is upside down. Moving `artifacts.py` up to `tools/` would put
+both at the tier their scope implies. Not done; recorded so the inversion is a known
+trade rather than an accident. `[verdict: Matt]`
+
+**The seam is Python-only, and one live family sits outside it for exactly that reason.**
+`resolve` is reachable from Python; the Rust engine builds its own paths from constants. So
+`src/root_field.rs::CACHE_DIR = "data/root_field"` writes an expensive-but-deterministic
+cache — textbook `bulk()` — **in-tree**, and no Python-side declaration can move it.
+Closing this needs a **Rust-side `ARTIFACTS_ROOT` twin**: the same env var, the same
+repo-relative-string-in / real-path-out contract, so a plan row written on either side
+dereferences on both. That is a seam, not a cleanup, and it is the surviving Phase-2
+recommendation of the deleted `repo_size_audit.md`. The contract-side record of the
+violation is in [`storage_classes.md`](storage_classes.md) §"Known exceptions"; this is the
+mechanism side. `[code: src/root_field.rs::CACHE_DIR; tools/corpus/artifacts.py::resolve]`
+`[measured: 8 files / 1.1 GB in-tree and untracked, 2026-07-31, `du -sh data/root_field`]`
+
 ## 2. `durable()` — and what makes its check pass for the right reason
 
 **`durable(rel)` asserts at write time that git would keep the path**, raising
@@ -223,6 +242,44 @@ line silently overriding it would commit a 90 MB file inline.
 `[code: tests/test_tracked_artifacts.py::{test_v8_durability_wiring_coherent,
 test_v8_durable_declared_paths_tracked}]` `[measured: 28 LFS-tracked files, this tree,
 2026-07-31]`
+
+**`git lfs prune --verify-remote` is not a usable safety check in this checkout, and it
+fails in the dangerous direction.** The LFS cache retains superseded object versions, so
+pruning is the standard reclaim — but it deletes what may be the only local copy, which is
+why `--verify-remote` exists. On git-lfs **2.11.0** it resolved the endpoint via the **SSH**
+remote; SSH auth fails here (`git@github.com: Permission denied (publickey)`), and it
+therefore reported the objects **"missing on remote"** and aborted. That is *"could not
+ask"* rendered as *"is not there"* — a false negative that reads exactly like the one
+condition under which you must not prune.
+
+The procedure that is actually sound, and the one to repeat: query
+`<remote>/info/lfs/objects/batch` with `operation: download` (works anonymously for a public
+repo; a genuinely absent object comes back as an error object with `code: 404`, a present
+one as a signed href), then **download each object and `sha256` it against its own OID**
+before deleting the local copy. Confirming the hash is the only check that distinguishes
+"the API lists it" from "the remote can hand back these bytes".
+`[measured: 4 objects / 281,512,322 B pruned 2026-07-31; all 4 reported missing by
+--verify-remote, all 4 sha256-verified present]` `[cmd: git lfs prune --dry-run
+--verify-remote; curl -X POST .../info/lfs/objects/batch; sha256sum; git lfs prune]`
+
+**The 63 negations are a symptom of interleaving, not of `.gitignore` style.** The file is
+366 lines: 220 comments, 125 rules, **63 negations**. The negations are not decoration —
+each one is load-bearing, and the exact-path discipline above is why. But the *count* has a
+single structural cause: **tracked metadata and ignored bulk share a directory.**
+`data/label_corpus/batches/<id>/` holds both a committed `images.jsonl` and an ignored
+`crops/`, so durability has to be re-asserted per leaf. Behind that sits the fact that this
+repo's tracked tree is **majority ledger** — ~53% of tracked files are data rather than
+code (`data/` + `labels/`, almost all `.json`/`.jsonl`/`.npz`/`.pt`) — which is also why git
+needed LFS at all.
+
+The consequence is a cost per experiment, not a cosmetic one: every new family must
+hand-author a correct stanza, and getting it wrong is silent in both directions (commit
+scratch, or lose metadata). **The fix is structural — all disposable under one ignored
+root, all committed metadata under one tracked root, never interleaved** — and it is
+unexecuted. It is the surviving recommendation of the deleted `repo_structure_audit.md`;
+inherited here because this section owns the wiring it would change.
+`[measured: 366 lines / 220 comments / 125 rules / 63 negations, 2026-07-31]`
+`[cmd: awk over .gitignore counting comment / blank / rule / '^!' lines]`
 
 ## 6. The derived canary set, and its non-vacuity pairing
 
