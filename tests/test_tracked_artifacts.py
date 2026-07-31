@@ -34,16 +34,19 @@ It does NOT discover newly-added irreplaceable files (that needs a glob, which b
 construction cannot detect a file that is already gone). Adding a batch of human
 labels is therefore a conscious edit to `TRACKED_CANARIES` below.
 
-The `data/v8/` artifacts are the exception and are guarded RELATIONALLY at the
-bottom of this file — their path set is derived from the `.gitignore` negations
-that declare them durable, because unlike everything in the static list they are
-periodically REBUILT, and a list that must be emptied and refilled around each
-rebuild is a guard that is off exactly when it is needed.
+The versioned classifier-build trees (`data/v8/`, `data/v9/`, ...) are the
+exception and are guarded RELATIONALLY at the bottom of this file — their path set
+is derived from the `.gitignore` negations that declare them durable, because
+unlike everything in the static list they are periodically REBUILT, and a list
+that must be emptied and refilled around each rebuild is a guard that is off
+exactly when it is needed. The prefix is matched as `data/v<N>/`, so a new build
+version is covered the moment its negations land, with no edit here.
 
 Runs under default `pytest`: no release binary, no GPU, no corpus reads — only
 `git`. See `test_release_binary.py` for the binary-presence canary.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -117,10 +120,10 @@ TRACKED_CANARIES = [
     "data/wallpaper_head/v3/model_best.pt",       # LIVE cross-location wallpaper-quality head
     "data/render_mode_head/v1/model_best.pt",     # LIVE strange-mode (mining_v1) gate
     "data/queries/scorer/v3_gvo/model_best.pt",   # LIVE palette-preference ranker (pref-v3-gvo)
-    # data/v8/* is deliberately ABSENT from this static list — it is guarded relationally
-    # instead, by `test_v8_durable_declared_paths_tracked` below. See that section's
-    # rationale: the v8 artifacts are rebuilt periodically, and a static list that has to be
-    # deleted and re-added around every rebuild is a guard that spends half its life off.
+    # data/v<N>/* is deliberately ABSENT from this static list — those trees are guarded
+    # relationally instead, by `test_v8_durable_declared_paths_tracked` below. See that
+    # section's rationale: build artifacts are rebuilt periodically, and a static list that
+    # has to be deleted and re-added around every rebuild spends half its life off.
     # The prospect location library. Both are unregenerable: morph_v6 has no
     # producer and the CLIP arrays only regenerate value-approximate under a
     # verdict-sensitive threshold. (.gitignore negates these two exact paths; the
@@ -187,34 +190,43 @@ def test_canary_tracked(path):
 # form reports any force-added path as not-ignored regardless of the rules, which is how a
 # real false-accept got through on the v7 checkpoint; `--no-index` evaluates the rules alone.
 # --------------------------------------------------------------------------- #
-V8_PREFIX = "data/v8/"
+# Matches ANY versioned classifier-build tree (`data/v8/`, `data/v9/`, ...) rather than a
+# single hard-coded version. The whole point of deriving this set from the .gitignore
+# negations is that it tracks the wiring instead of being maintained alongside it; a
+# literal "data/v8/" would have silently stopped covering the build the moment v9 landed,
+# which is the same failure the static list has and the reason this section exists.
+BUILD_PREFIX_RE = re.compile(r"^data/v\d+/")
+
+
+def _is_build_path(rel: str) -> bool:
+    return bool(BUILD_PREFIX_RE.match(rel))
 
 
 def _v8_gitignore_negations() -> list[str]:
-    """data/v8/ paths re-included by an EXACT-path negation (`!/data/v8/<file>`).
+    """Versioned-build paths re-included by an EXACT-path negation (`!/data/vN/<file>`).
 
-    Directory negations (`!/data/v8/`) are excluded on purpose: that line exists only to let
-    the following `/data/v8/*` re-exclude everything, and it declares nothing durable."""
+    Directory negations (`!/data/vN/`) are excluded on purpose: that line exists only to let
+    the following `/data/vN/*` re-exclude everything, and it declares nothing durable."""
     out = []
     for raw in (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line.startswith("!") or line.endswith("/"):
             continue
         rel = line[1:].lstrip("/")
-        if rel.startswith(V8_PREFIX):
+        if _is_build_path(rel):
             out.append(rel)
     return sorted(out)
 
 
 def _v8_lfs_rules() -> list[str]:
-    """data/v8/ paths carrying a `filter=lfs` rule in .gitattributes."""
+    """Versioned-build paths carrying a `filter=lfs` rule in .gitattributes."""
     out = []
     for raw in (REPO_ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "filter=lfs" not in line:
             continue
         pattern = line.split()[0]
-        if pattern.startswith(V8_PREFIX):
+        if _is_build_path(pattern):
             out.append(pattern)
     return sorted(out)
 

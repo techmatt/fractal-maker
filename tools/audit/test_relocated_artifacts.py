@@ -374,9 +374,24 @@ def test_non_relocated_paths_resolve_in_tree():
         assert A.resolve(p) == A.REPO_ROOT / p
 
 
+def test_live_aug_caches_are_registered():
+    """Both live aug-cache trees are literals in RELOCATED_PREFIXES.
+
+    v9 (the v8 corpus re-rendered at the raised iteration cap) is a SECOND live tree, not
+    a replacement: v8's 12.1 GB is retained as the rollback anchor. Registration must
+    happen BEFORE the first render — storage_classes.md rule 5, a new bulk family is born
+    out-of-tree — so this asserts the registry rather than the disk."""
+    assert "data/v8/aug_cache" in A.RELOCATED_PREFIXES
+    assert "data/v9/aug_cache" in A.RELOCATED_PREFIXES
+    assert A.is_relocated("data/v9/aug_cache/7116/twilight_shifted__id__s1.0000__sh0.0000__ss2.jpg")
+    # ...and the sibling-prefix guard still holds for the new literal
+    assert not A.is_relocated("data/v9/aug_cache_notes/x.jpg")
+
+
 def test_backslash_and_dotslash_normalized():
     assert A.is_relocated("data\\v8\\aug_cache\\1\\x.jpg")
     assert A.is_relocated("./data/v8/aug_cache/1/x.jpg")
+    assert A.is_relocated("data\\v9\\aug_cache\\1\\x.jpg")
     # normalization also applies to the discovery-scratch class
     assert A.is_relocated("data\\discovery\\campaign2\\breadth\\scratch\\x.jpg")
 

@@ -126,6 +126,24 @@ production policy, so the cache tile and the deploy crop resolve the **same** ca
 `--maxiter` argument survives as the fallback for a plan row that omits it, which keeps
 every pre-v9 plan byte-reproducible.
 
+### …and the label corpus is mixed the same way
+
+The flat cap is not confined to the aug cache. Measured over the live labeled corpus
+(`corpus_reader.iter_labeled()`, 8,467 crops): **4,880 — 57.6% — carry `maxiter == 8000`
+exactly**, the flat present/gather crop cap, while the remaining 3,587 carry 1,038 distinct
+per-location `auto_maxiter` values. The corpus has two render regimes in it:
+
+| cap regime | who writes it |
+|---|---|
+| `auto_maxiter(fw)` | `build_native_multibrot_band.py`, `descent/store.py`, `rescore_gather_mb4_v7.py`, every `wallpaper/build_*.py` |
+| flat **8000** | `gather_select.py`, `recolor_gather_v6.py`, `build_enrich_batch.py`, `build_rev4_batch.py`, `sourcing/build_minibrot_batch.py`, `coevo/analyze_round.py`, `eda/scale_2x2_build_batch.py`, `mining/score_lib.run_enrich_score`, `mining/harvest.py` |
+
+This does **not** contaminate training — the classifier trains on aug-cache tiles, and
+`render.maxiter` is not one of the fields it sees. It bears on **label quality**: a human
+judged some locations through a flat-8000 crop and others through an old-`auto_maxiter`
+crop, so the two groups were presented at systematically different clip levels. Out of
+scope for the cap raise, recorded here so it is not rediscovered as a surprise.
+
 ## Sites deliberately left alone
 
 `tools/emission/descriptor.py`, `tools/julia_ladder/build_j0.py`,

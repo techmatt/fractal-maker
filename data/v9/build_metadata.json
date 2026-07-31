@@ -1,0 +1,806 @@
+{
+  "build": "v8",
+  "mode": "from_scratch",
+  "scale": "1..4 ordinal (CORN K-1 = 3 cutpoints)",
+  "protocol_departure": {
+    "rule": "classifier_retrain_protocol.md \u00a71 (append, never rebuild)",
+    "reason": "data/v{4,5,6,7}/manifest.jsonl are gone and are not to be reconstructed; there is no prefix to freeze and no byte gate to run. The frozen-prefix byte gate is DROPPED.",
+    "replacement": "GATE 6 \u2014 the census-144 eval slice is reproduced identically and asserted location-for-location. Eval comparability rides on the instrument, not on row order."
+  },
+  "population": {
+    "labeled_crops": 8467,
+    "labeled_locations": 7151,
+    "manifest_rows": 7117,
+    "groups": 4930,
+    "gid_offset": 8000000,
+    "train": 6447,
+    "eval": 670,
+    "class_train": {
+      "1": 4273,
+      "2": 1278,
+      "3": 609,
+      "4": 287
+    },
+    "class_eval": {
+      "1": 361,
+      "2": 218,
+      "3": 69,
+      "4": 22
+    },
+    "per_family": {
+      "julia": {
+        "1": 541,
+        "2": 297,
+        "3": 172,
+        "4": 77
+      },
+      "julia_multibrot3": {
+        "1": 76,
+        "2": 55,
+        "3": 26,
+        "4": 19
+      },
+      "julia_multibrot4": {
+        "1": 51,
+        "2": 38,
+        "3": 33,
+        "4": 25
+      },
+      "julia_multibrot5": {
+        "1": 25,
+        "2": 31,
+        "3": 31,
+        "4": 24
+      },
+      "mandelbrot": {
+        "1": 3142,
+        "2": 587,
+        "3": 289,
+        "4": 83
+      },
+      "multibrot3": {
+        "1": 167,
+        "2": 120,
+        "3": 25,
+        "4": 9
+      },
+      "multibrot4": {
+        "1": 127,
+        "2": 136,
+        "3": 36,
+        "4": 5
+      },
+      "multibrot5": {
+        "1": 151,
+        "2": 96,
+        "3": 37,
+        "4": 13
+      },
+      "phoenix": {
+        "1": 354,
+        "2": 136,
+        "3": 29,
+        "4": 54
+      }
+    },
+    "per_batch_labeled_crops": {
+      "2026-06-23_flat_generate_loose0_v3": 1043,
+      "2026-06-24_guided_descend_rev4": 1176,
+      "2026-06-24_guided_descend_rev4occfix_v2filtered": 1066,
+      "2026-06-25_mining_v3guided_v1": 450,
+      "2026-06-25_scale_2x2_labelset": 600,
+      "2026-06-25_scale_controlled_2x2": 600,
+      "2026-07-05_gather_v6": 640,
+      "2026-07-11_jm3_band_v1": 58,
+      "2026-07-12_blindspot_v6reject_v1": 219,
+      "2026-07-12_jm45_band_v1": 71,
+      "2026-07-17_prospect_run1_baserate_R_v1": 86,
+      "2026-07-17_prospect_run1_baserate_v1": 83,
+      "2026-07-21_phoenix_grid": 500,
+      "2026-07-22_native_multibrot_band_v1": 300,
+      "2026-07-26_anchor_class4_v1": 8,
+      "2026-07-26_minibrot_roster_v2": 487,
+      "2026-07-27_interior_band_v1": 80,
+      "julia_ladder_j0": 1000
+    }
+  },
+  "split_rule": "Group first (union-find partitioned by (fractal_type, c-bucket)), then split per GROUP: a group containing a FORCED-EVAL location -> eval, else train. Two registered eval-eligible instruments, both forced 100% eval: the CENSUS (prospect run-1 base-rate julia:multibrot, 144 loc \u2014 the pinned primary) and the MANDELBROT FLOOR (loose0_v3 base-rate flat-generate, 526 loc \u2014 additive secondary, Matt's call 2026-07-29). assign_split is FAIL-CLOSED: an unregistered batch classifies biased -> train.",
+  "mandelbrot_eval_floor": "loose0_v3 (2026-06-23_flat_generate) is now eval-eligible: 526 unbiased base-rate mandelbrot locations moved train->eval so the mandelbrot slice (59% of the corpus) has a non-regression instrument the julia:multibrot census cannot provide. This REVERSES the prior eval_is_census_only stance on the record. It qualifies because the disqualifying bias is MODEL-DRIVEN selection (candidates a model retained), not an unbiased draw. The census-144 is untouched and stays the pinned primary; Gate 6 still reproduces it location-for-location. The paired v7<->v8 census comparison is unaffected \u2014 the floor is a separate, secondary read.",
+  "eval_power_note": "670 eval locations out of 7117 (9.4%): 144 census (julia:multibrot) + 526 floor (mandelbrot). The census remains the only unbiased-given-DESCENT draw; the floor is unbiased base-rate over the native mandelbrot plane. Per protocol \u00a73 a null result on the census still means 'label more', not 'model failed'; the floor is powered for the bulk mandelbrot classes (q3 pos=26) but carries 0 class-4.",
+  "loc_id_stability": "7117 of 7117 loc_ids preserved from the prior manifest, 0 new. loc_id is NOT re-enumerated: the 171,384-tile aug cache is keyed on it (plan seeds every draw on 'v8b-aug|<loc_id>' and writes tiles under aug_cache/<loc_id>/). The re-split's surviving population is a strict subset of the prior manifest (loose0_v3 flips train->eval in place; 24 biased mandelbrot neighbours are dropped), so every survivor keeps its prior id and every cache tile stays valid with zero re-render. build_plan.py regenerates plan.jsonl + cache_manifest.jsonl consistently from these ids.",
+  "multi_batch_locations": "616 locations are contributed by >1 batch (600 shared by the two scale_* batches, 8 anchor/roster, 8 gather/native-band). v7 asserted one batch per location, which only held because it looked at post-freeze rows. biased = OR over batches, eval_eligible = AND \u2014 conservative on both.",
+  "phoenix_family_params": "Location identity is location.Location.key(), which includes family_params (phoenix p_re/p_im/zm1_re/zm1_im). The 500 phoenix_grid locations vary p and z_-1 per row; v7's tuple key omitted them, which would collapse distinct locations and render every phoenix cache tile at the Rust default Ushiki spot. Those keys are carried into the manifest row and the render plan. v8 is the first manifest to contain phoenix.",
+  "dropped_biased_in_forced_eval_group": {
+    "count": 34,
+    "by_fractal_type": {
+      "julia_multibrot3": 10,
+      "mandelbrot": 24
+    },
+    "why": "A forced-eval group (census OR mandelbrot-floor) that also holds a biased location cannot satisfy forced-100%-eval + 0-biased-in-eval + 0-group-straddle at once. Keeping the biased neighbour in train would leak the eval neighbourhood into training, so it is dropped. The 24 mandelbrot drops are NEW (base-rate floor locations chaining to guided-descent neighbours); the 10 julia_multibrot3 are the pre-existing jm3_band census conflict, unchanged.",
+    "locations": [
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.052202239476687895",
+        "cy": "0.6530785439639304",
+        "fw": "0.020129405883550066",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-07-12_blindspot_v6reject_v1"
+        ],
+        "group_id": 8000066
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7302280993771931",
+        "cy": "-0.21523013751531272",
+        "fw": "0.00831791525101414",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7288417801686907",
+        "cy": "-0.21384381830681037",
+        "fw": "0.00831791525101414",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7312096133768128",
+        "cy": "-0.2162116515149324",
+        "fw": "0.00831791525101414",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.3738510434941183",
+        "cy": "0.6599763895272843",
+        "fw": "0.007100269463234195",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000106
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.37251588876810127",
+        "cy": "0.6589372631484126",
+        "fw": "0.007274758201140728",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000106
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.3777262726723306",
+        "cy": "0.6557726660893494",
+        "fw": "0.008345906862037632",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000106
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.4765734078917922",
+        "cy": "-0.5971422979865149",
+        "fw": "0.01864974014621652",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000111
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.1405646079938638",
+        "cy": "-0.8719206503942228",
+        "fw": "0.014491151851802565",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000112
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.3409277905013649",
+        "cy": "-0.5113213155124943",
+        "fw": "0.017017563434335845",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000113
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.3351957706782975",
+        "cy": "-0.5109268593011472",
+        "fw": "0.014696329996913726",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000113
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.01039584126040535",
+        "cy": "-0.653296115178306",
+        "fw": "0.017496955515103503",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.009990682135203679",
+        "cy": "-0.6478813926708532",
+        "fw": "0.016595254322723435",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.015797344438534356",
+        "cy": "-0.6564999937157059",
+        "fw": "0.015170436623483873",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.026323104324476265",
+        "cy": "-0.6523361783034691",
+        "fw": "0.014292821221927944",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.007418843866574114",
+        "cy": "-0.6424257467000308",
+        "fw": "0.013834505005201399",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-1.3540425290255775",
+        "cy": "-0.058325275041514746",
+        "fw": "0.014832318244368856",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000121
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.39091160445086415",
+        "cy": "-0.3688866660426195",
+        "fw": "0.017084107939967702",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000129
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7183952785588381",
+        "cy": "-0.22905910512836158",
+        "fw": "0.010325479730229617",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8000154
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.6437219719139099",
+        "cy": "0.37975497974476075",
+        "fw": "0.015915186012000912",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000155
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-1.2493398314912227",
+        "cy": "-0.07296657178028607",
+        "fw": "0.013892417562227215",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000157
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7614524606843265",
+        "cy": "-0.08496026442928359",
+        "fw": "0.007577509231680098",
+        "c_re": null,
+        "c_im": null,
+        "label": 2,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000161
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7636790594608687",
+        "cy": "-0.08505224922624866",
+        "fw": "0.004483386210126114",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-07-12_blindspot_v6reject_v1"
+        ],
+        "group_id": 8000161
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.42257192752358974",
+        "cy": "-0.2084071894826743",
+        "fw": "0.009510247344558269",
+        "c_re": null,
+        "c_im": null,
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000172
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "2.121320343559643",
+        "c_re": "0.23235111196981809",
+        "c_im": "0.7273380745324011",
+        "label": 2,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8004318
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.15283133487459447",
+        "cy": "0.0",
+        "fw": "0.6113253394983779",
+        "c_re": "0.5650023581746639",
+        "c_im": "0.2302221708851889",
+        "label": 2,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8004344
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "1.1462002344290696",
+        "c_re": "0.5459941721073124",
+        "c_im": "0.21336588290584366",
+        "label": 1,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8004344
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.5585937499999999",
+        "cy": "-0.06640625000000001",
+        "fw": "1.0948063858003612",
+        "c_re": "-0.4245928979325057",
+        "c_im": "0.5980694448277311",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "0.3763894303813933",
+        "c_re": "-0.48066976996596106",
+        "c_im": "0.6010951619208411",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "0.3554542853945903",
+        "c_re": "-0.48066976996596106",
+        "c_im": "0.6010951619208411",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "-0.375",
+        "fw": "1.5",
+        "c_re": "-0.359817144870237",
+        "c_im": "0.6488658691815916",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "0.5044378333292681",
+        "c_re": "-0.4583690302288969",
+        "c_im": "0.5453692617977908",
+        "label": 3,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.2573157035842422",
+        "cy": "0.0",
+        "fw": "1.0292628143369689",
+        "c_re": "-0.4583690302288969",
+        "c_im": "0.5453692617977908",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.19974321172095238",
+        "cy": "0.0",
+        "fw": "0.7989728468838095",
+        "c_re": "-0.4583690302288969",
+        "c_im": "0.5453692617977908",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8004335
+      }
+    ]
+  },
+  "amendment_overlay": {
+    "crops_revised": 364,
+    "class4_locations": 309,
+    "note": "Every label resolves through resolve_score(row, sidecar, amendments). There is no post-freeze branch, so no path reads a pre-revision label. Gate 9 asserts the overlay bound; gate 10 asserts no revision row contributes an in-row label of its own."
+  },
+  "deploy_note": "ACTIVE_CKPT NOT switched (v7 remains the deployed scorer); no threshold touched; t_good NOT set; nothing trained by this build.",
+  "manifest_source": "data/v8/manifest.jsonl",
+  "manifest_sha256": "a85db70ad235ea53e7e532acfb436524e7fca130c16b050d27085026b56dd7ec",
+  "aug_recipe": {
+    "recipe": "v8b",
+    "corpus_version": "v9",
+    "supersedes_corpus": "v8 (same recipe, flat maxiter=8000)",
+    "supersedes": "the first v8 recipe (2 palettes x 3 fixed scales {0.7,1.0,1.3} x 2 fixed shifts at 0.4 frame widths x 2 AA), abandoned at 10,538 of 171,384 tiles",
+    "why": "the fixed 0.4-frame-width shift at scale 1.3 put the window 0.52 base frame widths off centre \u2014 off the structure entirely \u2014 while the tile kept the location's label. That corrupts only the positive classes (an empty crop labeled 1 is roughly true; labeled 3 or 4 it is a lie) and fights deploy, which reframes to centre content before scoring.",
+    "slots_per_location": 24,
+    "axes": "4 palettes x 3 geometries x 2 AA levels",
+    "palettes": {
+      "always": [
+        "twilight_shifted",
+        "blue_orange"
+      ],
+      "always_roles": {
+        "twilight_shifted": "deploy-matched; data_v4.NEUTRAL_PALETTE, the pinned scoring instrument and the canonical eval view",
+        "blue_orange": "the vivid companion the human labels were formed through (data/palettes/vivid_blue_orange.json); closes the judge/model presentation gap"
+      },
+      "drawn_per_location": 2,
+      "pool_source": "data/palettes/score3_colormaps.json",
+      "pool_size": 76,
+      "drawable": [
+        "Blues",
+        "BrBG",
+        "CMRmap",
+        "GnBu",
+        "PuOr",
+        "RdBu",
+        "RdGy",
+        "RdPu",
+        "RdYlBu",
+        "Spectral",
+        "YlGnBu",
+        "YlOrBr",
+        "YlOrRd",
+        "afmhot",
+        "berlin",
+        "bwr",
+        "cet_cyclic_mybm_20_100_c48_s25",
+        "cet_cyclic_protanopic_deuteranopic_bwyk_16_96_c31",
+        "cet_cyclic_protanopic_deuteranopic_wywb_55_96_c33",
+        "cet_cyclic_rygcbmr_50_90_c64_s25",
+        "cet_cyclic_wrkbw_10_90_c43",
+        "cet_cyclic_wrkbw_10_90_c43_s25",
+        "cet_linear_bgyw_15_100_c68",
+        "cet_linear_bmy_10_95_c71",
+        "cet_linear_bmy_10_95_c78",
+        "cet_linear_kry_0_97_c73",
+        "cet_linear_kry_5_95_c72",
+        "cet_linear_kryw_0_100_c71",
+        "cet_linear_kryw_5_100_c64",
+        "cet_linear_kryw_5_100_c67",
+        "cet_linear_protanopic_deuteranopic_kbjyw_5_95_c25",
+        "cet_linear_protanopic_deuteranopic_kbw_5_95_c34",
+        "cet_linear_tritanopic_krjcw_5_98_c46",
+        "cet_linear_tritanopic_krw_5_95_c46",
+        "cividis",
+        "cmr.amber",
+        "cmr.copper",
+        "cmr.ember",
+        "cmr.emergency_s",
+        "cmr.fall",
+        "cmr.fusion",
+        "cmr.jungle",
+        "cmr.lilac",
+        "cmr.pride",
+        "cmr.prinsenvlag",
+        "cmr.rainforest",
+        "cmr.redshift",
+        "cmr.savanna",
+        "cmr.seasons_s",
+        "cmr.sunburst",
+        "cmr.swamp",
+        "cmr.torch",
+        "cmr.toxic",
+        "cmr.voltage",
+        "cmr.waterlily",
+        "cmr.wildfire",
+        "coolwarm",
+        "gist_heat",
+        "gist_stern",
+        "inferno",
+        "magma",
+        "managua",
+        "plasma",
+        "seismic",
+        "turbo",
+        "twilight",
+        "viridis"
+      ],
+      "drawable_size": 67,
+      "held_out": [
+        "cet_cyclic_wrwbw_40_90_c42",
+        "cet_diverging_bwr_40_95_c42",
+        "cet_linear_bmw_5_95_c86",
+        "cet_linear_kry_5_98_c75",
+        "cet_linear_protanopic_deuteranopic_kbw_5_98_c40",
+        "cmr.ocean",
+        "cmr.seasons",
+        "cmr.viola"
+      ],
+      "held_out_seed": 20260729,
+      "held_out_role": "no location may draw these; they are the held-out-palette invariance read at eval time",
+      "draw_scope": "PER LOCATION, not per crop \u2014 all 4 palettes share the location's 3 geometries, so 24 tiles rest on 6 distinct escape-time fields",
+      "exposure_per_drawable_palette": {
+        "min": 185,
+        "max": 245,
+        "mean": 212.4
+      }
+    },
+    "geometry": {
+      "samples_per_location": 3,
+      "identity": {
+        "scale": 1.0,
+        "shift": 0.0,
+        "shift_id": "center",
+        "role": "the deploy composition; present in every (palette, AA) cell"
+      },
+      "jittered": {
+        "count": 2,
+        "shift_frac": "U(0, 0.1) of the slot frame width",
+        "shift_direction": "U(0, 2*pi)",
+        "scale": "U(0.9, 1.1)",
+        "shift_ids": [
+          "jit0",
+          "jit1"
+        ]
+      },
+      "seed": "random.Random(\"v8b-aug|<loc_id>\"); palette draw consumed first"
+    },
+    "aa_levels": [
+      {
+        "ss": 1,
+        "filter": "box",
+        "aa_level": "aliased"
+      },
+      {
+        "ss": 2,
+        "filter": "lanczos3",
+        "aa_level": "antialiased"
+      }
+    ],
+    "previous_recipe_magnitudes": {
+      "note": "recorded for the first time \u2014 these were never written down, only seen",
+      "scales": [
+        0.7,
+        1.0,
+        1.3
+      ],
+      "shift_frac": 0.4,
+      "shift_frac_basis": "the SLOT frame width (scale x base), so 0.28/0.40/0.52 base",
+      "shift_direction": "deterministic: 2*pi*(palette_index*3 + scale_index)/(n_pal*3)",
+      "aa_levels": "ss1 box + ss2 lanczos3 (unchanged)"
+    },
+    "colormap_library": {
+      "path": "data/v9/colormaps.json",
+      "n": 77,
+      "built_from": [
+        "data/palettes/score3_colormaps.json",
+        "data/palettes/vivid_blue_orange.json"
+      ],
+      "note": "v4-render-batch takes ONE --colormaps path and blue_orange is in neither committed library, so the two committed sources are concatenated verbatim (stops and mirror_needed untouched)"
+    },
+    "cache_render": {
+      "width": 512,
+      "height": 288,
+      "jpg_quality": 85,
+      "maxiter": "auto_maxiter(fw_slot) \u2014 per row, production policy",
+      "note": "width/height/jpg_quality are v4-render-batch defaults, unchanged from v4..v8. maxiter is NOT: v4..v8 rendered EVERY tile at the subcommand's flat 8000 regardless of fw \u2014 never through auto_maxiter \u2014 so the training cache and the deploy crop have never agreed on the cap. v9 emits the production cap per plan row.",
+      "maxiter_policy": {
+        "source": "tools/scoring/active_ckpt.auto_maxiter",
+        "base": 4000,
+        "k": 0.3,
+        "min": 200,
+        "max": 67000,
+        "fw_home": 3.0,
+        "field_cache_token": "mi4000k0.3c200-67000",
+        "basis": "the SLOT frame width (scale x base), not the location's \u2014 a jittered slot gets the cap its own frame resolves",
+        "supersedes": "flat maxiter=8000",
+        "doc": "docs/design/auto_maxiter.md",
+        "residual": "x8 covers the MEDIAN convergent multiple (mean 7.7 / median 8.0); the measured tail runs to x24, so the most decorated material stays somewhat clipped. Median-clean, not clean."
+      },
+      "maxiter_range_over_plan": {
+        "min": 3248,
+        "max": 43469
+      }
+    },
+    "recipe_parity": {
+      "manifest_sha256": "a85db70ad235ea53e7e532acfb436524e7fca130c16b050d27085026b56dd7ec",
+      "manifest_path": "data/v8/manifest.jsonl",
+      "colormaps_identical_to_v8": true,
+      "plan_rows_compared_to_v8": 170808,
+      "plan_rows_still_at_flat_8000": 0,
+      "plan_recipe_identical_to_v8_except": [
+        "maxiter",
+        "out"
+      ],
+      "cache_manifest_recipe_fields_identical_to_v8": true
+    },
+    "executor_note": "the plan shares 4 palettes per escape-time field, but v4-render-batch renders each row independently, so that sharing is NOT exploited today \u2014 see marginal_cost below",
+    "marginal_cost": null,
+    "reuse_audit": {
+      "prior_cache_trees_on_disk": [
+        [
+          "v8",
+          "C:\\Code\\fractal-maker-artifacts\\data\\v8\\aug_cache"
+        ]
+      ],
+      "prior_cache_location_dirs": 7141,
+      "prior_cache_manifests_found": [
+        [
+          "v8",
+          "C:\\Code\\fractal-maker\\data\\v8\\cache_manifest.jsonl"
+        ],
+        [
+          "v8",
+          "C:\\Code\\fractal-maker\\data\\v8\\cache_manifest.jsonl"
+        ]
+      ],
+      "reusable_slots_per_location": 0,
+      "reuse_fraction": 0.0,
+      "why": "ZERO, and this time the v8 tree IS on disk and IS attributable \u2014 the reason is the cap, not durability. Every v8 tile was iterated to a flat maxiter=8000 (v4-render-batch's default; the v8 plan carries no per-row cap), while v9 iterates each slot to auto_maxiter(fw_slot) under the raised policy. Same coordinates, same palette, same filename \u2014 DIFFERENT field. Reusing one would put an old-cap tile in a new-cap corpus, which is the exact failure this rebuild exists to remove, so the v9 tree is a separate directory and the v8 tree is left intact as the rollback anchor. (The v4..v7 caches were deleted on 2026-07-29, commit 7068839 \u2014 243,477 JPGs no surviving cache_manifest could attribute to a location.)",
+      "v8_tree_retained_as_rollback": true
+    },
+    "trainer_followup": "classifier/data_v4.py Loc.palette_renders() asserts exactly 6 palette renders per location and must become 4 (and per-location variable) before a v8 train. canonical() and aa_twin() are unaffected: the identity slot supplies exactly one (twilight_shifted, ss2, scale 1.0, center) row per location."
+  }
+}

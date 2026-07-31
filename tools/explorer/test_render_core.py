@@ -39,7 +39,21 @@ def _ref_click_to_world(px, py, ctr_x, ctr_y, fw, w=700, h=394):
     return world_x, world_y
 
 
-def _ref_auto_maxiter(fw, override=None):
+def _ref_auto_maxiter(fw, override=None, *, base=500, k=0.30, lo=200, hi=8000):
+    """The pre-extraction implementation, verbatim, EXCEPT that the four policy constants
+    are now arguments defaulting to their pre-extraction values.
+
+    The invariant this file exists to protect is the EXTRACTION — that moving the inline
+    implementation into `render_core` did not change the arithmetic — and that invariant
+    lives in the closed form, the Decimal/float mixing and the clamp-then-truncate order,
+    not in the four numbers. Those numbers moved on 2026-07-31 for a measured reason
+    (docs/design/auto_maxiter.md); hard-coding them here turned an extraction oracle into
+    a policy oracle, which then blocks the policy it was never meant to govern.
+
+    `test_auto_maxiter_matches_reference` now runs the differential BOTH at the frozen
+    pre-extraction constants and at whatever `render_core` currently holds, and separately
+    asserts that the live policy is not the old one — so the check cannot pass vacuously
+    and cannot be silenced by reverting the raise."""
     if override is not None:
         return int(override)
     import math
@@ -47,8 +61,12 @@ def _ref_auto_maxiter(fw, override=None):
     fw_home = Decimal("3.0")
     ratio = fw_home / fw if fw > 0 else Decimal(1)
     lz = math.log2(float(ratio)) if ratio > 0 else 0.0
-    val = 500 * (1.0 + 0.30 * lz)
-    return int(max(200, min(8000, val)))
+    val = base * (1.0 + k * lz)
+    return int(max(lo, min(hi, val)))
+
+
+# The constants the inline implementation carried at extraction time (git fa9ca42).
+_FROZEN_POLICY = dict(base=500, k=0.30, lo=200, hi=8000)
 
 
 # --------------------------------------------------------------------------- #
@@ -72,11 +90,43 @@ def test_click_to_world_matches_reference_grid():
                     assert got == exp, (px, py, cx, cy, fw)
 
 
+_FWS = ("3.0", "1.0", "0.75", "1e-3", "1e-6", "1e-20", "2.5e-40")
+
+
 def test_auto_maxiter_matches_reference():
-    for fw in ("3.0", "1.0", "0.75", "1e-3", "1e-6", "1e-20", "2.5e-40"):
-        assert rc.auto_maxiter(Decimal(fw)) == _ref_auto_maxiter(Decimal(fw))
+    """The EXTRACTION differential: `render_core.auto_maxiter` reproduces the frozen
+    pre-extraction arithmetic at render_core's OWN constants, bit for bit."""
+    live = dict(base=rc.MAXITER_BASE, k=rc.MAXITER_K,
+                lo=rc.MAXITER_MIN, hi=rc.MAXITER_MAX)
+    for fw in _FWS:
+        assert rc.auto_maxiter(Decimal(fw)) == _ref_auto_maxiter(Decimal(fw), **live), fw
     # override wins verbatim
     assert rc.auto_maxiter(Decimal("1e-6"), 1234) == 1234
+
+
+def test_auto_maxiter_policy_moved_off_the_extraction_era_constants():
+    """The other half of the bracket. The differential above is satisfied by ANY constants
+    (it feeds render_core's own back in), so on its own it would silently accept a revert
+    to the old cap — or a typo'd one. This pins the direction of the change:
+
+      * the live constants are NOT the extraction-era ones (so the differential above is
+        not comparing the frozen policy to itself), and
+      * the live policy really does iterate FURTHER at every depth, which is the whole
+        point of the raise (docs/design/auto_maxiter.md: base 500 -> 4000, x8, the median
+        measured convergent multiple).
+
+    The frozen reference stays exercised: `_ref_auto_maxiter(..., **_FROZEN_POLICY)` is
+    still the pre-extraction implementation at the pre-extraction numbers."""
+    live = dict(base=rc.MAXITER_BASE, k=rc.MAXITER_K,
+                lo=rc.MAXITER_MIN, hi=rc.MAXITER_MAX)
+    assert live != _FROZEN_POLICY, "cap raise reverted — the differential is now vacuous"
+    for fw in _FWS:
+        old = _ref_auto_maxiter(Decimal(fw), **_FROZEN_POLICY)
+        new = rc.auto_maxiter(Decimal(fw))
+        assert new > old, (fw, old, new)
+    # k (the fw SHAPE) is deliberately unchanged; only base and the clamp moved.
+    assert rc.MAXITER_K == _FROZEN_POLICY["k"]
+    assert rc.MAXITER_MIN == _FROZEN_POLICY["lo"]
 
 
 def test_box_commit_center_and_fw():
@@ -141,6 +191,7 @@ def test_julia_nav_argv_byte_identical():
 if __name__ == "__main__":
     test_click_to_world_matches_reference_grid()
     test_auto_maxiter_matches_reference()
+    test_auto_maxiter_policy_moved_off_the_extraction_era_constants()
     test_box_commit_center_and_fw()
     test_box_commit_symmetric_in_drag_direction()
     test_mandelbrot_nav_argv_byte_identical()

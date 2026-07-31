@@ -153,6 +153,14 @@ REGISTRY: list[Entry] = [
           "thing that maps a cached tile back to a location — losing them is exactly how "
           "the v4..v7 caches became 243k unattributable JPGs. durable() + canaried; the "
           "aug_cache JPGs themselves are bulk() and out-of-tree. CANARY.", canary=True),
+    Entry("data/v9/", KEEP, None, "tracked",
+          "v9 classifier build — the v8 corpus re-rendered at the raised iteration cap "
+          "(docs/design/auto_maxiter.md). Same shape and same reason as data/v8/ above: "
+          "plan/cache_manifest are 170,808 rows each (~54/92 MB, LFS) and are the ONLY "
+          "thing mapping a cached tile back to a location. It has no manifest.jsonl of "
+          "its own on purpose — it reads v8's and records that file's sha256, so 'same "
+          "corpus' is a checked claim rather than a copy that can drift. The aug_cache "
+          "JPGs are bulk() and out-of-tree. durable() + canaried. CANARY.", canary=True),
     Entry("data/library_embeddings/", KEEP, None, "mixed",
           "prospect-library CLIP embeddings (embeddings.npz, tracked): unregenerable "
           "except value-approximate under a verdict-sensitive threshold. CANARY.",
