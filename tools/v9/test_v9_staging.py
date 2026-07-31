@@ -11,10 +11,17 @@ easy to violate by one overwrite, so it is checked:
   * `production_seeder.T_GOOD_OVERRIDES` still mirrors v8's derived table, not v9's;
   * the staged v9 artifacts, when present, are stamped STAGED and carry the v9 model.
 
-And the τ_h half of §7: τ_h is left FATAL and is NOT re-derived here (that happens from
-harvest logs at hunt launch). What is confirmed is that the version-mismatch raise reports
-**v9** by name once v9 is the active head — checked by simulating the active version rather
-than by flipping it, because flipping it is exactly what this pass must not do.
+And the τ_h half of §7: τ_h is left FATAL and was NOT re-derived by THIS pass. What is
+confirmed is that the version-mismatch raise reports **v9** by name once v9 is the active
+head — checked by simulating the active version rather than by flipping it, because flipping
+it is exactly what this pass must not do.
+
+  UPDATE 2026-07-31 — the launch-time re-derivation the τ_h tests always pointed at has now
+  happened, under the ACTIVE (v8) head, for the minibrot-maneuver shakedown
+  (`tools/atlas/tau_h_rederive.py`; `docs/design/minibrot_maneuvers.md`). The staging
+  invariant is untouched by it — v9 is still staged, not deployed — but the τ_h check below
+  no longer pins the literal "v7"; it pins the RELATION to `ACTIVE_CKPT`, which is what the
+  stamp was always for.
 
 Run:  uv run python -m pytest tools/v9/test_v9_staging.py -q
 """
@@ -114,10 +121,11 @@ def test_staged_t_good_is_v9_same_objectives_and_keeps_uncalibrated_uncalibrated
 def test_tau_h_mismatch_raise_names_v9_as_the_active_version(monkeypatch, tmp_path):
     """§7: leave τ_h fatal; confirm the version-mismatch raise reports v9.
 
-    τ_h is a cut on the CHEAP-render p_good of a specific head, and the vendored base is
-    v7-era. It is deliberately NOT re-derived here — that happens from harvest logs at hunt
-    launch. What must hold is that the moment v9 is the active head, the vendored fallback
-    refuses BY NAME rather than serving a stale float that looks authoritative.
+    τ_h is a cut on the CHEAP-render p_good of a specific head; the vendored base is stamped
+    with whatever head it was derived under (v7-era when this test was written, v8 since the
+    2026-07-31 re-derivation). Either way it is NOT re-derived by THIS pass. What must hold
+    is that the moment v9 is the active head, the vendored fallback refuses BY NAME rather
+    than serving a stale float that looks authoritative.
 
     The active version is SIMULATED, not flipped: flipping it is precisely what this pass
     must not do, and a test that required the flip to prove the post-flip behaviour would
@@ -135,8 +143,24 @@ def test_tau_h_mismatch_raise_names_v9_as_the_active_version(monkeypatch, tmp_pa
     assert sf.derive_tau_h(["mandelbrot"])["mandelbrot"] > 0
 
 
-def test_tau_h_vendored_base_was_not_rederived_by_this_pass():
-    """τ_h is left alone. The vendored base and its stamp are v7-era and must stay that
-    way until a launch-time re-derivation replaces BOTH together."""
-    assert sf.TAU_H_FIDELITY_BASE_MODEL == "v7"
+def test_tau_h_vendored_base_tracks_the_ACTIVE_head_not_a_frozen_version_string():
+    """τ_h's stamp must name the LIVE gate's head, and base+stamp move together.
+
+    This test used to pin `TAU_H_FIDELITY_BASE_MODEL == "v7"` — correct while the v9 staging
+    pass was the only thing that had touched τ_h, and its own docstring said so: the v7 pair
+    stands "until a launch-time re-derivation replaces BOTH together". That re-derivation
+    happened (2026-07-31, `tools/atlas/tau_h_rederive.py` -> `data/atlas/tau_h_base_v8.json`),
+    so pinning the literal would now assert the staleness the stamp exists to prevent.
+
+    The invariant that actually survives a re-derivation is the RELATION: the vendored base
+    is stamped with whatever `ACTIVE_CKPT` currently is, and it is non-empty. That still
+    fails loudly on the thing this test was written to catch — a head flip that leaves τ_h
+    behind — and it now also catches a re-derivation that updates one of the pair.
+    """
+    assert sf.TAU_H_FIDELITY_BASE_MODEL == active_ckpt.ACTIVE_VERSION, (
+        f"τ_h is stamped {sf.TAU_H_FIDELITY_BASE_MODEL!r} against active "
+        f"{active_ckpt.ACTIVE_VERSION!r} — re-run tools/atlas/tau_h_rederive.py and update "
+        f"TAU_H_FIDELITY_BASE + TAU_H_FIDELITY_BASE_MODEL together")
     assert sf.TAU_H_FIDELITY_BASE, "vendored base emptied — τ_h would fail at launch"
+    # v9 is STAGED, not deployed, so the stamp must not have run ahead of the flip either.
+    assert sf.TAU_H_FIDELITY_BASE_MODEL != "v9"

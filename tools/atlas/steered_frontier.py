@@ -79,6 +79,7 @@ import julia_ledger_schema as jls       # noqa: E402  (campaign/walk julia schem
 from score_lib import corn_decode       # noqa: E402
 from active_ckpt import ACTIVE_CKPT, auto_maxiter  # noqa: E402
 import deficit_scheduler as dsched       # noqa: E402  (pure; torch-free scheduling logic)
+import minibrot_maneuvers as mnv         # noqa: E402  (pure mpmath; no subprocess, no torch)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -130,9 +131,31 @@ def load_morph_anchors(cli_lo=None, cli_hi=None):
     if hi <= lo:
         hi = lo + 0.05
     return lo, hi, src
+# --- minibrot maneuvers (v1.3; --maneuvers, default OFF => byte-identical) --------------
+# A minibrot is a REFRAMING OPERATOR applied to a location already found, not a source of
+# locations, so the two operators enter here as candidate MOVES: a fired probe pushes a new
+# frontier NODE (like a root does — unscored, neutral prior), and the ordinary --expand /
+# score / harvest machinery takes it from there. See docs/design/minibrot_maneuvers.md.
+MAN_QUOTA_DEFAULT = 4        # reserved frontier SLOTS per batch (a floor, not a probability)
+MAN_PROBE_P_DEFAULT = 0.25   # cost governor: P(probe fires) per popped rung
+MAN_K_DEFAULT = "none,4"     # framing set: preserve-fw, and the 4x-atom "money shot"
+# Counters, named once so __init__/load_state/the summary can never drift apart.
+#   probes_*        — cost-governor accounting (did the probe even get to run)
+#   op_avail/unavail— the operator's own availability (the ~17% expectation)
+#   avail_unused    — AVAILABLE BUT NOT PUSHED: the atom was already visited this run.
+#                     Recorded because "the operator had nothing" and "the operator had
+#                     something we already had" are different constraints at scale.
+#   quota_bound     — reserved slots that promoted a node the plain priority top-B would
+#                     NOT have taken (the floor actually binding, not merely present)
+#   quota_unfilled  — reserved slots that went unused for lack of AVAILABILITY
+MAN_TOTALS = ("man_probes_rolled", "man_probes_fired", "man_probes_coin_skip",
+              "man_probes_cache_skip", "man_op_available", "man_op_unavailable",
+              "man_avail_unused", "man_nodes_pushed", "man_quota_bound",
+              "man_quota_unfilled", "man_nodes_expanded", "man_admitted")
 FRONTIER_CAP = 6000      # prune the frontier to the top-N by priority (memory bound)
 JULIA_ROOT_FW = 3.0      # fixed z-plane base-scale root view (matches --julia-root-fw)
 EXPAND_TIMEOUT_S = 900   # hard-kill backstop on a hung --expand call
+MIN_UNIT_TIMEOUT_S = 60  # floor for the budget-clamped per-unit backstop (unit_timeout_s)
 ROOT_LOW_WATER = None    # replenish roots when frontier < this (set to B at runtime)
 
 # Steered production walk config (mirror of production_seeder; keeps the gates identical).
@@ -191,7 +214,22 @@ def loc_of(partition: str, c, cx, cy, fw):
 # loss). mb4 and every julia partition are left at the fidelity-derived value — their
 # curves are band-thin and the cheap score is flat within the retained slice.
 # Applied as a floor (max with the derived value) so it only ever raises, never lowers.
-TAU_H_CAMPAIGN_FLOOR = {
+#
+# RETIRED AT THE v8 FLIP, NOT CARRIED. The three values above were cuts on **v7's** cheap
+# p_good, raised from v7-era campaign harvest logs, exactly like the `julia:mandelbrot`
+# / `phoenix` t_good overrides that `production_seeder.T_GOOD_UNCALIBRATED` retires by
+# name. A v7 floor on a v8 base is the same category error the version stamp below exists
+# to stop, so it is not applied — and it cannot be re-derived yet: the floor's definition
+# ("raise the cut to where it starts costing admits") needs ADMISSIONS under the active
+# head, and no v8-era discovery run has happened. The mechanism stays live and tested; the
+# table is empty on purpose, with its own stamp so an unstamped re-add is visible.
+#
+# It would be a no-op even if applied — every re-derived v8 base (0.199..0.704) is already
+# far above every v7 floor (0.216..0.269) — but "harmless today" is not why it is empty.
+TAU_H_CAMPAIGN_FLOOR_MODEL = "v8"
+TAU_H_CAMPAIGN_FLOOR: dict = {}
+# The v7 table, kept for the record only. NEVER read by the code path.
+TAU_H_CAMPAIGN_FLOOR_V7_RETIRED = {
     "mandelbrot": 0.2690,
     "multibrot3": 0.2193,
     "multibrot5": 0.2162,
@@ -224,16 +262,37 @@ TAU_H_CAMPAIGN_FLOOR = {
 # launch (tools/atlas/tau_h_retained_readout.py builds both axes of the curve from
 # harvest_log.jsonl). Until then the loud failure is the correct state — emission is dark
 # after a flip anyway, so nothing is blocked that was not already waiting on a discovery run.
-TAU_H_FIDELITY_BASE_MODEL = "v7"
+#
+# RE-DERIVED UNDER v8 on 2026-07-31 by `tools/atlas/tau_h_rederive.py`, which is the
+# regeneration path this comment's failure message points at. Provenance artifact:
+# `data/atlas/tau_h_base_v8.json` (per-partition n, t_good, both population estimates).
+# Method — the fidelity study's estimator verbatim, on a population the harvest logs make
+# re-renderable: each sampled harvest-check geometry is re-rendered at BOTH presentations
+# (384x216 ss1 cheap / 640x360 ss2 canonical) and re-scored under the ACTIVE head, then
+# tau_h = the 10th percentile of cheap p_good among frames whose canonical p_good clears
+# the family's t_good. All 8 partitions cut on their OWN population (n_pass 39..285); no
+# partition fell back to the pooled cut.
+#
+# The values move a LOT versus v7 (mandelbrot 0.201 -> 0.704) and that is the point: v8's
+# per-partition t_good is a different, much stricter bar (mandelbrot 0.85), so the frames
+# that clear it sit far higher on the cheap axis. Serving the v7 numbers to a v8 gate would
+# have rendered confirmations for a population v8 does not consider q3 at all.
+#
+# ONE BIAS, STATED. The harvest log only holds checks that already cleared the PREVIOUS
+# head's tau_h, so it is left-truncated and its quantile is an UPPER bound. The untruncated
+# walk-outcome ledger (prospect_run1: uniform-random gate survivors, never tau-selected) is
+# re-derived alongside it as a cross-check, and the committed value is the per-partition
+# MINIMUM of the two — the conservative side, since a too-high cut sheds admissions.
+TAU_H_FIDELITY_BASE_MODEL = "v8"
 TAU_H_FIDELITY_BASE = {
-    "mandelbrot": 0.20102782547473907,
-    "multibrot3": 0.20102782547473907,
-    "multibrot4": 0.7739711046218872,
-    "multibrot5": 0.20102782547473907,
-    "julia:mandelbrot": 0.18439058661460875,
-    "julia:multibrot3": 0.31058982014656067,
-    "julia:multibrot4": 0.20721471309661865,
-    "julia:multibrot5": 0.18631197065114974,
+    "mandelbrot": 0.704061222076416,
+    "multibrot3": 0.41670822501182553,
+    "multibrot4": 0.550365686416626,
+    "multibrot5": 0.4374629855155945,
+    "julia:mandelbrot": 0.3485920131206512,
+    "julia:multibrot3": 0.38111798763275145,
+    "julia:multibrot4": 0.19956488609313963,
+    "julia:multibrot5": 0.19899649918079373,
 }
 
 
@@ -621,6 +680,21 @@ class SteeredFrontier:
         if self.julia_hook or self.dive or self.julia_seed_pool_path:
             self.partitions += [ps.julia_partition(f) for f in self.families]
 
+        # --- minibrot maneuvers (v1.3). OFF => every path short-circuits on
+        # `self.maneuvers is False` and the run is byte-identical to the pre-maneuver
+        # frontier. Dives are single-track with no frontier to reserve slots in, so the
+        # operators are forced off there. ---
+        self.maneuvers = bool(getattr(args, "maneuvers", False)) and not self.dive
+        self.man_quota = int(getattr(args, "maneuver_quota", MAN_QUOTA_DEFAULT))
+        self.man_ks = mnv.parse_k_spec(getattr(args, "maneuver_k", MAN_K_DEFAULT))
+        self.man_lateral = bool(getattr(args, "maneuver_lateral", True))
+        self.man_log = self.run_dir / "maneuvers.jsonl"
+        self.man_visited: set = set()      # canonical atom keys already turned into a node
+        self.man_gov = mnv.ProbeGovernor(
+            float(getattr(args, "maneuver_probe_p", MAN_PROBE_P_DEFAULT)),
+            np.random.default_rng(self.seed + 9901))
+        self.man_probe_s = 0.0             # cumulative probe+solve wall time (cost sizing)
+
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.scratch.mkdir(parents=True, exist_ok=True)
 
@@ -644,7 +718,12 @@ class SteeredFrontier:
                            canonical_q3=0, admitted=0, q3_dup=0, guarded=0,
                            julia_roots=0, julia_hooks_skipped=0, precanon_dup=0,
                            cap_hits=0, dead_nodes=0, novelty_hits=0,
-                           nov_scored=0, sat_hits=0, distinct_looks=0)
+                           nov_scored=0, sat_hits=0, distinct_looks=0,
+                           # reconcile terms: every harvest check must land in exactly one
+                           # of these buckets, checked per batch (see _reconcile_batch).
+                           canon_not_q3=0, reframe_not_q3=0, render_failed=0,
+                           frontier_pushed=0,
+                           **{k: 0 for k in MAN_TOTALS})
         self.rng = np.random.default_rng(self.seed)
         # per-family native seeders (root source) — re-created fresh on resume.
         self.seeders = {f: ps.NativeSeeder(self.seed, self.scratch / f"native_{f}",
@@ -957,6 +1036,134 @@ class SteeredFrontier:
               f"(fw={JULIA_ROOT_FW}) from {self.julia_seed_pool_path.name}", flush=True)
         return added
 
+    # ------------------------------------------------------------- maneuvers
+    def propose_maneuvers(self, batch) -> int:
+        """Fire the minibrot operators on the rungs about to be expanded, and push every
+        available, not-yet-visited result as a new frontier NODE.
+
+        A maneuver is a MOVE, so it enters as a node (unscored, neutral prior) exactly as a
+        root does — not as a scored candidate. That is deliberate and it is the whole reason
+        the reserved floor in `pop_batch` is needed: the active head has never seen a
+        maneuver-originated view, so on score alone these would sink and the material needed
+        to train its successor would never be generated.
+
+        `lateral_to_sibling` reuses the snap's parent atom record, so a fired probe costs one
+        atom-domain pass + the snap solves + the lateral's neighbourhood sweep, never two
+        parent solves. Every probe decision is logged to `maneuvers.jsonl`."""
+        if not self.maneuvers:
+            return 0
+        pushed = 0
+        for n in batch:
+            degree = mnv.degree_of(n["partition"])
+            if degree is None:            # julia/phoenix viewport — operators undefined
+                continue
+            go, why = self.man_gov.should_probe(degree, n["cx"], n["cy"], n["fw"])
+            if not go:
+                self._log_maneuver(dict(batch=self.batch_i, op="probe", fired=False,
+                                        skip=why, partition=n["partition"],
+                                        node_id=n["node_id"], depth=n["depth"],
+                                        cx=n["cx"], cy=n["cy"], fw=n["fw"]))
+                continue
+            view = dict(node_id=n["node_id"], cx=n["cx"], cy=n["cy"], fw=n["fw"],
+                        depth=n["depth"])
+            t0 = time.time()
+            parent_rec = None
+            for k in self.man_ks:
+                m = mnv.snap_to_nucleus(view, k, degree=degree)
+                pushed += self._consume_maneuver(m, n)
+                if m.available and parent_rec is None:
+                    parent_rec = dict(id=m.atom_id, cx=m.cx, cy=m.cy, period=m.period,
+                                      window_scale=m.window_scale, degree=degree)
+            if self.man_lateral:
+                m = mnv.lateral_to_sibling(view, self.rng, degree=degree,
+                                           parent_rec=parent_rec)
+                pushed += self._consume_maneuver(m, n)
+            self.man_probe_s += time.time() - t0
+        # mirror the governor's counters into totals (the checkpointed, resumable copy)
+        g = self.man_gov
+        self.totals["man_probes_rolled"] = g.n_rolled
+        self.totals["man_probes_fired"] = g.n_fired
+        self.totals["man_probes_coin_skip"] = g.n_coin_skip
+        self.totals["man_probes_cache_skip"] = g.n_cache_skip
+        return pushed
+
+    def _consume_maneuver(self, m, parent) -> int:
+        """Record a maneuver outcome and, when it is available AND new, push its node."""
+        row = m.as_row()
+        row.update(batch=self.batch_i, partition=parent["partition"],
+                   root_id=parent["root_id"])
+        if not m.available:
+            self.totals["man_op_unavailable"] += 1
+            row["used"] = False
+            self._log_maneuver(row)
+            return 0
+        self.totals["man_op_available"] += 1
+        # Multiple frontier members snapping to ONE nucleus is the normal case; the
+        # read-time canonical key (snap_near_zero + sector-canonical rounding) is what
+        # collapses them. Framing (k) is part of the identity — the same atom at two k's
+        # is two distinct views — so the visited key carries k.
+        vkey = f"{m.atom_key}|{m.op}|{m.k}"
+        if vkey in self.man_visited:
+            self.totals["man_avail_unused"] += 1
+            row["used"] = False
+            row["unused_reason"] = "atom_already_visited"
+            self._log_maneuver(row)
+            return 0
+        self.man_visited.add(vkey)
+        nid = self.new_node_id()
+        man = dict(op=m.op, k=m.k, origin_node_id=nid, atom_id=m.atom_id,
+                   atom_key=m.atom_key, period=m.period, log10_abs_A=m.log10_abs_A,
+                   window_scale=m.window_scale, degree=m.extra.get("degree"),
+                   parent_node_id=m.parent_node_id, parent_cx=m.parent_cx,
+                   parent_cy=m.parent_cy, parent_fw=m.parent_fw,
+                   parent_depth=m.parent_depth)
+        self.frontier.append(dict(
+            node_id=nid, root_id=parent["root_id"], partition=parent["partition"],
+            c=parent["c"], cx=float(m.cx), cy=float(m.cy), fw=float(m.fw),
+            depth=int(m.depth), branch="maneuver",
+            priority=NEUTRAL_PRIOR + gumbel(self.rng, T_GUMBEL) + self.beta * int(m.depth),
+            cheap_eord=None, cheap_pgood=None,
+            mix_source=f"maneuver:{m.op}:k={m.k}", man=man,
+        ))
+        self.totals["man_nodes_pushed"] += 1
+        row["used"] = True
+        row["node_id_pushed"] = nid
+        self._log_maneuver(row)
+        return 1
+
+    def _log_maneuver(self, row: dict):
+        with open(self.man_log, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, default=str) + "\n")
+
+    def _split_reserved(self, pool: list[dict]) -> tuple[list[dict], list[dict]]:
+        """Take the batch out of a PRIORITY-SORTED `pool`, honouring the maneuver floor.
+
+        The floor is a reserved count of SLOTS, not a probability and not a priority bonus:
+        the walker already ranks a slate, so a new proposal source needs a slot. It is a
+        quota **of available** — with ~17% Newton convergence the operator is often simply
+        not there, and an unfillable quota must never stall the frontier, so whatever is not
+        filled falls straight back to the ordinary priority order.
+
+        `pref_loc_v1` (the preference ranker) is ABSENT from this seam, as it is from
+        `pop_batch_scheduled`: reserving a slot is not a ranker change, and the
+        ranks-never-steers boundary is untouched by it."""
+        if not self.maneuvers or self.man_quota <= 0:
+            return pool[:self.B], pool[self.B:]
+        plain = pool[:self.B]
+        plain_ids = {n["node_id"] for n in plain}
+        man = [n for n in pool if n.get("man")]
+        take = min(self.man_quota, len(man), self.B)
+        self.totals["man_quota_unfilled"] += self.man_quota - take
+        if take <= 0:
+            return plain, pool[self.B:]
+        reserved = man[:take]
+        self.totals["man_quota_bound"] += sum(1 for n in reserved
+                                              if n["node_id"] not in plain_ids)
+        taken = {n["node_id"] for n in reserved}
+        rest = [n for n in pool if n["node_id"] not in taken]
+        batch = reserved + rest[:self.B - take]
+        return batch, rest[self.B - take:]
+
     # ---------------------------------------------------------------- expand
     def pop_batch(self) -> list[dict]:
         """Top-B expandable nodes by priority. A node whose root has hit the M cap can NEVER be
@@ -967,15 +1174,13 @@ class SteeredFrontier:
         was capped-root dead weight, throughput ~0). Eviction is a no-op below the cap regime the
         pilot ran in (few caps, frontier << cap), so it does not change short-run behaviour."""
         self.frontier.sort(key=lambda n: -n["priority"])
-        batch, rest = [], []
+        live = []
         for n in self.frontier:
             if self.expansions_per_root.get(str(n["root_id"]), 0) >= M_CAP:
                 self.node_embs.pop(n["node_id"], None)   # evict: capped root -> dead weight
                 continue
-            if len(batch) < self.B:
-                batch.append(n)
-            else:
-                rest.append(n)
+            live.append(n)
+        batch, rest = self._split_reserved(live)
         self.frontier = rest
         # cap_hits = distinct roots that have reached the M cap (derived, not per-batch).
         self.totals["cap_hits"] = sum(1 for v in self.expansions_per_root.values() if v >= M_CAP)
@@ -1010,7 +1215,7 @@ class SteeredFrontier:
             return []
         pool = [n for n in self.frontier if n["partition"] == part]
         pool.sort(key=lambda n: -n["priority"])
-        batch = pool[:self.B]
+        batch, _rest = self._split_reserved(pool)   # maneuver floor is WITHIN the served partition
         taken = {n["node_id"] for n in batch}
         self.frontier = [n for n in self.frontier if n["node_id"] not in taken]
         for n in batch:
@@ -1045,6 +1250,61 @@ class SteeredFrontier:
         emb = embed_clip(model, tf, [gray])[0].astype(np.float32)
         return emb / (np.linalg.norm(emb) + 1e-9)
 
+    # ---------------------------------------------------------------- reconcile
+    RECONCILE_KEYS = ("candidates", "frontier_pushed", "harvest_checks", "precanon_dup",
+                      "canonical_q3", "canon_not_q3", "render_failed", "admitted",
+                      "q3_dup", "guarded", "reframe_not_q3")
+
+    def _reconcile_snapshot(self) -> dict:
+        return {k: self.totals[k] for k in self.RECONCILE_KEYS}
+
+    def _reconcile_batch(self, before: dict, n_cands: int):
+        """`found == written + dropped_*` per work unit, or EXIT LOUD.
+
+        Two identities have to close on every batch, and a long unattended run that silently
+        loses candidates is exactly the failure a summary cannot show you afterwards:
+
+          1. FRONTIER   every scored candidate is pushed:
+                        candidates == frontier_pushed
+          2. HARVEST    every check lands in exactly one fate:
+                        harvest_checks == precanon_dup + canonical_q3 + canon_not_q3
+                        canonical_q3   == admitted + q3_dup + guarded + reframe_not_q3
+
+        (`render_failed` checks are subtracted from `harvest_checks` at the point of failure,
+        so they are outside both identities by construction rather than by omission.)"""
+        d = {k: self.totals[k] - before[k] for k in self.RECONCILE_KEYS}
+        problems = []
+        if d["candidates"] != d["frontier_pushed"]:
+            problems.append(f"frontier: found {d['candidates']} candidates but pushed "
+                            f"{d['frontier_pushed']}")
+        if d["harvest_checks"] != d["precanon_dup"] + d["canonical_q3"] + d["canon_not_q3"]:
+            problems.append(
+                f"harvest: {d['harvest_checks']} checks != precanon_dup {d['precanon_dup']} "
+                f"+ canonical_q3 {d['canonical_q3']} + canon_not_q3 {d['canon_not_q3']}")
+        if d["canonical_q3"] != d["admitted"] + d["q3_dup"] + d["guarded"] + d["reframe_not_q3"]:
+            problems.append(
+                f"q3 fates: {d['canonical_q3']} canonical_q3 != admitted {d['admitted']} "
+                f"+ q3_dup {d['q3_dup']} + guarded {d['guarded']} + reframe_not_q3 "
+                f"{d['reframe_not_q3']}")
+        if problems:
+            raise SystemExit(f"[reconcile] batch {self.batch_i} DOES NOT BALANCE "
+                             f"(n_cands={n_cands}):\n  " + "\n  ".join(problems))
+
+    def unit_timeout_s(self) -> float:
+        """Hard-kill backstop for ONE subprocess work unit (an --expand call, a confirmation
+        render), bounded by what is left of the wall-clock budget.
+
+        The standing `EXPAND_TIMEOUT_S` is 900s. On a run whose whole budget is 15 minutes
+        that backstop is LONGER THAN THE RUN: a single hung unit doubles the run's wall
+        clock while the cap logic sits there believing it is inside budget. So when a budget
+        is set the timeout is additionally clamped to the REMAINING budget, floored at
+        `MIN_UNIT_TIMEOUT_S` so a legitimately slow unit near the end is not shot merely for
+        being slow. With no budget the historical 900s stands unchanged."""
+        if not self.budget_s:
+            return float(EXPAND_TIMEOUT_S)
+        remaining = max(0.0, self.budget_s - self.active_s)
+        return float(min(EXPAND_TIMEOUT_S, max(MIN_UNIT_TIMEOUT_S, remaining)))
+
     def expand_group(self, key, nodes) -> list[dict]:
         partition, c = key
         gdir = self.scratch / f"expand_b{self.batch_i:04d}" / f"{partition.replace(':','_')}"
@@ -1059,10 +1319,11 @@ class SteeredFrontier:
               descend_flags(partition, c)
         if self.expand_min_fw is not None:               # dive: stop before the fw floor w/ margin
             cmd += ["--min-fw", repr(self.expand_min_fw)]
+        to = self.unit_timeout_s()
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=EXPAND_TIMEOUT_S)
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=to)
         except subprocess.TimeoutExpired:
-            print(f"  WARN expand group {partition} timed out ({EXPAND_TIMEOUT_S}s) — skipped", flush=True)
+            print(f"  WARN expand group {partition} timed out ({to:.0f}s) — skipped", flush=True)
             return []
         if r.returncode != 0:
             print(f"  WARN expand group {partition} failed: {r.stderr[-400:]}", flush=True)
@@ -1087,6 +1348,10 @@ class SteeredFrontier:
                 cx=float(row["cx"]), cy=float(row["cy"]), fw=float(row["fw"]),
                 depth=int(row["depth"]), branch=row["branch"],
                 mix_source=parent.get("mix_source"),   # propagate root supply for harvest attribution
+                # A maneuver's whole subtree stays attributable to the operator that made
+                # it: op / k / origin node / parent view ride down every rung, so a later
+                # read never has to reconstruct lineage from coordinates.
+                man=parent.get("man"),
                 img=str((gdir / row["img"]).resolve()),
                 int_frac=row["int_frac"], occ=row["occ"],
             ))
@@ -1151,10 +1416,22 @@ class SteeredFrontier:
             tiles.append(cdir / f"confirm_{i:04d}.jpg")
         with cf.ThreadPoolExecutor(max_workers=ps.WORKERS) as ex:
             futs = {ex.submit(prescreen._render, c["cx"], c["cy"], c["fw"], tiles[i],
-                              family=render_family_of(c["partition"]), c=c["c"]): i
+                              family=render_family_of(c["partition"]), c=c["c"],
+                              timeout=self.unit_timeout_s()): i
                     for i, c in enumerate(checks)}
             for fut in cf.as_completed(futs):
                 fut.result()
+        # A timed-out / failed confirmation render leaves no tile; scoring a missing path
+        # would raise deep in the scorer, so drop those checks here and count them.
+        missing = [i for i, t in enumerate(tiles) if not t.exists()]
+        if missing:
+            self.totals["render_failed"] += len(missing)
+            keep = [i for i in range(len(checks)) if i not in set(missing)]
+            checks = [checks[i] for i in keep]
+            tiles = [tiles[i] for i in keep]
+            self.totals["harvest_checks"] -= len(missing)
+            if not checks:
+                return
         # K-aware (`score_paths_k`): on a K=4 head the third cutpoint comes back too, so the
         # confirmation decode can reach class 4 instead of being capped at 3 by the reader.
         rows_k = self.scorer.score_paths_k([str(t) for t in tiles])
@@ -1181,6 +1458,8 @@ class SteeredFrontier:
                     self.totals["q3_dup"] += 1
                 else:
                     admitted, reframe_decoded = self.admit(c, cdir)
+            else:
+                self.totals["canon_not_q3"] += 1
             self._log_harvest(c, admitted, reframe_decoded)
 
     def admit(self, c, cdir):
@@ -1219,7 +1498,16 @@ class SteeredFrontier:
             distinct=distinct, dup_of=dup_of,
             guard_pass=guard_pass, guard_fail=None if guard_pass else "sentinel",
             cheap_pgood=c["cheap_pgood"], canon_pgood=c["canon_pg"], branch=c["branch"],
+            # fw + depth on EVERY row: a maneuver's snap-and-rescale changes fw without
+            # changing the walk-rung count, so after this feature depth is no longer a
+            # monotone stand-in for scale. Any later read has to depth-match on BOTH or it
+            # measures depth (outcome_fw/reached_depth above; seed_fw here for the pre-
+            # reframe view).
+            seed_fw=c["fw"],
         )
+        if c.get("man"):                             # maneuver-originated lineage
+            row["maneuver"] = c["man"]
+            row["mix_source"] = c.get("mix_source") or row["mix_source"]
         if c["c"] is not None:                       # julia twin outcome carries the parameter c
             row["julia_c_re"], row["julia_c_im"] = c["c"][0], c["c"][1]
             # CAMPAIGN schema (outcome_* = viewport, c = julia_c_*): stamp it so the row is
@@ -1233,6 +1521,8 @@ class SteeredFrontier:
             self.clouds[c["partition"]].append(row)
             self.run_clouds[c["partition"]].append(row)   # keep the rejection-sampler cloud current
             self.totals["admitted"] += 1
+            if c.get("man"):
+                self.totals["man_admitted"] += 1
             # fold the admitted location's look into morph memory (its cheap emb; reframe only
             # nudges the frame <=0.25*fw, so the candidate's cheap look stands in for it).
             if self.lambda_m > 0.0 and c.get("emb") is not None:
@@ -1251,6 +1541,10 @@ class SteeredFrontier:
             self.totals["q3_dup"] += 1
         elif not guard_pass:
             self.totals["guarded"] += 1
+        else:
+            # guard passed but the REFRAMED frame decoded below q3 — previously the one
+            # uncounted fate, which is why a per-unit reconcile could not close.
+            self.totals["reframe_not_q3"] += 1
         return False, decoded
 
     def _log_harvest(self, c, admitted, reframe_decoded, precanon_dup=None):
@@ -1273,6 +1567,7 @@ class SteeredFrontier:
                 canon_decoded=c.get("canon_decoded"), reframe_decoded=reframe_decoded,
                 admitted=bool(admitted), tau_h=self.tau_h[c["partition"]],
                 precanon_dup=precanon_dup, mix_source=c.get("mix_source"),
+                maneuver=c.get("man"),   # operator/k/origin ride every check, admitted or not
             )) + "\n")
 
     # ---------------------------------------------------------------- push
@@ -1291,7 +1586,9 @@ class SteeredFrontier:
                 cx=c["cx"], cy=c["cy"], fw=c["fw"], depth=c["depth"], priority=prio,
                 cheap_eord=c["cheap_eord"], cheap_pgood=c["cheap_pgood"], branch=c["branch"],
                 mix_source=c.get("mix_source"),   # carry root supply down the tree (probe attribution)
+                man=c.get("man"),                 # maneuver provenance, if this lineage has one
             ))
+            self.totals["frontier_pushed"] += 1
             if c.get("emb") is not None:
                 self.node_embs[c["node_id"]] = c["emb"]
             if terms["nov_pen"] > 0.0:
@@ -1321,10 +1618,20 @@ class SteeredFrontier:
                 for r in prio_rows:
                     f.write(json.dumps(r) + "\n")
         # prune to the memory bound (keep the best); drop pruned nodes' cached embeddings.
+        # Maneuver-originated nodes are exempt: they are the population the reserved floor
+        # exists to protect, and pruning by priority would delete them first (they carry a
+        # neutral prior, or a score from a head that has never seen their kind) — the cap
+        # would silently undo the floor. The exemption is bounded by the same probe
+        # governor that bounds how many can ever be created.
         if len(self.frontier) > FRONTIER_CAP:
             self.frontier.sort(key=lambda n: -n["priority"])
-            dropped = self.frontier[FRONTIER_CAP:]
-            self.frontier = self.frontier[:FRONTIER_CAP]
+            keep_man = [n for n in self.frontier if n.get("man")] if self.maneuvers else []
+            room = max(0, FRONTIER_CAP - len(keep_man))
+            others = [n for n in self.frontier if not n.get("man")] if self.maneuvers \
+                else self.frontier
+            kept_ids = {n["node_id"] for n in keep_man} | {n["node_id"] for n in others[:room]}
+            dropped = [n for n in self.frontier if n["node_id"] not in kept_ids]
+            self.frontier = [n for n in self.frontier if n["node_id"] in kept_ids]
             for n in dropped:
                 self.node_embs.pop(n["node_id"], None)
 
@@ -1342,6 +1649,15 @@ class SteeredFrontier:
         )
         if self.scheduler is not None:
             state["scheduler"] = self.scheduler.state_dict()
+        if self.maneuvers:
+            # The visited-atom set and the governor's region cache are the two pieces of
+            # maneuver state a resume must not lose: without them a restart re-pays the
+            # Newton cost for regions the killed run already probed and re-pushes nodes the
+            # ledger already carries.
+            state["maneuvers"] = dict(
+                quota=self.man_quota, ks=[("none" if k is None else k) for k in self.man_ks],
+                lateral=self.man_lateral, probe_s=self.man_probe_s,
+                visited=sorted(self.man_visited), governor=self.man_gov.state_dict())
         # morph memory + frontier-node embeddings first (state.json references them), then the
         # checkpoint. Both are heuristic (priority only) — a stale copy never loses an admission.
         self.morph.save()
@@ -1363,6 +1679,13 @@ class SteeredFrontier:
         self.totals.setdefault("nov_scored", 0); self.totals.setdefault("sat_hits", 0)
         self.totals.setdefault("precanon_dup", 0); self.totals.setdefault("julia_hooks_skipped", 0)
         self.totals.setdefault("distinct_looks", 0)
+        for k in MAN_TOTALS:
+            self.totals.setdefault(k, 0)
+        if self.maneuvers and "maneuvers" in st:
+            m = st["maneuvers"]
+            self.man_visited = set(m.get("visited", []))
+            self.man_probe_s = float(m.get("probe_s", 0.0))
+            self.man_gov.load_state(m.get("governor", {}))
         self.rng.bit_generator.state = st["rng"]
         # scheduler prices/caps reload from the checkpoint; caps re-open on resume (item 4). The
         # distinct-look tally reloaded from its npz in the scheduler's __init__.
@@ -1568,6 +1891,12 @@ class SteeredFrontier:
                     "library seed absent (status=%s): deficits/look_frac in this run measure "
                     "RUN-LOCAL scarcity, NOT library-wide. Do not compare them to a seeded run."
                     % summary["library_seed"].get("status"))
+        else:                                        # never_attempted, not absent — see finish()
+            summary["library_seed"] = dict(
+                status="never_attempted",
+                reason="run has --scheduler OFF: nothing to seed",
+                source=str(dsched.library_seed_paths()[0]),
+                source_exists=dsched.library_seed_paths()[0].exists())
         (self.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print("\n=== DIVE SUMMARY ===")
         print(f"  {done_idx}/{len(plan)} dives, active {self.active_s/60:.1f}m")
@@ -1599,6 +1928,10 @@ class SteeredFrontier:
                       f"({self.anchor_src}); memory={mode}, sat knee cos>={self.sat_cos:.4f}",
                       flush=True)
             print(f"[tau_h] {self.tau_h}", flush=True)
+            if self.maneuvers:
+                print(f"[maneuvers] ON — quota={self.man_quota} slots/batch (of AVAILABLE), "
+                      f"probe_p={self.man_gov.p} k={self.man_ks} lateral={self.man_lateral}",
+                      flush=True)
             if self.scheduler is not None:
                 tf = {p: round(v, 3) for p, v in self.scheduler.target_frac.items()}
                 print(f"[scheduler] ON — target_frac={tf} "
@@ -1650,6 +1983,13 @@ class SteeredFrontier:
                 continue
             self.fold_expanded_into_memory(batch)   # parents join morph memory before scoring
             self.totals["expanded"] += len(batch)
+            self.totals["man_nodes_expanded"] += sum(1 for n in batch if n.get("man"))
+            # Maneuvers are proposed off the rungs ABOUT TO BE EXPANDED and are INTERLEAVED
+            # into this same walk — never a separate run, which would confound the move with
+            # the run. They land on the frontier for a later batch, competing (with a
+            # reserved floor) against ordinary nodes.
+            self.propose_maneuvers(batch)
+            rec0 = self._reconcile_snapshot()
             cands = self.expand_batch(batch)
             self.totals["candidates"] += len(cands)
             self.score_cheap(cands)
@@ -1657,6 +1997,7 @@ class SteeredFrontier:
             self.harvest(cands)                      # admissions fold into memory
             self.push_children(cands)                # novelty penalty applied from cos_max
             self.morph.end_batch()                   # finalize recency block, evict > K (no-op legacy)
+            self._reconcile_batch(rec0, len(cands))  # found == written + dropped_*, or exit loud
 
             dt = time.time() - tb
             self.active_s += dt
@@ -1696,6 +2037,7 @@ class SteeredFrontier:
             tau_h=self.tau_h, totals=self.totals,
             cloud_sizes={p: len(v) for p, v in self.clouds.items()},
         )
+        summary["maneuvers"] = self.maneuver_summary()
         if self.scheduler is not None:
             summary["scheduler"] = self.scheduler.summary()
             # Stamp the seed provenance at the TOP level too, not only nested under
@@ -1708,6 +2050,18 @@ class SteeredFrontier:
                     "library seed absent (status=%s): deficits/look_frac in this run measure "
                     "RUN-LOCAL scarcity, NOT library-wide. Do not compare them to a seeded run."
                     % summary["library_seed"].get("status"))
+        else:
+            # A SEEDER THAT WAS NEVER CALLED RECORDS never_attempted, NOT ABSENCE. The
+            # library seed is a scheduler-only concept, so a scheduler-off run has no seed
+            # by construction — but "the key is missing" and "the seed was missing" read
+            # identically in a summary six months later, which is exactly how campaign-2's
+            # seeded/unseeded status became unrecoverable. Say which it is, in the file.
+            summary["library_seed"] = dict(
+                status="never_attempted", reason="run has --scheduler OFF: no deficit "
+                "scheduler, therefore no distinct-look tally and nothing to seed",
+                source=str(dsched.library_seed_paths()[0]),
+                emb_dir=str(dsched.library_seed_paths()[1]),
+                source_exists=dsched.library_seed_paths()[0].exists())
         (self.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print("\n=== STEERED FRONTIER SUMMARY ===")
         print(f"  active {self.active_s/60:.1f}m over {self.batch_i} batches")
@@ -1733,7 +2087,73 @@ class SteeredFrontier:
             print(f"    target_frac={s['target_frac']}\n    look_frac={s['look_frac']}")
             print(f"    prices={s['prices']} capped={s['capped']}")
             print(f"    trace -> {self.scheduler.trace_path}")
+        if self.maneuvers:
+            m = summary["maneuvers"]
+            print(f"  MANEUVERS: probes {m['probes_fired']}/{m['probes_rolled']} fired "
+                  f"(coin-skip {m['probes_coin_skip']}, region-cache-skip "
+                  f"{m['probes_cache_skip']}); operator available "
+                  f"{m['op_available']}/{m['op_calls']} = "
+                  f"{(m['op_available']/m['op_calls']) if m['op_calls'] else float('nan'):.3f}")
+            print(f"    pushed={m['nodes_pushed']} (available-but-unused {m['avail_unused']}) "
+                  f"expanded={m['nodes_expanded']} admitted={m['admitted']}")
+            print(f"    quota={m['quota']} bound={m['quota_bound']} "
+                  f"unfilled={m['quota_unfilled']}  probe+solve "
+                  f"{m['probe_s']:.1f}s = {m['probe_share_of_active']:.3%} of active")
         print(f"  ledger -> {self.ledger.path}\n  summary -> {self.run_dir/'summary.json'}")
+
+    def maneuver_summary(self) -> dict:
+        """The §7 read: did each operator fire, what did availability actually run at, did
+        the floor bind, and what share of the run was probe+solve."""
+        t = self.totals
+        calls = t["man_op_available"] + t["man_op_unavailable"]
+        return dict(
+            enabled=self.maneuvers, quota=self.man_quota,
+            probe_p=self.man_gov.p, ks=[("none" if k is None else k) for k in self.man_ks],
+            lateral=self.man_lateral,
+            probes_rolled=t["man_probes_rolled"], probes_fired=t["man_probes_fired"],
+            probes_coin_skip=t["man_probes_coin_skip"],
+            probes_cache_skip=t["man_probes_cache_skip"],
+            op_calls=calls, op_available=t["man_op_available"],
+            op_unavailable=t["man_op_unavailable"],
+            avail_unused=t["man_avail_unused"], nodes_pushed=t["man_nodes_pushed"],
+            nodes_expanded=t["man_nodes_expanded"], admitted=t["man_admitted"],
+            quota_bound=t["man_quota_bound"], quota_unfilled=t["man_quota_unfilled"],
+            visited_atoms=len(self.man_visited), probe_s=round(self.man_probe_s, 2),
+            probe_share_of_active=(self.man_probe_s / self.active_s
+                                   if self.active_s > 0 else 0.0),
+            log=str(self.man_log),
+        )
+
+
+def set_below_normal_priority() -> str:
+    """Drop THIS process to BELOW_NORMAL, which every child inherits.
+
+    A long unattended discovery run must yield to interactive work. This driver fans out
+    `fractal-generator.exe` through several call sites (--expand, the confirmation renders,
+    reframe's own renders), and on win32 a child inherits the parent's priority class — so
+    lowering the driver once covers all of them, without threading `creationflags` through
+    every launcher. The thread-count half of the pairing stays with the engine defaults
+    (`corpus_common.DEFAULT_ENGINE_THREADS`); this is only the priority half."""
+    if sys.platform != "win32":
+        try:
+            os.nice(10)
+            return "nice+10"
+        except Exception as e:
+            return f"unavailable ({e})"
+    try:
+        import ctypes
+        from corpus_common import BELOW_NORMAL_PRIORITY_CLASS
+        k32 = ctypes.windll.kernel32
+        # restypes/argtypes are load-bearing: GetCurrentProcess returns the pseudo-handle
+        # (HANDLE)-1, and without c_void_p ctypes truncates it to a 32-bit int that
+        # SetPriorityClass rejects — the call then "fails" for a reason nothing reports.
+        k32.GetCurrentProcess.restype = ctypes.c_void_p
+        k32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        k32.SetPriorityClass.restype = ctypes.c_int
+        ok = k32.SetPriorityClass(k32.GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS)
+        return "BELOW_NORMAL" if ok else f"FAILED (err {ctypes.get_last_error()})"
+    except Exception as e:                                   # never fatal
+        return f"unavailable ({e})"
 
 
 def preflight_library_seed(args):
@@ -1798,6 +2218,26 @@ def main():
                          "legacy all-permanent, reproduces v1.1)")
     ap.add_argument("--recency-k", type=int, default=8,
                     help="recency window size in batches for --mem-recency (default 8)")
+    # --- minibrot maneuvers (default OFF; off is byte-identical to pre-change) ---
+    ap.add_argument("--maneuvers", action="store_true",
+                    help="ENABLE the minibrot reframing operators (snap_to_nucleus / "
+                         "lateral_to_sibling) as candidate moves interleaved in this walk. "
+                         "DEFAULT OFF (byte-identical).")
+    ap.add_argument("--maneuver-quota", type=int, default=MAN_QUOTA_DEFAULT,
+                    help=f"reserved frontier SLOTS per batch for maneuver-originated nodes, "
+                         f"regardless of score — a floor OF AVAILABLE, never a probability "
+                         f"(default {MAN_QUOTA_DEFAULT})")
+    ap.add_argument("--maneuver-probe-p", type=float, default=MAN_PROBE_P_DEFAULT,
+                    help=f"COST GOVERNOR: probability the atom probe fires per popped rung "
+                         f"(default {MAN_PROBE_P_DEFAULT}). Not a selection probability — "
+                         f"selection is the reserved quota.")
+    ap.add_argument("--maneuver-k", type=str, default=MAN_K_DEFAULT,
+                    help=f"framing set for snap_to_nucleus: comma list where 'none' preserves "
+                         f"the parent fw and a number k frames at k x atom size "
+                         f"(default {MAN_K_DEFAULT!r})")
+    ap.add_argument("--no-maneuver-lateral", dest="maneuver_lateral", action="store_false",
+                    help="disable lateral_to_sibling (the expensive operator); snap only")
+    ap.set_defaults(maneuver_lateral=True)
     # --- deficit scheduler (default OFF; scheduler-off is byte-identical to pre-change) ---
     ap.add_argument("--scheduler", action="store_true",
                     help="ENABLE the family-level deficit scheduler: cross-partition allocation "
@@ -1825,8 +2265,13 @@ def main():
                     help="dives from the top source admissions by canonical p_good (default 20)")
     ap.add_argument("--n-control", type=int, default=8,
                     help="control dives from random source admissions regardless of score (default 8)")
+    ap.add_argument("--below-normal", action="store_true",
+                    help="run this process (and every engine child it spawns) at "
+                         "BELOW_NORMAL priority so a long run yields to interactive work")
     ap.add_argument("--resume", action="store_true", help="continue from state.json / dive_state.json")
     args = ap.parse_args()
+    if args.below_normal:
+        print(f"[priority] {set_below_normal_priority()}", flush=True)
     preflight_library_seed(args)
     SteeredFrontier(args).run()
 

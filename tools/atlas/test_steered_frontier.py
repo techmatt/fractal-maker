@@ -13,6 +13,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
@@ -173,7 +175,7 @@ def test_pop_batch_evicts_capped_root_nodes():
     # embedding dropped), not merely skipped-and-retained — else capped nodes clog the frontier.
     import types
     obj = types.SimpleNamespace(
-        B=2,
+        B=2, maneuvers=False, man_quota=0,             # maneuver floor off => plain top-B
         expansions_per_root={"1": sf.M_CAP, "2": 0},   # root 1 capped, root 2 open
         node_embs={101: None, 102: None, 201: None},
         totals={"cap_hits": 0},
@@ -183,6 +185,7 @@ def test_pop_batch_evicts_capped_root_nodes():
             {"node_id": 201, "root_id": 2, "priority": 3.0},   # open  -> popped
         ],
     )
+    obj._split_reserved = types.MethodType(sf.SteeredFrontier._split_reserved, obj)
     batch = sf.SteeredFrontier.pop_batch(obj)
     assert [n["node_id"] for n in batch] == [201]
     assert obj.frontier == []                                  # capped nodes gone, not retained
@@ -311,10 +314,55 @@ def test_derive_tau_h_falls_back_to_vendored_base_when_records_absent(monkeypatc
     # campaign floors are applied on top (max — only ever raise)
     for p, floor in sf.TAU_H_CAMPAIGN_FLOOR.items():
         assert tau[p] >= floor - 1e-12
-    # mandelbrot's floor (0.269) dominates its vendored base (0.201)
-    assert tau["mandelbrot"] == sf.TAU_H_CAMPAIGN_FLOOR["mandelbrot"]
     # a floor-free partition passes the vendored base through unchanged
     assert tau["julia:multibrot3"] == sf.TAU_H_FIDELITY_BASE["julia:multibrot3"]
+
+
+def test_campaign_floor_mechanism_still_raises_when_a_floor_exists(monkeypatch, tmp_path):
+    """The floor MECHANISM, tested independently of the (currently empty) live table.
+
+    `TAU_H_CAMPAIGN_FLOOR` was emptied at the v8 flip — its values were cuts on v7's cheap
+    p_good and cannot be re-derived until a v8-era campaign produces admissions. Keying this
+    test on the live table would have deleted coverage of the mechanism along with the data,
+    so it injects a floor instead: max-only, never lowering."""
+    monkeypatch.setattr(sf, "FIDELITY_RECORDS", tmp_path / "records_do_not_exist.json")
+    monkeypatch.setattr(sf, "_active_scorer_version", lambda: sf.TAU_H_FIDELITY_BASE_MODEL)
+    base = sf.TAU_H_FIDELITY_BASE["mandelbrot"]
+    monkeypatch.setattr(sf, "TAU_H_CAMPAIGN_FLOOR",
+                        {"mandelbrot": base + 0.1, "multibrot3": 0.0})
+    tau = sf.derive_tau_h(["mandelbrot", "multibrot3"])
+    assert tau["mandelbrot"] == base + 0.1                              # raised
+    assert tau["multibrot3"] == sf.TAU_H_FIDELITY_BASE["multibrot3"]    # never lowered
+
+
+def test_the_retired_v7_campaign_floor_is_not_on_the_live_path():
+    # Kept for the record, never read. A v7 floor applied to a v8 base is the same category
+    # error the version stamp exists to stop.
+    assert sf.TAU_H_CAMPAIGN_FLOOR == {}
+    assert sf.TAU_H_CAMPAIGN_FLOOR_V7_RETIRED                    # the record survives
+    assert sf.TAU_H_CAMPAIGN_FLOOR_MODEL == sf.TAU_H_FIDELITY_BASE_MODEL
+
+
+def test_vendored_tau_h_stamp_matches_the_active_checkpoint():
+    """The stamp is the whole guard, so it must actually be current in the committed tree —
+    otherwise every run aborts and the gate reads as broken rather than as protective."""
+    import active_ckpt
+    assert sf.TAU_H_FIDELITY_BASE_MODEL == active_ckpt.ACTIVE_VERSION, (
+        f"vendored tau_h is stamped {sf.TAU_H_FIDELITY_BASE_MODEL!r} but the active scorer "
+        f"is {active_ckpt.ACTIVE_VERSION!r} — re-run tools/atlas/tau_h_rederive.py and "
+        f"update TAU_H_FIDELITY_BASE + TAU_H_FIDELITY_BASE_MODEL together")
+
+
+def test_vendored_tau_h_matches_its_provenance_artifact():
+    """The committed constants must be exactly what the re-derivation wrote — a hand-edited
+    threshold is otherwise indistinguishable from a derived one."""
+    art = Path(sf.ROOT) / "data" / "atlas" / f"tau_h_base_{sf.TAU_H_FIDELITY_BASE_MODEL}.json"
+    assert art.exists(), f"{art} missing — the tau_h provenance must stay durable"
+    doc = json.loads(art.read_text(encoding="utf-8"))
+    assert doc["model"] == sf.TAU_H_FIDELITY_BASE_MODEL
+    assert set(doc["tau_h_base"]) == set(sf.TAU_H_FIDELITY_BASE)
+    for p, v in doc["tau_h_base"].items():
+        assert float(v) == float(sf.TAU_H_FIDELITY_BASE[p]), p
 
 
 def test_derive_tau_h_loud_fail_for_unvendored_partition_when_records_absent(monkeypatch, tmp_path):
@@ -349,12 +397,14 @@ def test_live_fidelity_records_bypass_the_version_gate(monkeypatch, tmp_path):
     recs.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(sf, "FIDELITY_RECORDS", recs)
     monkeypatch.setattr(sf, "_active_scorer_version", lambda: "v99_some_future_head")
-    # base below mandelbrot's campaign floor (0.269), so the floor's raise is observable
+    # an injected floor above the record-derived base, so the floor's raise is observable
+    # independently of the (retired, empty) live table
+    monkeypatch.setattr(sf, "TAU_H_CAMPAIGN_FLOOR", {"mandelbrot": 0.30})
     monkeypatch.setattr(sf, "_derive_tau_h_base_from_records",
                         lambda parts, keep: {p: 0.10 for p in parts})
     tau = sf.derive_tau_h(["mandelbrot", "julia:multibrot3"])
     assert tau["julia:multibrot3"] == 0.10                     # no gate, no raise
-    assert tau["mandelbrot"] == sf.TAU_H_CAMPAIGN_FLOOR["mandelbrot"]   # floor still applies
+    assert tau["mandelbrot"] == 0.30                           # floor still applies
 
 
 # =========================================================================== #
@@ -437,3 +487,64 @@ def test_main_runs_the_preflight_before_constructing_the_driver(monkeypatch, tmp
         sf.main()
     assert built == []                                        # never constructed, never ran
     assert not (tmp_path / "run").exists()
+
+
+# =========================================================================== #
+# Per-unit reconcile + the wall-clock hard-kill backstop (the unattended-run guards).
+# =========================================================================== #
+def _recon_obj(totals):
+    import types
+    o = types.SimpleNamespace(totals=dict(totals), batch_i=7)
+    o._reconcile_snapshot = types.MethodType(sf.SteeredFrontier._reconcile_snapshot, o)
+    o._reconcile_batch = types.MethodType(sf.SteeredFrontier._reconcile_batch, o)
+    o.RECONCILE_KEYS = sf.SteeredFrontier.RECONCILE_KEYS
+    return o
+
+
+_ZERO = {k: 0 for k in sf.SteeredFrontier.RECONCILE_KEYS}
+
+
+def test_reconcile_passes_when_every_check_lands_in_exactly_one_fate():
+    o = _recon_obj(_ZERO)
+    before = o._reconcile_snapshot()
+    o.totals.update(candidates=10, frontier_pushed=10, harvest_checks=6,
+                    precanon_dup=2, canonical_q3=3, canon_not_q3=1,
+                    admitted=1, q3_dup=1, guarded=1, reframe_not_q3=0)
+    o._reconcile_batch(before, 10)          # closes: 6 == 2+3+1 and 3 == 1+1+1+0
+
+
+def test_reconcile_exits_loud_on_a_lost_candidate():
+    o = _recon_obj(_ZERO)
+    before = o._reconcile_snapshot()
+    o.totals.update(candidates=10, frontier_pushed=9)     # one candidate vanished
+    with pytest.raises(SystemExit) as e:
+        o._reconcile_batch(before, 10)
+    assert "frontier" in str(e.value)
+
+
+def test_reconcile_exits_loud_on_an_uncounted_q3_fate():
+    # The historical gap: guard passed but the REFRAMED frame decoded below q3 and nothing
+    # counted it, so the q3 identity could not close.
+    o = _recon_obj(_ZERO)
+    before = o._reconcile_snapshot()
+    o.totals.update(candidates=1, frontier_pushed=1, harvest_checks=1, canonical_q3=1)
+    with pytest.raises(SystemExit) as e:
+        o._reconcile_batch(before, 1)
+    assert "q3 fates" in str(e.value)
+
+
+def test_unit_timeout_is_clamped_by_the_remaining_budget():
+    import types
+    # No budget -> the historical 900s standing backstop, unchanged.
+    o = types.SimpleNamespace(budget_s=0.0, active_s=0.0)
+    assert sf.SteeredFrontier.unit_timeout_s(o) == float(sf.EXPAND_TIMEOUT_S)
+    # 15-minute budget, nothing spent: the backstop is the run, never longer than it.
+    o = types.SimpleNamespace(budget_s=900.0, active_s=0.0)
+    assert sf.SteeredFrontier.unit_timeout_s(o) == 900.0
+    # Near the end of the budget the backstop shrinks with it ...
+    o = types.SimpleNamespace(budget_s=900.0, active_s=880.0)
+    assert sf.SteeredFrontier.unit_timeout_s(o) == sf.MIN_UNIT_TIMEOUT_S
+    # ... but never below the floor, so a legitimately slow last unit is not shot for
+    # being slow (this is the branch that keeps the clamp from becoming a zero timeout).
+    o = types.SimpleNamespace(budget_s=900.0, active_s=100000.0)
+    assert sf.SteeredFrontier.unit_timeout_s(o) == float(sf.MIN_UNIT_TIMEOUT_S)

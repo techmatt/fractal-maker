@@ -122,7 +122,8 @@ def prescreen(cloud: np.ndarray, fw: np.ndarray, workdir: Path,
 RENDER_W, RENDER_H, RENDER_SS = 640, 360, 2  # reframe search fidelity
 
 
-def _render(cx, cy, fw, out: Path, *, family: str = "mandelbrot", c=None) -> tuple[bool, str]:
+def _render(cx, cy, fw, out: Path, *, family: str = "mandelbrot", c=None,
+            timeout: float | None = None) -> tuple[bool, str]:
     """Render an outcome tile at v5 search fidelity. `family`/`c` select the fractal:
     default (`mandelbrot`, no c) is byte-identical to the historical call; pass e.g.
     `family="multibrot3"` or `family="julia", c=(re, im)` and the family's flags are
@@ -137,7 +138,13 @@ def _render(cx, cy, fw, out: Path, *, family: str = "mandelbrot", c=None) -> tup
         "--maxiter", str(auto_maxiter(float(fw))), "--palette", PALETTE,
         "--jpg-quality", str(JPG_Q), "--out", str(out),
     ] + loc_mod.render_one_flags(loc)
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    # `timeout=None` (the default) is the historical behaviour, byte-identical. A caller
+    # running under a wall-clock cap passes a bound so ONE hung render-one cannot park the
+    # whole run past its budget with no backstop.
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, f"render-one timed out after {timeout}s"
     ok = r.returncode == 0 and out.exists()
     return ok, ("" if ok else r.stderr[-300:])
 

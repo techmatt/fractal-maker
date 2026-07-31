@@ -1,0 +1,193 @@
+{
+  "model": "v8",
+  "ckpt": "data/classifier/v8/model_best.pt",
+  "keep": 0.9,
+  "seed": 0,
+  "combine": "min",
+  "per_partition": 300,
+  "n_rows_harvest": 2419,
+  "n_rows_walk": 1092,
+  "harvest_runs": [
+    "campaign1/breadth",
+    "campaign1/dive",
+    "campaign2/breadth",
+    "campaign2/dive",
+    "julia_parent_probe/breadth"
+  ],
+  "walk_ledger": "C:\\Code\\fractal-maker\\data\\discovery\\fresh_runs\\prospect_run1\\outcome_ledger.jsonl",
+  "t_good": {
+    "julia:mandelbrot": 0.5,
+    "julia:multibrot3": 0.39,
+    "julia:multibrot4": 0.14,
+    "julia:multibrot5": 0.2,
+    "mandelbrot": 0.85,
+    "multibrot3": 0.5,
+    "multibrot4": 0.5,
+    "multibrot5": 0.5
+  },
+  "t_good_status": {
+    "julia:mandelbrot": "UNCALIBRATED",
+    "julia:multibrot3": "DERIVED",
+    "julia:multibrot4": "DERIVED",
+    "julia:multibrot5": "DERIVED",
+    "mandelbrot": "DERIVED",
+    "multibrot3": "UNCALIBRATED",
+    "multibrot4": "UNCALIBRATED",
+    "multibrot5": "UNCALIBRATED"
+  },
+  "tau_h_base": {
+    "julia:mandelbrot": 0.3485920131206512,
+    "julia:multibrot3": 0.38111798763275145,
+    "julia:multibrot4": 0.19956488609313963,
+    "julia:multibrot5": 0.19899649918079373,
+    "mandelbrot": 0.704061222076416,
+    "multibrot3": 0.41670822501182553,
+    "multibrot4": 0.550365686416626,
+    "multibrot5": 0.4374629855155945
+  },
+  "harvest_estimate": {
+    "julia:mandelbrot": 0.4900252431631088,
+    "julia:multibrot3": 0.38111798763275145,
+    "julia:multibrot4": 0.21726327836513512,
+    "julia:multibrot5": 0.21128661036491395,
+    "mandelbrot": 0.704061222076416,
+    "multibrot3": 0.41670822501182553,
+    "multibrot4": 0.550365686416626,
+    "multibrot5": 0.4953071027994156
+  },
+  "walk_estimate": {
+    "julia:mandelbrot": 0.3485920131206512,
+    "julia:multibrot3": 0.516879141330719,
+    "julia:multibrot4": 0.19956488609313963,
+    "julia:multibrot5": 0.19899649918079373,
+    "mandelbrot": 0.8562394857406617,
+    "multibrot3": 0.48744340538978576,
+    "multibrot4": 0.5834986209869385,
+    "multibrot5": 0.4374629855155945
+  },
+  "harvest_detail": {
+    "julia:mandelbrot": {
+      "n_rows": 302,
+      "n_pass": 190,
+      "t_good": 0.5,
+      "value": 0.4900252431631088,
+      "source": "own"
+    },
+    "julia:multibrot3": {
+      "n_rows": 303,
+      "n_pass": 207,
+      "t_good": 0.39,
+      "value": 0.38111798763275145,
+      "source": "own"
+    },
+    "julia:multibrot4": {
+      "n_rows": 303,
+      "n_pass": 285,
+      "t_good": 0.14,
+      "value": 0.21726327836513512,
+      "source": "own"
+    },
+    "julia:multibrot5": {
+      "n_rows": 302,
+      "n_pass": 253,
+      "t_good": 0.2,
+      "value": 0.21128661036491395,
+      "source": "own"
+    },
+    "mandelbrot": {
+      "n_rows": 303,
+      "n_pass": 39,
+      "t_good": 0.85,
+      "value": 0.704061222076416,
+      "source": "own"
+    },
+    "multibrot3": {
+      "n_rows": 303,
+      "n_pass": 132,
+      "t_good": 0.5,
+      "value": 0.41670822501182553,
+      "source": "own"
+    },
+    "multibrot4": {
+      "n_rows": 300,
+      "n_pass": 271,
+      "t_good": 0.5,
+      "value": 0.550365686416626,
+      "source": "own"
+    },
+    "multibrot5": {
+      "n_rows": 303,
+      "n_pass": 116,
+      "t_good": 0.5,
+      "value": 0.4953071027994156,
+      "source": "own"
+    }
+  },
+  "walk_detail": {
+    "julia:mandelbrot": {
+      "n_rows": 102,
+      "n_pass": 52,
+      "t_good": 0.5,
+      "value": 0.3485920131206512,
+      "source": "own"
+    },
+    "julia:multibrot3": {
+      "n_rows": 54,
+      "n_pass": 36,
+      "t_good": 0.39,
+      "value": 0.516879141330719,
+      "source": "own"
+    },
+    "julia:multibrot4": {
+      "n_rows": 54,
+      "n_pass": 47,
+      "t_good": 0.14,
+      "value": 0.19956488609313963,
+      "source": "own"
+    },
+    "julia:multibrot5": {
+      "n_rows": 39,
+      "n_pass": 31,
+      "t_good": 0.2,
+      "value": 0.19899649918079373,
+      "source": "own"
+    },
+    "mandelbrot": {
+      "n_rows": 300,
+      "n_pass": 7,
+      "t_good": 0.85,
+      "value": 0.8562394857406617,
+      "source": "own"
+    },
+    "multibrot3": {
+      "n_rows": 239,
+      "n_pass": 12,
+      "t_good": 0.5,
+      "value": 0.48744340538978576,
+      "source": "own"
+    },
+    "multibrot4": {
+      "n_rows": 169,
+      "n_pass": 9,
+      "t_good": 0.5,
+      "value": 0.5834986209869385,
+      "source": "own"
+    },
+    "multibrot5": {
+      "n_rows": 135,
+      "n_pass": 11,
+      "t_good": 0.5,
+      "value": 0.4374629855155945,
+      "source": "own"
+    }
+  },
+  "pooled_harvest": {
+    "pooled": 0.34488460421562195,
+    "n_pooled": 1493
+  },
+  "pooled_walk": {
+    "pooled": 0.3351633608341216,
+    "n_pooled": 205
+  },
+  "caveat": "The harvest population is LEFT-TRUNCATED at the previous head's tau_h, so its quantile is an UPPER bound on the untruncated value; the walk-outcome population is untruncated but off-distribution (walk outcomes, not frontier candidates). combine=min takes the conservative side."
+}
