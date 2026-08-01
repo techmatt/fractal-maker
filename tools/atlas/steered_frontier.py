@@ -1495,12 +1495,22 @@ class SteeredFrontier:
                              f"(n_cands={n_cands}):\n  " + "\n  ".join(problems))
 
     def wall_elapsed_s(self) -> float:
-        """Wall seconds this run has burned, ACROSS resumes.
+        """Wall seconds this run has burned in its BATCH LOOP, across resumes.
 
         `wall_s_base` is what previous sessions spent (checkpointed); `_session_t0` is when
         this one entered the loop. Derived rather than stored-and-incremented so a kill
         between the increment and the checkpoint cannot lose or double-count a session —
-        the same reason the admitted count is re-derived from the ledger."""
+        the same reason the admitted count is re-derived from the ledger.
+
+        SCOPE, because "wall clock" invites the wrong reading: the clock starts when the
+        loop is entered, so the one-time pre-loop cost — model load plus the first
+        `draw_roots` across every family, measured at ~12 min for four families — is outside
+        it, exactly as it is outside `active_s`. What the cap DOES cover is every
+        replenishment `draw_roots` inside the loop, which is the recurring cost the active
+        cap cannot see and the reason this exists. Add the startup by hand when comparing to
+        a process wall clock. Measured on the v1.4 exploration run: 57.6 wall min against
+        57.2 active min at batch 101, i.e. in-loop replenishment was ~1% there — the
+        maneuver push rate kept the frontier above the low-water mark."""
         if getattr(self, "_session_t0", None) is None:
             return float(self.wall_s_base)
         return float(self.wall_s_base) + (time.time() - self._session_t0)
