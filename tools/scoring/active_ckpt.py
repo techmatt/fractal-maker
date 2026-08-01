@@ -1,12 +1,24 @@
 #!/usr/bin/env python
-"""Reframing probe — does the location-quality classifier track framing crispness?
+"""The production pins (re-exported), plus the retired reframing probe that once held them.
 
-One-off diagnostic (see prompts/reframe_probe_prompt.md). Holds a score-3 anchor
-location fixed and sweeps ONLY the frame (center cx/cy + frame width fw), rendering
-each framing through the classifier's native render path and scoring it with the
-location-quality CORN head. Output: per-anchor thumbnail sheets + records.json.
+**Import target, not a program.** ~41 modules do `import active_ckpt` / `from active_ckpt
+import ...` for the production constants — `ACTIVE_CKPT`, `ACTIVE_VERSION`, `PALETTE`,
+`JPG_Q`, `BIN`, `DEFAULT_SS`, `auto_maxiter`, `make_scorer`. Those now live in
+`production_pins.py` and are re-exported here **unchanged**, so the module name (which
+names the pin, not the probe) keeps working. New code should import
+`tools/scoring/production_pins.py` directly.
 
-Interfaces reused verbatim (NOT the preference scorer / query_batch_gen path):
+The rest of this file is the **retired one-off reframing probe** the module was originally
+written as (`prompts/reframe_probe_prompt.md`): does the location-quality classifier track
+framing crispness? It holds a score-3 anchor fixed and sweeps ONLY the frame (center cx/cy +
+frame width fw), rendering each framing through the classifier's native render path and
+scoring it with the location-quality CORN head. Output: per-anchor thumbnail sheets +
+records.json under `scratch/reframe_probe/`. Two of its helpers are still imported by
+successors — `select_anchors` (tools/reframe_probe/speed.py) and `_unique_score3_locations`
+(tools/reframe/reframe.py) — so the probe half is live as a library even though its CLI is not
+run.
+
+Interfaces the probe reuses verbatim (NOT the preference scorer / query_batch_gen path):
   * render : `render-one` (Rust), the canonical "rebuild a location the way the
              classifier expects" helper — Mandelbrot f64 path, or `--julia --c`
              for Julia. Palette held fixed to `twilight_shifted` (the v4/v5
@@ -22,85 +34,39 @@ Interfaces reused verbatim (NOT the preference scorer / query_batch_gen path):
   * anchors: tools/corpus/corpus_reader.iter_labeled() — version-blind labeled
              iterator; family/cx/cy/fw/c read off the version-invariant `render`.
 
-Usage (uv):
-  uv run python tools/reframe_probe/probe.py --anchors-only
-  uv run python tools/reframe_probe/probe.py --time-only
-  uv run python tools/reframe_probe/probe.py            # full run
-  uv run python tools/reframe_probe/probe.py --rebuild-sheets
+Usage (uv) — the probe CLI, retired:
+  uv run python tools/scoring/active_ckpt.py --anchors-only
+  uv run python tools/scoring/active_ckpt.py --time-only
+  uv run python tools/scoring/active_ckpt.py            # full run
+  uv run python tools/scoring/active_ckpt.py --rebuild-sheets
 """
 from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
 import json
-import math
 import subprocess
 import sys
 import time
 from decimal import Decimal
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "tools" / "corpus"))
-sys.path.insert(0, str(ROOT / "tools" / "mining"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # sibling production_pins
 
-BIN = ROOT / "target" / "release" / "fractal-generator.exe"
+# The production pins live in their own module now; re-exported verbatim so the ~41
+# importers of this name get exactly what they got before the split.
+from production_pins import (  # noqa: E402,F401
+    ROOT, BIN, PALETTE, ACTIVE_CKPT, V7_CKPT_ROLLBACK, V6_CKPT_ROLLBACK, V5_CKPT_ROLLBACK,
+    DEFAULT_MODEL, ACTIVE_VERSION, JPG_Q, DEFAULT_SS,
+    FW_HOME, MAXITER_BASE, MAXITER_K, MAXITER_MIN, MAXITER_MAX,
+    auto_maxiter, make_scorer,
+)
+
 OUT_DIR = ROOT / "scratch" / "reframe_probe"
-PALETTE = "twilight_shifted"           # v4/v5 deploy-canonical palette
-# --- Active discovery/guard/reframe classifier checkpoint (SINGLE SOURCE OF TRUTH) ---
-# Every discovery-path scorer (production_seeder, guard, reframe) resolves the live
-# checkpoint from here. Flip ACTIVE_CKPT and the whole gate moves; nothing else hardcodes
-# a version. The load path is version-agnostic (score_lib.Scorer reads mean/std/head from
-# the checkpoint's own config), so only this string changes between versions.
-ACTIVE_CKPT = "data/classifier/v8/model_best.pt"    # v8 unified location classifier (LIVE)
-# v8 is the first K=4 head: it emits THREE cutpoint logits (P>=2, P>=3, P>=4) where v5..v7
-# emitted two, so it can decode class 4. The load path stays version-agnostic — score_lib.Scorer
-# reads num_classes/mean/std/geometry off the checkpoint's own config — but a K=3-shaped consumer
-# that hardcoded two logits will now fail loudly on the state-dict shape rather than mis-score.
-# Rollback: point ACTIVE_CKPT back at v7 (the one-flip rollback anchor, the role v6 held) to
-# restore the prior gate; v6/v5 remain the deeper rollbacks. A rollback must also revert the
-# per-partition t_good table (production_seeder.T_GOOD_OVERRIDES) and the keeper cut
-# (data/atlas/keeper_cuts.json) — those thresholds are calibrated to v8's p_good scale and are
-# meaningless on v7's. tools/atlas/test_steered_frontier.py holds keeper_cuts to the active
-# version, so a rollback that forgets goes red rather than silent.
-V7_CKPT_ROLLBACK = "data/classifier/v7/model_best.pt"
-V6_CKPT_ROLLBACK = "data/classifier/v6/model_best.pt"
-V5_CKPT_ROLLBACK = "data/classifier/v5/model_best.pt"
-DEFAULT_MODEL = ACTIVE_CKPT             # unified location-quality model (== ACTIVE_CKPT)
-# Version token of the live checkpoint ("v6"/"v7"...), parsed off the checkpoint dir. This
-# is the SINGLE SOURCE OF TRUTH for what "current" means: corpus_common.is_current_decoded
-# and production_seeder.SCORER_VERSION both resolve the decode-stamp version from here, so
-# flipping ACTIVE_CKPT moves the whole notion of "current-decoded" with it.
-ACTIVE_VERSION = Path(ACTIVE_CKPT).parent.name   # "v7"
-JPG_Q = 90                              # match corpus crop quality
-DEFAULT_SS = 4                          # ss4 = v4/v5 deploy-canonical antialiased view
 
 # --- sweep grid (LOCKED, see prompt §3) ---
 FW_LOG2_STEPS = [-1.0, -0.5, 0.0, 0.5, 1.0]   # 0.5x .. 2x, anchor centered (5 cols)
 RECENTER = [-0.25, 0.0, 0.25]                 # dx,dy in fractions of the fw step (3x3=9 rows)
-
-# --- auto_maxiter: native fw-dependent policy (PRODUCTION; see docs/design/auto_maxiter.md) ---
-# base 500 -> 4000 and clamp 8000 -> 67000 on 2026-07-31. Measured on 32 atoms spanning
-# fw 3.3e-10..0.76, each walked up a cap ladder until radial_rings stopped moving (all 32
-# converged): the convergent cap is a near-constant MULTIPLE of the old policy — mean 7.7,
-# median 8.0, max 24 — so the fw SHAPE (k) was right and the BASE was 8x too low. The old
-# 8000 clamp was never binding (old-policy max over the v8 manifest was 5424), so the clamp
-# rises only to stop re-clipping the raised base; 67000 is non-binding over that manifest
-# (new max 43,397). RESIDUAL: x8 covers the median, the measured tail runs to x24 — the most
-# decorated material stays somewhat clipped. Median-clean, not clean.
-#
-# tools/explorer/render_core.py carries an independent copy of these four constants; the two
-# are pinned to agree by tools/scoring/test_maxiter_policy.py.
-FW_HOME = 3.0
-MAXITER_BASE, MAXITER_K, MAXITER_MIN, MAXITER_MAX = 4000, 0.30, 200, 67000
-
-
-def auto_maxiter(fw: float) -> int:
-    ratio = FW_HOME / fw if fw > 0 else 1.0
-    lz = math.log2(ratio) if ratio > 0 else 0.0
-    val = MAXITER_BASE * (1.0 + MAXITER_K * lz)
-    return int(max(MAXITER_MIN, min(MAXITER_MAX, val)))
 
 
 # --------------------------------------------------------------------------- #
@@ -246,11 +212,6 @@ def render_anchor(anchor: dict, frames: list[dict], ss: int, workers: int):
             sys.stderr.write(f"[render FAIL {anchor['anchor_key']} c{f['col']}r{f['row']}] {err}\n")
         raise SystemExit(f"{len(fails)} render failures in {anchor['anchor_key']}")
     return anchor_dir
-
-
-def make_scorer(model_path: str):
-    from score_lib import Scorer
-    return Scorer(model_path=model_path)
 
 
 def score_frames(scorer, anchor_dir: Path, frames: list[dict]):

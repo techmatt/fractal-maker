@@ -99,7 +99,7 @@ why that pool is a **candidate** list and nothing more:
 | `reframe/` | 1 | The promoted coarse-reframing step of discovery (`reframe_location`, 12 importers) — runs on every discovery survivor. | **live** | 1 / 1 / 1 / 1 |
 | `reframe_probe/` | 1 | One coarse-reframe speed diagnostic. Closed. | retired | 1 / 0 / 1 / 1 |
 | `render_mode_pilot/` | 8 | The 500 + 1000 render-mode label batches that produced the mining-head dataset (`labels/render_mode_pilot_v1.json`). **0 importers, 5 committed producers** — the clearest B-only block in the tree. Closed. | retired | 8 / 0 / 5 / 5 |
-| `scoring/` | 2 | `active_ckpt.py` — **`ACTIVE_CKPT`, the single source of truth for the live classifier pin (41 importers)**. See the defect note below. | **live** | 1 / 1 / 1 / 1 |
+| `scoring/` | 2 | `production_pins.py` — **`ACTIVE_CKPT`, the single source of truth for the live classifier pin**, plus `PALETTE`/`JPG_Q`/`BIN`/`auto_maxiter`. `active_ckpt.py` re-exports all of it (~41 importers use that name) and is otherwise the retired reframe probe, two of whose helpers are still imported. | **live** | 2 / 2 / 1 / 2 |
 | `sources/` | 7 | The minibrot **source sheets**: seven generation algorithms → `data/minibrot_sources/`, one HTML sheet per algorithm. | **live** | 6 / 5 / 1 / 5 |
 | `sourcing/` | 11 | The durable minibrot **roster** (`build_minibrot_roster.py`), `deep_center_finder.py` (19 importers), and the live label-batch builders (`build_minibrot_batch`, `build_interior_band_batch`, `build_gcf_arm_batch`). | **live** | 7 / 6 / 5 / 7 |
 | `specs/` | 1 | Generates `specs/REGISTRY.md` from `specs/modes_registry.json`; parity enforced by `cargo test --test modes_registry`. 0 importers — A alone would kill it. | **live** | 1 / 0 / 1 / 1 |
@@ -137,12 +137,18 @@ why that pool is a **candidate** list and nothing more:
 
 ## Known defects found while indexing
 
-- **`scoring/active_ckpt.py` carries the wrong module docstring.** The file is the retired
-  reframe-probe script (`OUT_DIR = scratch/reframe_probe`, usage lines pointing at
-  `tools/reframe_probe/probe.py`, 380 lines of sweep/sheet code) with the `ACTIVE_CKPT`
-  block bolted into the middle. Its 41 importers want ~20 lines of constants and get a
-  one-off diagnostic's module body. The comment on `ACTIVE_VERSION` also still says
-  `# "v7"` while `ACTIVE_CKPT` is v8.
+- ~~**`scoring/active_ckpt.py` carries the wrong module docstring.**~~ **Fixed 2026-07-31.**
+  The production constants moved to `scoring/production_pins.py`; `active_ckpt.py` re-exports
+  every name (its ~41 importers are unchanged, including `corpus/location.py`'s and
+  `classifier/train_v9.py`'s by-path execs, which resolve the sibling off `__file__`) and
+  keeps only the probe body. `tools/scoring/test_production_pins.py` pins the resolved values
+  to their pre-split ones and asserts the re-export is the same object, not a copy. The stale
+  usage lines and the `# "v7"` comment on a v8 pin went with it.
+  **The probe half was NOT deleted** — `active_ckpt.select_anchors` is imported by
+  `reframe_probe/speed.py` and `active_ckpt._unique_score3_locations` by the live
+  `reframe/reframe.py`. Only the probe's own CLI (`main` and the sweep/render/sheet functions
+  reachable only from it) is entry-point-dead: no `if __name__` block anywhere else invokes
+  it and nothing subprocesses the path.
 - **`hooks/pre-commit` is not installed.** The tracked large-blob guard says
   *"Install: copy to `.git/hooks/pre-commit`"*; this checkout has no such file, so the
   recurrence guard is not actually guarding. Left uninstalled — installing a hook that

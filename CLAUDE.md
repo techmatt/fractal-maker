@@ -125,8 +125,9 @@ read back via `label_store.resolve_score`, leaving the original byte-identical.
 **git-LFS tracked in-tree — NOT gitignored** (`.gitattributes` + exact-path `.gitignore`
 negation; guarded by `tests/test_tracked_artifacts.py` and the size-guard registry). A weight
 file is a tracked artifact, not scratch. **Never hardcode a version** — the live pin is
-`tools/scoring/active_ckpt.ACTIVE_CKPT` (v8 today; v9 built but staged, not adopted), read by
-41 modules. Every version is a CORN **ordinal** head on
+`tools/scoring/production_pins.ACTIVE_CKPT` (v8 today; v9 built but staged, not adopted), read
+by ~41 modules — most of them still through the `active_ckpt` re-export, which is an alias, not
+a copy (`test_production_pins.py`). Every version is a CORN **ordinal** head on
 `mobilenetv4_conv_medium.e250_r384_in12k` emitting K−1 rank-consistent logits; **K is
 per-version — read `data/classifier/<v>/config.json`** (K=3 through v7, labels 1–3; K=4 from
 v9, labels 1–4). Deploy transform = `classifier.data.Transform(train=False)`: the
