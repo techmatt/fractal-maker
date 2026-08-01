@@ -268,6 +268,15 @@ whether *the floor* or *the operator* is the limit at scale:
 | `quota_bound` | reserved slots that promoted a node the plain priority top-B would **not** have taken — the floor actually binding |
 | `quota_unfilled` | reserved slots that went unused **for lack of availability** |
 
+**Measured on a mature frontier, and the premise has inverted.** Over 840 batches:
+`quota_bound` **1,347** (40% of all slots), `quota_unfilled` **101** (3%), with **36,605
+distinct candidates** available, passed over, and left on the frontier. The
+quota-of-available was designed around ~17% Newton convergence, i.e. around the operator
+usually having nothing; with three operators feeding each other (§8.0) that world is gone.
+**Availability is no longer the constraint — the quota is.** If the goal is to convert more
+maneuver material, `--maneuver-quota` is the lever, and `--maneuver-probe-p` is not.
+`[measured: data/discovery/maneuver_v14_exploration, 840 batches, 2026-08-01]`
+
 `[code: steered_frontier.SteeredFrontier._split_reserved]`
 
 **"Maneuver node" here means the maneuver-descended SUBTREE, not the origin node.** The
@@ -505,7 +514,16 @@ degree decision.
 with the scheduler off, so *supply* was balanced; realized snap calls were **318 / 234 / 210
 / 123**, ~2.6:1 against d2, because the batch is popped by global priority. Governor skips
 follow the same shape (404 / 288 / 272 / 149), so this is where the walk went, not a
-maneuver-side bias. d5's cells are the thinnest in every table — enough to establish
+maneuver-side bias.
+
+**…but 2.6:1 is a SHORT-RUN artifact, corrected 2026-08-01.** Over an 840-batch run the same
+measurement comes out at **1.2:1** — candidates pushed d2 27.9% / d3 24.9% / d4 24.9% / d5
+22.3%. The 2.6:1 above was measured over 44 batches, and this run read **2.6:1 at its own
+batch 55** before converging. The imbalance is real and the confound is real — the batch is
+still popped by global priority — but its *magnitude* shrinks with run length, so a
+short-run composition number must not be quoted as the run-length-independent one.
+`[measured: 840 batches / 414 active min, data/discovery/maneuver_v14_exploration,
+2026-08-01; cmd: tools/atlas/maneuver_run_readout.py]` d5's cells are the thinnest in every table — enough to establish
 availability, not enough for the period-controlled `|A|` read.
 
 **d2's low availability is one mechanism: the nucleus keeps landing outside the frame.**
@@ -561,6 +579,30 @@ configuration's cost: the same measure on this run, at the default, is **5.4%**.
 that drop is the §2.6 cost cut and half is firing half as often — so read the per-call
 numbers (lateral mean 442 → 176 ms, max 6.57 → 1.32 s) as the clean comparison, not the
 share.
+
+## 8.2 The screen, measured over a long run
+
+`[measured: 840 batches / 414 active min, `probe_p = 0.25`, range prior + neighbourhood on,
+data/discovery/maneuver_v14_exploration, 2026-08-01]`
+
+**5,627 distinct nuclei screened, ZERO unscreenable, 20,700 cache hits (79%), 643 s = 2.6%
+of active.** The 4× frame never fell below the `render-one` spacing guard at 64 px on this
+population — the reachability floor of `orbital_field_metrics.md` §8 did not bind once. The
+cache is what makes it cheap: four of five screen requests are answered from a nucleus
+already measured, which is the §2.5 dedup key paying for itself a second time.
+
+`radial_range` over those 5,627: p05 0.55 · p25 1.49 · median 2.88 · p75 5.46 · p95 14.55 ·
+max 63.6. Wide enough that quintile stratification separates real material.
+
+**What a range quintile predicts, and what it does not.** On a 100-tile stratified sample
+scored with v8, Spearman(`p_good`, `radial_range`) = **+0.096** — the *typical* score is flat
+across the range. What moves is the tail: top-quintile `p_good` p75 0.214 / max 0.487 against
+bottom-quintile 0.047 / 0.097, and every class-3 decode in the sample sits in the top
+quintile. **High `range` does not raise the typical view; it is where the occasional good one
+lives at all.** By eye the bottom quintile is giant black blobs and sparse dendrites (one
+tile entirely black) and the top holds the dense spiral fields — so the measure sorts the way
+a person does, and v8's median does not. 87 of 100 tiles decode class 1, which is §9 working
+as stated, not a verdict on the material. `[code: tools/atlas/maneuver_inspection_sheet.py]`
 
 ## 9. What this is NOT
 
