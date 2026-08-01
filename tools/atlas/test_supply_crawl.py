@@ -310,3 +310,19 @@ def test_render_threads_are_sized_for_the_fan_out_not_for_one_process():
     import corpus_common as _cc
     assert bsc.RENDER_THREADS < _cc.DEFAULT_ENGINE_THREADS
     assert 4 * bsc.RENDER_THREADS <= 12
+
+
+def test_a_timed_out_render_leaves_no_half_written_crop(tmp_path, monkeypatch):
+    """The one failure this pipeline cannot see. `needs()` checks EXISTENCE, so a JPG
+    truncated by a timeout kill reads as rendered forever and the batch is quietly one bad
+    crop short — of a picture a human is about to score."""
+    out = tmp_path / "sc0000_deadbeef.jpg"
+
+    def half_write(render, path, **kw):
+        Path(path).write_bytes(b"\xff\xd8\xff\xe0truncated")
+        raise TimeoutError("engine killed at the timeout")
+
+    monkeypatch.setattr(bsc.cc, "render_corpus_crop", half_write)
+    with pytest.raises(TimeoutError):
+        bsc._render_to({"palette": "magma"}, out, "src", 1.0)
+    assert not out.exists()

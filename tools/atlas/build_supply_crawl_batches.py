@@ -429,21 +429,37 @@ RENDER_THREADS = 3
 RENDER_ORDER = (EXEMPLAR, UNIFORM, STRAT_A, STRAT_B)
 
 
+def _render_to(render: dict, out: Path, source, timeout: float) -> None:
+    """One crop, and a HALF-WRITTEN one is deleted rather than left behind.
+
+    `render_corpus_crop` raises when the engine exits non-zero or writes nothing — but a
+    `timeout` kills the engine mid-write, and the truncated JPG that leaves is the one
+    failure mode this pipeline cannot see: `needs()` checks existence, so the row reads as
+    rendered forever and the batch is quietly one bad crop short. Deleting on the way out
+    turns it back into a missing crop, which the resume re-renders and `verify` counts.
+    """
+    try:
+        cc.render_corpus_crop(render, str(out), palette_source=source, timeout=timeout,
+                              threads=RENDER_THREADS)
+    except BaseException:
+        try:
+            out.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+
 def _render_one(job):
     row, crops, vivid, timeout = job
     iid, render = row["image_id"], row["render"]
     made = []
     canon = crops / f"{iid}.jpg"
     if not canon.exists():
-        cc.render_corpus_crop(render, str(canon), palette_source=PALETTE_SOURCE,
-                              timeout=timeout, threads=RENDER_THREADS)
+        _render_to(render, canon, PALETTE_SOURCE, timeout)
         made.append("canon")
     vp = vivid / f"{iid}.jpg"
     if not vp.exists():
-        vr = dict(render)
-        vr["palette"] = VIVID_PALETTE
-        cc.render_corpus_crop(vr, str(vp), palette_source=VIVID_SOURCE, timeout=timeout,
-                              threads=RENDER_THREADS)
+        _render_to(dict(render, palette=VIVID_PALETTE), vp, VIVID_SOURCE, timeout)
         made.append("vivid")
     return iid, made
 
