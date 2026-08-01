@@ -117,8 +117,8 @@ pushed nodes** — median 71 ms but mean 442 ms and tail 6.57 s, i.e. tail-domin
 `[measured: 1,001 deduped operator calls, maneuver_shakedown]`
 
 The fix is the same correction that made the snap probe cheap (§2.2), applied to the
-*tail only*: **sweep the cheap head exactly, rank the expensive tail.** Periods `2..24`
-are always tried (`LAT_LOW_SWEEP`; `pmax >= 24` always, so the head is a fixed ~23 solves)
+*tail only*: **sweep the cheap head exactly, rank the expensive tail.** Periods `2..16`
+are always tried (`LAT_LOW_SWEEP`; `pmax >= 24` always, so the head is a fixed 15 solves)
 and everything above comes from the atom-domain ranking. The split is not arbitrary in
 either direction — the head is where the ranking is *weakest*, because a probe seed sits
 inside many low-period atom domains at once and "smallest period wins" is what stops the
@@ -127,22 +127,35 @@ atom has one sharp `|z_p|` minimum. Pure ranking with no head lost 17% of availa
 
 Measured by **replay** — the recorded parent views of the shakedown, both arms driven from
 an identically-seeded RNG so the probe seeds are byte-identical, which a live A/B cannot
-give (the walk's frontier moves with the cost of the operator).
-`[code: tools/atlas/bench_lateral_seeding.py; measured: 239 replayable calls, 2026-07-31]`
+give (the walk's frontier moves with the cost of the operator). Newton solves and
+availability are deterministic and reproduce exactly across runs; the wall clocks are one
+box's and move a few percent, so read the **solve count** as the cost invariant.
+`[code: tools/atlas/bench_lateral_seeding.py; measured: 239 replayable calls,
+re-measured at the head-16 default 2026-07-31:
+`uv run python tools/atlas/bench_lateral_seeding.py --low 24 16`]`
 
-| arm | total | mean | max | Newton solves | available |
-|---|---|---|---|---|---|
-| sweep (reference) | 141.7 s | 593 ms | 6.23 s | 39,261 | 116 |
-| head 24 (**shipped**) | 52.6 s | 220 ms | 1.03 s | 13,896 | 109 |
-| head 16 | 33.4 s | 140 ms | 0.65 s | 9,869 | 112 |
-| no head | 16.6 s | 70 ms | 0.50 s | 4,997 | 96 |
+| arm | total | mean | max | Newton solves | available | names a different sibling |
+|---|---|---|---|---|---|---|
+| sweep (reference) | 144.4 s | 604 ms | 5.94 s | 39,261 | 116 | — |
+| head 24 | 57.6 s | 241 ms | 1.41 s | 13,896 | 109 | 4 / 109 |
+| head 16 (**shipped**) | 34.5 s | 144 ms | 0.68 s | 9,869 | 112 | 11 / 105 |
+| no head | 16.6 s | 70 ms | 0.50 s | 4,997 | 96 | — |
 
-**2.7× cheaper and the 6-second tail is gone.** A cheaper head is available as a knob
-(`low_sweep=16` is 4.2×) and is *not* shipped: it triples how often the probe names a
-different sibling than the reference (11/105 vs 4/109). A disagreement is not an error —
-both arms return a minimal, in-frame, comparable-scale nucleus, and the operator's
-contract is "a sibling", not "that specific sibling" — so it is reported as identity
-drift, which is the quantity a conservative default should minimise.
+**4.2× cheaper than the sweep, and the 6-second tail is gone.** Head 16 ships over head 24
+(2.5×): it is another 29% fewer Newton solves at **no availability cost** — 112 against
+109, i.e. head 16 is if anything the *better* arm on the only axis that gates throughput
+(it loses 11 of the sweep's and gains 7 the sweep never found, net 112).
+
+Head 24 was the original default on one argument only: it names a different sibling than
+the reference less often (4/109 vs 11/105). That argument does not survive contact with
+what the operator promises. A disagreement is not an error — both arms return a minimal,
+in-frame, comparable-scale nucleus, and the contract is "**a** sibling", not "that specific
+sibling". Sibling identity is not reproduced across reruns by anything downstream (the walk
+re-derives it, and the dedup key is the *nucleus'* canonical key, so two arms agreeing or
+disagreeing costs nothing either way), so identity drift is a quantity with no consumer —
+and paying 1.7× the probe cost to minimise it buys nothing. The head remains a live knob
+(`lateral_to_sibling(low_sweep=...)`, and `bench_lateral_seeding.py --low`), so restoring
+24 is one argument.
 
 ## 3. Selection is a reserved FLOOR of frontier slots, not a probability
 

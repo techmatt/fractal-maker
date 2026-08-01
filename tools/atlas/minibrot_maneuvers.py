@@ -93,7 +93,7 @@ LAT_PERIOD_CAP = 120           # ... capped here
 LAT_SCALE_TOL_DECADES = 1.0    # "comparable scale": |log10(w_sib / w_par)| <= this
 LAT_SEED_PERIODS = True        # seed identify_nucleus from the atom-domain probe (not a sweep)
 LAT_N_PERIODS = N_PERIODS      # argmins kept per seeded lateral probe (-> <=3x solves)
-LAT_LOW_SWEEP = 24             # ... but periods 2..this are ALWAYS swept exactly (see below)
+LAT_LOW_SWEEP = 16             # ... but periods 2..this are ALWAYS swept exactly (see below)
 
 # c-plane partitions only: a julia/phoenix viewport is a z-plane and has no nucleus in the
 # parameter-plane sense, so the operators are simply not defined there.
@@ -404,7 +404,7 @@ def lateral_to_sibling(view: dict, rng, *, degree: int = 2, k=None,
         cands = None
         if seed_periods:
             # HYBRID, and the split is not arbitrary. The sweep's floor is pmax >= 24, so
-            # the low head is a FIXED, cheap 23 solves while the tail runs to 120 — 80% of
+            # the low head is a FIXED, cheap 15 solves while the tail runs to 120 — 80% of
             # the cost. The head is also exactly where the atom-domain ranking is weakest
             # (a seed sits inside many low-period atom domains at once, and "smallest
             # period wins" is what stops the probe returning the parent itself), and the
