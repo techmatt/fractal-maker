@@ -114,9 +114,8 @@ cx/cy/fw as decimal strings, and is the *only* thing the classifier sees (it's a
 pure function → `crops/<image_id>.jpg`, rebuildable via `present`/`render-one`).
 `provenance` is **version-tagged**, free to differ/be null across batches
 (`PROVENANCE_KEYS`); it feeds the bias loop only and **never enters training**.
-`label.score ∈ {null,1,2,3,4}` (bad/okay/good/exceptional; rubric
-`docs/design/label_rubric.md` — class 4 ranks the top of "good" and does **not** move the
-`>=3` emit floor). `null → value` is the ONE allowed mutation to an **original** label; a
+`label.score ∈ {null,1,2,3,4}` (bad/okay/good/exceptional; rubric in `CORPUS_SCHEMA.md`
+§ label — class 4 ranks the top of "good" and does **not** move the `>=3` emit floor). `null → value` is the ONE allowed mutation to an **original** label; a
 merge that would change a non-null score warns and refuses. A *revision* is no exception —
 it goes to the amendment stream (`labels/<revision>.json`, `merge_amendments.py`) and is
 read back via `label_store.resolve_score`, leaving the original byte-identical.

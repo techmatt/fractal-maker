@@ -23,7 +23,6 @@ the render core and pipeline; these docs go a level deeper on specific decisions
 | [label_corpus_relocation.md](label_corpus_relocation.md) | Relocating the label corpus's `crops/`+`vivid/` bulk (3,822 files, ~72% of the working tree) out of tree behind `artifacts.resolve`: why the scope is crops/vivid only (labels stay tracked in-tree), the silent-zero hazard across 34 construction sites (2 load-bearing readers), the seam, and the staged move + before/after `(image_id,score)` gate. |
 | [minibrot_maneuvers.md](minibrot_maneuvers.md) | Minibrot moves as candidate MOVES inside a descent (`tools/atlas/minibrot_maneuvers.py`): the two operators (`snap_to_nucleus(k)` / `lateral_to_sibling`) and why five collapse to two, the superattracting-argmin correction that makes the atom-domain probe work, unavailability as the normal case, the reserved frontier FLOOR (of available) vs the probability used only as a cost governor, and the provenance a later read needs. |
 | [atom_instrument.md](atom_instrument.md) | The atom instrument `A` (`deep_center_finder.atom_instrument`): the recursion for size / orientation / required precision, and the f64-wall predictor derived from it. |
-| [label_rubric.md](label_rubric.md) | The 1–4 human quality scale, cited by every corpus batch builder: the one question a labeler answers, judge-from-the-vivid-render rule, and class 4 as a fourth tier that ranks the top of "good" without moving the `>=3` emit floor. **Class-4 aesthetic criteria are a stub** pending the anchor pass. |
 | [deferred_recalibration.md](deferred_recalibration.md) | Four recalibrations designed but deliberately unbuilt (v8 head retrain, ranker growth, location blind reads, mining-head calibration), the release-review gate that unparks them, and where to start on each. |
 | [v8_training.md](v8_training.md) | The v8 train-split population read off `data/v8/manifest.jsonl`: locations per (fractal partition × quality class), and the ×24 augmentation-tile expansion under the v8b recipe. |
 | [pytest_suite_cost.md](pytest_suite_cost.md) | The Python suite's cost model: five files hold ~all of it, the default/`-m slow` lane split and the two ways to get it wrong (`-m` is a filter not a path rule; mark the test not the module), the three shared-fixture fixes, the four costs measured to be **at their floor** (incl. the tripwire's worker/thread sweep), and the prototyped-but-unadopted xdist 1.88×. |
@@ -41,8 +40,11 @@ doc's boundary note names those explicitly. If you want roster / screen / pre-fi
 window-label content, read `minibrot_sourcing.md`; if you want precision, the
 perturbation tier or deep-center production, read `deep_zoom_sourcing.md`.
 
-**The table indexes all 24 docs here** — every file gets a row, because an unindexed doc is
+**The table indexes all 23 docs here** — every file gets a row, because an unindexed doc is
 invisible, which is how one rots unnoticed. A new doc lands with its row or it does not land.
+
+The 1–4 human label scale is **not** here: it lives with the store it governs, in
+`data/label_corpus/CORPUS_SCHEMA.md` § label (`label_rubric.md` was retired into it).
 `[measured: 24 docs, 24 rows; 2026-07-31]`
 `[cmd: ls docs/design/*.md | grep -vc README; grep -c '^| \[' docs/design/README.md]`
 

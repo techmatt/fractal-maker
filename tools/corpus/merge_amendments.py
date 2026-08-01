@@ -2,7 +2,7 @@
 
 The counterpart to merge_scores.py for REVISIONS. An "anchor"/revision batch is a presentation
 batch whose rows re-label ALREADY-labeled source rows on the 1..4 scale (see
-docs/design/label_rubric.md, data/label_corpus/CORPUS_SCHEMA.md § Revisions). Each such row
+data/label_corpus/CORPUS_SCHEMA.md §§ label, Revisions). Each such row
 carries a provenance pointer back to the source row it revises
 (`revises_batch_id` + `revises_image_id`).
 

@@ -2,8 +2,8 @@
 r"""minibrot_roster_v2_sheets.py — the three companion sheets for the G-transfer readout.
 
 Part C of prompt-process-minibrot-labels.md. Three vivid-companion contact sheets, read
-beside docs/design/label_rubric.md, that put G's failure modes on minibrot fields in front
-of the eye:
+beside the 1..4 rubric (data/label_corpus/CORPUS_SCHEMA.md § label), that put G's failure
+modes on minibrot fields in front of the eye:
 
   1. class4     — every crop I called 4 (what a minibrot 4 looks like; n is tiny).
   2. hi_g_lo    — high G, low label: the screen said ACCEPT, I said 1 or 2. Top-N by G
@@ -20,8 +20,8 @@ The PNGs are a REGENERABLE VIEW, so they go to `scratch/minibrot_roster_v2_sheet
 generated-output convention — not into `docs/`. (They were briefly written into `docs/design/`
 and gitignored there, which left `tests/test_repo_size_guard.py` permanently red on 4
 uncovered multi-MB files; `tests/test_docs_tree.py` now forbids untracked content under
-`docs/` outright.) Read them beside `docs/design/label_rubric.md`; rebuild with the one-liner
-below.
+`docs/` outright.) Read them beside `data/label_corpus/CORPUS_SCHEMA.md` § label; rebuild
+with the one-liner below.
 
   uv run python tools/corpus/minibrot_roster_v2_sheets.py
 """

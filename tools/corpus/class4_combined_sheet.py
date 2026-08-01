@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 r"""class4_combined_sheet.py — ONE contact sheet of every class-4 crop in the corpus.
 
-The class-4 aesthetic criteria in docs/design/label_rubric.md were to be written "from the
-full set rather than from two tiles". This gathers every crop that resolves to score 4 across
+The class-4 aesthetic criteria (a stub in the retired docs/design/label_rubric.md, never
+written; the 1..4 scale now lives in data/label_corpus/CORPUS_SCHEMA.md § label) were to be
+written "from the full set rather than from two tiles". This gathers every crop that resolves
+to score 4 across
 ALL batches (via label_store.resolve_score, amendments included) into a single sheet, so the
 bar can be written from the whole class at once instead of one batch's view.
 

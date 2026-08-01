@@ -2,8 +2,11 @@
 r"""anchor_rubric_sheets.py — the two sheets the class-4 rubric is written from.
 
 The 2026-07-26 anchor pass re-judged 52 previously-class-3 rows blind on the 1..4 scale and
-freshly scored 8 minibrot rows. Two contact sheets distill that pass into the material Matt
-writes `docs/design/label_rubric.md` § "Class 4 — aesthetic criteria" from:
+freshly scored 8 minibrot rows. Two contact sheets distill that pass into the material the
+class-4 aesthetic criteria were to be written from. Those criteria were never written: the
+section stayed a stub and its doc (`docs/design/label_rubric.md`) has since been retired into
+`data/label_corpus/CORPUS_SCHEMA.md` § label, which carries the 1..4 scale but not a
+"what makes a 4 not just a 3" bar. **The sheets are the bar** — read them.
 
   * everything he called 4   (the promotions — what a 4 looks like)
   * everything he demoted    (3 -> 1|2 — what fell OUT of "good")
@@ -16,8 +19,8 @@ The PNGs are a REGENERABLE VIEW, so they go to `scratch/anchor_rubric_sheets/` p
 generated-output convention — not into `docs/`. (They were briefly written into
 `docs/design/` and gitignored there, which left `tests/test_repo_size_guard.py`
 permanently red on 4 uncovered multi-MB files; `tests/test_docs_tree.py` now forbids
-untracked content under `docs/` outright.) Read them beside the rubric; rebuild with the
-one-liner below.
+untracked content under `docs/` outright.) Read them beside `data/label_corpus/
+CORPUS_SCHEMA.md` § label; rebuild with the one-liner below.
 
   uv run python tools/corpus/anchor_rubric_sheets.py
 """

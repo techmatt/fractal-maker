@@ -68,9 +68,28 @@ sample does not get invented rev4-style provenance.
 ### `label` — the human verdict.
 `score`: `null` (unlabeled) | `1` (bad) | `2` (okay) | `3` (good) | `4` (exceptional wallpaper
 emission). Class 4 is a **fourth tier on the same quality scale**, not a separate head or a new
-floor — final emissions can be class 3 or class 4; class 4 is preferred where available. See
-`docs/design/label_rubric.md`. `labeler`, `labeled_at` filled when scored. **`null → value` is
-the ONE allowed mutation to an original label anywhere in the store.**
+floor — final emissions can be class 3 or class 4; class 4 is preferred where available.
+`labeler`, `labeled_at` filled when scored. **`null → value` is the ONE allowed mutation to an
+original label anywhere in the store.**
+
+#### The rubric — one question, one scale, all families.
+The same scale is used across mandelbrot, the julia twins, phoenix, native multibrot and
+minibrot; the classifier trains on it as an **ordinal** target, so the tiers are ranked, not
+nominal. **The question the labeler answers:** *does this crop work as a wallpaper?*
+
+**Judge from the vivid companion render** where one is shown — a crushing palette makes good
+material look dead, and the label is a verdict on the *location*, not on one unlucky colormap.
+The canonical (model-facing) crop is what the network sees; the vivid one is what you judge from.
+
+| Score | Name | Meaning |
+|-------|------|---------|
+| 1 | bad | Does not work. Dead/black-dominated, structureless, muddy, or broken. Would never be shipped. |
+| 2 | okay | Has structure but is unremarkable — a competent fill, not something you'd choose. Below the emission floor. |
+| 3 | good | A genuine wallpaper. Clean composition, real structure, ships. This is the emission floor. |
+| 4 | exceptional | An exceptional wallpaper emission — the best of the "good" material, the ones worth surfacing first. |
+
+The labeling UI (`tools/viz/corpus_label.html`) states this scale inline, so a labeler never has
+to leave the tool to read it.
 
 ### Revisions — the amendment overlay.
 An existing label can be **revised** (a q3 demoted to q2, or promoted to q4). Because a revision
