@@ -50,16 +50,16 @@ THREADS = 1                     # per process: the field is 64x36
 DEFAULT_OUT = ("view_rescreen", "sweep.jsonl")
 
 
-def select(rows: list[dict], veto: float, *, top: int, n: int, seed: int) -> list[dict]:
+def select(rows: list[dict], p: vs.ScreenParams, *, top: int, n: int, seed: int) -> list[dict]:
     """`top` best by composite, then a stratified fill across composite quintiles.
 
     Stratified rather than top-only on purpose: a sweep measured only where the composite
     already likes the view answers "does framing help the winners", which is not the
     question. The bottom quintile is in by construction.
     """
-    ok = [r for r in rows if r.get("screened") and not vs.is_vetoed(r, veto)]
+    ok = [r for r in rows if r.get("screened") and not vs.is_vetoed(r, p.veto)]
     for r in ok:
-        r["_c"] = vs.composite(r, veto)
+        r["_c"] = vs.composite_v3(r, p)
     ok.sort(key=lambda r: -r["_c"])
     chosen = {r["key"]: r for r in ok[:top]}
     v = np.array([r["_c"] for r in ok])
@@ -75,7 +75,7 @@ def select(rows: list[dict], veto: float, *, top: int, n: int, seed: int) -> lis
     return list(chosen.values())
 
 
-def run(rows: list[dict], out_path: Path, veto: float, *, workers=WORKERS, log=print):
+def run(rows: list[dict], out_path: Path, p: vs.ScreenParams, *, workers=WORKERS, log=print):
     done = set()
     if out_path.exists():
         for line in out_path.read_text(encoding="utf-8").splitlines():
@@ -91,8 +91,11 @@ def run(rows: list[dict], out_path: Path, veto: float, *, workers=WORKERS, log=p
     results = []
 
     def work(r):
-        res = vs.sweep_best(r["cx"], r["cy"], r["fw"], veto, family=r["partition"],
-                            threads=THREADS)
+        # THE ANCHOR IS THE ROW'S OWN CENTRE. Every maneuver record centres the view on the
+        # atom's nucleus and sets `fw = k * window_scale` (or the parent's `fw` for a keep),
+        # so the origin window's centre IS the nucleus — read off the record, not re-solved.
+        res = vs.sweep_best(r["cx"], r["cy"], r["fw"], p, family=r["partition"],
+                            threads=THREADS, anchor=(r["cx"], r["cy"]))
         row = dict(key=r["key"], op=r["op"], k=r["k"], degree=r["degree"],
                    period=r["period"], cx=r["cx"], cy=r["cy"], fw=r["fw"],
                    partition=r["partition"], **res)
@@ -116,13 +119,23 @@ def readout(rows: list[dict], n_eligible: int, n_swept: int) -> dict:
     gains = [r["chosen_composite"] - r["origin_composite"] for r in rows
              if r.get("chosen_composite") is not None
              and r.get("origin_composite") is not None]
-    rel = [(r["chosen_composite"] + 1e-9) / (r["origin_composite"] + 1e-9) for r in rows
-           if r.get("origin_composite") not in (None, 0.0)
-           and r.get("chosen_composite") is not None]
+    # THE RATIO NEEDS A DENOMINATOR FLOOR UNDER v3 AND DID NOT UNDER v2. The size band
+    # drives a heavily-banded origin's composite toward 0, so `chosen/origin` runs to the
+    # hundreds on rows whose origin scored ~0 — a ratio that measures the denominator, not
+    # the move. Rows below the floor are counted and reported, never silently dropped.
+    RATIO_FLOOR = 0.1
+    usable = [r for r in rows if r.get("chosen_composite") is not None
+              and (r.get("origin_composite") or 0.0) >= RATIO_FLOOR]
+    rel = [r["chosen_composite"] / r["origin_composite"] for r in usable]
+    n_below = sum(1 for r in rows if r.get("chosen_composite") is not None
+                  and (r.get("origin_composite") or 0.0) < RATIO_FLOOR)
     from collections import Counter
+    anch = [r["n_anchor_eligible"] for r in rows if r.get("n_anchor_eligible") is not None]
     return dict(
         eligible_after_veto=n_eligible, swept=n_swept,
         not_swept=n_eligible - n_swept,
+        anchor_margin=vs.ANCHOR_MARGIN,
+        anchor_eligible_windows=dict(Counter(anch).most_common()),
         moved=len(moved), moved_frac=round(len(moved) / max(1, len(rows)), 4),
         chosen_scale=dict(Counter(r["chosen"]["scale"] for r in rows
                                   if r.get("chosen")).most_common()),
@@ -133,12 +146,17 @@ def readout(rows: list[dict], n_eligible: int, n_swept: int) -> dict:
             p90=round(float(np.percentile(gains, 90)), 4) if gains else None,
             max=round(float(np.max(gains)), 4) if gains else None),
         composite_ratio=dict(
+            n=len(rel), excluded_origin_below_floor=n_below, floor=RATIO_FLOOR,
             median=round(float(np.median(rel)), 4) if rel else None,
             p90=round(float(np.percentile(rel, 90)), 4) if rel else None),
         CAVEAT=("The gain is measured BY THE SAME COMPOSITE the sweep maximises, so it is "
-                "an argmax over 18 draws and is biased upward by construction — read it as "
-                "'how much headroom the composite sees', never as a quality improvement. "
-                "The before/after sheet is the only thing here that can answer the latter."),
+                "an argmax over the anchor-eligible windows and is biased upward by "
+                "construction — read it as 'how much headroom the composite sees', never "
+                "as a quality improvement. The before/after sheet is the only thing here "
+                "that can answer the latter. `composite_ratio` additionally excludes "
+                f"{n_below} rows whose origin scored below {RATIO_FLOOR}: under the v3 size "
+                "band a dominated origin scores ~0, and a ratio against ~0 measures the "
+                "denominator."),
     )
 
 
@@ -152,6 +170,10 @@ def main(argv=None) -> int:
     ap.add_argument("--n", type=int, default=600)
     ap.add_argument("--seed", type=int, default=20260801)
     ap.add_argument("--workers", type=int, default=WORKERS)
+    ap.add_argument("--keys-from", type=Path, default=None,
+                    help="sweep EXACTLY the keys in this prior sweep file instead of "
+                         "re-selecting — the only way a v2 and a v3 argmax describe the "
+                         "same candidates rather than two different draws")
     a = ap.parse_args(argv)
     if a.workers > 4:
         print("refusing >4 concurrent engine processes (CLAUDE.md)", file=sys.stderr)
@@ -160,12 +182,24 @@ def main(argv=None) -> int:
     rows = [json.loads(l) for l in
             a.scores.read_text(encoding="utf-8").splitlines() if l.strip()]
     fm.require_one_policy(("view scores", rows), what="the framing sweep's input")
-    veto = vs.interior_veto(vs.load_refs())
-    eligible = sum(1 for r in rows if r.get("screened") and not vs.is_vetoed(r, veto))
-    sel = select(rows, veto, top=a.top, n=a.n, seed=a.seed)
-    print(f"[sweep] {eligible} candidates clear the veto; sweeping {len(sel)} "
-          f"({a.top} top-composite + stratified fill)")
-    res = run(sel, a.out, veto, workers=a.workers)
+    p = vs.screen_params(vs.load_refs())
+    eligible = sum(1 for r in rows if r.get("screened") and not vs.is_vetoed(r, p.veto))
+    if a.keys_from:
+        want = {json.loads(l)["key"] for l in
+                a.keys_from.read_text(encoding="utf-8").splitlines() if l.strip()}
+        by_key = {r["key"]: r for r in rows}
+        missing = sorted(want - set(by_key))
+        if missing:
+            raise SystemExit(f"--keys-from names {len(missing)} keys absent from --scores: "
+                             f"{missing[:3]}")
+        sel = [by_key[k] for k in want]
+        print(f"[sweep] {eligible} candidates clear the veto; sweeping the {len(sel)} keys "
+              f"of {a.keys_from} (re-selection SUPPRESSED for comparability)")
+    else:
+        sel = select(rows, p, top=a.top, n=a.n, seed=a.seed)
+        print(f"[sweep] {eligible} candidates clear the veto; sweeping {len(sel)} "
+              f"({a.top} top-composite + stratified fill)")
+    res = run(sel, a.out, p, workers=a.workers)
     if not res:
         res = [json.loads(l) for l in
                a.out.read_text(encoding="utf-8").splitlines() if l.strip()]

@@ -76,6 +76,15 @@ an item's evidence, the line points at it rather than restating it.
 - A veto threshold expressed as a multiple of the references' `interior_fraction` — both
   references measure ~0 interior, so any multiple of them vetoes ~70% of the population
   (`orbital_field_metrics.md` §11)
+- The unbounded `sqrt(range × rings)` richness term — an unbounded factor inside an argmax
+  is the tail the argmax finds; winsorized at 2× the strongest reference in v3
+  (`orbital_field_metrics.md` §11.6)
+- Log-compressing the richness term instead of winsorizing — measured, and at the seam
+  window it still returns ~6.3× the cap, so the pathology survives at ~12× the population
+  (`orbital_field_metrics.md` §11.6)
+- An unconstrained framing argmax for a maneuver-anchored candidate — "find the richest
+  window near here" is not the sweep's contract and is content drift dressed as framing
+  (`orbital_field_metrics.md` §11.6)
 
 ## Un-retired
 
@@ -103,6 +112,21 @@ an item's evidence, the line points at it rather than restating it.
   pairwise-disjoint from the legacy and live tokens, production scoring untouched.
   `[code: tools/atlas/view_screen.py::measure_view;
   tools/atlas/test_view_screen.py::test_every_view_measure_carries_the_screen_cap_policy]`
+
+- **2026-08-01 — "interior mass as a quality axis", re-scoped to a bounded SIZE BAND and
+  to nothing else.** The original retirement (`minibrot_sourcing.md` §11: +0.046 given
+  degree) stands as written and its reason still holds where it was aimed — interior mass
+  is not a monotone quality signal and nothing here treats it as one. What v3 adds is a
+  *band*: `view_screen.size_factor` is exactly 1.0 from interior 0 through 0.12, so a frame
+  at 0.10 scores identically to the same frame at 0.00 and "less interior is better" is
+  never asserted; above the edge it declines to the veto's own behaviour at the veto
+  threshold. The claim is only that past some share the subject dominates the frame, which
+  is a composition statement about one picture and not a quality axis over a population.
+  Scope: the view-level composite's sort key, and nothing else — no discovery module reads
+  it, and `--maneuver-range-prior` is untouched. The distinction is asserted, not asserted
+  in prose: a test pins the flat interval and would go red if the band ever became monotone.
+  `[code: tools/atlas/view_screen.py::size_factor;
+  tools/atlas/test_view_screen.py::test_the_size_band_is_a_band_and_not_an_interior_quality_axis]`
 
 - **2026-07 — "depth/period as a quality axis."** Retired on a roster spanning period ~3–15,
   where it measured +0.06 pooled and −0.21 inside the period-matched eval slice. Across

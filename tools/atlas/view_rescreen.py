@@ -118,9 +118,10 @@ def rescreen(pop: list[dict], out_path: Path, *, workers=WORKERS, log=print) -> 
 
 
 # --------------------------------------------------------------------------- #
-def summarize(rows: list[dict], veto: float) -> dict:
+def summarize(rows: list[dict], p: vs.ScreenParams) -> dict:
     ok = [r for r in rows if r.get("screened")]
-    comp = np.array([vs.composite(r, veto) for r in ok], dtype=float)
+    veto = p.veto
+    comp = np.array([vs.composite_v3(r, p) for r in ok], dtype=float)
     pct = [1, 5, 10, 25, 50, 75, 90, 95, 99]
     # Every unscreened row is counted under a named reason class — never characterize a
     # failure population from a truncated sample (`CLAUDE.md`, four rules).
@@ -131,13 +132,16 @@ def summarize(rows: list[dict], veto: float) -> dict:
         n=len(rows), screened=len(ok), unscreened=len(rows) - len(ok),
         unscreened_reasons=dict(reasons.most_common()),
         interior_veto=veto,
+        composite_version="v3", screen_params=p._asdict(),
         vetoed=int(sum(1 for r in ok if vs.is_vetoed(r, veto))),
-        composite=({f"p{p}": round(float(np.percentile(comp, p)), 4) for p in pct}
+        size_banded=int(sum(1 for r in ok if vs.size_factor(r, p) < 1.0
+                            and not vs.is_vetoed(r, veto))),
+        composite=({f"p{q}": round(float(np.percentile(comp, q)), 4) for q in pct}
                    if len(comp) else {}),
     )
     for k in ("band_coverage", "interior_fraction", "radial_range", "radial_rings"):
         v = np.array([r[k] for r in ok], dtype=float)
-        out[k] = {f"p{p}": round(float(np.percentile(v, p)), 4) for p in pct} if v.size else {}
+        out[k] = {f"p{q}": round(float(np.percentile(v, q)), 4) for q in pct} if v.size else {}
     return out
 
 
@@ -164,8 +168,7 @@ def main(argv=None) -> int:
         print(f"[pop] sampling {len(pop)} (seed {a.seed})")
 
     rows = rescreen(pop, out_path, workers=a.workers)
-    veto = vs.interior_veto(vs.load_refs())
-    rep = summarize(rows, veto)
+    rep = summarize(rows, vs.screen_params(vs.load_refs()))
     print(json.dumps(rep, indent=2))
     print(f"-> {out_path}")
     return 0

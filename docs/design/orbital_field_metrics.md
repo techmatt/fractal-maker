@@ -640,6 +640,128 @@ carried almost entirely by one term. `[verdict: Matt]` `[measured: 594 swept can
 - **Absolute composites are meaningless outside this (geometry, cap policy) pair**, exactly
   as in §5 and §7. Only orderings within one pair compare.
 
+### 11.6 Composite v3 — size band, compressed richness, anchored sweep (2026-08-01)
+
+**What changed and what did not.** Three re-weightings of measures already on the row; no new
+field, no new walk, no re-screen of the population. `view_screen.composite_v2` is kept live
+beside `composite_v3` so §11.3's record re-derives from source rather than being copied
+forward — the v2 block of `view_screen_gate.json` is re-run on every gate invocation and
+reproduces byte-identically. `[code: tools/atlas/view_screen.py]`
+
+**Why.** Matt's verdicts on the v2 Q5 sheet named three defects. Under v2 all five tiles he
+called dominated were in v2's **own** top quintile — that is the premise, and it is recorded
+as a re-run rather than asserted (`v3_0_v2_baseline` in the gate). `[verdict: Matt]`
+
+1. **Size band on interior.** `size_factor` is exactly 1.0 from interior 0 through **0.12**,
+   then `((veto − i)/(veto − 0.12))^8` to 0 at the veto. The **edge is Matt's verdict
+   transcribed** (the top of what he passed); the **exponent is one scalar fitted** to the
+   anchors under a rule written down first — *the least steep integer exponent that satisfies
+   every gate clause*. `exp = 6` is recorded failing (the 0.17 tile survives at p83.9).
+   **This is not interior mass revived as a quality axis** (retired at +0.046 given degree):
+   a quality axis is monotone everywhere, a band is *flat* below its edge, and the flat
+   interval is a test, not a claim. `retired.md` carries the dated re-scoping entry.
+2. **Winsorized richness.** Both ring measures capped at `RICHNESS_CAP_REF_MULT = 2` × the
+   **strongest** reference (21.32 / 66.0 today) — reference-anchored for the same reason the
+   veto is, and derived in code from the same record. On the population it clips `range` on
+   **251 rows (1.5 %)** and `rings` on **85 (0.5 %)**: the tail, not the body.
+3. **Anchor-retention on the sweep.** A swept window is argmax-eligible only if the nucleus
+   stays inside the central **80 %** of it. Pure geometry from recorded coordinates in
+   `Decimal`. On the fixed sweep grid the nucleus sits |0.5| frames from a scale-1
+   neighbour's centre and |0.25| from a scale-2 one, so **every margin in (0.5, 1.0) selects
+   the same 10 of 18 windows** — 0.8 is a judgement that does not carry the result, and that
+   is asserted rather than argued. Concretely the eligible moves are **zoom out or stay**; a
+   same-scale lateral shift always drops the nucleus out. **Non-anchored contexts — ranking
+   arbitrary views — use the composite with `anchor=None` and no constraint.**
+
+**The veto branch is deliberately un-banded.** `size_factor` is 0 for every vetoed row by
+construction, so banding that branch collapsed all 2,957 vetoed rows to exactly −1.0 and
+destroyed §11.2's stated contract that a vetoed candidate keeps its order among the vetoed.
+Caught by the existing test re-run against v3. The consequence is that v3 still *steps* at
+the veto, exactly as v2 did; what the band guarantees is that the two ranges stay disjoint —
+the last non-vetoed score is 0.
+
+#### The extended gate
+
+G1–G3 unchanged. **G4** the five named-dominated tiles out of the top quintile; **G5** the
+twelve tiles at interior 0.00–0.12 he passed stay in — without G5 the band passes G4
+trivially by demoting everything with any interior at all. The calibration set is
+**regenerated from source** (v2 composite → v2 quintiles → `stratify` at seed 20260801) and
+cross-checked against the caption tuples, so the gate cannot end up calibrated on tiles
+nobody saw. `[measured: 16,440 candidates, 64×36, `mi12000k0.3c4800-67000`, 2026-08-01;
+data/atlas/view_screen_gate.json §v3]`
+
+| formulation | eye | mb19 16× | worst dominated | weakest passed | gate |
+|---|---|---|---|---|---|
+| v2 baseline | 95.0 | 81.8 | **97.4** | 83.1 | **FAIL (G4)** |
+| edge 0.12, exp 6 | 97.0 | 89.1 | **83.9** | 89.9 | **FAIL (G4)** |
+| edge 0.08, exp 8 | 97.0 | 89.7 | 65.5 | **77.4** | **FAIL (G5)** |
+| edge 0.12, exp 8, uncompressed | 97.0 | 89.5 | 77.8 | 90.2 | PASS |
+| edge 0.12, exp 8, log-compressed | 96.8 | 89.1 | 75.4 | 90.3 | PASS |
+| edge 0.12, exp 8, winsorized — **shipped** | 97.0 | 89.5 | 77.8 | 90.2 | PASS |
+
+The two losers fail in **opposite** directions, which is what makes the pair informative:
+either one alone could be met by moving the other parameter. **The winsorization is invisible
+to this gate** — the uncompressed variant passes identically, because all six v2 anchors sit
+far below the cap. That is recorded as a number, not softened: the cap's evidence is the
+sweep, below. The decile bar §11.3 records still is not reached (mb19 at 89.5).
+
+**What the selection costs, one notch stronger than v2's.** v2 chose among three
+pre-specified coverage terms after seeing their results. v3 **fits a scalar** against the
+anchors. Read this as a tripwire against named failures over ~17 hand-picked points, not as
+evidence the composite ranks well in general. No label and no classifier has seen this
+population. `[verdict: Matt]`
+
+#### What re-ranking and the re-swept argmax measured
+
+**Ranking (all 16,440).** Spearman v3 vs v2 **+0.840**. Of the 3,288 v2-Q5 rows **62.0 %**
+survive into the v3 top quintile; **zero** v3-Q5 rows came from v2's Q1/Q2 — as in §11.4 the
+change is almost purely demoting. **5,523 rows (34 %)** carry a size penalty on top of the
+2,957 vetoed.
+
+**Interior distribution of the top quintile — the thing the band was for.** v2 Q5 held
+**28 %** of its mass in interior [0.17, 0.25) and **4 %** above 0.25; v3 Q5 holds **0.4 %**
+and **0 %**, with p99 = **0.168**. Low-interior mass rises 54 % → 88 %.
+
+**The k-mix, which is the supply run's answer.** v3 Q5 is **k16 59 % / keep 37 % / k4 4 %**
+against v2 Q5's 38 / 23 / 39 and a population that is an even third each. **k4 is what the
+band removes**: at four atom widths the nucleus is the picture. It is not that k4 is
+worthless — it is that a k4 frame's best available move is to stop being a k4 frame, which
+is exactly what the sweep does with it (below). **Degree mix** moves d5 14 % → 23 %, d4 26 %
+→ 28 %; read as a shift in what the composite selects, not a degree result (§11.4's confound
+stands unchanged).
+
+**The re-swept argmax (same 594 candidates, re-measured).** The v2 sweep record could not be
+re-scored from disk — it stored `band_coverage` per window but **not** `band_coverage_q25`,
+so the composite's own coverage term was unrecoverable; 10,692 fields were re-measured and
+both columns are now recorded. `[cmd: uv run python tools/atlas/view_frame_sweep.py --out
+scratch/view_rescreen/sweep_v3.jsonl --keys-from scratch/view_rescreen/sweep.jsonl]`
+
+- **45.3 %** of v2's argmax choices change. Moves rise 377 → **385**, and **every move is now
+  a zoom-out**: chosen scale 2 goes 184 → **385**, scale-1 relocation → 0, by construction.
+- **The blow-up no longer buys anything.** The window that made v2's worst choice
+  (`radial_range = 1663.5`) scored **1564.8** against an origin of 25.9; under v3 it scores
+  **35.2**, and it now beats its runner-up (a legitimate window at `range = 41`, comp 32.2)
+  by **9 %, on coverage, at a tied ceiling richness** — a rich frame, not fifty of them.
+  Chosen-window `range` p99 falls 57.0 → 41.8 and the count above the population's p99 falls
+  73 → 42. **The blow-up is not gone and is not claimed to be**: the cap changes what a large
+  range *buys*, not what it *measures*, and 37 of 594 chosen windows sit at the ceiling.
+- The composite *ratio* now needs a denominator floor that v2 did not: a size-banded origin
+  scores ~0, so 206 of 594 rows are excluded from it and counted. Over the remaining 388 the
+  median ratio is **1.14**. The gain is still an argmax by the objective it maximises.
+- **The 20 largest-gain pairs are 20 k4 rows zoomed out exactly 2×**, landing at interior
+  ~0.04. `pair_fw_ratio_over_2x` is **empty** — no pair slipped past the constraint into a
+  scale jump. `[scratch/view_screen/sheet_framing_pairs_moved.png]`
+
+#### Still blind to (§11.5 stands, plus)
+
+- **The band edge is a single human verdict** on one sheet of eighteen tiles, and the
+  exponent is fitted to it. Nothing here says 0.12 generalises off this population.
+- **The sweep grid is now half dead for anchored candidates.** Eight of eighteen windows can
+  never win, so the sweep pays for measurements it cannot use; a grid designed around the
+  constraint (more scales, fewer lateral offsets) was not explored.
+- **Winsorizing destroys ordering above the cap**, it does not compress it — two genuinely
+  different very-rich frames tie and fall back to the window order.
+
 ---
 
 ## Corrections made against the record this doc was written from

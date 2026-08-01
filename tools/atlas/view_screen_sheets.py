@@ -88,6 +88,14 @@ def render_all(jobs: list[tuple[dict, Path]], log=print) -> None:
         list(ex.map(one, jobs))
 
 
+def _tag(key: str) -> str:
+    """A STABLE per-key filename tag. `hash()` on a str is salted per interpreter
+    (PYTHONHASHSEED), so the render cache built from it missed on every re-run and every
+    sheet re-render paid for the whole tile set again."""
+    import hashlib
+    return hashlib.blake2b(key.encode("utf-8"), digest_size=5).hexdigest()
+
+
 def _tile(path, w=TW, h=TH):
     if path and Path(path).exists():
         return Image.open(path).convert("RGB").resize((w, h))
@@ -99,16 +107,24 @@ def caption(dr, x, y, lines):
         dr.text((x + 4, y + 4 + 19 * i), txt, fill=col)
 
 
-def cap_lines(r: dict, comp: float, newq: int) -> list:
+def cap_lines(r: dict, comp: float, newq: int, p) -> list:
+    """Three lines: what the row is, what v3 says, and what v3 CHANGED from.
+
+    The v2 line is the third one and not the atom line: the claim under inspection is now
+    v2 -> v3 (a re-weighting of the same measures on the same frame), and a caption that
+    showed only the atom sort could not be checked against the sheet it replaces. The size
+    factor and the compressed richness are printed because they are the whole change — a
+    tile that fell has to show WHICH term dropped it.
+    """
     k = "keep" if r.get("k") is None else f"k{float(r['k']):g}"
     op = r["op"].replace("_to_sibling", "").replace("_to_nucleus", "").replace("_expand", "")
     return [
         (f"{op} {k}  d{r.get('degree')} p{r.get('period')}  fw={r['fw']:.3g}", INK),
-        (f"NEW comp={comp:.2f} covq25={r['band_coverage_q25']:.2f} "
-         f"rng={r['radial_range']:.1f} rings={r['radial_rings']:.0f} "
-         f"int={r['interior_fraction']:.2f}  Q{newq}", WARM),
-        (f"OLD atom rng={r['atom_radial_range']:.1f} rings={r['atom_radial_rings']:.0f} "
-         f"int={r['atom_interior_fraction']:.2f}  Q{r['old_quintile']}", DIM),
+        (f"v3 comp={comp:.2f} size={vs.size_factor(r, p):.2f} rich={vs.richness(r, p):.1f} "
+         f"covq25={r['band_coverage_q25']:.2f} int={r['interior_fraction']:.3f}  Q{newq}", WARM),
+        (f"v2 comp={r['_comp_v2']:.2f} rich_raw={vs.richness(r):.1f} "
+         f"rng={r['radial_range']:.1f} rings={r['radial_rings']:.0f}  Q{r['v2_quintile']}"
+         f"   (atom rng={r['atom_radial_range']:.1f} Q{r['old_quintile']})", DIM),
     ]
 
 
@@ -214,6 +230,8 @@ def agreement(rows: list[dict]) -> dict:
     oq = [r["old_quintile"] for r in rows]
     old_q5 = [r for r in rows if r["old_quintile"] == 5]
     new_q5 = [r for r in rows if r["new_quintile"] == 5]
+    has_v2 = bool(rows) and all("_comp_v2" in r and "v2_quintile" in r for r in rows)
+    v2_q5 = [r for r in rows if r.get("v2_quintile") == 5] if has_v2 else []
 
     def deg_mix(sel):
         c = Counter(r.get("degree") for r in sel)
@@ -226,8 +244,55 @@ def agreement(rows: list[dict]) -> dict:
         tot = max(1, sum(c.values()))
         return {k: f"{v} ({100*v/tot:.0f}%)" for k, v in c.most_common()}
 
+    def k_mix(sel):
+        """The k set the supply run would order from this quintile. `keep` is its own class:
+        it is not a `k` at all, it is the parent's frame kept, so folding it into a numeric
+        bucket would report a zoom the walk never chose."""
+        c = Counter("keep" if r.get("k") is None else f"k{float(r['k']):g}" for r in sel)
+        tot = max(1, sum(c.values()))
+        return {k: f"{v} ({100*v/tot:.0f}%)" for k, v in
+                sorted(c.items(), key=lambda kv: (kv[0] == "keep",
+                                                  float(kv[0][1:]) if kv[0] != "keep" else 0))}
+
+    def int_dist(sel):
+        if not sel:
+            return {}
+        v = np.array([r["interior_fraction"] for r in sel], dtype=float)
+        return {f"p{q}": round(float(np.percentile(v, q)), 4)
+                for q in (5, 25, 50, 75, 90, 95, 99)}
+
+    def int_bands(sel):
+        """Against the band the composite now shapes on, not against arbitrary deciles."""
+        tot = max(1, len(sel))
+        cuts = [(0.0, 0.06), (0.06, 0.12), (0.12, 0.17), (0.17, 0.25), (0.25, 1.01)]
+        return {f"[{a:.2f},{b:.2f})":
+                f"{sum(1 for r in sel if a <= r['interior_fraction'] < b)} "
+                f"({100*sum(1 for r in sel if a <= r['interior_fraction'] < b)/tot:.0f}%)"
+                for a, b in cuts}
+
+    v2 = {}
+    if has_v2:
+        v2 = dict(
+            spearman_v3_vs_v2=spearman(new, [r["_comp_v2"] for r in rows]),
+            v2_Q5_n=len(v2_q5),
+            v2_Q5_surviving_v3_Q5=sum(1 for r in v2_q5 if r["new_quintile"] == 5),
+            v2_Q5_surviving_frac=round(sum(1 for r in v2_q5 if r["new_quintile"] == 5)
+                                       / max(1, len(v2_q5)), 4),
+            v3_Q5_that_were_v2_Q1_or_Q2=sum(1 for r in new_q5 if r["v2_quintile"] <= 2),
+            quintile_transition_v2_to_v3=[
+                [sum(1 for r in rows if r["v2_quintile"] == o and r["new_quintile"] == n_)
+                 for n_ in range(1, 6)] for o in range(1, 6)],
+            k_mix_v3_Q5=k_mix(new_q5), k_mix_v2_Q5=k_mix(v2_q5),
+            k_mix_population=k_mix(rows),
+            interior_pct_v3_Q5=int_dist(new_q5), interior_pct_v2_Q5=int_dist(v2_q5),
+            interior_pct_population=int_dist(rows),
+            interior_bands_v3_Q5=int_bands(new_q5),
+            interior_bands_v2_Q5=int_bands(v2_q5),
+            degree_mix_v2_Q5=deg_mix(v2_q5),
+        )
+
     return dict(
-        n=len(rows),
+        n=len(rows), **v2,
         spearman_new_vs_old_atom_range=spearman(new, old),
         spearman_new_vs_old_quintile=spearman(nq, oq),
         old_Q5_n=len(old_q5),
@@ -280,17 +345,22 @@ def main(argv=None) -> int:
     rows = [json.loads(l) for l in
             a.scores.read_text(encoding="utf-8").splitlines() if l.strip()]
     ok = [r for r in rows if r.get("screened")]
-    veto = vs.interior_veto(vs.load_refs())
+    p = vs.screen_params(vs.load_refs())
+    veto = p.veto
     for r in ok:
-        r["_comp"] = vs.composite(r, veto)
+        r["_comp"] = vs.composite_v3(r, p)
+        r["_comp_v2"] = vs.composite_v2(r, veto)
         r["_vetoed"] = vs.is_vetoed(r, veto)
     nq, new_edges = quintile_index([r["_comp"] for r in ok])
     oq, old_edges = quintile_index([r["atom_radial_range"] for r in ok])
-    for r, n_, o_ in zip(ok, nq, oq):
-        r["new_quintile"], r["old_quintile"] = n_, o_
+    v2q, v2_edges = quintile_index([r["_comp_v2"] for r in ok])
+    for r, n_, o_, w_ in zip(ok, nq, oq, v2q):
+        r["new_quintile"], r["old_quintile"], r["v2_quintile"] = n_, o_, w_
 
-    print(f"[sheets] {len(ok)} screened rows; new-composite quintile edges "
-          f"{[round(e,3) for e in new_edges]}; veto {veto} ({sum(r['_vetoed'] for r in ok)} rows)")
+    print(f"[sheets] {len(ok)} screened rows; v3 quintile edges "
+          f"{[round(e,3) for e in new_edges]} (v2 {[round(e,3) for e in v2_edges]}); "
+          f"veto {veto} ({sum(r['_vetoed'] for r in ok)} rows); "
+          f"size-banded {sum(1 for r in ok if vs.size_factor(r, p) < 1.0 and not r['_vetoed'])}")
 
     a.out.mkdir(parents=True, exist_ok=True)
     vivid = a.out / "vivid"
@@ -299,7 +369,7 @@ def main(argv=None) -> int:
     top = stratify([r for r in ok if r["new_quintile"] == 5], a.tiles, a.seed)
     bot = stratify([r for r in ok if r["new_quintile"] == 1], a.tiles, a.seed + 1)
     for r in top + bot:
-        r["_png"] = vivid / f"q{r['new_quintile']}_{abs(hash(r['key'])) % 10**10:010d}.jpg"
+        r["_png"] = vivid / f"q{r['new_quintile']}_{_tag(r['key'])}.jpg"
 
     swept = []
     if a.sweep.exists():
@@ -319,9 +389,9 @@ def main(argv=None) -> int:
     pair_dir = a.out / "pairs"
     pair_dir.mkdir(parents=True, exist_ok=True)
     for s in {id(x): x for x in pairs_src + moved_src}.values():
-        h = abs(hash(s["key"])) % 10 ** 10
-        s["_a"] = pair_dir / f"{h:010d}_before.jpg"
-        s["_b"] = pair_dir / f"{h:010d}_after.jpg"
+        h = _tag(s["key"])
+        s["_a"] = pair_dir / f"{h}_before.jpg"
+        s["_b"] = pair_dir / f"{h}_after.jpg"
 
     jobs = [(r, r["_png"]) for r in top + bot]
     for s in {id(x): x for x in pairs_src + moved_src}.values():
@@ -332,28 +402,42 @@ def main(argv=None) -> int:
     print(f"[render] {len(jobs)} vivid tiles")
     render_all(jobs)
 
-    build_sheet([(r["_png"], cap_lines(r, r["_comp"], 5)) for r in top],
-                f"view screen — NEW composite TOP quintile (n={len(top)}, vivid "
-                f"blue_orange; stratified over operator x degree)",
+    build_sheet([(r["_png"], cap_lines(r, r["_comp"], 5, p)) for r in top],
+                f"view screen — v3 composite TOP quintile (n={len(top)}, vivid "
+                f"blue_orange; stratified over operator x degree; band edge "
+                f"{p.band_edge:g}^{p.band_exp:g}, caps {p.cap_range:g}/{p.cap_rings:g})",
                 a.out / "sheet_new_q5.png")
-    build_sheet([(r["_png"], cap_lines(r, r["_comp"], 1)) for r in bot],
-                f"view screen — NEW composite BOTTOM quintile (n={len(bot)}, vivid "
+    build_sheet([(r["_png"], cap_lines(r, r["_comp"], 1, p)) for r in bot],
+                f"view screen — v3 composite BOTTOM quintile (n={len(bot)}, vivid "
                 f"blue_orange; stratified over operator x degree)",
                 a.out / "sheet_new_q1.png")
+
+    # A framing pair is unreadable unless the two frames are comparable in scale, so the
+    # ratio is CAPTIONED rather than assumed. With the anchor constraint the only eligible
+    # scale is {1, 2}, so anything above 2.0 is content drift the constraint was supposed
+    # to prevent and is flagged on the tile, not silently shown.
+    slipped = []
 
     def pair_rows(src):
         out = []
         for s in src:
             base = by_key[s["key"]]
             ch, cm = s["chosen"], s["chosen_measures"]
+            ratio = float(ch["fw"]) / float(s["fw"])
+            if ratio > 2.0 + 1e-9:
+                slipped.append((s["key"], round(ratio, 3)))
             la = [(f"BEFORE  {s['op']} k={s['k']}  d{s.get('degree')} p{s.get('period')}", INK),
                   (f"comp={s['origin_composite']:.2f} covq25={base['band_coverage_q25']:.2f} "
-                   f"rng={base['radial_range']:.1f} int={base['interior_fraction']:.2f}", DIM),
+                   f"rng={base['radial_range']:.1f} int={base['interior_fraction']:.3f} "
+                   f"size={vs.size_factor(base, p):.2f}", DIM),
                   (f"fw={s['fw']:.4g}  (as the walk pushed it)", DIM)]
             lb = [(f"AFTER   dx={ch['dx']:+g} dy={ch['dy']:+g} scale={ch['scale']:g}"
-                   f"{'   (unmoved)' if not s['moved'] else ''}", INK),
+                   f"{'   (unmoved)' if not s['moved'] else ''}"
+                   f"   fw ratio {ratio:.2f}x"
+                   f"{'  << SCALE JUMP' if ratio > 2.0 + 1e-9 else ''}", INK),
                   (f"comp={s['chosen_composite']:.2f} covq25={cm['band_coverage_q25']:.2f} "
-                   f"rng={cm['radial_range']:.1f} int={cm['interior_fraction']:.2f}", WARM),
+                   f"rng={cm['radial_range']:.1f} int={cm['interior_fraction']:.3f} "
+                   f"size={vs.size_factor(cm, p):.2f}", WARM),
                   (f"fw={ch['fw']:.4g}", DIM)]
             out.append((s["_a"], s["_b"], la, lb))
         return out
@@ -361,21 +445,29 @@ def main(argv=None) -> int:
     if pairs_src:
         n_moved = sum(1 for s in pairs_src if s["moved"])
         build_pair_sheet(pair_rows(pairs_src),
-                         f"view screen — framing sweep BEFORE / AFTER, {len(pairs_src)} "
+                         f"view screen v3 — framing sweep BEFORE / AFTER, {len(pairs_src)} "
                          f"TOP-COMPOSITE candidates ({n_moved} moved — the composite's own "
                          f"winners are what it least wants to move)",
                          a.out / "sheet_framing_pairs.png")
     if moved_src:
         build_pair_sheet(pair_rows(moved_src),
-                         f"view screen — framing sweep BEFORE / AFTER, {len(moved_src)} "
-                         f"LARGEST COMPOSITE GAIN (all moved; the gain is an argmax over 18 "
-                         f"draws by the objective it maximises)",
+                         f"view screen v3 — framing sweep BEFORE / AFTER, {len(moved_src)} "
+                         f"LARGEST v3 COMPOSITE GAIN (all moved, all anchor-retaining; the "
+                         f"gain is an argmax over the eligible windows by the objective it "
+                         f"maximises)",
                          a.out / "sheet_framing_pairs_moved.png")
     if not swept:
         print("  no sweep rows — before/after sheets SKIPPED (run view_frame_sweep.py)")
+    if slipped:
+        print(f"  !! {len(slipped)} pair(s) with fw ratio > 2x — the anchor constraint "
+              f"should have prevented these: {slipped}")
 
     rep = agreement(ok)
+    rep["composite_version"] = "v3"
+    rep["screen_params"] = p._asdict()
+    rep["pair_fw_ratio_over_2x"] = slipped
     rep["new_quintile_edges"] = [round(e, 4) for e in new_edges]
+    rep["v2_quintile_edges"] = [round(e, 4) for e in v2_edges]
     rep["old_quintile_edges"] = [round(e, 4) for e in old_edges]
     (a.out / "readout.json").write_text(json.dumps(rep, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in rep.items()

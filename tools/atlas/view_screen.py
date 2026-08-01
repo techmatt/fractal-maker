@@ -53,6 +53,15 @@ across geometries and cap policies (`orbital_field_metrics.md` §5, §7). The re
 interiors are measured, frozen in `data/atlas/view_screen_refs.json`, and re-derivable by
 `--refs`.
 
+COMPOSITE v3 (2026-08-01) — three re-weightings of recorded measures, no new field. Matt's
+verdicts on the v2 Q5 sheet named three defects, each fixed by weighting differently what
+is already on the row: a **size band** on `interior_fraction` (a nucleus can be too big
+before it is a veto), a **winsorized richness** (the raw product is unbounded and the sweep
+argmax exploits it), and an **anchor-retention constraint** on the sweep (its contract is
+"frame THIS minibrot well", not "find the richest window near here"). `composite_v2` is
+kept beside `composite_v3` because the v2 gate record must stay reproducible from source,
+not only from the JSON it was written to.
+
   uv run python tools/atlas/view_screen.py --refs        # re-measure the references
   uv run python tools/atlas/view_screen.py --demo <cx> <cy> <fw>
 """
@@ -65,6 +74,7 @@ import math
 import sys
 import tempfile
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -248,6 +258,76 @@ REFS_PATH = "data/atlas/view_screen_refs.json"
 # measurement it is applied to, and moving either moves the veto in code.
 VETO_ESCAPED_SHARE = 2.0 / 3.0
 
+# --------------------------------------------------------------------------- #
+# v3: the size band on interior
+# --------------------------------------------------------------------------- #
+# THE VETO IS A DOMAIN STATEMENT; THIS IS A COMPOSITION ONE, AND THEY ARE DIFFERENT.
+# The veto says "the scalars are being computed on a minority of the frame". The band says
+# something the veto is far too late to say: a nucleus can be TOO BIG for the picture long
+# before it is dead area. Matt's verdicts off the v2 Q5 sheet, which is the whole
+# calibration set: interior ~= 0 is fine (pure filigree; both references sit there),
+# interior up to ~0.12 passed his eye, 0.17 is "good region but minibrot too big", and the
+# 0.20-0.25 k4 series reads as dominated. The veto fires at 0.3403 — every one of those
+# tiles clears it, which is why v2 ranked four of them into its own top quintile.
+#
+# This is NOT a revival of interior mass as a quality axis (retired at +0.046 given degree,
+# `minibrot_sourcing.md` §11, `retired.md`). Interior mass as a quality axis is monotone and
+# unbounded in the claim "less interior is better"; this is a BAND — flat and neutral from 0
+# to the edge, so a frame with 0.10 interior is not preferred to one with 0.00 — that only
+# expresses "past this share the subject dominates the frame". Above the edge it declines to
+# the veto's own behaviour at the veto threshold, so the two are continuous rather than a
+# step at 0.3403.
+#
+# WHERE THE TWO NUMBERS COME FROM, SEPARATELY, BECAUSE THEY WERE NOT FIXED THE SAME WAY.
+# The EDGE is Matt's verdict transcribed (the top of what he passed), not a fit. The
+# EXPONENT is one scalar fitted against those tiles under a rule written down before the
+# grid was run: the LEAST STEEP integer exponent that satisfies every clause of the v3 gate.
+# `exp = 6` is recorded as failing (the 0.17 tile survives at p83.9) so the choice reads as
+# a fit to six-plus anchor points, which is what it is. `[data/atlas/view_screen_gate.json]`
+SIZE_BAND_EDGE = 0.12
+SIZE_BAND_EXP = 8.0
+
+# --------------------------------------------------------------------------- #
+# v3: the richness cap
+# --------------------------------------------------------------------------- #
+# `sqrt(range x rings)` is unbounded, and an unbounded term inside an argmax is a term the
+# argmax will find the tail of: the framing sweep's worst choice took an antenna-seam window
+# at `radial_range = 16603` to a composite of ~1505, against a top-quintile population that
+# lives at 3-30. A seam window should score like a rich frame, not like fifty of them.
+#
+# Both measures are winsorized at `RICHNESS_CAP_REF_MULT` x the STRONGEST reference's value
+# — the same anchoring the veto uses, and for the same reason: an absolute field number
+# means nothing across geometries and cap policies (`orbital_field_metrics.md` §5, §7).
+# Twice the reference is a judgement; what it buys is that the cap lands at the top of the
+# ordinary population rather than inside it (on the re-scored 16,440 it clips `range` on
+# ~1.5% of rows and `rings` on ~0.5%, i.e. the tail and not the body).
+#
+# WINSORIZE AND NOT LOG, ON THE STATED CRITERION. Log compression was measured and keeps the
+# seam window at ~12x the population's richness, because `c*log1p(x/c)/log2` is still
+# growing at x = 78c. Winsorizing is the one that meets "like a rich frame, not 50x one".
+# The cost is real and is the reason it is recorded rather than asserted: above the cap the
+# ordering is DESTROYED, not compressed, so two genuinely different rich frames tie and fall
+# back to the tie-break. On the population gate neither choice is visible at all (all six
+# anchors sit far below the cap) — the compression is justified on the SWEEP, and the sweep
+# is where its evidence is.
+RICHNESS_CAP_REF_MULT = 2.0
+
+
+class ScreenParams(NamedTuple):
+    """Everything the v3 composite needs that is derived from the reference record.
+
+    Derived in code, frozen in the record it reads: re-measuring the references moves the
+    veto AND the caps, instead of leaving stale literals in the source. Passed explicitly
+    rather than resolved inside `composite_v3`, so a test can inject one and a driver
+    resolves it once per run instead of per row.
+    """
+    veto: float
+    cap_range: float
+    cap_rings: float
+    band_edge: float = SIZE_BAND_EDGE
+    band_exp: float = SIZE_BAND_EXP
+
+
 # The richness term: the geometric mean of the two ring measures.
 #
 # STATE WHAT THIS IS AND IS NOT FORCED BY. `orbital_field_metrics.md` §4 records that
@@ -260,9 +340,32 @@ VETO_ESCAPED_SHARE = 2.0 / 3.0
 # (measured; the sweep is in the report). The geometric mean is chosen because it moves
 # when EITHER measure moves and so cannot inherit either one's known single-reference
 # failure — a judgement, taken with the alternatives measured, not a forced choice.
-def richness(m: dict) -> float:
-    return math.sqrt(max(0.0, float(m["radial_range"])) *
-                     max(0.0, float(m["radial_rings"])))
+def richness(m: dict, p: "ScreenParams | None" = None) -> float:
+    """`sqrt(range x rings)`, winsorized at `p`'s caps when one is given.
+
+    `p=None` is the v2 term, uncapped — kept so `composite_v2` is the original function and
+    not a re-derivation of it.
+    """
+    rng = max(0.0, float(m["radial_range"]))
+    rings = max(0.0, float(m["radial_rings"]))
+    if p is not None:
+        rng, rings = min(rng, p.cap_range), min(rings, p.cap_rings)
+    return math.sqrt(rng * rings)
+
+
+def size_factor(m: dict, p: "ScreenParams") -> float:
+    """The v3 size band on `interior_fraction`, in [0, 1].
+
+    Neutral (1.0) from 0 through `band_edge`; above it, `((veto - i)/(veto - edge))**exp`,
+    reaching 0 exactly at the veto threshold so the graded term and the sort-to-bottom band
+    meet rather than step. Nothing above the veto reaches this: those rows are vetoed.
+    """
+    i = float(m["interior_fraction"])
+    if i <= p.band_edge:
+        return 1.0
+    if i >= p.veto:
+        return 0.0
+    return ((p.veto - i) / (p.veto - p.band_edge)) ** p.band_exp
 
 
 def coverage_term(m: dict) -> float:
@@ -304,20 +407,71 @@ def interior_veto(refs: dict, *, share: float = VETO_ESCAPED_SHARE) -> float:
     return round(max(0.0, 1.0 - share * min(escaped)), 4)
 
 
-def composite(m: dict, veto: float) -> float:
-    """The sort key: coverage-weighted richness, with the interior veto sorting to bottom.
+def richness_caps(refs: dict, *, mult: float = RICHNESS_CAP_REF_MULT) -> tuple:
+    """The winsorization caps, derived from the references at run time (see `interior_veto`).
 
-    Non-vetoed candidates score `coverage_term * richness >= 0`. A vetoed candidate scores
-    in `[-1, 0)` — strictly below every non-vetoed one, and still ordered among the vetoed
-    by the same quantity. Recording, never exclusion: nothing is dropped, and every raw
-    measure survives on the row.
+    The STRONGEST reference sets each cap, not the weakest: the caps say "beyond this much
+    dynamic range, more is not more", and anchoring that on the weaker reference would clip
+    the stronger one — a reference must never be capped by the screen it calibrates.
+    """
+    ok = [r for r in refs["references"].values() if r.get("screened")]
+    if not ok:
+        raise ValueError(f"{REFS_PATH}: no screened references — cannot derive the caps")
+    return (round(mult * max(float(r["radial_range"]) for r in ok), 4),
+            round(mult * max(float(r["radial_rings"]) for r in ok), 4))
+
+
+def screen_params(refs: dict, *, share: float = VETO_ESCAPED_SHARE,
+                  mult: float = RICHNESS_CAP_REF_MULT, band_edge: float = SIZE_BAND_EDGE,
+                  band_exp: float = SIZE_BAND_EXP) -> ScreenParams:
+    """Every v3 constant that is derived from the reference record, resolved once."""
+    cr, cg = richness_caps(refs, mult=mult)
+    return ScreenParams(veto=interior_veto(refs, share=share), cap_range=cr, cap_rings=cg,
+                        band_edge=band_edge, band_exp=band_exp)
+
+
+def _veto_band(c: float) -> float:
+    """The sort-to-bottom band: `[-1, 0)`, strictly below every non-vetoed score, and still
+    ordered among the vetoed by the same quantity. Shared by v2 and v3 so the two composites
+    cannot drift on the one behaviour that is not a re-weighting."""
+    return -1.0 / (1.0 + c)
+
+
+def composite_v2(m: dict, veto: float) -> float:
+    """The v2 sort key, FROZEN. `coverage_term * richness`, uncapped, no size band.
+
+    Kept live (not just in the JSON) so `view_screen_gate.py` re-derives the recorded v2
+    block from source rather than copying it forward — a record whose producer no longer
+    exists cannot be checked (`verification_practice.md` §7).
     """
     if not m.get("screened"):
         return float("-inf")
     c = coverage_term(m) * richness(m)
-    if float(m["interior_fraction"]) > veto:
-        return -1.0 / (1.0 + c)
-    return c
+    return _veto_band(c) if float(m["interior_fraction"]) > veto else c
+
+
+def composite_v3(m: dict, p: ScreenParams) -> float:
+    """The live sort key: size-banded, coverage-weighted, winsorized richness.
+
+    `size_factor * coverage_term * richness(capped)`, with the interior veto sorting to
+    bottom exactly as in v2. Non-vetoed candidates score >= 0; a vetoed one scores in
+    `[-1, 0)`. Recording, never exclusion: nothing is dropped, and every raw measure
+    survives on the row — the band and the caps are weights on the sort, not filters.
+
+    THE BAND IS NOT APPLIED INSIDE THE VETOED BAND, and that is deliberate. `size_factor`
+    is 0 for every vetoed row by construction (it reaches 0 at the veto), so banding the
+    vetoed branch would collapse all of them to exactly -1.0 and destroy v2's stated
+    contract that a vetoed candidate "keeps its order among the other vetoed ones". Below
+    the veto the frame is outside the instrument's domain and a composition judgement on it
+    means nothing, so what orders those rows stays what ordered them in v2. Caught by
+    `test_the_veto_sorts_to_bottom_and_never_excludes`, which runs on both composites.
+    """
+    if not m.get("screened"):
+        return float("-inf")
+    c = coverage_term(m) * richness(m, p)
+    if float(m["interior_fraction"]) > p.veto:
+        return _veto_band(c)
+    return size_factor(m, p) * c
 
 
 def is_vetoed(m: dict, veto: float) -> bool:
@@ -369,14 +523,53 @@ def sweep_windows(cx, cy, fw) -> list[dict]:
     return out
 
 
-def sweep_best(cx, cy, fw, veto: float, *, family: str = "mandelbrot", threads: int = 1,
-               tmpdir=None, measure=None) -> dict:
-    """Measure every sweep window and return the argmax by `composite`.
+# v3: the anchor-retention constraint. The sweep's contract for a maneuver-anchored
+# candidate is "frame THIS minibrot well", not "find the richest window near here" — and
+# without a constraint the second is what an argmax does: it walks off the nucleus onto
+# whatever seam scores highest, which is content drift dressed as framing. The nucleus must
+# stay inside the central `ANCHOR_MARGIN` of the chosen window.
+#
+# 0.8 is a judgement, and on THIS grid it is not a knife edge: the fixed offsets put the
+# nucleus at |0.5| frames (scale 1) or |0.25| (scale 2) from a window's centre, so every
+# margin in (0.5, 1.0) selects the same 10 of 18 windows. What that means concretely is
+# worth stating because it is the mechanism, not a side effect: for an anchored candidate
+# the eligible moves are ZOOM OUT (all nine scale-2 windows) or STAY (the origin) — a
+# same-scale lateral shift always drops the nucleus outside the margin. That is the intended
+# answer for a frame whose minibrot is too big.
+ANCHOR_MARGIN = 0.8
+
+
+def anchor_retained(anchor_cx, anchor_cy, w: dict, *, margin: float = ANCHOR_MARGIN) -> bool:
+    """Is the anchor inside the central `margin` box of window `w`? Pure geometry.
+
+    `Decimal` at `SWEEP_PREC` for the same reason `sweep_windows` is: the difference of two
+    35-digit centres at `fw = 1e-10` is exactly the cancellation `CLAUDE.md`'s coordinate
+    rule forbids computing in f64.
+    """
+    with decimal.localcontext() as ctx:
+        ctx.prec = SWEEP_PREC
+        fwd = decimal.Decimal(repr(float(w["fw"])))
+        fhd = fwd * decimal.Decimal(repr(ASPECT_H_OVER_W))
+        nx = (decimal.Decimal(str(anchor_cx)) - decimal.Decimal(str(w["cx"]))) / fwd
+        ny = (decimal.Decimal(str(anchor_cy)) - decimal.Decimal(str(w["cy"]))) / fhd
+        half = decimal.Decimal(repr(margin)) / 2
+        return bool(abs(nx) <= half and abs(ny) <= half)
+
+
+def sweep_best(cx, cy, fw, p: ScreenParams, *, family: str = "mandelbrot", threads: int = 1,
+               tmpdir=None, measure=None, anchor=None,
+               anchor_margin: float = ANCHOR_MARGIN) -> dict:
+    """Measure every sweep window and return the argmax by `composite_v3`.
 
     `measure=` is the injection point for tests (and for a cached driver); it defaults to
     the real `measure_view`. Ties break on the fixed window order, which puts the origin
     first — so a sweep that finds nothing better returns the original frame rather than an
     arbitrary neighbour.
+
+    `anchor=(cx, cy)` applies the anchor-retention constraint: an ineligible window is still
+    MEASURED and RECORDED with its composite, it is only barred from the argmax. Recording,
+    never exclusion — the same contract the veto keeps. `anchor=None` is the non-anchored
+    case (ranking arbitrary views), where the constraint has nothing to mean.
     """
     measure = measure or measure_view
     wins = sweep_windows(cx, cy, fw)
@@ -384,19 +577,25 @@ def sweep_best(cx, cy, fw, veto: float, *, family: str = "mandelbrot", threads: 
     for wdw in wins:
         m = measure(wdw["cx"], wdw["cy"], wdw["fw"], family=family, threads=threads,
                     tmpdir=tmpdir)
-        c = composite(m, veto)
+        c = composite_v3(m, p)
+        ok = (True if anchor is None else
+              anchor_retained(anchor[0], anchor[1], wdw, margin=anchor_margin))
         rows.append(dict(**{k: wdw[k] for k in ("dx", "dy", "scale", "is_origin")},
                          composite=(None if c == float("-inf") else round(c, 6)),
-                         screened=bool(m.get("screened")),
+                         screened=bool(m.get("screened")), anchor_ok=ok,
                          band_coverage=m.get("band_coverage"),
+                         band_coverage_q25=m.get("band_coverage_q25"),
                          radial_range=m.get("radial_range"),
                          radial_rings=m.get("radial_rings"),
                          interior_fraction=m.get("interior_fraction")))
-        if c != float("-inf") and (best_c is None or c > best_c):
+        if ok and c != float("-inf") and (best_c is None or c > best_c):
             best_c, best = c, dict(window=wdw, measures=m)
     origin = next((r for r in rows if r["is_origin"]), None)
     return dict(
         n_windows=len(wins),
+        n_anchor_eligible=sum(1 for r in rows if r["anchor_ok"]),
+        anchor=(None if anchor is None else dict(cx=str(anchor[0]), cy=str(anchor[1]),
+                                                 margin=anchor_margin)),
         origin_composite=(origin or {}).get("composite"),
         chosen=(None if best is None else
                 dict(dx=best["window"]["dx"], dy=best["window"]["dy"],
@@ -438,10 +637,13 @@ def measure_references(*, threads: int = 3) -> dict:
         block_quantile=BLOCK_QUANTILE, tile_cycle_floor=TILE_CYCLE_FLOOR,
         tile_min_finite=TILE_MIN_FINITE,
         veto_escaped_share=round(VETO_ESCAPED_SHARE, 6),
+        richness_cap_ref_mult=round(RICHNESS_CAP_REF_MULT, 6),
+        size_band=[SIZE_BAND_EDGE, SIZE_BAND_EXP],
         references=out,
-        note=("Reference measurements for the view-level screen. The interior veto is "
-              "derived from these at run time (view_screen.interior_veto), not hardcoded "
-              "— re-measuring moves the veto instead of leaving a stale literal."),
+        note=("Reference measurements for the view-level screen. The interior veto AND the "
+              "v3 richness caps are derived from these at run time "
+              "(view_screen.screen_params), not hardcoded — re-measuring moves both "
+              "instead of leaving stale literals."),
     )
 
 
@@ -462,14 +664,15 @@ def main(argv=None) -> int:
                   f"range={v.get('radial_range')}  rings={v.get('radial_rings')}")
         print(f"  veto: interior > 1 - {VETO_ESCAPED_SHARE:.4f} x min(ref escaped) "
               f"= {interior_veto(rep)}")
+        print(f"  caps: {RICHNESS_CAP_REF_MULT:g} x max(ref) = {richness_caps(rep)}")
         print(f"-> {REFS_PATH}")
         return 0
     if a.demo:
-        veto = interior_veto(load_refs())
+        p = screen_params(load_refs())
         m = measure_view(a.demo[0], a.demo[1], float(a.demo[2]))
         print(json.dumps(m, indent=2))
-        print(f"composite = {composite(m, veto):.4f}  (veto {veto}, "
-              f"vetoed={is_vetoed(m, veto)})")
+        print(f"composite v3 = {composite_v3(m, p):.4f}  (v2 {composite_v2(m, p.veto):.4f}; "
+              f"size {size_factor(m, p):.4f}; veto {p.veto}, vetoed={is_vetoed(m, p.veto)})")
         return 0
     ap.print_help()
     return 2
