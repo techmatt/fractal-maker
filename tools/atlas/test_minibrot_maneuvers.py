@@ -613,7 +613,67 @@ def test_push_children_still_routes_through_the_prune_the_tests_drive():
     assert "man_frontier_pruned" in sf.MAN_TOTALS
 
 
-def test_k_is_stamped_on_the_unavailable_path_too():
+# =========================================================================== #
+# v1.4 — the WALL-CLOCK cap (the unattended-overnight bound)
+# =========================================================================== #
+def _clock(base_s, session_ago_s, est_batch_s, wall_budget_min):
+    """A minimal object both wall-clock methods really run against — `wall_elapsed_s` is the
+    LIVE implementation bound to it, not a stub, so neither test can pass off a fake clock."""
+    import time as _t
+    o = types.SimpleNamespace(
+        wall_s_base=base_s, _session_t0=_t.time() - session_ago_s,
+        est_batch_s=est_batch_s, wall_budget_s=wall_budget_min * 60.0)
+    o.wall_elapsed_s = lambda: sf.SteeredFrontier.wall_elapsed_s(o)
+    return o
+
+
+def test_the_wall_cap_is_off_by_default_and_never_fires_when_disabled():
+    """Zero is the historical behaviour — every run before v1.4 — so a run that does not ask
+    for the cap must not be able to be stopped by it however long it runs."""
+    o = _clock(base_s=10 ** 7, session_ago_s=10 ** 6, est_batch_s=999, wall_budget_min=0)
+    assert sf.SteeredFrontier.wall_exhausted(o) is False
+
+
+def test_the_wall_cap_refuses_to_START_a_batch_it_cannot_finish():
+    """`+ est_batch_s`, not "already over": the rule is never start a unit that cannot finish
+    inside the remaining budget. Bracketed on both sides of the boundary so it is not merely
+    "stops eventually"."""
+    fits = _clock(base_s=0, session_ago_s=3540, est_batch_s=30, wall_budget_min=60)
+    assert sf.SteeredFrontier.wall_exhausted(fits) is False        # 3540 + 30 < 3600
+    over = _clock(base_s=0, session_ago_s=3540, est_batch_s=120, wall_budget_min=60)
+    assert sf.SteeredFrontier.wall_exhausted(over) is True         # 3540 + 120 > 3600
+
+
+def test_wall_time_accumulates_across_resumes():
+    """A kill/resume loop must not reset the night's bound — that is the whole failure mode
+    a wall cap exists to prevent on an unattended run. The base comes off the checkpoint and
+    only the CURRENT session is measured live."""
+    o = _clock(base_s=3000, session_ago_s=500, est_batch_s=10, wall_budget_min=60)
+    assert 3495 <= sf.SteeredFrontier.wall_elapsed_s(o) <= 3505
+    assert sf.SteeredFrontier.wall_exhausted(o) is False
+    o2 = _clock(base_s=3500, session_ago_s=500, est_batch_s=10, wall_budget_min=60)
+    assert sf.SteeredFrontier.wall_exhausted(o2) is True   # the resumed 3500s still counts
+
+
+def test_wall_elapsed_before_the_loop_starts_is_the_checkpointed_base_alone():
+    """`_session_t0` is None until the loop is entered; reading the clock then must not
+    charge the run for a session that has not begun."""
+    o = types.SimpleNamespace(wall_s_base=1234.0, _session_t0=None)
+    assert sf.SteeredFrontier.wall_elapsed_s(o) == 1234.0
+
+
+def test_the_wall_cap_is_a_SECOND_cap_not_a_restatement_of_the_active_one():
+    """It exists because `draw_roots` sits outside the timed block, so active time cannot
+    see a root replenishment. If the run loop ever stopped consulting it, an overnight run
+    would be bounded only by a budget that does not count the minutes it actually spends."""
+    import inspect
+    src = inspect.getsource(sf.SteeredFrontier.run)
+    assert "self.wall_exhausted()" in src
+    # ... and the active-time check is still there too: this is an addition, not a swap.
+    assert "self.active_s + self.est_batch_s > self.budget_s" in src
+    # ... and draw_roots really is outside the timed block, which is the premise
+    i_draw, i_tb = src.index("self.draw_roots()"), src.index("tb = time.time()")
+    assert i_draw < i_tb, "draw_roots moved inside the timed block — the premise changed"
     # Found by the shakedown: every refusal used to stamp k=None regardless of the k asked
     # for, so a log could not split availability by framing — and two refusal reasons
     # (f64_spacing_wall / fw_over_root_scale) are k-dependent by construction.

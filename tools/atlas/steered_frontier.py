@@ -739,6 +739,10 @@ class SteeredFrontier:
         self.man_nbh_probes = int(getattr(args, "maneuver_nbh_probes",
                                           MAN_NBH_PROBES_DEFAULT))
         self.man_screen_s = 0.0            # cumulative screen wall time, priced separately
+        # Wall-clock cap (0 = off). Distinct from --budget: see the check in run().
+        self.wall_budget_s = float(getattr(args, "wall_budget", 0.0) or 0.0) * 60.0
+        self.wall_s_base = 0.0             # wall seconds spent by PREVIOUS sessions
+        self._session_t0 = None
 
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.scratch.mkdir(parents=True, exist_ok=True)
@@ -1478,6 +1482,28 @@ class SteeredFrontier:
             raise SystemExit(f"[reconcile] batch {self.batch_i} DOES NOT BALANCE "
                              f"(n_cands={n_cands}):\n  " + "\n  ".join(problems))
 
+    def wall_elapsed_s(self) -> float:
+        """Wall seconds this run has burned, ACROSS resumes.
+
+        `wall_s_base` is what previous sessions spent (checkpointed); `_session_t0` is when
+        this one entered the loop. Derived rather than stored-and-incremented so a kill
+        between the increment and the checkpoint cannot lose or double-count a session —
+        the same reason the admitted count is re-derived from the ledger."""
+        if getattr(self, "_session_t0", None) is None:
+            return float(self.wall_s_base)
+        return float(self.wall_s_base) + (time.time() - self._session_t0)
+
+    def wall_exhausted(self) -> bool:
+        """Would the NEXT batch cross the wall cap? Its own method so it is testable without
+        driving the whole loop — the same reason `prune_frontier` is one.
+
+        Note the `+ est_batch_s`: the rule is never START a unit that cannot finish inside
+        the remaining budget, not stop once the budget is already blown. `wall_budget_s = 0`
+        disables it, which is the historical behaviour and every run before this one."""
+        if not self.wall_budget_s:
+            return False
+        return self.wall_elapsed_s() + self.est_batch_s > self.wall_budget_s
+
     def unit_timeout_s(self) -> float:
         """Hard-kill backstop for ONE subprocess work unit (an --expand call, a confirmation
         render), bounded by what is left of the wall-clock budget.
@@ -1856,6 +1882,7 @@ class SteeredFrontier:
             morph_lo=self.morph_lo, morph_hi=self.morph_hi, anchor_src=self.anchor_src,
             node_ctr=self.node_ctr, seq=self.seq, batch_i=self.batch_i,
             active_s=self.active_s, est_batch_s=self.est_batch_s,
+            wall_s=self.wall_elapsed_s(), wall_budget_s=self.wall_budget_s,
             expansions_per_root=self.expansions_per_root, totals=self.totals,
             frontier=self.frontier, rng=self.rng.bit_generator.state,
         )
@@ -1894,6 +1921,9 @@ class SteeredFrontier:
         st = json.loads(self.state_path.read_text(encoding="utf-8"))
         self.node_ctr = st["node_ctr"]; self.seq = st["seq"]; self.batch_i = st["batch_i"]
         self.active_s = st["active_s"]; self.est_batch_s = st["est_batch_s"]
+        # Absent on a pre-v1.4 checkpoint: 0.0 is correct there (no wall cap was in force),
+        # and it is a DEFAULT for a key that did not exist, not tolerance of a missing one.
+        self.wall_s_base = float(st.get("wall_s", 0.0))
         self.expansions_per_root = st["expansions_per_root"]; self.totals = st["totals"]
         self.frontier = st["frontier"]; self.tau_h = st["tau_h"]
         self.totals.setdefault("novelty_hits", 0)
@@ -2182,6 +2212,7 @@ class SteeredFrontier:
             self.seed_julia_pool()          # PRIMARY julia supply: sampler-sourced roots (probe)
             self.save_state()
 
+        session_t0 = time.time()
         while True:
             if self.stop_path.exists():
                 print("[STOP] sentinel present — halting at batch boundary.", flush=True)
@@ -2189,6 +2220,21 @@ class SteeredFrontier:
             if self.budget_s and self.active_s + self.est_batch_s > self.budget_s:
                 print(f"[budget] active {self.active_s/60:.1f}m + est batch "
                       f"{self.est_batch_s:.0f}s would exceed {self.budget_s/60:.0f}m — stopping.", flush=True)
+                break
+            # WALL-CLOCK CAP, and it is not a duplicate of the active cap. `active_s` counts
+            # only the timed batch block, and `draw_roots` sits OUTSIDE it — a root
+            # replenishment is minutes of real time that the active cap cannot see, so on a
+            # replenishment-heavy run the wall clock outruns the active budget without limit.
+            # For an unattended overnight run the wall clock is the constraint that actually
+            # matters, so it gets its own cap, checked at the same boundary and against the
+            # same "never start a unit that cannot finish" rule. Accumulated ACROSS resumes
+            # (`wall_s` is checkpointed), or a kill/resume loop would reset the night's bound.
+            self._session_t0 = session_t0
+            if self.wall_exhausted():
+                print(f"[wall] elapsed {self.wall_elapsed_s()/3600:.2f}h + est batch "
+                      f"{self.est_batch_s:.0f}s would exceed the "
+                      f"{self.wall_budget_s/3600:.2f}h wall cap — stopping "
+                      f"(active {self.active_s/60:.1f}m).", flush=True)
                 break
             if len(self.frontier) < ROOT_LOW_WATER:
                 self.draw_roots()
@@ -2257,6 +2303,13 @@ class SteeredFrontier:
             julia_hook=self.julia_hook, julia_hook_spacing=self.julia_hook_spacing,
             freshness_prior=self.freshness_prior, prior_rows=len(self.prior_rows),
             budget_min=self.budget_s / 60.0,
+            wall_budget_min=self.wall_budget_s / 60.0,
+            wall_min=round(self.wall_elapsed_s() / 60.0, 2),
+            # The ratio the next run's ETA has to be projected from: active time is what the
+            # budget bounds, wall clock is what the night bounds, and root replenishment is
+            # the gap between them.
+            wall_over_active=(round(self.wall_elapsed_s() / self.active_s, 2)
+                              if self.active_s > 0 else None),
             lambda_m=self.lambda_m, beta=self.beta, recency_k=self.recency_k,
             morph_mem=len(self.morph), morph_perm=self.morph.n_perm,
             morph_recency=self.morph.n_recency,
@@ -2464,6 +2517,14 @@ def main():
                          "admitted coords. DEFAULT OFF — prior-ON sterilized the native-seed "
                          "rejection sampler.")
     ap.add_argument("--budget", type=float, default=45.0, help="active-time budget (minutes)")
+    ap.add_argument("--wall-budget", type=float, default=0.0,
+                    help="WALL-CLOCK cap in minutes (0 = off, the historical behaviour). "
+                         "Not a duplicate of --budget: --budget counts only the timed batch "
+                         "block, and root replenishment sits outside it, so a "
+                         "replenishment-heavy run outruns its active budget in real time "
+                         "without limit. Accumulates across resumes. Checked at the same "
+                         "batch boundary, under the same never-start-a-unit-that-cannot-"
+                         "finish rule.")
     ap.add_argument("--batch", type=int, default=0, help="nodes per batch (0 = default 32)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--lambda-m", type=float, default=LAMBDA_M_DEFAULT,
