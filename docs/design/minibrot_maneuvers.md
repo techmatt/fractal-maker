@@ -270,6 +270,15 @@ whether *the floor* or *the operator* is the limit at scale:
 
 `[code: steered_frontier.SteeredFrontier._split_reserved]`
 
+**"Maneuver node" here means the maneuver-descended SUBTREE, not the origin node.** The
+`man` stamp rides every rung below a fired operator (§5), so `_split_reserved`'s reserved
+pool, the frontier share (§3.2) and every `man_*` counter are over the subtree. This is the
+right scope — the head has not seen a maneuver view's *children* either — but it makes the
+counters unreadable if you assume otherwise: measured 14 batches into the v1.4 exploration
+run, **52% of the frontier was maneuver-descended while only 55 nodes of 686 were origins**,
+which is why `quota_passed_over` (1,044) can exceed `nodes_pushed` (341) without either
+being wrong. `[measured: data/discovery/maneuver_v14_exploration, batch 14, 2026-08-01]`
+
 **A probability IS used — as a COST governor, not as selection.** The probe is an
 enumeration cost, and enumeration measured ~25× the screening cost. `ProbeGovernor` bounds
 it two ways: a Bernoulli(`p`) draw per rung, **and** a region cache keyed on a coarse
@@ -343,7 +352,9 @@ score carries `cap_headroom` and `clamped`. `[code: maneuver_screen.SCREEN_MAXIT
 maneuver nodes *first* — silently undoing the floor. Maneuver-originated nodes are therefore
 **protected** from the pooled prune.
 
-**Protected is not exempt — corrected 2026-08-01.** The protection was total, and total
+### 3.2 Protected is not exempt
+
+**Corrected 2026-08-01.** The protection was total, and total
 protection has the mirror-image failure: once the maneuver population passes `FRONTIER_CAP`
 the ordinary nodes' room goes to zero and *every one of them* is evicted, leaving a frontier
 that is 100% maneuver nodes and a walk with nothing else to expand. That is precisely the
@@ -355,6 +366,12 @@ among themselves beyond it; unused share falls to the ordinary nodes and unused 
 room falls back to the maneuvers, so below the share nothing changes — which is every run
 before this one. `[code: steered_frontier.prune_frontier;
 test_minibrot_maneuvers.py::test_a_flood_of_maneuver_nodes_cannot_evict_every_ordinary_node]`
+
+**What the rule actually guarantees**, since the subtree scope above makes the maneuver side
+the majority quickly: ordinary nodes always keep `min(len(others), CAP × share)` and
+maneuvers take the remainder. So neither side can starve the other — a 90%-maneuver frontier
+still keeps every ordinary node, and a 90%-ordinary frontier still keeps 3,000 maneuvers.
+The share is a mutual floor, not a ration.
 
 ## 4. A maneuver enters as a NODE, not as a scored candidate
 
