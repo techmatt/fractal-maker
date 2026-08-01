@@ -124,9 +124,24 @@ def test_interrupted_chunk_replay_is_a_noop(tmp_path):
     assert ts.load_pool() == pool
 
 
-def test_only_cut_is_a_feasibility_and_no_period_stratification(tmp_path):
-    _redirect(tmp_path)
+@pytest.fixture(scope="module")
+def full_pool_dir(tmp_path_factory):
+    """ONE full-size enumeration (~120 atoms, ~14s at 4.6 tasks/s), shared by the two
+    tests below that need a pool big enough to be statistically meaningful.
+
+    Enumeration is the dominant cost in this file and it is pure — the pool is a
+    deterministic function of the cursor schedule — so the two consumers can read the
+    same one. They re-`_redirect` at it on entry, which is what keeps them independent
+    of the function-scoped builds elsewhere in the file (`_redirect` repoints module
+    globals with no teardown, so LAST writer wins and every test must set its own)."""
+    d = tmp_path_factory.mktemp("triage_full_pool")
+    _redirect(d)
     btp.main(["--target", "120", "--chunk", "8"])
+    return d
+
+
+def test_only_cut_is_a_feasibility_and_no_period_stratification(full_pool_dir):
+    _redirect(full_pool_dir)
     pool = ts.load_pool()
     assert len(pool) >= 120
     # the ONLY cut: every atom clears the deploy f64 wall with >= 1 decade
@@ -223,10 +238,9 @@ def test_browser_payloads_carry_no_metadata(tmp_path):
         assert k not in blob, f"/api payload text mentions {k}"
 
 
-def test_page_size_bounds_what_loads(tmp_path):
+def test_page_size_bounds_what_loads(full_pool_dir):
     """A 1000-tile pass must not load at once."""
-    _redirect(tmp_path)
-    btp.main(["--target", "80", "--chunk", "8"])
+    _redirect(full_pool_dir)
     btp.build_references()
     import triage_app as ta
     ta.load_all()

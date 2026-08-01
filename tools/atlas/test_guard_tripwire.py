@@ -12,11 +12,17 @@ Per-outcome verdict match (not just "20 drop") localizes a flip and cannot be fo
 by two offsetting flips. The `0.25` / `6.0` thresholds are FIXED — this is a
 tripwire, not tuning.
 
-Marked slow (renders 81 tiles, ~tens of seconds); the fast `test_guard.py` gate stays
-pure/GPU-free. Run it explicitly:
+Only the RENDER pass is marked slow (81 tiles, ~46s) — deliberately not the module, so
+the cheap fixture-integrity check below stays in the default lane. A corrupt fixture is
+exactly what would make the render pass vacuous, and it costs nothing to keep checking.
+The fast `test_guard.py` gate stays pure/GPU-free. Run the render pass explicitly:
 
-  uv run pytest tools/atlas/test_guard_tripwire.py
-  uv run pytest tools/atlas -m "not slow"      # fast gate only, skips this
+  uv run pytest -m slow                             # the whole opt-in lane
+  uv run pytest tools/atlas/test_guard_tripwire.py -m slow
+
+The trailing `-m slow` is not optional: `addopts` in pyproject filters `-m "not slow"`
+by default, and naming the file on the command line does NOT override a marker filter —
+without it the path resolves and then deselects to zero tests, which reads as a pass.
 """
 from __future__ import annotations
 
@@ -35,9 +41,9 @@ import guard  # noqa: E402
 
 FIXTURE = ROOT / "data" / "atlas" / "guard_tripwire.json"
 FIELD_DIR = ROOT / "scratch" / "atlas" / "guard_tripwire" / "fields"   # ephemeral render scratch
-WORKERS = 4   # project hard cap: never exceed 4 concurrent workers.
-
-pytestmark = pytest.mark.slow
+WORKERS = 4   # project hard cap: never exceed 4 concurrent workers. Measured optimal:
+              # 4x(default threads) = 46.5s, vs 50.0s at 4x3, 64.6s at 4x2, 51.6s at
+              # 2x6, 53.3s at 1x12. Do not "tune" the thread count — it is already there.
 
 
 def _load_fixture():
@@ -72,6 +78,7 @@ def test_fixture_is_the_canonical_81_20_set():
     assert all(o["family"] == "mandelbrot" for o in outs)
 
 
+@pytest.mark.slow
 def test_live_f64_path_reproduces_every_verdict():
     """Render all 81 fields through the real `render-one --dump-field-source f64` path
     at GUARD_STAT_RES, measure via the real `guard.py`, and assert each per-outcome

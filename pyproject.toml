@@ -44,6 +44,13 @@ dev = [
 testpaths = ["tests", "tools", "classifier", "palette_lib", "palette_extractor"]
 markers = [
     # Opt-in slow tests (e.g. the guard 81-set re-render tripwire, which renders 81
-    # tiles through the live f64 field path). Exclude with: pytest -m "not slow".
-    "slow: renders/heavy; opt-in, excluded by -m 'not slow'",
+    # tiles through the live f64 field path). Run them with: pytest -m slow.
+    "slow: renders/heavy; opt-in, excluded from the default lane by addopts",
 ]
+# `slow` was described as opt-in in this file and in every marked module's docstring,
+# but nothing implemented it, so a bare `pytest` ran the whole opt-in lane anyway —
+# 49s of the 172s suite, 46s of it the guard tripwire's 81 renders. This is the
+# exclusion those docstrings already assumed. Note it is a FILTER, not a path rule:
+# naming a slow test's file on the command line still deselects it, so the opt-in
+# lane needs an explicit `-m slow` (see CLAUDE.md "Commands").
+addopts = ["-m", "not slow"]

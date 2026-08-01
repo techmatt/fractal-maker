@@ -12,6 +12,9 @@ A Rust engine for generating orbit-trap Mandelbrot/Julia fractal images as wallp
 cargo build --release            # always release — debug is ~50-200x slower
 cargo test                       # tests/*.rs + unit tests; --test <file> or a name substring narrows
 
+uv run pytest                    # Python suite, default lane (~2 min); slow tests excluded
+uv run pytest -m slow            # the opt-in lane (~50s) — see below for when it's mandatory
+
 # Single render (no subcommand → one PNG):
 cargo run --release -- --center-re -0.743643887 --center-im 0.131825904 \
   --frame-width 1e-6 --maxiter 2000 --width 1920 --output out.png
@@ -21,6 +24,15 @@ cargo run --release -- sheet --builtins "default cubehelix viridis" --output she
 ```
 
 Background long renders / descents; release builds do deep production-res renders in seconds.
+
+**The `slow` pytest lane is manual — nothing else runs it.** There is no CI here and every
+git hook is a git-lfs shim, so `-m slow` runs when you type it or never. It is **mandatory
+before committing** a change to the guard field path (`tools/atlas/guard.py`'s
+`render_field`, `--dump-field-source f64`, or the f64 smooth kernel): the 81-tile tripwire
+is the only thing that regresses live-path verdict parity, and the fast `test_guard.py`
+gate only exercises `guard.py`'s arithmetic on a frozen field. `-m slow` is a **filter, not
+a path rule** — naming a slow test's file on the command line still deselects it, and a
+deselect-to-zero run reads as a pass, so the `-m slow` must be there explicitly.
 
 **Windows exe-lock note.** A running binary file-locks
 `target/release/fractal-generator.exe`, so a concurrent `cargo build --release` fails with

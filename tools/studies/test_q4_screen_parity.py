@@ -39,6 +39,7 @@ import os
 import sys
 
 import numpy as np
+import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
@@ -147,14 +148,35 @@ def _accepts(kept, cutoff):
     return sorted(_box(c) for c in kept if c["G"] >= cutoff)
 
 
-def test_sweep_fates_G_grid_bit_identical_to_dense_grid():
+# --------------------------------------------------------------------------- #
+# Shared inputs. Both tests need the same field, the same fitted model, and the same
+# `LF.dense_grid` sweep at every scale — and a dense sweep is ~2.2s per scale (one
+# `featurize` per sliding window), which was the whole cost of this file. The field is
+# deterministic (seeded) and the model fit is a pure function of it, so a module-scoped
+# build is the same object each test would have built for itself. Nothing here is
+# mutated by either test: `dense_grid` returns fresh arrays and both tests only read.
+# --------------------------------------------------------------------------- #
+@pytest.fixture(scope="module")
+def synthetic():
+    field, fw, fh = _synthetic_field()
+    return field, fw, fh, _fit_synthetic_model(field, fw, fh)
+
+
+@pytest.fixture(scope="module")
+def deployed_grids(synthetic):
+    """{scale: LF.dense_grid(...)} — the UNEXTENDED deployed screen's output, which is
+    the reference side of both parity assertions."""
+    field, fw, fh, model = synthetic
+    return {s: LF.dense_grid(field, fw, fh, s, model) for s in LF.FIELD_SCALES}
+
+
+def test_sweep_fates_G_grid_bit_identical_to_dense_grid(synthetic, deployed_grids):
     """Root invariant: the extended sweep's scored field == the deployed screen's, exactly,
     at every deployed scale (shape, NaN/survivor mask, and finite G values)."""
-    field, fw, fh = _synthetic_field()
-    model = _fit_synthetic_model(field, fw, fh)
+    field, fw, fh, model = synthetic
     checked_finite = 0
     for s in LF.FIELD_SCALES:
-        dg = LF.dense_grid(field, fw, fh, s, model)
+        dg = deployed_grids[s]
         fr = MT._sweep_fates(field, fw, fh, s, model)
         assert (dg is None) == (fr is None), f"scale {s}: one path returned None, the other did not"
         if dg is None:
@@ -170,15 +192,14 @@ def test_sweep_fates_G_grid_bit_identical_to_dense_grid():
     assert checked_finite > 0, "no survivors scored at any scale — test field is vacuous"
 
 
-def test_accept_verdicts_bit_identical_across_the_extension():
+def test_accept_verdicts_bit_identical_across_the_extension(synthetic, deployed_grids):
     """The deployed accept box set (dense_grid + harvest NMS) equals the extended accept box
     set (screen_field), box-for-box and G-for-G, at a non-empty cutoff and a permissive one.
     The field is swept once per path: `grids` for the deployed side, one `screen_field` call
     for the extended side."""
-    field, fw, fh = _synthetic_field()
-    model = _fit_synthetic_model(field, fw, fh)
+    field, fw, fh, model = synthetic
 
-    grids = {s: LF.dense_grid(field, fw, fh, s, model) for s in LF.FIELD_SCALES}
+    grids = deployed_grids
     dep_kept = _deployed_kept(grids, fw, fh)
     ext_kept = MT.screen_field(field, fw, fh, model, 0.0, assert_once=False)["kept"]
 
@@ -201,6 +222,9 @@ def test_accept_verdicts_bit_identical_across_the_extension():
 
 
 if __name__ == "__main__":
-    test_sweep_fates_G_grid_bit_identical_to_dense_grid()
-    test_accept_verdicts_bit_identical_across_the_extension()
+    _field, _fw, _fh = _synthetic_field()
+    _syn = (_field, _fw, _fh, _fit_synthetic_model(_field, _fw, _fh))
+    _grids = {s: LF.dense_grid(_field, _fw, _fh, s, _syn[3]) for s in LF.FIELD_SCALES}
+    test_sweep_fates_G_grid_bit_identical_to_dense_grid(_syn, _grids)
+    test_accept_verdicts_bit_identical_across_the_extension(_syn, _grids)
     print("PASS  stage-1 screen extension is additive-only (G grid + accept verdicts identical)")

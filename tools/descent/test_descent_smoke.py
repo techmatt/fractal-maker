@@ -15,6 +15,7 @@ Run:  uv run python -m pytest tools/descent/test_descent_smoke.py -q
 """
 import os
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,16 @@ def _redirect_store(tmp: Path):
 
 def _first_d2():
     return next(a["id"] for a in store.load_selection() if a["degree"] == 2)
+
+
+def _deepest_d2():
+    """The d2 atom already closest to the f64 wall. The wall-guard test walks boxes down
+    until the guard refuses, and every rung on the way is a real nav render whose maxiter
+    grows with depth — starting from the shallowest atom (what `_first_d2` returns) spends
+    three renders getting to the wall instead of one. Same route, same refusal, chosen by
+    the property under test rather than by file order."""
+    return min((a for a in store.load_selection() if a["degree"] == 2),
+               key=lambda a: Decimal(a["fw"]))["id"]
 
 
 def test_two_step_descent_emit_and_roundtrip(tmp_path, monkeypatch):
@@ -118,7 +129,7 @@ def test_box_guard_refuses_below_f64_wall(tmp_path):
     _redirect_store(tmp_path)
     dh.SESSIONS.clear()
     client = dh.app.test_client()
-    atom_id = _first_d2()
+    atom_id = _deepest_d2()
     client.post("/open", json={"atom_id": atom_id})
     # a 1-pixel-radius box at a shallow atom is still well above the wall; instead
     # drive the current view very deep by many boxes until the guard fires, bounded.
