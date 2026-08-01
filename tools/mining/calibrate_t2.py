@@ -21,7 +21,9 @@ Writes data/mining/t2_calibration.json: {score_kind, t2, ...metrics}.
 
 MANUAL-ONLY: the descend.py/run.py mining orchestrator was removed. Run by hand to
 recalibrate the T2 gate that harvest.py applies. Scores with v3 (DEFAULT_V3) by
-design — T2 is defined against the same scorer harvest.py gates with.
+design — T2 is defined against the same scorer harvest.py gates with. **v3 is no
+longer on disk**, so this stops at `require_ckpt` naming the missing checkpoint
+rather than recalibrating a v3 threshold on some other head's scores.
 """
 from __future__ import annotations
 
@@ -35,7 +37,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "mining"))
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
-from score_lib import Scorer, DEFAULT_V3  # noqa: E402
+from score_lib import Scorer, DEFAULT_V3, require_ckpt  # noqa: E402
 import corpus_common as cc  # noqa: E402
 
 V3_TRAIN_BATCHES = [
@@ -109,7 +111,7 @@ def main():
     rows = gather()
     print(f"gathered {len(rows)} labeled crops "
           f"({sum(not h for _, _, h in rows)} train-batch + {sum(h for _, _, h in rows)} holdout)")
-    scorer = Scorer(DEFAULT_V3)
+    scorer = Scorer(require_ckpt(DEFAULT_V3))
     paths = [r[0] for r in rows]
     labels = np.array([r[1] for r in rows])
     holdout = np.array([r[2] for r in rows])

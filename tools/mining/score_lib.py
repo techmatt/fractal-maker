@@ -49,8 +49,38 @@ HDR = struct.Struct("<IIII")  # idx, ki, w, h  (little-endian u32 x4)
 # `Scorer(model_path=...)` is required so no path can *silently* score with v3.
 # The v5-intended callers (reframe/atlas/step0) always pass v5 explicitly via
 # `make_scorer`; the two mining tools (harvest.py, calibrate_t2.py) pass this.
+#
+# **v3 IS GONE FROM DISK** (data/classifier/ holds v5..v9). The pin stays because it is the
+# provenance record of the v3-guided biased mining batch — that batch's rows carry
+# `v3_model_id` and mean nothing rescored under another head — but a pin whose file is
+# absent is unrunnable, not frozen. Callers go through `require_ckpt` so the failure names
+# the checkpoint instead of surfacing as a FileNotFoundError inside torch.load. Repointing
+# it at the live pin was considered and rejected: "the batch scored with v3" is the claim
+# the constant exists to make, and v8 scores would quietly falsify it.
 DEFAULT_V3 = "data/classifier/v3/model_best.pt"
 BIN = "target/release/fractal-generator.exe"
+
+
+def require_ckpt(model_path: str) -> str:
+    """Fail loudly, naming the missing checkpoint. Never fall back to another version.
+
+    A silent fallback here is worse than a crash: the mining harness records the model it
+    scored with, so a substituted head produces a batch that lies about its own provenance.
+    """
+    p = Path(model_path)
+    if not p.is_absolute():
+        p = ROOT / model_path
+    if p.exists():
+        return str(p)
+    have = sorted(d.name for d in (ROOT / "data" / "classifier").glob("v*") if d.is_dir())
+    raise SystemExit(
+        f"checkpoint not found: {model_path}\n"
+        f"  (resolved to {p})\n"
+        f"  data/classifier/ holds: {', '.join(have) if have else '(nothing)'}\n"
+        f"  DEFAULT_V3 is the provenance record of the v3-guided biased mining batch, not a\n"
+        f"  live pin, and is NOT auto-repointed — rescoring under another head would make the\n"
+        f"  batch's recorded v3_model_id false. Pass an explicit checkpoint, or resolve\n"
+        f"  tools/scoring/production_pins.ACTIVE_CKPT if you want the live gate.")
 
 
 def pick_device(device: str | None = None) -> str:

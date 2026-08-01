@@ -22,11 +22,21 @@ scored.jsonl) — deliberately not unified. The 16-byte stream header both parse
 (`HDR = struct.Struct("<IIII")`) is owned by the Rust side (`src/enrich.rs`), not
 by either script.
 
+**`MODEL_ID` (v2) no longer exists on disk** — `data/classifier/` holds v5…v9. It is kept
+as the record of what this script was written against, and `--model` still defaults to it,
+but the default is now CHECKED: running without `--model` raises and names the missing
+checkpoint rather than dying inside `torch.load`. It is deliberately NOT repointed at the
+live pin. `load_v2` builds the head with no `num_classes` and reads exactly two logits, so
+it is K=3-shaped; the live v8 head is K=4 and would fail on the state-dict shape. Silently
+handing this script a modern checkpoint would be a different program wearing this one's
+docstring. Pass `--model` explicitly, or resolve `production_pins.ACTIVE_CKPT` and use the
+version-agnostic `tools/mining/score_lib.py::Scorer`, which reads K off the checkpoint.
+
 Run:
   uv run python tools/corpus/enrich_score.py \
       --pool data/guided_descend/run5/pool.jsonl \
       --bin  target/release/fractal-generator.exe \
-      --model data/classifier/v2/model_best.pt \
+      --model data/classifier/v8/model_best.pt \
       --out  data/enrich/run5/scored.jsonl
 """
 from __future__ import annotations
@@ -51,7 +61,27 @@ from classifier.data import Transform  # noqa: E402
 from classifier.model import build_model  # noqa: E402
 
 HDR = struct.Struct("<IIII")  # idx, ki, w, h  (little-endian u32 x4)
+# The checkpoint this script was written against. GONE from disk (see the module docstring):
+# a record of provenance, not a runnable default. `require_ckpt` is what stands between it
+# and a confusing failure inside torch.load.
 MODEL_ID = "data/classifier/v2/model_best.pt"
+
+
+def require_ckpt(model_path: str) -> str:
+    """Fail loudly, naming the missing checkpoint. Never fall back to another version."""
+    p = Path(model_path)
+    if not p.is_absolute():
+        p = ROOT / model_path
+    if p.exists():
+        return str(p)
+    have = sorted(d.name for d in (ROOT / "data" / "classifier").glob("v*") if d.is_dir())
+    raise SystemExit(
+        f"checkpoint not found: {model_path}\n"
+        f"  (resolved to {p})\n"
+        f"  data/classifier/ holds: {', '.join(have) if have else '(nothing)'}\n"
+        f"  This script's default (MODEL_ID={MODEL_ID}) is a v2-era record, not a live pin,\n"
+        f"  and is NOT auto-repointed: load_v2 is K=3-shaped (two logits, no num_classes) and\n"
+        f"  would fail on a v8+ K=4 head anyway. Pass --model explicitly.")
 
 
 def load_v2(model_path: str, device: str):
@@ -123,7 +153,7 @@ def main() -> None:
     a = ap.parse_args()
 
     device = a.device or ("cuda" if torch.cuda.is_available() else "cpu")
-    model, transform, cfg = load_v2(str(ROOT / a.model) if not os.path.isabs(a.model) else a.model, device)
+    model, transform, cfg = load_v2(require_ckpt(a.model), device)
     print(f"v2 loaded ({cfg['backbone']}, {cfg['target']} head) on {device}", flush=True)
 
     os.makedirs(os.path.dirname(str(ROOT / a.meta_out)), exist_ok=True)

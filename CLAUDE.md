@@ -146,8 +146,11 @@ the selected `(location, argmax-palette)` rows are rendered to JPG (`enrich --mo
 ss4 Lanczos3 wallpaper quality). Two readers of that stream: the live one is the library
 `tools/mining/score_lib.py::run_enrich_score` (driven by `tools/mining/harvest.py`);
 `tools/corpus/enrich_score.py` is the standalone CLI sibling. Both default to a checkpoint
-that **no longer exists on disk** (v2 / v3 — `data/classifier/` holds v5…v9), so pass
-`--model` explicitly or resolve through `ACTIVE_CKPT`.
+that **no longer exists on disk** (v2 / v3 — `data/classifier/` holds v5…v9). Those pins are
+kept on purpose — they record what those batches were scored with — and are **not**
+repointed; each now goes through a `require_ckpt` that raises naming the missing file, so
+pass `--model` explicitly or resolve through `ACTIVE_CKPT`
+(`tools/mining/test_require_ckpt.py`).
 
 ## Conventions
 
