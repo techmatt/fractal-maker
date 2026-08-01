@@ -267,17 +267,56 @@ def main() -> int:
             rho_bd = spearman([c["batch"] for c, _ in joined], [d["mean"] for _, d in joined])
             L += [f"Spearman(batch, seconds) = **{rho}** · Spearman(mean depth, seconds) = "
                   f"**{rho_d}** · Spearman(batch, mean depth) = **{rho_bd}**.", ""]
-            warn = []
-            if rho is not None and rho <= 0.1:
-                warn.append("per-batch cost is FLAT or FALLING over the run")
-            if rho_bd is not None and rho_bd <= 0.1:
-                warn.append("depth is not increasing over the run")
-            L += [("**WARNING: " + "; ".join(warn) +
-                   ". Per-batch cost must rise as lineages deepen — flat cost late in a run "
-                   "means the walk stopped going deeper, or something is capping work per "
-                   "batch. This is a warning, not reassurance.**") if warn else
-                  "Cost rises with batch and with depth, which is the expected shape: "
-                  "deeper lineages cost more per rung.", ""]
+            # THE TWO FLAT CASES ARE DIFFERENT DIAGNOSES and must not share a verdict.
+            # "cost flat while depth RISES" is the alarming one — the work per rung stopped
+            # tracking the depth it is being done at. "cost flat because DEPTH is flat" is a
+            # statement about the walk: it reached a stationary depth mixture and stayed
+            # there, which on this driver is what `M_CAP` + root replenishment produces by
+            # construction (a capped root's nodes are evicted and replaced by fresh depth-1
+            # roots, so the depth distribution converges instead of marching).
+            # THE VERDICT IS ON EFFECT SIZE, NOT ON RANK CORRELATION. Spearman answers "is
+            # there a monotone trend", and over hundreds of batches it reports one for a
+            # drift far too small to matter: the exploration run ramped 3.2 -> 5.7 rungs in
+            # its first 100 batches and then sat between 5.8 and 6.0 for the remaining 740,
+            # which is a PLATEAU, and rho = 0.154 called it "rising". The question is
+            # whether the walk goes meaningfully deeper, and the unit that matters is a
+            # RUNG — a whole extra level of zoom. So the threshold is in rungs, and rho is
+            # reported beside it rather than deciding.
+            d_first = st.mean([d["mean"] for _, d in joined[:max(1, len(joined) // qn)]])
+            d_last = st.mean([d["mean"] for _, d in joined[-max(1, len(joined) // qn):]])
+            d_gain = d_last - d_first
+            c_first = st.median([c["seconds"] for c, _ in joined[:max(1, len(joined) // qn)]])
+            c_last = st.median([c["seconds"] for c, _ in joined[-max(1, len(joined) // qn):]])
+            L += [f"First block → last block: mean depth **{d_first:.2f} → {d_last:.2f} "
+                  f"({d_gain:+.2f} rungs)**, median cost **{c_first:.0f}s → {c_last:.0f}s**. "
+                  f"The verdict below is on that effect size; the rank correlations are "
+                  f"reported beside it and do not decide it.", ""]
+            flat_cost = c_last <= c_first * 1.15
+            flat_depth = d_gain < 1.0                      # less than one rung of zoom
+            if flat_cost and flat_depth:
+                L += ["**The walk reached a STATIONARY depth mixture — cost is flat because "
+                      "depth is flat, not because work per rung was capped.** Both trends "
+                      "are flat together, which is the signature of `M_CAP` recycling: a "
+                      "root that hits the cap has its nodes evicted and is replaced by fresh "
+                      "depth-1 roots, so the depth distribution converges rather than "
+                      "marching. Check the block table: if mean depth ramps early and then "
+                      "sits, the ramp is the transient and the plateau is the run's real "
+                      "operating depth.", "",
+                      "**This is still a finding, not reassurance.** A run that plateaus at "
+                      "a shallow mean depth is not producing deep material however long it "
+                      "runs, and no amount of extra wall clock changes that — the lever is "
+                      "`M_CAP` / root supply, not budget.", ""]
+            elif flat_cost:
+                L += ["**WARNING: per-batch cost is FLAT while DEPTH IS RISING.** This is the "
+                      "alarming shape: the work per batch stopped tracking the depth it is "
+                      "being done at, which means something is capping work per batch rather "
+                      "than the walk having settled. Not reassurance.", ""]
+            elif flat_depth:
+                L += ["**WARNING: depth is not increasing over the run** even though cost is. "
+                      "Cost is rising for some reason other than deeper lineages.", ""]
+            else:
+                L += ["Cost rises with batch and with depth, which is the expected shape: "
+                      "deeper lineages cost more per rung.", ""]
             # Two things that make an EARLY flat reading weak evidence either way, stated
             # beside the number rather than left for the reader to remember.
             L += ["Read the trend with two structural facts in hand. **(a)** A batch expands "
