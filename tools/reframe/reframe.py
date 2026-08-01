@@ -76,7 +76,7 @@ sys.path.insert(0, str(ROOT / "tools" / "mining"))
 
 # Classifier native paths reused verbatim (same imports speed.py uses).
 from active_ckpt import (  # noqa: E402
-    BIN, PALETTE, JPG_Q, auto_maxiter, make_scorer, _unique_score3_locations, ACTIVE_CKPT,
+    BIN, PALETTE, JPG_Q, auto_maxiter, make_scorer, ACTIVE_CKPT,
 )
 import location as loc_mod  # noqa: E402  (the one render-one flag builder + family_params)
 
@@ -423,11 +423,50 @@ def run_gate(args):
 # --------------------------------------------------------------------------- #
 # Validation 2 -- broad before/after batch (visual, paired)
 # --------------------------------------------------------------------------- #
+def unique_score3_locations() -> list[dict]:
+    """Dedup score==3 crops into unique locations (family + geometry + family_params).
+
+    Family-general: the dedup key and the returned row carry the per-family extra
+    constants (Phoenix's `p_re/p_im`) via `location.location_key` / the params slot,
+    so two Phoenix locations differing only in `p` are distinct and `p` survives into
+    the reframe Location.
+
+    LIVES HERE because this module is its consumer. It was `active_ckpt._unique_score3_locations`
+    — a PRIVATE name inside a retired one-off probe — which meant the live reframing step
+    reached into a diagnostic's internals for a function the diagnostic does not own, and
+    the underscore said "nobody outside may call this" while twelve importers' worth of
+    live code did. `active_ckpt.select_anchors` (the probe's own remaining live helper)
+    now imports it from here instead: the retired module depends on the live one, not the
+    other way round."""
+    import corpus_reader as cr
+    import location as loc_mod_
+    seen: dict = {}
+    for lc in cr.iter_labeled():
+        if lc.score != 3:
+            continue
+        r = lc.render
+        if r.get("cx") is None or r.get("cy") is None or r.get("fw") is None:
+            continue
+        canon = loc_mod_.from_render_block(r)
+        key = canon.key()
+        if key in seen:
+            continue
+        seen[key] = {
+            "family": canon.family, "cx": str(canon.cx), "cy": str(canon.cy),
+            "fw": str(canon.fw),
+            "c_re": None if canon.c_re is None else str(canon.c_re),
+            "c_im": None if canon.c_im is None else str(canon.c_im),
+            "family_params": canon.params,
+            "example_image_id": lc.image_id, "batch_id": lc.batch_id,
+        }
+    return list(seen.values())
+
+
 def sample_quality3(n_total: int, seed: int) -> list[Location]:
     """~n_total unique quality-3 locations, mandelbrot+julia mix spanning zoom depth.
     Deterministic: even-spaced over each family's fw-sorted list (spans zoom), split
     ~proportional to the pool. `seed` only rotates the even-spacing phase."""
-    locs = _unique_score3_locations()
+    locs = unique_score3_locations()
     fams = {"mandelbrot": [], "julia": []}
     for l in locs:
         fams.setdefault(l["family"], []).append(l)

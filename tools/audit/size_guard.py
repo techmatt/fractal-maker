@@ -11,7 +11,8 @@ Two independent things live here:
   1. A WORKING-TREE size SCAN (`scan`). Walks the filesystem — not `git ls-files`,
      because a gitignored file can bloat the tree while invisible to git, which is
      the whole point. Flags:
-       (a) any FILE >= FILE_THRESHOLD (1 MiB — matches the pre-commit blob hook), and
+       (a) any FILE >= FILE_THRESHOLD (1 MiB — the same "large" as the index-side
+           policy guard, tests/test_large_tracked_blobs.py), and
        (b) any DIRECTORY whose aggregate of SMALL files (< FILE_THRESHOLD) in its
            subtree >= DIR_THRESHOLD (~100 MB), reported at MINIMAL granularity (the
            leaf-most such dir). Rule (b) is deliberately keyed on small files only:
@@ -83,7 +84,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Thresholds (constants — tune if the report is noisy or sparse).
 # ---------------------------------------------------------------------------
-FILE_THRESHOLD = 1 * 1024 * 1024        # 1 MiB — matches .git/hooks/pre-commit LIMIT
+FILE_THRESHOLD = 1 * 1024 * 1024        # 1 MiB — same LARGE as test_large_tracked_blobs.py
 DIR_THRESHOLD = 100 * 1024 * 1024       # ~100 MB — many-small-file catch
 
 # --- BULK rule (c) thresholds: storage_classes.md rule 5, "no bulk in-tree" ---

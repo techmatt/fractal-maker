@@ -146,3 +146,44 @@ def test_repo_root_holds_no_loose_prose(tracked_docs):
 def test_the_tracked_docs_set_is_nonempty(tracked_docs):
     """Guard the guard: an empty docs/ would make the tracked-ness assertion vacuous."""
     assert len(tracked_docs) > 10, f"only {len(tracked_docs)} tracked files under docs/"
+
+
+# --------------------------------------------------------------------------- #
+# The extract-then-DELETE half of the convention.
+# --------------------------------------------------------------------------- #
+DESIGN_README = REPO_ROOT / "docs" / "design" / "README.md"
+DATED_READOUT = "Dated readout"
+
+
+def test_no_row_in_the_design_index_is_a_dated_readout():
+    """`docs/design/` holds docs something in the code OWNS and that stay true as the code
+    changes. A measurement of a transient state owns nothing and is false the moment the
+    work it drove succeeds: it goes to `scratch/`, what survives is extracted into the doc
+    that already owns the subject, and the analysis is DELETED.
+
+    NINE such readouts accumulated before anyone counted, because the convention had a
+    reviewer for the extract half and nothing at all for the delete half — and each one
+    arrived correctly labeled `Dated readout` in the index, which is the tell: a row that
+    announces it does not belong is a decision deferred, not a decision made. They were
+    extracted and deleted on 2026-07-31; this assertion is what stops the tenth.
+
+    Deliberately keyed on the LABEL, not on prose heuristics. If a doc genuinely needs to
+    record a dated measurement, that is fine and expected — `[measured: population, date]`
+    inside a doc the code owns. What this refuses is a whole index ROW whose subject is a
+    run that is over."""
+    rows = [ln for ln in DESIGN_README.read_text(encoding="utf-8").splitlines()
+            if ln.lstrip().startswith("|") and DATED_READOUT in ln]
+    assert not rows, (
+        f"{len(rows)} row(s) in docs/design/README.md are marked '{DATED_READOUT}':\n  "
+        + "\n  ".join(r.strip()[:160] for r in rows)
+        + f"\n\nA dated readout does not belong in docs/design/. Extract what survives into "
+          f"the doc that already owns the subject, move the analysis to scratch/, and delete "
+          f"the file and this row. Do NOT just drop the label."
+    )
+
+
+def test_the_design_index_is_readable_and_nonempty():
+    """Guard the guard: a moved/renamed index would make the assertion above vacuous."""
+    table = [ln for ln in DESIGN_README.read_text(encoding="utf-8").splitlines()
+             if ln.lstrip().startswith("| [")]
+    assert len(table) > 10, f"only {len(table)} doc rows found in {DESIGN_README}"

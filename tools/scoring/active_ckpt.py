@@ -13,10 +13,12 @@ written as (`prompts/reframe_probe_prompt.md`): does the location-quality classi
 framing crispness? It holds a score-3 anchor fixed and sweeps ONLY the frame (center cx/cy +
 frame width fw), rendering each framing through the classifier's native render path and
 scoring it with the location-quality CORN head. Output: per-anchor thumbnail sheets +
-records.json under `scratch/reframe_probe/`. Two of its helpers are still imported by
-successors — `select_anchors` (tools/reframe_probe/speed.py) and `_unique_score3_locations`
-(tools/reframe/reframe.py) — so the probe half is live as a library even though its CLI is not
-run.
+records.json under `scratch/reframe_probe/`. ONE of its helpers is still imported by a
+successor — `select_anchors` (tools/reframe_probe/speed.py) — so the probe half is live as
+a library even though its CLI is not run. The second, `_unique_score3_locations`, moved to
+`tools/reframe/reframe.py` (its live consumer) on 2026-07-31: a private name in a retired
+probe is not a place for live code to reach into, and the dependency now runs
+retired -> live rather than the reverse.
 
 Interfaces the probe reuses verbatim (NOT the preference scorer / query_batch_gen path):
   * render : `render-one` (Rust), the canonical "rebuild a location the way the
@@ -72,41 +74,17 @@ RECENTER = [-0.25, 0.0, 0.25]                 # dx,dy in fractions of the fw ste
 # --------------------------------------------------------------------------- #
 # Step 2 — anchor selection (deterministic).
 # --------------------------------------------------------------------------- #
-def _unique_score3_locations():
-    """Dedup score==3 crops into unique locations (family + geometry + family_params).
-
-    Family-general: the dedup key and the returned row carry the per-family extra
-    constants (Phoenix's `p_re/p_im`) via `location.location_key` / the params slot,
-    so two Phoenix locations differing only in `p` are distinct and `p` survives into
-    the reframe Location."""
-    import corpus_reader as cr
-    import location as loc_mod
-    seen: dict = {}
-    for lc in cr.iter_labeled():
-        if lc.score != 3:
-            continue
-        r = lc.render
-        if r.get("cx") is None or r.get("cy") is None or r.get("fw") is None:
-            continue
-        canon = loc_mod.from_render_block(r)
-        key = canon.key()
-        if key in seen:
-            continue
-        seen[key] = {
-            "family": canon.family, "cx": str(canon.cx), "cy": str(canon.cy),
-            "fw": str(canon.fw),
-            "c_re": None if canon.c_re is None else str(canon.c_re),
-            "c_im": None if canon.c_im is None else str(canon.c_im),
-            "family_params": canon.params,
-            "example_image_id": lc.image_id, "batch_id": lc.batch_id,
-        }
-    return list(seen.values())
-
-
 def select_anchors() -> list[dict]:
     """6 quality-3 anchors: 4 mandelbrot spanning zoom (1 deep, 2 mid, 1 shallow)
-    + 2 julia spanning zoom. Deterministic via stable sort on (fw, cx, cy)."""
-    locs = _unique_score3_locations()
+    + 2 julia spanning zoom. Deterministic via stable sort on (fw, cx, cy).
+
+    The score-3 location query it stands on moved to `tools/reframe/reframe.py`, its
+    live consumer — it was a PRIVATE name here that live code imported across a
+    module boundary. Imported inside the function, not at module scope: `reframe`
+    imports THIS module for the pins, so a top-level import would close the cycle."""
+    sys.path.insert(0, str(ROOT / "tools" / "reframe"))
+    from reframe import unique_score3_locations
+    locs = unique_score3_locations()
 
     def stable(rows):
         return sorted(rows, key=lambda r: (float(r["fw"]), r["cx"], r["cy"]))

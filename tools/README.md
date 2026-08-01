@@ -1,11 +1,16 @@
 # tools/ — index
 
-405 tracked files, 373 of them `.py`, across 36 subdirectories. This file is the entry
+413 tracked files, 381 of them `.py`, across 35 subdirectories. This file is the entry
 point for **"what produces X?"**. It is an index, not a contract: nothing here is
 enforced by a test, so treat a verdict as evidence to check, not as permission to delete.
 
-Measured **2026-07-31** @ `fad68df`. Regenerate the counts with the commands stamped in
-[§Method](#method).
+**File counts re-derived 2026-07-31 at this commit**; the `A`/`B`/`∪` liveness numbers are
+from the 2026-07-31 @ `fad68df` pass and are **not** re-derived here, because the analysis
+scripts that produced them do not exist (§[Method](#method)). The two are stamped
+separately on purpose: the counts were **stale on arrival** — measured at `fad68df` but
+committed in `b6ce6ee`, which itself added six test files, so six rows and the header were
+wrong the moment they landed. Regenerate the counts with the commands stamped in
+[§Method](#method); re-deriving the liveness numbers is a bigger job and says so.
 
 ## How liveness was established (and why not by date)
 
@@ -46,6 +51,14 @@ reports their union:
 | union live | 207 | |
 | dead by **both** | 101 | the candidate-retirement pool ([below](#candidate-retirements)) |
 
+**This block is one below the per-row sums**, and which side is right cannot be recovered:
+summing the index's own `n / A / ∪` columns gives **309 / 142 / 208** against the 308 / 141 /
+207 above, while `B` (118) and dead-by-both (101) agree exactly. That shape — off by one in
+`n`, `A` and `∪` together, consistent everywhere else — reads as one A-live non-test module
+counted in a row and missed by the summary, but the analysis scripts are gone (§Method), so
+the discrepancy is **recorded rather than papered over by editing one number until it adds
+up**. The two maneuver tools added 2026-07-31 make the row sums 311 / 142 / 208.
+
 ### What neither method sees
 
 Four blind spots they share. All four show up inside the "dead by both" pool, which is
@@ -75,31 +88,30 @@ why that pool is a **candidate** list and nothing more:
 
 | dir | files | drives | verdict | n / A / B / ∪ |
 |---|---:|---|---|---|
-| *(top level)* | 10 | Shared helpers every subdir imports: `paths.py` (storage-class write gate, 42 importers), `colormap.py` (the Python coloring tail for the field⊗colormap split, 32), `_bootstrap.py` (`sys.path` for 4 of 36 subdirs), `kill_run.py`. | **live** | 6 / 5 / 3 / 5 |
-| `atlas/` | 46 | **The standing discovery flow.** `production_seeder.py` (26 importers) → `guided-descend` → reward; `steered_frontier.py` (classifier-steered descent), `guard.py` (degenerate-outcome gate), `deficit_scheduler.py`, `minibrot_maneuvers.py`, `prescreen.py`. Plus ~9 closed per-campaign readouts. | **live** | 35 / 12 / 20 / 26 |
+| *(top level)* | 11 | Shared helpers every subdir imports: `paths.py` (storage-class write gate, 42 importers), `colormap.py` (the Python coloring tail for the field⊗colormap split, 32), `_bootstrap.py` (`sys.path` for 4 of 36 subdirs), `kill_run.py`. | **live** | 6 / 5 / 3 / 5 |
+| `atlas/` | 48 | **The standing discovery flow.** `production_seeder.py` (26 importers) → `guided-descend` → reward; `steered_frontier.py` (classifier-steered descent), `guard.py` (degenerate-outcome gate), `deficit_scheduler.py`, `minibrot_maneuvers.py`, `prescreen.py`. Plus ~9 closed per-campaign readouts and the two maneuver measurement tools added 2026-07-31 — `bench_lateral_seeding.py` (replay bench) and `maneuver_degree_readout.py` (per-degree availability/cost). Both are hand-run and write only `scratch/`, so both are **dead by both methods by construction** (blind spot 1), which is what the pool is for. | **live** | 37 / 12 / 20 / 26 |
 | `atlas_probe/` | 5 | Step-0 atlas measurement probes (a closed study) — **but `step0_reanalysis.py` is the k3 reward primitive `production_seeder` imports** via an explicit `sys.path.insert`. Not retirable. | **live** | 5 / 3 / 2 / 4 |
 | `audit/` | 6 | `size_guard.py` (the repo-size registry — exec'd by `tests/test_repo_size_guard.py` through a piecewise path the A pass cannot see), `disk_audit.py` (safe-delete classifier), `durability_map.py` (declared-vs-actual storage class). | **live** | 3 / 1 / 3 / 3 |
 | `coevo/` | 2 | One guard-OFF v6-gap diagnostic round into `data/discovery/gather/`. Closed. | retired | 2 / 0 / 1 / 1 |
 | `corpus/` | 40 | **The label-corpus contract.** `corpus_common.py` (row shape, 59 stem-refs), `location.py` (canonical location identity, 57), `label_store.py`, `corpus_reader.py` (the trainer's version-blind view), `merge_scores.py`, `artifacts.py` (the `ARTIFACTS_ROOT` resolver), `enrich_score.py`/`enrich_select.py`, `q4_window_reader.py`, + ~15 closed batch builders. | **live** | 32 / 12 / 14 / 23 |
 | `curation/` | 4 | `colored_clip` palette-appearance descriptors + collision-aware palette placement (`colorize_assign`, soft-spread). | **live** | 4 / 3 / 2 / 4 |
-| `descent/` | 13 | The minibrot **descent harness** and **triage wall** — two Flask apps + their durable stores (`data/descent_harness/`). Matt-driven; the recorded path is the product. | **live** | 8 / 7 / 5 / 8 |
+| `descent/` | 14 | The minibrot **descent harness** and **triage wall** — two Flask apps + their durable stores (`data/descent_harness/`). Matt-driven; the recorded path is the product. | **live** | 8 / 7 / 5 / 8 |
 | `descent_ablation/` | 3 | One overnight ablation + percentile-strategy campaign. Has its own `README.md`. Closed. | retired | 2 / 1 / 1 / 2 |
 | `eda/` | 13 | One-off render/coloring eyeball studies (direct-trap sweeps, interior-trap validation, deband) + the whole closed scale-2×2 corpus arc. **0 of 12 live by either method.** | retired | 12 / 0 / 0 / **0** |
 | `emission/` | 23 | **Diversity-aware emission v1**: `cells.py` (joint-count cells + target measure), `descriptor.py` (intake → morph cluster), `palette_deficit.py`, `pool.py`, `selection.py`, `release_record.py`, driven by `build_emission_diversity_v1.py`. | **live** | 16 / 12 / 6 / 13 |
 | `explorer/` | 4 | The Flask Mandelbrot/Julia explorer + `render_core.py` (shared pixel→plane math, 13 importers, also used by the descent apps). `app.py` scores dead by both methods and is launched by `explorer.cmd`. | **live** | 2 / 1 / 0 / 1 |
-| `hooks/` | 1 | Tracked source of the >1 MiB staged-blob `pre-commit` guard. **NOT currently installed** — `.git/hooks/pre-commit` does not exist in this checkout. | live, uninstalled | — |
 | `julia_ladder/` | 1 | The J0 unlabeled Julia batch generator. One batch, produced and labeled; nothing imports it. | retired | 1 / 0 / 0 / **0** |
-| `mining/` | 11 | The strange/render-mode quality gate: `mining_gate.py` (the pinned `mining_v1`), `score_lib.py` (the v3 deploy-transform scorer, 28 importers), `dedup.py`, `tail_alloc.py`, `deploy_tail.py`. | **live** | 10 / 7 / 2 / 7 |
+| `mining/` | 12 | The strange/render-mode quality gate: `mining_gate.py` (the pinned `mining_v1`), `score_lib.py` (the v3 deploy-transform scorer, 28 importers), `dedup.py`, `tail_alloc.py`, `deploy_tail.py`. | **live** | 10 / 7 / 2 / 7 |
 | `orbital/` | 8 | The ring measures `radial_rings`/`radial_range` and the cap-policy stamping — owned by `docs/design/orbital_field_metrics.md`. | **live** | 6 / 6 / 5 / 6 |
 | `palettes/` | 11 | The durable palette pool / features / k-cut categories, authored-palette densification, and the preview-sheet harness. | **live** | 10 / 6 / 3 / 7 |
 | `phoenix/` | 12 | The phoenix seed sampler (`phoenix_sampler.py`, spec: `docs/design/phoenix_seed_sampler_spec.md`) + the closed Phase-B grid and its label analysis. Sampler live, grid closed. | **live** | 10 / 4 / 3 / 6 |
 | `queries/` | 20 | The **palette-preference** corpus and scorer (distinct from the location classifier): `query_sampler.py` (20 importers), `scorer/` (v1 → v3-gvo; `data/queries/scorer/v3_gvo` is the deployed pref head), `query_label.html`. | **live** | 18 / 11 / 2 / 12 |
 | `ranker/` | 8 | The location preference ranker, deployed head `pref_loc_v1` (`scorer.py`, `score_locations.py` — the consumer-side seam). | **live** | 6 / 3 / 3 / 6 |
 | `readout/` | 1 | One morning diversity readout over an overnight emit manifest. | retired | 1 / 0 / 0 / **0** |
-| `reframe/` | 1 | The promoted coarse-reframing step of discovery (`reframe_location`, 12 importers) — runs on every discovery survivor. | **live** | 1 / 1 / 1 / 1 |
+| `reframe/` | 2 | The promoted coarse-reframing step of discovery (`reframe_location`, 12 importers) — runs on every discovery survivor. | **live** | 1 / 1 / 1 / 1 |
 | `reframe_probe/` | 1 | One coarse-reframe speed diagnostic. Closed. | retired | 1 / 0 / 1 / 1 |
 | `render_mode_pilot/` | 8 | The 500 + 1000 render-mode label batches that produced the mining-head dataset (`labels/render_mode_pilot_v1.json`). **0 importers, 5 committed producers** — the clearest B-only block in the tree. Closed. | retired | 8 / 0 / 5 / 5 |
-| `scoring/` | 2 | `production_pins.py` — **`ACTIVE_CKPT`, the single source of truth for the live classifier pin**, plus `PALETTE`/`JPG_Q`/`BIN`/`auto_maxiter`. `active_ckpt.py` re-exports all of it (~41 importers use that name) and is otherwise the retired reframe probe, two of whose helpers are still imported. | **live** | 2 / 2 / 1 / 2 |
+| `scoring/` | 4 | `production_pins.py` — **`ACTIVE_CKPT`, the single source of truth for the live classifier pin**, plus `PALETTE`/`JPG_Q`/`BIN`/`auto_maxiter`. `active_ckpt.py` re-exports all of it (~41 importers use that name) and is otherwise the retired reframe probe, two of whose helpers are still imported. | **live** | 2 / 2 / 1 / 2 |
 | `sources/` | 7 | The minibrot **source sheets**: seven generation algorithms → `data/minibrot_sources/`, one HTML sheet per algorithm. | **live** | 6 / 5 / 1 / 5 |
 | `sourcing/` | 11 | The durable minibrot **roster** (`build_minibrot_roster.py`), `deep_center_finder.py` (19 importers), and the live label-batch builders (`build_minibrot_batch`, `build_interior_band_batch`, `build_gcf_arm_batch`). | **live** | 7 / 6 / 5 / 7 |
 | `specs/` | 1 | Generates `specs/REGISTRY.md` from `specs/modes_registry.json`; parity enforced by `cargo test --test modes_registry`. 0 importers — A alone would kill it. | **live** | 1 / 0 / 1 / 1 |
@@ -108,7 +120,7 @@ why that pool is a **candidate** list and nothing more:
 | `v5/` | 4 | v5 manifest + plan (freeze v4, fold J0 Julia). Only `build_plan.py` is live, and only because `test_recipe_parity_v5.py` execs it by path. | retired (1 pinned) | 3 / 1 / 0 / 1 |
 | `v6/` | 7 | v6 manifest + plan + the monitored-harvest drivers. Same shape: `build_plan.py` pinned by `test_recipe_parity_v6.py`, the rest dead by both. | retired (1 pinned) | 6 / 1 / 0 / 1 |
 | `v7/` | 6 | Mostly closed — **except `build_manifest.py`** (imported by the live `sourcing/build_gcf_arm_batch.py` for `assign_split`) and **`eval_delong.py`** (the acceptance battery v8 and v9 both import). | **live** (2 of 4) | 4 / 2 / 0 / 2 |
-| `v8/` | 10 | The shipped training generation: `data/v8/{manifest,plan,cache_manifest}.jsonl`, `derive_t_good_v8.py` (the **adopted** discovery table), `eval_v8.py`, the render supervisor. `ACTIVE_CKPT` = v8. | **live** | 8 / 3 / 7 / 7 |
+| `v8/` | 11 | The shipped training generation: `data/v8/{manifest,plan,cache_manifest}.jsonl`, `derive_t_good_v8.py` (the **adopted** discovery table), `eval_v8.py`, the render supervisor. `ACTIVE_CKPT` = v8. | **live** | 8 / 3 / 7 / 7 |
 | `v9/` | 9 | The raised-cap re-render generation (`docs/design/auto_maxiter.md`). Artifacts committed; `t_good` and keeper cuts derived but **STAGED, not adopted**. | **live** (staged) | 8 / 1 / 6 / 6 |
 | `viz/` | 26 | 23 committed HTML inspection/label UIs — including **`corpus_label.html`, the labeling harness** named in `CLAUDE.md` — plus `serve.py` (the single-host static server for it) and two sheet builders. The `.py` side scores dead by both; the directory is not. | **live** | 3 / 0 / 1 / 1 |
 | `wallpaper/` | 24 | The emission / location-library tail: `library_store.py`, `library_annotate.py` (12 importers), `prospect_orchestrator.py`, `emit_v1.py`, `pool_rule.py`, `label_crop.py`, `emission_selector.py`. Four batch builders are held live only by `test_builders_import.py`, a module-load smoke that exists because exactly this rot went unnoticed once. | **live** | 19 / 13 / 7 / 17 |
@@ -123,7 +135,7 @@ why that pool is a **candidate** list and nothing more:
 | **`v4/` (6 files)** | 0 importers, 0 committed outputs, and the only directory left where **every** module is dead by both. The "reuses the EXACT v4 recipe" claim in v5–v9 is **prose in a docstring**, not an import. | The recipe constants are duplicated into v5–v9, so deleting v4 loses the origin comment, not a code path. But `test_recipe_parity_v5.py` compares regenerated rows against `data/v4/cache_manifest.jsonl` — that artifact is already gone (the test skips), so confirm you are not deleting the last description of a manifest nobody can rebuild. |
 | **`v5/` (2 of 3), `v6/` (5 of 6)** | Dead by both, superseded by v7 → v8 → v9. | **Not the whole directory:** each one's `build_plan.py` is exec'd by its committed recipe-parity test. `v6/threshold_sweep.py` documents how the q3 operating point was set; move that reasoning to `docs/design/` before deleting. |
 | **`eda/` (12)** | 0 / 0 across all 12. Closed one-off render studies + the finished scale-2×2 arc. | `scale_2x2_label_analysis.py` reads `labels/scale_2x2_labelset.json`, which stays. |
-| **`julia_ladder/` (1), `readout/` (1), `coevo/` (2), `reframe_probe/` (1), `descent_ablation/` (2)** | Single-purpose closed runs; ≤1 importer, outputs under `scratch/`. | `descent_ablation/` has its own README explaining the campaign — retire the code, keep the README or fold it into `docs/design/`. |
+| **`julia_ladder/` (1), `readout/` (1), `coevo/` (1 of 2), `descent_ablation/` (0 of 2), `reframe_probe/` (0 of 1)** | Single-purpose closed runs. **Only the first two are dead by both** — the counts here contradicted the index's own `∪` column until 2026-07-31 and now match it. `coevo/analyze_round.py` and `reframe_probe/speed.py` are **B-live**: they produced a committed artifact once (blind spot 2 — B cannot tell a one-shot from a driver that will run again), so "closed" is a judgement about the future, not something the numbers say. `descent_ablation/` is dead by both to the *rest of the tree*: its `A=1` edge is `run_campaign.py` importing its own sibling `finalize.py`, which the method counts and a retirement decision should not. | `descent_ablation/` has its own README explaining the campaign — retire the code, keep the README or fold it into `docs/design/`. Retiring a B-live module deletes the only committed description of how its artifact was made. |
 | `studies/archive/` (6 of them dead by both) | Already explicitly an archive with its own README. | Six *other* `studies/` modules are frozen live dependencies. Do not retire the directory wholesale. |
 | `atlas/` closed readouts (9) | Per-campaign reports (`campaign2_readout`, `dive_read_adjudicate`, `julia_fix_readout`, `confirm_report`, `v5_v6_anchor_diff`, …). Each answered one question, once. | `cross_family_shakeout.py` imports `step0_reanalysis` — retiring it does not free `atlas_probe/`. |
 | `corpus/` closed builders (9) | rev4 / anchor / revisit batch builders; their batches are built and labeled. | `merge_amendments.py` is the amendment-overlay writer — verify no future revision batch needs it before retiring. |
@@ -149,10 +161,13 @@ why that pool is a **candidate** list and nothing more:
   `reframe/reframe.py`. Only the probe's own CLI (`main` and the sweep/render/sheet functions
   reachable only from it) is entry-point-dead: no `if __name__` block anywhere else invokes
   it and nothing subprocesses the path.
-- **`hooks/pre-commit` is not installed.** The tracked large-blob guard says
-  *"Install: copy to `.git/hooks/pre-commit`"*; this checkout has no such file, so the
-  recurrence guard is not actually guarding. Left uninstalled — installing a hook that
-  refuses commits is the repo owner's call.
+- **`hooks/` is gone (2026-07-31).** It held one tracked `pre-commit` that refused staged
+  blobs over 1 MiB, and this checkout never installed it — so the recurrence guard was not
+  guarding, and nothing said so except the line that used to be here. A client-side hook is
+  the wrong instrument for a standing policy: it fires during ordinary work (training people
+  to reach for `--no-verify`) and it is invisible when disabled. Replaced by
+  `tests/test_large_tracked_blobs.py`, an allowlist of what may be large-and-tracked that
+  reads the whole index instead of one staged blob.
 - **`data_large/` was deleted in this pass**, leaving two files naming `data_large/…` paths
   whose corpus was already absent. `tests/occupancy_parity.rs` was **deleted on 2026-07-31**
   rather than repointed: it compared `energy::occupancy` against a persisted
