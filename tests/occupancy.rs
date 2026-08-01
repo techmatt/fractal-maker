@@ -1,6 +1,8 @@
-//! Direct coverage for [`energy::occupancy`] — the detail-occupancy gate on the
-//! live `--expand` path (`enrich.rs` and `guided_descend.rs` both call it with
-//! [`energy::OCC_GX`]/[`energy::OCC_GY`]/[`energy::OCC_FLOOR`]).
+//! Direct coverage for [`energy::occupancy`] — the detail-occupancy gate on two
+//! live paths, both calling it with [`energy::OCC_GX`]/[`energy::OCC_GY`]/
+//! [`energy::OCC_FLOOR`]: `enrich`'s pre-scoring gate (`enrich.rs`, parity with
+//! `present`), and `guided_descend`'s Stage-2 best-of-N cull (`best_of_n_step`),
+//! which is what `guided-descend --expand` runs per frontier node.
 //!
 //! This is **not** a port of the deleted `tests/occupancy_parity.rs`. That test
 //! asserted byte-parity against `score_complexity.py` / `complexity_scores.json`,
