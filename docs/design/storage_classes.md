@@ -255,22 +255,28 @@ next pass either "fixes" it or trips over it.
   seam rather than a cleanup. `[code: src/root_field.rs::CACHE_DIR]`
   `[measured: 8 files / 1.1 GB, 2026-07-31, `du -sh data/root_field`]`
 
-- **Views committed into the durable store — and this one is not a convention question.**
-  Eight `pool_sheet.html` files under `data/atlas/round{1,2}/*/`, 2.6 MB. They read as
-  "regenerable views in the wrong class", but they are worse than that: every one is
-  **dangling**. Each references `tiles/tile_NNNN.png` by relative path; no `tiles/`
-  directory exists in the tree, none resolves out-of-tree (`data/atlas/` is not in
-  `artifacts.RELOCATED_PREFIXES`), and the builder that wrote them went with the atlas
-  round-1/round-2 cluster when it was deleted — `prescreen.py`'s docstring is what survived
-  of it. So they are neither viewable nor rebuildable: 8 pages of broken images.
+- **A view is not durable content, and a view whose images are gone is not content at all.**
+  *Closed 2026-07-31 — the eight `pool_sheet.html` files under `data/atlas/round{1,2}/*/`
+  (2.6 MB) were deleted.* Each was an `<img src="tiles/tile_NNNN.png">` index over a `tiles/`
+  directory that no longer existed anywhere: not beside the sheet, not out-of-tree
+  (`data/atlas/` is not in `artifacts.RELOCATED_PREFIXES`, so `artifacts.resolve` returns the
+  in-tree path unchanged), and nowhere else in the working tree. Eight pages of broken images
+  sitting in the class reserved for records that cannot be rebuilt.
 
-  *Recommendation: the files give way, not the convention.* The durable content of those
-  rounds is `pool.jsonl` / `walks.jsonl` / `REPORT.md`, which stay and are unaffected.
-  Deleting the sheets is not a `scratch/`-vs-`data/` reclassification — there is nothing to
-  reclassify, because nothing can regenerate them. **Not acted on unilaterally** in the
-  2026-07-31 pass. `[code: data/atlas/round1/arm1_pool/pool_sheet.html `src="tiles/…"`;
-  tools/atlas/prescreen.py module docstring]` `[measured: 8 files / 2.6 MB, 0 tiles present,
-  2026-07-31]`
+  The durable content of those rounds — `pool.jsonl`, `walks.jsonl`, `REPORT.md` — stays and
+  is unaffected. The sheet is a **view over** `pool.jsonl`, which is the point: the row
+  survives, the rendering of it does not have to. `[measured: 8 files / 2.6 MB, 0 tiles
+  present, 2026-07-31, `find . -type d -name tiles`]`
+
+  *The generator is alive, and that does not save the sheets.* An earlier draft of this entry
+  said "the builder went with the atlas round-1/round-2 cluster when it was deleted" — that
+  was wrong. `src/guided_descend.rs` still writes `pool_sheet.html` and `tiles/tile_%04d.png`
+  in the same pass, and those directories are its output set. But a *sheet* rebuild would mean
+  re-running the seeded descent walk end to end, and nothing re-renders tiles from an existing
+  `pool.jsonl` — so the sheets were regenerable only in the sense that the whole run was, which
+  is not a reason to keep 2.6 MB of broken HTML in `data/`.
+  `[code: src/guided_descend.rs — `tiles_dir.join("tile_{:04}.png")` and
+  `out_dir.join("pool_sheet.html")` in one function]`
 
 ## Where this is enforced
 
