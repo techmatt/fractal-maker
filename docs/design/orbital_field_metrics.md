@@ -388,6 +388,12 @@ residual set scores above both references on both axes — `rings` 587.5–952.0
 references' 140.5/146.5, `range` 144.9–236.7 against 17.8/70.3 — and still reads as poorly
 composed. **No scalar settles a composition call.** `[measured: 8 residual atoms at
 320×180, clean cap, scratch/rescore/eye_vs_residual.json]` `[verdict: Matt]`
+⇒ **Partly addressed as of 2026-08-01, and the limit above still stands as written.** §11
+adds a view-level screen with two composition measures and a validated composite. It moves
+specific named failures — a nucleus-centred blob, a wide flat field with one deep pocket —
+out of the top quintile. It does **not** settle a composition call, it does not measure
+subject placement, and every sentence above about the ring measures themselves is
+unchanged: §11 is a different frame and two extra measures, not a repair of these two.
 
 **The deep end, but far less of it than the screen run suggested.** 910 of the 4,669
 enumerated atoms (19.5%) went unscored in the committed screen run; only **58 of them
@@ -465,6 +471,174 @@ paths. All synthetic numpy — no engine, no GPU.
 - **The `radial_rings_p90` failure at ×4 is not pinned** (§4).
 - `test_measure_keeps_no_field_files` spawns the real engine — it is the only test here
   that needs `target/release/fractal-generator.exe`.
+
+## 11. The view-level screen (2026-08-01)
+
+**What it is.** `tools/atlas/view_screen.py` measures **the frame a candidate actually
+pushes**, not the atom's 4× frame, and adds two composition measures the ring measures are
+structurally unable to see. It exists because §8's composition limit had a named, visible
+cost: the maneuver dry run's top-`radial_range` quintile contained nucleus-centred blobs
+(huge dead interior, high `rings` anyway) and wide flat fields with one deep pocket (one
+well raises every ray's span, so a median-over-rays measure calls the frame rich).
+`[code: tools/atlas/view_screen.py; scratch/maneuver_inspection/sheet_q5.png]` `[verdict: Matt]`
+
+**It is retroactive and selects nothing.** No discovery module imports it;
+`--maneuver-range-prior` still fills quota slots by the 4× `radial_range`
+(`minibrot_maneuvers.md` §3.1). `[code: grep over tools/ — the only importers are its own
+four drivers and its test]`
+
+**Frame, geometry and cap.** The candidate's own `cx/cy/fw`, at the same 64×36 ss1
+screening geometry, under the same stamped `mi12000k0.3c4800-67000` policy the atom screen
+runs (`retired.md`, the 2026-08-01 scope-extension entry) — read from
+`maneuver_screen.{screen_maxiter, screen_policy_token}` rather than restated. **None of
+§4's validation transfers**, for exactly the reason §2 gives, which is why the composite
+has its own gate below. `[code: tools/atlas/view_screen.py::measure_view]`
+
+### 11.1 The two new measures
+
+**`band_coverage`** — grid the field into 16×9 tiles (4×4 px); a tile **participates** iff
+it spans ≥ 1 colour cycle and is ≥ 25 % escaping; the measure is the participating
+fraction. One cycle is the render-visible unit, so the floor is phase-independent; the
+25 % clause is what stops a thin bright rim from crediting the dead tiles it runs through.
+Deliberately the same *shape* as `energy::occupancy` (grid, floor, occupied fraction) and a
+different *measure* — that one reduces OKLab edge energy over a rendered RGB image and needs
+a render and a palette. **Do not read either as a proxy for the other**
+(`measurement_practice.md` §2: "occupancy ≠ mid-detail", "edge-energy ≠ quality").
+`[code: tools/atlas/view_screen.py::band_coverage]`
+
+**`band_coverage_q25`** — the same tile indicator pooled into a 4×3 grid of regions, then
+the 25th percentile across regions: *at least three quarters of the frame's regions
+participate at least this much*. The tile mean cannot see WHERE the dead area is; a solid
+black slab plus a solid flat slab scores the same as structure spread evenly. That is not
+an argument, it is the fixture `test_view_screen.py::test_q25_separates_concentrated_dead_
+area_from_spread_dead_area` asserts on two fields with identical tile means.
+`[code: tools/atlas/view_screen.py::band_coverage_q25]`
+
+### 11.2 The composite
+
+`composite = coverage_term × richness`, sorted to a strictly-lower band when vetoed.
+
+- `richness = sqrt(radial_range × radial_rings)` — the pair, not either alone, because §4
+  records `range` failing on the eye and `rings` as the measure both references pass. **On
+  this population that is not a gate requirement**: `range`-only, `rings`-only and the
+  geometric mean all clear the reference bar, so the choice is a judgement taken with the
+  alternatives measured, not a forced one. `[measured: 16,440 candidates;
+  data/atlas/view_screen_gate.json `richness_variants_percentile`]`
+- `coverage_term = sqrt(band_coverage × band_coverage_q25)` — how much participates times
+  how evenly, so a frame needs both. §11.3 is why it is neither factor alone.
+- **The interior veto is a sort-to-bottom, never an exclusion.** Vetoed rows score in
+  `[−1, 0)`, strictly below every non-vetoed row and still ordered among themselves; every
+  raw measure survives on the row. It is **not** a revival of interior mass as a quality
+  axis (retired at +0.046 given degree, `minibrot_sourcing.md` §11): it says the frame's
+  scalars are being computed on a minority of it, which is a statement about the
+  instrument's domain. `[code: tools/atlas/view_screen.py::composite]`
+- **The veto threshold is anchored on the references' ESCAPING share**, not on their
+  interior fraction: both references measure ~0 interior (0.0000 and 0.0104), so any
+  *multiple* of that is a hair above zero and vetoes ~70 % of the population — a veto that
+  fires on most rows is the main sort. It fires when escaping area falls below **⅔** of the
+  weaker reference's, i.e. `interior_fraction > 0.3403` on today's measurement; **18.0 %**
+  of the population. The share is a judgement, frozen beside the reference record it reads
+  and re-derived in code from it. `[code: view_screen.interior_veto;
+  data/atlas/view_screen_refs.json]` `[measured: 16,440 candidates]`
+
+### 11.3 The validation gate, and the two formulations that lost
+
+**The gate, pre-registered then run:** G1 both references in the top **quintile** of the
+composite over the re-scored population (`minibroteye` at 4×, `mb19_p35` at 16×); G2 all
+four views Matt named off the Q5 sheet **out** of the top quintile, with each one's old
+quintile recorded so it cannot pass because the premise moved; G3 the eye outranks mb19 —
+§4's "not depth in disguise" test, carried to this frame.
+
+**A decile was written down first and no formulation reached it.** The bar was moved to the
+quintile before the formulations were compared, and `refs_in_top_decile` is recorded false
+on all three. It was **not** moved afterwards to admit f2, which misses at p79.9 against a
+bar of 80.0 and is recorded as failing. `[code: data/atlas/view_screen_gate.json]`
+
+`[measured: 16,440 candidates, 64×36, `mi12000k0.3c4800-67000`, 2026-08-01;
+data/atlas/view_screen_gate.json]`
+
+| formulation (coverage term) | eye | mb19 16× | blob d3 p45 | blob d2 p18 | blue d2 p15 | blue d2 p17 | gate |
+|---|---|---|---|---|---|---|---|
+| f1 tile mean | 95.5 | 83.3 | 15.2 | **61.7** | 31.0 | 47.0 | PASS |
+| f2 pooled q25 | 94.5 | **79.9** | 16.2 | 38.9 | 18.0 | 47.4 | **FAIL (G1)** |
+| f3 `sqrt(mean × q25)` — **shipped** | 95.0 | 81.8 | 15.9 | 46.6 | 18.0 | 47.5 | PASS |
+
+All four named views were in the old Q5 (p80+ by the atom-frame `radial_range` the sheet was
+sorted on). f1 clears the stated gate and was still not shipped: it leaves the `d2 p18` blob
+— one solid black slab beside one solid flat slab — at p61.7, which is the failure the whole
+exercise is about and which a boolean gate does not catch.
+
+**What the selection cost, stated because no care removes it.** f3 was chosen **after**
+seeing f1's and f2's results, against **six** anchor points. That is selection on the
+validation set: read the bar as "survived one look at six points", not as an independent
+test. The 6 anchors are also not a sample of anything — two hand-picked references and four
+views a human named — so the gate is a *tripwire against known failures*, not evidence the
+composite ranks well in general. `[verdict: Matt]`
+
+**Retired by this work** (`retired.md`): the tile-mean-only coverage term, and a veto
+expressed as a multiple of the references' `interior_fraction`.
+
+### 11.4 What the re-score and the sweep measured
+
+`[measured: 16,440 maneuver candidates from data/discovery/maneuver_v14_exploration,
+2026-08-01; cmd: uv run python tools/atlas/view_rescreen.py --run-dir <run>]`
+
+**Reachability and cap.** **16,440 / 16,440 screened, zero unscreenable** — the `render-one`
+spacing guard did not bind at the view frame either (§8's floor, still not reached). 3,809
+rows (23 %) hit the 67000 clamp, and the 5th-percentile `cap_headroom` is **0.267**, so the
+policy is non-clipping *on this population* as a measurement rather than an assertion.
+
+**The two sorts are not two measurements of one quantity** — one is `radial_range` on the
+atom's 4× frame (a single value shared by every `k` row of a nucleus), the other a composite
+on the frame each row pushed. Spearman **+0.609**. Of the 3,288 old-Q5 rows, **64.2 %**
+survive into the new top quintile and **711 (21.6 %)** fall to the new Q1/Q2. In the other
+direction the screen is almost purely demoting: **1** row of the new Q5 came from the old
+Q1/Q2.
+
+**The degree mix moves, and it is confounded.** New Q5 is d2 31 % / d3 29 % / d4 26 % /
+d5 14 % against old Q5's 52 / 30 / 13 / 4 — so the new composite roughly doubles d4+d5 in
+the top quintile (17 % → 40 %). Both remain far below the population's d4+d5 = 63 %. **Read
+this as a shift in what the composite selects, not as a degree result**: degree and period
+are confounded here (`rings` is +0.87 with period over periods 2–74, §6) and a search that
+chooses where it goes confounds its own axes (`measurement_practice.md` §1).
+
+**The framing sweep.** A deterministic 3×3 offset grid at ±½ frame × scale {1, 2} = 18
+windows, argmax by the same composite, chosen window recorded beside the original.
+`[code: tools/atlas/view_screen.py::sweep_best, view_frame_sweep.py]` On **594** swept
+candidates (120 top-composite + a stratified fill across composite quintiles) the argmax
+moved off the original frame **63.5 %** of the time, chose scale 2 in 184 cases, and raised
+the composite by a median ratio of **1.20** (p90 2.62). **That gain is an argmax over 18
+draws scored by the objective it maximises and is biased upward by construction** — it is
+headroom the composite sees, not a quality improvement. The full sweep over all 13,483
+candidates clearing the veto was **not run**: 17 extra fields each, ~225k fields, ~4.2 h
+wall at four processes.
+
+**What the move actually consists of, because the sheet alone gets it wrong.** Over the 377
+moved cases the chosen window's `radial_range` is a median **1.14×** the origin's and
+exceeds 10× in **0.8 %**; `interior_fraction` **falls** in 69.5 % of moves (median −0.010).
+So the typical move is small and in the direction composition wants. The pathology is real
+but is a **tail**: inside the top-20-by-gain set the range ratio median is 2.1 and 15 %
+exceed 10×, i.e. the largest gains are `radial_range` inflating on a wider window rather
+than a better picture — and a before/after sheet drawn from *that* set is therefore an
+unrepresentative view of the sweep. Both sheets are emitted for this reason
+(`sheet_framing_pairs.png` top-composite, `sheet_framing_pairs_moved.png` largest gain).
+⇒ **A screen is not an objective.** The composite sorts a 16k population well and is a poor
+argmax over 18 near-identical variants, because across those variants its dynamic range is
+carried almost entirely by one term. `[verdict: Matt]` `[measured: 594 swept candidates]`
+
+### 11.5 What the view screen is blind to
+
+- **It rewards busy fields.** Coverage is high wherever banding is dense, which includes
+  wide ordinary Mandelbrot territory with no subject in it. Nothing here measures *subject
+  placement*, and §8's composition limit stands.
+- **Six anchor points.** §11.3.
+- **No human labels and no classifier.** Nothing in §11 was checked against a label or a
+  `p_good`; the head has never seen this population (`minibrot_maneuvers.md` §9).
+- **One frame per candidate.** The re-score measures the frame recorded in the maneuver log.
+  The sweep shows that frame is frequently not the best nearby one, which means the ranking
+  in §11.4 is a ranking of *un-framed* views.
+- **Absolute composites are meaningless outside this (geometry, cap policy) pair**, exactly
+  as in §5 and §7. Only orderings within one pair compare.
 
 ---
 

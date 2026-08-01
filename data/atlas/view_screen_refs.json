@@ -1,0 +1,86 @@
+{
+  "geometry": [
+    64,
+    36,
+    1
+  ],
+  "grid": [
+    16,
+    9
+  ],
+  "blocks": [
+    4,
+    3
+  ],
+  "block_quantile": 25.0,
+  "tile_cycle_floor": 1.0,
+  "tile_min_finite": 0.25,
+  "veto_escaped_share": 0.666667,
+  "references": {
+    "minibroteye": {
+      "label": "minibrot eye",
+      "scale": 4,
+      "cx": "-0.746339",
+      "cy": "0.112242",
+      "fw": 0.000583,
+      "screened": true,
+      "view_fw": 0.000583,
+      "view_maxiter": 56385,
+      "cap_headroom": 0.9854,
+      "clamped": false,
+      "interior_fraction": 0.0,
+      "interior_radial": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "band_coverage": 0.7222,
+      "band_coverage_q25": 0.5833,
+      "radial_range": 10.6618,
+      "radial_rings": 33.0,
+      "radial_range_p90": 17.4678,
+      "radial_rings_p90": 50.8,
+      "escaped_px": 2304,
+      "smooth_max": 825.34,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+    },
+    "mb19_p35_16x": {
+      "label": "mb19_p35",
+      "scale": 16,
+      "cx": "-0.74977483272365342795786040375088960",
+      "cy": "0.10761724352653678278696798751738616",
+      "fw": 3.22784961136e-09,
+      "screened": true,
+      "view_fw": 3.22784961136e-09,
+      "view_maxiter": 67000,
+      "cap_headroom": 0.939,
+      "clamped": true,
+      "interior_fraction": 0.0104,
+      "interior_radial": [
+        0.3833,
+        0.0051,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "band_coverage": 0.5833,
+      "band_coverage_q25": 0.4167,
+      "radial_range": 6.9348,
+      "radial_rings": 16.0,
+      "radial_range_p90": 56.1021,
+      "radial_rings_p90": 59.4,
+      "escaped_px": 2280,
+      "smooth_max": 4090.29,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+    }
+  },
+  "note": "Reference measurements for the view-level screen. The interior veto is derived from these at run time (view_screen.interior_veto), not hardcoded \u2014 re-measuring moves the veto instead of leaving a stale literal."
+}

@@ -319,6 +319,14 @@ thousand atom-widths wide; its score is still the 4× number, because 4× is the
 scale any orbital measure has ever been validated at (`orbital_field_metrics.md` §2) and a
 score at another scale would carry none of that validation.
 
+> **There is now a VIEW-level sibling, and it is not this screen.** `tools/atlas/view_screen.py`
+> measures the frame each row actually pushed and adds the two composition measures this one
+> is structurally unable to see — the sentence above is exactly why it had to be a separate
+> module rather than a parameter. It is **retroactive only**: nothing in `steered_frontier`,
+> `minibrot_maneuvers` or the quota path reads it, `--maneuver-range-prior` still selects on
+> the 4× `radial_range`, and no default here moved. What it measures, what it was validated
+> against, and what it is still blind to: `orbital_field_metrics.md` §11.
+
 **RECORDING IS UNCONDITIONAL; SELECTING IS NOT.** Scores land on every candidate — pushed,
 passed over, or beaten to a quota slot — and ride the frontier node into `state.json`, the
 harvest log and the ledger. `--maneuver-range-prior` (default **off**) gates the only two

@@ -70,6 +70,12 @@ an item's evidence, the line points at it rather than restating it.
   (`verification_practice.md` §4)
 - `selection_triage.json` regeneration
 - Calibration exemplars beside the labeling rig
+- Tile-mean band coverage as the view screen's coverage term — blind to *where* the dead
+  area is, so a solid black disc plus a solid flat gradient scores like structure spread
+  evenly (`orbital_field_metrics.md` §11)
+- A veto threshold expressed as a multiple of the references' `interior_fraction` — both
+  references measure ~0 interior, so any multiple of them vetoes ~70% of the population
+  (`orbital_field_metrics.md` §11)
 
 ## Un-retired
 
@@ -85,6 +91,18 @@ an item's evidence, the line points at it rather than restating it.
   `field_metrics.require_one_policy` raises rather than pooling across them.
   `[code: docs/design/minibrot_maneuvers.md §3.1;
   tools/atlas/test_maneuver_screen.py::test_the_screen_policy_is_24x_the_legacy_envelope_until_the_clamp_binds]`
+
+- **2026-08-01 — the 24× / clamp-67000 screening cap policy, scope EXTENDED by one module.**
+  The 2026-07-31 entry above adopted it for `tools/atlas/maneuver_screen.py` "and for nothing
+  else"; `tools/atlas/view_screen.py` now runs under the same policy, reading
+  `maneuver_screen.{screen_maxiter, screen_policy_token}` rather than restating it. The
+  extension is deliberate and is the whole point: a view score and an atom score describe the
+  same population at two frames, and giving them different cap tokens would make
+  `require_one_policy` refuse a comparison that is legitimate while permitting nothing new.
+  Everything else in the original scope stands — screening only, stamped on every record,
+  pairwise-disjoint from the legacy and live tokens, production scoring untouched.
+  `[code: tools/atlas/view_screen.py::measure_view;
+  tools/atlas/test_view_screen.py::test_every_view_measure_carries_the_screen_cap_policy]`
 
 - **2026-07 — "depth/period as a quality axis."** Retired on a roster spanning period ~3–15,
   where it measured +0.06 pooled and −0.21 inside the period-matched eval slice. Across

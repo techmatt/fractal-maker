@@ -1,0 +1,276 @@
+{
+  "bar_percentile": 80.0,
+  "population_n": 16440,
+  "screened_n": 16440,
+  "interior_veto": 0.3403,
+  "formulations": [
+    {
+      "name": "f1_tile_mean_coverage",
+      "coverage": "mean",
+      "note": "coverage = mean over 144 tiles of the participation indicator. Passes the reference bar, but is blind to WHERE the dead tiles are: it leaves the `snap k16 d2 p18` blob \u2014 one solid black slab plus one solid flat slab \u2014 high in the population.",
+      "references": {
+        "minibroteye": {
+          "composite": 13.5466,
+          "percentile": 95.5,
+          "coverage": 0.7222,
+          "radial_range": 10.6618,
+          "radial_rings": 33.0,
+          "interior_fraction": 0.0,
+          "vetoed": false
+        },
+        "mb19_p35_16x": {
+          "composite": 6.1443,
+          "percentile": 83.3,
+          "coverage": 0.5833,
+          "radial_range": 6.9348,
+          "radial_rings": 16.0,
+          "interior_fraction": 0.0104,
+          "vetoed": false
+        }
+      },
+      "bads": {
+        "q4_snap_099": {
+          "label": "snap k16 d3 p45 (blob)",
+          "composite": -0.1776,
+          "percentile": 15.2,
+          "old_quintile": 5,
+          "old_atom_radial_range": 23.8514,
+          "coverage": 0.4722,
+          "radial_range": 8.3614,
+          "radial_rings": 11.5,
+          "interior_fraction": 0.4948,
+          "vetoed": true
+        },
+        "q4_snap_095": {
+          "label": "snap k16 d2 p18 (blob corner)",
+          "composite": 2.4298,
+          "percentile": 61.7,
+          "old_quintile": 5,
+          "old_atom_radial_range": 8.4075,
+          "coverage": 0.4167,
+          "radial_range": 3.7779,
+          "radial_rings": 9.0,
+          "interior_fraction": 0.2383,
+          "vetoed": false
+        },
+        "q4_late_084": {
+          "label": "lateral keep d2 p15 (wide blue field)",
+          "composite": 0.437,
+          "percentile": 31.0,
+          "old_quintile": 5,
+          "old_atom_radial_range": 8.1924,
+          "coverage": 0.1319,
+          "radial_range": 2.7445,
+          "radial_rings": 4.0,
+          "interior_fraction": 0.0004,
+          "vetoed": false
+        },
+        "q4_late_085": {
+          "label": "lateral keep d2 p17 (wide blue field)",
+          "composite": 1.3148,
+          "percentile": 47.0,
+          "old_quintile": 5,
+          "old_atom_radial_range": 7.8112,
+          "coverage": 0.2917,
+          "radial_range": 2.9023,
+          "radial_rings": 7.0,
+          "interior_fraction": 0.0004,
+          "vetoed": false
+        }
+      },
+      "G1_refs_in_top_quintile": true,
+      "G2_bads_out_of_top_quintile": true,
+      "G3_eye_outranks_mb19": true,
+      "passed": true,
+      "refs_in_top_decile": false
+    },
+    {
+      "name": "f2_block_q25_coverage",
+      "coverage": "q25",
+      "note": "coverage = 25th percentile across a 4x3 grid of pooled regions. Sorts the blob down hard, and drops mb19 at 16x below the reference bar.",
+      "references": {
+        "minibroteye": {
+          "composite": 10.9412,
+          "percentile": 94.5,
+          "coverage": 0.5833,
+          "radial_range": 10.6618,
+          "radial_rings": 33.0,
+          "interior_fraction": 0.0,
+          "vetoed": false
+        },
+        "mb19_p35_16x": {
+          "composite": 4.3894,
+          "percentile": 79.9,
+          "coverage": 0.4167,
+          "radial_range": 6.9348,
+          "radial_rings": 16.0,
+          "interior_fraction": 0.0104,
+          "vetoed": false
+        }
+      },
+      "bads": {
+        "q4_snap_099": {
+          "label": "snap k16 d3 p45 (blob)",
+          "composite": -0.246,
+          "percentile": 16.2,
+          "old_quintile": 5,
+          "old_atom_radial_range": 23.8514,
+          "coverage": 0.3125,
+          "radial_range": 8.3614,
+          "radial_rings": 11.5,
+          "interior_fraction": 0.4948,
+          "vetoed": true
+        },
+        "q4_snap_095": {
+          "label": "snap k16 d2 p18 (blob corner)",
+          "composite": 0.3644,
+          "percentile": 38.9,
+          "old_quintile": 5,
+          "old_atom_radial_range": 8.4075,
+          "coverage": 0.0625,
+          "radial_range": 3.7779,
+          "radial_rings": 9.0,
+          "interior_fraction": 0.2383,
+          "vetoed": false
+        },
+        "q4_late_084": {
+          "label": "lateral keep d2 p15 (wide blue field)",
+          "composite": 0.0,
+          "percentile": 18.0,
+          "old_quintile": 5,
+          "old_atom_radial_range": 8.1924,
+          "coverage": 0.0,
+          "radial_range": 2.7445,
+          "radial_rings": 4.0,
+          "interior_fraction": 0.0004,
+          "vetoed": false
+        },
+        "q4_late_085": {
+          "label": "lateral keep d2 p17 (wide blue field)",
+          "composite": 0.7514,
+          "percentile": 47.4,
+          "old_quintile": 5,
+          "old_atom_radial_range": 7.8112,
+          "coverage": 0.1667,
+          "radial_range": 2.9023,
+          "radial_rings": 7.0,
+          "interior_fraction": 0.0004,
+          "vetoed": false
+        }
+      },
+      "G1_refs_in_top_quintile": false,
+      "G2_bads_out_of_top_quintile": true,
+      "G3_eye_outranks_mb19": true,
+      "passed": false,
+      "refs_in_top_decile": false
+    },
+    {
+      "name": "f3_geometric_mean_SHIPPED",
+      "coverage": "geo",
+      "note": "coverage = sqrt(mean * q25) \u2014 how much participates times how evenly it is spread. Passes both halves. CHOSEN AFTER seeing f1 and f2 against the gate, on 6 anchor points; see the doc for what that costs.",
+      "references": {
+        "minibroteye": {
+          "composite": 12.1744,
+          "percentile": 95.0,
+          "coverage": 0.649,
+          "radial_range": 10.6618,
+          "radial_rings": 33.0,
+          "interior_fraction": 0.0,
+          "vetoed": false
+        },
+        "mb19_p35_16x": {
+          "composite": 5.1932,
+          "percentile": 81.8,
+          "coverage": 0.493,
+          "radial_range": 6.9348,
+          "radial_rings": 16.0,
+          "interior_fraction": 0.0104,
+          "vetoed": false
+        }
+      },
+      "bads": {
+        "q4_snap_099": {
+          "label": "snap k16 d3 p45 (blob)",
+          "composite": -0.2098,
+          "percentile": 15.9,
+          "old_quintile": 5,
+          "old_atom_radial_range": 23.8514,
+          "coverage": 0.3841,
+          "radial_range": 8.3614,
+          "radial_rings": 11.5,
+          "interior_fraction": 0.4948,
+          "vetoed": true
+        },
+        "q4_snap_095": {
+          "label": "snap k16 d2 p18 (blob corner)",
+          "composite": 0.941,
+          "percentile": 46.6,
+          "old_quintile": 5,
+          "old_atom_radial_range": 8.4075,
+          "coverage": 0.1614,
+          "radial_range": 3.7779,
+          "radial_rings": 9.0,
+          "interior_fraction": 0.2383,
+          "vetoed": false
+        },
+        "q4_late_084": {
+          "label": "lateral keep d2 p15 (wide blue field)",
+          "composite": 0.0,
+          "percentile": 18.0,
+          "old_quintile": 5,
+          "old_atom_radial_range": 8.1924,
+          "coverage": 0.0,
+          "radial_range": 2.7445,
+          "radial_rings": 4.0,
+          "interior_fraction": 0.0004,
+          "vetoed": false
+        },
+        "q4_late_085": {
+          "label": "lateral keep d2 p17 (wide blue field)",
+          "composite": 0.9939,
+          "percentile": 47.5,
+          "old_quintile": 5,
+          "old_atom_radial_range": 7.8112,
+          "coverage": 0.2205,
+          "radial_range": 2.9023,
+          "radial_rings": 7.0,
+          "interior_fraction": 0.0004,
+          "vetoed": false
+        }
+      },
+      "G1_refs_in_top_quintile": true,
+      "G2_bads_out_of_top_quintile": true,
+      "G3_eye_outranks_mb19": true,
+      "passed": true,
+      "refs_in_top_decile": false
+    }
+  ],
+  "richness_variants_percentile": {
+    "range_only": {
+      "minibroteye": 92.3,
+      "mb19_p35_16x": 79.2,
+      "q4_snap_099": 16.5,
+      "q4_snap_095": 38.6,
+      "q4_late_084": 18.0,
+      "q4_late_085": 46.8
+    },
+    "rings_only": {
+      "minibroteye": 95.4,
+      "mb19_p35_16x": 80.6,
+      "q4_snap_099": 16.0,
+      "q4_snap_095": 39.4,
+      "q4_late_084": 18.0,
+      "q4_late_085": 48.3
+    },
+    "geometric_mean_SHIPPED": {
+      "minibroteye": 94.5,
+      "mb19_p35_16x": 79.9,
+      "q4_snap_099": 16.2,
+      "q4_snap_095": 38.9,
+      "q4_late_084": 18.0,
+      "q4_late_085": 47.4
+    }
+  },
+  "maxiter_policy_token": "mi12000k0.3c4800-67000",
+  "note": "Percentiles are against the re-scored dry-run population (one 64x36 field per candidate at the frame it actually pushed). Absolute composites are comparable only within this (geometry, cap policy) pair (orbital_field_metrics.md \u00a75, \u00a77)."
+}
