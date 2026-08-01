@@ -239,14 +239,27 @@ def solve_nucleus(seed, period: int, *, degree: int = DEGREE, source: str = "",
 
 def identify_nucleus(seed, *, period_min=1, period_max=64, degree: int = DEGREE,
                      near: float = 1e-2, source: str = "",
-                     provenance: dict | None = None, want_embedding: bool = True):
+                     provenance: dict | None = None, want_embedding: bool = True,
+                     periods=None):
     """Find the nucleus a location sits on/near: try every period in range, keep the
     converged minimal ones within `near` of the seed, and return the record for the
-    **smallest period** (the largest containing component). Returns (rec, status)."""
+    **smallest period** (the largest containing component). Returns (rec, status).
+
+    `periods` — an explicit, already-ranked candidate list tried **instead of** the
+    `period_min..period_max` sweep. The sweep is O(period_max) Newton solves and that is
+    the whole cost of the caller (`minibrot_maneuvers.lateral_to_sibling` measured 84% of
+    probe cost at `period_max` up to 120); an atom-domain orbit pass ranks every period in
+    one f64 walk, so a caller can hand in the ~10 periods worth solving. The candidate set
+    is sorted and de-duplicated here, so "smallest period wins" is the same rule under
+    either mode — the seeded mode only ever sees a SUBSET, which is the one way the two can
+    disagree, and the disagreement is measured
+    (`tools/atlas/bench_lateral_seeding.py`) rather than assumed away."""
     seed = mp.mpc(seed)
     near = mp.mpf(str(near))
     best = None
-    for p in range(period_min, period_max + 1):
+    cands = (sorted({int(p) for p in periods}) if periods is not None
+             else range(period_min, period_max + 1))
+    for p in cands:
         r = dcf.newton_nucleus(seed, p, degree=degree, max_steps=NEWTON_STEPS)
         if not r.converged or abs(r.c - seed) > near:
             continue

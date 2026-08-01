@@ -113,6 +113,44 @@ def test_snap_refuses_a_frame_wider_than_a_root_view():
     assert fw is None and why == "fw_over_root_scale"
 
 
+def test_snap_multi_pays_one_solve_for_every_framing():
+    # k only chooses fw AFTER the nucleus is known, so N framings must cost ONE Newton
+    # pass. This is what makes adding k=16 to the default set free; the naive loop of
+    # per-k snap_to_nucleus calls re-solved the same nucleus once per k.
+    view = dict(node_id=3, cx=-1.7686, cy=0.0038, fw=0.01, depth=4)
+    ms = mnv.snap_to_nucleus_multi(view, [None, 4.0, 16.0], degree=2)
+    assert [m.k for m in ms] == [None, 4.0, 16.0]
+    assert all(m.available for m in ms), [m.reason for m in ms]
+    assert len({m.atom_id for m in ms}) == 1 and len({m.period for m in ms}) == 1
+    # cost is charged to the first row only -> summing probe_s over rows is the true cost
+    assert ms[0].newton_solves > 0
+    assert [m.newton_solves for m in ms[1:]] == [0, 0]
+    assert all(m.extra.get("reused_solve") for m in ms[1:])
+    assert ms[0].fw == view["fw"]                       # k=None preserves the frame
+    assert ms[1].fw == pytest.approx(4.0 * ms[1].window_scale, rel=1e-12)
+    assert ms[2].fw == pytest.approx(16.0 * ms[2].window_scale, rel=1e-12)
+
+
+def test_snap_multi_refuses_per_k_not_per_probe():
+    # One solve, but the framing verdict is still PER k: the shallow period-3 rabbit atom
+    # is big enough that 16x its size is wider than a base-scale root view, while k=None
+    # and k=4 are fine off the same solve. A shared solve must not share a verdict.
+    view = dict(node_id=7, cx=-0.1226, cy=0.7449, fw=0.01, depth=5)
+    ms = mnv.snap_to_nucleus_multi(view, [None, 4.0, 16.0], degree=2)
+    assert [m.available for m in ms] == [True, True, False]
+    assert ms[2].reason == "fw_over_root_scale" and ms[2].k == 16.0
+
+
+def test_snap_multi_agrees_with_single_k_calls_including_when_unavailable():
+    for view in (dict(node_id=1, cx=-0.1226, cy=0.7449, fw=0.01, depth=5),
+                 dict(node_id=1, cx=3.0, cy=3.0, fw=0.01, depth=2)):
+        ms = mnv.snap_to_nucleus_multi(view, [None, 4.0], degree=2)
+        for m, k in zip(ms, [None, 4.0]):
+            one = mnv.snap_to_nucleus(view, k, degree=2)
+            assert (m.available, m.reason, m.k, m.cx, m.fw) == \
+                   (one.available, one.reason, one.k, one.cx, one.fw)
+
+
 # =========================================================================== #
 # lateral_to_sibling
 # =========================================================================== #
@@ -130,6 +168,30 @@ def test_lateral_without_a_parent_atom_is_cleanly_unavailable():
     m = mnv.lateral_to_sibling(dict(node_id=1, cx=3.0, cy=3.0, fw=0.01, depth=2),
                                np.random.default_rng(0))
     assert m.available is False and m.reason.startswith("no_parent_atom:")
+
+
+def test_lateral_seeded_periods_agree_with_the_sweep_and_cost_far_less():
+    # DIFFERENTIAL, not a frozen literal: the period SWEEP is the reference implementation
+    # and it still exists (`seed_periods=False`), so the seeded path is checked against the
+    # thing it replaces. Where both find a nucleus they must find the SAME one — the
+    # hybrid's exact low head is what buys that, since the atom-domain ranking alone can
+    # miss a small period the "smallest period wins" rule would have taken.
+    # Population-scale version: tools/atlas/bench_lateral_seeding.py.
+    view = dict(node_id=3, cx=-1.7686, cy=0.0038, fw=0.01, depth=4)
+    sweep = mnv.lateral_to_sibling(view, np.random.default_rng(5), degree=2,
+                                   seed_periods=False)
+    seeded = mnv.lateral_to_sibling(view, np.random.default_rng(5), degree=2)
+    assert sweep.available and seeded.available
+    assert seeded.atom_id == sweep.atom_id and seeded.period == sweep.period
+    assert seeded.newton_solves < sweep.newton_solves
+
+
+def test_lateral_low_sweep_head_is_swept_exactly_even_when_the_orbit_escapes():
+    # A seed whose orbit escapes at once yields NO atom-domain candidates; with the hybrid
+    # head the probe still tries the low periods, which is where three of the shakedown
+    # replay's lost siblings came back.
+    assert mnv.period_candidates(complex(3.0, 3.0), 2, max_period=64, n=4) == []
+    assert mnv.LAT_LOW_SWEEP >= 2
 
 
 def test_lateral_is_deterministic_given_the_rng_seed():
@@ -190,6 +252,14 @@ def test_governor_state_round_trips_so_a_resume_does_not_re_probe():
 def test_parse_k_spec():
     assert mnv.parse_k_spec("none,4,16") == [None, 4.0, 16.0]
     assert mnv.parse_k_spec("") == [None]
+
+
+def test_default_k_set_carries_the_16x_wallpaper_frame_and_no_small_k():
+    # k=4 answers "is this atom good?"; k=16 is often a usable wallpaper frame by itself,
+    # which is the material worth labeling. A k < 1 frames INTO the atom — interior black.
+    assert mnv.parse_k_spec(sf.MAN_K_DEFAULT) == [None, 4.0, 16.0]
+    assert list(mnv.DEFAULT_K) == [None, 4.0, 16.0]
+    assert all(k is None or k >= 1.0 for k in mnv.DEFAULT_K)
 
 
 def test_degree_of_is_c_plane_only():

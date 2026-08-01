@@ -138,7 +138,11 @@ def load_morph_anchors(cli_lo=None, cli_hi=None):
 # score / harvest machinery takes it from there. See docs/design/minibrot_maneuvers.md.
 MAN_QUOTA_DEFAULT = 4        # reserved frontier SLOTS per batch (a floor, not a probability)
 MAN_PROBE_P_DEFAULT = 0.25   # cost governor: P(probe fires) per popped rung
-MAN_K_DEFAULT = "none,4"     # framing set: preserve-fw, and the 4x-atom "money shot"
+# Framing set. k=4 answers "is this atom good?"; k=16 is often close to a usable wallpaper
+# frame by ITSELF, which is the material worth labeling — and it is free, because
+# snap_to_nucleus_multi solves the nucleus once and reframes per k (a k is not a probe).
+# No small k: framing INTO the atom is interior black (docs/design/minibrot_maneuvers.md §7).
+MAN_K_DEFAULT = "none,4,16"
 # Counters, named once so __init__/load_state/the summary can never drift apart.
 #   probes_*        — cost-governor accounting (did the probe even get to run)
 #   op_avail/unavail— the operator's own availability (the ~17% expectation)
@@ -1068,8 +1072,9 @@ class SteeredFrontier:
                         depth=n["depth"])
             t0 = time.time()
             parent_rec = None
-            for k in self.man_ks:
-                m = mnv.snap_to_nucleus(view, k, degree=degree)
+            # ONE solve, one row per framing: the nucleus does not depend on k, so adding
+            # a k to the set costs a reframing, not another probe.
+            for m in mnv.snap_to_nucleus_multi(view, self.man_ks, degree=degree):
                 pushed += self._consume_maneuver(m, n)
                 if m.available and parent_rec is None:
                     parent_rec = dict(id=m.atom_id, cx=m.cx, cy=m.cy, period=m.period,

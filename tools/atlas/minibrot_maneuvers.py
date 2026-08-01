@@ -80,7 +80,7 @@ import triage_store as ts                 # noqa: E402  (atom_id — shared with
 MAX_PERIOD = 64          # ceiling on the atom-domain orbit scan (period candidates)
 N_PERIODS = 4            # Newton solves per snap probe = the top-N argmins of |z_k|
 SNAP_MAX_FW_MULT = 1.0   # the nucleus must land within this many frame widths of centre
-DEFAULT_K = (None, 4.0)  # k=None (preserve fw) + the 4x-atom "money shot" framing
+DEFAULT_K = (None, 4.0, 16.0)  # preserve-fw, the 4x "is this atom good?" frame, and 16x
 MAX_FW = 3.0             # never reframe wider than a base-scale root view
 NODE_WIDTH = 384         # descent node presentation width — sets the f64 spacing wall
 PERTURB_SPACING = 1e-13  # Rust PERTURB_SPACING: below this the f64 backend quantizes
@@ -91,6 +91,9 @@ LAT_PROBES = 3                 # probe seeds per lateral call (bounded enumerati
 LAT_PERIOD_HEADROOM = 3.0      # period ceiling = headroom x parent period ...
 LAT_PERIOD_CAP = 120           # ... capped here
 LAT_SCALE_TOL_DECADES = 1.0    # "comparable scale": |log10(w_sib / w_par)| <= this
+LAT_SEED_PERIODS = True        # seed identify_nucleus from the atom-domain probe (not a sweep)
+LAT_N_PERIODS = N_PERIODS      # argmins kept per seeded lateral probe (-> <=3x solves)
+LAT_LOW_SWEEP = 24             # ... but periods 2..this are ALWAYS swept exactly (see below)
 
 # c-plane partitions only: a julia/phoenix viewport is a z-plane and has no nucleus in the
 # parameter-plane sense, so the operators are simply not defined there.
@@ -233,26 +236,21 @@ def _frame_for(rec: dict, k, parent_fw: float, max_fw: float):
 # --------------------------------------------------------------------------- #
 # Operator 1 — snap_to_nucleus
 # --------------------------------------------------------------------------- #
-def snap_to_nucleus(view: dict, k=None, *, degree: int = 2, max_period: int = MAX_PERIOD,
-                    n_periods: int = N_PERIODS, snap_max_fw_mult: float = SNAP_MAX_FW_MULT,
-                    max_fw: float = MAX_FW, source: str = "maneuver_snap") -> Maneuver:
-    """Atom-domain probe at the view centre -> Newton -> recentre on the nucleus.
+def _solve_snap(view: dict, degree: int, max_period: int, n_periods: int,
+                snap_max_fw_mult: float, source: str):
+    """The Newton half of a snap: atom-domain probe at the view centre -> nucleus record.
 
-    `view` is `{cx, cy, fw, depth, node_id}` (floats/ints; cx/cy may be strings).
-    `k` is the frame: None preserves `view["fw"]`; otherwise `fw = k * atom size`.
+    Split out because **the nucleus does not depend on the framing.** `k` only chooses
+    `fw` afterwards, so N framings of one view cost ONE solve, not N — which is what
+    makes adding a k to the set (`k=16`) a free reframing rather than another probe.
 
-    Returns an unavailable `Maneuver` — with the reason named — when no candidate period
-    converges, when the nucleus is outside the frame (that would be a teleport, not a
-    snap), when the atom is degenerate/non-minimal, or when the requested framing crosses
-    the f64 pixel-spacing wall at the descent's node width.
-    """
-    t0 = time.time()
+    Returns `(rec, period, solves, reason, periods)`; `rec is None` names the refusal."""
     al.set_precision()
     cx, cy, fw = float(view["cx"]), float(view["cy"]), float(view["fw"])
     c0 = mp.mpc(mp.mpf(str(view["cx"])), mp.mpf(str(view["cy"])))
     periods = period_candidates(c0, degree, max_period, n_periods)
     if not periods:
-        return _unavailable("snap_to_nucleus", "orbit_escaped_immediately", view, t0, k=k)
+        return None, None, 0, "orbit_escaped_immediately", periods
 
     solves = 0
     near = mp.mpf(str(snap_max_fw_mult * fw))
@@ -274,11 +272,42 @@ def snap_to_nucleus(view: dict, k=None, *, degree: int = 2, max_period: int = MA
         if rec is None:
             last = "degenerate_or_not_minimal"
             continue
+        return rec, p, solves, "", periods
+    return None, None, solves, last, periods
+
+
+def snap_to_nucleus_multi(view: dict, ks, *, degree: int = 2,
+                          max_period: int = MAX_PERIOD, n_periods: int = N_PERIODS,
+                          snap_max_fw_mult: float = SNAP_MAX_FW_MULT,
+                          max_fw: float = MAX_FW,
+                          source: str = "maneuver_snap") -> list[Maneuver]:
+    """One snap probe, one `Maneuver` per requested framing `k` — in `ks` order.
+
+    COST ATTRIBUTION. The shared solve is charged to the FIRST row only; later rows carry
+    just their own (negligible) framing time, `newton_solves=0` and `extra.reused_solve`.
+    A sum of `probe_s` over the emitted rows is therefore the true cost of the call, and a
+    per-`k` cost read is not inflated by N copies of one solve."""
+    t0 = time.time()
+    ks = list(ks) or [None]
+    cx, cy, fw = float(view["cx"]), float(view["cy"]), float(view["fw"])
+    rec, p, solves, reason, periods = _solve_snap(
+        view, degree, max_period, n_periods, snap_max_fw_mult, source)
+
+    out: list[Maneuver] = []
+    for i, k in enumerate(ks):
+        t_row = t0 if i == 0 else time.time()
+        n_solves = solves if i == 0 else 0
+        shared = {} if i == 0 else {"reused_solve": True}
+        if rec is None:
+            out.append(_unavailable("snap_to_nucleus", reason, view, t_row, n_solves, k=k,
+                                    period_candidates=periods, **shared))
+            continue
         newfw, why = _frame_for(rec, k, fw, max_fw)
         if newfw is None:
-            return _unavailable("snap_to_nucleus", why, view, t0, solves, k=k,
-                                period=p, window_scale=rec["window_scale"])
-        return Maneuver(
+            out.append(_unavailable("snap_to_nucleus", why, view, t_row, n_solves, k=k,
+                                    period=p, window_scale=rec["window_scale"], **shared))
+            continue
+        out.append(Maneuver(
             op="snap_to_nucleus", available=True, k=(None if k is None else float(k)),
             cx=rec["cx"], cy=rec["cy"], fw=newfw, depth=int(view.get("depth", 0)),
             atom_id=rec["id"], atom_key=atom_key_of(rec), period=p,
@@ -287,13 +316,33 @@ def snap_to_nucleus(view: dict, k=None, *, degree: int = 2, max_period: int = MA
             f64_margin_deploy_decades=rec["f64_margin_deploy_decades"],
             parent_node_id=view.get("node_id"), parent_cx=cx, parent_cy=cy,
             parent_fw=fw, parent_depth=int(view.get("depth", 0)),
-            probe_s=time.time() - t0, newton_solves=solves,
+            probe_s=time.time() - t_row, newton_solves=n_solves,
             extra=dict(seed_distance=rec["provenance"]["seed_distance"],
                        period_rank=rec["provenance"]["period_rank"],
-                       degree=degree, atom_size=rec["size"]),
-        )
-    return _unavailable("snap_to_nucleus", last, view, t0, solves, k=k,
-                        period_candidates=periods)
+                       degree=degree, atom_size=rec["size"], **shared),
+        ))
+    return out
+
+
+def snap_to_nucleus(view: dict, k=None, *, degree: int = 2, max_period: int = MAX_PERIOD,
+                    n_periods: int = N_PERIODS, snap_max_fw_mult: float = SNAP_MAX_FW_MULT,
+                    max_fw: float = MAX_FW, source: str = "maneuver_snap") -> Maneuver:
+    """Atom-domain probe at the view centre -> Newton -> recentre on the nucleus.
+
+    `view` is `{cx, cy, fw, depth, node_id}` (floats/ints; cx/cy may be strings).
+    `k` is the frame: None preserves `view["fw"]`; otherwise `fw = k * atom size`.
+
+    Returns an unavailable `Maneuver` — with the reason named — when no candidate period
+    converges, when the nucleus is outside the frame (that would be a teleport, not a
+    snap), when the atom is degenerate/non-minimal, or when the requested framing crosses
+    the f64 pixel-spacing wall at the descent's node width.
+
+    Single-`k` convenience over `snap_to_nucleus_multi`; a caller with several framings
+    must use that one or it pays the same solve once per `k`.
+    """
+    return snap_to_nucleus_multi(view, [k], degree=degree, max_period=max_period,
+                                 n_periods=n_periods, snap_max_fw_mult=snap_max_fw_mult,
+                                 max_fw=max_fw, source=source)[0]
 
 
 # --------------------------------------------------------------------------- #
@@ -305,6 +354,9 @@ def lateral_to_sibling(view: dict, rng, *, degree: int = 2, k=None,
                        period_cap: int = LAT_PERIOD_CAP,
                        scale_tol: float = LAT_SCALE_TOL_DECADES,
                        max_fw: float = MAX_FW, parent_rec: dict | None = None,
+                       seed_periods: bool = LAT_SEED_PERIODS,
+                       n_periods: int = LAT_N_PERIODS,
+                       low_sweep: int = LAT_LOW_SWEEP,
                        source: str = "maneuver_lateral") -> Maneuver:
     """Move to a nearby sibling nucleus at comparable scale.
 
@@ -317,7 +369,15 @@ def lateral_to_sibling(view: dict, rng, *, degree: int = 2, k=None,
 
     "Comparable scale" is enforced: a candidate whose window scale differs from the
     parent's by more than `scale_tol` decades is not a sibling, it is a different rung.
-    """
+
+    COST. `seed_periods` (default on) hands `identify_nucleus` the atom-domain probe's
+    ranked candidates instead of letting it sweep `1..pmax` — the same correction that
+    made the snap probe cheap. The sweep was 84% of all maneuver probe cost in the
+    shakedown for 23% of the pushed nodes, because `pmax` reaches `LAT_PERIOD_CAP` and
+    every period costs a full Newton solve. Setting it False restores the sweep, which is
+    the reference implementation the seeded path is differentially tested against
+    (`tools/atlas/bench_lateral_seeding.py`); the caps below are then the fallback lever
+    and are deliberately NOT lowered while seeding carries the cost."""
     t0 = time.time()
     al.set_precision()
     fw = float(view["fw"])
@@ -341,14 +401,31 @@ def lateral_to_sibling(view: dict, rng, *, degree: int = 2, k=None,
         th = float(rng.random()) * 2.0 * math.pi
         seed = mp.mpc(pcx + mp.mpf(rad * math.cos(th)), pcy + mp.mpf(rad * math.sin(th)))
         tried += 1
+        cands = None
+        if seed_periods:
+            # HYBRID, and the split is not arbitrary. The sweep's floor is pmax >= 24, so
+            # the low head is a FIXED, cheap 23 solves while the tail runs to 120 — 80% of
+            # the cost. The head is also exactly where the atom-domain ranking is weakest
+            # (a seed sits inside many low-period atom domains at once, and "smallest
+            # period wins" is what stops the probe returning the parent itself), and the
+            # tail is where it is strongest (a deep atom has one sharp |z_p| minimum).
+            # So: sweep the cheap head exactly, rank the expensive tail. Measured against
+            # the pure sweep in bench_lateral_seeding.py.
+            cands = sorted(set(period_candidates(seed, degree, pmax, n_periods)) |
+                           set(range(2, min(int(low_sweep), pmax) + 1)))
+            if not cands:
+                last = "orbit_escaped_immediately"
+                continue
         rec, why = al.identify_nucleus(
             seed, period_min=1, period_max=pmax, degree=degree, near=rad * 4,
-            source=source,
+            source=source, periods=cands,
             provenance={"parent_atom_id": parent_rec["id"],
                         "parent_period": int(parent_rec["period"]),
-                        "probe_period_max": pmax,
+                        "probe_period_max": pmax, "probe_periods": cands,
                         "radius_over_parent_w": (rad / w_par if w_par else None)})
-        solves += pmax                       # identify_nucleus sweeps periods 1..pmax
+        # upper bound either way: identify_nucleus stops at the first success, and the
+        # seeded set is what replaces the 1..pmax sweep.
+        solves += len(cands) if cands is not None else pmax
         if rec is None:
             last = why
             continue

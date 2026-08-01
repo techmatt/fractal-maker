@@ -109,6 +109,41 @@ run-scoped visited key is `atom_key | op | k`: **the framing is part of the iden
 because the same atom at two `k`s is two different views.
 `[code: minibrot_maneuvers.atom_key_of; steered_frontier._consume_maneuver]`
 
+### 2.6 The lateral probe is a hybrid, not a sweep
+
+`identify_nucleus` sweeps every period `1..pmax`, and with `pmax` reaching
+`LAT_PERIOD_CAP = 120` that sweep **was 84% of all maneuver probe cost for 23% of the
+pushed nodes** — median 71 ms but mean 442 ms and tail 6.57 s, i.e. tail-dominated.
+`[measured: 1,001 deduped operator calls, maneuver_shakedown]`
+
+The fix is the same correction that made the snap probe cheap (§2.2), applied to the
+*tail only*: **sweep the cheap head exactly, rank the expensive tail.** Periods `2..24`
+are always tried (`LAT_LOW_SWEEP`; `pmax >= 24` always, so the head is a fixed ~23 solves)
+and everything above comes from the atom-domain ranking. The split is not arbitrary in
+either direction — the head is where the ranking is *weakest*, because a probe seed sits
+inside many low-period atom domains at once and "smallest period wins" is what stops the
+probe returning the parent itself; the tail is where it is *strongest*, because a deep
+atom has one sharp `|z_p|` minimum. Pure ranking with no head lost 17% of availability.
+
+Measured by **replay** — the recorded parent views of the shakedown, both arms driven from
+an identically-seeded RNG so the probe seeds are byte-identical, which a live A/B cannot
+give (the walk's frontier moves with the cost of the operator).
+`[code: tools/atlas/bench_lateral_seeding.py; measured: 239 replayable calls, 2026-07-31]`
+
+| arm | total | mean | max | Newton solves | available |
+|---|---|---|---|---|---|
+| sweep (reference) | 141.7 s | 593 ms | 6.23 s | 39,261 | 116 |
+| head 24 (**shipped**) | 52.6 s | 220 ms | 1.03 s | 13,896 | 109 |
+| head 16 | 33.4 s | 140 ms | 0.65 s | 9,869 | 112 |
+| no head | 16.6 s | 70 ms | 0.50 s | 4,997 | 96 |
+
+**2.7× cheaper and the 6-second tail is gone.** A cheaper head is available as a knob
+(`low_sweep=16` is 4.2×) and is *not* shipped: it triples how often the probe names a
+different sibling than the reference (11/105 vs 4/109). A disagreement is not an error —
+both arms return a minimal, in-frame, comparable-scale nucleus, and the operator's
+contract is "a sibling", not "that specific sibling" — so it is reported as identity
+drift, which is the quantity a conservative default should minimise.
+
 ## 3. Selection is a reserved FLOOR of frontier slots, not a probability
 
 The walker already ranks a candidate slate, so a new proposal source needs a **slot**, not a
@@ -211,12 +246,33 @@ and scheduler features use.
 |---|---|---|
 | `--maneuver-quota` | 4 | reserved slots per batch, **of available** |
 | `--maneuver-probe-p` | 0.25 | cost governor: P(probe fires) per popped rung |
-| `--maneuver-k` | `none,4` | preserve-fw, and the 4×-atom "money shot" framing |
+| `--maneuver-k` | `none,4,16` | preserve-fw, the 4×-atom frame, and the 16× wallpaper frame |
 | `--no-maneuver-lateral` | (lateral on) | disable the expensive operator; snap only |
 
 `k = 4` is the framing the deep-center emitter already suggests for a nucleus-centred
 frame — `fw ≈ size` is mostly interior black and `fw < size` on-nucleus is pure black.
 `[code: deep_center_finder.make_deep_center]`
+
+**`k = 16` is in the set because it is the framing worth LABELING, not because it is
+cheap.** The 4× frame answers *"is this atom good?"*; the 16× frame is often close to a
+usable wallpaper frame by itself, which is the material the corpus wants. That it is also
+free is a consequence of §7.1, not the reason. **No small `k`** — framing *into* the atom
+is interior black, which is the same fact that sets the floor at `k = 4`.
+
+### 7.1 A `k` is a reframing, not a probe
+
+The nucleus does not depend on the framing, so `snap_to_nucleus_multi` runs **one**
+atom-domain probe + Newton pass per view and emits one `Maneuver` per `k`. Adding a `k`
+therefore costs a division, not a probe — which is what makes the k set a design axis
+rather than a cost knob. The naive per-`k` loop it replaces re-solved the identical
+nucleus once per framing.
+
+The shared solve is charged to the **first row only** (`newton_solves = 0` and
+`extra.reused_solve` on the rest), so summing `probe_s` over the emitted rows is the true
+cost of the call and a per-`k` cost read is not N copies of one solve. The framing verdict
+stays **per `k`**: one solve, three answers — a shallow atom can take `k = 4` and refuse
+`k = 16` as `fw_over_root_scale` off the same nucleus.
+`[code: minibrot_maneuvers.snap_to_nucleus_multi]`
 
 ## 8. What this is NOT
 
