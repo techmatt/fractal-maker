@@ -141,19 +141,41 @@ adopted. The deletion is pinned so it does not return by reflex.
 `[code: tools/orbital/rescore_lib.py module docstring;
 test_rescore_lib.py::test_the_dead_scoring_cap_policy_is_gone]`
 
-**Nothing downstream consumes any of this.** No sourcing, descent, corpus or classifier
+**Nothing downstream consumes these ARTIFACTS.** No sourcing, descent, corpus or classifier
 code reads `data/orbital/`; the only tracked references to it are the size-guard
 disposition and the tracked-artifact canary list. The screen is run by hand and its output
 is read by a human. `[code: grep `data/orbital` over tools/ src/ tests/ → `tools/audit/size_guard.py`,
-`tests/test_tracked_artifacts.py`]`
+`tests/test_tracked_artifacts.py`]` **The measure CODE is a different question** — since
+2026-07-31 `rescore_lib.ring_measures` has a live caller in the descent walk (below).
 
-### `radial_range` is UNPROMOTED, not retired — and deliberately so
+### `radial_range` has a consumer as of 2026-07-31 — but the `data/orbital/` promotion is still not done
 
-**Verdict: do not promote it.** `radial_range` is **not load-bearing yet**. It is
-committed code with no consumer and no committed output, and all of its evidence sits in
-disposable `scratch/`. Nothing downstream reads `data/orbital/` **at all** — the screen is
-run by hand — so wiring `range` in would be building for a consumer that does not exist.
-`[code: as the paragraph above]` `[verdict: Matt]`
+**The two halves of "unpromoted" have come apart, so read them separately.**
+
+**It is now load-bearing.** `tools/atlas/maneuver_screen.py` calls
+`rescore_lib.ring_measures` on every available minibrot-maneuver candidate and records both
+measures on the maneuver record and on the pushed frontier node; `radial_range` is the axis
+`--maneuver-range-prior` fills quota slots and sets the node prior by, and the one
+`neighborhood_expand` takes its top-`n` on. The consumer this section said did not exist now
+does. It runs at the 64×36 screen geometry on the 4× frame — the pair this doc validated —
+under its own stamped cap policy (`mi12000k0.3c4800-67000`, `retired.md`'s dated
+`UN-RETIRED` entry), so those numbers are **not** commensurable with anything in
+`data/orbital/` and `require_one_policy` raises across the two. Selection on it is behind a
+default-off flag; recording is unconditional.
+`[code: tools/atlas/maneuver_screen.py; docs/design/minibrot_maneuvers.md §3.1]`
+
+**The `data/orbital/` promotion described below is still NOT done, and is still optional.**
+`field_metrics.measure_field` computes crossings only; `measures.jsonl` and
+`screen_scores.jsonl` still carry no `radial_range` column, and the hand-run screen still
+reads `rings`. The maneuver consumer bypasses that path entirely — it goes through
+`rescore_lib`, which is where `range` has always lived. So the paragraph below stands as
+written, minus its premise that nothing consumes the measure.
+
+**Historical verdict, superseded 2026-07-31 (kept because the reasoning is the record):**
+"do not promote it — `radial_range` is not load-bearing yet. It is committed code with no
+consumer and no committed output, and all of its evidence sits in disposable `scratch/`.
+Nothing downstream reads `data/orbital/` **at all** — the screen is run by hand — so wiring
+`range` in would be building for a consumer that does not exist." `[verdict: Matt]`
 
 **Unpromoted, not retired.** The distinction is the point, and it is different from the
 one `cycles_spanned` / `falloff_extent` / `radial_rings_p90` got in §4: those *failed* and

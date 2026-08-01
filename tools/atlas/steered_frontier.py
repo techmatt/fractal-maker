@@ -80,6 +80,7 @@ from score_lib import corn_decode       # noqa: E402
 from active_ckpt import ACTIVE_CKPT, auto_maxiter  # noqa: E402
 import deficit_scheduler as dsched       # noqa: E402  (pure; torch-free scheduling logic)
 import minibrot_maneuvers as mnv         # noqa: E402  (pure mpmath; no subprocess, no torch)
+import maneuver_screen as msc            # noqa: E402  (the field half: spawns the engine)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -143,6 +144,21 @@ MAN_PROBE_P_DEFAULT = 0.25   # cost governor: P(probe fires) per popped rung
 # snap_to_nucleus_multi solves the nucleus once and reframes per k (a k is not a probe).
 # No small k: framing INTO the atom is interior black (docs/design/minibrot_maneuvers.md §7).
 MAN_K_DEFAULT = "none,4,16"
+# --- v1.4: the richness screen and what may select on it -------------------------------
+# Every available candidate is SCREENED (both ring measures at 64x36 on the atom's 4x
+# frame, `maneuver_screen.py`) and the scores are RECORDED on the maneuver row and on the
+# pushed node. Recording is unconditional; SELECTING on it is not. `--maneuver-range-prior`
+# gates the two selection changes, and with it off the walk's trajectory is byte-identical
+# to v1.3 — the screen consumes no RNG, gates nothing, and only adds columns.
+MAN_RANGE_GAIN_DEFAULT = 0.5   # bounded prior term: +/- gain/2 around NEUTRAL_PRIOR.
+# The bound is the whole design. An ordinary node's `cheap_eord` runs over [0, K-1] = [0, 3]
+# (v8 is a K=4 CORN head), so the best-ranked maneuver sits at 1.25 and still loses to any
+# ordinary node scoring above that: a maneuver out-competes a SCORED node only via the
+# quota floor, never via the prior (docs/design/minibrot_maneuvers.md §3). Symmetric about
+# NEUTRAL_PRIOR, so the flag REORDERS maneuvers without inflating them as a class.
+MAN_NBH_M_DEFAULT = mnv.NBH_MAX_FOUND      # enumerate up to m nearby nuclei
+MAN_NBH_N_DEFAULT = mnv.NBH_TOP_N          # propose the top n by radial_range
+MAN_NBH_PROBES_DEFAULT = mnv.NBH_MAX_PROBES
 # Counters, named once so __init__/load_state/the summary can never drift apart.
 #   probes_*        — cost-governor accounting (did the probe even get to run)
 #   op_avail/unavail— the operator's own availability (the ~17% expectation)
@@ -152,11 +168,20 @@ MAN_K_DEFAULT = "none,4,16"
 #   quota_bound     — reserved slots that promoted a node the plain priority top-B would
 #                     NOT have taken (the floor actually binding, not merely present)
 #   quota_unfilled  — reserved slots that went unused for lack of AVAILABILITY
+#   screened/unscreenable — the richness screen's own reach (the deep tail is genuinely
+#                     below the f64 spacing guard at 64 px; that is data, not an error)
+#   nbh_passed_over — neighbourhood candidates enumerated, screened and NOT in the top n
+#   quota_passed_over — available maneuver nodes the quota could not take THIS batch
 MAN_TOTALS = ("man_probes_rolled", "man_probes_fired", "man_probes_coin_skip",
               "man_probes_cache_skip", "man_op_available", "man_op_unavailable",
               "man_avail_unused", "man_nodes_pushed", "man_quota_bound",
-              "man_quota_unfilled", "man_nodes_expanded", "man_admitted")
+              "man_quota_unfilled", "man_nodes_expanded", "man_admitted",
+              "man_screened", "man_unscreenable", "man_screen_cache_hits",
+              "man_nbh_passed_over", "man_quota_passed_over", "man_frontier_pruned")
 FRONTIER_CAP = 6000      # prune the frontier to the top-N by priority (memory bound)
+MAN_FRONTIER_SHARE = 0.5  # ... of which maneuver nodes may hold at most this fraction. They
+                          # are PROTECTED from the pooled priority prune, not exempt from the
+                          # bound — see push_children for the starvation this stops.
 JULIA_ROOT_FW = 3.0      # fixed z-plane base-scale root view (matches --julia-root-fw)
 EXPAND_TIMEOUT_S = 900   # hard-kill backstop on a hung --expand call
 MIN_UNIT_TIMEOUT_S = 60  # floor for the budget-clamped per-unit backstop (unit_timeout_s)
@@ -698,6 +723,22 @@ class SteeredFrontier:
             float(getattr(args, "maneuver_probe_p", MAN_PROBE_P_DEFAULT)),
             np.random.default_rng(self.seed + 9901))
         self.man_probe_s = 0.0             # cumulative probe+solve wall time (cost sizing)
+        # --- v1.4 richness screen. The cache is keyed on the SHARED atom key and is
+        # checkpointed: a resume must not re-spawn the engine for nuclei the killed run
+        # already screened. The distribution is the run's OWN accumulating radial_range
+        # population — absolute ring scores mean nothing across geometries or cap policies,
+        # only orderings within one pair (orbital_field_metrics.md §5, §7). ---
+        self.man_screens = msc.ScreenCache()
+        self.man_range_dist = msc.RangeDistribution()
+        self.man_range_prior = bool(getattr(args, "maneuver_range_prior", False))
+        self.man_range_gain = float(getattr(args, "maneuver_range_gain",
+                                            MAN_RANGE_GAIN_DEFAULT))
+        self.man_nbh = bool(getattr(args, "maneuver_neighborhood", False))
+        self.man_nbh_m = int(getattr(args, "maneuver_nbh_m", MAN_NBH_M_DEFAULT))
+        self.man_nbh_n = int(getattr(args, "maneuver_nbh_n", MAN_NBH_N_DEFAULT))
+        self.man_nbh_probes = int(getattr(args, "maneuver_nbh_probes",
+                                          MAN_NBH_PROBES_DEFAULT))
+        self.man_screen_s = 0.0            # cumulative screen wall time, priced separately
 
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.scratch.mkdir(parents=True, exist_ok=True)
@@ -1053,10 +1094,18 @@ class SteeredFrontier:
 
         `lateral_to_sibling` reuses the snap's parent atom record, so a fired probe costs one
         atom-domain pass + the snap solves + the lateral's neighbourhood sweep, never two
-        parent solves. Every probe decision is logged to `maneuvers.jsonl`."""
+        parent solves. Every probe decision is logged to `maneuvers.jsonl`.
+
+        THREE PHASES, and the split is what makes the screen affordable. (1) ENUMERATE:
+        every operator runs, pure mpmath, no process spawned. (2) SCREEN: every DISTINCT
+        available nucleus in the whole batch is measured in one concurrent pass — the
+        screen's cost is process spawn, not compute, so batching hides it, and a per-row
+        screen would have paid it once per k. (3) CONSUME: rows are recorded and pushed in
+        enumeration order, so the RNG stream and the push order are unchanged from v1.3.
+        """
         if not self.maneuvers:
             return 0
-        pushed = 0
+        produced: list[dict] = []          # {m, parent, nbh_group} in enumeration order
         for n in batch:
             degree = mnv.degree_of(n["partition"])
             if degree is None:            # julia/phoenix viewport — operators undefined
@@ -1075,39 +1124,135 @@ class SteeredFrontier:
             # ONE solve, one row per framing: the nucleus does not depend on k, so adding
             # a k to the set costs a reframing, not another probe.
             for m in mnv.snap_to_nucleus_multi(view, self.man_ks, degree=degree):
-                pushed += self._consume_maneuver(m, n)
+                produced.append(dict(m=m, parent=n, nbh_group=None))
                 if m.available and parent_rec is None:
                     parent_rec = dict(id=m.atom_id, cx=m.cx, cy=m.cy, period=m.period,
                                       window_scale=m.window_scale, degree=degree)
             if self.man_lateral:
                 m = mnv.lateral_to_sibling(view, self.rng, degree=degree,
                                            parent_rec=parent_rec)
-                pushed += self._consume_maneuver(m, n)
+                produced.append(dict(m=m, parent=n, nbh_group=None))
+            if self.man_nbh:
+                for m in mnv.neighborhood_expand(
+                        view, self.rng, self.man_ks, degree=degree, parent_rec=parent_rec,
+                        max_found=self.man_nbh_m, max_probes=self.man_nbh_probes):
+                    produced.append(dict(m=m, parent=n, nbh_group=n["node_id"]))
             self.man_probe_s += time.time() - t0
+
+        scores = self._screen_produced(produced)
+        keep_nbh = self._nbh_top_n(produced, scores)
+
+        pushed = 0
+        for item in produced:
+            m = item["m"]
+            drop = None
+            if (item["nbh_group"] is not None and m.available
+                    and m.atom_key not in keep_nbh.get(item["nbh_group"], ())):
+                drop = "nbh_not_top_n"
+            pushed += self._consume_maneuver(m, item["parent"],
+                                             scores.get(m.atom_key), passed_over=drop)
         # mirror the governor's counters into totals (the checkpointed, resumable copy)
         g = self.man_gov
         self.totals["man_probes_rolled"] = g.n_rolled
         self.totals["man_probes_fired"] = g.n_fired
         self.totals["man_probes_coin_skip"] = g.n_coin_skip
         self.totals["man_probes_cache_skip"] = g.n_cache_skip
+        self.totals["man_screen_cache_hits"] = self.man_screens.n_hits
         return pushed
 
-    def _consume_maneuver(self, m, parent) -> int:
-        """Record a maneuver outcome and, when it is available AND new, push its node."""
+    def _screen_produced(self, produced: list[dict]) -> dict:
+        """Screen every DISTINCT available nucleus in this batch's enumeration, once.
+
+        RECORDING, NEVER A GATE (the prompt's phrasing, and the reason this returns a dict
+        rather than filtering `produced`): a candidate whose screen fails is still a
+        candidate. The run's radial_range distribution is fed here — from the screened
+        candidates only, which is the population the percentile is later taken against."""
+        if not produced:
+            return {}
+        jobs = []
+        for item in produced:
+            m = item["m"]
+            if m.available and m.atom_key and m.window_scale:
+                jobs.append(dict(atom_key=m.atom_key, cx=m.cx, cy=m.cy,
+                                 window_scale=m.window_scale,
+                                 family=item["parent"]["partition"]))
+        if not jobs:
+            return {}
+        t0 = time.time()
+        before = set(self.man_screens.by_key)
+        # Bounded by the SAME budget-clamped backstop the expand call uses, so the screen
+        # pass can never be the unbounded thing inside a batch the between-batch cap cannot
+        # see. `unit_timeout_s` is already `min(900s, remaining budget)` floored at 60s.
+        scores = self.man_screens.screen_many(jobs, budget_s=self.unit_timeout_s())
+        self.man_screen_s += time.time() - t0
+        for key, rec in scores.items():
+            if key in before:                   # cache hit: already counted and already
+                continue                        # in the distribution
+            if rec.get("screened"):
+                self.totals["man_screened"] += 1
+                self.man_range_dist.add(rec.get("radial_range"))
+            else:
+                self.totals["man_unscreenable"] += 1
+        return scores
+
+    def _nbh_top_n(self, produced: list[dict], scores: dict) -> dict:
+        """Per parent node, the `n` neighbourhood atom keys to propose, by radial_range.
+
+        Selection is by DISTINCT ATOM, not by row: a nucleus emits one row per `k`, and
+        ranking rows would spend the whole budget on the k-set of a single nucleus.
+        Unscreenable atoms sort LAST but are not excluded — the screen is a ranker here,
+        not a gate, so an atom the 64 px geometry cannot reach still gets a slot if one is
+        left over. Enumeration order breaks ties, which is what keeps a run with a totally
+        unreachable neighbourhood behaving like the plain operator."""
+        groups: dict = {}
+        for i, item in enumerate(produced):
+            m = item["m"]
+            if item["nbh_group"] is None or not m.available:
+                continue
+            g = groups.setdefault(item["nbh_group"], {})
+            if m.atom_key not in g:
+                rec = scores.get(m.atom_key) or {}
+                g[m.atom_key] = (1 if rec.get("screened") else 0,
+                                 float(rec.get("radial_range") or 0.0), -i)
+        keep = {}
+        for gid, cands in groups.items():
+            order = sorted(cands, key=lambda k: cands[k], reverse=True)
+            keep[gid] = set(order[:max(0, self.man_nbh_n)])
+            self.totals["man_nbh_passed_over"] += max(0, len(order) - self.man_nbh_n)
+        return keep
+
+    def _consume_maneuver(self, m, parent, screen=None, passed_over=None) -> int:
+        """Record a maneuver outcome and, when it is available AND new, push its node.
+
+        `screen` is the richness record for this nucleus (may be None / unscreened). It is
+        written onto the row and onto `man` in EVERY case, including the rows that are not
+        pushed — the prompt's "every candidate keeps its scores, including candidates not
+        selected". `passed_over` names a candidate that lost a bounded selection (today:
+        the neighbourhood top-n) rather than being unavailable or already visited."""
         row = m.as_row()
         row.update(batch=self.batch_i, partition=parent["partition"],
                    root_id=parent["root_id"])
+        if screen:
+            row["screen"] = screen
         if not m.available:
             self.totals["man_op_unavailable"] += 1
             row["used"] = False
             self._log_maneuver(row)
             return 0
         self.totals["man_op_available"] += 1
+        if passed_over:
+            row["used"] = False
+            row["unused_reason"] = passed_over
+            row["passed_over"] = True
+            self._log_maneuver(row)
+            return 0
         # Multiple frontier members snapping to ONE nucleus is the normal case; the
         # read-time canonical key (snap_near_zero + sector-canonical rounding) is what
         # collapses them. Framing (k) is part of the identity — the same atom at two k's
-        # is two distinct views — so the visited key carries k.
-        vkey = f"{m.atom_key}|{m.op}|{m.k}"
+        # is two distinct views. The OPERATOR is not: with three operators live, lateral
+        # and neighborhood routinely reach the same sibling, and keying on op as well would
+        # push that one view twice under two provenance labels. Identity is (atom, k).
+        vkey = f"{m.atom_key}|{m.k}"
         if vkey in self.man_visited:
             self.totals["man_avail_unused"] += 1
             row["used"] = False
@@ -1122,11 +1267,25 @@ class SteeredFrontier:
                    parent_node_id=m.parent_node_id, parent_cx=m.parent_cx,
                    parent_cy=m.parent_cy, parent_fw=m.parent_fw,
                    parent_depth=m.parent_depth)
+        # The richness scores ride the NODE (and therefore state.json, the harvest log and
+        # the ledger), not only the probe log — a readout that has to re-derive a score
+        # from coordinates is a readout that will re-derive it under a different cap.
+        if screen:
+            man["radial_range"] = screen.get("radial_range")
+            man["radial_rings"] = screen.get("radial_rings")
+            man["screened"] = bool(screen.get("screened"))
+            man["screen_policy"] = screen.get("maxiter_policy_token")
+        prior = NEUTRAL_PRIOR
+        if self.man_range_prior:
+            pct = self.man_range_dist.percentile_of(
+                (screen or {}).get("radial_range") if (screen or {}).get("screened") else None)
+            prior += msc.range_prior_delta(pct, self.man_range_gain)
+            man["range_pct"] = round(pct, 4)
         self.frontier.append(dict(
             node_id=nid, root_id=parent["root_id"], partition=parent["partition"],
             c=parent["c"], cx=float(m.cx), cy=float(m.cy), fw=float(m.fw),
             depth=int(m.depth), branch="maneuver",
-            priority=NEUTRAL_PRIOR + gumbel(self.rng, T_GUMBEL) + self.beta * int(m.depth),
+            priority=prior + gumbel(self.rng, T_GUMBEL) + self.beta * int(m.depth),
             cheap_eord=None, cheap_pgood=None,
             mix_source=f"maneuver:{m.op}:k={m.k}", man=man,
         ))
@@ -1151,14 +1310,38 @@ class SteeredFrontier:
 
         `pref_loc_v1` (the preference ranker) is ABSENT from this seam, as it is from
         `pop_batch_scheduled`: reserving a slot is not a ranker change, and the
-        ranks-never-steers boundary is untouched by it."""
+        ranks-never-steers boundary is untouched by it.
+
+        WHICH available maneuver fills a slot is the v1.4 change, and only behind
+        `--maneuver-range-prior`: with the flag on the reserved slots are filled by
+        descending `radial_range` instead of by the incoming priority order. That is still
+        not a ranker — no aesthetic score enters — it is a field/geometry measure choosing
+        among candidates that already hold the slots. Flag off, the order is v1.3's."""
         if not self.maneuvers or self.man_quota <= 0:
             return pool[:self.B], pool[self.B:]
         plain = pool[:self.B]
         plain_ids = {n["node_id"] for n in plain}
         man = [n for n in pool if n.get("man")]
+        if getattr(self, "man_range_prior", False) and man:
+            # Unscreened sorts last (0 in the first key), never excluded — the screen ranks
+            # the quota, it does not gate it. Ties keep the incoming priority order.
+            man = sorted(man, key=lambda n: (1 if n["man"].get("screened") else 0,
+                                             float(n["man"].get("radial_range") or 0.0)),
+                         reverse=True)
         take = min(self.man_quota, len(man), self.B)
         self.totals["man_quota_unfilled"] += self.man_quota - take
+        self.totals["man_quota_passed_over"] += max(0, len(man) - take)
+        if getattr(self, "man_range_prior", False) and len(man) > take:
+            for n in man[take:]:
+                self._log_maneuver(dict(batch=self.batch_i, op=n["man"].get("op"),
+                                        k=n["man"].get("k"), node_id=n["node_id"],
+                                        atom_key=n["man"].get("atom_key"),
+                                        partition=n["partition"], used=False,
+                                        passed_over=True, unused_reason="quota_passed_over",
+                                        priority=n["priority"],
+                                        radial_range=n["man"].get("radial_range"),
+                                        radial_rings=n["man"].get("radial_rings"),
+                                        screened=n["man"].get("screened")))
         if take <= 0:
             return plain, pool[self.B:]
         reserved = man[:take]
@@ -1623,22 +1806,46 @@ class SteeredFrontier:
                 for r in prio_rows:
                     f.write(json.dumps(r) + "\n")
         # prune to the memory bound (keep the best); drop pruned nodes' cached embeddings.
-        # Maneuver-originated nodes are exempt: they are the population the reserved floor
-        # exists to protect, and pruning by priority would delete them first (they carry a
-        # neutral prior, or a score from a head that has never seen their kind) — the cap
-        # would silently undo the floor. The exemption is bounded by the same probe
-        # governor that bounds how many can ever be created.
-        if len(self.frontier) > FRONTIER_CAP:
-            self.frontier.sort(key=lambda n: -n["priority"])
-            keep_man = [n for n in self.frontier if n.get("man")] if self.maneuvers else []
-            room = max(0, FRONTIER_CAP - len(keep_man))
-            others = [n for n in self.frontier if not n.get("man")] if self.maneuvers \
-                else self.frontier
-            kept_ids = {n["node_id"] for n in keep_man} | {n["node_id"] for n in others[:room]}
-            dropped = [n for n in self.frontier if n["node_id"] not in kept_ids]
-            self.frontier = [n for n in self.frontier if n["node_id"] in kept_ids]
-            for n in dropped:
-                self.node_embs.pop(n["node_id"], None)
+        # Maneuver-originated nodes are PROTECTED, not exempt: they are the population the
+        # reserved floor exists to protect, and pruning the pooled frontier by priority
+        # would delete them first (they carry a neutral prior, or a score from a head that
+        # has never seen their kind) — the cap would silently undo the floor.
+        #
+        # v1.4: PROTECTED IS NOT UNLIMITED. The exemption used to be total, so once the
+        # maneuver population passed FRONTIER_CAP the ordinary nodes' room went to zero and
+        # every one of them was evicted — the frontier becomes 100% maneuver nodes and the
+        # walk starves. That is the same failure `pop_batch` records for capped-root dead
+        # weight, reached by another route, and the third operator is what makes it
+        # reachable: it pushes ~2x as many nodes per fired probe, and a 2-minute shakedown
+        # already pushed 40/batch against ~21 expanded, i.e. it crosses 6000 inside a
+        # 7-hour run. So maneuvers get a guaranteed SHARE and are pruned among themselves
+        # beyond it. Below the share nothing changes — which is every run before this one.
+        self.prune_frontier()
+
+    def prune_frontier(self):
+        """Prune the frontier to `FRONTIER_CAP`, protecting maneuver nodes up to their share.
+
+        Its own method so the tests can drive THE code rather than a hand-mirrored copy of
+        it — a fixture that reimplements its subject asserts `f(x) == f(x)`
+        (`verification_practice.md` §1.10) and, worse, stays green while the subject rots."""
+        if len(self.frontier) <= FRONTIER_CAP:
+            return
+        self.frontier.sort(key=lambda n: -n["priority"])
+        man = [n for n in self.frontier if n.get("man")] if self.maneuvers else []
+        others = [n for n in self.frontier if not n.get("man")] if self.maneuvers \
+            else self.frontier
+        # maneuvers keep up to their share; unused share falls to the ordinary nodes, and
+        # unused ordinary room falls back to the maneuvers.
+        man_room = min(len(man), max(int(FRONTIER_CAP * MAN_FRONTIER_SHARE),
+                                     FRONTIER_CAP - len(others)))
+        keep_man = man[:man_room]
+        room = max(0, FRONTIER_CAP - len(keep_man))
+        kept_ids = {n["node_id"] for n in keep_man} | {n["node_id"] for n in others[:room]}
+        dropped = [n for n in self.frontier if n["node_id"] not in kept_ids]
+        self.frontier = [n for n in self.frontier if n["node_id"] in kept_ids]
+        self.totals["man_frontier_pruned"] += sum(1 for n in dropped if n.get("man"))
+        for n in dropped:
+            self.node_embs.pop(n["node_id"], None)
 
     # ---------------------------------------------------------------- state
     def save_state(self):
@@ -1659,10 +1866,19 @@ class SteeredFrontier:
             # maneuver state a resume must not lose: without them a restart re-pays the
             # Newton cost for regions the killed run already probed and re-pushes nodes the
             # ledger already carries.
+            # The screen cache and the range distribution join them for the same reason:
+            # a resume without the cache re-spawns the engine for every nucleus already
+            # measured, and a resume without the distribution restarts the percentile from
+            # n=0 — which silently reverts the range prior to neutral for the next 8 rows.
             state["maneuvers"] = dict(
                 quota=self.man_quota, ks=[("none" if k is None else k) for k in self.man_ks],
                 lateral=self.man_lateral, probe_s=self.man_probe_s,
-                visited=sorted(self.man_visited), governor=self.man_gov.state_dict())
+                visited=sorted(self.man_visited), governor=self.man_gov.state_dict(),
+                neighborhood=self.man_nbh, nbh_m=self.man_nbh_m, nbh_n=self.man_nbh_n,
+                nbh_probes=self.man_nbh_probes, range_prior=self.man_range_prior,
+                range_gain=self.man_range_gain, screen_s=round(self.man_screen_s, 3),
+                screens=self.man_screens.state_dict(),
+                range_dist=self.man_range_dist.state_dict())
         # morph memory + frontier-node embeddings first (state.json references them), then the
         # checkpoint. Both are heuristic (priority only) — a stale copy never loses an admission.
         self.morph.save()
@@ -1691,6 +1907,9 @@ class SteeredFrontier:
             self.man_visited = set(m.get("visited", []))
             self.man_probe_s = float(m.get("probe_s", 0.0))
             self.man_gov.load_state(m.get("governor", {}))
+            self.man_screen_s = float(m.get("screen_s", 0.0))
+            self.man_screens.load_state(m.get("screens") or {})
+            self.man_range_dist.load_state(m.get("range_dist") or {})
         self.rng.bit_generator.state = st["rng"]
         # scheduler prices/caps reload from the checkpoint; caps re-open on resume (item 4). The
         # distinct-look tally reloaded from its npz in the scheduler's __init__.
@@ -1935,8 +2154,15 @@ class SteeredFrontier:
             print(f"[tau_h] {self.tau_h}", flush=True)
             if self.maneuvers:
                 print(f"[maneuvers] ON — quota={self.man_quota} slots/batch (of AVAILABLE), "
-                      f"probe_p={self.man_gov.p} k={self.man_ks} lateral={self.man_lateral}",
+                      f"probe_p={self.man_gov.p} k={self.man_ks} lateral={self.man_lateral} "
+                      f"neighborhood={self.man_nbh}"
+                      + (f" (m={self.man_nbh_m} n={self.man_nbh_n} "
+                         f"probes={self.man_nbh_probes})" if self.man_nbh else ""),
                       flush=True)
+                print(f"[maneuvers] screen at {msc.fm.SCREEN_W}x{msc.fm.SCREEN_H} on the "
+                      f"{msc.SCREEN_FRAME_MULT:g}x atom frame, cap policy "
+                      f"{msc.screen_policy_token()!r}; range_prior="
+                      f"{self.man_range_prior} (gain {self.man_range_gain})", flush=True)
             if self.scheduler is not None:
                 tf = {p: round(v, 3) for p, v in self.scheduler.target_frac.items()}
                 print(f"[scheduler] ON — target_frac={tf} "
@@ -2102,8 +2328,18 @@ class SteeredFrontier:
             print(f"    pushed={m['nodes_pushed']} (available-but-unused {m['avail_unused']}) "
                   f"expanded={m['nodes_expanded']} admitted={m['admitted']}")
             print(f"    quota={m['quota']} bound={m['quota_bound']} "
-                  f"unfilled={m['quota_unfilled']}  probe+solve "
-                  f"{m['probe_s']:.1f}s = {m['probe_share_of_active']:.3%} of active")
+                  f"unfilled={m['quota_unfilled']} passed_over={m['quota_passed_over']}  "
+                  f"probe+solve {m['probe_s']:.1f}s = "
+                  f"{m['probe_share_of_active']:.3%} of active")
+            print(f"    screen: {m['screened']} scored / {m['unscreenable']} unscreenable "
+                  f"({m['screen_cache_hits']} cache hits) at "
+                  f"{m['screen_geometry'][0]}x{m['screen_geometry'][1]} "
+                  f"x{m['screen_frame_mult']:g} frame, policy {m['screen_policy']!r} "
+                  f"— {m['screen_s']:.1f}s = {m['screen_share_of_active']:.3%} of active")
+            print(f"    range_prior={m['range_prior']} (gain {m['range_gain']}, "
+                  f"dist n={m['range_dist_n']})  neighborhood={m['neighborhood']} "
+                  f"(m={m['nbh_m']} n={m['nbh_n']} probes={m['nbh_probes']}, "
+                  f"passed_over={m['nbh_passed_over']})")
         print(f"  ledger -> {self.ledger.path}\n  summary -> {self.run_dir/'summary.json'}")
 
     def maneuver_summary(self) -> dict:
@@ -2123,9 +2359,23 @@ class SteeredFrontier:
             avail_unused=t["man_avail_unused"], nodes_pushed=t["man_nodes_pushed"],
             nodes_expanded=t["man_nodes_expanded"], admitted=t["man_admitted"],
             quota_bound=t["man_quota_bound"], quota_unfilled=t["man_quota_unfilled"],
+            quota_passed_over=t["man_quota_passed_over"],
             visited_atoms=len(self.man_visited), probe_s=round(self.man_probe_s, 2),
             probe_share_of_active=(self.man_probe_s / self.active_s
                                    if self.active_s > 0 else 0.0),
+            # --- v1.4 ---
+            neighborhood=self.man_nbh, nbh_m=self.man_nbh_m, nbh_n=self.man_nbh_n,
+            nbh_probes=self.man_nbh_probes, nbh_passed_over=t["man_nbh_passed_over"],
+            range_prior=self.man_range_prior, range_gain=self.man_range_gain,
+            screened=t["man_screened"], unscreenable=t["man_unscreenable"],
+            screen_cache_hits=t["man_screen_cache_hits"],
+            screen_policy=msc.screen_policy_token(),
+            screen_geometry=[msc.fm.SCREEN_W, msc.fm.SCREEN_H, msc.fm.SCREEN_SS],
+            screen_frame_mult=msc.SCREEN_FRAME_MULT,
+            screen_s=round(self.man_screen_s, 2),
+            screen_share_of_active=(self.man_screen_s / self.active_s
+                                    if self.active_s > 0 else 0.0),
+            range_dist_n=len(self.man_range_dist.values),
             log=str(self.man_log),
         )
 
@@ -2250,6 +2500,31 @@ def main():
     ap.add_argument("--no-maneuver-lateral", dest="maneuver_lateral", action="store_false",
                     help="disable lateral_to_sibling (the expensive operator); snap only")
     ap.set_defaults(maneuver_lateral=True)
+    # --- v1.4: the richness screen selects (recording is unconditional) ---
+    ap.add_argument("--maneuver-range-prior", action="store_true",
+                    help="LET THE RICHNESS SCREEN SELECT: fill reserved quota slots by "
+                         "descending radial_range, and replace the maneuver node's neutral "
+                         "prior with a bounded range-percentile term. DEFAULT OFF — the "
+                         "scores are recorded either way, and off is byte-identical "
+                         "selection.")
+    ap.add_argument("--maneuver-range-gain", type=float, default=MAN_RANGE_GAIN_DEFAULT,
+                    help=f"magnitude of the range prior term; the term is "
+                         f"gain*(percentile-0.5), i.e. bounded to +/-gain/2 around the "
+                         f"neutral prior (default {MAN_RANGE_GAIN_DEFAULT})")
+    ap.add_argument("--maneuver-neighborhood", action="store_true",
+                    help="ENABLE the third operator, neighborhood_expand: enumerate up to "
+                         "m nearby nuclei around the solved nucleus, screen each, propose "
+                         "the top n. DEFAULT OFF.")
+    ap.add_argument("--maneuver-nbh-m", type=int, default=MAN_NBH_M_DEFAULT,
+                    help=f"neighborhood_expand: ceiling on DISTINCT nuclei enumerated per "
+                         f"call (default {MAN_NBH_M_DEFAULT})")
+    ap.add_argument("--maneuver-nbh-n", type=int, default=MAN_NBH_N_DEFAULT,
+                    help=f"neighborhood_expand: how many of them are proposed, by "
+                         f"radial_range (default {MAN_NBH_N_DEFAULT})")
+    ap.add_argument("--maneuver-nbh-probes", type=int, default=MAN_NBH_PROBES_DEFAULT,
+                    help=f"neighborhood_expand: PROBE budget per call — the bound that "
+                         f"actually binds, since 88%% of sheet-3's probes returned the "
+                         f"parent (default {MAN_NBH_PROBES_DEFAULT})")
     # --- deficit scheduler (default OFF; scheduler-off is byte-identical to pre-change) ---
     ap.add_argument("--scheduler", action="store_true",
                     help="ENABLE the family-level deficit scheduler: cross-partition allocation "

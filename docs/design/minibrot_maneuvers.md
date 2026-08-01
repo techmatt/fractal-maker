@@ -26,11 +26,13 @@ a location the walk already found. That single decision fixes everything below �
 they enter as frontier *nodes* rather than as a separate run, why they need a slot rather
 than a score, and why "unavailable" has to be a first-class, frequent answer.
 
-## 2. Two operators, not five
+## 2. Three operators — two reframings and one enumeration
 
-The maneuver set collapses to two. Five named moves (snap-preserving, reframe-outward,
-descend-to-child, ascend-to-scale, lateral) alias each other: the first four differ only in
-what frame you put on the nucleus you snapped to.
+The maneuver set collapses to **two reframings**. Five named moves (snap-preserving,
+reframe-outward, descend-to-child, ascend-to-scale, lateral) alias each other: the first
+four differ only in what frame you put on the nucleus you snapped to. A **third** operator,
+`neighborhood_expand` (§2.7), was added in v1.4 and is not a reframing at all — it
+enumerates, which is why it is the only one with a probe budget rather than a probe count.
 
 **`snap_to_nucleus(view, k)`** — atom-domain probe at the view's centre → Newton → recentre
 on the nucleus. `k` is the frame: `None` preserves the view's own `fw`; otherwise
@@ -105,9 +107,15 @@ the **shared read-time canonicalization** — `snap_near_zero` + the sector-cano
 key, i.e. exactly `deep_center_finder.snapped_dedup_key`, the function `collapse_population`
 uses. An atom found by an operator therefore carries the same `id` as one found by a source
 sheet or already sitting in the triage pool, and the overlap falls out for free. The
-run-scoped visited key is `atom_key | op | k`: **the framing is part of the identity**,
-because the same atom at two `k`s is two different views.
-`[code: minibrot_maneuvers.atom_key_of; steered_frontier._consume_maneuver]`
+run-scoped visited key is `atom_key | k`: **the framing is part of the identity**,
+because the same atom at two `k`s is two different views — and **the operator is not**.
+That second half is a v1.4 correction: the key used to carry `op` as well, which was
+harmless with two operators that rarely collided and is not harmless with three. `lateral`
+and `neighborhood_expand` sample the *same disc* and routinely reach the same sibling, so
+an op-keyed set pushed one view twice under two provenance labels. The pushed node is
+`(cx, cy, fw)`, which `(atom, k)` determines and `op` does not; `op` is provenance.
+`[code: minibrot_maneuvers.atom_key_of; steered_frontier._consume_maneuver;
+test_minibrot_maneuvers.py::test_the_visited_key_is_the_atom_and_its_framing_not_the_operator]`
 
 ### 2.6 The lateral probe is a hybrid, not a sweep
 
@@ -157,6 +165,65 @@ and paying 1.7× the probe cost to minimise it buys nothing. The head remains a 
 (`lateral_to_sibling(low_sweep=...)`, and `bench_lateral_seeding.py --low`), so restoring
 24 is one argument.
 
+### 2.7 `neighborhood_expand` — the sheet-3 mechanism as an operator
+
+**How sheet 3 actually enumerates, and why its one prior run produced only 22 atoms.**
+`src_neighborhood` takes a list of parent nuclei and fires `per_parent` probe seeds around
+each: radius drawn uniformly from `(2, 8, 32)` **× the parent's own window scale**, angle
+uniform, then `identify_nucleus(seed, period_min=1, period_max=pmax, near=rad*4)` with
+`pmax = min(200, max(24, 3 × parent period))` — smallest period wins. It stops on a target
+count or a deadline. The sheet-3 run passed 60 parents × `per_parent = 6` = **360 probes**,
+and its recorded stats close exactly: `parents 60, probes 360, hit_parent 317,
+no_nucleus_near_seed 1, seconds 146.8`, with no `budget_stopped_at` key. So the answer is
+**neither exhausted supply nor the wall-clock budget**: the configured probe budget was
+spent in full, in 2.4 minutes, and **88% of the probes returned the parent itself**. Only
+42 probes found a non-parent nucleus, and those deduped to 22. The binding constraint is
+that a seed 2–32 window scales from a nucleus is still inside that nucleus' *atom domain*,
+which is far larger than the atom, so "smallest period wins" hands the parent back.
+`[measured: data/minibrot_sources/neighborhood/meta.json, built 2026-07-30]`
+
+That single number sets the operator's design. **`m` is a ceiling on the answer; the probe
+count is the ceiling on the bill, and it is the one that binds** — a budget expressed as
+"find `m` neighbours" is an unbounded budget at an 88% miss rate. So `neighborhood_expand`
+takes `max_found = m` (default 8) *and* `max_probes` (default 12), early-exits at `m`, and
+counts `hit_parent` apart from `duplicate_neighbour` so a run can tell "the disc is
+exhausted" from "the disc keeps returning the parent".
+
+**What is ported and what is not.** Ported: the disc geometry, the parent-relative radii,
+the parent-scaled period ceiling, and the §2.6 hybrid seeding. **Not** ported: the
+*symmetry* of lateral's comparable-scale window. Sheet 3 probes "at comparable **and
+smaller** scale", so operator 3's window is **one-sided** — unbounded below,
+`NBH_SCALE_UP_DECADES = 1.0` above. The upper bound is not decoration: unfiltered, the
+first smoke case returned a period-2 giant **+1.76 decades** larger than the parent, and
+framing that at `k × size` proposes a near-base-scale view the walk's own root draws
+already cover. An atom that much larger is an ancestor, not a neighbour.
+
+**k framing applies as for snap** (§7.1): one enumeration, one `Maneuver` per
+(nucleus, `k`), the whole enumeration charged to the first emitted row. The operator
+returns candidates and selects none — screening spawns a process and this module is pure
+mpmath (§4), so the caller screens and takes the top `n` (default 2) by `radial_range`.
+`[code: minibrot_maneuvers.neighborhood_expand; steered_frontier._nbh_top_n]`
+
+**Lateral is NOT subsumed, and is not deleted.** §2.8.
+
+### 2.8 Is `lateral_to_sibling` subsumed?
+
+The two operators sample the same disc, so the question is real: at `m = 1` with an equal
+probe budget, `neighborhood_expand` walks byte-identical seed points (both call
+`_draw_probe_seed`, so one seeded RNG gives both the same radius/angle pairs) and returns
+the first survivor — which is what lateral does. The filters are the only difference, and
+they differ in exactly one place: lateral's scale window is **symmetric**
+(`|log10 ratio| <= 1`), operator 3's is **one-sided**.
+
+Measured by replay, both arms off one RNG seed per case:
+`[code: tools/atlas/bench_neighborhood_subsumption.py]`
+
+<!-- BENCH:SUBSUMPTION -->
+
+**A disagreement is not a defect.** Both contracts promise "*a* nearby nucleus", not "*that*
+one — the same identity-drift reading §2.6 records for the lateral head, and the dedup key
+is the nucleus' canonical key, so nothing downstream reproduces sibling identity either way.
+
 ## 3. Selection is a reserved FLOOR of frontier slots, not a probability
 
 The walker already ranks a candidate slate, so a new proposal source needs a **slot**, not a
@@ -194,10 +261,78 @@ a slot reservation is not a ranker change, and the preference ranker is absent f
 `_split_reserved` exactly as it is absent from `pop_batch_scheduled`. Said so in a comment
 at the seam. `[code: steered_frontier._split_reserved docstring]`
 
+### 3.1 The richness screen, and what may select on it (v1.4)
+
+Every available candidate is measured: `radial_range` **and** `radial_rings` at the 64×36
+screening geometry on the **4× atom-size frame**. What the measures are and what they were
+validated against is `orbital_field_metrics.md`'s and is not restated; three things about
+their use here are this doc's.
+
+**One field per NUCLEUS, not per row.** The screen frame is 4× the *atom*, so it cannot
+depend on `k` — §7.1's shared solve, extended to the screen. A run-scoped cache keyed on
+the shared `atom_key` (§2.5) makes a repeated nucleus free, and the whole batch's distinct
+nuclei are screened in one concurrent pass, because the cost is process spawn (~40 ms) and
+not compute (~2 ms). `[code: maneuver_screen.ScreenCache]`
+
+**The score describes the ATOM, not the view.** A `k = None` row's own frame may be a
+thousand atom-widths wide; its score is still the 4× number, because 4× is the only frame
+scale any orbital measure has ever been validated at (`orbital_field_metrics.md` §2) and a
+score at another scale would carry none of that validation.
+
+**RECORDING IS UNCONDITIONAL; SELECTING IS NOT.** Scores land on every candidate — pushed,
+passed over, or beaten to a quota slot — and ride the frontier node into `state.json`, the
+harvest log and the ledger. `--maneuver-range-prior` (default **off**) gates the only two
+places anything selects on them:
+
+1. **Quota fill order.** When available candidates exceed the per-batch quota, the reserved
+   slots go to the highest `radial_range` instead of to the incoming priority order. It
+   changes *which* maneuver fills a slot, never *how many*; unscreened candidates sort last
+   and are never excluded, because the screen ranks the quota and does not gate it.
+2. **The node's prior.** `NEUTRAL_PRIOR` becomes
+   `NEUTRAL_PRIOR + gain × (percentile − 0.5)` — the percentile of this atom's
+   `radial_range` against **the run's own accumulating distribution**, since absolute ring
+   scores are comparable only within one (geometry, cap policy) pair. Below 8 observations
+   the percentile returns exactly 0.5, i.e. the unchanged neutral prior.
+
+**The bound on the prior is the design, not a tuning choice.** The term is symmetric about
+`NEUTRAL_PRIOR`, so the flag *reorders* maneuvers without inflating them as a class, and it
+is bounded to ±`gain/2` = ±0.25 at the shipped `gain = 0.5`. An ordinary node's
+`cheap_eord` runs over `[0, K−1] = [0, 3]` on the K=4 head, so the best-ranked maneuver sits
+at 1.25 and still loses to any ordinary node scoring above that. **A maneuver out-competes a
+scored node via the quota floor, never via the prior** — §3's whole argument would collapse
+otherwise. `gain` is the knob; raising it past ~2.0 would break that property.
+`[code: maneuver_screen.range_prior_delta; steered_frontier.MAN_RANGE_GAIN_DEFAULT;
+test_maneuver_screen.py::test_the_prior_term_is_bounded_and_cannot_reach_a_well_scored_ordinary_node]`
+
+**This is not a ranker change.** No aesthetic score enters. `radial_range` is a
+field/geometry measure, exactly like the `A` instrument and the black/band/occupancy gates —
+the ranks-never-steers seam is where it was.
+
+**The cap policy is its own, and stamped.** The screen renders under 24× the legacy
+production envelope clamped at 67000 (`mi12000k0.3c4800-67000`), so the numbers do not move
+when the production cap moves. That policy is listed in `retired.md` and is **un-retired for
+this use only** — see the dated entry there. In practice the 67000 clamp binds below
+`fw ≈ 2e-5`, so at maneuver frame depths the screen runs at **1.8–3× production**, itself
+already the ×8 convergent cap the 32-atom ladder measured (`auto_maxiter.md`). Whether that
+is genuinely non-clipping *on this population* is a measurement, not an assertion: every
+score carries `cap_headroom` and `clamped`. `[code: maneuver_screen.SCREEN_MAXITER_POLICY]`
+
 **One consequence worth stating.** `FRONTIER_CAP` pruning is by priority, so it would delete
-maneuver nodes *first* — silently undoing the floor. Maneuver-originated nodes are exempt
-from the cap; the exemption is bounded by the same governor that bounds how many can exist.
-`[code: steered_frontier.push_children]`
+maneuver nodes *first* — silently undoing the floor. Maneuver-originated nodes are therefore
+**protected** from the pooled prune.
+
+**Protected is not exempt — corrected 2026-08-01.** The protection was total, and total
+protection has the mirror-image failure: once the maneuver population passes `FRONTIER_CAP`
+the ordinary nodes' room goes to zero and *every one of them* is evicted, leaving a frontier
+that is 100% maneuver nodes and a walk with nothing else to expand. That is precisely the
+capped-root starvation `pop_batch` already records, reached by a second route. It was
+unreachable with two operators and is reachable with three: a 2-minute shakedown pushed
+**~40 maneuver nodes per batch against ~21 expanded**, which crosses 6000 inside a 7-hour
+run. So maneuvers hold a guaranteed **share** (`MAN_FRONTIER_SHARE = 0.5`) and are pruned
+among themselves beyond it; unused share falls to the ordinary nodes and unused ordinary
+room falls back to the maneuvers, so below the share nothing changes — which is every run
+before this one. `[code: steered_frontier.prune_frontier;
+test_minibrot_maneuvers.py::test_a_flood_of_maneuver_nodes_cannot_evict_every_ordinary_node]`
 
 ## 4. A maneuver enters as a NODE, not as a scored candidate
 
@@ -261,6 +396,18 @@ and scheduler features use.
 | `--maneuver-probe-p` | 0.25 | cost governor: P(probe fires) per popped rung |
 | `--maneuver-k` | `none,4,16` | preserve-fw, the 4×-atom frame, and the 16× wallpaper frame |
 | `--no-maneuver-lateral` | (lateral on) | disable the expensive operator; snap only |
+| `--maneuver-neighborhood` | **off** | enable operator 3 (§2.7) |
+| `--maneuver-nbh-m` | 8 | ceiling on distinct nuclei *enumerated* per call |
+| `--maneuver-nbh-n` | 2 | how many of them are *proposed*, by `radial_range` |
+| `--maneuver-nbh-probes` | 12 | the probe budget — the bound that actually binds (§2.7) |
+| `--maneuver-range-prior` | **off** | let the screen select (§3.1); off is byte-identical selection |
+| `--maneuver-range-gain` | 0.5 | prior term magnitude; bounded to ±gain/2 (§3.1) |
+
+The screen itself has no off switch: it runs whenever `--maneuvers` does, because
+recording is unconditional (§3.1). With `--maneuver-range-prior` off the walk's
+**trajectory** is byte-identical to v1.3 — the screen consumes no RNG and gates nothing —
+but the run is not byte-identical in wall clock or in log columns, and saying "byte-identical"
+without that qualifier would be the wrong claim.
 
 `k = 4` is the framing the deep-center emitter already suggests for a nucleus-centred
 frame — `fw ≈ size` is mostly interior black and `fw < size` on-nucleus is pure black.

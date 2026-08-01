@@ -95,6 +95,14 @@ LAT_SEED_PERIODS = True        # seed identify_nucleus from the atom-domain prob
 LAT_N_PERIODS = N_PERIODS      # argmins kept per seeded lateral probe (-> <=3x solves)
 LAT_LOW_SWEEP = 16             # ... but periods 2..this are ALWAYS swept exactly (see below)
 
+# Operator 3 — neighbourhood expansion. Same disc geometry as `lateral_to_sibling`, and
+# deliberately WITHOUT its comparable-scale constraint (see `neighborhood_expand`).
+NBH_MAX_FOUND = 8        # m: ceiling on DISTINCT nearby nuclei returned per call
+NBH_MAX_PROBES = 12      # the real cost bound — probes attempted, found or not
+NBH_TOP_N = 2            # n: how many the caller proposes (selection is the caller's)
+NBH_SCALE_UP_DECADES = 1.0   # ... but an atom THIS much larger than the parent is an
+                             # ancestor, not a neighbour (one-sided; see the operator)
+
 # c-plane partitions only: a julia/phoenix viewport is a z-plane and has no nucleus in the
 # parameter-plane sense, so the operators are simply not defined there.
 PARTITION_DEGREE = {"mandelbrot": 2, "multibrot3": 3, "multibrot4": 4, "multibrot5": 5}
@@ -346,6 +354,40 @@ def snap_to_nucleus(view: dict, k=None, *, degree: int = 2, max_period: int = MA
 
 
 # --------------------------------------------------------------------------- #
+# Shared neighbourhood-probe primitives (operators 2 and 3)
+# --------------------------------------------------------------------------- #
+def _draw_probe_seed(rng, radii, w_par, pcx, pcy):
+    """One neighbourhood probe seed -> `(seed_c, radius_in_plane)`.
+
+    Radii are measured in units of the PARENT's own window scale, so "nearby" means the
+    same thing for a shallow and a deep parent (`sources.src_neighborhood`). Factored out
+    so operators 2 and 3 consume the RNG in the IDENTICAL order — which is what lets the
+    subsumption replay drive both from one seeded stream and compare their picks rather
+    than comparing two different random walks."""
+    rad = float(radii[int(rng.integers(len(radii)))]) * w_par
+    th = float(rng.random()) * 2.0 * math.pi
+    return mp.mpc(pcx + mp.mpf(rad * math.cos(th)), pcy + mp.mpf(rad * math.sin(th))), rad
+
+
+def _hybrid_candidates(seed, degree: int, pmax: int, n_periods: int, low_sweep: int):
+    """The §2.6 hybrid period set: sweep the cheap head exactly, rank the expensive tail.
+
+    Periods `2..low_sweep` are always tried (the head is where the atom-domain ranking is
+    weakest — a seed sits inside many low-period atom domains at once) and everything above
+    comes from the atom-domain argmin divisors (where it is strongest — a deep atom has one
+    sharp `|z_p|` minimum). Empty means the orbit escaped before any period ranked."""
+    return sorted(set(period_candidates(seed, degree, pmax, n_periods)) |
+                  set(range(2, min(int(low_sweep), pmax) + 1)))
+
+
+def _period_ceiling(parent_period: int, headroom: float, cap: int) -> int:
+    """Period ceiling SCALED to the parent's period, capped. A flat ceiling silently finds
+    nothing around deep parents — measured at 15 atoms from 360 probes
+    (`sources.src_neighborhood`)."""
+    return min(int(cap), max(24, int(float(headroom) * int(parent_period))))
+
+
+# --------------------------------------------------------------------------- #
 # Operator 2 — lateral_to_sibling
 # --------------------------------------------------------------------------- #
 def lateral_to_sibling(view: dict, rng, *, degree: int = 2, k=None,
@@ -394,12 +436,10 @@ def lateral_to_sibling(view: dict, rng, *, degree: int = 2, k=None,
 
     w_par = float(parent_rec["window_scale"])
     pcx, pcy = mp.mpf(str(parent_rec["cx"])), mp.mpf(str(parent_rec["cy"]))
-    pmax = min(period_cap, max(24, int(period_headroom * int(parent_rec["period"]))))
+    pmax = _period_ceiling(parent_rec["period"], period_headroom, period_cap)
     tried, last = 0, "no_sibling_found"
     for _ in range(max(1, n_probes)):
-        rad = float(radii[int(rng.integers(len(radii)))]) * w_par
-        th = float(rng.random()) * 2.0 * math.pi
-        seed = mp.mpc(pcx + mp.mpf(rad * math.cos(th)), pcy + mp.mpf(rad * math.sin(th)))
+        seed, rad = _draw_probe_seed(rng, radii, w_par, pcx, pcy)
         tried += 1
         cands = None
         if seed_periods:
@@ -411,8 +451,7 @@ def lateral_to_sibling(view: dict, rng, *, degree: int = 2, k=None,
             # tail is where it is strongest (a deep atom has one sharp |z_p| minimum).
             # So: sweep the cheap head exactly, rank the expensive tail. Measured against
             # the pure sweep in bench_lateral_seeding.py.
-            cands = sorted(set(period_candidates(seed, degree, pmax, n_periods)) |
-                           set(range(2, min(int(low_sweep), pmax) + 1)))
+            cands = _hybrid_candidates(seed, degree, pmax, n_periods, low_sweep)
             if not cands:
                 last = "orbit_escaped_immediately"
                 continue
@@ -460,6 +499,164 @@ def lateral_to_sibling(view: dict, rng, *, degree: int = 2, k=None,
     return _unavailable("lateral_to_sibling", last, view, t0, solves, k=k,
                         probes_tried=tried, parent_atom_id=parent_rec["id"],
                         parent_period=int(parent_rec["period"]))
+
+
+# --------------------------------------------------------------------------- #
+# Operator 3 — neighborhood_expand
+# --------------------------------------------------------------------------- #
+def neighborhood_expand(view: dict, rng, ks, *, degree: int = 2,
+                        radii=LAT_RADII, max_found: int = NBH_MAX_FOUND,
+                        max_probes: int = NBH_MAX_PROBES,
+                        period_headroom: float = LAT_PERIOD_HEADROOM,
+                        period_cap: int = LAT_PERIOD_CAP,
+                        scale_up_tol: float = NBH_SCALE_UP_DECADES,
+                        max_fw: float = MAX_FW, parent_rec: dict | None = None,
+                        n_periods: int = LAT_N_PERIODS,
+                        low_sweep: int = LAT_LOW_SWEEP,
+                        source: str = "maneuver_neighborhood") -> list[Maneuver]:
+    """Enumerate up to `max_found` distinct nearby nuclei around the solved nucleus.
+
+    THE SHEET-3 MECHANISM, PORTED. Same disc geometry as `lateral_to_sibling` — radii in
+    units of the parent's own window scale, period ceiling scaled to the parent's period —
+    because both descend from `sources.src_neighborhood`. What is NOT ported is the
+    SYMMETRY of lateral's `LAT_SCALE_TOL_DECADES` filter, and that asymmetry IS the
+    operator: sheet 3 probes "at comparable AND SMALLER scale", so a child two decades down
+    the period ladder is a legitimate neighbour here and a `scale_mismatch` refusal in
+    lateral. The window is therefore ONE-SIDED — unbounded below, `scale_up_tol` decades
+    above. The upper bound is not decoration: an unfiltered probe returns period-2 and
+    period-3 giants (measured: +1.76 decades on the first smoke case), and framing one at
+    `k x size` proposes a near-base-scale view the walk's own root draws already cover. An
+    atom that much larger than the parent is an ancestor, not a neighbour. Every row
+    carries `scale_ratio_decades`, so the remaining difference from lateral is readable
+    rather than asserted.
+
+    WHY IT RETURNS MANY AND SELECTS NONE. The prompt's "screen each, propose the top n" is
+    split at this seam on purpose: screening renders a field, and this module is pure
+    mpmath (§4). So the operator enumerates and the caller (`steered_frontier`, which
+    already owns a process pool) screens the candidates and takes the top `n` by
+    `radial_range`. `found_rank` is the enumeration order, NOT a quality order.
+
+    COST IS BOUNDED BY PROBES, NOT BY FINDS. `max_found` is a ceiling on the answer;
+    `max_probes` is the ceiling on the bill, and it is the one that binds. In the sheet-3
+    run 317 of 360 probes (88%) returned the parent itself, so a budget expressed as "find
+    m" would have been an unbounded budget. Early-exits as soon as `max_found` is reached.
+
+    K FRAMING IS AS FOR SNAP (§7.1): one enumeration, one `Maneuver` per (nucleus, k), and
+    the whole enumeration's Newton solves are charged to the FIRST emitted row only — so
+    summing `probe_s` over the returned rows is the true cost of the call.
+
+    Always returns at least one row; an empty neighbourhood is one unavailable `Maneuver`
+    with a named reason, never an exception and never an empty list."""
+    t0 = time.time()
+    al.set_precision()
+    fw = float(view["fw"])
+    ks = list(ks) or [None]
+    solves = 0
+
+    if parent_rec is None:
+        snap = snap_to_nucleus(view, None, degree=degree, source=source + "_parent")
+        solves += snap.newton_solves
+        if not snap.available:
+            return [_unavailable("neighborhood_expand", "no_parent_atom:" + snap.reason,
+                                 view, t0, solves)]
+        parent_rec = dict(id=snap.atom_id, cx=snap.cx, cy=snap.cy, period=snap.period,
+                          window_scale=snap.window_scale, degree=degree)
+
+    w_par = float(parent_rec["window_scale"])
+    pcx, pcy = mp.mpf(str(parent_rec["cx"])), mp.mpf(str(parent_rec["cy"]))
+    pmax = _period_ceiling(parent_rec["period"], period_headroom, period_cap)
+
+    found: list[dict] = []
+    seen_ids = {parent_rec["id"]}
+    tried, last = 0, "no_neighbour_found"
+    reasons: dict = {}
+    for _ in range(max(1, int(max_probes))):
+        if len(found) >= int(max_found):
+            break
+        seed, rad = _draw_probe_seed(rng, radii, w_par, pcx, pcy)
+        tried += 1
+        cands = _hybrid_candidates(seed, degree, pmax, n_periods, low_sweep)
+        if not cands:
+            last = "orbit_escaped_immediately"
+            reasons[last] = reasons.get(last, 0) + 1
+            continue
+        rec, why = al.identify_nucleus(
+            seed, period_min=1, period_max=pmax, degree=degree, near=rad * 4,
+            source=source, periods=cands,
+            provenance={"parent_atom_id": parent_rec["id"],
+                        "parent_period": int(parent_rec["period"]),
+                        "probe_period_max": pmax, "probe_periods": cands,
+                        "radius_over_parent_w": (rad / w_par if w_par else None)})
+        solves += len(cands)     # upper bound: identify_nucleus stops at the first success
+        if rec is None:
+            last = why
+            reasons[why] = reasons.get(why, 0) + 1
+            continue
+        if rec["id"] in seen_ids:
+            # `hit_parent` and "we already found this one" are different constraints and
+            # are counted apart: the first is the 88% failure mode of the sheet-3 run, the
+            # second is the disc genuinely running out of distinct nuclei.
+            last = "hit_parent" if rec["id"] == parent_rec["id"] else "duplicate_neighbour"
+            reasons[last] = reasons.get(last, 0) + 1
+            continue
+        w_sib = float(rec["window_scale"])
+        if w_sib > 0 and w_par > 0 and math.log10(w_sib / w_par) > float(scale_up_tol):
+            last = "scale_too_large"          # an ancestor, not a neighbour
+            reasons[last] = reasons.get(last, 0) + 1
+            continue
+        seen_ids.add(rec["id"])
+        found.append(rec)
+
+    if not found:
+        return [_unavailable("neighborhood_expand", last, view, t0, solves,
+                             probes_tried=tried, probe_reasons=reasons,
+                             parent_atom_id=parent_rec["id"],
+                             parent_period=int(parent_rec["period"]))]
+
+    out: list[Maneuver] = []
+    for rank, rec in enumerate(found):
+        w_sib = float(rec["window_scale"])
+        for k in ks:
+            first = not out
+            t_row = t0 if first else time.time()
+            n_solves = solves if first else 0
+            shared = {} if first else {"reused_solve": True}
+            newfw, whyf = _frame_for(rec, k, fw, max_fw)
+            if newfw is None:
+                out.append(_unavailable("neighborhood_expand", whyf, view, t_row, n_solves,
+                                        k=k, period=rec["period"],
+                                        window_scale=w_sib, found_rank=rank,
+                                        probes_tried=tried, **shared))
+                continue
+            out.append(Maneuver(
+                op="neighborhood_expand", available=True,
+                k=(None if k is None else float(k)),
+                cx=rec["cx"], cy=rec["cy"], fw=newfw, depth=int(view.get("depth", 0)),
+                atom_id=rec["id"], atom_key=atom_key_of(rec), period=rec["period"],
+                log10_abs_A=rec["log10_abs_A"], window_scale=w_sib,
+                f64_margin_node_decades=round(_wall_margin_decades(newfw, NODE_WIDTH), 4),
+                f64_margin_deploy_decades=rec["f64_margin_deploy_decades"],
+                parent_node_id=view.get("node_id"), parent_cx=float(view["cx"]),
+                parent_cy=float(view["cy"]), parent_fw=fw,
+                parent_depth=int(view.get("depth", 0)),
+                probe_s=time.time() - t_row, newton_solves=n_solves,
+                extra=dict(parent_atom_id=parent_rec["id"],
+                           parent_period=int(parent_rec["period"]),
+                           parent_window_scale=w_par, probes_tried=tried,
+                           found_rank=rank, n_found=len(found),
+                           # The per-probe refusal tally rides the FIRST available row
+                           # too, not only the unavailable one. It was on the unavailable
+                           # path alone, so a successful call silently discarded exactly
+                           # the counts that answer the sheet-3 question at scale —
+                           # hit_parent vs scale_too_large vs no nucleus near the seed.
+                           **({"probe_reasons": reasons} if first and reasons else {}),
+                           # recorded, NOT filtered on: this is the one axis on which
+                           # operator 3 differs from operator 2.
+                           scale_ratio_decades=(round(math.log10(w_sib / w_par), 4)
+                                                if w_sib > 0 and w_par > 0 else None),
+                           degree=degree, atom_size=rec["size"], **shared),
+            ))
+    return out
 
 
 # --------------------------------------------------------------------------- #

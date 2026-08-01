@@ -73,6 +73,19 @@ an item's evidence, the line points at it rather than restating it.
 
 ## Un-retired
 
+- **2026-07-31 — the 24× / clamp-67000 scoring cap policy, for ONE narrow use.** Adopted as
+  the cap policy of the maneuver richness screen (`tools/atlas/maneuver_screen.py`
+  `SCREEN_MAXITER_POLICY`, token `mi12000k0.3c4800-67000`), and for nothing else. The
+  original retirement stands as written and its reason still holds where it was aimed: it
+  was a *fitted* proposal that became a stated property of the system without ever being
+  adopted, and it is still not a **scoring** policy — production scoring is untouched. What
+  changed is that a screen now needs a cap that does not move when the production cap moves,
+  and at 64×36 the extra iterations cost nothing. Scope: screening only, stamped on every
+  record, and pairwise-disjoint from both the legacy and the live tokens so
+  `field_metrics.require_one_policy` raises rather than pooling across them.
+  `[code: docs/design/minibrot_maneuvers.md §3.1;
+  tools/atlas/test_maneuver_screen.py::test_the_screen_policy_is_24x_the_legacy_envelope_until_the_clamp_binds]`
+
 - **2026-07 — "depth/period as a quality axis."** Retired on a roster spanning period ~3–15,
   where it measured +0.06 pooled and −0.21 inside the period-matched eval slice. Across
   periods 2–74 `period` correlates **+0.87** with `radial_rings`. The retirement was scoped
