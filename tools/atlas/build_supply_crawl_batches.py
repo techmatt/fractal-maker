@@ -62,7 +62,7 @@ import paths                                   # noqa: E402
 import corpus_common as cc                      # noqa: E402
 import build_minibrot_batch as BMB              # noqa: E402  (coords / palettes / io)
 import maneuver_inspection_sheet as mis         # noqa: E402  (the population loader)
-from active_ckpt import auto_maxiter            # noqa: E402  (the live deploy cap policy)
+import deep_center_finder as dcf                # noqa: E402  (the corpus crop cap policy)
 from tools.v7 import build_manifest as bm       # noqa: E402  (assign_split — the authority)
 
 STAMP = "2026-08-01"
@@ -248,10 +248,19 @@ def draw_all(pop: list[dict], *, seed: int = DRAW_SEED) -> tuple[dict, dict]:
 # =========================================================================== #
 # the corpus batch
 # =========================================================================== #
+# THE CROP CAP IS THE CORPUS'S, NOT THE SCREEN'S OR THE DEPLOY HEAD'S. Every sibling batch
+# builder renders label crops under `deep_center_finder._maxiter_for_fw` (~1500 iters per
+# decade of depth, floored 3000, capped 40000) — checkable on any existing row:
+# `2026-07-26_minibrot_roster_v2` at fw 2.116e-04 carries maxiter 5512, which is exactly
+# `round(1500 * 3.674)`. Using `active_ckpt.auto_maxiter` instead looked defensible (it is
+# the LIVE deploy policy) and was wrong twice over: it makes these crops incomparable with
+# every other batch in the corpus, and at the v9 raised cap it put the median crop at
+# maxiter 12,642 against ~3,000 — a ~3x render bill for a picture the labeler cannot tell
+# apart. Caught by rendering six crops and timing them, not by reading the constant.
 def _render_block(r: dict, palette: str) -> dict:
     fw = cc.hp_str(r["fw"])
     render = cc.render_block(cx=str(r["cx"]), cy=str(r["cy"]), fw=fw,
-                             maxiter=int(auto_maxiter(float(r["fw"]))),
+                             maxiter=int(dcf._maxiter_for_fw(float(r["fw"]))),
                              palette=palette, composition=COMPOSITION, width=CROP_W,
                              height=CROP_H, ss=CROP_SS, filter=CROP_FILTER,
                              interior_mode=INTERIOR_MODE)
@@ -326,7 +335,8 @@ def write_batch(batch_id: str, rows: list[dict], *, role: str, purpose: str,
                              interior_mode=INTERIOR_MODE, composition=COMPOSITION,
                              palette_roster="data/palettes/score3_colormaps.json",
                              vivid_companion=VIVID_PALETTE,
-                             maxiter="active_ckpt.auto_maxiter(fw) — the live deploy cap"),
+                             maxiter="deep_center_finder._maxiter_for_fw(fw) — the cap "
+                                     "every other corpus batch builder renders crops under"),
         render_recipe=cc.render_recipe_stamp(PALETTE_SOURCE),
         sampling_metaparameters=sampling,
     )
@@ -402,6 +412,23 @@ def stage_draw(args) -> int:
     return 0
 
 
+# RENDER THREADS, and why not the single-process default. `DEFAULT_ENGINE_THREADS` is 7 and
+# is documented as the number for ONE engine process; four workers of seven is 28 threads on
+# a 12-core box, which is oversubscription, not throughput. Sized for the actual N instead,
+# as `corpus_common` says to: 4 x 3 = 12.
+RENDER_THREADS = 3
+
+# The order the crops are rendered in, and it is a BUDGET decision rather than a preference.
+# 730 rows is 1,460 renders at 1280x720 ss4, measured at ~500 core-seconds each — call it 17
+# core-hours, which does not fit inside any session that also had to produce the run. So the
+# smallest and most decision-relevant legs go first: the exemplar mini-chunk is the only leg
+# that TESTS something (60 rows, ~1.4 h), the uniform leg is the only one whose label
+# distribution estimates a base rate (90 rows), and the two stratified chunks — which are
+# the bulk and are the most robust to being partly labelled — go last. A partly-rendered
+# batch is not labelable, so the order is chosen to leave WHOLE batches finished.
+RENDER_ORDER = (EXEMPLAR, UNIFORM, STRAT_A, STRAT_B)
+
+
 def _render_one(job):
     row, crops, vivid, timeout = job
     iid, render = row["image_id"], row["render"]
@@ -409,21 +436,23 @@ def _render_one(job):
     canon = crops / f"{iid}.jpg"
     if not canon.exists():
         cc.render_corpus_crop(render, str(canon), palette_source=PALETTE_SOURCE,
-                              timeout=timeout, threads=cc.DEFAULT_ENGINE_THREADS)
+                              timeout=timeout, threads=RENDER_THREADS)
         made.append("canon")
     vp = vivid / f"{iid}.jpg"
     if not vp.exists():
         vr = dict(render)
         vr["palette"] = VIVID_PALETTE
         cc.render_corpus_crop(vr, str(vp), palette_source=VIVID_SOURCE, timeout=timeout,
-                              threads=cc.DEFAULT_ENGINE_THREADS)
+                              threads=RENDER_THREADS)
         made.append("vivid")
     return iid, made
 
 
 def stage_render(args) -> int:
-    total = 0
-    for batch_id in BATCHES:
+    deadline = (time.time() + args.max_minutes * 60.0) if args.max_minutes else None
+    total, stopped = 0, None
+    for batch_id in (RENDER_ORDER if not args.only else [b for b in RENDER_ORDER
+                                                         if args.only in b]):
         bdir = Path(cc.batch_dir(batch_id))
         if not (bdir / "images.jsonl").exists():
             print(f"  {batch_id}: no images.jsonl — run `draw` first.")
@@ -438,7 +467,8 @@ def stage_render(args) -> int:
                 not (vivid / f"{r['image_id']}.jpg").exists()
         todo = [r for r in rows if needs(r)]
         print(f"render {batch_id}: {len(rows)} rows, {len(todo)} need crops "
-              f"= {2*len(todo)} renders, workers={args.workers}", flush=True)
+              f"= {2*len(todo)} renders, workers={args.workers}x{RENDER_THREADS} threads",
+              flush=True)
         t0, done, fails = time.time(), 0, []
         with ThreadPoolExecutor(max_workers=args.workers) as ex:
             futs = {ex.submit(_render_one, (r, crops, vivid, args.render_timeout)): r
@@ -452,9 +482,18 @@ def stage_render(args) -> int:
                 done += 1
                 if done % 25 == 0 or done == len(todo):
                     el = time.time() - t0
-                    print(f"  [{done}/{len(todo)}] {el:.0f}s ETA "
-                          f"{(len(todo)-done)*el/max(done,1)/60:.1f} min "
+                    # Reprojected from the run's OWN observed rate, never restated from a
+                    # pre-run estimate (`CLAUDE.md`, projecting a long run's wall clock).
+                    print(f"  [{done}/{len(todo)}] {el:.0f}s  {done/max(el,1e-9)*60:.1f} "
+                          f"row/min  ETA {(len(todo)-done)*el/max(done,1)/60:.1f} min "
                           f"({len(fails)} failed)", flush=True)
+                if deadline and time.time() > deadline:
+                    # Cancel what has not started; in-flight renders finish (killing one
+                    # leaves a truncated JPG that `needs()` would then call present).
+                    stopped = batch_id
+                    for f2 in futs:
+                        f2.cancel()
+                    break
         total += done
         if fails:
             # The WHOLE failure population, classed — never a truncated head (`CLAUDE.md`).
@@ -463,7 +502,32 @@ def stage_render(args) -> int:
                     f["err"].split(":")[0] for f in fails)), failures=fails), indent=2),
                 encoding="utf-8")
             print(f"  !! {len(fails)} render failures -> {bdir/'render_failures.json'}")
-    print(f"render: {total} rows this run.")
+        if stopped:
+            break
+    # NO SILENT CAP. What was dropped is named, per batch, or a partial render reads as
+    # "covered everything" to anyone looking at the batch dirs.
+    left = {}
+    for batch_id in BATCHES:
+        bdir = Path(cc.batch_dir(batch_id))
+        if not (bdir / "images.jsonl").exists():
+            continue
+        rows = cc.read_jsonl(str(bdir / "images.jsonl"))
+        crops, vivid = Path(cc.crops_dir(batch_id)), Path(cc.vivid_dir(batch_id))
+        miss = sum(1 for r in rows
+                   if not (crops / f"{r['image_id']}.jpg").exists()
+                   or not (vivid / f"{r['image_id']}.jpg").exists())
+        left[batch_id] = dict(rows=len(rows), missing=miss, complete=miss == 0)
+    print(f"render: {total} rows this run"
+          + (f"; STOPPED at the {args.max_minutes:g}-minute bound during {stopped}"
+             if stopped else ""))
+    for b, v in left.items():
+        print(f"  {b:42s} {v['rows'] - v['missing']:4d}/{v['rows']:4d} crops"
+              + ("  COMPLETE" if v["complete"] else "  INCOMPLETE — not labelable"))
+    paths.scratch("supply_crawl", "render_state.json", mkparents=True).write_text(
+        json.dumps(dict(stopped_during=stopped, per_batch=left,
+                        NOTE=("resumable: re-run `render`, it skips crops that exist. A "
+                              "batch marked INCOMPLETE must not be queued for labeling.")),
+                   indent=2) + "\n", encoding="utf-8")
     return 0
 
 
@@ -690,6 +754,12 @@ def main(argv=None) -> int:
     r = sub.add_parser("render")
     r.add_argument("--workers", type=int, default=4)
     r.add_argument("--render-timeout", type=float, default=600.0)
+    r.add_argument("--max-minutes", type=float, default=0.0,
+                   help="stop starting new rows after this many minutes (0 = no bound). "
+                        "In-flight renders finish; what is left is named per batch and "
+                        "written to scratch/supply_crawl/render_state.json.")
+    r.add_argument("--only", type=str, default=None,
+                   help="restrict to batches whose id contains this substring")
     r.set_defaults(fn=stage_render)
     f = sub.add_parser("features")
     f.add_argument("--run-dir", type=Path, required=True)

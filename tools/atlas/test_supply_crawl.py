@@ -279,3 +279,34 @@ def test_the_exemplar_set_is_three_legs_and_stays_inside_five_to_eight():
                    "corpus" if k.startswith("corpus_") else "named"
                    for k in (r["key"] for r in rows))
     assert legs["named"] == 3 and legs["sheet"] >= 1 and legs["corpus"] >= 1
+
+
+# =========================================================================== #
+# the render, which is the expensive half and therefore the one with a budget
+# =========================================================================== #
+def test_the_crop_cap_is_the_one_every_other_corpus_batch_uses():
+    """Checkable against a row that already exists: `2026-07-26_minibrot_roster_v2` renders
+    fw 2.116e-04 at maxiter 5512, which is `round(1500 * -log10(fw))`. Using the live deploy
+    `auto_maxiter` instead made these crops incomparable with the rest of the corpus AND
+    tripled the render bill for a picture the labeler cannot tell apart."""
+    r = dict(cx="0.1", cy="0.2", fw=2.11635414e-04, partition="mandelbrot")
+    assert bsc._render_block(r, "magma")["maxiter"] == 5512
+    # floored at 3000 for anything shallow, so a base-scale root view is not free-for-all
+    assert bsc._render_block(dict(r, fw=1.0), "magma")["maxiter"] == 3000
+
+
+def test_the_render_order_finishes_whole_batches_smallest_first():
+    """1,460 renders does not fit any session that also produced the run, so the order is a
+    budget decision: a partly-rendered batch is not labelable, and the legs that TEST
+    something are the small ones."""
+    assert set(bsc.RENDER_ORDER) == set(bsc.BATCHES)
+    assert bsc.RENDER_ORDER[0] == bsc.EXEMPLAR and bsc.RENDER_ORDER[1] == bsc.UNIFORM
+    assert bsc.N_EXEMPLAR < bsc.N_UNIFORM < bsc.N_STRAT
+
+
+def test_render_threads_are_sized_for_the_fan_out_not_for_one_process():
+    """`DEFAULT_ENGINE_THREADS` is documented as the number for ONE engine process. Four
+    workers of seven is 28 threads on a 12-core box — oversubscription, not throughput."""
+    import corpus_common as _cc
+    assert bsc.RENDER_THREADS < _cc.DEFAULT_ENGINE_THREADS
+    assert 4 * bsc.RENDER_THREADS <= 12

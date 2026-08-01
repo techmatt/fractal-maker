@@ -96,6 +96,26 @@ PROVENANCE_KEYS = (
     # demotion-vs-promotion accounting). A fresh (non-revision) row leaves all three null.
     # `family` reused from above (the source family). Bias/routing only — never training.
     "revises_batch_id", "revises_image_id", "original_score",
+    # supply-crawl batches (2026-08-01, tools/atlas/build_supply_crawl_batches.py): the
+    # maneuver walk's own view-level screen, one row per recorded candidate. `composite` is
+    # `view_screen.composite_v3` on the frame the candidate was PUSHED at and `screen_frame`
+    # says which frame that was — "view" here, "atom4x" for a v1.4 run, and the two must
+    # never be pooled (`orbital_field_metrics.md` §5, §7). `composite_bin` is the quintile
+    # of the run's own composite distribution that the stratified draw round-robins over;
+    # `vetoed`/`size_factor`/`band_coverage*`/`radial_*`/`interior_fraction` are the terms
+    # under it. `exemplar_sim_max`/`_mean` are the recorded distance-to-the-exemplars
+    # feature and `exemplar_substrate` names the embedding space, because a cosine across
+    # two substrates is a number with no referent. `op`/`k`/`degree`/`period`/`log10_abs_A`/
+    # `window_scale`/`parent_depth`/`atom_key`/`candidate_key` are the geometry and the
+    # candidate's identity in the run's `maneuvers.jsonl`; `used`/`unused_reason` say whether
+    # the walk pushed it or passed it over — the passed-over rows are the negative class and
+    # are in these batches on purpose. Bias loop and the post-label fit only; the classifier
+    # sees `render` and nothing here.
+    "composite", "composite_bin", "vetoed", "size_factor", "band_coverage",
+    "band_coverage_q25", "radial_range", "radial_rings", "interior_fraction",
+    "exemplar_sim_max", "exemplar_sim_mean", "exemplar_substrate",
+    "screen_frame", "screen_policy", "op", "k", "degree", "period", "log10_abs_A",
+    "window_scale", "parent_depth", "atom_key", "candidate_key", "used", "unused_reason",
 )
 
 
