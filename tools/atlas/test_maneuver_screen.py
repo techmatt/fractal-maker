@@ -249,5 +249,39 @@ def test_the_cache_screens_one_nucleus_once_however_many_k_rows_ask(atom):
         "a resume must not re-spawn the engine for a nucleus the killed run screened"
 
 
+def test_the_screen_pass_is_bounded_and_says_so_when_it_runs_out(atom):
+    """The walk checks its active-time cap BETWEEN batches, so anything unbounded inside a
+    batch is outside the cap. With a 60 s field timeout per screen and a fat neighbourhood
+    enumeration, an unbudgeted pass could spend half an hour here while the budget logic
+    believed it was inside its cap — "a backstop longer than the job's budget is not a
+    backstop", one level down.
+
+    A job the pass never reached must come back as a NAMED unscreened row, not as a missing
+    key: `_nbh_top_n` and the quota sort both read these records, and a silent absence would
+    read as "screened, range 0" at both."""
+    c = msc.ScreenCache(workers=1)
+    jobs = [dict(atom_key=f"k{i}", family="mandelbrot", cx=atom["cx"], cy=atom["cy"],
+                 window_scale=atom["window_scale"]) for i in range(6)]
+    got = c.screen_many(jobs, budget_s=1e-6)          # already spent before the first job
+    assert len(got) == 6, "every job is accounted for, none silently dropped"
+    assert all(r["screened"] is False for r in got.values())
+    assert all(r["screen_reason"] == "screen_budget_exhausted" for r in got.values())
+    assert all(r[fm.POLICY_KEY] == msc.screen_policy_token() for r in got.values())
+    # ... and the same jobs DO screen with a real budget, so the test is not passing merely
+    # because this fixture cannot be screened at all.
+    d = msc.ScreenCache(workers=1)
+    ok = d.screen_many(jobs[:1], budget_s=120.0)
+    assert next(iter(ok.values()))["screened"] is True
+
+
+def test_an_unbudgeted_screen_pass_still_works(atom):
+    """`budget_s=None` is the plain path — a caller outside the walk (a bench, a readout)
+    must not have to invent a budget to use the screen."""
+    c = msc.ScreenCache(workers=1)
+    got = c.screen_many([dict(atom_key="k", family="mandelbrot", cx=atom["cx"],
+                              cy=atom["cy"], window_scale=atom["window_scale"])])
+    assert got["k"]["screened"] is True
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
