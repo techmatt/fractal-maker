@@ -153,7 +153,66 @@ curves `egg`, `pinch`, `spiral`, `heart`.
 > marked `niche`/deprecated for render-mode exploration in the code. Keep `smooth` as the
 > base carrier. `[code: src/render_modes.rs::Field::ExpSmoothing]`
 
-## 7. Open build task — the deploy-transform parity gate has zero coverage
+## 7. The field-dump path — two sources, and the field gate that made the slow one usable
+
+`--dump-field` has two sources, and picking the wrong one is a **35× cost, not an error**.
+Folded in from the standalone `beautiful_perf_report.md` on 2026-07-31: the measurement was
+dated but the design rule it produced is permanent, and `src/render_modes.rs` owns it.
+
+**They differ by a constant, and that is the whole selection rule.** The backend's smooth
+value is un-normalized `(n+1) − ln(ln|z|)/ln d`; `beautiful` carries the bailout
+normalization. The two differ by exactly `ln(ln B)/ln d`, and the escape mask is
+bailout-driven, so the NaN-interior seam is identical. **Any consumer whose statistic is
+invariant to a constant offset reads the same field** — the degenerate-outcome guard
+(`interior_frac`, `field_std`), and the entire q4 stage-1 screen, whose `featurize`
+percentile-stretches every crop `(v−lo)/span` and is therefore exactly offset-invariant
+(verified to 1.3e-9; `_v2_drop` agrees on every probe). It is **not** byte-identical, so it
+must never feed the field⊗colormap reproduction path.
+
+**Why `beautiful` was ~35× slower, and why that was a kernel property rather than a bug.**
+`iterate_orbit` was **field-agnostic**: it did not know which field the caller wanted (the
+reduction to `params.field` happens after the orbit returns), so it accumulated *every*
+coloring field on *every* iteration — ≈4 transcendentals (`exp`, `sin`, two `atan2`) plus
+rounds and norms — and then kept one scalar. `F64Backend::sample_flags` is a lean escape loop
+with ~0 transcendentals per iteration (its trap-phase `atan2` fires only on a trap-min
+improvement). Not a threading gap: both parallelize identically over supersampled rows.
+
+**The fix is `iterate_orbit_needs(.., needs: FieldNeeds)`** — each accumulator block guarded
+by a flag, `FieldNeeds::for_field(F)` setting exactly what field `F` reduces from (Smooth and
+Decomposition need **none**), `.with_deriv()` ORing in the `dz` recurrence for `normal_map`
+emboss, and `DirectTrap` falling back to `all()`. The flag set is constant for a render, so
+the branch is perfectly predicted; when a field IS requested its block runs verbatim, which is
+why the reduced value stays **bit-identical** — pinned by
+`render_modes::tests::field_gating_matches_ungated`. The always-on essentials (escape/smooth,
+`zn_sq`, `zabs`, the `zprev` shifts) are deliberately left ungated: gating them would shave the
+residual gap but risks the byte-pinned paths for little gain.
+
+| source | 2176×1224 ss1 smooth dump | when to use |
+|---|---|---|
+| `beautiful` (default) | 39.2 s → **2.24 s** after gating | byte-identical smooth reproduction; **every non-smooth field** (`tia`, `stripe`, `curvature`, `trap_circle`, `gaussian_int`, `de` — `f64` explicitly errors for these) |
+| `f64` | **1.1 s** (0.5 s post-gate baseline) | any offset-invariant smooth *statistic* — strictly fastest, no general-kernel overhead |
+
+`[measured: one d5 nucleus, W=2176 H=1224 ss1, maxiter 3000; cmd: tools/studies/q4_multibrot_transfer.py timing probe]`
+`[code: src/render_modes.rs::{iterate_orbit_needs,FieldNeeds}; src/render_one.rs:301 non-smooth f64 rejection]`
+
+**`beautiful` cannot be deprecated**, and the recommendation is narrowing rather than removal:
+route offset-invariant smooth consumers to `f64` (done in the q4 transfer study — that switch
+cut its render stage from a projected ~50 min to ~3 min), keep `beautiful` for everything else.
+
+**The field source is part of the cache key, and was not always.** `assemble_queries._field_key`
+/ `emit_v1._emit_field_stem` originally hashed family + geometry + maxiter + family-params +
+`field_mode_token` but **not** `--dump-field-source` — so the two fields above, which share
+geometry and seam but differ by that constant, would have collided on one cache entry and the
+offset field would have leaked silently. Closed by `location.field_source_token`, mirroring
+`field_mode_token` exactly: `beautiful`/None → empty token, so **every existing smooth stem
+stays byte-identical** and no cache was orphaned; `f64` → its own token, keying disjointly.
+The general rule this is an instance of: **a cache key must carry every axis that changes the
+value, and a new axis is added with an empty token for the incumbent so the existing keys do
+not move.** `[code: tools/corpus/location.py::field_source_token; pinned by
+tools/corpus/test_location.py::test_field_source_token_semantics + the frozen `_BEAM_SMOOTH` /
+`_EMIT_SMOOTH` literals]`
+
+## 8. Open build task — the deploy-transform parity gate has zero coverage
 
 The deploy-transform parity check — `present.rs` JPG path ↔
 `classifier.data.Transform(train=False)` (the 1280×720 → 384×224 bicubic-stretch +

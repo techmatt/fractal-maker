@@ -37,6 +37,24 @@ So for a **floor source**, v7 serves only as a **badness floor**: admit iff
   `p_notbad >= FLOOR_PNOTBAD` (`0.5`).
 - otherwise → the q3 gate: `decoded_class == 3`.
 
+> **The `current-decode` conjunct is a firewall, not bookkeeping.** `is_current_decoded`
+> (`scorer_version == active_ckpt.ACTIVE_VERSION`) is what makes a stale ledger *unreachable*
+> rather than merely old, and that has already absorbed one real defect for free. When
+> `descriptor.location_of` was found to resolve **walk-era julia rows** wrongly — reading the
+> viewport from `outcome_*` when for a walk row `outcome_*` IS the parameter `c`, producing a
+> degenerate location with no julia `c` at all — the blast radius was **zero**: all 1644 walk
+> rows across 15 ledgers were decoded at v6 or unstamped, none at the then-active v7, so not
+> one of them survived `load_admitted` to reach `location_of` in the first place. Persisted
+> artifacts carrying the degenerate empty-`c` signature, scanned across all of `data/` and
+> `out/`: **0** — direct evidence the wrong resolver never produced a durable record, rather
+> than an argument that it could not have. (The one path that *does* carry walk-backed julia
+> records, the library union, reads locations from the curated wallpaper pool, not
+> `location_of`, and was independently verified byte-correct.) The general form: **a
+> version-stamped admission gate bounds the reach of any bug in the resolution code behind
+> it**, so a resolver fix that lands before the next checkpoint flip needs no regeneration.
+> `[measured: 2026-07-26, 2060 julia rows = 1644 walk + 416 campaign, 0 untagged, over 15
+> ledgers; verdict: record clean, no regeneration]`
+
 `guard_pass ∧ distinct ∧ current-decode` still apply to **every** source. The branch is
 backward-compatible: no existing ledger carries the `q4_harvest` tag, so every prior intake is
 byte-identical. The tag is the durable per-row `mix_source` (falls back to `_source_tag`), the

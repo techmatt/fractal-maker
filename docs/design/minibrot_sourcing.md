@@ -34,6 +34,17 @@ Rules that must not be relaxed:
 
 The old belief that "d4 tops out near period 10 and d5 is bimodal" was a **seeding-plus-subsample artifact**, not a degree ceiling. Minimal p13–15 nuclei exist at every degree.
 
+### 2.1 How a nucleus is actually seeded — as-built, and it is a DRAW, not a census
+
+Four properties of `deep_center_finder` that constrain every rate computed off its output. There is no polynomial root-finding (no Aberth/Durand–Kerner) and no atom-domain detection from a rendered field.
+
+1. **Newton is seeded from a ring grid, blind.** `_ring_seeds(degree)` = 3 radii from `0.30` to `1.05·R_boundary` (`R_boundary = 2^{1/(d−1)}`) × 24 angles = **72 seeds**, each tried at **every** period in `range(3,16)` — 936 solves per degree. (`emit_deep_pool.py` instead uses a hand-curated `SEEDS` list, d2 only.)
+2. **Period is a loop variable, not a measurement.** Nothing reads a period estimate off a field or an orbit; the sweep keeps whatever converges.
+3. **Minimality IS confirmed; largeness is not.** After `|z_n| < tol`, `_is_minimal_nucleus` rejects the solution if any proper divisor `q | period` also closes, so the reported period is exact rather than a multiple. A `|c| < 1e-6` guard drops the `z=0` period-1 degenerate.
+4. **Dedup is by rounded coordinate only** (`DEDUP_DPS = 22`), with **no symmetry dedup** — so the draw contains rotational copies (`c ↦ ωc`, `ω^{d−1}=1`), which a coordinate key cannot collapse. Any "distinct look" count off a raw ring draw is inflated by up to `(d−1)×`. Canonicalizing each nucleus into one symmetry sector before the coordinate dedup is the fix when this becomes a supply pipeline. `q4_multibrot_transfer.md` owns the measured pseudo-replication and its removal.
+
+**Consequence: screen-transfer rates computed over this population are not base rates.** The draw is {ring seeds} → Newton at 3–15 → keep minimal → size-band → coordinate-dedup → explicit subsample. Read those rates as *"the d2 screen treats comparably-sourced d≥3 atoms comparably"*, never as a yield. `[measured: 2026-07-26/27; code: deep_center_finder.newton_nucleus / _is_minimal_nucleus, q4_multibrot_transfer.source_nuclei]`
+
 **Three atom counts appear in this arc and they are different populations — do not reconcile them by assumption.** The roster holds 160 filled cells; the `A` feasibility cut was evaluated over 163 atoms; the labeled roster's realized split covers 145 atoms. Quote the one that matches your population, and reconcile them properly before quoting an atom-level rate.
 
 ---
@@ -60,6 +71,12 @@ The old belief that "d4 tops out near period 10 and d5 is bimodal" was a **seedi
 Read plainly: **G is a weak gate and a dead ranker.** Its accepts average *below* "good." The part that works is the **OOD mask**, which produces a clean floor of 1s. Use G to discard junk; never to order candidates.
 
 **11% of what G rejects is good** — 27 of 250 sub-cutoff crops scored ≥3. Hunting outside the accepts pays.
+
+**The screen accepts nothing at all from the shallowest period band.** Every p3–4 atom at every degree screens to zero accepts, which is why the positive arm of the 487 came in at **237, not 250** — accepts are genuinely scarce outside the mid/deep bands. That is a property of the deployed screen, not a draw shortfall, and it is not fixed by padding with low-quality accepts. A low-period minibrot is large and simple: its `4·size` frame is mostly black body plus plain surround, which the d2-trained screen dislikes.
+
+**G is less dead than the accept-arm number alone suggests — but only on train.** Held at fixed degree, train AUC recovers to **0.59 / 0.78 / 0.68** (d3/d4/d5), so "flat above the cutoff" (within-accept AUC 0.511) is a statement about the post-cutoff tail, not about G's ordering across its full range. **On held-out atoms it collapses back to chance: eval 0.500 / 0.510 / 0.479** — in exactly the cells where `coh_scale_drop` (§8) holds at 0.80 / 0.87. The verdict stands on the eval column.
+
+**The recomputation is verified, so these are statements about the windows actually drawn.** The deployed screen's 15 T2 features recomputed on the exact drawn window reproduce the stored deployed G to **max |ΔG| = 0.0000 over all 462 scored rows**, and crop-resolution interior agrees with screen-resolution interior at ρ = **+0.984** (487 crops) / **+0.999** (the 80-crop interior band) — so nothing here is a re-derivation or resolution artifact. `[measured: 2026-07-27; cmd: uv run python -m tools.studies.interior_bakeoff board]`
 
 **Superseded at sourcing by the orbital ring measures** (`orbital_field_metrics.md`), which
 own that verdict and the evidence for it. G's numbers above stand; do not invest further in
@@ -93,6 +110,8 @@ The interior clause is large and expensive. Over 296k swept positions it alone r
 
 The catch-22 is structural: G-framing cannot produce high-interior windows (`interior_worst` = −1.278 inside G), and uniform sampling produces high-interior windows but no good material. Neither arm can convict or clear the clause.
 
+**The binding ceiling is G's weight, not the mask's threshold.** No drawn accept exceeds `g_interior` = **0.037** — barely a third of the mask's own 0.10 cut. So moving the mask threshold would change almost nothing about what gets accepted; `interior_worst` = −1.278 is what actually holds the accept arm at near-zero interior. Any experiment aimed at the clause has to move the *weight*, or bypass G-framing entirely (which is what the interior-band batch did).
+
 **The way out is constructible and designed but unrun: the `G_cf` framing experiment.** Frame by maximising G with the interior clause removed — the `G_cf` objective is already computed. Note that the reported non-overlap of `G_cf` between the existing arms is an artifact of uniform sampling (uniform windows score low regardless of interior), *not* evidence that high-interior windows cannot score well under a de-interiored objective. Worth ~20% of swept positions and ~50% pool growth.
 
 ---
@@ -108,6 +127,8 @@ Two objections are live and a "degree is the draw axis" decision has to survive 
 - **Objection 1 — the `A` feasibility cut fired only on d2**, and removed d2's best material: the three excluded atoms are among the most beautiful sourced. d2's mean is biased downward by construction. Quantify the size of that bias before trusting the gradient.
 - **Objection 2 — the cross-family anchor batch points the opposite way.** Promotions to class 4: mandelbrot 3/12 plus julia 2/10 = **5/22**, against **1/22** across all six high-degree families. Two labeled sets, one eye, one week, opposite sign. Not strictly contradictory — anchors are curated whole-set locations while the 487 are minibrot-neighbourhood crops at one scale — but the strongest single counter-example is that the human's own exemplar of a great minibrot appears to be d2.
 
+- **Objection 3 — eval's larger degree effect is a composition difference, not corroboration.** The train and eval conditional intervals **do not overlap** (train upper +0.478 < eval lower +0.541), which looks like independent confirmation and is not: **14 of eval's 19 positives sit at degree 5**, so on eval "is it degree 5?" is very nearly "is it good?". A split where one degree carries three quarters of the positives reports a large degree correlation whether or not degree is doing the work. The honest statement before degree becomes a draw axis is the **train** number — ρ ≈ +0.40 [+0.30, +0.48] on the split with 120 atoms — with eval corroborating the *direction* and not the *size*.
+
 **Novelty is a live alternative reading of the degree gradient:** far more d2 has been looked at than d5 over the life of this project, so a preference for d5 may be a preference for unfamiliarity.
 
 **Period is dead as a quality axis** [+0.06 pooled, and **−0.21** inside the period-matched eval slice]. The earlier "deep = good" signal was the screen's bias, not the human's judgement.
@@ -120,6 +141,8 @@ Two objections are live and a "degree is the draw axis" decision has to survive 
 
 **In practice it is a safety rail, not a selector** [measured, 163 atoms]: it fired on 3. Ring-seeding converges to the large-basin nucleus at each period, so the median admitted margin is 6.66 decades. The two margin≈0 exclusions genuinely fail f64 quantisation on render, 9 times out of 9; a margin of 0.95 renders fine.
 
+**The cut only becomes a selector if you deliberately source the deep tail, and ring-seeding cannot.** Uniform rings converge to the large-basin (large-size) nucleus at each period, so even p13–15 atoms sourced this way are the prominent ones (size ≈ 2.5e-5, log|A| ≈ 4.6), not the small/deep tail. Reaching that tail needs **targeted near-∂M seeding**, not more rings — and only there does the `A` cut start doing work.
+
 The wall is on **pixel spacing**, not centre precision, and the emission render path is f64 regardless. Consequently the deep/perturbation tier cannot rescue material this cut excludes: a location that can be rendered deep but not *scored* deep is not a candidate. See `deep_zoom_sourcing.md` §4 for why that is one dependency chain rather than four separate gaps.
 
 **The same size law governs framing in the deep file.** `size ≡ 1/|A|`; the naïve degree-2 λ² law under-sizes d≥3 atoms by 4–2497× and frames them all-black. That law is forbidden in both files.
@@ -131,6 +154,7 @@ The wall is on **pixel spacing**, not centre precision, and the emission render 
 These are the rules that the arc's mistakes were made of. They cost real batches to learn.
 
 - **The atom is the SEARCH unit; the window is the QUALITY unit.** Within-atom ICC is 0.68, but 25 of 105 multi-crop atoms straddle low and high labels. The per-arm rule that each atom contributes both a positive and a negative crop turned out to be ideal case-control — it forces discrimination onto the window. Keep it.
+- **A hard negative has to be sourced deliberately; a deep atom will not volunteer one.** Cache only the screen's top-4 G-maxima per atom and a deep atom yields ~zero rejects — its best windows are good — so accepts land at p13–15 and rejects at p3–4, nearly disjoint, and "deep" becomes a free predictor of "good" purely by construction. The fix is to keep going past the peaks: extract the **sub-cutoff, OOD-surviving** windows the screen already surveyed and NMS them into ≤8 distinct near-miss framings per atom. Deep atoms have thousands of surviving windows (`n_surv` ≈ 7–8k), so deep-and-structured negatives are abundant once you look below the cutoff. That is what filled the deep-band negative floor with 125 genuine near-misses rather than 10 featureless masked frames.
 - **Nominal splits are not realized splits.** The roster's nominal 70/30 realized as **17.2% eval — 25 of 145 atoms.** Every eval-side number in this arc rests on ~25 atoms. Check the realized share before quoting a CI.
 - **Measure the axis you intend to conclude about.** The 487 answered "what is auto-framed yield at one scale per atom." It was very nearly read as "do minibrot neighbourhoods contain q4s." State the population and the axis in the same breath as the number.
 - **A control arm must differ from the treatment in one thing.** The interior batch's low-interior control conflated "no interior" with "empty space," because a 0%-interior window is either a dendrite-rich field or dead space. Where a clean control is impossible, run two comparisons that fail in *opposite* directions and report whether they agree.
@@ -147,6 +171,10 @@ Selected on train, confirmed on eval, atom-bootstrapped, out of a board of 39. B
 **`int_perim_area`** — interior-boundary length per unit interior area; the dendrite-vs-body discriminator. Train AUC 0.652, eval 0.683, **+0.177 given degree**. Replicated out-of-sample on the interior band, but only at the dead-vs-not boundary, where a trivial ink measure beats it. Real but weak.
 
 **`coh_scale_drop`** — orientation coherence lost as the analysis window grows; scrolls turn, filaments don't. **A sign-reversing Simpson case:** ρ = −0.183 pooled, but eval AUC **d4 0.802 CI[0.632, 0.871]** and **d5 0.871 CI[0.753, 0.972]**, both excluding chance — and in exactly the cells where G collapses to 0.510 / 0.479. Higher-degree fields are intrinsically more coherent (ρ = −0.566), which buries the feature in the pool. **Usable only conditioned on degree**, which is always known at draw time. Strongest positive result of the arc.
+
+**Quote the eval column, not the train triple.** The per-degree numbers this feature is usually cited by — 0.70 / 0.76 / 0.73 across d3/d4/d5 — are **train**. Eval is **0.28 / 0.80 / 0.87**: d4 and d5 hold and are the strongest cells on the board, while **d3 has one positive against 32 negatives** (CI [0.065, 0.559]) and must be read as unresolved, not as a reversal. This matters because the feature was the max of a 13-feature × 3-degree board, so the train column is biased upward by selection and the eval column is the one that survives it — on six eval atoms per degree.
+
+Both features are recomputed at draw time on every later batch and recorded without ever being selected on, so batches stay directly comparable. `[artifact: data/minibrot_roster/batch_v1/interior_features.jsonl — 487 rows × 13 crop features + the screen's own 15 + covariates]` `[cmd: uv run python -m tools.studies.interior_bakeoff {features,board,audit,questions}; tests tools/studies/test_interior_bakeoff.py]`
 
 ---
 

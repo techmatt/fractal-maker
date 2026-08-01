@@ -64,7 +64,7 @@ def _jsonl(p):
 # --------------------------------------------------------------------------- #
 def boot_ci(recs, seed=BOOT_SEED, reps=BOOT_REPS, lo=5, hi=95):
     """90% CI on Spearman(degree, label), resampling ATOMS (up to 6 windows share one, so
-    crops are not independent). Mirrors the interval method in interior_band_batch_v1.md."""
+    crops are not independent). Mirrors the interval method in docs/design/minibrot_sourcing.md §8."""
     by_atom = defaultdict(list)
     for r in recs:
         by_atom[r["atom"]].append(r)

@@ -289,7 +289,7 @@ axis.** Period was measured at +0.06 pooled and **−0.21** inside the period-ma
 slice — on a roster spanning **period 3–15** (median 8). The population here spans 2–74.
 Degree's +0.55 was measured on the same restricted roster and carries the same suspicion
 until re-measured. `[code: docs/design/minibrot_sourcing.md §5;
-docs/design/minibrot_roster_v2_readout.md]` `[measured: data/minibrot_roster/roster.jsonl,
+docs/design/minibrot_sourcing.md §5]` `[measured: data/minibrot_roster/roster.jsonl,
 n=163, period 3–15; data/orbital/measures.jsonl, period 2–74]`
 
 ## 7. Cap provenance

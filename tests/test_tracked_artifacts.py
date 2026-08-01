@@ -124,7 +124,7 @@ TRACKED_CANARIES = [
     # Live trained heads carried over in the fractal-maker migration (2026-07-24).
     # Same rationale as the classifier weights: trained .pt, not GPU-reproducible, no
     # rebuild path. Only the LATEST canonical weight of each is kept (no v1/v2 history,
-    # no seed variants) — see docs/design/migration_to_fractal_maker.md.
+    # no seed variants) — see docs/design/storage_classes.md, "Git history is a durability tier".
     "data/wallpaper_head/v3/model_best.pt",       # LIVE cross-location wallpaper-quality head
     "data/render_mode_head/v1/model_best.pt",     # LIVE strange-mode (mining_v1) gate
     "data/queries/scorer/v3_gvo/model_best.pt",   # LIVE palette-preference ranker (pref-v3-gvo)

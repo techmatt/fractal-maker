@@ -289,7 +289,7 @@ pub fn run_render_one(args: &RenderOneArgs) -> Result<(), String> {
         // PERF (future runs): `beautiful` smooth is now field-GATED (skips the field
         // accumulators a smooth dump never reads), so it is ~4x `f64` — not the ~35x it
         // was before gating (39s→2.24s at 2176x1224 mi3000; see
-        // docs/design/beautiful_perf_report.md). But `f64` is still strictly fastest
+        // docs/design/render_coloring_surface.md §7). But `f64` is still strictly fastest
         // (~0.5s, no general-kernel overhead) and offset-invariant, so for smooth-field
         // STATISTICS invariant to a constant offset (escape mask + any percentile-
         // normalized feature — e.g. the q4 stage-1 screen, the degenerate-outcome

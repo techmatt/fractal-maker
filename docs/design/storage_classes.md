@@ -182,8 +182,45 @@ A surviving producer is not reproducibility. Two failure shapes, both live in th
   policy_maxiter}; data/orbital/maxiter_convergence_ladder.json
   `not_reproducible_under_current_policy: true`]`
 
+- **A chain, where the producer of each link needs the link before it.** The third shape, and
+  the most expensive one this tree has actually paid. `data/v{4,5,6,7}/` were classed
+  regenerable at the 2026-07-24 migration on exactly the "the producer exists" reasoning, and
+  cleared. They are not regenerable: `build_manifest → build_plan → cache_manifest` each carry
+  an **ABORT-level byte-parity gate against the previous version's artifact**, so rebuilding v7
+  requires v6's manifest and cache_manifest, which require v4's `aug_roster.json`, which is also
+  gone. What that cost concretely: `data/classifier/v7/eval_scores_v7.jsonl` cannot be
+  regenerated, because the eval freeze needs the v7 cache manifest and the full frozen v6 eval
+  split. The eval-only *code* path is trivial and was never the blocker — the inputs were. The
+  gate that depended on it was retired in favour of one that guards the committed constant
+  directly, with no dead-machinery input. **A per-file regenerability judgement is wrong for a
+  chain; classify the chain.** `[measured: 2026-07-25 — data/v4..v7 empty, aug_roster.json and
+  both v6 oracles absent, no prior eval_scores_v7 copy in git history or siblings]`
+
 So the KEEP question is not *does something still produce this*, it is *would running it
 again produce this*. `[verdict: Matt]`
+
+## Git history is a durability tier too, and this repo's floor is 2026-07-24
+
+`fractal-maker` begins at a **single squashed import commit** (`ff88da4`, 1247 tracked files,
+byte-identical to the old HEAD by blob-OID diff). Nothing before 2026-07-24 is reachable with
+`git log` here, so "recoverable from git history" — a phrase this contract and
+`docs/design/README.md` both lean on — means *since the import*, and a `git show <old>^:<file>`
+against an earlier date silently finds nothing rather than failing.
+
+The pre-migration record is not lost, it is **elsewhere**: the old GitHub repo (renamed
+`fractal-generator-deprecated`) holds the full 609-commit history with all branches confirmed
+merged, and a local mirror sits at `C:\code\fractal-generator-prewrite-backup-20260724`
+(`repo-mirror.git` = all refs, plus raw weight copies with verified sha256 and a HEAD
+manifest). Check there before concluding something never existed.
+
+Why the squash: the old `.git` had reached 365 MB, dominated by raw-committed `v6`/`v7`
+weights (34 MB each) and dead `to_delete/**` + superseded `pool_colormaps.json` blobs. A
+premise correction worth keeping, because it is the kind that gets re-guessed: there was
+**never ~300 MB of dead weight** — committed weight was 68 MB single-copy, and a
+"single-digit MB `.git`" was unreachable while preserving the live tracked palettes and corpus.
+A fresh repo was chosen over a history rewrite for that reason. All classifier weights are LFS
+from the import forward. `[measured: 2026-07-24; verified by blob-OID diff of the 1247-file
+tracked set]`
 
 ## Derive in code, freeze in records
 

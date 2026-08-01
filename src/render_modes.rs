@@ -1444,7 +1444,7 @@ impl OrbitAccum {
 /// actually compute. The beautiful kernel used to accumulate *every* field on
 /// *every* iteration (exp / sin / two atan2 / lattice-round + norm) and then keep
 /// only the one scalar the caller reduced — ~35× slower than the escape-time twin
-/// for a smooth dump (`beautiful_perf_report.md`). Gating each block behind its flag
+/// for a smooth dump (docs/design/render_coloring_surface.md §7). Gating each block behind its flag
 /// computes only what the requested field(s) read. The flag set is fixed for the
 /// whole render, so the per-iteration branch is perfectly predicted (≈free), and
 /// when a field IS requested its block runs verbatim — byte-identical to the
@@ -2184,7 +2184,7 @@ pub fn smooth_field_supersampled(
 /// value is byte-identical (guard: `tests::field_gating_matches_ungated`). `f64` stays
 /// strictly fastest for offset-invariant `Smooth` statistics (`--dump-field-source
 /// f64`); this kernel is required for byte-identical smooth reproduction and the
-/// non-smooth fields. See docs/design/beautiful_perf_report.md.
+/// non-smooth fields. See docs/design/render_coloring_surface.md §7.
 pub fn single_field_supersampled(
     frame: &Frame,
     ss: u32,

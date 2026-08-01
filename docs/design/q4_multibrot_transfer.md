@@ -44,7 +44,7 @@ avoid, and it bit at the sourcing layer rather than the screen layer.
   path, degree carried by `--family multibrot{d}` (`F64Backend` is already
   degree-parametric). 2176×1224 ss1, `fw = 4·|size|`. (Rendered with
   `--dump-field-source f64` — offset-invariant to the screen and ~35× faster; see
-  `beautiful_perf_report.md`.)
+  `render_coloring_surface.md` §7.)
 - **Screen — unchanged.** The deployment model is refit exactly as `q4_harvest_tight`
   does (`LF.surviving_weights(.., "T2_cells", 2.0)` over the 340 d2 labels, 33 corpus
   minibrots; tight cutoff **G ≥ 1.390**, labeled precision 0.85). Every gating decision
@@ -211,7 +211,7 @@ are computed on. This correction now lives in `deep_center_finder.nucleus_size_e
   `featurize`'s per-crop percentile stretch — verified: interior mask identical,
   features agree to 1.3e-9, `_v2_drop` identical. ~35× faster. Both the corpus refit
   fields and the transfer fields use it, so the model is unchanged. Full write-up:
-  `beautiful_perf_report.md`.
+  `render_coloring_surface.md` §7.
 - **Size-law exponent `d/(d-1)`** (above) — required to source non-degenerate multibrot
   fields at all; without it the read is confounded by black fields. d=2 unchanged.
 - **Coarse pre-filter and OOD mask reported as one rate** — they are the identical
