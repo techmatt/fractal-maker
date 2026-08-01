@@ -209,6 +209,44 @@ def test_the_screen_measures_the_field_and_stamps_its_cap(atom):
     assert 0.0 < r["cap_headroom"] <= 1.0
 
 
+def test_the_screen_measures_THE_4x_FRAME_and_not_some_other_one(atom):
+    """DIFFERENTIAL against the reference path, because every other test here checks
+    plumbing. `screen_atom`'s numbers must equal `rescore_lib.ring_measures` on a field
+    dumped independently at 4x the ATOM — so a screen that quietly framed at `k x
+    window_scale`, or at the parent's fw, or at 1x, is caught by its VALUES rather than by
+    an `screen_fw` field it also computes itself.
+
+    Non-vacuity is the second half: the 1x frame must give different numbers, or this would
+    pass on any frame at all.
+
+    The `4.0` is a LITERAL, not `msc.SCREEN_FRAME_MULT`. Written the derived way first, this
+    test stayed green when the constant was moved to 8.0 — it pinned "the screen frames at
+    whatever it says it frames at", which is `f(x) == f(x)` (`verification_practice.md`
+    §1.10). 4x is the only frame scale ANY orbital score has been computed at and the only
+    one `orbital_field_metrics.md` §2's validation covers, so it is the thing to pin."""
+    import tempfile
+    import rescore_lib as rl
+    assert msc.SCREEN_FRAME_MULT == 4.0, "the validated frame scale (orbital §2)"
+    want_fw = atom["window_scale"] * 4.0
+    got = msc.screen_atom(atom["cx"], atom["cy"], atom["window_scale"])
+    assert got["screened"] is True
+
+    def measure_at(fw):
+        with tempfile.TemporaryDirectory() as td:
+            field, _ = fm.dump_field(atom["cx"], atom["cy"], fw, msc.screen_maxiter(fw),
+                                     Path(td) / "f.bin", width=fm.SCREEN_W,
+                                     height=fm.SCREEN_H, ss=fm.SCREEN_SS, threads=1)
+        return rl.ring_measures(field)
+
+    ref = measure_at(want_fw)
+    assert got["radial_range"] == pytest.approx(ref["radial_range"], abs=1e-4)
+    assert got["radial_rings"] == pytest.approx(ref["radial_rings"], abs=1e-2)
+    # ... and a different frame really would have shown up
+    other = measure_at(atom["window_scale"] * 1.0)
+    assert (other["radial_range"], other["radial_rings"]) != \
+           (ref["radial_range"], ref["radial_rings"])
+
+
 def test_the_screen_actually_moves_when_the_cap_moves(atom):
     """`measurement_practice.md`: before pre-registering a bar, verify the instrument's
     inputs change. If the 24x policy produced the same field as a tiny cap, the whole
