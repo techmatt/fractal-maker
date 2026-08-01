@@ -19,9 +19,14 @@ These records capture human choices nothing can regenerate, so they are
 Thumbnails and navigation previews are **scratch** (regenerable) — they live under
 `scratch/descent_harness/`, never here.
 
-The emit crop is produced by `corpus_common.render_corpus_crop` (the sanctioned,
-byte-reproducible corpus-crop path), so a re-render from a stored record's
-`render` block reproduces the saved crop bit-for-bit (the round-trip acceptance).
+**The emit ROW is the artifact; the crop pair is a cache.** The row records a human
+judgement nothing can regenerate, so `app.emit` writes it *before* it touches a file.
+The crops are a pure function of the row (`render` / `vivid_render` block + the
+palette library + `jpg_quality`), produced by `corpus_common.render_corpus_crop` —
+the sanctioned, byte-reproducible corpus-crop path — so a re-render from a stored
+record reproduces the saved crop bit-for-bit (the round-trip acceptance). That is
+what lets a lost `scratch/` staging file be rebuilt instead of costing the approval;
+see `test_emit_staging.py`.
 """
 from __future__ import annotations
 
@@ -37,6 +42,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "scoring"))
 sys.path.insert(0, str(REPO_ROOT / "tools" / "mining"))
 import artifacts as _artifacts          # noqa: E402  (the out-of-tree resolver seam)
 import corpus_common as cc              # noqa: E402
+import location as _loc                 # noqa: E402  (per-family extra-constant registry)
 import active_ckpt as _prod             # noqa: E402  (production render-block source of truth)
 
 DH_DIR = REPO_ROOT / "data" / "descent_harness"
@@ -80,10 +86,35 @@ def production_maxiter(fw) -> int:
     return int(_prod.auto_maxiter(float(fw)))
 
 
-def canonical_render_block(cx, cy, fw, family) -> dict:
+def maxiter_policy() -> dict:
+    """The maxiter POLICY the emitted block's cap was derived under, read off the
+    production pins (derive in code, freeze in the record — never a literal here).
+
+    A block freezes `maxiter` as an integer, so a rebuild is under the same cap no
+    matter what production does later. This token records *which* policy produced
+    that integer, so a record read months from now says so rather than implying the
+    then-current one — the cap has already moved once (base 500 -> 4000, clamp
+    8000 -> 67000, see docs/design/auto_maxiter.md)."""
+    return {
+        "source": "tools/scoring/production_pins.auto_maxiter",
+        "fw_home": _prod.FW_HOME,
+        "base": _prod.MAXITER_BASE,
+        "k": _prod.MAXITER_K,
+        "clamp": [_prod.MAXITER_MIN, _prod.MAXITER_MAX],
+    }
+
+
+def canonical_render_block(cx, cy, fw, family, family_params=None) -> dict:
     """The version-invariant canonical label-crop render block, derived from the
     production source (active_ckpt) — geometry + interior/filter/composition are the
-    corpus canonical; maxiter and palette come from production."""
+    corpus canonical; maxiter and palette come from production.
+
+    `family_params` are the family's extra constants (`location.family_param_keys`).
+    A family that HAS them and is not given them raises rather than rendering under
+    the engine's fallback defaults: an omitted family param is silent — the crop
+    still looks like a fractal — and it once put hundreds of renders of one phoenix
+    location into a batch. Every family the descent selections carry today
+    (mandelbrot, multibrot3/4/5) has an empty key set, so the block is unchanged."""
     blk = cc.render_block(
         cx=cc.hp_str(cx), cy=cc.hp_str(cy), fw=cc.hp_str(fw),
         maxiter=production_maxiter(fw), palette=CANONICAL_PALETTE,
@@ -94,14 +125,23 @@ def canonical_render_block(cx, cy, fw, family) -> dict:
     blk["fractal_type"] = family            # native family in the block, no c
     blk["c_re"] = None
     blk["c_im"] = None
+    have = dict(family_params or {})
+    need = _loc.family_param_keys(family)
+    missing = [k for k in need if have.get(k) is None]
+    if missing:
+        raise ValueError(
+            f"family {family!r} requires extra constants {list(need)}; missing {missing}. "
+            "Rendering without them would silently use the engine's fallback defaults.")
+    for k in need:
+        blk[k] = have[k]
     return blk
 
 
-def vivid_render_block(cx, cy, fw, family) -> dict:
+def vivid_render_block(cx, cy, fw, family, family_params=None) -> dict:
     """The vivid judging companion: identical to the canonical block in every field
     except the palette (the colormap library, a render arg not a block field, also
     differs — VIVID_COLORMAPS)."""
-    blk = canonical_render_block(cx, cy, fw, family)
+    blk = canonical_render_block(cx, cy, fw, family, family_params)
     blk["palette"] = VIVID_PALETTE
     return blk
 

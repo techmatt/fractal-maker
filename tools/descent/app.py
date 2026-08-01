@@ -101,21 +101,58 @@ def canonical_block(atom, cx, cy, fw) -> dict:
     """Canonical (model-facing) label-crop render block — DERIVED from the production
     source (store.canonical_render_block → active_ckpt), NOT the explorer nav heuristic.
     `rc.auto_maxiter` is for navigation renders only and never touches this path."""
-    return store.canonical_render_block(cx, cy, fw, atom["family"])
+    return store.canonical_render_block(cx, cy, fw, atom["family"],
+                                        atom.get("family_params"))
 
 
 def vivid_block(atom, cx, cy, fw) -> dict:
     """Vivid judging companion — identical to the canonical block except palette."""
-    return store.vivid_render_block(cx, cy, fw, atom["family"])
+    return store.vivid_render_block(cx, cy, fw, atom["family"],
+                                    atom.get("family_params"))
 
 
-def render_quality_crop(block: dict, out: Path, palette_source: Path) -> Path:
+def render_quality_crop(block: dict, out: Path, palette_source: Path,
+                        jpg_quality: int | None = None) -> Path:
     """Render one quality crop through the sanctioned byte-reproducible path."""
     out.parent.mkdir(parents=True, exist_ok=True)
     with _engine_sem:
-        cc.render_corpus_crop(block, str(out), palette_source=str(palette_source),
-                              jpg_quality=store.JPG_QUALITY)
+        cc.render_corpus_crop(
+            block, str(out), palette_source=str(palette_source),
+            jpg_quality=store.JPG_QUALITY if jpg_quality is None else jpg_quality)
     return out
+
+
+class CropMaterializeError(RuntimeError):
+    """An emitted crop could not be produced. Named on purpose: by the time this can
+    be raised the verdict is already durable, so the caller reports a failed *crop*,
+    not a failed emit."""
+
+
+def materialize_crop(block: dict, staged: Path, dst: Path, palette_source: Path,
+                     jpg_quality: int, what: str) -> str:
+    """Put the emitted crop at `dst`; return "cache" or "rebuild".
+
+    The staged `scratch/` render is a CACHE, not the record — it holds exactly the
+    bytes the human judged, so a hit is a copy. On a miss (a `scratch/` wipe between
+    judging and emitting) the crop is REBUILT from `block`, the same parameters the
+    staged file was rendered from: `render_corpus_crop` reads every pixel-affecting
+    input off the block, so the rebuild is byte-identical to what was judged.
+
+    A rebuild that cannot run raises `CropMaterializeError` naming the cause. It must
+    never fall back to different parameters — a crop that merely still looks like a
+    fractal is the silent failure this whole path exists to avoid."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if staged is not None and Path(staged).exists():
+        shutil.copyfile(staged, dst)
+        return "cache"
+    try:
+        render_quality_crop(block, dst, palette_source, jpg_quality)
+    except Exception as exc:                     # engine failure, bad family, bad block
+        raise CropMaterializeError(
+            f"{what} crop could not be rebuilt from the record: {exc}") from exc
+    if not dst.exists():
+        raise CropMaterializeError(f"{what} crop rebuild produced no file at {dst}")
+    return "rebuild"
 
 
 # --------------------------------------------------------------------------- #
@@ -464,9 +501,11 @@ def quality():
         sess = _session(atom_id)
         if sess["current_id"] == view_id:      # view unchanged during the render
             sess["quality_view_id"] = view_id
+            # PARAMETERS only. The staged file is a cache and its path is derivable
+            # from (atom_id, view_id) — holding the path here is what made the
+            # approval depend on a `scratch/` tree that may be wiped under it.
             sess.setdefault("quality", {})[view_id] = {
                 "canonical_block": canon_blk, "vivid_block": vivid_blk,
-                "canonical_scratch": str(canon_scratch), "vivid_scratch": str(vivid_scratch),
             }
         st = atom_state(atom_id)
     st["vivid_img"] = _b64(vivid_scratch, "image/jpeg")
@@ -476,6 +515,15 @@ def quality():
 
 @app.route("/emit", methods=["POST"])
 def emit():
+    """Record the human's verdict, then materialize its crop pair.
+
+    That order is the whole point. The verdict is the one thing here nothing can
+    regenerate, so it goes to `emits.jsonl` FIRST — before any filesystem work that
+    can fail. The crops are a pure function of the record and are produced after:
+    from the staged `scratch/` render when it is still there, rebuilt from the
+    record's own blocks when it is not (`materialize_crop`). Previously the copy came
+    first, so a `scratch/` wipe between judging and emitting raised inside the view —
+    an unhandled 500, with the approval gone."""
     d = request.get_json()
     atom_id = d["atom_id"]
     klass = int(d["class"])
@@ -494,20 +542,8 @@ def emit():
         seq = store.next_emit_seq(atom_id)
         emit_id = f"{atom_id}__e{seq}"
         lineage = walk_lineage(sess, view_id)
-        canon_scratch = Path(qq["canonical_scratch"])
-        vivid_scratch = Path(qq["vivid_scratch"])
         canon_blk = qq["canonical_block"]
         vivid_blk = qq["vivid_block"]
-
-    # copy the approved quality crops to durable storage (approve == saved, no re-render).
-    # Crops resolve OUT of the tree via the artifacts seam; the record stores the portable
-    # repo-relative string.
-    canon_dst = store.canonical_crop_path(emit_id)
-    vivid_dst = store.vivid_crop_path(emit_id)
-    canon_dst.parent.mkdir(parents=True, exist_ok=True)
-    vivid_dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(canon_scratch, canon_dst)
-    shutil.copyfile(vivid_scratch, vivid_dst)
 
     record = {
         "emit_id": emit_id,
@@ -525,14 +561,36 @@ def emit():
         "palette_source": store.rel(store.CLEAN_COLORMAPS),
         "vivid_palette_source": store.rel(store.VIVID_COLORMAPS),
         "jpg_quality": store.JPG_QUALITY,
+        # the cap in `render` is frozen; this names the policy it was derived under
+        "maxiter_policy": store.maxiter_policy(),
         "canonical_crop": store.canonical_crop_rel(emit_id),   # portable repo-relative
         "vivid_crop": store.vivid_crop_rel(emit_id),
         "lineage": lineage,
     }
-    store.append_emit(record)
+    store.append_emit(record)                   # the verdict is durable from here on
+
+    # Crops resolve OUT of the tree via the artifacts seam; the record stores the
+    # portable repo-relative string. Cache hit -> copy the judged bytes; cache miss
+    # -> rebuild them from the record. Crop presence is DERIVED at read time
+    # (solutions_payload / the /file route), never asserted in the row.
+    canon_scratch, vivid_scratch = store.quality_scratch_paths(atom_id, view_id)
+    try:
+        canon_how = materialize_crop(canon_blk, canon_scratch,
+                                     store.canonical_crop_path(emit_id),
+                                     store.CLEAN_COLORMAPS, store.JPG_QUALITY, "canonical")
+        vivid_how = materialize_crop(vivid_blk, vivid_scratch,
+                                     store.vivid_crop_path(emit_id),
+                                     store.VIVID_COLORMAPS, store.JPG_QUALITY, "vivid")
+    except CropMaterializeError as exc:
+        return jsonify({
+            "error": f"{emit_id} RECORDED (the approval is safe) but its {exc}",
+            "emitted": emit_id,
+        }), 500
+
     with _lock:
         st = atom_state(atom_id)
     st["emitted"] = emit_id
+    st["crops_from"] = {"canonical": canon_how, "vivid": vivid_how}
     return jsonify(st)
 
 
