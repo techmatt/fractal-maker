@@ -59,7 +59,7 @@ def select(rows: list[dict], p: vs.ScreenParams, *, top: int, n: int, seed: int)
     """
     ok = [r for r in rows if r.get("screened") and not vs.is_vetoed(r, p.veto)]
     for r in ok:
-        r["_c"] = vs.composite_v3(r, p)
+        r["_c"] = vs.composite_v3(r, p)   # v4 was measured and NOT adopted
     ok.sort(key=lambda r: -r["_c"])
     chosen = {r["key"]: r for r in ok[:top]}
     v = np.array([r["_c"] for r in ok])
@@ -119,7 +119,7 @@ def readout(rows: list[dict], n_eligible: int, n_swept: int) -> dict:
     gains = [r["chosen_composite"] - r["origin_composite"] for r in rows
              if r.get("chosen_composite") is not None
              and r.get("origin_composite") is not None]
-    # THE RATIO NEEDS A DENOMINATOR FLOOR UNDER v3 AND DID NOT UNDER v2. The size band
+    # THE RATIO NEEDS A DENOMINATOR FLOOR FROM v3 ON, AND DID NOT UNDER v2. The size band
     # drives a heavily-banded origin's composite toward 0, so `chosen/origin` runs to the
     # hundreds on rows whose origin scored ~0 — a ratio that measures the denominator, not
     # the move. Rows below the floor are counted and reported, never silently dropped.
@@ -154,7 +154,7 @@ def readout(rows: list[dict], n_eligible: int, n_swept: int) -> dict:
                 "construction — read it as 'how much headroom the composite sees', never "
                 "as a quality improvement. The before/after sheet is the only thing here "
                 "that can answer the latter. `composite_ratio` additionally excludes "
-                f"{n_below} rows whose origin scored below {RATIO_FLOOR}: under the v3 size "
+                f"{n_below} rows whose origin scored below {RATIO_FLOOR}: under the size "
                 "band a dominated origin scores ~0, and a ratio against ~0 measures the "
                 "denominator."),
     )
@@ -172,7 +172,7 @@ def main(argv=None) -> int:
     ap.add_argument("--workers", type=int, default=WORKERS)
     ap.add_argument("--keys-from", type=Path, default=None,
                     help="sweep EXACTLY the keys in this prior sweep file instead of "
-                         "re-selecting — the only way a v2 and a v3 argmax describe the "
+                         "re-selecting — the only way two versions' argmaxes describe the "
                          "same candidates rather than two different draws")
     a = ap.parse_args(argv)
     if a.workers > 4:

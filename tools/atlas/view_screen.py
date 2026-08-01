@@ -62,6 +62,31 @@ argmax exploits it), and an **anchor-retention constraint** on the sweep (its co
 kept beside `composite_v3` because the v2 gate record must stay reproducible from source,
 not only from the JSON it was written to.
 
+COMPOSITE v4 (2026-08-01) — PROPOSED, MEASURED, AND **NOT ADOPTED**. `composite_v3` is still
+the live sort key; `composite_v4` exists so the 41 formulations that were run against the v4
+gate stay re-derivable from source rather than only from the JSON they were written to,
+exactly as `composite_v2` does.
+
+The proposal: `band_coverage` calls a tile participating iff it SPANS a colour cycle, and a
+slow gradient spans a cycle with one lazy band in it — so a "field of blue" could post
+`covq25 = 0.50`. v4 additionally required structure INSIDE the tile (band-boundary crossings
+per pixel step), leaving the arithmetic above it — size band, winsorized richness, veto —
+untouched.
+
+WHY IT WAS NOT ADOPTED, because the negative result is the useful part. The field does not
+support the premise. The tile that motivated it (`snap k16 d5 p16`) is not a frame of lazy
+span-only tiles: its dead area is one contiguous diagonal band, and its participating tiles
+hold band crossings at population rates. Measured on the 16,440, that tile sits at **p64.6
+on the coverage term and p69.4 on richness** — above median on BOTH — and reaches p83.5
+because the product of two above-median heavy-tailed factors clears the top quintile. No
+refinement of either factor demotes it, and the crossing clause moves it the WRONG way
+(p83.5 -> p84.4) while re-promoting the dense k4 frames v3's size band exists to demote
+(p77.8 -> p84.3). Full record, every family and floor: `data/atlas/view_screen_gate.json`
+§v4 and `orbital_field_metrics.md` §11.7.
+
+What the iteration did leave behind is the field cache (`view_field_cache.py`): the next
+per-tile statistic is a numpy pass, not a 17-minute engine pass over the population.
+
   uv run python tools/atlas/view_screen.py --refs        # re-measure the references
   uv run python tools/atlas/view_screen.py --demo <cx> <cy> <fw>
 """
@@ -138,12 +163,125 @@ def _tile_stats(field: np.ndarray, gx: int, gy: int):
     return span, n_finite / float(th * tw)
 
 
+# --------------------------------------------------------------------------- #
+# v4: STRUCTURE INSIDE THE TILE, not span across it
+# --------------------------------------------------------------------------- #
+# THE DEFECT v4 FIXES. `span >= 1 cycle` is satisfied by a tile that holds ONE lazy band:
+# a slow monotone gradient crossing a single colour boundary spans a cycle with no
+# structure in it at all. That is how `snap k16 d5 p16` — "a field of blue" — posted
+# `band_coverage_q25 = 0.50`, i.e. half of every region "participating" in banding that is
+# not there. The favourite (`neighborhood_expand k16 d2 p43`) differs not in SPAN but in how
+# many band boundaries its tiles contain. So the indicator has to ask how much boundary a
+# tile holds, not how far its values travel. `[verdict: Matt, on the v3 Q5 sheet]`
+#
+# THE THREE FAMILIES BELOW ARE ALL "STRUCTURE WITHIN THE TILE" AND THEY ARE NOT THE SAME
+# STATISTIC. All are computed here, in one place, so the gate SELECTS among them rather than
+# reimplementing any of them (the v3 precedent: only the rejected log compression lives in
+# the gate, because it is not what shipped).
+#
+#   "cross"  — the fraction of a tile's adjacent finite pixel pairs (both axes, within the
+#              tile only) whose `floor(cycles)` differs, i.e. how many of this tile's pixel
+#              steps cross a colour-band boundary. Bounded in [0, 1] and phase-independent
+#              (crossing an integer boundary is what a band edge IS, and the count of
+#              boundaries along a path does not move with the palette's phase). BOUNDED IS
+#              THE POINT, and it is v3's winsorization lesson applied one level down: one
+#              catastrophic jump between two adjacent screen pixels contributes exactly one
+#              crossing, not fifty, so an aliased seam cannot manufacture participation.
+#   "tv"     — mean |delta cycles| per adjacent finite pixel step: the same shape, UNBOUNDED.
+#              Recorded as the alternative that a single discontinuity can carry.
+#   "bands"  — the count of distinct `floor(cycles)` values present in the tile. The most
+#              literal reading of "distinct rings per tile"; it is phase-DEPENDENT at the
+#              margin (a tile spanning 1.0 cycles holds 2 distinct floors or 1, depending on
+#              where the boundary falls) which is exactly what `TILE_CYCLE_FLOOR` was written
+#              to avoid, and it is recorded so that cost is measured and not asserted.
+#
+# THE SPAN CLAUSE IS KEPT, NOT REPLACED. v4 participation is `span >= 1 cycle AND
+# finite_share >= 0.25 AND structure >= floor` — a strict TIGHTENING, so every v4-
+# participating tile also participated under v3 and coverage can only fall. Without the span
+# clause the crossing test would credit a tile that merely straddles one boundary with a span
+# of 0.01 — flatter than anything v3 admitted — which is the opposite of the fix.
+PARTICIPATION_MODES = ("cross", "tv", "bands")
+
+# The shipped structure floor. Selected by the v4 gate under a rule written down first: the
+# LEAST DEMANDING floor on a fixed 0.05 grid that satisfies every clause of the v4 gate.
+# See `data/atlas/view_screen_gate.json` §v4 for the grid and the floors that failed.
+TILE_CROSS_FLOOR = 0.40
+
+
+def _tile_fold(field: np.ndarray, gx: int, gy: int):
+    """`(gy, gx, th, tw)` view of the field in colour cycles, remainder trimmed.
+
+    Tiles are kept 2-D here (unlike `_tile_stats`, which flattens each tile) because every
+    v4 statistic is about ADJACENCY inside a tile, and a flattened tile has no adjacency.
+    """
+    h, w = field.shape
+    tw, th = w // gx, h // gy
+    if tw == 0 or th == 0:
+        return None
+    t = np.asarray(field, dtype=np.float64) * DENSITY
+    return t[:gy * th, :gx * tw].reshape(gy, th, gx, tw).transpose(0, 2, 1, 3)
+
+
+def tile_structure(field: np.ndarray, mode: str, *, gx: int = GRID_X, gy: int = GRID_Y):
+    """Per-tile structure statistic on a `gy x gx` grid, one of `PARTICIPATION_MODES`.
+
+    Pairs that straddle a tile edge are NOT counted: the question is what one tile holds, and
+    borrowing a neighbour's boundary would let a single band smeared across the frame credit
+    every tile it passes through — the same error the 25%-escaping clause exists to stop.
+    """
+    if mode not in PARTICIPATION_MODES:
+        raise ValueError(f"unknown participation mode {mode!r}")
+    t = _tile_fold(field, gx, gy)
+    if t is None:
+        return None
+    fin = np.isfinite(t)
+    if mode == "bands":
+        # Distinct finite floors per tile, by counting runs in the sorted tile. `+inf` is
+        # the sentinel rather than NaN so the non-escaping pixels sort to the end and drop
+        # out of the run count via `isfinite`, instead of comparing unequal to themselves.
+        flat = np.sort(np.where(fin, np.floor(t), np.inf).reshape(t.shape[0], t.shape[1], -1),
+                       axis=2)
+        f = np.isfinite(flat)
+        first = f[:, :, :1].sum(axis=2)
+        new = (f[:, :, 1:] & (flat[:, :, 1:] != flat[:, :, :-1])).sum(axis=2)
+        return (first + new).astype(np.float64)
+    b = np.floor(t)
+    ph = fin[:, :, :, :-1] & fin[:, :, :, 1:]
+    pv = fin[:, :, :-1, :] & fin[:, :, 1:, :]
+    if mode == "cross":
+        nh = (ph & (b[:, :, :, :-1] != b[:, :, :, 1:])).sum(axis=(2, 3))
+        nv = (pv & (b[:, :, :-1, :] != b[:, :, 1:, :])).sum(axis=(2, 3))
+    else:                                    # "tv"
+        nh = np.where(ph, np.abs(np.diff(t, axis=3)), 0.0).sum(axis=(2, 3))
+        nv = np.where(pv, np.abs(np.diff(t, axis=2)), 0.0).sum(axis=(2, 3))
+    dh, dv = ph.sum(axis=(2, 3)), pv.sum(axis=(2, 3))
+    # PER-AXIS, THEN MAX — not pooled over both axes. Pooling makes the statistic measure
+    # ORIENTATION as much as structure: a band running exactly along one axis contributes
+    # nothing to the other axis's pairs, so its pooled value is halved and the ceiling for
+    # axis-aligned banding is 0.5 while diagonal banding reaches 1.0. A band running along
+    # one axis is still a band. Taking the max asks "along its own direction of variation,
+    # how many of this tile's steps cross a boundary", which is orientation-free and reaches
+    # 1.0 for dense banding at any angle.
+    return np.maximum(np.where(dh > 0, nh / np.maximum(dh, 1), 0.0),
+                      np.where(dv > 0, nv / np.maximum(dv, 1), 0.0))
+
+
 def _participating(field: np.ndarray, gx: int, gy: int, cycle_floor: float,
-                   min_finite: float):
+                   min_finite: float, *, mode: str | None = None,
+                   structure_floor: float = 0.0):
+    """The tile-participation indicator. `mode=None` is the v3 (span-only) rule.
+
+    `mode` adds the v4 structure clause on top of — never instead of — the span and
+    escaping clauses, so the v4 indicator is a subset of the v3 one by construction.
+    """
     span, finite_share = _tile_stats(field, gx, gy)
     if span is None:
         return None
-    return ((finite_share >= min_finite) & (span >= cycle_floor)).astype(np.float64)
+    ok = (finite_share >= min_finite) & (span >= cycle_floor)
+    if mode is not None:
+        s = tile_structure(field, mode, gx=gx, gy=gy)
+        ok = ok & (s >= structure_floor)
+    return ok.astype(np.float64)
 
 
 def band_coverage(field: np.ndarray, *, gx: int = GRID_X, gy: int = GRID_Y,
@@ -177,29 +315,105 @@ def band_coverage_q25(field: np.ndarray, *, gx: int = GRID_X, gy: int = GRID_Y,
     its own tile mean; a frame whose structure is spread scores near it.
     """
     ok = _participating(field, gx, gy, cycle_floor, min_finite)
+    return _pool_q(ok, gx, gy, bx, by, quantile)
+
+
+def _pool_q(ok, gx: int, gy: int, bx: int, by: int, quantile: float) -> float:
     if ok is None or gy % by or gx % bx:
         return 0.0 if ok is None else float(ok.mean())
     blocks = ok.reshape(by, gy // by, bx, gx // bx).mean(axis=(1, 3))
     return float(np.percentile(blocks, quantile))
 
 
+def coverage_pair(field: np.ndarray, *, mode: str | None = None,
+                  structure_floor: float = 0.0, gx: int = GRID_X, gy: int = GRID_Y,
+                  bx: int = BLOCK_X, by: int = BLOCK_Y, quantile: float = BLOCK_QUANTILE,
+                  cycle_floor: float = TILE_CYCLE_FLOOR,
+                  min_finite: float = TILE_MIN_FINITE) -> tuple[float, float]:
+    """`(band_coverage, band_coverage_q25)` under one participation rule, in ONE tile pass.
+
+    `mode=None` reproduces the v3 pair exactly (same predicate, same pooling); a `mode`
+    adds the v4 structure clause. Returned as a pair because the composite's coverage term
+    is the geometric mean of the two and computing them separately walked the field twice.
+    """
+    ok = _participating(field, gx, gy, cycle_floor, min_finite, mode=mode,
+                        structure_floor=structure_floor)
+    if ok is None:
+        return 0.0, 0.0
+    return float(ok.mean()), _pool_q(ok, gx, gy, bx, by, quantile)
+
+
 # --------------------------------------------------------------------------- #
 # the view measures
 # --------------------------------------------------------------------------- #
+# The formulation grids the v4 gate selects over, recorded per row so the selection is
+# arithmetic on the record instead of 21 more passes over the population. Each entry is a
+# `(band_coverage, band_coverage_q25)` pair under that participation rule.
+#   cross — fraction of a tile's steps crossing a band boundary along its own axis, in
+#           [0, 1]. A single boundary through a 4-px tile sits at 1/3; a boundary at every
+#           step is 1.0, so the grid runs from just above "one boundary" to saturation.
+#   tv    — mean |delta cycles| per pixel step along the same axis. A monotone tile spanning
+#           exactly one cycle sits at 1/3, which is why the grid brackets it.
+#   bands — distinct floor(cycles) values present in the tile.
+COVERAGE_GRID = (
+    ("cross", (0.34, 0.40, 0.45, 0.50, 0.55, 0.60, 0.67, 0.75, 0.85)),
+    ("tv", (0.34, 0.40, 0.50, 0.67, 0.85, 1.00)),
+    ("bands", (2.0, 3.0, 4.0, 5.0, 6.0)),
+)
+
+
+def coverage_grid(field: np.ndarray) -> dict:
+    """`{mode: {floor: [coverage, coverage_q25]}}` over `COVERAGE_GRID`. Pure; no engine."""
+    return {mode: {f"{f:g}": [round(a, 4), round(b, 4)]
+                   for f in floors
+                   for a, b in [coverage_pair(field, mode=mode, structure_floor=f)]}
+            for mode, floors in COVERAGE_GRID}
+
+
+# The SECOND v4 family, and it was added AFTER the participation grid above was run and
+# failed — recorded in that order because that is the order it happened in. The tile
+# indicator is v3's, unchanged; what moves is the POOLING the q25 is taken over. It is here
+# because the field says the participation hypothesis was aimed at the wrong thing: the
+# "field of blue"'s dead area is a contiguous diagonal band that the 4x3 region grid cannot
+# isolate (every region catches part of the live diagonal), not a frame of lazy tiles.
+# `by` must divide GRID_Y = 9 and `bx` must divide GRID_X = 16.
+POOLING_GRID = ((4, 3, 25.0), (4, 3, 10.0), (8, 3, 25.0), (8, 3, 10.0),
+                (16, 3, 25.0), (16, 3, 10.0), (8, 9, 25.0), (8, 9, 10.0))
+
+
+def pooling_grid(field: np.ndarray) -> dict:
+    """`{"BXxBYqQ": [coverage, coverage_q]}` over `POOLING_GRID`, v3 participation. Pure.
+
+    One tile pass, reused across every pooling: the indicator does not depend on how the
+    regions are drawn, so re-deriving it per variant would be eight identical walks.
+    """
+    ok = _participating(field, GRID_X, GRID_Y, TILE_CYCLE_FLOOR, TILE_MIN_FINITE)
+    if ok is None:
+        return {f"{bx}x{by}q{q:g}": [0.0, 0.0] for bx, by, q in POOLING_GRID}
+    mean = round(float(ok.mean()), 4)
+    return {f"{bx}x{by}q{q:g}": [mean, round(_pool_q(ok, GRID_X, GRID_Y, bx, by, q), 4)]
+            for bx, by, q in POOLING_GRID}
+
+
 def view_measures(field: np.ndarray) -> dict:
     """Every raw measure this screen records for one field. Pure; no engine.
 
-    All four are kept on every candidate whatever the composite does with them — the
-    screen is a recording (`maneuver_screen.py`, "NOT A GATE").
+    All are kept on every candidate whatever the composite does with them — the screen is a
+    recording (`maneuver_screen.py`, "NOT A GATE"). The v3 coverage pair stays on the row
+    beside the v4 pair for the same reason `composite_v2` stays live: the record a previous
+    gate was written from has to keep re-deriving from source.
     """
     m = rl.ring_measures(field)
     ifrac, iprof = fm.interior_profile(field)
     finite = field[np.isfinite(field)]
+    cov4, cov4_q25 = coverage_pair(field, mode="cross", structure_floor=TILE_CROSS_FLOOR)
     return dict(
         interior_fraction=round(float(ifrac), 4),
         interior_radial=iprof,
         band_coverage=round(band_coverage(field), 4),
         band_coverage_q25=round(band_coverage_q25(field), 4),
+        band_coverage_v4=round(cov4, 4),
+        band_coverage_q25_v4=round(cov4_q25, 4),
         radial_range=round(float(m["radial_range"]), 4),
         radial_rings=round(float(m["radial_rings"]), 2),
         radial_range_p90=round(float(m["radial_range_p90"]), 4),
@@ -219,27 +433,49 @@ def measure_view(cx, cy, fw, *, family: str = "mandelbrot", threads: int = 1,
     functions on a different frame, and are re-validated against references measured on
     the same frames (`--refs`).
     """
+    meta = view_frame_policy(fw)
+    if not meta["screened"]:
+        return meta
+    maxiter = meta["view_maxiter"]
+    try:
+        with tempfile.TemporaryDirectory(dir=tmpdir) as td:
+            field, _side = fm.dump_field(cx, cy, float(fw), maxiter, Path(td) / "f.bin",
+                                         width=fm.SCREEN_W, height=fm.SCREEN_H,
+                                         ss=fm.SCREEN_SS, family=family, threads=threads,
+                                         timeout=max(1.0, float(timeout)))
+    except Exception as e:
+        return dict(meta, screened=False, screen_reason=f"dump_field:{str(e)[:120]}")
+    return measure_view_from_field(fw, field)
+
+
+def view_frame_policy(fw) -> dict:
+    """The engine-INDEPENDENT half of `measure_view`: the spacing guard, the stamped cap and
+    the policy token. Shared by the live path, the field cache and the cached re-score, so
+    the three cannot disagree about which frame and which cap a row was measured under."""
     tok = ms.screen_policy_token()
     fw = float(fw)
     if not (fw > 0 and math.isfinite(fw)) or (fw / fm.SCREEN_W) <= 1e-13:
         return dict(screened=False, screen_reason="f64_spacing_wall_at_screen_geometry",
                     view_fw=fw, **{fm.POLICY_KEY: tok})
-    maxiter = ms.screen_maxiter(fw)
-    try:
-        with tempfile.TemporaryDirectory(dir=tmpdir) as td:
-            field, _side = fm.dump_field(cx, cy, fw, maxiter, Path(td) / "f.bin",
-                                         width=fm.SCREEN_W, height=fm.SCREEN_H,
-                                         ss=fm.SCREEN_SS, family=family, threads=threads,
-                                         timeout=max(1.0, float(timeout)))
-    except Exception as e:
-        return dict(screened=False, screen_reason=f"dump_field:{str(e)[:120]}",
-                    view_fw=fw, view_maxiter=maxiter, **{fm.POLICY_KEY: tok})
+    return dict(screened=True, view_fw=fw, view_maxiter=ms.screen_maxiter(fw),
+                **{fm.POLICY_KEY: tok})
+
+
+def measure_view_from_field(fw, field: np.ndarray) -> dict:
+    """`measure_view`'s output for a field that has already been dumped. Pure; no engine.
+
+    This is what makes the field cache a substitute for a measurement rather than an
+    approximation of one: the live path calls exactly this function on the array the engine
+    just wrote, so a cached row and a live row differ only in where the array came from."""
+    meta = view_frame_policy(fw)
+    if not meta["screened"]:
+        return meta
     m = view_measures(field)
     sm = m["smooth_max"]
-    return dict(screened=True, view_fw=fw, view_maxiter=maxiter,
-                cap_headroom=(round(1.0 - sm / maxiter, 4) if sm is not None else None),
-                clamped=bool(maxiter >= ms.SCREEN_MAXITER_POLICY[3]),
-                **m, **{fm.POLICY_KEY: tok})
+    mi = meta["view_maxiter"]
+    return dict(**meta,
+                cap_headroom=(round(1.0 - sm / mi, 4) if sm is not None else None),
+                clamped=bool(mi >= ms.SCREEN_MAXITER_POLICY[3]), **m)
 
 
 # --------------------------------------------------------------------------- #
@@ -368,7 +604,11 @@ def size_factor(m: dict, p: "ScreenParams") -> float:
     return ((p.veto - i) / (p.veto - p.band_edge)) ** p.band_exp
 
 
-def coverage_term(m: dict) -> float:
+COV_KEYS_V3 = ("band_coverage", "band_coverage_q25")
+COV_KEYS_V4 = ("band_coverage_v4", "band_coverage_q25_v4")
+
+
+def coverage_term(m: dict, keys: tuple = COV_KEYS_V3) -> float:
     """The coverage half of the composite: `sqrt(band_coverage * band_coverage_q25)`.
 
     HOW MUCH of the frame participates, times HOW EVENLY that participation is spread,
@@ -381,10 +621,11 @@ def coverage_term(m: dict) -> float:
     `orbital_field_metrics.md` §11 and `data/atlas/view_screen_gate.json`.
 
     Computed from the two recorded measures rather than from the field, so a row scored
-    before this term existed re-scores without a re-measurement.
+    before this term existed re-scores without a re-measurement. `keys` selects WHICH
+    recorded pair — `COV_KEYS_V3` (span participation) or `COV_KEYS_V4` (span AND in-tile
+    structure). The arithmetic is identical; only the indicator underneath it moved.
     """
-    return math.sqrt(max(0.0, float(m["band_coverage"])) *
-                     max(0.0, float(m["band_coverage_q25"])))
+    return math.sqrt(max(0.0, float(m[keys[0]])) * max(0.0, float(m[keys[1]])))
 
 
 def load_refs(path=None) -> dict:
@@ -474,6 +715,28 @@ def composite_v3(m: dict, p: ScreenParams) -> float:
     return size_factor(m, p) * c
 
 
+def composite_v4(m: dict, p: ScreenParams, *, keys: tuple = COV_KEYS_V4) -> float:
+    """v3 EXACTLY, with the v4 participation indicator. **NOT the live sort key** — v4 was
+    measured against the gate and rejected (module doc). Kept live so the v4 gate block
+    re-derives from source, and callable so the rejected argmax stays reproducible.
+
+    Nothing in the composite's arithmetic changed between v3 and v4 — same size band, same
+    winsorized richness, same veto, same sort-to-bottom band. What changed is one boolean
+    inside `band_coverage`: a tile now has to hold band BOUNDARIES, not merely span a cycle.
+    That is why this is a two-line function and not a re-derivation: writing it any other way
+    would let the two versions drift on the parts that did not change.
+
+    `composite_v3` stays live for the same reason `composite_v2` did — the v2 and v3 gate
+    blocks are re-run from source on every gate invocation, not copied forward.
+    """
+    if not m.get("screened"):
+        return float("-inf")
+    c = coverage_term(m, keys) * richness(m, p)
+    if float(m["interior_fraction"]) > p.veto:
+        return _veto_band(c)
+    return size_factor(m, p) * c
+
+
 def is_vetoed(m: dict, veto: float) -> bool:
     return bool(m.get("screened")) and float(m["interior_fraction"]) > veto
 
@@ -557,9 +820,13 @@ def anchor_retained(anchor_cx, anchor_cy, w: dict, *, margin: float = ANCHOR_MAR
 
 
 def sweep_best(cx, cy, fw, p: ScreenParams, *, family: str = "mandelbrot", threads: int = 1,
-               tmpdir=None, measure=None, anchor=None,
+               tmpdir=None, measure=None, anchor=None, composite=None,
                anchor_margin: float = ANCHOR_MARGIN) -> dict:
-    """Measure every sweep window and return the argmax by `composite_v3`.
+    """Measure every sweep window and return the argmax by `composite_v3` (the LIVE sort).
+
+    `composite=` swaps the sort key, and it exists because v4 was measured and NOT adopted:
+    an argmax under a rejected formulation is evidence about that formulation, so it has to
+    be runnable without becoming the default.
 
     `measure=` is the injection point for tests (and for a cached driver); it defaults to
     the real `measure_view`. Ties break on the fixed window order, which puts the origin
@@ -572,12 +839,13 @@ def sweep_best(cx, cy, fw, p: ScreenParams, *, family: str = "mandelbrot", threa
     case (ranking arbitrary views), where the constraint has nothing to mean.
     """
     measure = measure or measure_view
+    composite = composite or composite_v3
     wins = sweep_windows(cx, cy, fw)
     rows, best, best_c = [], None, None
     for wdw in wins:
         m = measure(wdw["cx"], wdw["cy"], wdw["fw"], family=family, threads=threads,
                     tmpdir=tmpdir)
-        c = composite_v3(m, p)
+        c = composite(m, p)
         ok = (True if anchor is None else
               anchor_retained(anchor[0], anchor[1], wdw, margin=anchor_margin))
         rows.append(dict(**{k: wdw[k] for k in ("dx", "dy", "scale", "is_origin")},
@@ -585,6 +853,8 @@ def sweep_best(cx, cy, fw, p: ScreenParams, *, family: str = "mandelbrot", threa
                          screened=bool(m.get("screened")), anchor_ok=ok,
                          band_coverage=m.get("band_coverage"),
                          band_coverage_q25=m.get("band_coverage_q25"),
+                         band_coverage_v4=m.get("band_coverage_v4"),
+                         band_coverage_q25_v4=m.get("band_coverage_q25_v4"),
                          radial_range=m.get("radial_range"),
                          radial_rings=m.get("radial_rings"),
                          interior_fraction=m.get("interior_fraction")))
@@ -629,13 +899,22 @@ def measure_references(*, threads: int = 3) -> dict:
     for r in REF_VIEWS:
         fw = float(decimal.Decimal(r["base_scale"]) * r["scale"])
         m = measure_view(r["cx"], r["cy"], fw, threads=threads)
+        # The references are the ONE population the v4 gate compares formulations on that
+        # is not in the field cache, so their whole formulation grid is recorded here.
+        if m.get("screened"):
+            with tempfile.TemporaryDirectory() as td:
+                field, _ = fm.dump_field(r["cx"], r["cy"], fw, m["view_maxiter"],
+                                         Path(td) / "f.bin", width=fm.SCREEN_W,
+                                         height=fm.SCREEN_H, ss=fm.SCREEN_SS,
+                                         threads=threads)
+            m = dict(m, coverage_grid=coverage_grid(field))
         out[r["key"]] = dict(label=r["label"], scale=r["scale"], cx=r["cx"], cy=r["cy"],
                              fw=fw, **m)
     return dict(
         geometry=[fm.SCREEN_W, fm.SCREEN_H, fm.SCREEN_SS],
         grid=[GRID_X, GRID_Y], blocks=[BLOCK_X, BLOCK_Y],
         block_quantile=BLOCK_QUANTILE, tile_cycle_floor=TILE_CYCLE_FLOOR,
-        tile_min_finite=TILE_MIN_FINITE,
+        tile_min_finite=TILE_MIN_FINITE, tile_cross_floor=TILE_CROSS_FLOOR,
         veto_escaped_share=round(VETO_ESCAPED_SHARE, 6),
         richness_cap_ref_mult=round(RICHNESS_CAP_REF_MULT, 6),
         size_band=[SIZE_BAND_EDGE, SIZE_BAND_EXP],
@@ -671,8 +950,9 @@ def main(argv=None) -> int:
         p = screen_params(load_refs())
         m = measure_view(a.demo[0], a.demo[1], float(a.demo[2]))
         print(json.dumps(m, indent=2))
-        print(f"composite v3 = {composite_v3(m, p):.4f}  (v2 {composite_v2(m, p.veto):.4f}; "
-              f"size {size_factor(m, p):.4f}; veto {p.veto}, vetoed={is_vetoed(m, p.veto)})")
+        print(f"composite v4 = {composite_v4(m, p):.4f}  (v3 {composite_v3(m, p):.4f}, "
+              f"v2 {composite_v2(m, p.veto):.4f}; size {size_factor(m, p):.4f}; "
+              f"veto {p.veto}, vetoed={is_vetoed(m, p.veto)})")
         return 0
     ap.print_help()
     return 2

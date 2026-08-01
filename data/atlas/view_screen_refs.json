@@ -15,7 +15,13 @@
   "block_quantile": 25.0,
   "tile_cycle_floor": 1.0,
   "tile_min_finite": 0.25,
+  "tile_cross_floor": 0.4,
   "veto_escaped_share": 0.666667,
+  "richness_cap_ref_mult": 2.0,
+  "size_band": [
+    0.12,
+    8.0
+  ],
   "references": {
     "minibroteye": {
       "label": "minibrot eye",
@@ -26,6 +32,7 @@
       "screened": true,
       "view_fw": 0.000583,
       "view_maxiter": 56385,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000",
       "cap_headroom": 0.9854,
       "clamped": false,
       "interior_fraction": 0.0,
@@ -41,13 +48,102 @@
       ],
       "band_coverage": 0.7222,
       "band_coverage_q25": 0.5833,
+      "band_coverage_v4": 0.6111,
+      "band_coverage_q25_v4": 0.5,
       "radial_range": 10.6618,
       "radial_rings": 33.0,
       "radial_range_p90": 17.4678,
       "radial_rings_p90": 50.8,
       "escaped_px": 2304,
       "smooth_max": 825.34,
-      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+      "coverage_grid": {
+        "cross": {
+          "0.34": [
+            0.6111,
+            0.5
+          ],
+          "0.4": [
+            0.6111,
+            0.5
+          ],
+          "0.45": [
+            0.5833,
+            0.4167
+          ],
+          "0.5": [
+            0.5833,
+            0.4167
+          ],
+          "0.55": [
+            0.5069,
+            0.2917
+          ],
+          "0.6": [
+            0.4444,
+            0.2083
+          ],
+          "0.67": [
+            0.3472,
+            0.1458
+          ],
+          "0.75": [
+            0.3472,
+            0.1458
+          ],
+          "0.85": [
+            0.1111,
+            0.0
+          ]
+        },
+        "tv": {
+          "0.34": [
+            0.6736,
+            0.5625
+          ],
+          "0.4": [
+            0.6667,
+            0.5625
+          ],
+          "0.5": [
+            0.6597,
+            0.5625
+          ],
+          "0.67": [
+            0.6389,
+            0.5625
+          ],
+          "0.85": [
+            0.5972,
+            0.3542
+          ],
+          "1": [
+            0.5278,
+            0.3333
+          ]
+        },
+        "bands": {
+          "2": [
+            0.7222,
+            0.5833
+          ],
+          "3": [
+            0.6944,
+            0.5833
+          ],
+          "4": [
+            0.6111,
+            0.5
+          ],
+          "5": [
+            0.4792,
+            0.2708
+          ],
+          "6": [
+            0.3681,
+            0.2083
+          ]
+        }
+      }
     },
     "mb19_p35_16x": {
       "label": "mb19_p35",
@@ -58,6 +154,7 @@
       "screened": true,
       "view_fw": 3.22784961136e-09,
       "view_maxiter": 67000,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000",
       "cap_headroom": 0.939,
       "clamped": true,
       "interior_fraction": 0.0104,
@@ -73,14 +170,103 @@
       ],
       "band_coverage": 0.5833,
       "band_coverage_q25": 0.4167,
+      "band_coverage_v4": 0.4583,
+      "band_coverage_q25_v4": 0.3333,
       "radial_range": 6.9348,
       "radial_rings": 16.0,
       "radial_range_p90": 56.1021,
       "radial_rings_p90": 59.4,
       "escaped_px": 2280,
       "smooth_max": 4090.29,
-      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+      "coverage_grid": {
+        "cross": {
+          "0.34": [
+            0.4583,
+            0.3333
+          ],
+          "0.4": [
+            0.4583,
+            0.3333
+          ],
+          "0.45": [
+            0.4097,
+            0.3333
+          ],
+          "0.5": [
+            0.4097,
+            0.3333
+          ],
+          "0.55": [
+            0.2917,
+            0.25
+          ],
+          "0.6": [
+            0.1944,
+            0.1667
+          ],
+          "0.67": [
+            0.1042,
+            0.0
+          ],
+          "0.75": [
+            0.1042,
+            0.0
+          ],
+          "0.85": [
+            0.0278,
+            0.0
+          ]
+        },
+        "tv": {
+          "0.34": [
+            0.5556,
+            0.3958
+          ],
+          "0.4": [
+            0.5486,
+            0.3958
+          ],
+          "0.5": [
+            0.5278,
+            0.3958
+          ],
+          "0.67": [
+            0.4653,
+            0.3958
+          ],
+          "0.85": [
+            0.3889,
+            0.3125
+          ],
+          "1": [
+            0.3403,
+            0.25
+          ]
+        },
+        "bands": {
+          "2": [
+            0.5833,
+            0.4167
+          ],
+          "3": [
+            0.5486,
+            0.3958
+          ],
+          "4": [
+            0.4306,
+            0.3125
+          ],
+          "5": [
+            0.2569,
+            0.2292
+          ],
+          "6": [
+            0.1042,
+            0.0625
+          ]
+        }
+      }
     }
   },
-  "note": "Reference measurements for the view-level screen. The interior veto is derived from these at run time (view_screen.interior_veto), not hardcoded \u2014 re-measuring moves the veto instead of leaving a stale literal."
+  "note": "Reference measurements for the view-level screen. The interior veto AND the v3 richness caps are derived from these at run time (view_screen.screen_params), not hardcoded \u2014 re-measuring moves both instead of leaving stale literals."
 }

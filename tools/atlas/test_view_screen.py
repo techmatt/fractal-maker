@@ -137,11 +137,149 @@ def test_a_black_tile_with_a_bright_rim_does_not_count_as_participating():
 
 
 # --------------------------------------------------------------------------- #
+# v4 — participation requires structure INSIDE the tile, not span across it
+# --------------------------------------------------------------------------- #
+def _tiled_ramp(cycles: float) -> np.ndarray:
+    """Every tile filled with the SAME `cycles`-span left-to-right ramp.
+
+    Per-tile rather than per-frame so the boundary count is exact and phase-free: a ramp of
+    span `s` starting at 0 crosses exactly `ceil(s) - 1` boundaries over its three steps,
+    with no dependence on where in the frame the tile sits.
+    """
+    f = np.zeros((H, W), dtype="f4")
+    ramp = np.linspace(0.0, cycles * CYCLE, TW)[None, :] * np.ones((TH, 1))
+    for ty in range(vs.GRID_Y):
+        for tx in range(vs.GRID_X):
+            f[ty * TH:(ty + 1) * TH, tx * TW:(tx + 1) * TW] = ramp
+    return f
+
+
+def _stripes(cycles_per_px: float) -> np.ndarray:
+    """Banding at a fixed rate per SCREEN pixel — structure, not span."""
+    return (np.arange(W, dtype="f4")[None, :] * cycles_per_px * CYCLE
+            * np.ones((H, 1))).astype("f4")
+
+
+def test_v4_separates_one_lazy_band_from_dense_banding_at_equal_v3_coverage():
+    """THE defect v4 exists for, as a fixture rather than a description.
+
+    Two fields the v3 indicator cannot tell apart: every tile a 1.5-cycle gradient (ONE
+    band boundary — Matt's "field of blue") and every tile a 3-cycle gradient (a boundary
+    at every pixel step). Both span more than a cycle, so v3 calls both 100% participating;
+    v4 keeps the second and drops the first.
+    """
+    lazy, dense = _tiled_ramp(1.5), _tiled_ramp(3.0)
+    assert vs.band_coverage(lazy) == vs.band_coverage(dense) == 1.0
+    assert vs.band_coverage_q25(lazy) == vs.band_coverage_q25(dense) == 1.0
+    assert float(vs.tile_structure(lazy, "cross").max()) == pytest.approx(1 / 3)
+    assert float(vs.tile_structure(dense, "cross").min()) == pytest.approx(1.0)
+    a = vs.coverage_pair(lazy, mode="cross", structure_floor=vs.TILE_CROSS_FLOOR)
+    b = vs.coverage_pair(dense, mode="cross", structure_floor=vs.TILE_CROSS_FLOOR)
+    assert a == (0.0, 0.0), a
+    assert b == (1.0, 1.0), b
+
+
+def test_v4_participation_is_a_strict_subset_of_v3_participation():
+    """v4 ADDS a clause; it never replaces the span or escaping ones. So coverage can only
+    fall, on every field and at every floor — if it ever rose, some tile would be
+    participating under v4 that v3 called dead, and the "strict tightening" claim in the
+    module doc would be false rather than merely unproven."""
+    fields = [_tiled_ramp(1.5), _tiled_ramp(4.0), _stripes(0.5), _stripes(0.05),
+              _field_from_tile_mask((np.indices((vs.GRID_Y, vs.GRID_X)).sum(axis=0) % 2)
+                                    .astype(bool))]
+    for f in fields:
+        base = vs.coverage_pair(f)
+        for mode, floors in vs.COVERAGE_GRID:
+            for fl in floors:
+                got = vs.coverage_pair(f, mode=mode, structure_floor=fl)
+                assert got[0] <= base[0] + 1e-12 and got[1] <= base[1] + 1e-12, \
+                    (mode, fl, got, base)
+
+
+def test_the_crossing_statistic_is_orientation_free():
+    """A band running along one axis is still a band. Pooling both axes' pixel steps into
+    one fraction would halve axis-aligned banding and cap it at 0.5 while diagonal banding
+    reached 1.0 — measuring orientation, not structure. Asserted on a field and its
+    transpose, which have identical structure and orthogonal orientation."""
+    f = _stripes(0.5)
+    ft = np.ascontiguousarray(f[:H, :H].T)              # square crop, rotated
+    a = vs.tile_structure(f[:H, :H], "cross", gx=vs.GRID_Y, gy=vs.GRID_Y)
+    b = vs.tile_structure(ft, "cross", gx=vs.GRID_Y, gy=vs.GRID_Y)
+    assert np.allclose(a, b.T)
+    assert float(a.max()) == pytest.approx(1.0 / 3.0)   # one boundary per 3-step traversal
+
+
+def test_one_aliased_jump_counts_as_one_crossing_and_not_as_fifty():
+    """v3's winsorization lesson, one level down: an unbounded factor inside a selection is
+    the tail the selection finds. A single 50-cycle discontinuity between two adjacent
+    screen pixels is ONE band boundary the eye can resolve, not fifty — `cross` says so and
+    `tv`, the recorded alternative, does not."""
+    seam = np.zeros((H, W), dtype="f4")
+    seam[:, W // 2 + 1:] = 50 * CYCLE       # one wall, INSIDE a tile, otherwise flat
+    real = _tiled_ramp(3.0)                 # a genuine dense-banded field
+    assert vs.tile_structure(seam, "cross").max() <= vs.tile_structure(real, "cross").max()
+    assert vs.tile_structure(seam, "tv").max() > 10 * vs.tile_structure(real, "tv").max()
+
+
+def test_the_crossing_count_never_reaches_across_a_tile_boundary():
+    """The question is what ONE tile holds. Borrowing the neighbour's boundary would let a
+    single band smeared across the frame credit every tile it passes through — the same
+    error `TILE_MIN_FINITE` exists to stop for a bright rim."""
+    f = np.zeros((H, W), dtype="f4")
+    f[:, TW:] = 3 * CYCLE          # a single wall sitting exactly ON a tile edge
+    s = vs.tile_structure(f, "cross")
+    assert float(s.max()) == 0.0, s
+
+
+def test_v4_changes_the_indicator_and_nothing_else_in_the_composite():
+    """`composite_v4` must be `composite_v3` with one boolean swapped. Fed a row whose v4
+    coverage pair equals its v3 pair, the two must agree exactly — otherwise some other
+    term drifted between versions and the doc's "two-line function" claim is false."""
+    p = _p()
+    for interior in (0.0, 0.10, 0.20, 0.33, 0.50):
+        m = _m(interior, 0.6, rng=7.0, rings=30.0)
+        m[vs.COV_KEYS_V4[0]] = m["band_coverage"]
+        m[vs.COV_KEYS_V4[1]] = m["band_coverage_q25"]
+        assert vs.composite_v4(m, p) == pytest.approx(vs.composite_v3(m, p)), interior
+
+
+def test_the_v4_coverage_grid_is_recorded_on_every_measured_row():
+    """The point of the grid is that the NEXT formulation sweep is arithmetic on the record
+    rather than 21 more passes over 16,440 fields, so every mode and floor has to be
+    there — a partially-recorded grid is a sweep that silently covers less than it says."""
+    g = vs.coverage_grid(_stripes(0.3))
+    assert set(g) == set(dict(vs.COVERAGE_GRID))
+    for mode, floors in vs.COVERAGE_GRID:
+        assert set(g[mode]) == {f"{f:g}" for f in floors}
+        for pair in g[mode].values():
+            assert len(pair) == 2 and all(0.0 <= x <= 1.0 for x in pair)
+
+
+def test_the_cached_field_path_and_the_live_path_are_the_same_function():
+    """What makes the field cache a substitute for a measurement rather than an
+    approximation of one. `measure_view` calls `measure_view_from_field` on the array the
+    engine just wrote, so the only thing a cached row can differ in is where the array came
+    from — asserted here on a field the engine never produced."""
+    f = _stripes(0.3)
+    a = vs.measure_view_from_field(1e-4, f)
+    assert a["screened"] and a["view_maxiter"] == vs.ms.screen_maxiter(1e-4)
+    assert a[fm.POLICY_KEY] == vs.ms.screen_policy_token()
+    for k, v in vs.view_measures(f).items():
+        assert a[k] == v, k
+    # ...and the spacing guard is the same one, so a wall row cannot be cached as screened.
+    assert vs.measure_view_from_field(1e-14, f)["screened"] is False
+
+
+# --------------------------------------------------------------------------- #
 # the composite and the veto
 # --------------------------------------------------------------------------- #
 def _m(interior, cov_q25, rng=4.0, rings=9.0):
+    # The v4 coverage columns are set EQUAL to the v3 ones so a fixture row exercises the
+    # composite's arithmetic without also asserting a participation rule — the real
+    # `view_measures` always emits both pairs, so a row lacking them is not a row.
     return dict(screened=True, interior_fraction=interior, band_coverage=cov_q25,
-                band_coverage_q25=cov_q25, radial_range=rng, radial_rings=rings)
+                band_coverage_q25=cov_q25, band_coverage_v4=cov_q25,
+                band_coverage_q25_v4=cov_q25, radial_range=rng, radial_rings=rings)
 
 
 def _p(veto=0.34, cap_range=21.32, cap_rings=66.0, edge=0.12, exp=8.0):
@@ -673,7 +811,7 @@ def test_no_formulation_reached_the_decile_bar_that_was_written_down_first():
 # --------------------------------------------------------------------------- #
 def _score_row(i, cov, rng, rings=None, interior=0.0, op="snap_to_nucleus", degree=2):
     return dict(key=f"k{i}", screened=True, band_coverage=cov, band_coverage_q25=cov,
-                radial_range=rng, radial_rings=(rng * 2 if rings is None else rings),
+                band_coverage_v4=cov, band_coverage_q25_v4=cov, radial_range=rng, radial_rings=(rng * 2 if rings is None else rings),
                 interior_fraction=interior, op=op, degree=degree, period=10 + i,
                 k=None, cx="-0.5", cy="0.1", fw=1e-3, partition="mandelbrot",
                 atom_radial_range=float(i), atom_radial_rings=2.0 * i,
@@ -736,7 +874,7 @@ def test_the_old_vs_new_table_counts_survivors_off_the_real_transition_matrix():
     veto = 0.9
     for r in rows:
         r["_comp"] = vs.composite_v3(r, _p(veto=veto))
-        r["_comp_v2"] = vs.composite_v2(r, veto)
+        r["_comp_prev"] = vs.composite_v2(r, veto)
         r["_vetoed"] = vs.is_vetoed(r, veto)
     nq, _ = vss.quintile_index([r["_comp"] for r in rows])
     oq, _ = vss.quintile_index([r["atom_radial_range"] for r in rows])
@@ -775,7 +913,7 @@ def test_the_survivor_count_is_the_top_quintile_and_not_the_top_two():
     assert rep["old_Q5_surviving_frac"] == pytest.approx(0.75)
 
 
-def test_the_v2_to_v3_half_of_the_readout_counts_off_its_own_transition_matrix():
+def test_the_previous_version_half_of_the_readout_counts_off_its_own_transition_matrix():
     """Same discipline as the old-vs-new table, applied to the comparison v3 is actually
     about: v2 -> v3 is a RE-WEIGHTING of the same measures on the same frames, so its
     survival counts have to be derivable from the matrix printed beside them. The fixture
@@ -788,23 +926,23 @@ def test_the_v2_to_v3_half_of_the_readout_counts_off_its_own_transition_matrix()
         r["radial_range"] = float(i) / 10.0          # v2 sort is by richness alone
         r["radial_rings"] = float(i) / 5.0
         r["_comp"] = vs.composite_v3(r, _p(veto=veto))
-        r["_comp_v2"] = vs.composite_v2(r, veto)
+        r["_comp_prev"] = vs.composite_v2(r, veto)
         r["_vetoed"] = False
     nq, _ = vss.quintile_index([r["_comp"] for r in rows])
-    v2q, _ = vss.quintile_index([r["_comp_v2"] for r in rows])
+    pq, _ = vss.quintile_index([r["_comp_prev"] for r in rows])
     oq, _ = vss.quintile_index([r["atom_radial_range"] for r in rows])
-    for r, a, b, c in zip(rows, nq, v2q, oq):
-        r["new_quintile"], r["v2_quintile"], r["old_quintile"] = a, b, c
+    for r, a, b, c in zip(rows, nq, pq, oq):
+        r["new_quintile"], r["prev_quintile"], r["old_quintile"] = a, b, c
     rep = vss.agreement(rows)
-    mat = rep["quintile_transition_v2_to_v3"]
+    mat = rep["quintile_transition_prev_to_new"]
     assert sum(sum(row) for row in mat) == len(rows)
-    assert rep["v2_Q5_n"] == sum(mat[4])
-    assert rep["v2_Q5_surviving_v3_Q5"] == mat[4][4]
-    assert rep["v3_Q5_that_were_v2_Q1_or_Q2"] == mat[0][4] + mat[1][4]
+    assert rep["prev_Q5_n"] == sum(mat[4])
+    assert rep["prev_Q5_surviving_new_Q5"] == mat[4][4]
+    assert rep["new_Q5_that_were_prev_Q1_or_Q2"] == mat[0][4] + mat[1][4]
     # the size band is the only difference, so the banded rows are exactly what fell
-    assert rep["v2_Q5_surviving_v3_Q5"] < rep["v2_Q5_n"], "nothing moved — vacuous fixture"
+    assert rep["prev_Q5_surviving_new_Q5"] < rep["prev_Q5_n"], "nothing moved — vacuous fixture"
     assert all("[0.25,1.01)" not in k or v.startswith("0 ")
-               for k, v in rep["interior_bands_v3_Q5"].items())
+               for k, v in rep["interior_bands_new_Q5"].items())
 
 
 def test_the_readout_reports_the_k_set_the_supply_run_would_order():
@@ -815,8 +953,8 @@ def test_the_readout_reports_the_k_set_the_supply_run_would_order():
     rows = [_score_row(i, 0.5, 5.0) for i in range(1, 21)]
     for i, r in enumerate(rows):
         r["k"] = None if i < 5 else (4.0 if i < 12 else 16.0)
-        r["_comp"], r["_comp_v2"], r["_vetoed"] = float(i), float(i), False
-        r["new_quintile"] = r["v2_quintile"] = r["old_quintile"] = 3
+        r["_comp"], r["_comp_prev"], r["_vetoed"] = float(i), float(i), False
+        r["new_quintile"] = r["prev_quintile"] = r["old_quintile"] = 3
     rep = vss.agreement(rows)
     mix = rep["k_mix_population"]
     assert set(mix) == {"k4", "k16", "keep"}
@@ -832,7 +970,7 @@ def test_the_readout_carries_both_confound_caveats():
     rows = [_score_row(i, 0.5, float(i)) for i in range(1, 21)]
     for r in rows:
         r["_comp"], r["_vetoed"] = vs.composite_v3(r, _p(veto=0.9)), False
-        r["_comp_v2"] = vs.composite_v2(r, 0.9)
+        r["_comp_prev"] = vs.composite_v2(r, 0.9)
         r["new_quintile"] = r["old_quintile"] = 3
     rep = vss.agreement(rows)
     assert "period" in rep["DEGREE_CAVEAT"] and "degree result" in rep["DEGREE_CAVEAT"]

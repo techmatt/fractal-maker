@@ -51,7 +51,22 @@ The v3 block is written BESIDE the v2 one, never over it. The v2 block is re-der
 `view_screen.composite_v2` on every run rather than copied forward, so "v2 still reproduces"
 is checked rather than assumed — and both blocks keep every formulation that lost.
 
-  uv run python tools/atlas/view_screen_gate.py --scores scratch/view_rescreen/scores.jsonl
+THE v4 GATE (2026-08-01) EXTENDS IT AGAIN, from Matt's verdicts on the v3 Q5 sheet. Two more
+clauses, and one of them is the first clause this gate has had that a demotion cannot buy:
+
+  G6  `neighborhood_expand k16 d2 p43 fw=6.4e-08`, the tile he picked out as his FAVOURITE,
+      is in the top quintile. G1-G5 and G7 are all satisfiable by demoting harder; G6 is
+      not, and it is a row the run produced rather than a hand-picked reference view.
+  G7  `snap k16 d5 p16 fw=0.00568` — "a field of blue", `band_coverage_q25 = 0.50` — falls
+      OUT of the top quintile. It was IN v3's own top quintile (p83.5), so this is a move.
+
+v4 is also the first version that is not a re-weighting: it changes what `band_coverage`
+MEASURES (a tile must hold band boundaries, not merely span a cycle), which is why the
+population had to be re-measured and why the fields are now cached
+(`tools/atlas/view_field_cache.py`). The formulation grid is therefore recorded ON THE ROW
+(`coverage_grid`) and the sweep over 21 participation rules is arithmetic here.
+
+  uv run python tools/atlas/view_screen_gate.py --scores scratch/view_rescreen/scores_v4.jsonl
 """
 from __future__ import annotations
 
@@ -199,6 +214,103 @@ V3_FORMULATIONS = (
 )
 
 
+# --------------------------------------------------------------------------- #
+# v4 — the two anchors Matt named off the v3 Q5 sheet
+# --------------------------------------------------------------------------- #
+# THE POSITIVE ANCHOR, and it is the first one this gate has had. G1-G5 are "these two
+# references stay up, these named tiles go down"; a gate made only of demotions is satisfied
+# by any formulation that demotes hard enough, and the references are hand-picked exemplars
+# rather than anything the run produced. The favourite is a row the RUN produced that Matt
+# picked out of it, so it is the one clause that costs something to satisfy.
+#
+# Keyed by its INSPECTION-SHEET TAG, resolved through `sample.jsonl` exactly as NAMED_BADS
+# is — `(op, k, degree, period)` is NOT unique here (five rows share
+# `neighborhood_expand k16 d2 p43`), so a tuple key would silently gate on whichever one
+# came first. The tag pins the tile that was actually looked at.
+NAMED_FAVOURITE = {
+    "q4_neig_089": "neighborhood_expand k16 d2 p43 fw=6.4e-08 (Matt's favourite)",
+}
+
+# THE NEGATIVE ANCHOR: "a field of blue", and "examples like it". Off the v3 Q5 sheet, so it
+# is identified the way that sheet's tiles are — by the caption tuple, plus `fw` because the
+# tuple alone matches nineteen rows, plus its recorded `band_coverage_q25` because that
+# number IS the defect (0.50 of a frame "participating" in banding that is not there).
+V4_NAMED_BAD = {
+    ("snap_to_nucleus", 16.0, 5, 16, 0.00568299747792): dict(
+        label="snap k16 d5 p16 fw=0.00568 (a field of blue)", band_coverage_q25=0.5),
+}
+
+# The v4 formulation grid. Every entry is a PARTICIPATION RULE, not a re-weighting: the
+# composite's arithmetic is `vs.composite_v4` unchanged in all of them, and only the boolean
+# that decides whether a tile participates moves. `mode=None` is the v3 baseline, present so
+# the premise ("the favourite is already high, the field of blue is still in Q5") is a re-run
+# and not an assertion.
+#
+# THE SELECTION RULE, WRITTEN DOWN BEFORE THE GRID WAS RUN, in the same shape as v3's
+# least-steep-exponent rule: ship the LEAST DEMANDING floor of the `cross` family that
+# satisfies every clause of the v4 gate. Least demanding = smallest floor = closest to v3, so
+# the rule cannot be met by demoting everything. The `tv` and `bands` families are run at the
+# same grid so that the choice of family is measured rather than asserted.
+V4_FAMILIES = dict(vs.COVERAGE_GRID)
+V4_FORMULATIONS = (
+    dict(name="v4_0_v3_baseline", mode=None, floor=None,
+         note="the SHIPPED v3 composite, re-run against the extended gate. Records where "
+              "the two new anchors sit BEFORE v4 touches anything — the favourite already "
+              "high, the field of blue still inside the top quintile, which is the premise "
+              "G6 and G7 are moves against."),
+    *[dict(name=f"v4_cross_{f:g}", mode="cross", floor=f,
+           note="participation additionally requires that this fraction of the tile's pixel "
+                "steps, along its own axis of variation, cross a colour-band boundary. "
+                "Bounded in [0,1]: one aliased jump between adjacent screen pixels is one "
+                "crossing, not fifty.")
+      for f in V4_FAMILIES["cross"]],
+    *[dict(name=f"v4_tv_{f:g}", mode="tv", floor=f,
+           note="the same shape, UNBOUNDED: mean |delta cycles| per pixel step. Recorded as "
+                "the alternative a single discontinuity can carry — v3's winsorization "
+                "lesson one level down.")
+      for f in V4_FAMILIES["tv"]],
+    *[dict(name=f"v4_bands_{f:g}", mode="bands", floor=f,
+           note="the most literal reading of 'distinct rings per tile': the count of "
+                "distinct floor(cycles) values in the tile. Phase-DEPENDENT at the margin, "
+                "which is what TILE_CYCLE_FLOOR was written to avoid.")
+      for f in V4_FAMILIES["bands"]],
+)
+
+
+def composite_v4_with(m: dict, p: vs.ScreenParams, f: dict) -> float:
+    """`vs.composite_v4` reading the coverage pair recorded for formulation `f`.
+
+    Never a reimplementation: the size band, the winsorized richness, the veto and the
+    sort-to-bottom band all come from the production function, and only the two coverage
+    columns are substituted. `mode=None` routes to `vs.composite_v3` for the same reason the
+    v3 gate routed its baseline to `composite_v2` — the baseline must be the shipped code."""
+    if f["mode"] is None:
+        return vs.composite_v3(m, p)
+    if not m.get("screened"):
+        return float("-inf")
+    grid = m.get("coverage_grid")
+    if not grid:
+        raise SystemExit("the scores file carries no `coverage_grid` — re-score from the "
+                         "field cache (view_rescreen.py --from-cache) before running v4")
+    a, b = grid[f["mode"]][f"{f['floor']:g}"]
+    return vs.composite_v4({**m, vs.COV_KEYS_V4[0]: a, vs.COV_KEYS_V4[1]: b}, p)
+
+
+def v3_q5_sheet(rows: list[dict], p: vs.ScreenParams) -> list[dict]:
+    """The 18 tiles of the v3 `sheet_new_q5.png` Matt ruled on, regenerated from source.
+
+    Same construction as `v2_q5_sheet` one version up — v3 composite, v3 quintile index,
+    `stratify` at the sheet's own seed. Derived, never transcribed."""
+    import view_screen_sheets as vss
+    ok = [r for r in rows if r.get("screened")]
+    for r in ok:
+        r["_c3"] = vs.composite_v3(r, p)
+    q, _ = vss.quintile_index([r["_c3"] for r in ok])
+    for r, x in zip(ok, q):
+        r["_q3"] = x
+    return vss.stratify([r for r in ok if r["_q3"] == 5], SHEET_TILES, SHEET_SEED)
+
+
 def _log_compress(x: float, c: float) -> float:
     """`c` at `x == c`, ~`x` for `x << c`, and still growing above it — the alternative that
     is kept in the record for the reason it was NOT chosen."""
@@ -228,6 +340,40 @@ def composite_v3_with(m: dict, p: vs.ScreenParams, f: dict) -> float:
                      _log_compress(float(m["radial_rings"]), p.cap_rings))
     c = vs.size_factor(m, q) * vs.coverage_term(m) * rich
     return vs._veto_band(c) if float(m["interior_fraction"]) > p.veto else c
+
+
+def sheet_order(rows: list[dict], order_path: Path) -> list[dict]:
+    """`rows` re-ordered to the row order of the scores file the SHEETS were built from.
+
+    `view_screen_sheets.stratify` shuffles each (operator x degree) cell with a seeded RNG,
+    and a seeded shuffle is only reproducible against a fixed INPUT order — so the 18 tiles
+    of a regenerated Q5 sheet depend on the order of the file the sheet was drawn from, not
+    only on the composite and the seed. That went unnoticed while one file fed both, and
+    surfaced the moment the population was re-scored from the field cache in population
+    order instead of engine-completion order: the regenerated v2 sheet held 0 of its 5
+    named-dominated tiles and `split_sheet` refused, which is what it is for.
+
+    Nothing here is a fix to `stratify` — changing it would change WHICH tiles a regenerated
+    sheet holds, i.e. re-calibrate the gate on tiles nobody looked at, which is the failure
+    being avoided. The dependency is made explicit instead, and it is a hard requirement: a
+    missing order file raises rather than silently regenerating a different sheet.
+    """
+    if not order_path.exists():
+        raise SystemExit(
+            f"--sheet-order {order_path} is missing. The v2/v3 Q5 calibration sheets are "
+            f"reproducible only against the row order of the scores file they were built "
+            f"from; without it the gate would calibrate on 18 different tiles. Rebuild it "
+            f"with view_rescreen.py, or pass the file the sheets were drawn from.")
+    idx = {}
+    for line in order_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            idx.setdefault(json.loads(line)["key"], len(idx))
+    missing = [r["key"] for r in rows if r["key"] not in idx]
+    if missing:
+        raise SystemExit(f"--sheet-order {order_path} is missing {len(missing)} of "
+                         f"{len(rows)} keys (e.g. {missing[:2]}) — it is not the order the "
+                         f"sheets were built from")
+    return sorted(rows, key=lambda r: idx[r["key"]])
 
 
 def load_scores(p: Path) -> list[dict]:
@@ -410,7 +556,105 @@ def run_gate_v3(rows: list[dict], bads: dict[str, dict], refs: dict,
     )
 
 
-def sweep_reargmax(v2_path: Path, v3_path: Path) -> dict:
+def run_gate_v4(rows: list[dict], bads: dict, refs: dict, p: vs.ScreenParams,
+                fav: dict, v4_bad: dict, v4_bad_label: str) -> dict:
+    """The v4 gate: G1-G5 as in v3, plus G6 (the favourite IN) and G7 (the field of blue OUT).
+
+    Percentiles are recomputed per formulation over the whole screened population, as in
+    every block before this one."""
+    ok = [r for r in rows if r.get("screened")]
+    dom, passed, rest = split_sheet(v2_q5_sheet(rows, p.veto))
+    sheet3 = v3_q5_sheet(rows, p)
+    forms = []
+    for f in V4_FORMULATIONS:
+        pop = np.array([composite_v4_with(r, p, f) for r in ok])
+
+        def entry(m, _f=f, _pop=pop):
+            x = composite_v4_with(m, p, _f)
+            cov = (None if _f["mode"] is None
+                   else m["coverage_grid"][_f["mode"]][f"{_f['floor']:g}"])
+            return dict(composite=round(float(x), 4),
+                        percentile=round(100.0 * float((_pop < x).mean()), 1),
+                        coverage_v3=[m["band_coverage"], m["band_coverage_q25"]],
+                        coverage_v4=cov,
+                        interior_fraction=m["interior_fraction"],
+                        size_factor=round(vs.size_factor(m, p), 4),
+                        richness_capped=round(vs.richness(m, p), 3),
+                        vetoed=vs.is_vetoed(m, p.veto))
+
+        ref_out = {k: entry(v) for k, v in refs.items()}
+        bad_out = {t: dict(label=NAMED_BADS[t], **entry(m)) for t, m in bads.items()}
+        dom_out = {t: dict(label=t, **entry(m)) for t, m in dom.items()}
+        pass_out = {f"{r['op']}|{r.get('k')}|d{r.get('degree')}|p{r.get('period')}": entry(r)
+                    for r in passed}
+        fav_e, bad_e = entry(fav), entry(v4_bad)
+        g1 = all(v["percentile"] >= TOP_QUINTILE for v in ref_out.values())
+        g2 = all(v["percentile"] < TOP_QUINTILE for v in bad_out.values())
+        g3 = (ref_out["minibroteye"]["percentile"] >= ref_out["mb19_p35_16x"]["percentile"])
+        g4 = all(v["percentile"] < TOP_QUINTILE for v in dom_out.values())
+        g5 = all(v["percentile"] >= TOP_QUINTILE for v in pass_out.values())
+        g6 = fav_e["percentile"] >= TOP_QUINTILE
+        g7 = bad_e["percentile"] < TOP_QUINTILE
+        # The fallout list Matt asked for: which OTHER tiles of the v3 Q5 sheet leave the
+        # top quintile under this formulation. "examples like it" is a claim about a
+        # PATTERN, and the only way he can check the pattern matched his intent is to see
+        # what else went with it — so the whole sheet is reported with its verdict, not
+        # only the rows that fell.
+        cut = float(np.percentile(pop, TOP_QUINTILE))
+        fallout = [dict(tile=f"{r['op']} "
+                              f"{'keep' if r.get('k') is None else 'k%g' % float(r['k'])} "
+                              f"d{r.get('degree')} p{r.get('period')} fw={r['fw']:.3g}",
+                        key=r["key"], **entry(r))
+                   for r in sheet3]
+        forms.append(dict(
+            name=f["name"], mode=f["mode"], floor=f["floor"], note=f["note"],
+            references=ref_out, bads_v2=bad_out, dominated=dom_out, passed=pass_out,
+            favourite=dict(label=list(NAMED_FAVOURITE.values())[0], **fav_e),
+            favourite_decile=int(min(10, 1 + fav_e["percentile"] // 10)),
+            named_bad=dict(label=v4_bad_label, **bad_e),
+            v3_q5_sheet=fallout,
+            v3_q5_sheet_leaving_top_quintile=sorted(
+                t["tile"] for t in fallout if t["percentile"] < TOP_QUINTILE),
+            top_quintile_cut=round(cut, 4),
+            G1_refs_in_top_quintile=g1, G2_v2_bads_out_of_top_quintile=g2,
+            G3_eye_outranks_mb19=g3, G4_named_dominated_out_of_top_quintile=g4,
+            G5_passed_low_interior_stay_in_top_quintile=g5,
+            G6_favourite_in_top_quintile=g6,
+            G7_field_of_blue_out_of_top_quintile=g7,
+            passed_gate=bool(g1 and g2 and g3 and g4 and g5 and g6 and g7),
+            refs_in_top_decile=all(v["percentile"] >= 90.0 for v in ref_out.values()),
+        ))
+    return dict(
+        bar_percentile=TOP_QUINTILE, population_n=len(rows), screened_n=len(ok),
+        composite_version="v4", screen_params=p._asdict(),
+        selection_rule=("the LEAST DEMANDING floor of the `cross` family that satisfies "
+                        "G1-G7, on the recorded grid. Written down before the grid was run; "
+                        "least demanding = closest to v3, so it cannot be met by demoting "
+                        "everything. The `tv` and `bands` families are run at the same grid "
+                        "so the choice of family is measured, not asserted."),
+        anchors=dict(favourite=dict(tag=list(NAMED_FAVOURITE), key=fav["key"],
+                                    fw=fav["fw"], source="scratch/maneuver_inspection/"),
+                     named_bad=dict(label=v4_bad_label, key=v4_bad["key"], fw=v4_bad["fw"],
+                                    source="the v3 Q5 sheet")),
+        calibration_set=dict(
+            v3_q5_sheet="the 18 tiles of scratch/view_screen/sheet_new_q5.png, regenerated "
+                        f"from view_screen.composite_v3 + stratify at seed {SHEET_SEED}",
+            named_dominated=sorted(dom), n_passed=len(passed)),
+        formulations=forms,
+        **{fm.POLICY_KEY: fm.record_policy(ok[0] if ok else {})},
+        HONESTY=("Same caveat as v3, one anchor stronger in one direction and one weaker in "
+                 "another. STRONGER: v4 has a POSITIVE anchor drawn from the run's own "
+                 "output rather than from two hand-picked reference views, so at least one "
+                 "clause is not satisfiable by demoting harder. WEAKER: the negative anchor "
+                 "is ONE tile standing in for 'examples like it', a class nobody has "
+                 "enumerated — the fallout list is reported precisely because the gate "
+                 "cannot check that class and a human has to. This remains an anchor "
+                 "tripwire against ~19 hand-named points, NOT evidence the composite ranks "
+                 "well in general. No label and no classifier has seen this population."),
+    )
+
+
+def sweep_reargmax(v2_path: Path, v3_path: Path, *, a_label="v2", b_label="v3") -> dict:
     """How the framing argmax moved from v2 to v3, over the SAME swept candidates.
 
     Two questions, and they are different: how often the chosen window changed at all, and
@@ -434,25 +678,28 @@ def sweep_reargmax(v2_path: Path, v3_path: Path) -> dict:
               if b[k].get("chosen_measures")]
     import numpy as _np
     blow = lambda v, t: int(sum(1 for x in v if x > t))
+    A, B = a_label, b_label
     return dict(
-        compared=len(both), v2_only=len(set(a) - set(b)), v3_only=len(set(b) - set(a)),
+        compared_versions=[A, B],
+        compared=len(both), **{f"{A}_only": len(set(a) - set(b)),
+                               f"{B}_only": len(set(b) - set(a))},
         argmax_changed=len(changed),
         argmax_changed_frac=round(len(changed) / max(1, len(both)), 4),
-        v2_moved=int(sum(1 for k in both if a[k].get("moved"))),
-        v3_moved=int(sum(1 for k in both if b[k].get("moved"))),
-        v2_chosen_scale2=int(sum(1 for k in both
-                                 if (a[k].get("chosen") or {}).get("scale") == 2.0)),
-        v3_chosen_scale2=int(sum(1 for k in both
-                                 if (b[k].get("chosen") or {}).get("scale") == 2.0)),
-        chosen_radial_range_max=dict(v2=round(float(max(v2_rng or [0])), 2),
-                                     v3=round(float(max(v3_rng or [0])), 2)),
-        chosen_radial_range_p99=dict(
-            v2=round(float(_np.percentile(v2_rng, 99)), 2) if v2_rng else None,
-            v3=round(float(_np.percentile(v3_rng, 99)), 2) if v3_rng else None),
-        chosen_over_100_range=dict(v2=blow(v2_rng, 100.0), v3=blow(v3_rng, 100.0)),
-        chosen_over_pop_p99_range=dict(v2=blow(v2_rng, 24.322), v3=blow(v3_rng, 24.322)),
+        **{f"{A}_moved": int(sum(1 for k in both if a[k].get("moved"))),
+           f"{B}_moved": int(sum(1 for k in both if b[k].get("moved"))),
+           f"{A}_chosen_scale2": int(sum(1 for k in both
+                                         if (a[k].get("chosen") or {}).get("scale") == 2.0)),
+           f"{B}_chosen_scale2": int(sum(1 for k in both
+                                         if (b[k].get("chosen") or {}).get("scale") == 2.0))},
+        chosen_radial_range_max={A: round(float(max(v2_rng or [0])), 2),
+                                 B: round(float(max(v3_rng or [0])), 2)},
+        chosen_radial_range_p99={
+            A: round(float(_np.percentile(v2_rng, 99)), 2) if v2_rng else None,
+            B: round(float(_np.percentile(v3_rng, 99)), 2) if v3_rng else None},
+        chosen_over_100_range={A: blow(v2_rng, 100.0), B: blow(v3_rng, 100.0)},
+        chosen_over_pop_p99_range={A: blow(v2_rng, 24.322), B: blow(v3_rng, 24.322)},
         NOTE=("`chosen_over_pop_p99_range` counts chosen windows whose `radial_range` "
-              "exceeds the re-scored population's p99 (24.322). A v3 chosen window may "
+              "exceeds the re-scored population's p99 (24.322). A capped chosen window may "
               "still carry a large raw range — the cap changes what it BUYS, not what it "
               "measures — so this is read as 'did the blow-up still win', never as 'the "
               "blow-up is gone'."),
@@ -464,16 +711,24 @@ def main(argv=None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scores", type=Path,
                     default=paths.scratch("view_rescreen", "scores.jsonl"))
+    ap.add_argument("--sheet-order", type=Path,
+                    default=paths.scratch("view_rescreen", "scores.jsonl"),
+                    help="the scores file the v2/v3 Q5 calibration sheets were built from; "
+                         "its ROW ORDER is what makes stratify reproducible")
     ap.add_argument("--sample", type=Path,
                     default=paths.scratch("maneuver_inspection", "sample.jsonl"))
     ap.add_argument("--sweep-v2", type=Path,
                     default=paths.scratch("view_rescreen", "sweep.jsonl"))
     ap.add_argument("--sweep-v3", type=Path,
                     default=paths.scratch("view_rescreen", "sweep_v3.jsonl"))
+    ap.add_argument("--sweep-v4", type=Path,
+                    default=paths.scratch("view_rescreen", "sweep_v4.jsonl"))
     a = ap.parse_args(argv)
 
     rows = load_scores(a.scores)
-    print(f"[gate] {len(rows)} re-scored candidates")
+    rows = sheet_order(rows, a.sheet_order)
+    print(f"[gate] {len(rows)} re-scored candidates "
+          f"(sheet order from {a.sheet_order.name})")
     veto = vs.interior_veto(vs.load_refs())
 
     insp = {json.loads(l)["tag"]: json.loads(l)
@@ -525,6 +780,51 @@ def main(argv=None) -> int:
         pw = min(f["passed"].values(), key=lambda v: v["percentile"])
         print(f"    PASSED-set minimum percentile p{pw['percentile']:.1f} "
               f"(int {pw['interior_fraction']})")
+
+    # ---- v4, written BESIDE v2 and v3 ------------------------------------- #
+    if any("coverage_grid" in r for r in rows):
+        fav_tag = next(iter(NAMED_FAVOURITE))
+        fs = insp[fav_tag]
+        fav = by_key.get(f"{fs['atom_key']}|{fs['k']}")
+        if fav is None:
+            raise SystemExit(f"the favourite {fav_tag} is not in the re-scored population")
+        (bk, blabel), = ((k, v) for k, v in V4_NAMED_BAD.items())
+        cands = [r for r in rows if (r["op"], r.get("k"), r.get("degree"), r.get("period"))
+                 == bk[:4] and abs(float(r["fw"]) - bk[4]) <= 1e-12 * abs(bk[4])]
+        if len(cands) != 1:
+            raise SystemExit(f"the v4 named bad {bk} matches {len(cands)} rows, not one")
+        v4_bad = cands[0]
+        # Cross-check on the number that IS the defect. A key list alone could name a row
+        # nobody saw; the recorded covq25 is what Matt quoted off the tile.
+        if abs(v4_bad["band_coverage_q25"] - blabel["band_coverage_q25"]) > 1e-9:
+            raise SystemExit(f"the v4 named bad measures covq25 "
+                             f"{v4_bad['band_coverage_q25']}, not "
+                             f"{blabel['band_coverage_q25']} — wrong tile")
+        v4 = run_gate_v4(rows, bads, refs, sp, fav, v4_bad, blabel["label"])
+        v4["sweep_reargmax"] = sweep_reargmax(a.sweep_v3, a.sweep_v4,
+                                              a_label="v3", b_label="v4")
+        rep["v4"] = v4
+        print(f"\n[v4] {len(v4['formulations'])} formulations over "
+              f"{v4['screened_n']} screened rows")
+        for f in v4["formulations"]:
+            flags = "".join(k.split("_")[0] for k in
+                            ("G1_refs_in_top_quintile", "G2_v2_bads_out_of_top_quintile",
+                             "G3_eye_outranks_mb19",
+                             "G4_named_dominated_out_of_top_quintile",
+                             "G5_passed_low_interior_stay_in_top_quintile",
+                             "G6_favourite_in_top_quintile",
+                             "G7_field_of_blue_out_of_top_quintile") if not f[k])
+            print(f"  {f['name']:20s} {'PASS' if f['passed_gate'] else 'FAIL':4s} "
+                  f"{('fails ' + flags) if flags else '':22s} "
+                  f"fav p{f['favourite']['percentile']:5.1f} (D{f['favourite_decile']})  "
+                  f"blue p{f['named_bad']['percentile']:5.1f}  "
+                  f"eye p{f['references']['minibroteye']['percentile']:5.1f}  "
+                  f"mb19 p{f['references']['mb19_p35_16x']['percentile']:5.1f}  "
+                  f"sheet-fallout {len(f['v3_q5_sheet_leaving_top_quintile'])}/18")
+    else:
+        print("\n[v4] SKIPPED — the scores file carries no `coverage_grid`. Re-score from "
+              "the field cache first: view_rescreen.py --from-cache <root>")
+        rep["v4"] = dict(not_run="scores file carries no coverage_grid")
 
     p = paths.durable(GATE_PATH, mkparents=True)
     p.write_text(json.dumps(rep, indent=2) + "\n", encoding="utf-8")
