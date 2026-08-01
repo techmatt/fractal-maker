@@ -287,7 +287,66 @@ stays **per `k`**: one solve, three answers — a shallow atom can take `k = 4` 
 `k = 16` as `fw_over_root_scale` off the same nucleus.
 `[code: minibrot_maneuvers.snap_to_nucleus_multi]`
 
-## 8. What this is NOT
+## 8. Per-degree availability and cost — measured
+
+`[measured: 1,180 distinct operator decisions + 1,113 governor rows over 44 batches /
+19.9 active minutes / 1,408 expansions, scheduler off, `--mem-recency`, defaults elsewhere
+(`probe_p = 0.25`, `k = none,4,16`), 2026-07-31]`
+`[cmd: tools/atlas/steered_frontier.py --run-dir data/discovery/maneuver_degree_probe
+--families mandelbrot,multibrot3,multibrot4,multibrot5 --budget 20 --maneuvers
+--mem-recency --below-normal --seed 20260731; then tools/atlas/maneuver_degree_readout.py]`
+
+**Availability rises with degree, on both operators — the expensive degrees are the easier
+ones.**
+
+| | d2 | d3 | d4 | d5 |
+|---|---|---|---|---|
+| `snap_to_nucleus` calls | 318 | 234 | 210 | 123 |
+| snap available | **51.9%** | **75.2%** | **72.9%** | **80.5%** |
+| `lateral_to_sibling` calls | 106 | 78 | 70 | 41 |
+| lateral available | **22.6%** | **35.9%** | **32.9%** | **46.3%** |
+| f64 node margin, median decades | 7.50 | 7.92 | 8.28 | **8.49** |
+
+**The consequence is confirmed; the mechanism is not measured.** The prediction was that a
+degree-`d` atom *of a given period* is intrinsically larger. Within period bands median
+`log₁₀|A|` is flat within noise in the low bands and inverted or too thin in the high ones
+(d5's 32–63 cell is three atoms). What the degrees differ in is **period mix** — median
+pushed period d2 22 / d3 16 / d4 9 / d5 8 — and this run cannot separate the two, because
+the walk chooses where it goes. `minibrot_sourcing.md` §5 carries the consequence for any
+degree decision.
+
+**The populations are unbalanced despite balanced supply.** Root draws are `B` per family
+with the scheduler off, so *supply* was balanced; realized snap calls were **318 / 234 / 210
+/ 123**, ~2.6:1 against d2, because the batch is popped by global priority. Governor skips
+follow the same shape (404 / 288 / 272 / 149), so this is where the walk went, not a
+maneuver-side bias. d5's cells are the thinnest in every table — enough to establish
+availability, not enough for the period-controlled `|A|` read.
+
+**d2's low availability is one mechanism: the nucleus keeps landing outside the frame.**
+`nucleus_outside_frame` — the teleport guard of §2.3, not Newton failure — is **50 of d2's
+51 snap refusals** (15/19 at d3 and d4, 5/8 at d5); `no_converge` is 1–4 per degree.
+`f64_spacing_wall` has **never fired**, at any degree or any `k`, which is consistent with
+the 7.5–8.5-decade margin table: the a-priori wall check has never been the binding
+constraint on this population. `fw_over_root_scale` fired once (d3, `k = 16`) — the first
+k-dependent refusal ever recorded, and exactly what §7.1 predicts, since a solve-level
+refusal cannot depend on `k` and only the framing verdict can.
+
+**Not an evaluation of move quality.** 14 maneuver-originated admissions are reported for
+completeness and are not readable as yield — see §9.
+
+### 8.1 The config record
+
+`--maneuver-probe-p` has been **0.25 since the operators landed** (`MAN_PROBE_P_DEFAULT`,
+`fad68df`), and §7's table has always said so. What ran at **0.5 was the shakedown**, which
+passed `--maneuver-probe-p 0.5` explicitly (its `summary.json` records `"probe_p": 0.5`).
+This is worth stating because the shakedown's headline **22.4% probe-cost share** is
+measured against a coin firing twice as often as the default and overstates the default
+configuration's cost: the same measure on this run, at the default, is **5.4%**. Half of
+that drop is the §2.6 cost cut and half is firing half as often — so read the per-call
+numbers (lateral mean 442 → 176 ms, max 6.57 → 1.32 s) as the clean comparison, not the
+share.
+
+## 9. What this is NOT
 
 * **Not an evaluation.** Per-move yield cannot be read until a head has been trained on the
   population these moves generate; the deployed scorer has never seen a maneuver-originated

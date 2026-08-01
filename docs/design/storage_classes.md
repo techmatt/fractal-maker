@@ -199,6 +199,40 @@ A surviving producer is not reproducibility. Two failure shapes, both live in th
 So the KEEP question is not *does something still produce this*, it is *would running it
 again produce this*. `[verdict: Matt]`
 
+### Preconditions for the approved v8/v9 `plan` + `cache_manifest` deletion
+
+Four tracked LFS files — `data/v{8,9}/{plan,cache_manifest}.jsonl`, **285 MiB**, one row per
+augmentation tile — are the single largest block of non-weight tracked bulk, and their
+deletion is **approved but blocked**. They are derived from committed inputs and both trees
+have a committed builder, so the usefulness test above does not save them on its own. What
+blocks it is that two guards over them are absence-tolerant, and taking the deletion first
+would silently turn them off. Before it is ever taken:
+
+**(a) Make the guards hard-fail, naming the rebuild command.** The two `.exists()` guards
+that read these files are both in `tools/v9/build_plan.py::assert_recipe_parity` — the
+v8-plan comparison and the v8-cache-manifest recipe-field comparison. Each is the
+**load-bearing check of the whole v9 rebuild**: a recipe that drifted by one seeded draw
+would make v9's corpus non-comparable to v8's, and the v9-vs-v8 eval bar would be measuring
+the drift. Absent the input, both simply do not run and the rebuild reports success. They
+must raise, naming `tools/v8/build_plan.py` (which rebuilds v8's pair) and
+`tools/v9/build_plan.py` (v9's). Note the chain: deleting **v8's** pair is what disarms the
+gate on a **v9** rebuild.
+
+**(b) DELETE the alignment tests whose referent is gone; do not let them skip.**
+`tools/v8/test_v8_cache_alignment.py`'s module fixture `pytest.skip`s if any of the four
+v8 artifacts is absent, so BACKWARD / FIELDS / COUNTS would go quietly green-by-absence.
+**Keep the census test** (`test_the_eval_slice_holds_the_full_144_location_census`) with a
+fixture narrowed to `eval_slice.jsonl`, which is small, plain-text and not part of the
+deletion. `[code: tools/v8/test_v8_cache_alignment.py::v8]`
+
+**The reclaim is working-tree only.** All four are `filter=lfs` in `.gitattributes` and
+re-included by exact-path `.gitignore` negations, so `git rm` frees the working copy and
+`.git/lfs` reclaims **nothing** until a prune — and `git lfs prune --verify-remote` is not
+usable here (it reports "missing on remote" when it merely could not authenticate, the one
+condition under which you must not prune). Any actual reclaim goes through the
+batch-API + sha256 procedure in [`artifacts_resolver.md`](artifacts_resolver.md) §5.
+`[measured: 298,820,096 B across the four files, 2026-07-31, `ls -l data/v8 data/v9`]`
+
 ## Git history is a durability tier too, and this repo's floor is 2026-07-24
 
 `fractal-maker` begins at a **single squashed import commit** (`ff88da4`, 1247 tracked files,
