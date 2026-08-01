@@ -40,24 +40,48 @@ import minibrot_maneuvers as mnv    # noqa: E402
 import paths                        # noqa: E402
 
 M_CAP = 40                          # mirrors steered_frontier.M_CAP
-OPS = ("snap_to_nucleus", "lateral_to_sibling")
+OPS = ("snap_to_nucleus", "lateral_to_sibling", "neighborhood_expand")
 
 
 def load_maneuvers(run_dir: Path):
-    """(deduped operator rows, governor 'probe' rows, n_raw, n_dropped)."""
+    """(deduped operator rows, governor 'probe' rows, n_raw, n_dropped).
+
+    v1.4 fixed two things here, both of which silently corrupted the tables rather than
+    raising:
+
+    * **the dedup key needed the ATOM.** `neighborhood_expand` emits one row per
+      (nucleus, k) from ONE call, so every row of a call shares
+      `(batch, parent_node_id, op, k)` — the old key collapsed a whole neighbourhood down
+      to its first atom and reported it as replay inflation.
+    * **the quota's passed-over records carry an `op` too** but are frontier-node rows with
+      no parent view. They are not operator decisions and must not enter an availability
+      rate; filtered on the field an operator row always has.
+    """
     rows = [json.loads(l) for l in
             (run_dir / "maneuvers.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
-    seen, ops, probes = set(), [], []
+    # Node ids this run pushed as maneuver ORIGINS. A later probe whose parent is one of
+    # them is the operator being applied to its own output — see `self_fed` below.
+    pushed_ids = {r["node_id_pushed"] for r in rows if r.get("node_id_pushed") is not None}
+    seen, ops, probes, quota = set(), [], [], 0
     for r in rows:
         if r.get("op") == "probe":
+            r["self_fed"] = r.get("node_id") in pushed_ids
             probes.append(r)
             continue
-        key = (r.get("batch"), r.get("parent_node_id"), r.get("op"), str(r.get("k")))
+        if r.get("unused_reason") == "quota_passed_over" or "available" not in r:
+            quota += 1
+            continue
+        key = (r.get("batch"), r.get("parent_node_id"), r.get("op"), str(r.get("k")),
+               r.get("atom_key"), r.get("reason"))
         if key in seen:
             continue
         seen.add(key)
+        # LOWER BOUND, and deliberately so: this catches a parent that was itself a pushed
+        # maneuver origin, not one that is a deeper descendant of one (children get fresh
+        # ids from the expand). So the true self-fed share is at least this.
+        r["self_fed"] = r.get("parent_node_id") in pushed_ids
         ops.append(r)
-    return ops, probes, len(rows), len(rows) - len(ops) - len(probes)
+    return ops, probes, len(rows), len(rows) - len(ops) - len(probes) - quota
 
 
 def kstr(k):
@@ -127,6 +151,34 @@ def main() -> int:
                          f"{av/len(rs):.1%}", used, av - used])
     L += [fmt_table(["degree", "op", "calls", "available", "avail rate", "pushed",
                      "avail-but-unused"], rows), ""]
+
+    # ---------------- 1b. the self-feeding split ----------------
+    # READ THIS BEFORE THE TABLE ABOVE. Once the operators push enough nodes, the views
+    # they are applied to are increasingly views THEY PRODUCED — and a view produced by
+    # snapping to a nucleus is, by construction, centred on a nucleus, so snapping it again
+    # nearly always succeeds. The pooled rate above is then a property of the feedback loop,
+    # not of the operator. `measurement_practice.md`: a search that chooses where it goes
+    # confounds its own axes by construction.
+    L += ["### 1b. Self-fed vs fresh views — READ THIS BEFORE TABLE 1", "",
+          "A probe whose parent view was itself a pushed maneuver origin is the operator "
+          "applied to its own output. The split is a LOWER bound on the self-fed share "
+          "(a deeper descendant of a maneuver node is not detectable from this log alone), "
+          "so the confound is at least this large. **Quote the `fresh` column** as the "
+          "operator's availability; the pooled rate is the feedback loop's.", ""]
+    rows_sf = []
+    for op in OPS:
+        for lab, sel in (("fresh", False), ("self-fed", True)):
+            rs = [r for r in ops if r["op"] == op and r["self_fed"] is sel]
+            if not rs:
+                continue
+            av = sum(1 for r in rs if r["available"])
+            rows_sf.append([op, lab, len(rs), av, f"{av/len(rs):.1%}"])
+    L += [fmt_table(["op", "parent view", "calls", "available", "avail rate"], rows_sf), ""]
+    n_sf = sum(1 for r in ops if r["self_fed"])
+    g_sf = sum(1 for r in probes if r.get("self_fed"))
+    L += [f"**{n_sf}/{len(ops)} ({n_sf/max(1,len(ops)):.0%}) of operator decisions, and "
+          f"{g_sf}/{len(probes)} ({g_sf/max(1,len(probes)):.0%}) of governor rolls, were on "
+          f"views the operators produced.**", ""]
 
     # ---------------- 2. refusal reasons by (op, k) ----------------
     L += ["## 2. Refusal reasons, by `(op, k)` and degree", "",

@@ -520,6 +520,36 @@ refusal cannot depend on `k` and only the framing verdict can.
 **Not an evaluation of move quality.** 14 maneuver-originated admissions are reported for
 completeness and are not readable as yield — see §9.
 
+### 8.0 The operators feed themselves, and it inflates every pooled rate
+
+**Read this before any availability number in §8.** A view produced by snapping to a nucleus
+is, by construction, centred on a nucleus — so snapping it again nearly always succeeds.
+Once the operators push enough nodes, the views they are applied to are increasingly views
+*they produced*, and the pooled availability rate becomes a property of the feedback loop
+rather than of the operator. This was latent with two operators and is dominant with three,
+because `neighborhood_expand` pushes several nodes per fired probe.
+
+`[measured: 3,415 distinct operator decisions, v1.4 shakedown, probe_p = 0.5, 2026-08-01;
+cmd: tools/atlas/maneuver_degree_readout.py --run-dir data/discovery/maneuver_v14_shakedown]`
+
+| op | fresh view | self-fed view |
+|---|---|---|
+| `snap_to_nucleus` | **72.7%** (330 calls) | 97.6% (741) |
+| `lateral_to_sibling` | **34.5%** (110) | 44.3% (253) |
+| `neighborhood_expand` | **88.2%** (473) | 94.2% (1,508) |
+
+**73% of operator decisions and 75% of governor rolls were on views the operators produced**
+— and that is a **lower bound**, since a deeper descendant of a maneuver node is not
+detectable from the log alone (children get fresh ids from the expand).
+
+⇒ **Quote the `fresh` column.** Snap's fresh 72.7% against §8's pooled two-operator 67%
+is a modest population difference, not an improvement; the apparent jump to ~87% pooled is
+the loop. The readout now splits this automatically so the pooled number cannot be quoted by
+accident. `[code: maneuver_degree_readout.load_maneuvers, §1b]` `[verdict: Matt]`
+
+This is `measurement_practice.md`'s "a search that chooses where it goes confounds its own
+axes by construction", one level in: here the search is choosing its own *inputs*.
+
 ### 8.1 The config record
 
 `--maneuver-probe-p` has been **0.25 since the operators landed** (`MAN_PROBE_P_DEFAULT`,
