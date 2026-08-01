@@ -215,14 +215,36 @@ the first survivor — which is what lateral does. The filters are the only diff
 they differ in exactly one place: lateral's scale window is **symmetric**
 (`|log10 ratio| <= 1`), operator 3's is **one-sided**.
 
-Measured by replay, both arms off one RNG seed per case:
-`[code: tools/atlas/bench_neighborhood_subsumption.py]`
+Measured by replay, both arms off one RNG seed per case and an EQUAL probe budget (3), or
+the comparison measures budget rather than filters.
+`[measured: 178 replayable lateral calls from the v1.4 shakedown, 2026-08-01;
+cmd: tools/atlas/bench_neighborhood_subsumption.py --log
+data/discovery/maneuver_v14_shakedown/maneuvers.jsonl --limit 200]`
 
-<!-- BENCH:SUBSUMPTION -->
+| | lateral available | nbh available | identical first pick | lateral's pick inside nbh's set | lateral-only | nbh-only | Newton solves |
+|---|---|---|---|---|---|---|---|
+| `m = 1` | 83 / 178 | **92** / 178 | 80 / 83 | 80 / 83 | **0** | 9 | 6,878 (vs 7,107) |
+| `m = 8` | 83 / 178 | **92** / 178 | 80 / 83 | **83 / 83** | **0** | 9 | 8,840 (vs 7,107) |
+
+**On this population lateral IS subsumed.** There is no case where lateral finds a sibling
+and neighbourhood finds nothing — `lateral-only = 0` at both `m` — and at `m = 8` lateral's
+pick is inside neighbourhood's set **every time**. At `m = 1` it is also *cheaper* than
+lateral (6,878 solves against 7,107): it early-exits at the first find exactly as lateral
+does, and its looser scale filter stops it sooner.
+
+The 9 extra availabilities are the one-sided window doing exactly what §2.7 predicts: **5 of
+them are cases where lateral refused with `scale_mismatch`, and all 5 are below its window.**
+
+**Scope, because a subsumption verdict is a retirement claim.** 178 replayed calls off one
+15-minute shakedown at `probe_p = 0.5` — the parents the walk had reached by then, not the
+deep tail. `measurement_practice.md`'s standing caution applies to this reading as much as
+to any other: it is scoped to that population. **Lateral is not deleted**, and the run
+config keeps both, so the next run's log is what re-tests it at depth.
 
 **A disagreement is not a defect.** Both contracts promise "*a* nearby nucleus", not "*that*
-one — the same identity-drift reading §2.6 records for the lateral head, and the dedup key
+one" — the same identity-drift reading §2.6 records for the lateral head, and the dedup key
 is the nucleus' canonical key, so nothing downstream reproduces sibling identity either way.
+The 3 of 83 first-pick disagreements are that, not error.
 
 ## 3. Selection is a reserved FLOOR of frontier slots, not a probability
 

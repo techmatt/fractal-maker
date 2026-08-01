@@ -398,6 +398,7 @@ _FLOOR_TOTALS = ("man_quota_bound", "man_quota_unfilled", "man_quota_passed_over
 def _obj(B, quota, maneuvers=True, range_prior=False, logged=None):
     return types.SimpleNamespace(B=B, man_quota=quota, maneuvers=maneuvers,
                                  man_range_prior=range_prior, batch_i=1,
+                                 man_passed_logged=set(),
                                  _log_maneuver=(logged.append if logged is not None
                                                 else (lambda row: None)),
                                  totals={k: 0 for k in _FLOOR_TOTALS})
@@ -494,6 +495,42 @@ def test_the_quota_fills_by_descending_range_when_the_prior_is_on():
     assert all(r["passed_over"] is True and r["unused_reason"] == "quota_passed_over"
                for r in logged)
     assert {r["radial_range"] for r in logged} == {0.1, 50.0}
+
+
+def test_a_passed_over_node_is_recorded_ONCE_not_once_per_batch():
+    """Found by the shakedown, which is what a shakedown is for. A maneuver node that loses
+    a quota slot stays on the frontier and loses again next batch, so re-logging it per
+    batch writes O(nodes x batches) rows and turns the counter into a backlog reading
+    wearing a count's name: 10,176 rows over 24 batches, 7.6 MB, with the maneuver frontier
+    still climbing. A 7-hour unattended run would have written hundreds of MB of the same
+    nodes restated."""
+    logged = []
+    o = _obj(2, 1, range_prior=True, logged=logged)
+    pool = _man_pool([(1, 9.0, 0.1), (2, 8.0, 99.0), (3, 7.0, 50.0)])
+    for batch in range(5):                       # the same pool loses the same slots
+        o.batch_i = batch
+        sf.SteeredFrontier._split_reserved(o, _man_pool([(1, 9.0, 0.1), (2, 8.0, 99.0),
+                                                         (3, 7.0, 50.0)]))
+    assert len(logged) == 2, [r["node_id"] for r in logged]
+    assert {r["node_id"] for r in logged} == {1, 3}
+    assert o.totals["man_quota_passed_over"] == 2, "a COUNT of distinct candidates"
+    # a genuinely new candidate still gets recorded
+    o.batch_i = 99
+    sf.SteeredFrontier._split_reserved(o, _man_pool([(4, 6.0, 5.0), (2, 8.0, 99.0)]))
+    assert {r["node_id"] for r in logged} == {1, 3, 4}
+    assert o.totals["man_quota_passed_over"] == 3
+    assert pool  # (fixture kept explicit; the loop rebuilds it so nodes are not mutated)
+
+
+def test_the_passed_over_count_is_the_same_with_the_prior_off_only_the_LOG_is_gated():
+    """The counter is a diagnostic and costs nothing, so it runs either way; the per-row
+    log is what the flag gates. If the two diverged, a flag-off run's backlog would read as
+    zero rather than as unrecorded."""
+    on, off = _obj(2, 1, range_prior=True), _obj(2, 1, range_prior=False)
+    for o in (on, off):
+        sf.SteeredFrontier._split_reserved(o, _man_pool([(1, 9.0, 0.1), (2, 8.0, 99.0),
+                                                         (3, 7.0, 50.0)]))
+    assert on.totals["man_quota_passed_over"] == off.totals["man_quota_passed_over"] == 2
 
 
 def test_an_unscreened_candidate_sorts_last_but_is_never_excluded():

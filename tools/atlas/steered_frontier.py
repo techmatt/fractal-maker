@@ -719,6 +719,7 @@ class SteeredFrontier:
         self.man_lateral = bool(getattr(args, "maneuver_lateral", True))
         self.man_log = self.run_dir / "maneuvers.jsonl"
         self.man_visited: set = set()      # canonical atom keys already turned into a node
+        self.man_passed_logged: set = set()   # nodes already recorded as quota-passed-over
         self.man_gov = mnv.ProbeGovernor(
             float(getattr(args, "maneuver_probe_p", MAN_PROBE_P_DEFAULT)),
             np.random.default_rng(self.seed + 9901))
@@ -1334,9 +1335,18 @@ class SteeredFrontier:
                          reverse=True)
         take = min(self.man_quota, len(man), self.B)
         self.totals["man_quota_unfilled"] += self.man_quota - take
-        self.totals["man_quota_passed_over"] += max(0, len(man) - take)
-        if getattr(self, "man_range_prior", False) and len(man) > take:
-            for n in man[take:]:
+        # ONCE PER NODE, not once per node per batch. A maneuver node that loses a quota
+        # slot stays on the frontier and loses again next batch, so a per-batch record is a
+        # BACKLOG-PRESSURE reading wearing a count's name — and it writes O(nodes x batches)
+        # rows. Measured: 10,176 rows over 24 shakedown batches, 7.6 MB, and the maneuver
+        # frontier was still climbing toward its share cap; a 7-hour run would have written
+        # hundreds of MB of the same nodes restated. The count is of DISTINCT candidates
+        # passed over at least once; live backlog is `len(man)`, which is derivable.
+        newly = [n for n in man[take:] if n["node_id"] not in self.man_passed_logged]
+        self.totals["man_quota_passed_over"] += len(newly)
+        if getattr(self, "man_range_prior", False):
+            for n in newly:
+                self.man_passed_logged.add(n["node_id"])
                 self._log_maneuver(dict(batch=self.batch_i, op=n["man"].get("op"),
                                         k=n["man"].get("k"), node_id=n["node_id"],
                                         atom_key=n["man"].get("atom_key"),
@@ -1346,6 +1356,8 @@ class SteeredFrontier:
                                         radial_range=n["man"].get("radial_range"),
                                         radial_rings=n["man"].get("radial_rings"),
                                         screened=n["man"].get("screened")))
+        else:
+            self.man_passed_logged.update(n["node_id"] for n in newly)
         if take <= 0:
             return plain, pool[self.B:]
         reserved = man[:take]
@@ -1901,6 +1913,7 @@ class SteeredFrontier:
                 quota=self.man_quota, ks=[("none" if k is None else k) for k in self.man_ks],
                 lateral=self.man_lateral, probe_s=self.man_probe_s,
                 visited=sorted(self.man_visited), governor=self.man_gov.state_dict(),
+                passed_logged=sorted(self.man_passed_logged),
                 neighborhood=self.man_nbh, nbh_m=self.man_nbh_m, nbh_n=self.man_nbh_n,
                 nbh_probes=self.man_nbh_probes, range_prior=self.man_range_prior,
                 range_gain=self.man_range_gain, screen_s=round(self.man_screen_s, 3),
@@ -1935,6 +1948,7 @@ class SteeredFrontier:
         if self.maneuvers and "maneuvers" in st:
             m = st["maneuvers"]
             self.man_visited = set(m.get("visited", []))
+            self.man_passed_logged = set(m.get("passed_logged", []))
             self.man_probe_s = float(m.get("probe_s", 0.0))
             self.man_gov.load_state(m.get("governor", {}))
             self.man_screen_s = float(m.get("screen_s", 0.0))

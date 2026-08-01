@@ -63,6 +63,12 @@ def load_cases(log: Path, limit: int | None) -> list[dict]:
         r = json.loads(line)
         if r.get("op") != "lateral_to_sibling":
             continue
+        # `maneuvers.jsonl` is not homogeneous: the quota's passed-over records carry an
+        # `op` too but are frontier-node rows, with no parent view on them. They are not
+        # operator calls and cannot be replayed — filter on the field the replay NEEDS
+        # rather than on the absence of a marker, so a future row shape cannot slip in.
+        if r.get("parent_cx") is None or r.get("parent_fw") is None:
+            continue
         key = (r.get("batch"), r.get("parent_node_id"))
         if key in seen:
             continue
