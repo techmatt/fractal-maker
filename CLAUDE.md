@@ -171,6 +171,15 @@ The fixed base defaults are `scratch/renders/` (bare render) and `scratch/strips
 > (`tests/test_docs_tree.py` enforces that it is gone, that no source names it as a write target,
 > and that every file under `docs/` is tracked).
 
+> **Standing references — consult, don't rediscover.** Three maintained practice docs in
+> `docs/design/`, each read *before* the work rather than after:
+> [`verification_practice.md`](docs/design/verification_practice.md) before writing any test,
+> guard or gate; [`measurement_practice.md`](docs/design/measurement_practice.md) before
+> designing any measurement, eval, readout or run projection;
+> [`retired.md`](docs/design/retired.md) before proposing an approach that may have been
+> tried already. `retired.md` is append-only — a reversal is a new dated `UN-RETIRED` entry,
+> never an edit.
+
 > **Neither scratch tree is a dependency tier — and it fails in both directions.** `scratchpad/`
 > is the disposable temp dir (gitignored, currently empty); `scratch/` the disposable output
 > tree. **If a file is imported from outside `scratchpad/`, or is the only thing producing a

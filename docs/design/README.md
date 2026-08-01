@@ -30,6 +30,9 @@ the render core and pipeline; these docs go a level deeper on specific decisions
 | [q4_harvest_emission.md](q4_harvest_emission.md) | Wiring the q4 tight harvest (`tools/studies/q4_harvest_tight.py`, G-gated framings) into emission as a first-class source through intake → cells/deficit → colorize → gate/pool → select; and why `current-decode` in `load_admitted` is a firewall that bounds the blast radius of any resolver bug behind it. |
 | [julia_parent_sourcing_probe.md](julia_parent_sourcing_probe.md) | **Negative result.** Sourcing julia roots from the c-diverse near-∂M sampler does NOT reduce `precanon_dup` (93.6% vs 90.3% baseline): the churn is intra-`c` z-plane self-saturation, not cross-parent c-crowding. |
 | [prio_terms_park_note.md](prio_terms_park_note.md) | Park note for `prio_terms.jsonl` (one row per *pushed* candidate, incl. the never-admitted majority): what it is, where it lives, why it is retained unprocessed. |
+| [verification_practice.md](verification_practice.md) | **Read before writing any test or guard.** The eleven ways a guard ships green-and-useless, the absence-tolerant skip (this repo's most repeated defect), prove-it-red, relational invariants + their non-vacuity pairing, the too-easy fixture, differential-over-frozen-literal and its identity-drift caveat, functional parity over byte-exactness, and why `git ls-files` cannot answer an absence question. |
+| [measurement_practice.md](measurement_practice.md) | **Read before designing any measurement, eval, readout or projection.** Scope of a claim under range restriction, UNKNOWN-not-ABSENT, never characterizing from truncated output, verifying an instrument's inputs move before pre-registering a bar, matching on the confounder, run-order projection — then the project's own measurement lore (winner's curse, enumeration-vs-screening cost, the proxies that were never the target, partition-dependence). |
+| [retired.md](retired.md) | **Check before proposing an approach — it may have been tried.** Append-only register of retired approaches, one line each, pointing at the doc that owns the evidence. A reversal is a new dated `UN-RETIRED` entry, never an edit. |
 
 **Two sourcing docs, one boundary — pick by depth regime.** `deep_zoom_sourcing.md` is
 the **deep, beyond-f64 tier** (perturbation, ∂M-tracking, deep-center production) and is
@@ -40,12 +43,20 @@ doc's boundary note names those explicitly. If you want roster / screen / pre-fi
 window-label content, read `minibrot_sourcing.md`; if you want precision, the
 perturbation tier or deep-center production, read `deep_zoom_sourcing.md`.
 
-**The table indexes all 23 docs here** — every file gets a row, because an unindexed doc is
+**The table indexes all 26 docs here** — every file gets a row, because an unindexed doc is
 invisible, which is how one rots unnoticed. A new doc lands with its row or it does not land.
+
+**Three of them are practice docs, and they are consulted rather than read.**
+[`verification_practice.md`](verification_practice.md) before writing a test or guard,
+[`measurement_practice.md`](measurement_practice.md) before designing a measurement, and
+[`retired.md`](retired.md) before proposing an approach. They own the cross-cutting rules
+the subject docs would otherwise each restate; where a rule has an owner already, they
+point at it.
 
 The 1–4 human label scale is **not** here: it lives with the store it governs, in
 `data/label_corpus/CORPUS_SCHEMA.md` § label (`label_rubric.md` was retired into it).
-`[measured: 24 docs, 24 rows; 2026-07-31]`
+`[measured: 26 docs, 26 rows; 2026-07-31 — was stated as 24/24 while the tree held 23/23,
+stale by one since `label_rubric.md` was retired into the corpus schema]`
 `[cmd: ls docs/design/*.md | grep -vc README; grep -c '^| \[' docs/design/README.md]`
 
 **The dated-readouts carve-out is withdrawn, and the readouts are gone.** This README used to
