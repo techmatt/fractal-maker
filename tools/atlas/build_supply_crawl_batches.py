@@ -539,7 +539,9 @@ def stage_render(args) -> int:
     for b, v in left.items():
         print(f"  {b:42s} {v['rows'] - v['missing']:4d}/{v['rows']:4d} crops"
               + ("  COMPLETE" if v["complete"] else "  INCOMPLETE — not labelable"))
-    paths.scratch("supply_crawl", "render_state.json", mkparents=True).write_text(
+    rs = paths.scratch("supply_crawl", "render_state.json")
+    rs.parent.mkdir(parents=True, exist_ok=True)
+    rs.write_text(
         json.dumps(dict(stopped_during=stopped, per_batch=left,
                         NOTE=("resumable: re-run `render`, it skips crops that exist. A "
                               "batch marked INCOMPLETE must not be queued for labeling.")),
@@ -632,7 +634,8 @@ def stage_sheets(args) -> int:
     top = q5[:args.tiles]
     strat5 = vss.stratify(q5, args.tiles, args.seed)
     strat1 = vss.stratify(q1, args.tiles, args.seed + 1)
-    out = paths.scratch("supply_crawl", "sheets", mkparents=True)
+    out = paths.scratch("supply_crawl", "sheets")
+    out.mkdir(parents=True, exist_ok=True)
     vivid = out / "vivid"
     vivid.mkdir(parents=True, exist_ok=True)
     jobs = []
@@ -754,7 +757,8 @@ def stage_verify(args) -> int:
     else:
         check("feature table exists", False, str(fp))
     emit(f"\n{'ALL PASS' if ok else 'FAILURES ABOVE'}")
-    rep = paths.scratch("supply_crawl", "verify.txt", mkparents=True)
+    rep = paths.scratch("supply_crawl", "verify.txt")
+    rep.parent.mkdir(parents=True, exist_ok=True)
     rep.write_text("\n".join(L) + "\n", encoding="utf-8")
     return 0 if ok else 1
 

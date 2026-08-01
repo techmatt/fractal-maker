@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-01_supply_crawl_exemplar_v1",
+  "generator_version": "supply_crawl_v1",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 6031361,
+  "vivid_companion": "blue_orange",
+  "served_manifest": "blind.jsonl",
+  "queued_for_labeling": false,
+  "purpose": "top by exemplar similarity, excluding rows already in the other chunks. The direct test of 'closer to the exemplars = better'; registered as its own biased method so the answer reads AGAINST the stratified chunks.",
+  "counts": {
+    "total": 60
+  },
+  "registration": {
+    "assign_split": [
+      "train",
+      true,
+      "supply_crawl_exemplar"
+    ],
+    "registered_explicitly": true,
+    "NOTE": "registered in tools/v7/build_manifest BEFORE the build. The fail-closed default would also have landed this train-side, but 'nobody registered it' and 'this is a biased train draw' are different facts."
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 4,
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "blue_orange",
+    "maxiter": "deep_center_finder._maxiter_for_fw(fw) \u2014 the cap every other corpus batch builder renders crops under"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sampling_metaparameters": {
+    "population": "every recorded maneuver candidate of the crawl that the screen reached \u2014 pushed AND passed over; a candidate the 64x36 screen could not reach has no renderable crop",
+    "population_n": 7063,
+    "draw_seed": 20260801,
+    "composite_bin_edges": [
+      0.0,
+      0.118574,
+      1.311178,
+      3.863164
+    ],
+    "draw_order": "uniform FIRST, then the two stratified chunks, then the exemplar mini-chunk \u2014 so the uniform leg's selection is never conditioned on a score",
+    "selection": "top-N by exemplar_sim_max",
+    "g_used_for_selection": true,
+    "substrate": "field64x36_twilight_shifted_clip_vitb16"
+  }
+}

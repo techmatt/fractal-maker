@@ -207,6 +207,10 @@ __pycache__/
 # render+decode over every candidate (a full re-derivation, not a ledger replay). It
 # is the tau_h curve's data on record; ignoring it lost campaign1/2's — see
 # docs/design/discovery_pipeline.md §"tau_h on record".
+# The STOP sentinel is a CONTROL SIGNAL, not a run artifact — an empty file whose only
+# meaning is "halt at the next batch boundary". It was deleted from the tree once
+# (58bec40) without a rule to stop it coming back, and it came back.
+/data/discovery/**/STOP
 /data/discovery/**/scratch/
 /data/discovery/**/*.log
 /data/discovery/**/morph_mem.npz
@@ -254,6 +258,15 @@ __pycache__/
 /data/library/*
 !/data/library/library_records.jsonl
 !/data/library_embeddings/
+# The supply crawl's DRAW RECORD and FEATURE TABLE (2026-08-01,
+# tools/atlas/build_supply_crawl_batches.py). Small (hundreds of rows), and durable for the
+# reason `harvest_log.jsonl` is: the feature table is the join between a label that has not
+# been collected yet and the screen measures the candidate carried when it was drawn, keyed
+# on the `image_id` the labels will come back under. Re-deriving it later means re-deriving
+# the draw, and the draw is seeded off a population that lives in a run dir nothing promises
+# to keep. `paths.durable()` refuses to write here without this negation, which is how the
+# omission was caught rather than silently discarded.
+!/data/supply_crawl/
 /data/library_embeddings/*
 !/data/library_embeddings/embeddings.npz
 

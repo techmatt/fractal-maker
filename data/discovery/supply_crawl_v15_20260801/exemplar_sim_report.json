@@ -1,0 +1,110 @@
+{
+  "n": 7063,
+  "substrate": "field64x36_twilight_shifted_clip_vitb16",
+  "clip_model": "vit_base_patch16_clip_224.openai",
+  "colormap": "twilight_shifted",
+  "geometry": [
+    64,
+    36,
+    1
+  ],
+  "policy": "mi12000k0.3c4800-67000",
+  "exemplars": [
+    {
+      "key": "q4_neig_089",
+      "label": "the favourite (neighborhood_expand k16 d2 p43)",
+      "cx": "-0.6565829797781106821644",
+      "cy": "0.3719359208903791863335",
+      "fw": 6.3994681768e-08,
+      "family": "mandelbrot",
+      "verdict": "data/atlas/view_screen_gate.json v4.anchors.favourite",
+      "view_maxiter": 67000,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+    },
+    {
+      "key": "mb19_p35_16x",
+      "label": "mb19_p35 at 16x",
+      "cx": "-0.74977483272365342795786040375088960",
+      "cy": "0.10761724352653678278696798751738616",
+      "fw": 3.22784961136e-09,
+      "family": "mandelbrot",
+      "verdict": "view_screen.REF_VIEWS (the screen's own calibration reference)",
+      "view_maxiter": 67000,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+    },
+    {
+      "key": "minibroteye",
+      "label": "the minibrot eye at 4x",
+      "cx": "-0.746339",
+      "cy": "0.112242",
+      "fw": 0.000583,
+      "family": "mandelbrot",
+      "verdict": "view_screen.REF_VIEWS (the screen's own calibration reference)",
+      "view_maxiter": 56385,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+    },
+    {
+      "key": "sheet_0.4315736643657594157913,0.6630972938817363276017|None",
+      "label": "v2 Q5 sheet: lateral_to_sibling|None|d5|p26",
+      "cx": "0.43157366436575941579129889392300743",
+      "cy": "0.66309729388173632760167225179378150",
+      "fw": 0.0019443003649380018,
+      "family": "multibrot5",
+      "verdict": "data/atlas/view_screen_gate.json calibration_set.passed_tiles (interior 0.0655 <= the level Matt tolerated; a DERIVED positive, not a named verdict)",
+      "view_maxiter": 50129,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+    },
+    {
+      "key": "sheet_0.507689136828227493899,0.4566238941449259682125|16.0",
+      "label": "v2 Q5 sheet: neighborhood_expand|16.0|d3|p36",
+      "cx": "0.50768913682822749389897291889581548",
+      "cy": "0.45662389414492596821249403933468572",
+      "fw": 1.72078938288e-06,
+      "family": "multibrot3",
+      "verdict": "data/atlas/view_screen_gate.json calibration_set.passed_tiles (interior 0.0117 <= the level Matt tolerated; a DERIVED positive, not a named verdict)",
+      "view_maxiter": 67000,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+    },
+    {
+      "key": "sheet_-0.2073853933831916862304,1.0507503389511832254|16.0",
+      "label": "v2 Q5 sheet: snap_to_nucleus|16.0|d3|p40",
+      "cx": "-0.20738539338319168623038501537068332",
+      "cy": "1.0507503389511832253995974817374377",
+      "fw": 0.000532396650912,
+      "family": "multibrot3",
+      "verdict": "data/atlas/view_screen_gate.json calibration_set.passed_tiles (interior 0.0174 <= the level Matt tolerated; a DERIVED positive, not a named verdict)",
+      "view_maxiter": 56856,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+    },
+    {
+      "key": "corpus_mb0095_d5_p11_029_accepted",
+      "label": "corpus label 4: mb0095_d5_p11_029_accepted",
+      "cx": "0.6459993700410318",
+      "cy": "0.5139099960351162",
+      "fw": 0.000211635414,
+      "family": "multibrot5",
+      "verdict": "2026-07-26_minibrot_roster_v2/images.jsonl label.score=4",
+      "view_maxiter": 61647,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+    },
+    {
+      "key": "corpus_822_cmr.fusion",
+      "label": "corpus label 3: 822_cmr.fusion",
+      "cx": "-0.7443218217097564",
+      "cy": "-0.1647426033628334",
+      "fw": 0.00700582118203118,
+      "family": "mandelbrot",
+      "verdict": "2026-06-24_guided_descend_rev4occfix_v2filtered/images.jsonl label.score=3",
+      "view_maxiter": 43471,
+      "maxiter_policy_token": "mi12000k0.3c4800-67000"
+    }
+  ],
+  "exemplars_skipped": [],
+  "sim_max": {
+    "min": 0.6565018892288208,
+    "median": 0.9389616847038269,
+    "max": 0.9823020100593567
+  },
+  "NOTE": "RECORDED, never the crawl's ordering. Selects exactly once: the exemplar mini-chunk of the label batch, registered as its own biased draw.",
+  "out": "data\\discovery\\supply_crawl_v15_20260801\\exemplar_sim.jsonl"
+}
