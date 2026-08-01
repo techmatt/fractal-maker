@@ -376,11 +376,20 @@ def test_parse_k_spec():
 
 
 def test_default_k_set_carries_the_16x_wallpaper_frame_and_no_small_k():
-    # k=4 answers "is this atom good?"; k=16 is often a usable wallpaper frame by itself,
-    # which is the material worth labeling. A k < 1 frames INTO the atom — interior black.
-    assert mnv.parse_k_spec(sf.MAN_K_DEFAULT) == [None, 4.0, 16.0]
+    # k=16 is often a usable wallpaper frame by itself, which is the material worth
+    # labeling. A k < 1 frames INTO the atom — interior black.
+    #
+    # THE PUSH SET AND THE MEASURING FRAME ARE DIFFERENT THINGS, and this test is the one
+    # place that could have hidden them being conflated. 4x is the frame every orbital
+    # score is MEASURED on and `minibrot_maneuvers.DEFAULT_K` still carries it; the walk's
+    # PUSH set dropped it for k=8 on 2026-08-01, because a 4x frame is what the view
+    # screen's size band exists to demote (`steered_frontier.MAN_K_DEFAULT`). So the two
+    # constants are pinned SEPARATELY and are deliberately no longer equal.
+    assert mnv.parse_k_spec(sf.MAN_K_DEFAULT) == [None, 8.0, 16.0]
     assert list(mnv.DEFAULT_K) == [None, 4.0, 16.0]
+    assert 4.0 not in mnv.parse_k_spec(sf.MAN_K_DEFAULT)
     assert all(k is None or k >= 1.0 for k in mnv.DEFAULT_K)
+    assert all(k is None or k >= 1.0 for k in mnv.parse_k_spec(sf.MAN_K_DEFAULT))
 
 
 def test_degree_of_is_c_plane_only():

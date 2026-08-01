@@ -979,3 +979,143 @@ def test_the_readout_carries_both_confound_caveats():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# --------------------------------------------------------------------------- #
+# the v4 gate block — a REJECTION, pinned the same way the acceptances are
+# --------------------------------------------------------------------------- #
+def _v4():
+    return json.loads(GATE.read_text(encoding="utf-8"))["v4"]
+
+
+@pytest.mark.skipif(not GATE.exists(), reason="gate not run")
+def test_the_v4_gate_block_is_pinned_to_its_record():
+    """A rejected version's block is exactly as easy to lose as an accepted one's, and
+    losing it costs more: without §v4 nothing in the tree says the participation refinement
+    was tried. So the block is pinned on the three things that make it a record rather than
+    a leftover — that it sits BESIDE v2 and v3, that it holds the whole formulation history,
+    and that every one of them failed."""
+    g = json.loads(GATE.read_text(encoding="utf-8"))
+    v4 = g["v4"]
+    assert g["composite_version"] == "v2" and g["v3"]["composite_version"] == "v3"
+    assert v4["composite_version"] == "v4"
+    assert v4["bar_percentile"] == 80.0 and v4["screened_n"] == g["screened_n"]
+    forms = v4["formulations"]
+    assert len(forms) == 41, "the v4 formulation history must survive in the record"
+    assert not any(f["passed_gate"] for f in forms), \
+        "v4 is RETIRED; a passing formulation means the record and retired.md disagree"
+    # every family is present, and the two that were added AFTER the first grid failed are
+    # recorded IN THAT ORDER — a grid re-sorted to look planned is a different claim.
+    names = [f["name"] for f in forms]
+    assert names[0] == "v4_0_v3_baseline"
+    for fam, n in (("v4_cross_", 9 + 6), ("v4_tv_", 6), ("v4_bands_", 5),
+                   ("v4_pool_", 8), ("v4_cov_exp_", 6)):
+        assert sum(1 for n_ in names if n_.startswith(fam)) == n, fam
+    first_pool = min(i for i, n_ in enumerate(names) if n_.startswith("v4_pool_"))
+    last_part = max(i for i, n_ in enumerate(names)
+                    if n_.startswith(("v4_cross_0.34", "v4_tv_", "v4_bands_"))
+                    and "exp" not in n_)
+    assert first_pool > last_part
+
+
+@pytest.mark.skipif(not GATE.exists(), reason="gate not run")
+def test_the_v4_baseline_records_the_premise_that_turned_out_to_be_wrong():
+    """The proposal's whole motivation: under v3 the favourite is IN and the field of blue
+    is still in the top quintile. Both halves are recorded numbers, so if a later re-measure
+    moves either, the motivation is re-argued rather than inherited."""
+    base = {f["name"]: f for f in _v4()["formulations"]}["v4_0_v3_baseline"]
+    assert base["G6_favourite_in_top_quintile"] is True
+    assert base["favourite_decile"] == 10
+    assert base["G7_field_of_blue_out_of_top_quintile"] is False
+    assert base["named_bad"]["percentile"] >= 80.0
+    assert base["passed_gate"] is False
+
+
+@pytest.mark.skipif(not GATE.exists(), reason="gate not run")
+def test_the_crossing_clause_is_recorded_moving_the_target_the_WRONG_way():
+    """The measurement that refutes the causal story, pinned as a number. The clause was
+    supposed to demote the field of blue; on the population it RAISES it, because the tile's
+    coverage falls by less than the population's does."""
+    forms = {f["name"]: f for f in _v4()["formulations"]}
+    base = forms["v4_0_v3_baseline"]["named_bad"]["percentile"]
+    for floor in ("0.4", "0.45"):
+        assert forms[f"v4_cross_{floor}"]["named_bad"]["percentile"] > base, floor
+
+
+@pytest.mark.skipif(not GATE.exists(), reason="gate not run")
+def test_G4_and_G7_are_recorded_moving_together():
+    """The structural result, and the reason no coverage-side lever can win: the clause that
+    pushes the field of blue down pushes the dense k4 frames — which G4 needs OUT — up."""
+    forms = {f["name"]: f for f in _v4()["formulations"]}
+    base, cross = forms["v4_0_v3_baseline"], forms["v4_cross_0.45"]
+
+    def worst_dom(f):
+        return max(v["percentile"] for v in f["dominated"].values())
+    assert base["G4_named_dominated_out_of_top_quintile"] is True
+    assert cross["G4_named_dominated_out_of_top_quintile"] is False
+    assert worst_dom(cross) > worst_dom(base)
+
+
+@pytest.mark.skipif(not GATE.exists(), reason="gate not run")
+def test_the_pooling_family_is_recorded_as_the_near_miss_it_was():
+    """The family aimed at the mechanism the field actually shows. It is the only one that
+    clears G1-G6 together, and it still misses G7 — recorded because "we tried the right
+    thing and it was not enough" is a different finding from "we tried the wrong thing"."""
+    best = {f["name"]: f for f in _v4()["formulations"]}["v4_pool_16x3q25"]
+    for k in ("G1_refs_in_top_quintile", "G2_v2_bads_out_of_top_quintile",
+              "G3_eye_outranks_mb19", "G4_named_dominated_out_of_top_quintile",
+              "G5_passed_low_interior_stay_in_top_quintile",
+              "G6_favourite_in_top_quintile"):
+        assert best[k] is True, k
+    assert best["G7_field_of_blue_out_of_top_quintile"] is False
+    assert 80.0 <= best["named_bad"]["percentile"] <= 82.0, best["named_bad"]["percentile"]
+
+
+@pytest.mark.skipif(not GATE.exists(), reason="gate not run")
+def test_the_coverage_exponent_family_is_recorded_trading_G7_against_G4():
+    """The other lever, and the same trade: raising the exponent walks the field of blue
+    down toward the bar and breaks G4 before it gets there."""
+    forms = {f["name"]: f for f in _v4()["formulations"]}
+    ps = [forms[f"v4_cov_exp_{e:g}"]["named_bad"]["percentile"]
+          for e in (1.0, 1.5, 2.0, 3.0, 4.0)]
+    assert ps == sorted(ps, reverse=True), ps          # monotone toward the bar
+    assert ps[-1] >= 80.0, "it never actually crosses"
+    assert forms["v4_cov_exp_1"]["G4_named_dominated_out_of_top_quintile"] is True
+    assert forms["v4_cov_exp_1.5"]["G4_named_dominated_out_of_top_quintile"] is False
+
+
+@pytest.mark.skipif(not GATE.exists(), reason="gate not run")
+def test_the_favourite_is_identified_by_a_key_and_not_by_a_caption():
+    """Five rows share the tuple `neighborhood_expand k16 d2 p43`, so the caption does not
+    identify the tile. The anchor is keyed on the atom, and the fw is recorded beside it."""
+    a = _v4()["anchors"]
+    assert a["favourite"]["key"].endswith("|16.0")
+    assert abs(a["favourite"]["fw"] - 6.3994681768e-08) < 1e-18
+    assert "field of blue" in a["named_bad"]["label"]
+
+
+def test_the_live_sort_key_is_composite_v3():
+    """THE GUARD THE REJECTION NEEDS, and the one the v4 report named as missing. `v4` stays
+    live in code so the record re-derives from source — which is exactly what makes it
+    possible to ship it by accident, in a default argument nobody re-reads.
+
+    Asserted on behaviour where a default can be driven (`sweep_best` with an injected
+    measure), and on the SOURCE where the call site is a module-level default: there is no
+    input that makes `view_frame_sweep`'s or the sheets' choice of composite observable
+    without running the engine over a population."""
+    p = vs.ScreenParams(veto=0.3403, cap_range=21.3236, cap_rings=66.0)
+    # A field whose v3 and v4 coverage pairs DISAGREE, so the two composites are distinct
+    # and the assertion cannot pass by coincidence.
+    m = dict(screened=True, interior_fraction=0.0, radial_range=4.0, radial_rings=9.0,
+             band_coverage=0.9, band_coverage_q25=0.8,
+             band_coverage_v4=0.2, band_coverage_q25_v4=0.1)
+    assert vs.composite_v3(m, p) != vs.composite_v4(m, p)
+    got = vs.sweep_best("0", "0", 1e-3, p, measure=lambda cx, cy, fw, **kw: dict(m))
+    assert got["chosen_composite"] == round(vs.composite_v3(m, p), 6)
+
+    for mod in ("view_frame_sweep.py", "view_screen_sheets.py"):
+        src = (HERE / mod).read_text(encoding="utf-8")
+        assert "composite_v3" in src, mod
+        for line in src.splitlines():
+            bare = line.split("#", 1)[0]
+            assert "composite_v4(" not in bare or "_comp_v4" in bare, (mod, line)

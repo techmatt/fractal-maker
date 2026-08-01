@@ -901,13 +901,18 @@ def measure_references(*, threads: int = 3) -> dict:
         m = measure_view(r["cx"], r["cy"], fw, threads=threads)
         # The references are the ONE population the v4 gate compares formulations on that
         # is not in the field cache, so their whole formulation grid is recorded here.
+        # BOTH grids: `pooling_grid` was added when the pooling family was measured, and a
+        # reference that carries only one of them makes exactly half the gate unrunnable —
+        # which is how the pooling and coverage-exponent families ended up measured in a
+        # scratch report instead of in the durable record.
         if m.get("screened"):
             with tempfile.TemporaryDirectory() as td:
                 field, _ = fm.dump_field(r["cx"], r["cy"], fw, m["view_maxiter"],
                                          Path(td) / "f.bin", width=fm.SCREEN_W,
                                          height=fm.SCREEN_H, ss=fm.SCREEN_SS,
                                          threads=threads)
-            m = dict(m, coverage_grid=coverage_grid(field))
+            m = dict(m, coverage_grid=coverage_grid(field),
+                     pooling_grid=pooling_grid(field))
         out[r["key"]] = dict(label=r["label"], scale=r["scale"], cx=r["cx"], cy=r["cy"],
                              fw=fw, **m)
     return dict(

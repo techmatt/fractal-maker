@@ -81,6 +81,9 @@ from active_ckpt import ACTIVE_CKPT, auto_maxiter  # noqa: E402
 import deficit_scheduler as dsched       # noqa: E402  (pure; torch-free scheduling logic)
 import minibrot_maneuvers as mnv         # noqa: E402  (pure mpmath; no subprocess, no torch)
 import maneuver_screen as msc            # noqa: E402  (the field half: spawns the engine)
+import maneuver_view_screen as mvs       # noqa: E402  (the same, on the VIEW's own frame)
+import view_field_cache as vfc           # noqa: E402  (the run-local f32 field store)
+import view_screen as vscr               # noqa: E402  (composite_v3 + the reference params)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -139,11 +142,20 @@ def load_morph_anchors(cli_lo=None, cli_hi=None):
 # score / harvest machinery takes it from there. See docs/design/minibrot_maneuvers.md.
 MAN_QUOTA_DEFAULT = 4        # reserved frontier SLOTS per batch (a floor, not a probability)
 MAN_PROBE_P_DEFAULT = 0.25   # cost governor: P(probe fires) per popped rung
-# Framing set. k=4 answers "is this atom good?"; k=16 is often close to a usable wallpaper
-# frame by ITSELF, which is the material worth labeling — and it is free, because
+# Framing set. k=16 is often close to a usable wallpaper frame by ITSELF, which is the
+# material worth labeling — and every extra k is free of NEWTON cost, because
 # snap_to_nucleus_multi solves the nucleus once and reframes per k (a k is not a probe).
 # No small k: framing INTO the atom is interior black (docs/design/minibrot_maneuvers.md §7).
-MAN_K_DEFAULT = "none,4,16"
+#
+# WHY k=4 LEFT THE PUSH SET AND k=8 REPLACED IT (2026-08-01). 4x is the frame every orbital
+# score has ever been MEASURED on and it stays exactly that (`maneuver_screen.py`) — but as a
+# pushed picture it is the frame the view screen's size band exists to demote: the v3 gate's
+# calibration set is a series of k4 tiles Matt read as "minibrot too big" / dominated, at
+# interior 0.17-0.25 (`view_screen.py`, SIZE_BAND_EDGE). Pushing a framing the sort key is
+# built to rank down spends probe budget on material the same run then declines. k=8 sits
+# between it and 16 and is Newton-free for the same reason 16 is: one solve, three reframings.
+# A measuring frame and a pushed frame are different things, and this is the line between them.
+MAN_K_DEFAULT = "none,8,16"
 # --- v1.4: the richness screen and what may select on it -------------------------------
 # Every available candidate is SCREENED (both ring measures at 64x36 on the atom's 4x
 # frame, `maneuver_screen.py`) and the scores are RECORDED on the maneuver row and on the
@@ -172,12 +184,33 @@ MAN_NBH_PROBES_DEFAULT = mnv.NBH_MAX_PROBES
 #                     below the f64 spacing guard at 64 px; that is data, not an error)
 #   nbh_passed_over — neighbourhood candidates enumerated, screened and NOT in the top n
 #   quota_passed_over — available maneuver nodes the quota could not take THIS batch
+#   view_*          — the v1.5 VIEW screen's own reach, counted apart from the atom
+#                     screen's `man_screened`/`man_unscreenable` because they are
+#                     measurements on different frames and must never be summed.
 MAN_TOTALS = ("man_probes_rolled", "man_probes_fired", "man_probes_coin_skip",
               "man_probes_cache_skip", "man_op_available", "man_op_unavailable",
               "man_avail_unused", "man_nodes_pushed", "man_quota_bound",
               "man_quota_unfilled", "man_nodes_expanded", "man_admitted",
               "man_screened", "man_unscreenable", "man_screen_cache_hits",
-              "man_nbh_passed_over", "man_quota_passed_over", "man_frontier_pruned")
+              "man_nbh_passed_over", "man_quota_passed_over", "man_frontier_pruned",
+              "man_view_screened", "man_view_unscreenable", "man_view_vetoed",
+              "man_view_fields_cached")
+
+# --- v1.5: the VIEW-level screen selects (2026-08-01) -----------------------------------
+# The successor to `--maneuver-range-prior`. That flag selects on `radial_range` measured on
+# the ATOM's 4x frame; this one selects on `view_screen.composite_v3` measured on the frame
+# the candidate is actually PUSHED at. The retrospective study behind the change is
+# `orbital_field_metrics.md` §11: the atom score cannot see the two failures that dominated
+# the dry run's own top quintile (a nucleus-centred black blob, and one deep pocket setting a
+# large radial span across an otherwise flat frame), because both are failures of spatial
+# PARTICIPATION and the ring measures describe dynamic RANGE.
+#
+# The two flags are mutually exclusive by construction and the view screen REPLACES the atom
+# screen when it is on, rather than running beside it. Cost is the reason and it was priced
+# first: the view screen is ~3x the fields (one per k, against one shared across k), ~7.6% of
+# active on the exploration run's population; adding the atom screen's 2.6% on top crosses the
+# ~10% the screen is budgeted at, to produce a second number nothing would select on.
+MAN_VIEW_GAIN_DEFAULT = MAN_RANGE_GAIN_DEFAULT   # same bounded +/- gain/2 term, same reason
 FRONTIER_CAP = 6000      # prune the frontier to the top-N by priority (memory bound)
 MAN_FRONTIER_SHARE = 0.5  # ... of which maneuver nodes may hold at most this fraction. They
                           # are PROTECTED from the pooled priority prune, not exempt from the
@@ -740,6 +773,28 @@ class SteeredFrontier:
         self.man_nbh_probes = int(getattr(args, "maneuver_nbh_probes",
                                           MAN_NBH_PROBES_DEFAULT))
         self.man_screen_s = 0.0            # cumulative screen wall time, priced separately
+        # --- v1.5 VIEW screen. Built ONLY when the flag is on: the reference record has to
+        # be read and the field store has to be created, and doing either unconditionally
+        # would make an OFF run depend on `data/atlas/view_screen_refs.json` existing. The
+        # atom screen is skipped entirely while this is on (see MAN_VIEW_GAIN_DEFAULT). ---
+        self.man_view_prior = bool(getattr(args, "maneuver_view_prior", False))
+        self.man_view_gain = float(getattr(args, "maneuver_view_gain",
+                                           MAN_VIEW_GAIN_DEFAULT))
+        self.man_views = None
+        self.man_fields = None
+        self.man_comp_dist = msc.RangeDistribution()   # generic running-percentile tracker
+        if self.maneuvers and self.man_view_prior:
+            if self.man_range_prior:
+                raise SystemExit(
+                    "--maneuver-range-prior and --maneuver-view-prior both set. They are "
+                    "two sort keys for one seam (the 4x atom radial_range and the view's "
+                    "composite_v3) measured on different frames; running both would screen "
+                    "twice and let which one selected depend on argument order.")
+            self.man_view_params = vscr.screen_params(vscr.load_refs())
+            self.man_fields = vfc.RunFieldCache(self.run_dir / "view_fields",
+                                                policy=msc.screen_policy_token())
+            self.man_views = mvs.ViewScreenCache(self.man_view_params,
+                                                 fields=self.man_fields)
         # Wall-clock cap (0 = off). Distinct from --budget: see the check in run().
         self.wall_budget_s = float(getattr(args, "wall_budget", 0.0) or 0.0) * 60.0
         self.wall_s_base = 0.0             # wall seconds spent by PREVIOUS sessions
@@ -1155,7 +1210,8 @@ class SteeredFrontier:
                     and m.atom_key not in keep_nbh.get(item["nbh_group"], ())):
                 drop = "nbh_not_top_n"
             pushed += self._consume_maneuver(m, item["parent"],
-                                             scores.get(m.atom_key), passed_over=drop)
+                                             scores.get(self._screen_key(m)),
+                                             passed_over=drop)
         # mirror the governor's counters into totals (the checkpointed, resumable copy)
         g = self.man_gov
         self.totals["man_probes_rolled"] = g.n_rolled
@@ -1165,15 +1221,30 @@ class SteeredFrontier:
         self.totals["man_screen_cache_hits"] = self.man_screens.n_hits
         return pushed
 
+    def _screen_key(self, m) -> str:
+        """The key one screen record is filed under: the VIEW under v1.5, else the ATOM.
+
+        One function so the enumeration, the lookup and the cache can never disagree about
+        what a screened thing is — the bug that shape invites is a screen filed per view and
+        read back per atom, which silently hands one framing's numbers to another's."""
+        return (mvs.view_key(m.atom_key, m.k)
+                if getattr(self, "man_view_prior", False) else m.atom_key)
+
     def _screen_produced(self, produced: list[dict]) -> dict:
-        """Screen every DISTINCT available nucleus in this batch's enumeration, once.
+        """Screen every DISTINCT available candidate in this batch's enumeration, once.
 
         RECORDING, NEVER A GATE (the prompt's phrasing, and the reason this returns a dict
         rather than filtering `produced`): a candidate whose screen fails is still a
-        candidate. The run's radial_range distribution is fed here — from the screened
-        candidates only, which is the population the percentile is later taken against."""
+        candidate. The run's own score distribution is fed here — from the screened
+        candidates only, which is the population the percentile is later taken against.
+
+        WHICH screen is the v1.5 branch. Under `--maneuver-view-prior` the unit is the VIEW
+        (`atom|k`) at the frame that is actually pushed, and the atom screen does not run at
+        all; otherwise it is the ATOM at its 4x frame, exactly as v1.4 did."""
         if not produced:
             return {}
+        if getattr(self, "man_view_prior", False):
+            return self._screen_views(produced)
         jobs = []
         for item in produced:
             m = item["m"]
@@ -1200,11 +1271,57 @@ class SteeredFrontier:
                 self.totals["man_unscreenable"] += 1
         return scores
 
+    def _screen_views(self, produced: list[dict]) -> dict:
+        """The v1.5 half of `_screen_produced`: one field per DISTINCT VIEW, at its own frame.
+
+        A `k` is no longer free here and that is the point — under the atom screen one field
+        served every framing of a nucleus, because the 4x frame does not depend on `k`; a
+        view screen's frame IS `k`, so three framings are three fields. The cost was priced
+        against the exploration run before the k-set was fixed at three
+        (`maneuver_view_screen.py`, "THE COST").
+        """
+        jobs, seen = [], set()
+        for item in produced:
+            m = item["m"]
+            if not (m.available and m.atom_key and m.fw):
+                continue
+            key = mvs.view_key(m.atom_key, m.k)
+            if key in seen:
+                continue
+            seen.add(key)
+            jobs.append(dict(view_key=key, cx=m.cx, cy=m.cy, fw=m.fw, atom_key=m.atom_key,
+                             k=m.k, family=item["parent"]["partition"]))
+        if not jobs:
+            return {}
+        t0 = time.time()
+        before = set(self.man_views.by_key)
+        scores = self.man_views.screen_many(jobs, budget_s=self.unit_timeout_s())
+        self.man_screen_s += time.time() - t0
+        for key, rec in scores.items():
+            if key in before:                   # cache hit: already counted, already ranked
+                continue
+            if rec.get("screened"):
+                self.totals["man_view_screened"] += 1
+                self.man_comp_dist.add(rec.get("composite"))
+                if rec.get("vetoed"):
+                    self.totals["man_view_vetoed"] += 1
+            else:
+                self.totals["man_view_unscreenable"] += 1
+        self.totals["man_screen_cache_hits"] = self.man_views.n_hits
+        self.totals["man_view_fields_cached"] = self.man_views.n_fields_cached
+        return scores
+
     def _nbh_top_n(self, produced: list[dict], scores: dict) -> dict:
-        """Per parent node, the `n` neighbourhood atom keys to propose, by radial_range.
+        """Per parent node, the `n` neighbourhood atom keys to propose, by the live screen.
 
         Selection is by DISTINCT ATOM, not by row: a nucleus emits one row per `k`, and
-        ranking rows would spend the whole budget on the k-set of a single nucleus.
+        ranking rows would spend the whole budget on the k-set of a single nucleus. Under
+        v1.5 the sort key is the atom's BEST view — `max composite_v3` over its framings —
+        which is the right reduction for the question this selection asks ("is there a good
+        picture here?") and not the same as the mean, which would let two weak framings
+        outvote one strong one. Under v1.4 it is the atom's `radial_range`, one number for
+        the nucleus, which is why the reduction did not arise there.
+
         Unscreenable atoms sort LAST but are not excluded — the screen is a ranker here,
         not a gate, so an atom the 64 px geometry cannot reach still gets a slot if one is
         left over. Enumeration order breaks ties, which is what keeps a run with a totally
@@ -1215,8 +1332,18 @@ class SteeredFrontier:
             if item["nbh_group"] is None or not m.available:
                 continue
             g = groups.setdefault(item["nbh_group"], {})
+            rec = scores.get(self._screen_key(m)) or {}
+            if getattr(self, "man_view_prior", False):
+                cand = (1 if rec.get("screened") else 0,
+                        float(rec.get("composite") if rec.get("composite") is not None
+                              else -1e18), -i)
+                prev = g.get(m.atom_key)
+                # max over the atom's framings, and the tie-break stays the FIRST row's
+                # enumeration index so the ordering does not depend on which k won.
+                if prev is None or cand[:2] > prev[:2]:
+                    g[m.atom_key] = cand[:2] + (prev[2] if prev is not None else cand[2],)
+                continue
             if m.atom_key not in g:
-                rec = scores.get(m.atom_key) or {}
                 g[m.atom_key] = (1 if rec.get("screened") else 0,
                                  float(rec.get("radial_range") or 0.0), -i)
         keep = {}
@@ -1280,12 +1407,33 @@ class SteeredFrontier:
             man["radial_rings"] = screen.get("radial_rings")
             man["screened"] = bool(screen.get("screened"))
             man["screen_policy"] = screen.get("maxiter_policy_token")
+            # WHICH FRAME the two ring measures above were taken on. It is on the node and
+            # not only in the run config because a readout that joins two runs' rows would
+            # otherwise pool a 4x-atom `radial_range` with a view-frame one and report the
+            # mixture as one distribution. Same measure, different frames, never summed.
+            view_prior = getattr(self, "man_view_prior", False)
+            man["screen_frame"] = "view" if view_prior else "atom4x"
+            if view_prior:
+                for key in ("composite", "vetoed", "size_factor", "band_coverage",
+                            "band_coverage_q25", "interior_fraction", "view_fw"):
+                    man[key] = screen.get(key)
         prior = NEUTRAL_PRIOR
         if self.man_range_prior:
             pct = self.man_range_dist.percentile_of(
                 (screen or {}).get("radial_range") if (screen or {}).get("screened") else None)
             prior += msc.range_prior_delta(pct, self.man_range_gain)
             man["range_pct"] = round(pct, 4)
+        elif getattr(self, "man_view_prior", False):
+            # Against the run's OWN accumulating composite distribution, for the reason the
+            # range prior was: an absolute field number means nothing across geometries and
+            # cap policies, only an ordering within one pair does. An unscreened row draws
+            # the neutral 0.5, i.e. exactly no delta — not a penalty. A VETOED row does not:
+            # it has a composite in [-1, 0) and takes the percentile that score earns it,
+            # which is near the bottom of the run's population and is the intended demotion.
+            comp = (screen or {}).get("composite") if (screen or {}).get("screened") else None
+            pct = self.man_comp_dist.percentile_of(comp)
+            prior += msc.range_prior_delta(pct, self.man_view_gain)
+            man["composite_pct"] = round(pct, 4)
         self.frontier.append(dict(
             node_id=nid, root_id=parent["root_id"], partition=parent["partition"],
             c=parent["c"], cx=float(m.cx), cy=float(m.cy), fw=float(m.fw),
@@ -1327,12 +1475,15 @@ class SteeredFrontier:
         plain = pool[:self.B]
         plain_ids = {n["node_id"] for n in plain}
         man = [n for n in pool if n.get("man")]
-        if getattr(self, "man_range_prior", False) and man:
+        screen_sorted = getattr(self, "man_range_prior", False) or \
+            getattr(self, "man_view_prior", False)
+        if screen_sorted and man:
             # Unscreened sorts last (0 in the first key), never excluded — the screen ranks
             # the quota, it does not gate it. Ties keep the incoming priority order.
-            man = sorted(man, key=lambda n: (1 if n["man"].get("screened") else 0,
-                                             float(n["man"].get("radial_range") or 0.0)),
-                         reverse=True)
+            key = (mvs.composite_sort_key if getattr(self, "man_view_prior", False)
+                   else (lambda d: (1 if d.get("screened") else 0,
+                                    float(d.get("radial_range") or 0.0))))
+            man = sorted(man, key=lambda n: key(n["man"]), reverse=True)
         take = min(self.man_quota, len(man), self.B)
         self.totals["man_quota_unfilled"] += self.man_quota - take
         # ONCE PER NODE, not once per node per batch. A maneuver node that loses a quota
@@ -1344,7 +1495,7 @@ class SteeredFrontier:
         # passed over at least once; live backlog is `len(man)`, which is derivable.
         newly = [n for n in man[take:] if n["node_id"] not in self.man_passed_logged]
         self.totals["man_quota_passed_over"] += len(newly)
-        if getattr(self, "man_range_prior", False):
+        if screen_sorted:
             for n in newly:
                 self.man_passed_logged.add(n["node_id"])
                 self._log_maneuver(dict(batch=self.batch_i, op=n["man"].get("op"),
@@ -1355,6 +1506,8 @@ class SteeredFrontier:
                                         priority=n["priority"],
                                         radial_range=n["man"].get("radial_range"),
                                         radial_rings=n["man"].get("radial_rings"),
+                                        composite=n["man"].get("composite"),
+                                        screen_frame=n["man"].get("screen_frame"),
                                         screened=n["man"].get("screened")))
         else:
             self.man_passed_logged.update(n["node_id"] for n in newly)
@@ -1928,7 +2081,16 @@ class SteeredFrontier:
                 nbh_probes=self.man_nbh_probes, range_prior=self.man_range_prior,
                 range_gain=self.man_range_gain, screen_s=round(self.man_screen_s, 3),
                 screens=self.man_screens.state_dict(),
-                range_dist=self.man_range_dist.state_dict())
+                range_dist=self.man_range_dist.state_dict(),
+                view_prior=self.man_view_prior, view_gain=self.man_view_gain,
+                # The view cache checkpoints COMPACTLY (`maneuver_view_screen.STATE_KEYS`):
+                # what resumed selection reads back, not every measure. The full record is
+                # already durable twice — on the maneuver row and as the raw field — and a
+                # per-batch rewrite of ~25 MB to restate it is a cost, not a safeguard.
+                views=(self.man_views.state_dict() if self.man_views else None),
+                comp_dist=self.man_comp_dist.state_dict(),
+                view_fields=(dict(root=str(self.man_fields.root), n=self.man_fields.n)
+                             if self.man_fields else None))
         # morph memory + frontier-node embeddings first (state.json references them), then the
         # checkpoint. Both are heuristic (priority only) — a stale copy never loses an admission.
         self.morph.save()
@@ -1964,6 +2126,9 @@ class SteeredFrontier:
             self.man_screen_s = float(m.get("screen_s", 0.0))
             self.man_screens.load_state(m.get("screens") or {})
             self.man_range_dist.load_state(m.get("range_dist") or {})
+            if self.man_views is not None:
+                self.man_views.load_state(m.get("views") or {})
+            self.man_comp_dist.load_state(m.get("comp_dist") or {})
         self.rng.bit_generator.state = st["rng"]
         # scheduler prices/caps reload from the checkpoint; caps re-open on resume (item 4). The
         # distinct-look tally reloaded from its npz in the scheduler's __init__.
@@ -2213,10 +2378,20 @@ class SteeredFrontier:
                       + (f" (m={self.man_nbh_m} n={self.man_nbh_n} "
                          f"probes={self.man_nbh_probes})" if self.man_nbh else ""),
                       flush=True)
-                print(f"[maneuvers] screen at {msc.fm.SCREEN_W}x{msc.fm.SCREEN_H} on the "
-                      f"{msc.SCREEN_FRAME_MULT:g}x atom frame, cap policy "
-                      f"{msc.screen_policy_token()!r}; range_prior="
-                      f"{self.man_range_prior} (gain {self.man_range_gain})", flush=True)
+                if self.man_view_prior:
+                    p = self.man_view_params
+                    print(f"[maneuvers] VIEW screen at {msc.fm.SCREEN_W}x{msc.fm.SCREEN_H} "
+                          f"on each candidate's OWN frame, cap policy "
+                          f"{msc.screen_policy_token()!r}; sort key composite_v3 "
+                          f"(veto {p.veto}, caps {p.cap_range}/{p.cap_rings}, band "
+                          f"{p.band_edge}^{p.band_exp:g}); gain {self.man_view_gain}; "
+                          f"fields -> {self.man_fields.root} ({self.man_fields.n} present)",
+                          flush=True)
+                else:
+                    print(f"[maneuvers] screen at {msc.fm.SCREEN_W}x{msc.fm.SCREEN_H} on the "
+                          f"{msc.SCREEN_FRAME_MULT:g}x atom frame, cap policy "
+                          f"{msc.screen_policy_token()!r}; range_prior="
+                          f"{self.man_range_prior} (gain {self.man_range_gain})", flush=True)
             if self.scheduler is not None:
                 tf = {p: round(v, 3) for p, v in self.scheduler.target_frac.items()}
                 print(f"[scheduler] ON — target_frac={tf} "
@@ -2345,7 +2520,10 @@ class SteeredFrontier:
             tau_h=self.tau_h, totals=self.totals,
             cloud_sizes={p: len(v) for p, v in self.clouds.items()},
         )
+        vf = self.finalize_view_fields()
         summary["maneuvers"] = self.maneuver_summary()
+        if vf:
+            summary["maneuvers"]["view_fields_finalized"] = vf
         if self.scheduler is not None:
             summary["scheduler"] = self.scheduler.summary()
             # Stamp the seed provenance at the TOP level too, not only nested under
@@ -2417,6 +2595,14 @@ class SteeredFrontier:
                   f"dist n={m['range_dist_n']})  neighborhood={m['neighborhood']} "
                   f"(m={m['nbh_m']} n={m['nbh_n']} probes={m['nbh_probes']}, "
                   f"passed_over={m['nbh_passed_over']})")
+            if m["view_prior"]:
+                vshare = (f"{m['view_vetoed'] / m['view_screened']:.1%}"
+                          if m["view_screened"] else "n/a")
+                print(f"    VIEW screen: {m['view_screened']} scored / "
+                      f"{m['view_unscreenable']} unscreenable, {m['view_vetoed']} vetoed "
+                      f"({vshare} of scored)")
+                print(f"      composite dist n={m['view_dist_n']} gain={m['view_gain']}; "
+                      f"fields cached {m['view_fields_cached']} -> {m['view_fields']}")
         print(f"  ledger -> {self.ledger.path}\n  summary -> {self.run_dir/'summary.json'}")
 
     def maneuver_summary(self) -> dict:
@@ -2453,8 +2639,33 @@ class SteeredFrontier:
             screen_share_of_active=(self.man_screen_s / self.active_s
                                     if self.active_s > 0 else 0.0),
             range_dist_n=len(self.man_range_dist.values),
+            # --- v1.5: the view screen, counted APART from the atom screen above ---
+            view_prior=self.man_view_prior, view_gain=self.man_view_gain,
+            view_screened=t["man_view_screened"],
+            view_unscreenable=t["man_view_unscreenable"],
+            view_vetoed=t["man_view_vetoed"],
+            view_fields_cached=t["man_view_fields_cached"],
+            view_dist_n=len(self.man_comp_dist.values),
+            view_params=(None if not self.man_view_prior
+                         else dict(self.man_view_params._asdict())),
+            view_fields=(None if self.man_fields is None else str(self.man_fields.root)),
             log=str(self.man_log),
         )
+
+    def finalize_view_fields(self) -> dict | None:
+        """Write the retrospective index beside the run's append-only field store.
+
+        Called at the END of the run rather than per batch: `finalize` states what the store
+        holds, and a store that is still growing has no such statement to make. It is
+        idempotent and derived from the append index, so a resumed run re-finalizes over the
+        larger population and a killed run simply leaves the store un-finalized (still
+        readable through `RunFieldCache`, which is the format that tolerates a torn tail).
+        """
+        if self.man_fields is None:
+            return None
+        rep = self.man_fields.finalize()
+        self.man_fields.close()
+        return rep
 
 
 def set_below_normal_priority() -> str:
@@ -2596,6 +2807,21 @@ def main():
                     help=f"magnitude of the range prior term; the term is "
                          f"gain*(percentile-0.5), i.e. bounded to +/-gain/2 around the "
                          f"neutral prior (default {MAN_RANGE_GAIN_DEFAULT})")
+    # --- v1.5: the VIEW screen selects (recording is still unconditional) ---
+    ap.add_argument("--maneuver-view-prior", action="store_true",
+                    help="SUCCESSOR TO --maneuver-range-prior. Screen every candidate at the "
+                         "frame it is actually PUSHED at (64x36, one field per atom x k) and "
+                         "select on view_screen.composite_v3 instead of the 4x atom's "
+                         "radial_range: fill reserved quota slots by descending composite, "
+                         "rank the neighbourhood top-n by each atom's BEST framing, and "
+                         "replace the neutral prior with a bounded composite-percentile "
+                         "term. Replaces the atom screen rather than running beside it "
+                         "(~3x the fields). Mutually exclusive with --maneuver-range-prior. "
+                         "DEFAULT OFF — off is byte-identical selection.")
+    ap.add_argument("--maneuver-view-gain", type=float, default=MAN_VIEW_GAIN_DEFAULT,
+                    help=f"magnitude of the composite prior term; gain*(percentile-0.5), "
+                         f"i.e. bounded to +/-gain/2 around the neutral prior "
+                         f"(default {MAN_VIEW_GAIN_DEFAULT})")
     ap.add_argument("--maneuver-neighborhood", action="store_true",
                     help="ENABLE the third operator, neighborhood_expand: enumerate up to "
                          "m nearby nuclei around the solved nucleus, screen each, propose "

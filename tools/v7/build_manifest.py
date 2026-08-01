@@ -79,6 +79,28 @@ BLINDSPOT_BATCH = "2026-07-12_blindspot_v6reject_v1"
 # False, "loose0_v3"` default got backwards (it tagged every unregistered batch unbiased).
 UNBIASED_TRAIN_BATCHES = {"2026-06-23_flat_generate_loose0_v3"}  # flat unbiased re-labels
 
+# --- the 2026-08-01 supply crawl (three generation methods, registered BEFORE the build) ---
+# All three are TRAIN-side. Registering them explicitly rather than letting the fail-closed
+# default absorb them is the point: the default is a safety net, and a safety net records
+# "nobody thought about this batch", which is not what happened here. Each is named so a
+# later reader can tell the three draws apart in one place, which the shared default cannot.
+#
+#   STRATIFIED — round-robin over (degree x operator x composite-v3 bin) across ALL recorded
+#     candidates, pushed and passed over. A screen score chose the strata, so it is BIASED by
+#     construction; the low bins are in it precisely to supply the negative class.
+#   UNIFORM — uniform over the same recorded population with NO score anywhere in the
+#     selection. That makes it the one leg whose label distribution estimates the crawl's own
+#     base rate, so it is registered UNBIASED — but still TRAIN, not eval. Eval-eligibility
+#     would move the instrument the run is being measured against, and this run adopts no
+#     threshold and no checkpoint; that is a separate decision with its own evidence.
+#   EXEMPLAR — top by exemplar similarity, i.e. selected on a score, i.e. biased. It is its
+#     own method and not folded into the stratified chunks so that "closer to the exemplars
+#     = better" can be read AGAINST the stratified label distribution instead of out of it.
+SUPPLY_CRAWL_STRATIFIED_BATCHES = {"2026-08-01_supply_crawl_strat_a_v1",
+                                   "2026-08-01_supply_crawl_strat_b_v1"}
+SUPPLY_CRAWL_UNIFORM_BATCHES = {"2026-08-01_supply_crawl_uniform_v1"}
+SUPPLY_CRAWL_EXEMPLAR_BATCHES = {"2026-08-01_supply_crawl_exemplar_v1"}
+
 
 class UF:
     def __init__(self, n): self.p = list(range(n))
@@ -190,6 +212,12 @@ def assign_split(loc):
         return "train", True, "blindspot_v6reject"           # negative-by-construction
     if b in UNBIASED_TRAIN_BATCHES:
         return "train", False, "loose0_v3"                   # unbiased flat re-labels
+    if b in SUPPLY_CRAWL_STRATIFIED_BATCHES:
+        return "train", True, "supply_crawl_stratified"      # composite-v3-stratified draw
+    if b in SUPPLY_CRAWL_UNIFORM_BATCHES:
+        return "train", False, "supply_crawl_uniform"        # no score in the selection
+    if b in SUPPLY_CRAWL_EXEMPLAR_BATCHES:
+        return "train", True, "supply_crawl_exemplar"        # top-by-exemplar-similarity
     return "train", True, "unregistered"                     # FAIL CLOSED: biased-by-default
 
 

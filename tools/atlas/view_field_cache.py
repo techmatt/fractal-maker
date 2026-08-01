@@ -19,6 +19,14 @@ STORAGE CLASS: `scratch()`. It is a deterministic function of a durable input
 it is regenerable by re-running this file. It is large and it is disposable; nothing may
 depend on it surviving `rm -r scratch/*` (`docs/design/storage_classes.md`).
 
+TWO CACHES, ONE FORMAT. `FieldCache` is the RETROSPECTIVE one: a population is known up
+front, its key order is frozen in `index.json`, and the store is a fixed-size memmap. That
+shape cannot serve a live walk, whose population does not exist yet — so `RunFieldCache`
+(below) is the APPEND-ONLY sibling the run writes into as it screens. They share the
+dtype, the geometry and the `fields.f32` layout, and `RunFieldCache.finalize()` writes the
+retrospective pair (`index.json` + `valid.npy`) so a finished run's cache opens as a
+`FieldCache` for the post-label numpy pass. One format, two write patterns.
+
   uv run python tools/atlas/view_field_cache.py --run-dir data/discovery/maneuver_v14_exploration
   uv run python tools/atlas/view_field_cache.py --verify --limit 200      # cache vs engine
 """
@@ -140,6 +148,151 @@ class FieldCache:
     @property
     def n_valid(self) -> int:
         return int(np.asarray(self.valid).sum())
+
+
+# --------------------------------------------------------------------------- #
+# The append-only sibling: what a LIVE run writes into.
+# --------------------------------------------------------------------------- #
+RUN_INDEX_NAME, RUN_META_NAME = "index.jsonl", "meta.json"
+RUN_FORMAT = "view_field_cache/append/1"
+
+
+class RunFieldCache:
+    """Append-only field store for a walk that does not know its population in advance.
+
+    THE FAILURE THIS IS SHAPED AROUND is a kill mid-write, which for a long detached run is
+    the normal ending and not an exception. So the two writes are ordered: the field's
+    `rec_bytes` land at `i * rec_bytes` and are flushed FIRST, then one index line naming
+    `i` is appended and flushed. A kill between them leaves an orphan field that no index
+    line claims — and the next open recomputes `i` from the number of VALID index lines, so
+    the next `put` writes straight over it. There is no torn state that survives, and no
+    `.tmp` + rename either, because renaming a growing multi-hundred-MB store per field is
+    the cost this format exists to avoid.
+
+    A read truncates to `min(index lines, filesize // rec_bytes)`: an index line whose field
+    is not fully on disk is not a row, whatever the line says.
+
+    STORAGE CLASS is `scratch()`-equivalent even though it is written under the RUN dir: it
+    is a deterministic function of the run's own `maneuvers.jsonl` plus committed code and
+    the stamped cap policy. It lives beside the run because the run is what regenerates it
+    and because a post-label feature pass wants it next to the rows it describes; nothing
+    may depend on it surviving.
+    """
+
+    def __init__(self, root, *, policy: str = "", mode: str = "a"):
+        self.root = Path(root)
+        self.mode = mode
+        self.lock = threading.Lock()
+        self.rec_shape = (fm.SCREEN_H * fm.SCREEN_SS, fm.SCREEN_W * fm.SCREEN_SS)
+        self.rec_items = int(self.rec_shape[0] * self.rec_shape[1])
+        self.rec_bytes = self.rec_items * 4
+        self.fields_path = self.root / FIELDS_NAME
+        self.index_path = self.root / RUN_INDEX_NAME
+        self.meta_path = self.root / RUN_META_NAME
+        if mode == "a":
+            self.root.mkdir(parents=True, exist_ok=True)
+            if not self.meta_path.exists():
+                self.meta_path.write_text(json.dumps(dict(
+                    format=RUN_FORMAT, policy=policy, dtype=DTYPE,
+                    geometry=[fm.SCREEN_W, fm.SCREEN_H, fm.SCREEN_SS],
+                    note=("append-only view-field cache written live by the walk. Raw "
+                          "render-one --dump-field f32, NaN = did not escape. Disposable: "
+                          "a deterministic function of maneuvers.jsonl + committed code."),
+                ), indent=2) + "\n", encoding="utf-8")
+            self.fields_path.touch(exist_ok=True)
+        self.meta = json.loads(self.meta_path.read_text(encoding="utf-8"))
+        self.policy = self.meta.get("policy", "")
+        self.rows: list[dict] = []
+        self.pos: dict[str, int] = {}
+        self._load_index()
+        self._fh = open(self.fields_path, "r+b") if mode == "a" else None
+
+    def _load_index(self):
+        self.rows, self.pos = [], {}
+        if not self.index_path.exists():
+            return
+        on_disk = self.fields_path.stat().st_size // self.rec_bytes if \
+            self.fields_path.exists() else 0
+        for line in self.index_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except ValueError:                  # a torn final line is not a row
+                break
+            if int(r.get("i", -1)) != len(self.rows) or len(self.rows) >= on_disk:
+                break
+            self.rows.append(r)
+            self.pos[r["key"]] = int(r["i"])
+
+    # -- write ------------------------------------------------------------- #
+    def has(self, key: str) -> bool:
+        return key in self.pos
+
+    def put(self, key: str, field: np.ndarray, **meta) -> bool:
+        """Append one field. False iff the key is already stored (never an overwrite)."""
+        if self.mode != "a":
+            raise ValueError("RunFieldCache opened read-only")
+        arr = np.asarray(field, dtype=np.float32)
+        if arr.shape != self.rec_shape:
+            raise ValueError(f"{key}: field {arr.shape} != cache {self.rec_shape}")
+        with self.lock:
+            if key in self.pos:
+                return False
+            i = len(self.rows)
+            self._fh.seek(i * self.rec_bytes)
+            self._fh.write(arr.tobytes(order="C"))
+            self._fh.flush()
+            row = dict(i=i, key=key, **meta)
+            with open(self.index_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(row, default=str) + "\n")
+            self.rows.append(row)
+            self.pos[key] = i
+            return True
+
+    def close(self):
+        if self._fh is not None:
+            self._fh.close()
+            self._fh = None
+
+    # -- read -------------------------------------------------------------- #
+    def get(self, key: str):
+        i = self.pos.get(key)
+        if i is None:
+            return None
+        with open(self.fields_path, "rb") as f:
+            f.seek(i * self.rec_bytes)
+            buf = f.read(self.rec_bytes)
+        if len(buf) < self.rec_bytes:
+            return None
+        return np.frombuffer(buf, dtype=DTYPE).reshape(self.rec_shape)
+
+    def array(self) -> np.ndarray:
+        """The whole store as an `(N, H, W)` memmap — the post-label numpy pass."""
+        return np.memmap(self.fields_path, dtype=DTYPE, mode="r",
+                         shape=(len(self.rows),) + self.rec_shape)
+
+    @property
+    def n(self) -> int:
+        return len(self.rows)
+
+    def finalize(self) -> dict:
+        """Write the retrospective pair so `FieldCache(root)` opens this store read-only.
+
+        Derived from the index that is actually valid, never from the log the run was
+        driven by: a run killed mid-batch has fields the maneuver log does not yet name and
+        rows the cache never reached, and the store is the authority on what it holds.
+        """
+        keys = [r["key"] for r in self.rows]
+        (self.root / INDEX_NAME).write_text(json.dumps(dict(
+            keys=keys, policy=self.policy,
+            geometry=[fm.SCREEN_W, fm.SCREEN_H, fm.SCREEN_SS], dtype=DTYPE,
+            note=f"finalized from {RUN_FORMAT}; see {RUN_META_NAME}/{RUN_INDEX_NAME}.",
+        ), indent=2) + "\n", encoding="utf-8")
+        np.save(self.root / VALID_NAME, np.ones(len(keys), dtype=np.uint8))
+        return dict(root=str(self.root), n=len(keys), policy=self.policy,
+                    bytes=len(keys) * self.rec_bytes)
 
 
 # --------------------------------------------------------------------------- #

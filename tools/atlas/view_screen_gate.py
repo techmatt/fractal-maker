@@ -276,6 +276,48 @@ V4_FORMULATIONS = (
       for f in V4_FAMILIES["bands"]],
 )
 
+# --------------------------------------------------------------------------- #
+# The two families that were measured AFTER the participation grid failed
+# --------------------------------------------------------------------------- #
+# ORDER MATTERS AND IS PRESERVED. These were run after the 21 formulations above had all
+# failed, and they are appended rather than interleaved because that is the order it
+# happened in — a grid re-sorted into the order that makes the search look planned is a
+# different claim about the search than the one that is true.
+#
+# THEY EXIST BECAUSE THE PARTICIPATION HYPOTHESIS WAS AIMED AT THE WRONG THING. Measured on
+# the population, the dead area of the field of blue is one contiguous diagonal band, not a
+# frame of lazy span-only tiles — 42% of its tiles already fail v3 participation. What lets
+# it post covq25 = 0.50 is the POOLING: every 4x3 region catches part of the live diagonal,
+# so no region reads dead. So the lever is the region grid, not the tile indicator.
+#
+# NEITHER NEEDS A NEW FIELD PASS. Both are arithmetic on columns already on the row:
+# `pooling_grid` carries the v3 indicator pooled eight ways, and a coverage exponent is
+# `sqrt(a*b)^e == sqrt(a^e * b^e)`, i.e. the same recorded pair with each half raised to e.
+# That identity is why the exponent family can ride the same `composite_v4` substitution as
+# everything else instead of becoming a second composite.
+V4_POOLINGS = tuple(f"{bx}x{by}q{q:g}" for bx, by, q in vs.POOLING_GRID)
+V4_EXPONENTS = (1.0, 1.25, 1.5, 2.0, 3.0, 4.0)
+V4_EXP_CROSS = tuple((f, e) for f in (0.34, 0.40, 0.45) for e in (2.0, 3.0))
+
+V4_FORMULATIONS = V4_FORMULATIONS + (
+    *[dict(name=f"v4_pool_{p}", mode="pool", floor=None, pooling=p,
+           note="v3's tile indicator UNCHANGED; only the region grid the low quantile is "
+                "taken over moves. This is the family that actually addresses the measured "
+                "mechanism — it separates the two anchors ~5x where the participation "
+                "clause separates them ~1.2x.")
+      for p in V4_POOLINGS],
+    *[dict(name=f"v4_cov_exp_{e:g}", mode="exp", floor=None, exponent=e,
+           note="the coverage term raised to a power: how much the composite weighs "
+                "participation against richness, with the indicator untouched. e=1 is v3 "
+                "exactly, so the family brackets the shipped point.")
+      for e in V4_EXPONENTS],
+    *[dict(name=f"v4_cross_{f:g}_exp_{e:g}", mode="cross", floor=f, exponent=e,
+           note="both levers at once: the crossing participation clause AND a coverage "
+                "exponent. Recorded because 'each alone fails' does not imply 'together "
+                "they fail', and the combination is the last thing the family had left.")
+      for f, e in V4_EXP_CROSS],
+)
+
 
 def composite_v4_with(m: dict, p: vs.ScreenParams, f: dict) -> float:
     """`vs.composite_v4` reading the coverage pair recorded for formulation `f`.
@@ -284,16 +326,35 @@ def composite_v4_with(m: dict, p: vs.ScreenParams, f: dict) -> float:
     sort-to-bottom band all come from the production function, and only the two coverage
     columns are substituted. `mode=None` routes to `vs.composite_v3` for the same reason the
     v3 gate routed its baseline to `composite_v2` — the baseline must be the shipped code."""
-    if f["mode"] is None:
+    if f["mode"] is None and not f.get("exponent"):
         return vs.composite_v3(m, p)
     if not m.get("screened"):
         return float("-inf")
+    a, b = v4_coverage_pair(m, f)
+    e = float(f.get("exponent") or 1.0)
+    if e != 1.0:
+        # `sqrt(a*b)**e == sqrt(a**e * b**e)`. Raising the recorded PAIR rather than the
+        # composite keeps the exponent family inside the one substitution every other
+        # family uses, instead of forking a second composite that could drift from it.
+        a, b = a ** e, b ** e
+    return vs.composite_v4({**m, vs.COV_KEYS_V4[0]: a, vs.COV_KEYS_V4[1]: b}, p)
+
+
+def v4_coverage_pair(m: dict, f: dict) -> tuple:
+    """The `(band_coverage, band_coverage_q25)` pair formulation `f` reads off the row."""
+    if f["mode"] == "pool":
+        grid = m.get("pooling_grid")
+        if not grid:
+            raise SystemExit("the scores file carries no `pooling_grid` — re-score from the "
+                             "field cache (view_rescreen.py --from-cache) before running v4")
+        return tuple(grid[f["pooling"]])
+    if f["mode"] == "exp":
+        return float(m["band_coverage"]), float(m["band_coverage_q25"])
     grid = m.get("coverage_grid")
     if not grid:
         raise SystemExit("the scores file carries no `coverage_grid` — re-score from the "
                          "field cache (view_rescreen.py --from-cache) before running v4")
-    a, b = grid[f["mode"]][f"{f['floor']:g}"]
-    return vs.composite_v4({**m, vs.COV_KEYS_V4[0]: a, vs.COV_KEYS_V4[1]: b}, p)
+    return tuple(grid[f["mode"]][f"{f['floor']:g}"])
 
 
 def v3_q5_sheet(rows: list[dict], p: vs.ScreenParams) -> list[dict]:
@@ -403,6 +464,23 @@ def old_quintiles(rows: list[dict]) -> dict[str, int]:
     edges = [float(np.percentile(v, 20.0 * i)) for i in range(1, 5)]
     return {r["key"]: 1 + sum(1 for e in edges if r["atom_radial_range"] > e)
             for r in rows}
+
+
+def passed_tiles_record(passed: list[dict]) -> list[dict]:
+    """The sheet rows that cleared the interior level Matt tolerated, BY KEY.
+
+    Recorded because the block above records only the tiles that FAILED by name and a count
+    of the ones that did not — and a count is not an identification. Anything downstream
+    that wants "the tiles he passed" (the exemplar set, for one) would otherwise have to
+    regenerate the sheet, which is order-dependent and has already produced 0-of-5 agreement
+    once (§11.7, `--sheet-order`). One derivation, written down.
+    """
+    return [dict(key=r["key"], tile=f"{r['op']}|{r.get('k')}|d{r.get('degree')}|"
+                                    f"p{r.get('period')}",
+                 cx=r["cx"], cy=r["cy"], fw=float(r["fw"]),
+                 partition=r.get("partition") or "mandelbrot",
+                 interior_fraction=r.get("interior_fraction"))
+            for r in sorted(passed, key=lambda r: r["key"])]
 
 
 def run_gate(rows: list[dict], bads: dict[str, dict], refs: dict, veto: float) -> dict:
@@ -538,6 +616,7 @@ def run_gate_v3(rows: list[dict], bads: dict[str, dict], refs: dict,
                    "view_screen.composite_v2 + view_screen_sheets.stratify at seed "
                    f"{SHEET_SEED}",
             named_dominated=sorted(dom), n_passed=len(passed),
+            passed_tiles=passed_tiles_record(passed),
             passed_max_interior=PASSED_MAX_INTERIOR,
             unnamed_middle=[f"{r['op']}|{r.get('k')}|d{r.get('degree')}|"
                             f"p{r.get('period')} int={r['interior_fraction']}"
@@ -571,8 +650,8 @@ def run_gate_v4(rows: list[dict], bads: dict, refs: dict, p: vs.ScreenParams,
 
         def entry(m, _f=f, _pop=pop):
             x = composite_v4_with(m, p, _f)
-            cov = (None if _f["mode"] is None
-                   else m["coverage_grid"][_f["mode"]][f"{_f['floor']:g}"])
+            cov = (None if _f["mode"] is None and not _f.get("exponent")
+                   else list(v4_coverage_pair(m, _f)))
             return dict(composite=round(float(x), 4),
                         percentile=round(100.0 * float((_pop < x).mean()), 1),
                         coverage_v3=[m["band_coverage"], m["band_coverage_q25"]],
@@ -607,7 +686,8 @@ def run_gate_v4(rows: list[dict], bads: dict, refs: dict, p: vs.ScreenParams,
                         key=r["key"], **entry(r))
                    for r in sheet3]
         forms.append(dict(
-            name=f["name"], mode=f["mode"], floor=f["floor"], note=f["note"],
+            name=f["name"], mode=f["mode"], floor=f["floor"],
+            pooling=f.get("pooling"), exponent=f.get("exponent"), note=f["note"],
             references=ref_out, bads_v2=bad_out, dominated=dom_out, passed=pass_out,
             favourite=dict(label=list(NAMED_FAVOURITE.values())[0], **fav_e),
             favourite_decile=int(min(10, 1 + fav_e["percentile"] // 10)),
@@ -639,7 +719,8 @@ def run_gate_v4(rows: list[dict], bads: dict, refs: dict, p: vs.ScreenParams,
         calibration_set=dict(
             v3_q5_sheet="the 18 tiles of scratch/view_screen/sheet_new_q5.png, regenerated "
                         f"from view_screen.composite_v3 + stratify at seed {SHEET_SEED}",
-            named_dominated=sorted(dom), n_passed=len(passed)),
+            named_dominated=sorted(dom), n_passed=len(passed),
+            passed_tiles=passed_tiles_record(passed)),
         formulations=forms,
         **{fm.POLICY_KEY: fm.record_policy(ok[0] if ok else {})},
         HONESTY=("Same caveat as v3, one anchor stronger in one direction and one weaker in "

@@ -229,6 +229,18 @@ __pycache__/
 # trace, the within-run morph-embedding/dedup matrix, and the julia-hook seed-injection log
 # (kin to node_embs/morph_mem above — rebuildable from the ledger + generator, never source).
 /data/discovery/**/scheduler_trace.jsonl
+# The v1.5 run-local VIEW-FIELD store (tools/atlas/view_field_cache.RunFieldCache). It is
+# the one thing a maneuver run writes that is BULK and REGENERABLE at once: raw 64x36 f32
+# fields, ~9 KB a row and hundreds of MB a run, and a deterministic function of the run's
+# own maneuvers.jsonl (which IS committed) plus committed code and the stamped cap policy.
+# Nothing may depend on it surviving. Ignoring it by DIRECTORY and not by filename because
+# the store is three files that must move together — a half-committed cache is worse than
+# no cache, since `index.json` would then claim rows `fields.f32` does not hold.
+/data/discovery/**/view_fields/
+# ...and the crawl's stderr sidecar, which is the `*.log` rule's twin (a detached launch
+# splits the two streams; only the log half was covered).
+/data/discovery/**/*.err
+/data/discovery/**/launch.txt
 /data/discovery/**/distinct_looks.npz
 /data/discovery/**/julia_hooks.jsonl
 

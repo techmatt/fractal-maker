@@ -108,6 +108,17 @@ def load_population(logs: list[Path]) -> list[dict]:
                 cap_headroom=sc.get("cap_headroom"), clamped=sc.get("clamped"),
                 screen_policy=sc.get("maxiter_policy_token"),
                 used=bool(r.get("used")), unused_reason=r.get("unused_reason"),
+                # v1.5 VIEW-screen columns. All `.get`, so a v1.4 log (atom screen, 4x
+                # frame) loads unchanged with these as None — which is the honest reading:
+                # that run has no composite, rather than a composite of zero. `screen_frame`
+                # is what tells the two apart downstream, and its absence means 4x.
+                screen_frame=sc.get("screen_frame") or ("view" if "composite" in sc
+                                                        else "atom4x"),
+                composite=sc.get("composite"), vetoed=sc.get("vetoed"),
+                size_factor=sc.get("size_factor"),
+                band_coverage=sc.get("band_coverage"),
+                band_coverage_q25=sc.get("band_coverage_q25"),
+                view_fw=sc.get("view_fw"),
             ))
     return out
 

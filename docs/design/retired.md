@@ -134,3 +134,41 @@ an item's evidence, the line points at it rather than restating it.
   to a range, not to the axis. Evidence and the sharp-end caveat (top-100 overlap between a
   `rings` sort and a period sort is only 12%) are owned by `orbital_field_metrics.md` §6;
   the original retirement stands as written in `minibrot_sourcing.md` §11.
+
+- **2026-08-01 — the v4 "in-tile participation" refinement of `band_coverage`, RETIRED
+  BEFORE ADOPTION, together with the two families measured after it.** The proposal was
+  that a tile calling itself participating merely because it SPANS a colour cycle can be
+  satisfied by one lazy band, and that requiring band *structure* inside the tile would
+  demote the "field of blue" (`snap k16 d5 p16`) without touching the references. Three
+  structure statistics were run against the extended v4 gate — `cross` (band-boundary
+  crossings per in-tile pixel step, 9 floors), `tv` (mean |Δcycles| per step, 6) and
+  `bands` (distinct `floor(cycles)` per tile, 5) — under a selection rule written down
+  first: the least demanding `cross` floor satisfying G1–G7. **None of the 21 passed**, and
+  the reason is that the premise is false on the field: 42% of that tile's tiles ALREADY
+  fail v3 participation, and it reaches p83.5 because it is above median on BOTH factors
+  (coverage p64.6, richness p69.4), not because either is over-read. The crossing clause
+  moves it the WRONG way (p83.5 → p84.4 at floor 0.45) while re-promoting the k4 frames the
+  v3 size band exists to demote (p77.8 → p84.3).
+
+  Two further families were then measured and are retired with it. **Region pooling** (8
+  `BX×BY qQ` variants, v3's tile indicator unchanged) is the family that actually addresses
+  the measured mechanism — the dead area is one contiguous diagonal band that the 4×3 region
+  grid cannot isolate — and it separates the two anchors ~5× where the participation clause
+  separates them ~1.2×; its best variant `16×3q25` still cannot get the field of blue under
+  the bar, missing G7 at **p81.0** against 80.0. **Coverage exponents** (`cov^{1…4}`, 6) buy
+  p83.5 → p80.8 at `cov^4` but break G4 from `cov^1.5` onward, and the 6 exponent×crossing
+  combinations fail both clauses at once. G4 and G7 are 5.7 percentile points apart and
+  every coverage-side lever moves them together — that, not any one formulation, is the
+  result.
+
+  Scope of the retirement: the participation INDICATOR and these two re-weightings, as
+  candidates for the live sort key. `composite_v4`, `tile_structure`, `pooling_grid` and
+  `coverage_grid` all stay live in code — a record whose producer no longer exists cannot be
+  checked — and `composite_v3` remains the live sort key. What the iteration did leave behind
+  and is NOT retired is the field cache: the next per-tile statistic is a numpy pass rather
+  than a 17-minute engine pass over the population.
+  `[measured: 41 formulations, 16,440 candidates, 2026-08-01;
+  data/atlas/view_screen_gate.json §v4; orbital_field_metrics.md §11.7]`
+  `[code: tools/atlas/view_screen.py::{tile_structure,composite_v4,pooling_grid};
+  tools/atlas/test_view_screen.py::{test_the_v4_gate_block_is_pinned_to_its_record,
+  test_the_live_sort_key_is_composite_v3}]`

@@ -762,6 +762,113 @@ scratch/view_rescreen/sweep_v3.jsonl --keys-from scratch/view_rescreen/sweep.jso
 - **Winsorizing destroys ordering above the cap**, it does not compress it — two genuinely
   different very-rich frames tie and fall back to the window order.
 
+### 11.7 Composite v4 — measured and REJECTED, and what the field actually says (2026-08-01)
+
+**v4 does not ship. `composite_v3` is the live sort key.** 41 formulations were run against
+an extended gate and none passed. This section exists because the *negative* result is the
+durable part: it refutes a causal story about the screen that was plausible enough to be
+acted on twice, and it names the structural fact that replaces it.
+
+`[measured: 16,440 candidates of data/discovery/maneuver_v14_exploration, 64×36,
+mi12000k0.3c4800-67000; full per-formulation record in data/atlas/view_screen_gate.json §v4]`
+`[cmd: uv run python tools/atlas/view_screen_gate.py --scores scratch/view_rescreen/scores_v4.jsonl
+--sheet-order scratch/view_rescreen/scores.jsonl]`
+
+#### The gate, extended by two clauses
+
+G1–G5 are §11.3's and §11.6's. v4 adds two anchors drawn from the run's own output rather
+than from hand-picked reference views:
+
+* **G6 — the favourite is in the top quintile.** `q4_neig_089` (`neighborhood_expand k16 d2
+  p43`, `fw = 6.3995e-08`), the tile Matt picked out of the inspection sheets. It is a
+  **retention** clause and not a promotion: v3 already puts it at **p97.1, decile 10**, and
+  it holds D10 under 40 of the 41 formulations.
+* **G7 — the "field of blue" is out of it.** `snap k16 d5 p16`, `fw = 0.00568`, the tile from
+  the v3 Q5 sheet Matt named as the failure v4 was proposed to fix.
+
+#### The result, in one table
+
+| measure | favourite | **field of blue** | k4 dominated |
+|---|---|---|---|
+| `band_coverage` | p98.1 (0.91) | **p58.7 (0.58)** | p90.9 (0.82) |
+| `band_coverage_q25` | p97.8 (0.90) | **p66.3 (0.50)** | p85.9 (0.73) |
+| coverage term | p98.3 (0.90) | **p64.6 (0.54)** | p89.6 (0.77) |
+| richness (capped) | p91.4 (13.90) | **p69.4 (5.99)** | p96.4 (21.36) |
+| `size_factor` | 1.00 | 1.00 | 0.13 |
+| **composite v3** | **p97.1** | **p83.5** | **p77.8** |
+
+**The field of blue is above median on BOTH factors.** It reaches the top quintile because
+the product of two above-median, positively-correlated, heavy-tailed factors does. It is not
+being over-read by anything, and therefore no refinement of either factor demotes it.
+
+#### The premise v4 was built on is false
+
+The proposal was that `span ≥ 1 cycle` is satisfied by one lazy band, so a slow gradient
+"participates" with no structure in it. Measured: **42% of that tile's tiles already fail v3
+participation**. Its dead area is not lazy tiles — it is **one contiguous diagonal band**, and
+what lets it post `band_coverage_q25 = 0.50` is the **pooling**: every 4×3 region catches part
+of the live diagonal, so no region reads dead. The defect is in where the regions are drawn,
+not in what a tile has to hold.
+
+#### Three families, 41 formulations, and the shape of the failure
+
+| family | variants | result |
+|---|---|---|
+| `cross` — band-boundary crossings per in-tile pixel step, per-axis then max, in [0,1] | 9 floors 0.34–0.85 | G4+G7 fail at every usable floor; G1 (mb19) collapses at ≥0.67; at 0.85 everything collapses together |
+| `tv` — mean \|Δcycles\| per step, unbounded | 6 | G4+G7 fail at all |
+| `bands` — distinct `floor(cycles)` per tile | 5 | G4+G7 fail; G5 fails at ≥5 |
+| **region pooling** — v3's indicator, `BX×BY qQ` moved | 8 | best `16×3q25`: G1–G6 all pass, **G7 misses at p81.0** against the 80.0 bar |
+| **coverage exponent** — `cov^e` | 6 (1…4) | field of blue p83.5 → **p80.8** at `cov^4`; G4 breaks from `cov^1.5` |
+| exponent × crossings | 6 | both clauses fail together |
+
+Two facts do the explaining, and both are about the gate rather than about any formulation.
+
+**(a) The crossing clause moves the target the WRONG way.** At `cross 0.45` the field of blue
+goes p83.5 → **p84.4**: its own coverage falls ~42%, but the population's falls further, so it
+*rises*. A tightening that everything fails is not a demotion of anything.
+
+**(b) G4 and G7 are 5.7 percentile points apart and every coverage-side lever moves them
+together.** The k4 "dominated" frames are dense filigree, so they keep coverage while the
+population loses it: p77.8 → **p84.3** at `cross 0.45`, p90.3 at `cross 0.75`. G4 passes today
+with a **2.2-percentile margin** produced by fitting one integer exponent (§11.6 records
+`exp = 6` failing at p83.9 against `exp = 8` passing at p77.8). That margin is not robust to
+any change elsewhere in the composite, and every family above spent it.
+
+The pooling family is the one aimed at the measured mechanism, and it is the one that comes
+closest — it separates the two anchors **~5×** where the participation clause separates them
+~1.2× (at `8×3q10`: favourite 0.833 against field of blue 0.167) — and it still cannot get the
+field of blue under the bar without taking a reference with it. **It was added AFTER the
+participation grid had been run and failed, and is recorded in that order because that is the
+order it happened in.**
+
+#### What survives the rejection
+
+* **The field cache** (`tools/atlas/view_field_cache.py`). The v4 iteration's real cost was
+  that changing the per-tile indicator is a new statistic OF THE FIELD, and the field had been
+  thrown away — so the population had to be re-measured through the engine (16,440 fields,
+  1,013 s at four processes, 151 MB as `<f4`). Cached, the next per-tile statistic is a numpy
+  pass. **f32 and not f64**: the engine emits `<f4` and `rescore_lib` reduces in the input
+  dtype, so an f64 upcast moved `radial_range_p90` in the 4th decimal on ~2% of rows.
+* **`--sheet-order`.** `view_screen_sheets.stratify` seeds a shuffle *per cell*, so a
+  regenerated calibration sheet depends on the **row order of the scores file**, not only on
+  the composite and the seed. Re-scoring from the cache writes population order instead of
+  engine-completion order, and the regenerated v2 Q5 sheet then held **0 of its 5**
+  named-dominated tiles. `split_sheet` refused, as designed.
+* **`composite_v4`, `tile_structure`, `coverage_grid`, `pooling_grid` stay live in code** —
+  like `composite_v2` before them, so §v4 of the gate record re-derives from source rather
+  than being copied forward. A record whose producer no longer exists cannot be checked.
+
+#### What this section does NOT establish
+
+The v4 gate is still an **anchor tripwire against ~19 hand-named points**, now with one
+positive anchor drawn from the run's own output instead of two hand-picked references. It is
+not evidence that the composite ranks well in general, and **no label and no classifier has
+seen this population**. The negative anchor is ONE tile standing in for "examples like it", a
+class nobody has enumerated — which is why every formulation reports the whole 18-tile v3 Q5
+sheet with its verdict (`v3_q5_sheet_leaving_top_quintile`) rather than only the rows that
+fell. Under the survivable `cross` floors 0–2 of those 18 leave the top quintile and the field
+of blue is not among them: there is no pattern to check, because the formulation does not fire
+on the class.
 ---
 
 ## Corrections made against the record this doc was written from
