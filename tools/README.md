@@ -153,9 +153,12 @@ why that pool is a **candidate** list and nothing more:
   *"Install: copy to `.git/hooks/pre-commit`"*; this checkout has no such file, so the
   recurrence guard is not actually guarding. Left uninstalled — installing a hook that
   refuses commits is the repo owner's call.
-- **`data_large/` was deleted in this pass**, but `tests/occupancy_parity.rs`
-  (`#[ignore]`d) and `tools/viz/complexity_sort.html` still name `data_large/…` paths
-  whose corpus was already absent.
+- **`data_large/` was deleted in this pass**, leaving two files naming `data_large/…` paths
+  whose corpus was already absent. `tests/occupancy_parity.rs` was **deleted on 2026-07-31**
+  rather than repointed: it compared `energy::occupancy` against a persisted
+  `complexity_scores.json`, and both the crops and the `score_complexity.py` that produced
+  the reference numbers are gone, so there is no counterpart left to be parity *with*.
+  `tools/viz/complexity_sort.html` still names them.
 
 ## Two standing facts about this directory's shape
 
