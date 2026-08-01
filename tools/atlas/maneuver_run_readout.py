@@ -40,6 +40,11 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "tools"))
 
+try:                        # a readout that CRASHES on its own last print reports
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # a non-zero exit for a
+except Exception:           # cosmetic reason, after writing the file it was asked for.
+    pass
+
 import minibrot_maneuvers as mnv    # noqa: E402
 import paths                        # noqa: E402
 
@@ -130,7 +135,11 @@ def main() -> int:
         if (rd / "summary.json").exists() else {}
     state = json.loads((rd / "state.json").read_text(encoding="utf-8")) \
         if (rd / "state.json").exists() else {}
-    m = summary.get("maneuvers") or {}
+    # summary.json exists only for a FINISHED run; state.json is the live checkpoint. Fall
+    # through rather than defaulting, because the fallback default was the old quota (4) and
+    # a mid-run readout of a quota-8 run then reported the floor at 143% "of the quota" —
+    # a config the run is not using, printed as if it were the run's own denominator.
+    m = summary.get("maneuvers") or state.get("maneuvers") or {}
     tot = summary.get("totals") or state.get("totals") or {}
     finished = bool(summary)
 
