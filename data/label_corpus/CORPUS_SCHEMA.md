@@ -110,6 +110,16 @@ it was applied: of 21 human-labeled rows over the threshold, **21 were class 1 a
 Applied by `tools/corpus/apply_interior_rule.py`; label-store scope only — not a discovery gate,
 not applied to any historical batch.
 
+The two `label_seeded_v2` batches (2026-08-02) carry **no rule labels, and that is not an
+omission**: the same threshold is applied UPSTREAM, as a sourcing pre-filter, so a row over
+0.30 never becomes a candidate and never reaches a batch
+(`label_seeded_harvest.INTERIOR_DISCARD`, and `build_label_seeded_batches verify` asserts it on
+the built rows). Same rule, same measure, same frame, same strict `>` — moved from "auto-reject
+after the batch is built" to "never draw it", which is where Matt asked for it. The consequence
+for a reader is that these batches' label distributions are **not** comparable to the supply
+crawl's on the bad class: 81 of the crawl's 730 rows are class 1 by this rule and the
+equivalent rows are simply absent here.
+
 ### Revisions — the amendment overlay.
 An existing label can be **revised** (a q3 demoted to q2, or promoted to q4). Because a revision
 can move the `>=3` (good) boundary — demotions as well as promotions — and at least one batch is

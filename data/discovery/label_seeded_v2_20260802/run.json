@@ -1,0 +1,22 @@
+{
+  "stamp": "2026-08-02",
+  "gen_version": "label_seeded_v2",
+  "started": "2026-08-02T01:14:35",
+  "k_ladder": "none,8,16",
+  "interior_discard": 0.3,
+  "seed_snap_fw_mult": 0.75,
+  "budget_min": 115.0,
+  "wall_budget_min": 130.0,
+  "n_seeds": 511,
+  "seed_period_max": 128,
+  "max_found": 8,
+  "max_probes": 48,
+  "screen_policy": "mi12000k0.3c4800-67000",
+  "screen_params": {
+    "veto": 0.3403,
+    "cap_range": 21.3236,
+    "cap_rings": 66.0,
+    "band_edge": 0.12,
+    "band_exp": 8.0
+  }
+}

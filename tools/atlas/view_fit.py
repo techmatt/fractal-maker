@@ -203,6 +203,38 @@ FEATURE_ORDER = (
 FAMILY_FEATURES = ("degree", "log10_period")
 FEATURES_NO_FAMILY = tuple(f for f in FEATURE_ORDER if f not in FAMILY_FEATURES)
 
+# --------------------------------------------------------------------------- #
+# v1.1 (2026-08-02) — the variant that ORDERS a queue
+# --------------------------------------------------------------------------- #
+# `no_family` minus the two exemplar-similarity columns. Both removals are decisions with a
+# reason, and neither is a tuning choice:
+#   * `degree`/`log10_period` — `degree` IS the family on this population, so a POOLED queue
+#     sorted on a score carrying a degree coefficient allocates across families by that
+#     coefficient. That is the module doc's own scope argument, and the label-seeded harvest
+#     is exactly the pooled-queue case it was written for.
+#   * `exemplar_sim_max`/`_mean` — RETIRED as an ordering/steering feature on two null
+#     pre-registered reads (`retired.md`, 2026-08-02). A retired ordering feature cannot stay
+#     a column in the model that does the ordering, and the harvest does not compute it at
+#     all, so a model that needed it could not score the queue. The cost of the removal is
+#     measured, not assumed: `exemplar_read_a.drop_column_ap` (0.7158) is the same drop on
+#     the primary feature set and is ABOVE the full fit's 0.7118.
+EXEMPLAR_FEATURES = ("exemplar_sim_max", "exemplar_sim_mean")
+FEATURES_V11 = tuple(f for f in FEATURES_NO_FAMILY if f not in EXEMPLAR_FEATURES)
+
+# The C grid the nested selection chooses from, pre-registered. v1 asserted C=1.0 and
+# reported a flat `--c-sweep` beside it; v1.1 SELECTS, inside the cross-validation, so the
+# selection cannot see the fold it is scored on.
+#
+# THE GRID WAS WIDENED ONCE, AND WHY IS PART OF THE RESULT. The first grid stopped at 10 and
+# every outer fold picked 10 — the edge — with inner AP rising monotonically across it
+# (0.671 -> 0.729). A selection that lands on its grid boundary has not selected; it has run
+# out of grid. Extended to 1000 so the interior optimum is inside the search rather than
+# assumed, and the per-fold picks are recorded so an edge pick stays visible if it recurs.
+C_GRID = (0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0, 300.0, 1000.0)
+INNER_FOLDS = 4
+MODEL_ID_V11 = "view_fit_v1.1"
+RECORD_V11_REL = "data/atlas/view_fit_v1_1.json"
+
 
 def row_features(rec: dict, field_feats: dict) -> dict:
     """The full pre-registered feature dict for one `features.jsonl` row.
@@ -602,6 +634,146 @@ def run_fit(root: Path = ROOT, *, write=True, c_sweep=False) -> dict:
     return out
 
 
+# =========================================================================== #
+# v1.1 — nested-CV C selection on the strat legs, for the pooled queue
+# =========================================================================== #
+def _select_c(rows, features, *, grid=C_GRID, n_folds=INNER_FOLDS) -> tuple:
+    """The C maximising grouped-CV AP on `rows`. Returns `(best_C, {C: ap})`.
+
+    Grouped on the walk root like every other split here: a row is not the independent
+    unit, so a row-wise inner CV would let a sibling of the held-out row train the model
+    that scores it and would pick a C that is too weak a penalty.
+
+    Ties break to the LARGEST penalty (smallest C). A tie means the data does not
+    distinguish them, and preferring the more regularised model there is the choice that
+    does not silently buy variance for nothing.
+    """
+    from sklearn.model_selection import GroupKFold
+    X, _ = _design(rows, features)
+    y = np.array([1 if r["label"] >= TARGET_LABEL else 0 for r in rows], dtype=int)
+    g = np.array([r["group"] for r in rows])
+    n_folds = max(2, min(n_folds, len(set(g))))
+    aps = {}
+    for c in grid:
+        oof = np.full(len(rows), np.nan)
+        for tr, te in GroupKFold(n_splits=n_folds).split(X, y, groups=g):
+            spec, _ = _fit([rows[i] for i in tr], features, C=c)
+            m = FittedScore(spec)
+            oof[te] = [m.score(rows[i]["feats"]) for i in te]
+        aps[c] = _metrics(oof, y)["ap"]
+    best = max(grid, key=lambda c: (aps[c], -c))
+    return best, {str(c): aps[c] for c in grid}
+
+
+def _nested_oof(rows, features, *, grid=C_GRID, outer=N_FOLDS, inner=INNER_FOLDS):
+    """Out-of-fold logits under a NESTED grouped CV: C is chosen inside each outer fold.
+
+    This is the number the adoption question needs and `_oof` at a fixed C is not. Selecting
+    C on the same folds the score is then read off makes the readout optimistic by exactly
+    the amount the selection is worth — the selection has seen the test fold. Here the inner
+    CV runs on the outer TRAINING rows only, so the reported AP prices the whole procedure
+    (select C, fit, score) as it would run on data it has never seen.
+    """
+    from sklearn.model_selection import GroupKFold
+    X, _ = _design(rows, features)
+    y = np.array([1 if r["label"] >= TARGET_LABEL else 0 for r in rows], dtype=int)
+    g = np.array([r["group"] for r in rows])
+    oof = np.full(len(rows), np.nan)
+    picked = []
+    for tr, te in GroupKFold(n_splits=outer).split(X, y, groups=g):
+        sub = [rows[i] for i in tr]
+        c, _aps = _select_c(sub, features, grid=grid, n_folds=inner)
+        picked.append(c)
+        spec, _ = _fit(sub, features, C=c)
+        m = FittedScore(spec)
+        oof[te] = [m.score(rows[i]["feats"]) for i in te]
+    return oof, y, picked
+
+
+def run_fit_v11(root: Path = ROOT, *, write=True) -> dict:
+    """Fit, stamp and record `view_fit_v1.1` — the score the label-seeded queue is ordered by.
+
+    Same population, same target and the same grouped CV as v1. Three things move, each
+    named in the record so a later reader does not have to diff two files to find them:
+    the feature set (`FEATURES_V11`), the C (selected rather than asserted), and the scope
+    (this one is offered AS a sort key for a pooled sourcing queue).
+    """
+    rows = load_table(root)
+    fit_rows = [r for r in rows if r["leg"] in FIT_LEGS]
+    uni = [r for r in rows if r["leg"] == "uniform"]
+    y_fit = np.array([1 if r["label"] >= TARGET_LABEL else 0 for r in fit_rows])
+
+    best_c, inner_aps = _select_c(fit_rows, FEATURES_V11)
+    spec, _ = _fit(fit_rows, FEATURES_V11, C=best_c)
+    nested, y, picked = _nested_oof(fit_rows, FEATURES_V11)
+    spec["oof_nested"] = _metrics(nested, y)
+    spec["oof_nested_prec_at"] = _prec_at(nested, y, (20, 50, 100, 145))
+    spec["c_selected"] = best_c
+    spec["c_selected_per_outer_fold"] = picked
+    spec["c_grid_inner_ap"] = inner_aps
+    spec["model_id"] = MODEL_ID_V11
+
+    comp = np.array([r["composite_v3"] for r in fit_rows])
+    # The two incumbents this has to be read against, on the SAME rows: the live sort key,
+    # and v1's own no_family fit at its asserted C=1.0.
+    oof_nf, _ = _oof(fit_rows, FEATURES_NO_FAMILY)
+    out = dict(
+        schema_version=1, model_id=MODEL_ID_V11, stamp="2026-08-02",
+        supersedes=dict(record=RECORD_REL, variant="no_family",
+                        NOTE=("v1 stays as written and is not rewritten; this is a second "
+                              "record, so the population that produced it is unchanged.")),
+        target=f"label >= {TARGET_LABEL}",
+        scope=("sourcing-side ORDERING of a pooled candidate queue. Never a ranking of "
+               "finished images (that is production_pins.ACTIVE_CKPT) and never a "
+               "cross-family allocation — which is why no family term is in it."),
+        population=dict(n=len(rows), fit=len(fit_rows),
+                        fit_positives=int(y_fit.sum()),
+                        groups=len({r["group"] for r in fit_rows}),
+                        source=dict(features=FEATURES_REL, run=RUN_DIR_REL,
+                                    batches=sorted(BATCH_LEGS))),
+        cv=dict(scheme="GroupKFold", outer_folds=N_FOLDS, inner_folds=INNER_FOLDS,
+                group="walk root (partition:root_id)", c_grid=list(C_GRID),
+                selection="nested: C chosen on the outer fold's TRAINING rows only"),
+        features=dict(used=list(FEATURES_V11),
+                      dropped_family=list(FAMILY_FEATURES),
+                      dropped_exemplar=list(EXEMPLAR_FEATURES)),
+        models={"v11": spec},
+        readout=dict(
+            v11_nested_oof=spec["oof_nested"],
+            v11_fixed_c1_oof=_metrics(*_oof(fit_rows, FEATURES_V11, C=1.0)),
+            v1_no_family_oof_c1=_metrics(oof_nf, y_fit),
+            composite_v3_on_fit=_metrics(comp, y_fit),
+            ap_delta_v11_vs_composite=_boot_ap_delta(nested, comp, y_fit),
+            ap_delta_v11_vs_v1_no_family=_boot_ap_delta(nested, oof_nf, y_fit),
+            kept_missed_top_quartile=_kept_missed(nested, comp, y_fit, 145),
+            weights={f: round(float(c), 4) for f, c in
+                     zip(spec["features"], spec["coef"])},
+        ),
+    )
+    # The uniform leg is the one draw no score conditioned, so it is the only leg on which
+    # "does this order better than the incumbent" is asked of an unbiased sample. It is NOT
+    # a fit leg and never was; this is a read, not a selection.
+    m = FittedScore(spec)
+    p_uni = np.array([m.score(r["feats"]) for r in uni])
+    y_uni = np.array([1 if r["label"] >= TARGET_LABEL else 0 for r in uni])
+    out["readout"]["uniform_leg"] = dict(
+        fitted=_metrics(p_uni, y_uni),
+        composite_v3=_metrics([r["composite_v3"] for r in uni], y_uni),
+        ap_delta=_boot_ap_delta(p_uni, [r["composite_v3"] for r in uni], y_uni))
+    if write:
+        p = paths.durable(RECORD_V11_REL)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
+        print(f"wrote {p}")
+    return out
+
+
+def load_model_v11(path=None) -> FittedScore:
+    """The v1.1 score from its record — what `build_label_seeded_batches` orders on."""
+    p = Path(path) if path else paths.durable(RECORD_V11_REL)
+    return FittedScore(json.loads(p.read_text(encoding="utf-8"))["models"]["v11"])
+
+
 def _wilson(k: int, n: int, z: float = 1.96) -> list:
     if n == 0:
         return [0.0, 0.0]
@@ -681,12 +853,16 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     f = sub.add_parser("fit"); f.add_argument("--c-sweep", action="store_true")
     f.add_argument("--no-write", action="store_true")
+    f11 = sub.add_parser("fit11"); f11.add_argument("--no-write", action="store_true")
     s = sub.add_parser("sheet"); s.add_argument("-n", type=int, default=12)
     s.add_argument("--out")
     sub.add_parser("verify")
     a = ap.parse_args(argv)
     if a.cmd == "fit":
         out = run_fit(write=not a.no_write, c_sweep=a.c_sweep)
+        print(json.dumps(out["readout"], indent=1)[:4000])
+    elif a.cmd == "fit11":
+        out = run_fit_v11(write=not a.no_write)
         print(json.dumps(out["readout"], indent=1)[:4000])
     elif a.cmd == "sheet":
         build_sheet(n=a.n, out=a.out)

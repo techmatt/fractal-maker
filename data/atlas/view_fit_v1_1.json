@@ -1,0 +1,277 @@
+{
+ "schema_version": 1,
+ "model_id": "view_fit_v1.1",
+ "stamp": "2026-08-02",
+ "supersedes": {
+  "record": "data/atlas/view_fit_v1.json",
+  "variant": "no_family",
+  "NOTE": "v1 stays as written and is not rewritten; this is a second record, so the population that produced it is unchanged."
+ },
+ "target": "label >= 2",
+ "scope": "sourcing-side ORDERING of a pooled candidate queue. Never a ranking of finished images (that is production_pins.ACTIVE_CKPT) and never a cross-family allocation \u2014 which is why no family term is in it.",
+ "population": {
+  "n": 730,
+  "fit": 580,
+  "fit_positives": 149,
+  "groups": 195,
+  "source": {
+   "features": "data/supply_crawl/2026-08-01/features.jsonl",
+   "run": "data/discovery/supply_crawl_v15_20260801",
+   "batches": [
+    "2026-08-01_supply_crawl_exemplar_v1",
+    "2026-08-01_supply_crawl_strat_a_v1",
+    "2026-08-01_supply_crawl_strat_b_v1",
+    "2026-08-01_supply_crawl_uniform_v1"
+   ]
+  }
+ },
+ "cv": {
+  "scheme": "GroupKFold",
+  "outer_folds": 5,
+  "inner_folds": 4,
+  "group": "walk root (partition:root_id)",
+  "c_grid": [
+   0.03,
+   0.1,
+   0.3,
+   1.0,
+   3.0,
+   10.0,
+   30.0,
+   100.0,
+   300.0,
+   1000.0
+  ],
+  "selection": "nested: C chosen on the outer fold's TRAINING rows only"
+ },
+ "features": {
+  "used": [
+   "band_coverage",
+   "band_coverage_q25",
+   "log1p_radial_range",
+   "log1p_radial_rings",
+   "interior_fraction",
+   "log10_size_rel",
+   "falloff_rate",
+   "falloff_half",
+   "log10_fw",
+   "cap_headroom",
+   "clamped",
+   "composite_v3"
+  ],
+  "dropped_family": [
+   "degree",
+   "log10_period"
+  ],
+  "dropped_exemplar": [
+   "exemplar_sim_max",
+   "exemplar_sim_mean"
+  ]
+ },
+ "models": {
+  "v11": {
+   "features": [
+    "band_coverage",
+    "band_coverage_q25",
+    "log1p_radial_range",
+    "log1p_radial_rings",
+    "interior_fraction",
+    "log10_size_rel",
+    "falloff_rate",
+    "falloff_half",
+    "log10_fw",
+    "cap_headroom",
+    "clamped",
+    "composite_v3"
+   ],
+   "mean": [
+    0.48731966,
+    0.33965345,
+    1.39193308,
+    1.97904816,
+    0.13197,
+    -1.18496735,
+    3.75518781,
+    0.13736274,
+    -2.95149435,
+    0.84651224,
+    0.15172414,
+    2.37048652
+   ],
+   "scale": [
+    0.2412013,
+    0.27233904,
+    0.65236868,
+    0.87546141,
+    0.17681503,
+    0.68935537,
+    13.27280582,
+    0.07084293,
+    1.28376645,
+    0.21599714,
+    0.35875329,
+    4.10129768
+   ],
+   "coef": [
+    0.603413,
+    -0.003317,
+    -1.823593,
+    1.029955,
+    -7.015656,
+    0.685903,
+    -2.626602,
+    0.259025,
+    -1.145276,
+    0.473156,
+    -0.027964,
+    0.983984
+   ],
+   "intercept": -5.495671,
+   "impute": {
+    "band_coverage": 0.4861,
+    "band_coverage_q25": 0.3125,
+    "log1p_radial_range": 1.33100626,
+    "log1p_radial_rings": 2.01490302,
+    "interior_fraction": 0.0534,
+    "log10_size_rel": -0.90308999,
+    "falloff_rate": 2.18115,
+    "falloff_half": 0.123165,
+    "log10_fw": -2.81400475,
+    "cap_headroom": 0.93235,
+    "clamped": 0.0,
+    "composite_v3": 0.688827
+   },
+   "C": 30.0,
+   "n": 580,
+   "n_pos": 149,
+   "oof_nested": {
+    "ap": 0.7558,
+    "auc": 0.9021,
+    "spearman": 0.6085,
+    "base_rate": 0.2569,
+    "n": 580,
+    "n_pos": 149
+   },
+   "oof_nested_prec_at": {
+    "top20": 0.95,
+    "top50": 0.84,
+    "top100": 0.78,
+    "top145": 0.6897
+   },
+   "c_selected": 30.0,
+   "c_selected_per_outer_fold": [
+    100.0,
+    10.0,
+    300.0,
+    30.0,
+    1000.0
+   ],
+   "c_grid_inner_ap": {
+    "0.03": 0.6706,
+    "0.1": 0.6884,
+    "0.3": 0.704,
+    "1.0": 0.7189,
+    "3.0": 0.7244,
+    "10.0": 0.7293,
+    "30.0": 0.73,
+    "100.0": 0.7268,
+    "300.0": 0.7261,
+    "1000.0": 0.7268
+   },
+   "model_id": "view_fit_v1.1"
+  }
+ },
+ "readout": {
+  "v11_nested_oof": {
+   "ap": 0.7558,
+   "auc": 0.9021,
+   "spearman": 0.6085,
+   "base_rate": 0.2569,
+   "n": 580,
+   "n_pos": 149
+  },
+  "v11_fixed_c1_oof": {
+   "ap": 0.7236,
+   "auc": 0.8947,
+   "spearman": 0.5974,
+   "base_rate": 0.2569,
+   "n": 580,
+   "n_pos": 149
+  },
+  "v1_no_family_oof_c1": {
+   "ap": 0.7204,
+   "auc": 0.8938,
+   "spearman": 0.596,
+   "base_rate": 0.2569,
+   "n": 580,
+   "n_pos": 149
+  },
+  "composite_v3_on_fit": {
+   "ap": 0.5718,
+   "auc": 0.8153,
+   "spearman": 0.4775,
+   "base_rate": 0.2569,
+   "n": 580,
+   "n_pos": 149
+  },
+  "ap_delta_v11_vs_composite": {
+   "delta": 0.1819,
+   "lo": 0.1181,
+   "hi": 0.2466,
+   "n_boot": 2000
+  },
+  "ap_delta_v11_vs_v1_no_family": {
+   "delta": 0.0348,
+   "lo": 0.0069,
+   "hi": 0.0653,
+   "n_boot": 2000
+  },
+  "kept_missed_top_quartile": {
+   "k": 145,
+   "positives": 149,
+   "fit_keeps": 100,
+   "composite_keeps": 75,
+   "fit_only": 42,
+   "composite_only": 17,
+   "overlap_rows": 90
+  },
+  "weights": {
+   "band_coverage": 0.6034,
+   "band_coverage_q25": -0.0033,
+   "log1p_radial_range": -1.8236,
+   "log1p_radial_rings": 1.03,
+   "interior_fraction": -7.0157,
+   "log10_size_rel": 0.6859,
+   "falloff_rate": -2.6266,
+   "falloff_half": 0.259,
+   "log10_fw": -1.1453,
+   "cap_headroom": 0.4732,
+   "clamped": -0.028,
+   "composite_v3": 0.984
+  },
+  "uniform_leg": {
+   "fitted": {
+    "ap": 0.6046,
+    "auc": 0.8503,
+    "spearman": 0.5215,
+    "base_rate": 0.2444,
+    "n": 90,
+    "n_pos": 22
+   },
+   "composite_v3": {
+    "ap": 0.5341,
+    "auc": 0.8048,
+    "spearman": 0.4553,
+    "base_rate": 0.2444,
+    "n": 90,
+    "n_pos": 22
+   },
+   "ap_delta": {
+    "delta": 0.068,
+    "lo": -0.0828,
+    "hi": 0.2185,
+    "n_boot": 2000
+   }
+  }
+ }
+}

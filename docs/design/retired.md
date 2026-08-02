@@ -172,3 +172,45 @@ an item's evidence, the line points at it rather than restating it.
   `[code: tools/atlas/view_screen.py::{tile_structure,composite_v4,pooling_grid};
   tools/atlas/test_view_screen.py::{test_the_v4_gate_block_is_pinned_to_its_record,
   test_the_live_sort_key_is_composite_v3}]`
+
+- **2026-08-02 — exemplar similarity as an ORDERING / STEERING feature, retired on two null
+  pre-registered reads.** The hypothesis was "closer to the tiles Matt liked = better": each
+  of the supply crawl's 7,063 candidates carried a cosine to an 8-exemplar set on the
+  deterministic colour-mapped 64×36 field, and a 60-row mini-chunk was drawn top-by-similarity
+  to test it against the stratified chunks. Both reads were written down before the labels
+  came back and both came back null.
+
+  **Read (a) — does the column carry a coefficient?** In the `view_fit_v1` fit (580 rows, 149
+  positives, GroupKFold on the walk root) the standardized coefficients are `sim_max` +0.118
+  and `sim_mean` −0.086 against a largest-coefficient magnitude of 3.58, and their
+  group-bootstrap 95% CIs span zero in both directions: **[−0.369, +0.706]** and **[−0.788,
+  +0.417]**. Dropping both columns does not cost anything — OOF AP **0.7158 dropped against
+  0.7118 with them in**, i.e. the drop is *above* the full model, paired-bootstrap
+  ΔAP −0.0044 **[−0.0155, +0.0056]**.
+
+  **Read (b) — is the held-out leg's rate anything but its other features?** The model was
+  fitted on the stratified legs only and asked to predict the exemplar leg it had never seen.
+  Predicted `label >= 2` rate **0.6465**, realized **0.6333** (Wilson **[0.507, 0.744]**),
+  expected 38.8 against 38 realized on 60 rows. The leg's yield is exactly what its ordinary
+  screen features already say it should be; similarity adds nothing on top.
+
+  **And the one number that says why the mini-chunk could never have settled it on its own:**
+  `Spearman(composite_v3, exemplar_sim_max) = +0.442` over all 7,063, with the top-60-by-
+  similarity sitting at median composite **4.23** against the population's **0.58** — 55 of 60
+  rows in the top two composite bins. "Closer to the exemplars = better" is not separable from
+  "higher composite = better" out of that chunk; what makes the question answerable at all is
+  the stratified chunks spanning every bin, which is where both reads above were taken.
+
+  **Scope, and it is narrower than "the feature is useless".** Retired as an axis anything may
+  ORDER or STEER on: it is out of `view_fit_v1.1` (`FEATURES_V11`), which is the score the
+  label-seeded harvest's queue is ordered by, and the harvest does not compute it at all. Raw
+  similarity remains a perfectly good RECORDABLE feature if a future question wants it —
+  `tools/atlas/exemplar_similarity.py` stays live and the 730 supply-crawl rows keep their
+  recorded values, so the reads above stay re-derivable. Also unretired-by-omission: the
+  substrate itself (a deterministic colour map of the cached field) is close to blind to
+  palette-level qualities by construction, so this is a null on COMPOSITION similarity and
+  says nothing about a similarity measured on rendered crops.
+  `[measured: data/atlas/view_fit_v1.json §readout.exemplar_read_a / exemplar_read_b;
+  730 labeled rows, 2026-08-02]`
+  `[code: tools/atlas/view_fit.py::{FEATURES_V11,EXEMPLAR_FEATURES};
+  tools/atlas/test_label_seeded_harvest.py::test_v11_drops_the_family_and_the_exemplar_columns]`

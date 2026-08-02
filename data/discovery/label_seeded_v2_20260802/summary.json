@@ -1,0 +1,42 @@
+{
+  "halted_by": "seed_pool_exhausted",
+  "seeds_total": 511,
+  "seeds_done": 511,
+  "seeds_left": 0,
+  "active_min": 57.8,
+  "wall_min": 57.8,
+  "candidates_enumerated": 3021,
+  "candidates_kept": 2584,
+  "screened": 2743,
+  "drop_reasons": {
+    "interior_gt_30": 159
+  },
+  "totals": {
+    "snap_rows": 1533,
+    "snap_newton_solves": 37413,
+    "snap_available": 1073,
+    "nbh_rows": 2169,
+    "nbh_newton_solves": 316178,
+    "nbh_available": 1948,
+    "nbh_distinct_atoms": 652,
+    "dup_candidates": 278,
+    "screened": 2743,
+    "kept": 2584,
+    "seeds_done": 511,
+    "candidates_enumerated": 3021,
+    "candidates_kept": 2584,
+    "snap_unavail:no_nucleus_near_seed": 450,
+    "seed_no_nucleus": 150,
+    "nbh_unavail:no_nucleus_near_seed": 72,
+    "nbh_unavail:hit_parent": 138,
+    "nbh_unavail:f64_spacing_wall": 8,
+    "snap_unavail:f64_spacing_wall": 10,
+    "nbh_unavail:scale_too_large": 3
+  },
+  "fields": {
+    "root": "data\\discovery\\label_seeded_v2_20260802\\view_fields",
+    "n": 2743,
+    "policy": "mi12000k0.3c4800-67000",
+    "bytes": 25279488
+  }
+}

@@ -267,6 +267,15 @@ __pycache__/
 # to keep. `paths.durable()` refuses to write here without this negation, which is how the
 # omission was caught rather than silently discarded.
 !/data/supply_crawl/
+# The label-seeded harvest's SEED POOL, DRAW RECORD and FEATURE TABLE (2026-08-02,
+# tools/atlas/{label_seeded_harvest,build_label_seeded_batches}.py). Durable for the supply
+# crawl's reason above, plus one this harvest adds: the seed pool is a snapshot of which
+# corpus locations resolved to >= 3 ON THIS DATE, through the amendment overlay as it stood.
+# The overlay moves — the 2026-07-28 revisit pass alone promoted 338 rows and demoted 5 — so
+# re-deriving the pool later reconstructs a DIFFERENT population and silently re-labels what
+# this harvest was seeded from. The record keeps what was true when written
+# (`storage_classes.md`).
+!/data/label_seeded_harvest/
 /data/library_embeddings/*
 !/data/library_embeddings/embeddings.npz
 

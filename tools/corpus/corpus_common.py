@@ -116,6 +116,28 @@ PROVENANCE_KEYS = (
     "exemplar_sim_max", "exemplar_sim_mean", "exemplar_substrate",
     "screen_frame", "screen_policy", "op", "k", "degree", "period", "log10_abs_A",
     "window_scale", "parent_depth", "atom_key", "candidate_key", "used", "unused_reason",
+    # label-seeded harvest (2026-08-02, tools/atlas/label_seeded_harvest.py +
+    # build_label_seeded_batches.py). The screen block above is reused verbatim — same view
+    # frame, same `composite_v3`, same terms — so a row here and a supply-crawl row are the
+    # same measurement and CAN be pooled, which is the whole reason nothing is renamed.
+    # What is new is the seeding and the ordering. `method` ∈ {snap_at_seed,
+    # neighborhood_expand} is which of the two source-race winners produced the candidate and
+    # is one axis the chunks are stratified on (`degree` is the other). `seed_id`/
+    # `seed_batch_id`/`seed_image_id`/`seed_score` are the JUDGED-GOOD corpus row the harvest
+    # was seeded from — the pointer that makes the selection bias recoverable, since the
+    # population is conditioned on those verdicts. `fit_model`/`fit_score`/`queue_rank` are
+    # the ordering: `view_fit_v1.1`'s logit and the candidate's position in the ranked queue
+    # the chunks were taken from the top of. `falloff_rate`/`falloff_half`/`log10_size_rel`
+    # are the fitted score's three derived axes, recorded so the ordering is reproducible
+    # from the row without re-opening the field cache. `cap_headroom`/`clamped` say how far
+    # the screened frame sat below the stamped iteration cap. `f64_margin_deploy_decades` is
+    # the A-feasibility margin — RECORDED, never filtered on (the mb19 lesson).
+    # `parent_atom_id`/`scale_ratio_decades` place a neighbourhood row against the nucleus it
+    # was expanded from. Bias loop and analysis only; the classifier sees `render`.
+    "method", "seed_id", "seed_batch_id", "seed_image_id", "seed_score",
+    "fit_model", "fit_score", "queue_rank", "falloff_rate", "falloff_half",
+    "log10_size_rel", "cap_headroom", "clamped", "f64_margin_deploy_decades",
+    "parent_atom_id", "scale_ratio_decades",
 )
 
 

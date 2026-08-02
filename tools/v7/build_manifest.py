@@ -101,6 +101,19 @@ SUPPLY_CRAWL_STRATIFIED_BATCHES = {"2026-08-01_supply_crawl_strat_a_v1",
 SUPPLY_CRAWL_UNIFORM_BATCHES = {"2026-08-01_supply_crawl_uniform_v1"}
 SUPPLY_CRAWL_EXEMPLAR_BATCHES = {"2026-08-01_supply_crawl_exemplar_v1"}
 
+# --- the label-seeded harvest (2026-08-02) ---------------------------------------------
+# BIASED TWICE OVER, and both have to be said or the registration understates it.
+#   (1) the SEEDS are the corpus's own class-3/4 locations, so the population is conditioned
+#       on Matt's past verdicts — a q3 rate measured here estimates "the neighbourhood of
+#       things already judged good", never the discovery base rate; and
+#   (2) the QUEUE ORDER is a fitted score (`view_fit_v1.1`), and the two chunks are its top,
+#       so selection is on a model of the label as well.
+# ONE registered method for both chunks, not one per generation method, because the chunks
+# are stratified ACROSS (method x degree) by construction: every chunk holds both
+# `snap_at_seed` and `neighborhood_expand` rows, and `assign_split` classifies a BATCH. The
+# per-row method rides `provenance.method` and is what the stratification balanced on.
+LABEL_SEEDED_V2_BATCHES = {"2026-08-02_label_seeded_v2_a", "2026-08-02_label_seeded_v2_b"}
+
 
 class UF:
     def __init__(self, n): self.p = list(range(n))
@@ -218,6 +231,8 @@ def assign_split(loc):
         return "train", False, "supply_crawl_uniform"        # no score in the selection
     if b in SUPPLY_CRAWL_EXEMPLAR_BATCHES:
         return "train", True, "supply_crawl_exemplar"        # top-by-exemplar-similarity
+    if b in LABEL_SEEDED_V2_BATCHES:
+        return "train", True, "label_seeded_v2"              # judged-good seeds, fit-ordered
     return "train", True, "unregistered"                     # FAIL CLOSED: biased-by-default
 
 

@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-02_label_seeded_v2_b",
+  "generator_version": "label_seeded_v2",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 5872158722,
+  "vivid_companion": "blue_orange",
+  "served_manifest": "blind.jsonl",
+  "queued_for_labeling": false,
+  "purpose": "q3/q4 candidate supply seeded from the corpus's own class-3/4 locations (the source race's two top-rated sheets: nuclei at judged-good views, plus neighbourhood expansion around them), framed at k in {none,8,16}, screened at the view frame, interior>0.30 discarded at sourcing, and ordered by the fitted view_fit_v1.1 score. TRAIN-side biased twice over: the seeds are conditioned on past verdicts and the queue is ordered by a model of the label. No rate measured here is a base rate.",
+  "counts": {
+    "total": 289
+  },
+  "registration": {
+    "assign_split": [
+      "train",
+      true,
+      "label_seeded_v2"
+    ],
+    "registered_explicitly": true,
+    "NOTE": "registered in tools/v7/build_manifest BEFORE the build. The fail-closed default would also have landed this train-side, but 'nobody registered it' and 'this is a biased train draw' are different facts."
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 4,
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "blue_orange",
+    "maxiter": "deep_center_finder._maxiter_for_fw(fw) \u2014 the cap every other corpus batch builder renders crops under"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sampling_metaparameters": {
+    "population": "every candidate of the label-seeded harvest that the view screen reached and the interior>0.30 pre-filter kept",
+    "queue_n": 2584,
+    "model": "view_fit_v1.1",
+    "model_record": "data/atlas/view_fit_v1_1.json",
+    "selection": "top of the fit-ordered queue, round-robin to +/-1 over (method x degree), best-first within a cell",
+    "chunk_split": "one 2N round-robin draw split by stride, so both chunks are balanced on the same cells",
+    "g_used_for_selection": true,
+    "composite_v3_recorded_not_used_for_order": true,
+    "chunk": "2026-08-02_label_seeded_v2_b"
+  }
+}

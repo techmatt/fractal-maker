@@ -512,7 +512,7 @@ def neighborhood_expand(view: dict, rng, ks, *, degree: int = 2,
                         scale_up_tol: float = NBH_SCALE_UP_DECADES,
                         max_fw: float = MAX_FW, parent_rec: dict | None = None,
                         n_periods: int = LAT_N_PERIODS,
-                        low_sweep: int = LAT_LOW_SWEEP,
+                        low_sweep: int = LAT_LOW_SWEEP, deadline: float | None = None,
                         source: str = "maneuver_neighborhood") -> list[Maneuver]:
     """Enumerate up to `max_found` distinct nearby nuclei around the solved nucleus.
 
@@ -540,6 +540,15 @@ def neighborhood_expand(view: dict, rng, ks, *, degree: int = 2,
     `max_probes` is the ceiling on the bill, and it is the one that binds. In the sheet-3
     run 317 of 360 probes (88%) returned the parent itself, so a budget expressed as "find
     m" would have been an unbounded budget. Early-exits as soon as `max_found` is reached.
+
+    `deadline` (a `time.time()` value, default None = unbounded, which is byte-identical to
+    the pre-2026-08-02 behaviour) is the WALL bound on top of the probe bound. `max_probes`
+    prices the call in probes and a probe's own cost is not fixed: `pmax` scales with the
+    parent period, so a deep parent's probe can be 120 Newton solves at 50+ dps where a
+    shallow one is 15. A caller that must land inside a budget needs a bound in the units
+    its budget is denominated in (`CLAUDE.md`: a backstop longer than the job's budget is
+    not a backstop). Checked between probes, so it stops STARTING work rather than
+    abandoning a solve, and whatever was already found is still returned.
 
     K FRAMING IS AS FOR SNAP (§7.1): one enumeration, one `Maneuver` per (nucleus, k), and
     the whole enumeration's Newton solves are charged to the FIRST emitted row only — so
@@ -572,6 +581,10 @@ def neighborhood_expand(view: dict, rng, ks, *, degree: int = 2,
     reasons: dict = {}
     for _ in range(max(1, int(max_probes))):
         if len(found) >= int(max_found):
+            break
+        if deadline is not None and time.time() >= float(deadline):
+            last = "probe_deadline"
+            reasons[last] = reasons.get(last, 0) + 1
             break
         seed, rad = _draw_probe_seed(rng, radii, w_par, pcx, pcy)
         tried += 1
