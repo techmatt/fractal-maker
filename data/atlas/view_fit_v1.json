@@ -1,0 +1,408 @@
+{
+ "schema_version": 1,
+ "stamp": "2026-08-01",
+ "target": "label >= 2",
+ "population": {
+  "n": 730,
+  "fit": 580,
+  "uniform": 90,
+  "exemplar": 60,
+  "fit_positives": 149,
+  "rule_rows": 81,
+  "groups": 195,
+  "source": {
+   "features": "data/supply_crawl/2026-08-01/features.jsonl",
+   "run": "data/discovery/supply_crawl_v15_20260801",
+   "batches": [
+    "2026-08-01_supply_crawl_exemplar_v1",
+    "2026-08-01_supply_crawl_strat_a_v1",
+    "2026-08-01_supply_crawl_strat_b_v1",
+    "2026-08-01_supply_crawl_uniform_v1"
+   ]
+  }
+ },
+ "cv": {
+  "scheme": "GroupKFold",
+  "n_folds": 5,
+  "group": "walk root (partition:root_id)",
+  "C": 1.0
+ },
+ "models": {
+  "primary": {
+   "features": [
+    "band_coverage",
+    "band_coverage_q25",
+    "log1p_radial_range",
+    "log1p_radial_rings",
+    "interior_fraction",
+    "exemplar_sim_max",
+    "exemplar_sim_mean",
+    "degree",
+    "log10_period",
+    "log10_size_rel",
+    "falloff_rate",
+    "falloff_half",
+    "log10_fw",
+    "cap_headroom",
+    "clamped",
+    "composite_v3"
+   ],
+   "mean": [
+    0.48731966,
+    0.33965345,
+    1.39193308,
+    1.97904816,
+    0.13197,
+    0.93418697,
+    0.90167559,
+    3.52413793,
+    1.23218066,
+    -1.18496735,
+    3.75518781,
+    0.13736274,
+    -2.95149435,
+    0.84651224,
+    0.15172414,
+    2.37048652
+   ],
+   "scale": [
+    0.2412013,
+    0.27233904,
+    0.65236868,
+    0.87546141,
+    0.17681503,
+    0.03110956,
+    0.03270444,
+    1.11003423,
+    0.2947892,
+    0.68935537,
+    13.27280582,
+    0.07084293,
+    1.28376645,
+    0.21599714,
+    0.35875329,
+    4.10129768
+   ],
+   "coef": [
+    0.236279,
+    0.223528,
+    -0.979889,
+    0.956654,
+    -3.584396,
+    0.117657,
+    -0.085989,
+    0.291731,
+    -0.276007,
+    0.163331,
+    -0.865718,
+    -0.076742,
+    -0.91412,
+    0.539175,
+    -0.004845,
+    0.561353
+   ],
+   "intercept": -3.428749,
+   "impute": {
+    "band_coverage": 0.4861,
+    "band_coverage_q25": 0.3125,
+    "log1p_radial_range": 1.33100626,
+    "log1p_radial_rings": 2.01490302,
+    "interior_fraction": 0.0534,
+    "exemplar_sim_max": 0.939727,
+    "exemplar_sim_mean": 0.907159,
+    "degree": 4.0,
+    "log10_period": 1.23044892,
+    "log10_size_rel": -0.90308999,
+    "falloff_rate": 2.18115,
+    "falloff_half": 0.123165,
+    "log10_fw": -2.81400475,
+    "cap_headroom": 0.93235,
+    "clamped": 0.0,
+    "composite_v3": 0.688827
+   },
+   "C": 1.0,
+   "n": 580,
+   "n_pos": 149,
+   "oof": {
+    "ap": 0.7118,
+    "auc": 0.8941,
+    "spearman": 0.5965,
+    "base_rate": 0.2569,
+    "n": 580,
+    "n_pos": 149
+   },
+   "oof_prec_at": {
+    "top20": 0.8,
+    "top50": 0.86,
+    "top100": 0.71,
+    "top145": 0.6414
+   }
+  },
+  "no_family": {
+   "features": [
+    "band_coverage",
+    "band_coverage_q25",
+    "log1p_radial_range",
+    "log1p_radial_rings",
+    "interior_fraction",
+    "exemplar_sim_max",
+    "exemplar_sim_mean",
+    "log10_size_rel",
+    "falloff_rate",
+    "falloff_half",
+    "log10_fw",
+    "cap_headroom",
+    "clamped",
+    "composite_v3"
+   ],
+   "mean": [
+    0.48731966,
+    0.33965345,
+    1.39193308,
+    1.97904816,
+    0.13197,
+    0.93418697,
+    0.90167559,
+    -1.18496735,
+    3.75518781,
+    0.13736274,
+    -2.95149435,
+    0.84651224,
+    0.15172414,
+    2.37048652
+   ],
+   "scale": [
+    0.2412013,
+    0.27233904,
+    0.65236868,
+    0.87546141,
+    0.17681503,
+    0.03110956,
+    0.03270444,
+    0.68935537,
+    13.27280582,
+    0.07084293,
+    1.28376645,
+    0.21599714,
+    0.35875329,
+    4.10129768
+   ],
+   "coef": [
+    0.34191,
+    0.131403,
+    -1.379442,
+    0.936728,
+    -3.214083,
+    0.10115,
+    -0.044784,
+    0.301098,
+    -1.152713,
+    -0.047436,
+    -0.931868,
+    0.551256,
+    -0.016588,
+    0.646515
+   ],
+   "intercept": -3.260988,
+   "impute": {
+    "band_coverage": 0.4861,
+    "band_coverage_q25": 0.3125,
+    "log1p_radial_range": 1.33100626,
+    "log1p_radial_rings": 2.01490302,
+    "interior_fraction": 0.0534,
+    "exemplar_sim_max": 0.939727,
+    "exemplar_sim_mean": 0.907159,
+    "log10_size_rel": -0.90308999,
+    "falloff_rate": 2.18115,
+    "falloff_half": 0.123165,
+    "log10_fw": -2.81400475,
+    "cap_headroom": 0.93235,
+    "clamped": 0.0,
+    "composite_v3": 0.688827
+   },
+   "C": 1.0,
+   "n": 580,
+   "n_pos": 149,
+   "oof": {
+    "ap": 0.7204,
+    "auc": 0.8938,
+    "spearman": 0.596,
+    "base_rate": 0.2569,
+    "n": 580,
+    "n_pos": 149
+   },
+   "oof_prec_at": {
+    "top20": 0.75,
+    "top50": 0.86,
+    "top100": 0.73,
+    "top145": 0.6621
+   }
+  }
+ },
+ "readout": {
+  "composite_v3_on_fit": {
+   "ap": 0.5718,
+   "auc": 0.8153,
+   "spearman": 0.4775,
+   "base_rate": 0.2569,
+   "n": 580,
+   "n_pos": 149
+  },
+  "composite_v3_prec_at": {
+   "top20": 0.75,
+   "top50": 0.7,
+   "top100": 0.56,
+   "top145": 0.5172
+  },
+  "ap_delta_fit_vs_composite": {
+   "delta": 0.1393,
+   "lo": 0.0769,
+   "hi": 0.2012,
+   "n_boot": 2000
+  },
+  "kept_missed_top_quartile": {
+   "k": 145,
+   "positives": 149,
+   "fit_keeps": 93,
+   "composite_keeps": 75,
+   "fit_only": 36,
+   "composite_only": 18,
+   "overlap_rows": 95
+  },
+  "sensitivity_rule_rows_dropped": {
+   "n": 522,
+   "dropped": 58,
+   "oof": {
+    "ap": 0.7118,
+    "auc": 0.875,
+    "spearman": 0.5867,
+    "base_rate": 0.2854,
+    "n": 522,
+    "n_pos": 149
+   },
+   "composite_v3": {
+    "ap": 0.5719,
+    "auc": 0.7869,
+    "spearman": 0.4491,
+    "base_rate": 0.2854,
+    "n": 522,
+    "n_pos": 149
+   },
+   "coef": {
+    "band_coverage": 0.297362,
+    "band_coverage_q25": 0.20766,
+    "log1p_radial_range": -0.759219,
+    "log1p_radial_rings": 0.744483,
+    "interior_fraction": -3.402771,
+    "exemplar_sim_max": 0.010521,
+    "exemplar_sim_mean": -0.042071,
+    "degree": 0.356942,
+    "log10_period": -0.243961,
+    "log10_size_rel": 0.30901,
+    "falloff_rate": -0.465389,
+    "falloff_half": 0.036957,
+    "log10_fw": -0.917711,
+    "cap_headroom": 0.425873,
+    "clamped": 0.015473,
+    "composite_v3": 0.669392
+   }
+  },
+  "exemplar_read_a": {
+   "coef_sim_max": 0.117657,
+   "coef_sim_mean": -0.085989,
+   "max_abs_coef": 3.584396,
+   "drop_column_ap": 0.7158,
+   "full_ap": 0.7118,
+   "delta_ap": {
+    "delta": -0.0044,
+    "lo": -0.0155,
+    "hi": 0.0056,
+    "n_boot": 2000
+   },
+   "coef_ci95": {
+    "exemplar_sim_max": [
+     -0.3689,
+     0.7057
+    ],
+    "exemplar_sim_mean": [
+     -0.7884,
+     0.4168
+    ]
+   },
+   "univariate_spearman": {
+    "exemplar_sim_max": 0.1996,
+    "exemplar_sim_mean": 0.1608
+   }
+  },
+  "exemplar_read_b": {
+   "n": 60,
+   "predicted_rate": 0.6465,
+   "realized_rate": 0.6333,
+   "realized_ci95": [
+    0.5068,
+    0.7438
+   ],
+   "expected_count": 38.8,
+   "realized_count": 38,
+   "note": "in-sample-family caveat: the model was fitted on strat only, but the exemplar leg is a top-by-similarity draw, so its FEATURES are out of the fit leg's range on the similarity axis"
+  },
+  "uniform_leg": {
+   "fitted": {
+    "ap": 0.595,
+    "auc": 0.8496,
+    "spearman": 0.5205,
+    "base_rate": 0.2444,
+    "n": 90,
+    "n_pos": 22
+   },
+   "composite_v3": {
+    "ap": 0.5341,
+    "auc": 0.8048,
+    "spearman": 0.4553,
+    "base_rate": 0.2444,
+    "n": 90,
+    "n_pos": 22
+   },
+   "fitted_prec_at": {
+    "top10": 0.7,
+    "top20": 0.55,
+    "top30": 0.5667,
+    "top45": 0.4222
+   },
+   "composite_prec_at": {
+    "top10": 0.7,
+    "top20": 0.55,
+    "top30": 0.4333,
+    "top45": 0.4222
+   },
+   "ap_delta": {
+    "delta": 0.0587,
+    "lo": -0.0803,
+    "hi": 0.2032,
+    "n_boot": 2000
+   },
+   "kept_missed_top_23": {
+    "k": 23,
+    "positives": 22,
+    "fit_keeps": 13,
+    "composite_keeps": 12,
+    "fit_only": 4,
+    "composite_only": 3,
+    "overlap_rows": 18
+   }
+  },
+  "ge3_descriptive": {
+   "n": 730,
+   "positives": 14,
+   "class4": 0,
+   "fitted_in_top_73": 9,
+   "composite_in_top_73": 4,
+   "note": "14 positives, no fitted cut \u2014 a rate on 14 is not a bar"
+  },
+  "c_sweep": {
+   "0.1": 0.6719,
+   "1.0": 0.7118,
+   "10.0": 0.7427
+  }
+ }
+}
