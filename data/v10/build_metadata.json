@@ -891,6 +891,41 @@
     "why": "group ids are a dense enumeration per (fractal_type, c-bucket) partition, so appending 1,292 native-plane locations shifts the numbering. Nothing reads a group id across versions \u2014 the sampler uses group SIZE within one manifest and the gates use the partition \u2014 and GATE 12 asserts the partition over v8's rows is byte-for-byte v8's."
   },
   "deploy_note": "ACTIVE_CKPT NOT switched; no threshold touched; t_good NOT set; nothing trained by this build.",
+  "rollback_ladder": {
+    "note": "RECORD ONLY \u2014 this build adopts nothing. ACTIVE_CKPT is untouched and no threshold file is written by any tool in tools/v10/.",
+    "deployed_now": "v8",
+    "ladder_after_a_v10_adoption": [
+      "v10",
+      "v8",
+      "v7",
+      "v6",
+      "v5"
+    ],
+    "why_not_v9": "v9 was built, evaluated and STAGED but never adopted \u2014 its primary arm passed on inputs byte-identical to the baseline's, so the verdict was true and empty (auto_maxiter.md, 'Why v9 is shelved'). It is not a rung: a rollback to a version that was never deployed restores a gate that never ran.",
+    "must_revert_together": [
+      {
+        "what": "tools/scoring/production_pins.ACTIVE_CKPT",
+        "now": "data/classifier/v8/model_best.pt",
+        "why": "ACTIVE_VERSION derives from it, and with it every decode stamp (corpus_common.is_current_decoded, production_seeder.SCORER_VERSION)"
+      },
+      {
+        "what": "tools/atlas/production_seeder.T_GOOD_OVERRIDES",
+        "now": "the v8 table \u2014 mandelbrot 0.85 via F0.5, julia:multibrot{3,4,5} 0.39/0.14/0.20 via F2, five partitions UNCALIBRATED",
+        "why": "per-partition t_good is calibrated to one head's p_good scale (protocol \u00a74); reusing a cut across scales silently starves recall"
+      },
+      {
+        "what": "data/atlas/keeper_cuts.json",
+        "now": "stamped model='v8', derived from data/v8/eval_scores_v8.jsonl",
+        "why": "same scale-bound argument; tools/atlas/test_steered_frontier.py holds the stamp equal to ACTIVE_VERSION, so a forgetful flip goes RED"
+      },
+      {
+        "what": "tools/atlas/steered_frontier.TAU_H_FIDELITY_BASE + TAU_H_FIDELITY_BASE_MODEL, and data/atlas/tau_h_base_<v>.json",
+        "now": "vendored base model='v8'",
+        "why": "tau_h is a cut on a specific head's cheap p_good; the same test file asserts the vendored model equals ACTIVE_VERSION"
+      }
+    ],
+    "coherence": "all four currently agree on 'v8'"
+  },
   "aug_recipe": {
     "recipe": "v8b",
     "corpus_version": "v10",

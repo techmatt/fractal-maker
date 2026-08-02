@@ -199,6 +199,69 @@ def union_by_atom(all_locs, atom_of):
     return merges, spanning
 
 
+def rollback_ladder() -> dict:
+    """What an eventual v10 adoption would have to revert, READ from the live pins.
+
+    Not a hardcoded "v8": a rollback note that states the deployed version from memory is
+    the same species of bug as a metadata file with a hardcoded `True` — it outlives the
+    fact it records. Every version token below is read out of the module or artifact that
+    owns it, so if one of them moves without the others this block says so.
+
+    The thresholds are the point. `ACTIVE_CKPT` alone is not a rollback: `t_good`, the
+    keeper cut and the tau_h fidelity base are all calibrated to a specific head's `p_good`
+    SCALE (protocol §4), so leaving them pointed at v10's scale while the checkpoint goes
+    back to v8 silently starves or floods recall with no error anywhere."""
+    sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+    sys.path.insert(0, str(ROOT / "tools" / "atlas"))
+    import production_pins as pp
+    keeper = json.loads((ROOT / "data/atlas/keeper_cuts.json").read_text(encoding="utf-8"))
+    sf = (ROOT / "tools/atlas/steered_frontier.py").read_text(encoding="utf-8")
+    tau_model = None
+    for line in sf.splitlines():
+        if line.startswith("TAU_H_FIDELITY_BASE_MODEL"):
+            tau_model = line.split("=", 1)[1].strip().strip('"')
+            break
+    ps = (ROOT / "tools/atlas/production_seeder.py").read_text(encoding="utf-8")
+    return {
+        "note": ("RECORD ONLY — this build adopts nothing. ACTIVE_CKPT is untouched and no "
+                 "threshold file is written by any tool in tools/v10/."),
+        "deployed_now": pp.ACTIVE_VERSION,
+        "ladder_after_a_v10_adoption": ["v10", pp.ACTIVE_VERSION, "v7", "v6", "v5"],
+        "why_not_v9": ("v9 was built, evaluated and STAGED but never adopted — its "
+                       "primary arm passed on inputs byte-identical to the baseline's, so "
+                       "the verdict was true and empty (auto_maxiter.md, 'Why v9 is "
+                       "shelved'). It is not a rung: a rollback to a version that was "
+                       "never deployed restores a gate that never ran."),
+        "must_revert_together": [
+            {"what": "tools/scoring/production_pins.ACTIVE_CKPT",
+             "now": pp.ACTIVE_CKPT,
+             "why": "ACTIVE_VERSION derives from it, and with it every decode stamp "
+                    "(corpus_common.is_current_decoded, production_seeder.SCORER_VERSION)"},
+            {"what": "tools/atlas/production_seeder.T_GOOD_OVERRIDES",
+             "now": ("the v8 table — mandelbrot 0.85 via F0.5, julia:multibrot{3,4,5} "
+                     "0.39/0.14/0.20 via F2, five partitions UNCALIBRATED"
+                     if "0.85" in ps else "UNRECOGNIZED — read the table before rolling back"),
+             "why": "per-partition t_good is calibrated to one head's p_good scale "
+                    "(protocol §4); reusing a cut across scales silently starves recall"},
+            {"what": "data/atlas/keeper_cuts.json",
+             "now": f"stamped model={keeper['provenance']['model']!r}, derived from "
+                    f"{keeper['eval']}",
+             "why": "same scale-bound argument; tools/atlas/test_steered_frontier.py holds "
+                    "the stamp equal to ACTIVE_VERSION, so a forgetful flip goes RED"},
+            {"what": ("tools/atlas/steered_frontier.TAU_H_FIDELITY_BASE + "
+                      "TAU_H_FIDELITY_BASE_MODEL, and data/atlas/tau_h_base_<v>.json"),
+             "now": f"vendored base model={tau_model!r}",
+             "why": "tau_h is a cut on a specific head's cheap p_good; the same test file "
+                    "asserts the vendored model equals ACTIVE_VERSION"},
+        ],
+        "coherence": ("all four currently agree on "
+                      f"{pp.ACTIVE_VERSION!r}" if
+                      keeper["provenance"]["model"] == pp.ACTIVE_VERSION == tau_model
+                      else f"DISAGREEMENT: pins={pp.ACTIVE_VERSION!r} "
+                           f"keeper={keeper['provenance']['model']!r} tau_h={tau_model!r}"),
+    }
+
+
 def rule_labeled_join_keys():
     """The coordinate join_keys of every row the interior>30% rule labeled.
 
@@ -619,6 +682,7 @@ def main():
         },
         "deploy_note": ("ACTIVE_CKPT NOT switched; no threshold touched; t_good NOT set; "
                         "nothing trained by this build."),
+        "rollback_ladder": rollback_ladder(),
     }
     paths.durable(META_OUT, mkparents=True).write_text(json.dumps(meta, indent=2),
                                                        encoding="utf-8")
