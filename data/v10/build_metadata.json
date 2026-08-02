@@ -1,0 +1,894 @@
+{
+  "build": "v10",
+  "mode": "append_onto_frozen_prefix",
+  "prior_manifest": "data/v8/manifest.jsonl",
+  "scale": "1..4 ordinal (CORN K-1 = 3 cutpoints)",
+  "protocol": "classifier_retrain_protocol.md \u00a71 as written \u2014 v8's manifest is committed, so unlike the v8 build there IS a prefix to freeze. GATE 11 is the frozen-prefix gate; GATE 12 additionally pins v8's group partition (ids renumber, membership does not).",
+  "population": {
+    "labeled_crops": 9777,
+    "labeled_locations": 8443,
+    "manifest_rows": 8382,
+    "v8_prefix_rows": 7117,
+    "frozen_prefix_rows": 7115,
+    "displaced_prefix_rows": 2,
+    "appended_rows": 1267,
+    "groups": 6107,
+    "train": 7622,
+    "eval": 760,
+    "class_train": {
+      "1": 4707,
+      "2": 1842,
+      "3": 763,
+      "4": 310
+    },
+    "class_eval": {
+      "1": 429,
+      "2": 240,
+      "3": 69,
+      "4": 22
+    },
+    "per_family": {
+      "julia": {
+        "1": 541,
+        "2": 297,
+        "3": 172,
+        "4": 77
+      },
+      "julia_multibrot3": {
+        "1": 76,
+        "2": 55,
+        "3": 26,
+        "4": 19
+      },
+      "julia_multibrot4": {
+        "1": 51,
+        "2": 38,
+        "3": 33,
+        "4": 25
+      },
+      "julia_multibrot5": {
+        "1": 25,
+        "2": 31,
+        "3": 31,
+        "4": 24
+      },
+      "mandelbrot": {
+        "1": 3260,
+        "2": 678,
+        "3": 350,
+        "4": 100
+      },
+      "multibrot3": {
+        "1": 289,
+        "2": 283,
+        "3": 53,
+        "4": 9
+      },
+      "multibrot4": {
+        "1": 261,
+        "2": 307,
+        "3": 61,
+        "4": 8
+      },
+      "multibrot5": {
+        "1": 279,
+        "2": 257,
+        "3": 77,
+        "4": 16
+      },
+      "phoenix": {
+        "1": 354,
+        "2": 136,
+        "3": 29,
+        "4": 54
+      }
+    },
+    "per_batch_labeled_crops": {
+      "2026-06-23_flat_generate_loose0_v3": 1043,
+      "2026-06-24_guided_descend_rev4": 1176,
+      "2026-06-24_guided_descend_rev4occfix_v2filtered": 1066,
+      "2026-06-25_mining_v3guided_v1": 450,
+      "2026-06-25_scale_2x2_labelset": 600,
+      "2026-06-25_scale_controlled_2x2": 600,
+      "2026-07-05_gather_v6": 640,
+      "2026-07-11_jm3_band_v1": 58,
+      "2026-07-12_blindspot_v6reject_v1": 219,
+      "2026-07-12_jm45_band_v1": 71,
+      "2026-07-17_prospect_run1_baserate_R_v1": 86,
+      "2026-07-17_prospect_run1_baserate_v1": 83,
+      "2026-07-21_phoenix_grid": 500,
+      "2026-07-22_native_multibrot_band_v1": 300,
+      "2026-07-26_anchor_class4_v1": 8,
+      "2026-07-26_minibrot_roster_v2": 487,
+      "2026-07-27_interior_band_v1": 80,
+      "2026-08-01_supply_crawl_exemplar_v1": 60,
+      "2026-08-01_supply_crawl_strat_a_v1": 290,
+      "2026-08-01_supply_crawl_strat_b_v1": 290,
+      "2026-08-01_supply_crawl_uniform_v1": 90,
+      "2026-08-02_label_seeded_v2_a": 291,
+      "2026-08-02_label_seeded_v2_b": 289,
+      "julia_ladder_j0": 1000
+    }
+  },
+  "registration_change": {
+    "batch": [
+      "2026-08-01_supply_crawl_uniform_v1"
+    ],
+    "from": "unregistered -> fail-closed biased/train",
+    "to": "eval-eligible, unbiased, forced 100% eval (source 'maneuver_uniform_v1')",
+    "n_locations": 90,
+    "n_label_ge2": 22,
+    "why": "the only score-UNCONDITIONED draw over the maneuver-view population. The other three crawl legs are screen-stratified or exemplar-ordered and both harvest chunks are ordered by the fitted view_fit_v1.1 queue score, so all five are model/score-driven selection and stay train-side by the fail-closed default. Neither existing eval instrument covers this population: the census is julia:multibrot and loose0_v3 is a base-rate flat draw over the native mandelbrot plane, both predating the maneuver sweep.",
+    "decided_by": "Matt, 2026-08-02 (v10_build prompt)"
+  },
+  "new_batches": [
+    "2026-08-01_supply_crawl_exemplar_v1",
+    "2026-08-01_supply_crawl_strat_a_v1",
+    "2026-08-01_supply_crawl_strat_b_v1",
+    "2026-08-01_supply_crawl_uniform_v1",
+    "2026-08-02_label_seeded_v2_a",
+    "2026-08-02_label_seeded_v2_b"
+  ],
+  "rule_labeled_rows": {
+    "rule": "interior_gt30_v1 (provenance.interior_fraction > 0.30 -> class 1)",
+    "n": 81,
+    "by_split": {
+      "train": 57,
+      "DROPPED": 1,
+      "eval": 23
+    },
+    "note": "ordinary class-1 labels, not special-cased. The 23 that sit in the uniform leg stay in EVAL: removing them would condition the instrument's population on a quality-correlated rule, which is the bias the leg exists to avoid, and the pre-registered instrument is the whole 90 rows."
+  },
+  "eval_instruments": {
+    "census": {
+      "n": 144,
+      "source": "prospect_census",
+      "role": "pinned primary (julia:multibrot, unbiased-given-descent)"
+    },
+    "mandelbrot_floor": {
+      "n": 526,
+      "source": "loose0_v3_floor",
+      "role": "mandelbrot non-regression floor"
+    },
+    "maneuver_uniform": {
+      "n": 90,
+      "source": "maneuver_uniform_v1",
+      "role": "NEW secondary \u2014 the maneuver-view population"
+    }
+  },
+  "dropped_biased_in_forced_eval_group": {
+    "count": 61,
+    "by_fractal_type": {
+      "julia_multibrot3": 10,
+      "mandelbrot": 37,
+      "multibrot3": 6,
+      "multibrot4": 1,
+      "multibrot5": 7
+    },
+    "note": "v8's rule, unchanged: a forced-eval group holding a biased location cannot satisfy forced-100%-eval + 0-biased-in-eval + 0-straddle at once, so the biased neighbour is dropped. GATE 11 proves no v8 row was dropped by the new instrument.",
+    "locations": [
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.35925922475800743944115679029392885",
+        "cy": "-0.64251373713854234939823720472168235",
+        "fw": "0.01524541856169078",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8000032
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.052202239476687895",
+        "cy": "0.6530785439639304",
+        "fw": "0.020129405883550066",
+        "label": 1,
+        "batches": [
+          "2026-07-12_blindspot_v6reject_v1"
+        ],
+        "group_id": 8000066
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.59238886249161242925444932765033734",
+        "cy": "0.61932362779763902325143061064761379",
+        "fw": "0.0162568152736",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8000068
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7302280993771931",
+        "cy": "-0.21523013751531272",
+        "fw": "0.00831791525101414",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7288417801686907",
+        "cy": "-0.21384381830681037",
+        "fw": "0.00831791525101414",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7312096133768128",
+        "cy": "-0.2162116515149324",
+        "fw": "0.00831791525101414",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.73279580576606281779954089407984475",
+        "cy": "-0.21629178173519178035602555565931795",
+        "fw": "0.001957323448454283",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.73279580576606281779954089407984475",
+        "cy": "-0.21629178173519178035602555565931795",
+        "fw": "0.00999697605104",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8000071
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.3738510434941183",
+        "cy": "0.6599763895272843",
+        "fw": "0.007100269463234195",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000106
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.37251588876810127",
+        "cy": "0.6589372631484126",
+        "fw": "0.007274758201140728",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000106
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.3777262726723306",
+        "cy": "0.6557726660893494",
+        "fw": "0.008345906862037632",
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000106
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.4765734078917922",
+        "cy": "-0.5971422979865149",
+        "fw": "0.01864974014621652",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4"
+        ],
+        "group_id": 8000111
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.1405646079938638",
+        "cy": "-0.8719206503942228",
+        "fw": "0.014491151851802565",
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000112
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.3409277905013649",
+        "cy": "-0.5113213155124943",
+        "fw": "0.017017563434335845",
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000113
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.3351957706782975",
+        "cy": "-0.5109268593011472",
+        "fw": "0.014696329996913726",
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000113
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.01039584126040535",
+        "cy": "-0.653296115178306",
+        "fw": "0.017496955515103503",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.009990682135203679",
+        "cy": "-0.6478813926708532",
+        "fw": "0.016595254322723435",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.015797344438534356",
+        "cy": "-0.6564999937157059",
+        "fw": "0.015170436623483873",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.026323104324476265",
+        "cy": "-0.6523361783034691",
+        "fw": "0.014292821221927944",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.007418843866574114",
+        "cy": "-0.6424257467000308",
+        "fw": "0.013834505005201399",
+        "label": 1,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8000114
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-1.3540425290255775",
+        "cy": "-0.058325275041514746",
+        "fw": "0.014832318244368856",
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000121
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-1.3410708783448253",
+        "cy": "-0.06480700045392893",
+        "fw": "0.017910068936674104",
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000121
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-1.3477554964870251082764698613727223",
+        "cy": "-0.061315497264923919170216871234078374",
+        "fw": "0.0219778493816",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8000121
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.39091160445086415",
+        "cy": "-0.3688866660426195",
+        "fw": "0.017084107939967702",
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000129
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7183952785588381",
+        "cy": "-0.22905910512836158",
+        "fw": "0.010325479730229617",
+        "label": 1,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8000154
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.6437219719139099",
+        "cy": "0.37975497974476075",
+        "fw": "0.015915186012000912",
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000155
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-1.2493398314912227",
+        "cy": "-0.07296657178028607",
+        "fw": "0.013892417562227215",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000157
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7614524606843265",
+        "cy": "-0.08496026442928359",
+        "fw": "0.007577509231680098",
+        "label": 2,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8000161
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.7636790594608687",
+        "cy": "-0.08505224922624866",
+        "fw": "0.004483386210126114",
+        "label": 1,
+        "batches": [
+          "2026-07-12_blindspot_v6reject_v1"
+        ],
+        "group_id": 8000161
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.42257192752358974",
+        "cy": "-0.2084071894826743",
+        "fw": "0.009510247344558269",
+        "label": 1,
+        "batches": [
+          "2026-06-25_scale_2x2_labelset",
+          "2026-06-25_scale_controlled_2x2"
+        ],
+        "group_id": 8000172
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.5884443899977576",
+        "cy": "-0.45736158583323655",
+        "fw": "0.007470996881059335",
+        "label": 1,
+        "batches": [
+          "2026-06-24_guided_descend_rev4occfix_v2filtered"
+        ],
+        "group_id": 8002891
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.59109089558339107105786486642715619",
+        "cy": "-0.45777018842203794916433912246645746",
+        "fw": "0.00819654961629704",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8002891
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "2.121320343559643",
+        "label": 2,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8005495
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.15283133487459447",
+        "cy": "0.0",
+        "fw": "0.6113253394983779",
+        "label": 2,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8005521
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "1.1462002344290696",
+        "label": 1,
+        "batches": [
+          "2026-07-05_gather_v6"
+        ],
+        "group_id": 8005521
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.5585937499999999",
+        "cy": "-0.06640625000000001",
+        "fw": "1.0948063858003612",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8005512
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "0.3763894303813933",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8005512
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "0.3554542853945903",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8005512
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "-0.375",
+        "fw": "1.5",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8005512
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.0",
+        "cy": "0.0",
+        "fw": "0.5044378333292681",
+        "label": 3,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8005512
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.2573157035842422",
+        "cy": "0.0",
+        "fw": "1.0292628143369689",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8005512
+      },
+      {
+        "fractal_type": "julia_multibrot3",
+        "cx": "0.19974321172095238",
+        "cy": "0.0",
+        "fw": "0.7989728468838095",
+        "label": 2,
+        "batches": [
+          "2026-07-11_jm3_band_v1"
+        ],
+        "group_id": 8005512
+      },
+      {
+        "fractal_type": "multibrot5",
+        "cx": "0.32028908312747155548725969998668360",
+        "cy": "0.71672553187268204451945726235132906",
+        "fw": "0.0024744572176",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_exemplar_v1"
+        ],
+        "group_id": 8004734
+      },
+      {
+        "fractal_type": "multibrot3",
+        "cx": "0.64761126353061803163646341857791663",
+        "cy": "0.49349428062997783154424428730860794",
+        "fw": "0.01800856751038378",
+        "label": 2,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8003365
+      },
+      {
+        "fractal_type": "multibrot3",
+        "cx": "-0.20992452292446741743905619878675884",
+        "cy": "1.0935134504766501822509552100923431",
+        "fw": "0.433595313896",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8003520
+      },
+      {
+        "fractal_type": "multibrot3",
+        "cx": "-0.69568023278061866382733871907038356",
+        "cy": "0.53616092652546879136558065572262400",
+        "fw": "0.00407154602744",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8003512
+      },
+      {
+        "fractal_type": "multibrot3",
+        "cx": "-0.20320719940816160482845464893821162",
+        "cy": "0.85323151143700118176016544675964910",
+        "fw": "0.00105364808896",
+        "label": 2,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8003507
+      },
+      {
+        "fractal_type": "multibrot3",
+        "cx": "-0.38727052161510815535703063180442921",
+        "cy": "0.63788705003751038456574281931607530",
+        "fw": "0.006380623556713641",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8003518
+      },
+      {
+        "fractal_type": "multibrot5",
+        "cx": "0.51309572779062618925231396318415683",
+        "cy": "0.76212227956389075662919621994981016",
+        "fw": "0.001243447136819475",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8004719
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.37419913317656611134692297690413800",
+        "cy": "-0.37246238737494033741275551025333238",
+        "fw": "0.00034785347872",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_a_v1"
+        ],
+        "group_id": 8002874
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.37419913317656611134692297690413800",
+        "cy": "-0.37246238737494033741275551025333238",
+        "fw": "0.02053799333630349",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8002874
+      },
+      {
+        "fractal_type": "multibrot5",
+        "cx": "0.027986901241207670934979871517696205",
+        "cy": "0.61425412791499675162034714250708206",
+        "fw": "8.81469682736042e-05",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8004735
+      },
+      {
+        "fractal_type": "multibrot5",
+        "cx": "0.027986901241207670934979871517696205",
+        "cy": "0.61425412791499675162034714250708206",
+        "fw": "2.72443333752e-08",
+        "label": 2,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8004735
+      },
+      {
+        "fractal_type": "multibrot5",
+        "cx": "0.72863105812363758709880417562615650",
+        "cy": "0.20376120115796568061544233183175378",
+        "fw": "0.000572991743671823",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8004731
+      },
+      {
+        "fractal_type": "multibrot4",
+        "cx": "0.57448324736315188625907230113674595",
+        "cy": "0.96566674759276203417440031406801146",
+        "fw": "0.00050796399528",
+        "label": 2,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8004127
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-1.2604846095896091015580374549712611",
+        "cy": "0.17407027614023264150685498164163149",
+        "fw": "0.004088926263498866",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8002892
+      },
+      {
+        "fractal_type": "multibrot5",
+        "cx": "0.32305541354686923250166660971918245",
+        "cy": "0.71219887524597454515375854530369163",
+        "fw": "0.00250894784064",
+        "label": 2,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8004718
+      },
+      {
+        "fractal_type": "multibrot3",
+        "cx": "-0.26577184478958309543915641938684052",
+        "cy": "1.2451022800652294262393698623453184",
+        "fw": "0.001200813155312",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8003528
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "-0.58000772269804666201842671164688325",
+        "cy": "0.55938907874297808188175369811867967",
+        "fw": "7.78820345296e-05",
+        "label": 1,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8002896
+      },
+      {
+        "fractal_type": "multibrot5",
+        "cx": "0.69109580103488441541042001843107432",
+        "cy": "0.43000331350123082267050561415858910",
+        "fw": "6.44740721408e-05",
+        "label": 2,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8004736
+      },
+      {
+        "fractal_type": "mandelbrot",
+        "cx": "0.29411925945561360812039875623199500",
+        "cy": "0.48117118702716164488868521622485260",
+        "fw": "0.006871171809100324",
+        "label": 2,
+        "batches": [
+          "2026-08-01_supply_crawl_strat_b_v1"
+        ],
+        "group_id": 8002898
+      }
+    ]
+  },
+  "displaced_prefix_rows": {
+    "count": 2,
+    "cap": 25,
+    "eval_rows_displaced": 0,
+    "why": "v8's own drop rule, reached by a new bridge: an appended location neighbours BOTH a v8 biased location and a forced-eval location, so the union-find puts the v8 row in a forced-eval group, where a biased location must be dropped rather than left to leak. Not an accounting slip \u2014 a discovery that those two neighbourhoods are connected.",
+    "rows": [
+      {
+        "loc_id": 2849,
+        "fractal_type": "mandelbrot",
+        "cx": "-0.5884443899977576",
+        "cy": "-0.45736158583323655",
+        "fw": "0.007470996881059335",
+        "label": 1,
+        "split": "train",
+        "source": "biased:2026-06-24_guided_descend_rev4occfix_v2filtered"
+      },
+      {
+        "loc_id": 4354,
+        "fractal_type": "mandelbrot",
+        "cx": "-1.3410708783448253",
+        "cy": "-0.06480700045392893",
+        "fw": "0.017910068936674104",
+        "label": 1,
+        "split": "train",
+        "source": "biased:2026-06-25_scale_2x2_labelset+biased:2026-06-25_scale_controlled_2x2"
+      }
+    ],
+    "cache_note": "their 24 v9 cache tiles each become orphan directories in the extended tree; the v10 cache verifier names them as EXPECTED orphans rather than counting them complete."
+  },
+  "atom_union": {
+    "atoms_spanning_groups": 213,
+    "group_merges": 250,
+    "v8_rows_pulled_into_a_merged_group": 21,
+    "scope": "only the six 2026-08 batches record provenance.atom_key, so this pass can only union appended locations; GATE 14 asserts no v8 row changed group because of it.",
+    "why": "the spatial union-find unions only when frame widths are within 1.5x, so two views of ONE minibrot atom at different maneuver k (k=4 vs k=16 is 4x in fw) are invisible to it while being two framings of the same subject. Before this pass 18 train-side crawl rows shared an atom with a uniform-leg eval row \u2014 a fifth of the new instrument had a same-subject twin in training. Protocol \u00a72's standing rule (children inherit their seed's split) applied with the atom as the seed."
+  },
+  "group_renumbering": {
+    "v8_groups": 4928,
+    "rows_renumbered": 3726,
+    "why": "group ids are a dense enumeration per (fractal_type, c-bucket) partition, so appending 1,292 native-plane locations shifts the numbering. Nothing reads a group id across versions \u2014 the sampler uses group SIZE within one manifest and the gates use the partition \u2014 and GATE 12 asserts the partition over v8's rows is byte-for-byte v8's."
+  },
+  "deploy_note": "ACTIVE_CKPT NOT switched; no threshold touched; t_good NOT set; nothing trained by this build."
+}

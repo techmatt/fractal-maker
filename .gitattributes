@@ -30,3 +30,9 @@ data/v9/plan.jsonl filter=lfs diff=lfs merge=lfs -text
 data/v9/cache_manifest.jsonl filter=lfs diff=lfs merge=lfs -text
 data/classifier/**/eval_scores_v9.jsonl filter=lfs diff=lfs merge=lfs -text
 data/v9/eval_scores_v9.jsonl filter=lfs diff=lfs merge=lfs -text
+# v10 build artifacts — same shape and size class as v8/v9's (8,382 locations x 24 slots
+# = 201,168 rows each), so the two per-render files go through LFS on the same rule. Also
+# negated by exact path in .gitignore, so a normal `git add` works.
+data/v10/plan.jsonl filter=lfs diff=lfs merge=lfs -text
+data/v10/cache_manifest.jsonl filter=lfs diff=lfs merge=lfs -text
+data/v10/eval_scores_v10.jsonl filter=lfs diff=lfs merge=lfs -text

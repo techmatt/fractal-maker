@@ -100,6 +100,10 @@ ALLOWLIST = [
           "split assignment the LIVE deployed checkpoint was trained under."),
     Entry("data/v9/", EXCEPTION,
           "v9 build record, same shape as v8's (~152 MB, LFS)."),
+    Entry("data/v10/", EXCEPTION,
+          "v10 build record: v8's manifest appended with 1,267 maneuver-view locations "
+          "(8,382 x 24 slots, ~180 MB, LFS). Carries the split assignment for the third "
+          "eval instrument (maneuver_uniform_v1), which exists nowhere else."),
     Entry("data/palettes/", EXCEPTION,
           "pool_colormaps.json (20 MB) + palette_features.json (1.8 MB): the harvested "
           "palette pool and its feature table."),

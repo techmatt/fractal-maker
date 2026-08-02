@@ -351,6 +351,37 @@ __pycache__/
 /data/v9/aug_cache/
 
 # ---------------------------------------------------------------------------
+# v10 classifier build — DURABLE by exact path, same discipline as v8/v9 above.
+#
+# v10 is an APPEND onto v8's manifest: 1,267 maneuver-view locations from the 2026-08
+# supply crawl and the label-seeded harvest, on top of v8's byte-frozen 7,115-row prefix
+# (tools/v10/build_manifest.py GATE 11). Unlike v9 it DOES have a manifest and an
+# eval_slice of its own, because the population moved — a third forced-eval instrument
+# (the 90-row maneuver_uniform_v1 leg) joins the census and the mandelbrot floor, and a
+# split assignment that only exists as a diff against another file is a split assignment
+# nobody can read.
+#
+# Re-included BY EXACT PATH, not by directory, for the v8 reason: a bare `!/data/v10/`
+# would also re-include an accidental in-tree aug_cache/ rebuild.
+!/data/v10/
+/data/v10/*
+!/data/v10/manifest.jsonl
+!/data/v10/eval_slice.jsonl
+!/data/v10/build_metadata.json
+!/data/v10/plan.jsonl
+!/data/v10/cache_manifest.jsonl
+!/data/v10/aug_roster.json
+!/data/v10/colormaps.json
+# v10 EVAL products — the frozen per-location eval slice, the acceptance battery, and the
+# pre-registration record written BEFORE any eval ran.
+!/data/v10/eval_scores_v10.jsonl
+!/data/v10/eval_results_v10.json
+!/data/v10/prereg_v10.json
+# Backstop only — the v10 aug cache is bulk() and resolves out-of-tree through
+# artifacts.RELOCATED_PREFIXES. If it ever reappears here it stays un-committable.
+/data/v10/aug_cache/
+
+# ---------------------------------------------------------------------------
 # v9 classifier weights — DURABLE by exact path, and by NEGATION rather than by
 # force-add. data/classifier/v2..v8 are ignored by the blanket /data/* rule and were
 # force-added (`git add -f`), which works but leaves no rule saying they belong: a
@@ -381,6 +412,14 @@ __pycache__/
 !/data/classifier/v9/model_best.pt
 !/data/classifier/v9/config.json
 !/data/classifier/v9/metrics.json
+# v10 weights — identical wiring. This block MUST sit after the `/data/classifier/*`
+# re-exclusion above: last matching rule wins, so a v10 negation placed earlier in the
+# file is silently undone by that line (it was, on the first attempt).
+!/data/classifier/v10/
+/data/classifier/v10/*
+!/data/classifier/v10/model_best.pt
+!/data/classifier/v10/config.json
+!/data/classifier/v10/metrics.json
 
 # data_large/ was deleted 2026-07-31 (repo-hygiene pass): it held one README and no
 # data, and its name collided with data/. Regenerable bulk goes out of tree via
