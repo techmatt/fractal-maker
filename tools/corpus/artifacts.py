@@ -36,6 +36,7 @@ nothing else.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 # tools/corpus/artifacts.py -> parents[2] == repo root.
@@ -167,6 +168,33 @@ def _is_minibrot_source_bulk(r: str) -> bool:
     )
 
 
+_AUG_CACHE_VERSION_RE = re.compile(r"^v\d+$")
+
+
+def _is_aug_cache(r: str) -> bool:
+    """True iff ``r`` is a versioned augmentation-cache tree: ``data/v<N>/aug_cache/**``.
+
+    Matched as a CLASS, for the reason ``_is_discovery_scratch`` gives and for one earned
+    the hard way: the v10 extension's first dry run resolved
+    ``data/v10/aug_cache`` IN-TREE, because the registry above holds a literal per version
+    and v10 had not been added yet. Nothing would have failed — 30,408 JPGs would simply
+    have landed in the working tree under a gitignored path, which is the silent-bulk
+    outcome the whole resolver exists to prevent. A pattern fails toward out-of-tree, so a
+    forgotten registration costs nothing.
+
+    The literals in ``RELOCATED_PREFIXES`` stay: they are the record of which versions were
+    registered deliberately, and this predicate is a superset, not a replacement.
+    Component-exact on ``aug_cache``, so a sibling like ``data/v9/aug_cache_probe`` does
+    NOT match."""
+    parts = r.split("/")
+    return (
+        len(parts) >= 3
+        and parts[0] == "data"
+        and bool(_AUG_CACHE_VERSION_RE.match(parts[1]))
+        and parts[2] == "aug_cache"
+    )
+
+
 def artifacts_root() -> Path:
     """Root under which relocated artifacts live (env override or repo sibling)."""
     env = os.environ.get(ARTIFACTS_ENV)
@@ -185,13 +213,13 @@ def _norm(rel) -> str:
 
 def is_relocated(rel) -> bool:
     """True iff ``rel`` (repo-relative) belongs to a relocated family: a literal
-    aug-cache prefix, any discovery-scratch tree, any label-corpus crop/vivid tree,
-    any descent-harness image tree, or the minibrot source-sheet tiles/sheets bulk
-    (the last four matched by class, not by literal)."""
+    aug-cache prefix, any versioned ``data/v<N>/aug_cache`` tree, any discovery-scratch
+    tree, any label-corpus crop/vivid tree, any descent-harness image tree, or the
+    minibrot source-sheet tiles/sheets bulk (all but the literals matched by class)."""
     r = _norm(rel)
     if any(r == p or r.startswith(p + "/") for p in RELOCATED_PREFIXES):
         return True
-    return (_is_discovery_scratch(r) or _is_label_corpus_crop(r)
+    return (_is_aug_cache(r) or _is_discovery_scratch(r) or _is_label_corpus_crop(r)
             or _is_descent_harness_crop(r) or _is_minibrot_source_bulk(r))
 
 

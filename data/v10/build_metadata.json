@@ -890,5 +890,235 @@
     "rows_renumbered": 3726,
     "why": "group ids are a dense enumeration per (fractal_type, c-bucket) partition, so appending 1,292 native-plane locations shifts the numbering. Nothing reads a group id across versions \u2014 the sampler uses group SIZE within one manifest and the gates use the partition \u2014 and GATE 12 asserts the partition over v8's rows is byte-for-byte v8's."
   },
-  "deploy_note": "ACTIVE_CKPT NOT switched; no threshold touched; t_good NOT set; nothing trained by this build."
+  "deploy_note": "ACTIVE_CKPT NOT switched; no threshold touched; t_good NOT set; nothing trained by this build.",
+  "aug_recipe": {
+    "recipe": "v8b",
+    "corpus_version": "v10",
+    "supersedes_corpus": "v9 (same recipe, same cap; v10 adds locations)",
+    "supersedes": "the first v8 recipe (2 palettes x 3 fixed scales {0.7,1.0,1.3} x 2 fixed shifts at 0.4 frame widths x 2 AA), abandoned at 10,538 of 171,384 tiles",
+    "why": "the fixed 0.4-frame-width shift at scale 1.3 put the window 0.52 base frame widths off centre \u2014 off the structure entirely \u2014 while the tile kept the location's label. That corrupts only the positive classes (an empty crop labeled 1 is roughly true; labeled 3 or 4 it is a lie) and fights deploy, which reframes to centre content before scoring.",
+    "slots_per_location": 24,
+    "axes": "4 palettes x 3 geometries x 2 AA levels",
+    "palettes": {
+      "always": [
+        "twilight_shifted",
+        "blue_orange"
+      ],
+      "always_roles": {
+        "twilight_shifted": "deploy-matched; data_v4.NEUTRAL_PALETTE, the pinned scoring instrument and the canonical eval view",
+        "blue_orange": "the vivid companion the human labels were formed through (data/palettes/vivid_blue_orange.json); closes the judge/model presentation gap"
+      },
+      "drawn_per_location": 2,
+      "pool_source": "data/palettes/score3_colormaps.json",
+      "pool_size": 76,
+      "drawable": [
+        "Blues",
+        "BrBG",
+        "CMRmap",
+        "GnBu",
+        "PuOr",
+        "RdBu",
+        "RdGy",
+        "RdPu",
+        "RdYlBu",
+        "Spectral",
+        "YlGnBu",
+        "YlOrBr",
+        "YlOrRd",
+        "afmhot",
+        "berlin",
+        "bwr",
+        "cet_cyclic_mybm_20_100_c48_s25",
+        "cet_cyclic_protanopic_deuteranopic_bwyk_16_96_c31",
+        "cet_cyclic_protanopic_deuteranopic_wywb_55_96_c33",
+        "cet_cyclic_rygcbmr_50_90_c64_s25",
+        "cet_cyclic_wrkbw_10_90_c43",
+        "cet_cyclic_wrkbw_10_90_c43_s25",
+        "cet_linear_bgyw_15_100_c68",
+        "cet_linear_bmy_10_95_c71",
+        "cet_linear_bmy_10_95_c78",
+        "cet_linear_kry_0_97_c73",
+        "cet_linear_kry_5_95_c72",
+        "cet_linear_kryw_0_100_c71",
+        "cet_linear_kryw_5_100_c64",
+        "cet_linear_kryw_5_100_c67",
+        "cet_linear_protanopic_deuteranopic_kbjyw_5_95_c25",
+        "cet_linear_protanopic_deuteranopic_kbw_5_95_c34",
+        "cet_linear_tritanopic_krjcw_5_98_c46",
+        "cet_linear_tritanopic_krw_5_95_c46",
+        "cividis",
+        "cmr.amber",
+        "cmr.copper",
+        "cmr.ember",
+        "cmr.emergency_s",
+        "cmr.fall",
+        "cmr.fusion",
+        "cmr.jungle",
+        "cmr.lilac",
+        "cmr.pride",
+        "cmr.prinsenvlag",
+        "cmr.rainforest",
+        "cmr.redshift",
+        "cmr.savanna",
+        "cmr.seasons_s",
+        "cmr.sunburst",
+        "cmr.swamp",
+        "cmr.torch",
+        "cmr.toxic",
+        "cmr.voltage",
+        "cmr.waterlily",
+        "cmr.wildfire",
+        "coolwarm",
+        "gist_heat",
+        "gist_stern",
+        "inferno",
+        "magma",
+        "managua",
+        "plasma",
+        "seismic",
+        "turbo",
+        "twilight",
+        "viridis"
+      ],
+      "drawable_size": 67,
+      "held_out": [
+        "cet_cyclic_wrwbw_40_90_c42",
+        "cet_diverging_bwr_40_95_c42",
+        "cet_linear_bmw_5_95_c86",
+        "cet_linear_kry_5_98_c75",
+        "cet_linear_protanopic_deuteranopic_kbw_5_98_c40",
+        "cmr.ocean",
+        "cmr.seasons",
+        "cmr.viola"
+      ],
+      "held_out_seed": 20260729,
+      "held_out_role": "no location may draw these; they are the held-out-palette invariance read at eval time",
+      "draw_scope": "PER LOCATION, not per crop \u2014 all 4 palettes share the location's 3 geometries, so 24 tiles rest on 6 distinct escape-time fields",
+      "exposure_per_drawable_palette": {
+        "min": 185,
+        "max": 245,
+        "mean": 212.4
+      }
+    },
+    "geometry": {
+      "samples_per_location": 3,
+      "identity": {
+        "scale": 1.0,
+        "shift": 0.0,
+        "shift_id": "center",
+        "role": "the deploy composition; present in every (palette, AA) cell"
+      },
+      "jittered": {
+        "count": 2,
+        "shift_frac": "U(0, 0.1) of the slot frame width",
+        "shift_direction": "U(0, 2*pi)",
+        "scale": "U(0.9, 1.1)",
+        "shift_ids": [
+          "jit0",
+          "jit1"
+        ]
+      },
+      "seed": "random.Random(\"v8b-aug|<loc_id>\"); palette draw consumed first"
+    },
+    "aa_levels": [
+      {
+        "ss": 1,
+        "filter": "box",
+        "aa_level": "aliased"
+      },
+      {
+        "ss": 2,
+        "filter": "lanczos3",
+        "aa_level": "antialiased"
+      }
+    ],
+    "previous_recipe_magnitudes": {
+      "note": "recorded for the first time \u2014 these were never written down, only seen",
+      "scales": [
+        0.7,
+        1.0,
+        1.3
+      ],
+      "shift_frac": 0.4,
+      "shift_frac_basis": "the SLOT frame width (scale x base), so 0.28/0.40/0.52 base",
+      "shift_direction": "deterministic: 2*pi*(palette_index*3 + scale_index)/(n_pal*3)",
+      "aa_levels": "ss1 box + ss2 lanczos3 (unchanged)"
+    },
+    "colormap_library": {
+      "path": "data/v9/colormaps.json",
+      "n": 77,
+      "built_from": [
+        "data/palettes/score3_colormaps.json",
+        "data/palettes/vivid_blue_orange.json"
+      ],
+      "note": "v4-render-batch takes ONE --colormaps path and blue_orange is in neither committed library, so the two committed sources are concatenated verbatim (stops and mirror_needed untouched)"
+    },
+    "cache_render": {
+      "width": 512,
+      "height": 288,
+      "jpg_quality": 85,
+      "maxiter": "auto_maxiter(fw_slot) \u2014 per row, production policy",
+      "note": "width/height/jpg_quality are v4-render-batch defaults, unchanged from v4..v8. maxiter is NOT: v4..v8 rendered EVERY tile at the subcommand's flat 8000 regardless of fw \u2014 never through auto_maxiter \u2014 so the training cache and the deploy crop have never agreed on the cap. v9 emits the production cap per plan row.",
+      "maxiter_policy": {
+        "source": "tools/scoring/active_ckpt.auto_maxiter",
+        "base": 4000,
+        "k": 0.3,
+        "min": 200,
+        "max": 67000,
+        "fw_home": 3.0,
+        "field_cache_token": "mi4000k0.3c200-67000",
+        "basis": "the SLOT frame width (scale x base), not the location's \u2014 a jittered slot gets the cap its own frame resolves",
+        "supersedes": "flat maxiter=8000",
+        "doc": "docs/design/auto_maxiter.md",
+        "residual": "x8 covers the MEDIAN convergent multiple (mean 7.7 / median 8.0); the measured tail runs to x24, so the most decorated material stays somewhat clipped. Median-clean, not clean."
+      },
+      "maxiter_range_over_plan": {
+        "min": 3248,
+        "max": 44679
+      }
+    },
+    "recipe_parity": {
+      "colormaps_identical_to_v9": true,
+      "prefix_plan_rows_byte_identical_to_v9": 170760,
+      "v9_plan_rows_not_reused": 48
+    },
+    "executor_note": "the plan shares 4 palettes per escape-time field, but v4-render-batch renders each row independently, so that sharing is NOT exploited today \u2014 see marginal_cost below",
+    "marginal_cost": null,
+    "reuse_audit": {
+      "prior_cache_trees_on_disk": [
+        [
+          "v8",
+          "C:\\Code\\fractal-maker-artifacts\\data\\v8\\aug_cache"
+        ]
+      ],
+      "prior_cache_location_dirs": 7141,
+      "prior_cache_manifests_found": [
+        [
+          "v8",
+          "C:\\Code\\fractal-maker\\data\\v8\\cache_manifest.jsonl"
+        ],
+        [
+          "v8",
+          "C:\\Code\\fractal-maker\\data\\v8\\cache_manifest.jsonl"
+        ]
+      ],
+      "reusable_slots_per_location": 0,
+      "reuse_fraction": 0.0,
+      "why": "ZERO, and this time the v8 tree IS on disk and IS attributable \u2014 the reason is the cap, not durability. Every v8 tile was iterated to a flat maxiter=8000 (v4-render-batch's default; the v8 plan carries no per-row cap), while v9 iterates each slot to auto_maxiter(fw_slot) under the raised policy. Same coordinates, same palette, same filename \u2014 DIFFERENT field. Reusing one would put an old-cap tile in a new-cap corpus, which is the exact failure this rebuild exists to remove, so the v9 tree is a separate directory and the v8 tree is left intact as the rollback anchor. (The v4..v7 caches were deleted on 2026-07-29, commit 7068839 \u2014 243,477 JPGs no surviving cache_manifest could attribute to a location.)",
+      "v8_tree_retained_as_rollback": true
+    },
+    "trainer_followup": "classifier/data_v4.py Loc.palette_renders() asserts exactly 6 palette renders per location and must become 4 (and per-location variable) before a v8 train. canonical() and aa_twin() are unaffected: the identity slot supplies exactly one (twilight_shifted, ss2, scale 1.0, center) row per location.",
+    "extension": {
+      "mode": "extend_in_place",
+      "prefix_locations": 7115,
+      "prefix_tiles": 170760,
+      "prefix_tree": "data/v9/aug_cache",
+      "appended_locations": 1267,
+      "appended_tiles": 30408,
+      "appended_tree": "data/v10/aug_cache",
+      "why_two_trees": "v9's tiles are bit-for-bit what v10 would render \u2014 same recipe, same cap policy, same per-location seed \u2014 so re-rendering them would spend ~5.8 h reproducing files that exist. Splitting the appended tiles into their own tree keeps BOTH self-describing: v9's tree still matches v9's plan exactly, and v10's tree holds exactly the extension.",
+      "displaced_prefix_locations": "2 v8 loc_ids (2849, 4354) are no longer in the manifest; their 48 v9 tiles stay on disk unnamed by this plan and are declared EXPECTED orphans by verify_cache_alignment.py.",
+      "single_variable": "the LABELS are this retrain's only variable. The wider palette set stays PARKED for a second consecutive build and is still wanted for the rebuild after this one."
+    }
+  }
 }
