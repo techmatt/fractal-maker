@@ -1,0 +1,33 @@
+{
+ "rule_id": "interior_gt30_v1",
+ "applied": "2026-08-01",
+ "score": 1,
+ "labeler": "rule:interior_gt30_v1",
+ "threshold": 0.3,
+ "comparison": "strict >",
+ "measure": "provenance.interior_fraction",
+ "measure_frame": "view@64x36; view_fw == render.fw, 16:9, interior = non-escaped fraction",
+ "n": 20,
+ "labels": {
+  "sc0004_b1d1ca25": 0.4162,
+  "sc0005_532d0c55": 0.4553,
+  "sc0032_ee2dacca": 0.3181,
+  "sc0037_3cbebc70": 0.3168,
+  "sc0072_0d6a7b55": 0.3628,
+  "sc0080_c25dda58": 0.3294,
+  "sc0091_4baacffd": 0.8438,
+  "sc0095_89e7d717": 0.4284,
+  "sc0100_2deaad11": 0.444,
+  "sc0131_4dc18d77": 0.8446,
+  "sc0146_3e756adc": 1.0,
+  "sc0171_7ec3e1a2": 0.4271,
+  "sc0187_5d8c8b7f": 1.0,
+  "sc0189_d57114d4": 0.4479,
+  "sc0193_124bae5b": 0.4514,
+  "sc0209_c5f23e4d": 0.8919,
+  "sc0227_57b7c741": 0.3598,
+  "sc0231_c08dddfd": 0.3012,
+  "sc0247_553c4783": 0.3754,
+  "sc0285_9e6073ca": 0.4405
+ }
+}

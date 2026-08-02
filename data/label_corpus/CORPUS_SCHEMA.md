@@ -91,6 +91,25 @@ The canonical (model-facing) crop is what the network sees; the vivid one is wha
 The labeling UI (`tools/viz/corpus_label.html`) states this scale inline, so a labeler never has
 to leave the tool to read it.
 
+### Rule labels — a score a human did not cast.
+A label may be written by a **stated rule** instead of by eye, and when it is, `label.labeler`
+carries `rule:<rule_id>` rather than a person — the one place the two are told apart, and enough
+for any consumer that cares (the trainer reads only `(crop, score)` and is indifferent). A rule
+label obeys the same one mutation as a human one: `null → value`, never over an existing label,
+so a rule can only ever fill rows nobody has judged. Each application also writes
+`<batch>/rule_labels_<rule_id>.json` — rule id, threshold, comparison, measure, frame, date and
+the exact `{image_id: measured_value}` it fired on.
+
+**`interior_gt30_v1`** (2026-08-01, the four `supply_crawl` batches): `provenance.interior_fraction
+> 0.30` → score **1**. Matt's rule, dictated: past 30% black the frame does not work as a
+wallpaper, no gray zone. The measure is the non-escaped fraction on the VIEW-frame screen — the
+same quantity as Rust `render::black_fraction` at the same 0.30 as `present.rs::BLACK_THRESH`,
+measured at the crop's own frame (`view_fw == render.fw`) at 64×36 under a maxiter 4.8–13.9× the
+crop's, so it under-fires rather than over-fires. Falsified against the 130 labels standing when
+it was applied: of 21 human-labeled rows over the threshold, **21 were class 1 and none ≥2**.
+Applied by `tools/corpus/apply_interior_rule.py`; label-store scope only — not a discovery gate,
+not applied to any historical batch.
+
 ### Revisions — the amendment overlay.
 An existing label can be **revised** (a q3 demoted to q2, or promoted to q4). Because a revision
 can move the `>=3` (good) boundary — demotions as well as promotions — and at least one batch is
