@@ -88,7 +88,7 @@ code{color:#9bb}
       <button class="sb3" data-s="3">3 · good</button>
       <button class="sb4" data-s="4">4 · exceptional</button>
     </div>
-    <div class="hint">does <b>this crop</b> work as a wallpaper · <b>blind by default</b> · keys: <b>1</b>/<b>2</b>/<b>3</b>/<b>4</b> label &amp; advance · <b>←</b>/<b>→</b> move · <b>u</b> next unlabeled · <b>r</b> reveal</div>
+    <div class="hint">does <b>this crop</b> work as a wallpaper · <b>blind by default</b> · keys: <b>1</b>/<b>2</b>/<b>3</b>/<b>4</b> label &amp; jump to next unlabeled · <b>←</b>/<b>→</b> move · <b>u</b> next unlabeled · <b>r</b> reveal</div>
     <div class="rubric">
       <b>1–4 quality scale</b> (judge from the vivid render) —
       <span class="r1">1 bad</span>: dead/structureless, never ships.
@@ -291,7 +291,11 @@ function setScore(s){
   scores[k]=s; reveals[k]=revealed?1:0;    // record whether this call was blind or revealed
   saveScores(); saveReveals();
   refreshCell(cur); refreshCounts();
-  if(cur<ROWS.length-1){cur++;show();} else {show();}
+  // Advance to the next UNLABELED row, not the next index: rows can arrive already
+  // labeled (a rule label seeded in the manifest, a resumed session), and stepping onto
+  // one costs a decision about whether the score showing is yours. If none is left,
+  // stay put and repaint so the caption shows the score just set.
+  if(!nextUnscored()) show();
 }
 function setRevealed(v){
   revealed=v;
@@ -302,8 +306,10 @@ function setRevealed(v){
 }
 function toggleReveal(){ setRevealed(!revealed); }
 function move(d){ cur=(cur+d+ROWS.length)%ROWS.length; show(); }
+// Returns true iff it moved — `setScore` needs to know when the batch is finished.
 function nextUnscored(){
-  for(let k=1;k<=ROWS.length;k++){const i=(cur+k)%ROWS.length; if(!scores[keyOf(ROWS[i])]){cur=i;show();return;}}
+  for(let k=1;k<=ROWS.length;k++){const i=(cur+k)%ROWS.length; if(!scores[keyOf(ROWS[i])]){cur=i;show();return true;}}
+  return false;
 }
 
 let lbOpen=false;

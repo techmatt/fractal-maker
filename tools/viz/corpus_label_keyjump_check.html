@@ -1,0 +1,48 @@
+<!doctype html><meta charset="utf-8"><title>corpus_label — key-jump check</title>
+<!--
+  Does a number key jump to the next UNLABELED row (not the next index)?
+
+  There is no JS test runner in this repo, so this is a MANUAL harness that drives the real
+  labeler in a same-origin iframe and prints a verdict. It is not vacuous by construction:
+  it parks on the last unlabeled row BEFORE a run of already-labeled rows, so the old
+  behaviour (cur+1, landing ON a labeled row) and the new one must differ, and it fails if
+  they don't. Needs a batch that HAS pre-labeled rows (a rule label seeded into the served
+  manifest, or a resumed session) — with none, `start` comes back -1 and nothing is proven.
+
+  Run (serve.py must be up; any batch via ?batch=):
+    uv run python tools/viz/serve.py &
+    chrome --headless=new --disable-gpu --virtual-time-budget=20000 \
+      --user-data-dir=<throwaway> --dump-dom \
+      "http://127.0.0.1:8010/tools/viz/corpus_label_keyjump_check.html?batch=<batch_id>"
+  It labels rows in the THROWAWAY profile's localStorage only; it never writes to the store.
+-->
+<pre id="out">running…</pre>
+<iframe id="f" style="width:1200px;height:800px"></iframe>
+<script>
+const BATCH=new URLSearchParams(location.search).get('batch')||'2026-08-01_supply_crawl_strat_a_v1';
+const out=document.getElementById('out'), f=document.getElementById('f');
+f.src=`/tools/viz/corpus_label.html?batch=${BATCH}&manifest=blind.jsonl&cachebust=1`;
+const cap =()=>f.contentDocument.getElementById('cap-loc').textContent.trim();
+const idx =()=>parseInt(cap().split('/')[0],10)-1;           // 0-based presentation index
+const press=k=>{const w=f.contentWindow;
+  w.dispatchEvent(new w.KeyboardEvent('keydown',{key:k,bubbles:true}));};
+setTimeout(()=>{
+ try{
+  const cells=[...f.contentDocument.getElementById('overview').children];
+  const isLab=cells.map(c=>/\bs[1-4]\b/.test(c.className));
+  let start=-1;
+  for(let i=0;i<isLab.length-1;i++) if(!isLab[i]&&isLab[i+1]){start=i;break;}
+  let run=0; while(isLab[start+1+run]) run++;
+  const expected=start+1+run;                       // next unlabeled after the run
+  while(idx()<start) press('ArrowRight');
+  const at=idx();
+  press('2');                                       // label it -> must jump over the run
+  const landed=idx();
+  out.textContent=JSON.stringify({
+    batch:BATCH, total:cells.length, prelabeled:isLab.filter(Boolean).length,
+    start:at, labeled_run_after_start:run, expected_new_behaviour:expected,
+    old_behaviour_would_be:at+1, landed:landed,
+    PASS:(start>=0 && landed===expected && expected!==at+1)}, null, 1);
+ }catch(e){ out.textContent='HARNESS ERROR '+e+'\n'+e.stack; }
+}, 6000);
+</script>
