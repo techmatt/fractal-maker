@@ -112,6 +112,33 @@ TRACKED_CANARIES = [
     "data/label_corpus/batches/julia_ladder_j0/images.jsonl",
     # blindspot: labels live ONLY in images.jsonl (no scores.json exists).
     "data/label_corpus/batches/2026-07-12_blindspot_v6reject_v1/images.jsonl",
+    # The 2026-08 maneuver-view batches — 1,310 human labels, the whole of what v10
+    # appends. Added here per this list's own scope note: a new labeled batch is a
+    # conscious edit, because a glob cannot detect a file that is already gone.
+    #
+    # The two label_seeded harvest chunks carry their scores IN-ROW with an EMPTY
+    # scores.json (the labeling rig wrote `label.score` directly — legitimate, and the
+    # (a)-case in label_store's docstring), so only images.jsonl is canaried for them:
+    # guarding an empty file would assert nothing and would look like coverage.
+    "data/label_corpus/batches/2026-08-02_label_seeded_v2_a/images.jsonl",
+    "data/label_corpus/batches/2026-08-02_label_seeded_v2_b/images.jsonl",
+    # The four supply-crawl legs carry both. The uniform leg is the v10 eval instrument
+    # (maneuver_uniform_v1) — losing its 90 labels would delete an eval slice, not just
+    # training data.
+    "data/label_corpus/batches/2026-08-01_supply_crawl_uniform_v1/scores.json",
+    "data/label_corpus/batches/2026-08-01_supply_crawl_uniform_v1/images.jsonl",
+    "data/label_corpus/batches/2026-08-01_supply_crawl_strat_a_v1/scores.json",
+    "data/label_corpus/batches/2026-08-01_supply_crawl_strat_a_v1/images.jsonl",
+    "data/label_corpus/batches/2026-08-01_supply_crawl_strat_b_v1/scores.json",
+    "data/label_corpus/batches/2026-08-01_supply_crawl_strat_b_v1/images.jsonl",
+    "data/label_corpus/batches/2026-08-01_supply_crawl_exemplar_v1/scores.json",
+    "data/label_corpus/batches/2026-08-01_supply_crawl_exemplar_v1/images.jsonl",
+    # The rule labels are not human judgment, but they ARE 81 committed class-1 labels
+    # that no producer regenerates (the rule read provenance.interior_fraction off a
+    # screening pass that is gone), and 23 of them sit in the eval instrument.
+    "data/label_corpus/batches/2026-08-01_supply_crawl_uniform_v1/rule_labels_interior_gt30_v1.json",
+    "data/label_corpus/batches/2026-08-01_supply_crawl_strat_a_v1/rule_labels_interior_gt30_v1.json",
+    "data/label_corpus/batches/2026-08-01_supply_crawl_strat_b_v1/rule_labels_interior_gt30_v1.json",
     # Committed classifier weights (force-tracked; not reproducible under GPU float
     # nondeterminism, so no rebuild path). v8 is the LIVE deployed model; v7 is the
     # one-flip rollback anchor (the role v6 held before the v8 promotion) AND the frozen
