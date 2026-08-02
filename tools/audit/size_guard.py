@@ -180,6 +180,17 @@ REGISTRY: list[Entry] = [
           "its own on purpose — it reads v8's and records that file's sha256, so 'same "
           "corpus' is a checked claim rather than a copy that can drift. The aug_cache "
           "JPGs are bulk() and out-of-tree. durable() + canaried. CANARY.", canary=True),
+    Entry("data/v10/", KEEP, None, "tracked",
+          "v10 classifier build — v8's manifest APPENDED with 1,267 maneuver-view "
+          "locations from the 2026-08 supply crawl and label-seeded harvest. Same shape "
+          "and same reason as data/v8/ and data/v9/ above: plan/cache_manifest are 201,168 "
+          "rows each (~63/108 MB, LFS) and are the ONLY thing mapping a cached tile back "
+          "to a location. Unlike v9 it DOES carry its own manifest.jsonl (2.2 MB) and "
+          "eval_slice.jsonl, because the population moved: a third forced-eval instrument "
+          "(maneuver_uniform_v1, 90 loc) joins the census and the mandelbrot floor, and a "
+          "split assignment that exists only as a diff against another file is one nobody "
+          "can read. The aug_cache JPGs are bulk() and out-of-tree. durable() + canaried. "
+          "CANARY.", canary=True),
     Entry("data/library_embeddings/", KEEP, None, "mixed",
           "prospect-library CLIP embeddings (embeddings.npz, tracked): unregenerable "
           "except value-approximate under a verdict-sensitive threshold. CANARY.",
