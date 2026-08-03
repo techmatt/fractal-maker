@@ -88,13 +88,31 @@ __pycache__/
 # accept/reject verdicts + its atom pool — are irreplaceable choices, committed by
 # exact path. The IMAGE families (emitted canonical+vivid crop pairs, triage-wall
 # thumbnails) are regenerable bulk that relocates OUT of the tree via
-# tools/corpus/artifacts.resolve (like every other corpus crop), so their dirs are
-# re-ignored below — mirrors the label_corpus stanza and
-# artifacts._is_descent_harness_crop. (Nav previews live in scratch/.)
+# tools/corpus/artifacts.resolve (like every other corpus crop) —
+# artifacts._is_descent_harness_crop still names {crops,vivid,thumbs} explicitly on the
+# resolver side. (Nav previews live in scratch/.)
+#
+# WALK-DOWN, not a directory negation. This stanza used to be `!/data/descent_harness/`
+# with the three bulk dirs re-ignored beneath it, which inverts the default for
+# everything ELSE: a family that did not exist when those three lines were written —
+# previews/, triage/tiles/, anything a later harness adds — was committable the moment
+# it appeared, and nothing here would have said so. Same shape as the palettes and
+# label_corpus stanzas: un-ignore the directory so git descends, re-exclude its
+# contents, then re-include the durable records by exact path. Adding a record now
+# takes a line here, which is the point.
 !/data/descent_harness/
-/data/descent_harness/crops/
-/data/descent_harness/vivid/
-/data/descent_harness/thumbs/
+/data/descent_harness/*
+!/data/descent_harness/selection.json
+!/data/descent_harness/selection_triage.json
+!/data/descent_harness/emits.jsonl
+!/data/descent_harness/verified_bad.json
+!/data/descent_harness/triage/
+/data/descent_harness/triage/*
+!/data/descent_harness/triage/enum_state.json
+!/data/descent_harness/triage/neighbors.json
+!/data/descent_harness/triage/pool.jsonl
+!/data/descent_harness/triage/references.json
+!/data/descent_harness/triage/verdicts.jsonl
 # Minibrot source sheets (tools/sources/, prompts/minibrot_source_sheets.md): the
 # nuclei lists + descriptors are a durable computed population everything downstream
 # keys off, committed by exact path. The rendered tiles and the sheet HTML are
