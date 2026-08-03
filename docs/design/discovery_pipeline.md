@@ -72,6 +72,39 @@ julia budget or twin-price-proportional spending because it needs **no separate
 planner** — the existing price-weighted-deficit pop plus the existing hook do all the
 work.
 
+### 3.1 Root weights cannot enforce a cross-partition mix — measured
+
+A lighter alternative to the scheduler was tried and **does not work**, and the reason
+generalises past the one flag. `steered_frontier --family-weights` sizes the per-family
+**root draw** from a deficit computed before launch (there: each partition's class-4 count
+gap against a uniform target). Two things then defeat it, and neither is a draw:
+
+* **The julia hook.** Every admitted c-plane parent fires a `julia:X` root (§3's deficit
+  fold), so serving a native partition *manufactures* z-plane supply. Native admissions
+  become julia candidates at a rate the weights never see.
+* **Injected seed pools.** `--julia-seed-pool` / `--phoenix-seed-pool` entered the frontier
+  **wholesale at fresh start** — 534 + 96 roots against the ~128 a replenishment draws — and
+  the frontier is popped by GLOBAL PRIORITY with every root at `NEUTRAL_PRIOR + gumbel`. 630
+  injected roots simply outnumber the native ones, permanently.
+
+`[measured: data/discovery/q4_long_harvest_20260803, 2026-08-03]` Intended native
+multibrot3/4/5 share **70%**; at batch 14 the realized candidate stream was julia:mandelbrot
+1,500 / phoenix 314 / mb3 44 / mb4 26 / mb5 19, i.e. **5%**. Metering the pools
+(`--seed-pool-rate`, N entries per BATCH from a persisted cursor) moved it to **25.6%**, and
+over the full 149-batch run it settled at **19.6%** of 17,669 candidates — still a third of
+target, with julia:mandelbrot at 39.9%.
+
+**The lever that would work is a POP quota, not a draw weight**: the mix is decided where the
+batch is popped, and anything that only changes what enters the frontier is diluted by
+whatever multiplies fastest inside it. That is precisely what the §3 deficit scheduler's
+price-weighted pop does, which is the argument for using it rather than the light flag when
+the mix actually matters.
+
+**Metering is worth keeping regardless**, for a second reason: a pool consumed as the walk
+asks for roots is `julia_c_sourcing.md`'s "run to the knee, then refill" by construction,
+where a pool dumped at t=0 is run straight into its tail. `--seed-pool-rate 0` restores
+wholesale injection and is byte-identical to every run before 2026-08-03.
+
 ## 4. τ_h on record — the real per-partition curve
 
 `τ_h` is the **per-partition cheap-`p_good` harvest cut**: cheap score ≥ `τ_h` → one
