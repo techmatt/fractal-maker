@@ -905,6 +905,8 @@ class SteeredFrontier:
         self.trig_deadline_s = float(getattr(args, "trig_deadline_s", TRIG_DEADLINE_S))
         self.trig_fired_this_batch = 0
         self.trig_probe_s = 0.0
+        self.seed_pool_rate = int(getattr(args, "seed_pool_rate", 0) or 0)
+        self.pool_cursor: dict = {}
         self.families = [f.strip() for f in args.families.split(",") if f.strip()]
         # --- v1.6 channel allocation: deficit-by-q4-gap root weights. A lighter instrument
         # than `--scheduler` on purpose — the scheduler allocates by price-weighted
@@ -1391,6 +1393,34 @@ class SteeredFrontier:
                 spacing=self.julia_hook_spacing,
             )) + "\n")
 
+    # ------------------------------------------------------------ seed pools
+    # METERED INJECTION, and it is the fix for a measured failure rather than a refinement.
+    # Both z-plane pools used to be injected WHOLESALE at fresh start: 534 julia + 96 phoenix
+    # roots landing on the frontier at once. The frontier is popped by GLOBAL PRIORITY and
+    # every root enters at NEUTRAL_PRIOR + gumbel, so 630 injected roots simply outnumber the
+    # ~128 native roots a replenishment draws, and they keep outnumbering them for the rest of
+    # the run. Measured 14 batches into the first launch: 1,500 julia and 314 phoenix
+    # candidates against 44 / 26 / 19 for multibrot3/4/5 — 5% of the candidate stream going to
+    # the partitions holding 70% of the allocation and the largest q4 gaps.
+    #
+    # `--family-weights` cannot reach this: it sizes c-plane ROOT DRAWS, and the imbalance is
+    # in the injected pools, which are not draws. So the pools are metered — `rate` entries
+    # per replenishment, from a persisted cursor — and injection moves from "once at start"
+    # to "whenever roots are replenished". That also gives the operating rule
+    # `julia_c_sourcing.md` states outright: run the sampler TO THE KNEE, then refill. A pool
+    # consumed as the walk asks for roots is a pool run to its knee by construction, where a
+    # pool dumped at t=0 is a pool run straight into its tail.
+    #
+    # `rate = 0` restores wholesale injection and is byte-identical to every run before this.
+    def _take_from_pool(self, pool: list, cursor_key: str) -> list:
+        i = int(self.pool_cursor.get(cursor_key, 0))
+        if i >= len(pool):
+            return []
+        n = len(pool) - i if self.seed_pool_rate <= 0 else self.seed_pool_rate
+        chunk = pool[i:i + n]
+        self.pool_cursor[cursor_key] = i + len(chunk)
+        return chunk
+
     def seed_julia_pool(self) -> int:
         """PRIMARY julia supply under test (julia_parent_sourcing_probe). Inject the c-diverse
         near-∂M sampler pool as julia:mandelbrot base-scale z-plane roots at fresh start.
@@ -1407,8 +1437,11 @@ class SteeredFrontier:
         if jpart not in self.partitions:
             raise SystemExit(f"--julia-seed-pool needs 'mandelbrot' in --families (for {jpart})")
         pool = json.loads(self.julia_seed_pool_path.read_text(encoding="utf-8"))
+        chunk = self._take_from_pool(pool, "julia")
+        if not chunk:
+            return 0
         added = 0
-        for e in pool:
+        for e in chunk:
             cr, ci = float(e["c_re"]), float(e["c_im"])
             nid = self.new_node_id()
             self.frontier.append(dict(
@@ -1421,8 +1454,13 @@ class SteeredFrontier:
             self.hooked_c[jpart].append((cr, ci))
             self.totals["julia_roots"] += 1
             added += 1
-        print(f"[julia-seed-pool] injected {added} sampler-sourced {jpart} roots "
-              f"(fw={JULIA_ROOT_FW}) from {self.julia_seed_pool_path.name}", flush=True)
+        chatty = (self.seed_pool_rate <= 0
+                  or self.pool_cursor["julia"] >= len(pool)
+                  or self.batch_i % 25 == 0)
+        if chatty:
+            print(f"[julia-seed-pool] injected {added} sampler-sourced {jpart} roots "
+                  f"(fw={JULIA_ROOT_FW}) from {self.julia_seed_pool_path.name}; "
+                  f"{self.pool_cursor['julia']}/{len(pool)} of the pool consumed", flush=True)
         return added
 
     def seed_phoenix_pool(self) -> int:
@@ -1442,8 +1480,11 @@ class SteeredFrontier:
         if self.phoenix_seed_pool_path is None:
             return 0
         pool = json.loads(self.phoenix_seed_pool_path.read_text(encoding="utf-8"))
+        chunk = self._take_from_pool(pool, "phoenix")
+        if not chunk:
+            return 0
         added = 0
-        for e in pool:
+        for e in chunk:
             c6 = (str(e["c_re"]), str(e["c_im"]), str(e["p_re"]), str(e["p_im"]),
                   str(e.get("zm1_re", 0.0)), str(e.get("zm1_im", 0.0)))
             nid = self.new_node_id()
@@ -1458,8 +1499,13 @@ class SteeredFrontier:
             ))
             self.totals["phoenix_roots"] = self.totals.get("phoenix_roots", 0) + 1
             added += 1
-        print(f"[phoenix-seed-pool] injected {added} sampler-sourced phoenix roots "
-              f"(fw={JULIA_ROOT_FW}) from {self.phoenix_seed_pool_path.name}", flush=True)
+        chatty = (self.seed_pool_rate <= 0
+                  or self.pool_cursor["phoenix"] >= len(pool)
+                  or self.batch_i % 25 == 0)
+        if chatty:
+            print(f"[phoenix-seed-pool] injected {added} sampler-sourced phoenix roots "
+                  f"(fw={JULIA_ROOT_FW}) from {self.phoenix_seed_pool_path.name}; "
+                  f"{self.pool_cursor['phoenix']}/{len(pool)} of the pool consumed", flush=True)
         return added
 
     # ------------------------------------------------------------- maneuvers
@@ -2735,6 +2781,7 @@ class SteeredFrontier:
             expansions_per_root=self.expansions_per_root, totals=self.totals,
             frontier=self.frontier, rng=self.rng.bit_generator.state,
         )
+        state["pool_cursor"] = self.pool_cursor
         state["tau_rec"] = self.tau_rec
         state["tau_h_uncalibrated"] = self.tau_h_uncalibrated
         state["family_weights"] = self.family_weights
@@ -2799,6 +2846,10 @@ class SteeredFrontier:
         self.totals.setdefault("distinct_looks", 0)
         for k in MAN_TOTALS:
             self.totals.setdefault(k, 0)
+        # The metered seed-pool cursor. Restored, not re-derived: it is the record of how
+        # much of each pool this run has already consumed, and a resume that reset it would
+        # re-inject roots the ledger already carries.
+        self.pool_cursor = dict(st.get("pool_cursor") or {})
         # v1.6 keys, absent on any earlier checkpoint. `tau_rec` is RE-DERIVED from the
         # restored `tau_h` rather than restored, so the two can never come back out of step;
         # the counters default to 0 because they did not exist, which is a default for a
@@ -3103,6 +3154,8 @@ class SteeredFrontier:
                 print(f"[scheduler] launch look_frac={lf}\n[scheduler] launch deficits={df}", flush=True)
             self.write_run_config()
             self.draw_roots()
+            # At fresh start these inject the WHOLE pool when `--seed-pool-rate` is 0 (the
+            # historical behaviour) and only the first metered chunk when it is set.
             self.seed_julia_pool()          # PRIMARY julia supply: sampler-sourced roots (probe)
             self.seed_phoenix_pool()        # phoenix channel: skeleton-sampled parameter points
             self.save_state()
@@ -3133,6 +3186,15 @@ class SteeredFrontier:
                 break
             if len(self.frontier) < ROOT_LOW_WATER:
                 self.draw_roots()
+            # The metered z-plane pools top up PER BATCH, not per replenishment, and the
+            # difference is the whole fix. `ROOT_LOW_WATER` is B (32) while the frontier runs
+            # in the thousands, so replenishment almost never fires — hanging the meter on it
+            # would starve both z-plane channels to nothing instead of front-loading them,
+            # which is the same bug with the sign flipped. Per batch gives a steady trickle
+            # the native descendants can actually compete with.
+            if self.seed_pool_rate > 0:
+                self.seed_julia_pool()
+                self.seed_phoenix_pool()
             if not self.frontier:
                 print("[frontier] empty and no fresh roots — stopping.", flush=True)
                 break
@@ -3454,6 +3516,14 @@ def main():
                          "at fresh start. Phoenix cannot be a --families entry (it has no "
                          "parameter plane to prospect); a seed pool is how it gets roots. "
                          "DEFAULT None => no phoenix channel.")
+    ap.add_argument("--seed-pool-rate", type=int, default=0,
+                    help="inject at most N entries per z-plane seed pool per ROOT "
+                         "REPLENISHMENT instead of the whole pool at fresh start. 0 (the "
+                         "default) is wholesale injection, byte-identical to every earlier "
+                         "run. Wholesale is what let 534 julia + 96 phoenix roots take 95%% "
+                         "of the candidate stream from the native partitions holding 70%% of "
+                         "the allocation; metering also gives julia_c_sourcing.md's "
+                         "run-to-the-knee-then-refill operating rule for free.")
     ap.add_argument("--tau-h-phoenix", type=float, default=None,
                     help="phoenix's harvest cut. There is no derivable value under the "
                          "active head (see __init__), so this is explicit and the run "
