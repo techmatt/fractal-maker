@@ -1,0 +1,416 @@
+{
+  "run_ts": "harvest_v2_proving_20260803",
+  "started": "2026-08-03T12:35:35",
+  "scorer_version": "v10",
+  "ckpt": "data/classifier/v10/model_best.pt",
+  "families": [
+    "mandelbrot",
+    "multibrot3",
+    "multibrot4",
+    "multibrot5"
+  ],
+  "partitions": [
+    "mandelbrot",
+    "multibrot3",
+    "multibrot4",
+    "multibrot5",
+    "julia:mandelbrot",
+    "julia:multibrot3",
+    "julia:multibrot4",
+    "julia:multibrot5",
+    "phoenix"
+  ],
+  "family_weights": {},
+  "budget_min": 60.0,
+  "wall_budget_min": 75.0,
+  "tau_h": {
+    "mandelbrot": 0.02286625504493713,
+    "multibrot3": 0.36908935904502865,
+    "multibrot4": 0.408690321445465,
+    "multibrot5": 0.3513681888580322,
+    "julia:mandelbrot": 0.412648469209671,
+    "julia:multibrot3": 0.28186094164848324,
+    "julia:multibrot4": 0.05198849514126777,
+    "julia:multibrot5": 0.07040942013263703,
+    "phoenix": 0.5
+  },
+  "tau_rec": {
+    "mandelbrot": 0.02286625504493713,
+    "multibrot3": 0.18454467952251433,
+    "multibrot4": 0.2043451607227325,
+    "multibrot5": 0.1756840944290161,
+    "julia:mandelbrot": 0.2063242346048355,
+    "julia:multibrot3": 0.14093047082424162,
+    "julia:multibrot4": 0.05,
+    "julia:multibrot5": 0.05,
+    "phoenix": 0.25
+  },
+  "tau_h_uncalibrated": {
+    "phoenix": "UNCALIBRATED: no v10 cheap-p_good population exists for phoenix (fidelity records absent; vendored base has no phoenix row; the phoenix ledgers are v7 and carry no cheap column). Serving t_good_for('phoenix')=0.5 as a conservative cheap cut."
+  },
+  "t_good": {
+    "mandelbrot": 0.03,
+    "multibrot3": 0.5,
+    "multibrot4": 0.5,
+    "multibrot5": 0.5,
+    "julia:mandelbrot": 0.5,
+    "julia:multibrot3": 0.27,
+    "julia:multibrot4": 0.03,
+    "julia:multibrot5": 0.06,
+    "phoenix": 0.5
+  },
+  "t_good_status": {
+    "mandelbrot": "DERIVED",
+    "multibrot3": "UNCALIBRATED",
+    "multibrot4": "UNCALIBRATED",
+    "multibrot5": "UNCALIBRATED",
+    "julia:mandelbrot": "UNCALIBRATED",
+    "julia:multibrot3": "DERIVED",
+    "julia:multibrot4": "DERIVED",
+    "julia:multibrot5": "DERIVED",
+    "phoenix": "UNCALIBRATED"
+  },
+  "record_and_rank": {
+    "frac": 0.5,
+    "floor_abs": 0.05,
+    "record_canon_dups": false,
+    "store": "q4_candidates.jsonl",
+    "fates": [
+      "below_tau_h",
+      "precanon_dup",
+      "canon_not_q3",
+      "q3_dup",
+      "guarded",
+      "reframe_not_q3",
+      "admitted",
+      "interior_gt_30",
+      "render_failed",
+      "unknown"
+    ],
+    "rank_tiers": "2 = has a canonical decode; 1 = cheap score only; never pooled"
+  },
+  "interior_gate": {
+    "on": true,
+    "threshold": 0.3,
+    "comparison": "strict >",
+    "measure": "expand sidecar int_frac (= render::black_fraction)"
+  },
+  "maneuvers_on_admissions": {
+    "on": true,
+    "k": [
+      "None",
+      "16.0"
+    ],
+    "max_per_batch": 4,
+    "nbh_m": 8,
+    "nbh_probes": 12,
+    "period_max": 128
+  },
+  "julia_seed_pool": "C:\\Code\\fractal-maker\\data\\atlas\\julia_supply_pool_v2.json",
+  "phoenix_seed_pool": "C:\\Code\\fractal-maker\\data\\atlas\\phoenix_seed_pool.json",
+  "prereg": {
+    "view_fit_v1_1_vs_composite_v3": {
+      "claim": "view_fit v1.1 supersedes composite_v3 as the SOURCING order (including --maneuver-view-prior), pipeline-wide.",
+      "adopted_only_if": "view_fit's ordered top-k beats composite_v3's on THIS run's labeled outcome by delta-AP >= +0.1181",
+      "margin": 0.1181,
+      "margin_basis": "the lower bound of the fit-era CI, data/atlas/view_fit_v1_1.json readout.ap_delta_v11_vs_composite = 0.1819 [0.1181, 0.2466], n=580, 149 positives, 2000 bootstrap",
+      "scope": "SOURCING-side only \u2014 never ranking, never cross-family.",
+      "read_status": "DEFERRED. The labels this bar reads do not exist inside the run; both scores are recorded on every row so the read is taken when the batches come back."
+    },
+    "maneuvers_on_admissions": {
+      "read": "QUALITATIVE this run.",
+      "why": "the >=3 trigger boundary has no eval instrument, so there is nothing to certify against",
+      "deliverable": "the triggered-vs-fresh yield table + sheets \u2014 NOT a gate decision, and the two yields are never pooled"
+    }
+  },
+  "supply_routing": {
+    "routes": {
+      "julia:mandelbrot": {
+        "channels": [
+          "seeded_loop",
+          "q4_mining_ranked",
+          "q4_mining_recall",
+          "near_minibrot"
+        ],
+        "near_minibrot": {
+          "single_rung": true,
+          "cspacing_floor": 0.01
+        },
+        "evidence": "ranked harvest >=3 79.1% / class-4 16.3%; ladder >=3 66.6% / 4.8%; unscreened 16.7% / 0%"
+      },
+      "multibrot3": {
+        "channels": [
+          "seeds",
+          "triggered_maneuvers"
+        ],
+        "evidence": "unscreened dM shell 0/48 at >=2; triggered >=3 55.6% vs 9.1%"
+      },
+      "multibrot4": {
+        "channels": [
+          "seeds",
+          "triggered_maneuvers"
+        ],
+        "evidence": "unscreened dM shell 0/48 at >=2; triggered >=3 17.9% vs 9.1%"
+      },
+      "multibrot5": {
+        "channels": [
+          "seeds",
+          "triggered_maneuvers"
+        ],
+        "evidence": "unscreened dM shell 0/48 at >=2; triggered >=3 62.0% vs 50.0%"
+      },
+      "mandelbrot": {
+        "channels": [
+          "seeds",
+          "triggered_maneuvers"
+        ],
+        "evidence": "triggered >=3 87.5% vs 0.0% (n small); c-plane, same route as the multibrots"
+      },
+      "phoenix": {
+        "channels": [
+          "skeleton_spread"
+        ],
+        "evidence": "unscreened >=2 39.8% / >=3 6.1%, but 57 class-4s in corpus: motif scarcity, not volume"
+      },
+      "julia:multibrot3": {
+        "channels": [
+          "julia_hook"
+        ],
+        "evidence": "hook-fed only"
+      },
+      "julia:multibrot4": {
+        "channels": [
+          "julia_hook"
+        ],
+        "evidence": "hook-fed only"
+      },
+      "julia:multibrot5": {
+        "channels": [
+          "julia_hook"
+        ],
+        "evidence": "hook-fed only"
+      }
+    },
+    "machine_1_discard": {
+      "mandelbrot": false,
+      "julia:mandelbrot": false,
+      "multibrot3": true,
+      "multibrot4": true,
+      "multibrot5": true,
+      "julia:multibrot3": false,
+      "julia:multibrot4": false,
+      "julia:multibrot5": false,
+      "phoenix": true
+    },
+    "retired_channels": {
+      "unscreened_dM_shell": {
+        "partitions": [
+          "multibrot3",
+          "multibrot4",
+          "multibrot5"
+        ],
+        "measured": "0 of 144 rows reached >=2 (48 per family, [0, 7.4%] each); no class-4 anywhere in the leg",
+        "scope": "a verdict on the DRAW (dM_d shell eps=0.02, no screen), NOT a ceiling on the family \u2014 the same families reach >=3 at 55% through triggered maneuvers",
+        "population": "2026-08-03_q4_uniform_eval_v1, the score-unconditioned leg"
+      },
+      "near_minibrot_multi_rung": {
+        "partitions": [
+          "julia:mandelbrot"
+        ],
+        "measured": "same-atom different-rung pairs sit at median cos 0.9825 with 74.1% at or above the 0.974 near-dup cut; yields flat across rungs",
+        "scope": "the 1x/4x/16x ladder buys ~1 look per atom for 3x the label cost",
+        "population": "2026-08-03_q4_near_minibrot_v1, 290 labelled rows / 103 atoms"
+      }
+    },
+    "cspacing_floor": 0.01,
+    "cspacing_basis": {
+      "measured_on": "data/label_corpus/batches/2026-08-03_q4_near_minibrot_v1 (290 rows, 103 atoms) x scratch/q4_readout/morph_emb_870.npz",
+      "recipe": "library morph CLIP (robustz_tanh_k2_v1, 640x360ss2, vit_base_patch16_clip_224.openai) at cos >= 0.974",
+      "rule": "the coarsest |delta c| bucket boundary at which the near-dup rate reaches the different-atom baseline",
+      "near_dup_rate_at_or_above_floor": 0.024,
+      "near_dup_rate_one_bucket_below": 0.239,
+      "different_atom_baseline": 0.023,
+      "atom_nn_median_dc": 0.000905,
+      "note": "one c per ATOM is NOT sufficient: different atoms at 1e-4..1e-3 are 38% near-dup"
+    },
+    "near_dup_cos": 0.974,
+    "rung": {
+      "rung": 1.0,
+      "why": "cost is a tie (3.9% spread across rungs, band 10%), so the tie-break is the one yield column where the rungs separate: one-per-cluster class-4 rate",
+      "cost_s": {
+        "1.0": 0.132,
+        "4.0": 0.1343,
+        "16.0": 0.1293
+      },
+      "spread": 0.0387,
+      "yields": {
+        "1.0": {
+          "n": 97,
+          "ge3": 0.68,
+          "ge3_1pc": 0.618,
+          "eq4": 0.062,
+          "eq4_1pc": 0.086
+        },
+        "4.0": {
+          "n": 96,
+          "ge3": 0.635,
+          "ge3_1pc": 0.653,
+          "eq4": 0.031,
+          "eq4_1pc": 0.04
+        },
+        "16.0": {
+          "n": 97,
+          "ge3": 0.68,
+          "ge3_1pc": 0.667,
+          "eq4": 0.052,
+          "eq4_1pc": 0.037
+        }
+      },
+      "record": "C:\\Code\\fractal-maker\\data\\atlas\\near_minibrot_rung_v2.json"
+    },
+    "same_atom_saturation": {
+      "pairs": 278,
+      "median_cos": 0.9825,
+      "frac_at_or_above_cut": 0.741
+    }
+  },
+  "pop_quota": {
+    "floor": 0.05,
+    "julia_route_gain": 1.0,
+    "currency": "count(label==4) + 0.1*count(label==3), through the amendment overlay + library",
+    "target_rule": "uniform: level every partition to the richest holding",
+    "census": {
+      "currency": {
+        "mandelbrot": 186.8,
+        "multibrot3": 17.1,
+        "multibrot4": 14.7,
+        "multibrot5": 26.4,
+        "julia:mandelbrot": 136.6,
+        "julia:multibrot3": 26.7,
+        "julia:multibrot4": 30.7,
+        "julia:multibrot5": 31.5,
+        "phoenix": 63.4
+      },
+      "counts": {
+        "mandelbrot": {
+          "1": 4303,
+          "2": 817,
+          "3": 488,
+          "4": 138
+        },
+        "multibrot3": {
+          "1": 343,
+          "2": 313,
+          "3": 61,
+          "4": 11
+        },
+        "multibrot4": {
+          "3": 67,
+          "1": 317,
+          "4": 8,
+          "2": 334
+        },
+        "multibrot5": {
+          "1": 331,
+          "2": 281,
+          "4": 16,
+          "3": 104
+        },
+        "julia:mandelbrot": {
+          "3": 386,
+          "4": 98,
+          "2": 410,
+          "1": 574
+        },
+        "julia:multibrot3": {
+          "2": 86,
+          "1": 77,
+          "4": 23,
+          "3": 37
+        },
+        "julia:multibrot4": {
+          "4": 27,
+          "3": 37,
+          "2": 50,
+          "1": 51
+        },
+        "julia:multibrot5": {
+          "2": 50,
+          "4": 27,
+          "3": 45,
+          "1": 25
+        },
+        "phoenix": {
+          "2": 178,
+          "1": 413,
+          "3": 64,
+          "4": 57
+        }
+      },
+      "defaulted_rows": 4935,
+      "sources": {
+        "label_corpus": 10647,
+        "library": 0
+      },
+      "weights": {
+        "4": 1.0,
+        "3": 0.1
+      }
+    },
+    "deficit": {
+      "mandelbrot": 0.0,
+      "multibrot3": 169.7,
+      "multibrot4": 172.1,
+      "multibrot5": 160.4,
+      "julia:mandelbrot": 50.2,
+      "julia:multibrot3": 160.1,
+      "julia:multibrot4": 156.1,
+      "julia:multibrot5": 155.3,
+      "phoenix": 123.4
+    },
+    "intended": {
+      "share": {
+        "julia:mandelbrot": 0.05,
+        "julia:multibrot3": 0.1313,
+        "julia:multibrot4": 0.1281,
+        "julia:multibrot5": 0.1274,
+        "mandelbrot": 0.05,
+        "multibrot3": 0.1392,
+        "multibrot4": 0.1412,
+        "multibrot5": 0.1316,
+        "phoenix": 0.1012
+      },
+      "floored": [
+        "julia:mandelbrot",
+        "mandelbrot"
+      ],
+      "floor": 0.05,
+      "floor_share_total": 0.1,
+      "pwd": {
+        "julia:mandelbrot": 16.73333,
+        "julia:multibrot3": 53.36667,
+        "julia:multibrot4": 52.03333,
+        "julia:multibrot5": 51.76667,
+        "mandelbrot": 0.0,
+        "multibrot3": 56.56667,
+        "multibrot4": 57.36667,
+        "multibrot5": 53.46667,
+        "phoenix": 41.13333
+      }
+    },
+    "seed_prices": {
+      "julia:mandelbrot": 3.0,
+      "julia:multibrot3": 3.0,
+      "julia:multibrot4": 3.0,
+      "julia:multibrot5": 3.0,
+      "mandelbrot": 3.0,
+      "multibrot3": 3.0,
+      "multibrot4": 3.0,
+      "multibrot5": 3.0,
+      "phoenix": 3.0
+    },
+    "price": "measured active-minutes per currency unit mined, EMA 0.30, clamped to [seed/4, seed*4]",
+    "floor_rationale": "Every partition \u2014 including the q4-rich ones \u2014 receives a floor of ~5% of total time. Spending 100% of the time on a stubborn deficit partition means never learning anything new about the rich ones; the floor keeps per-partition cost-to-mine prices fresh for the scheduler, keeps rich-type material flowing to emission's diversity targets, and keeps the cross-feed alive (rich-base admissions trigger maneuvers/hooks into deficit partitions). It is a FLOOR, not a quota: a partition whose deficit allocation already exceeds 5% gets nothing extra.",
+    "headline_metric": "realized vs intended mix, per partition, in minutes / candidates / admissions"
+  }
+}
