@@ -215,6 +215,9 @@ def build() -> dict:
                     "run, so it has no prior version to be non-inferior to. It is the "
                     "reason the retrain exists and is reported at equal prominence; a "
                     "future v11 can make it gating once a v10 number exists to beat."),
+                "held_out_scope": (
+                    "as of amendment 1: fully held out — this leg touches neither training "
+                    "nor checkpoint selection, and is scored only at certification."),
                 "v8_baseline_expectation": (
                     "v8 is measured non-separating on this population. That flat result is "
                     "the number to beat, and it is COMPUTED here rather than assumed — "
@@ -238,7 +241,61 @@ def build() -> dict:
         "adoption": (
             "THIS PROMPT DOES NOT ADOPT. ACTIVE_CKPT stays v8 and no threshold file is "
             "touched. Adoption is a separate prompt judged against these bars."),
+        "amendments": AMENDMENTS,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Amendments. A pre-registration is only worth the discipline of NOT editing it, so a
+# second run against these bars is recorded here BEFORE it happens, with what failed and
+# what changed. Append only; never rewrite an entry.
+# --------------------------------------------------------------------------- #
+AMENDMENTS = [
+    {
+        "n": 1,
+        "date": "2026-08-02",
+        "declared": "BEFORE the re-run, and after attempt 1's numbers were known",
+        "attempt_1_outcome": {
+            "primary_census144": {"v8": 0.7509, "v10": 0.6598, "delta": -0.0911,
+                                  "delong_p": 0.0126, "verdict": "INFERIOR"},
+            "floor_loose0_v3": {"v8": 0.8673, "v10": 0.8701, "verdict": "NON-INFERIOR"},
+            "new_uniform90": {"v8": 0.8483, "v10": 0.8222, "both": "SEPARATE"},
+            "frozen_at": "commit c590070; data/v10/eval_results_v10.json as of that commit",
+        },
+        "what_was_wrong": (
+            "NOT the data — the build. Promoting the uniform leg to EVAL also moved the "
+            "MODEL-SELECTION objective, because train_resumable selects on not-bad AP over "
+            "the WHOLE eval split (cfg['eval_split_is_val']). v8 selected over 670 "
+            "locations; attempt 1 selected over 760, 12% of them a population v8's "
+            "selection never saw. So the build's own premise — 'the labels are the only "
+            "variable' — was false: the criterion that picks the checkpoint moved with "
+            "them."),
+        "evidence": (
+            "tools/v10/diagnose_selection.py: model_last (epoch 40, selected by NO "
+            "criterion) scores 0.7634 on census-144, ABOVE v8's 0.7509, against "
+            "model_best's 0.6598 — paired DeLong p=0.0024. The run passed through "
+            "checkpoints that would have certified and the changed objective rejected "
+            "them. model_last was NOT adopted: swapping in a checkpoint chosen by nothing, "
+            "after seeing the numbers, is the bar-moving this file exists to prevent."),
+        "change": (
+            "Model selection is restricted to the v8-COMPARABLE eval subset — "
+            "prospect_census + loose0_v3_floor, 670 locations, exactly v8's and v9's "
+            "selection population. The uniform-90 becomes a fully held-out instrument: it "
+            "is scored at certification only and touches neither training nor checkpoint "
+            "selection. This is strictly better for that arm's credibility than attempt 1, "
+            "where it influenced the pick."),
+        "what_is_NOT_changed": (
+            "Every bar, margin and boundary above is untouched, and so is the corpus, the "
+            "cache, the recipe and the baseline. Re-running the same bars is the reason "
+            "this amendment exists rather than a quiet retrain: attempt 1's failure is on "
+            "the record at commit c590070 and stays there."),
+        "authorized_by": "Matt, 2026-08-02 — asked explicitly before the re-run",
+        "if_it_fails_again": (
+            "then the selection objective was NOT the cause and the appended native-plane "
+            "data genuinely costs julia:multibrot accuracy. That is a real finding about "
+            "the corpus mix and the answer is a mix decision, not a third retrain."),
+    },
+]
 
 
 def main():

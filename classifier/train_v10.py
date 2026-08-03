@@ -80,7 +80,7 @@ _RUN_OUTPUT_KEYS = ("best_epoch",)
 # Keys v10 legitimately overrides — all provenance, none behavioural.
 _PROVENANCE_KEYS = ("cache_manifest", "corpus_version", "init", "recipe_vs_v7",
                     "recipe_vs_v8", "recipe_vs_v9", "maxiter_policy", "cap_doc",
-                    "corpus_note")
+                    "corpus_note", "selection_population")
 
 
 def build_v10_config(v9: dict, epochs_override=None) -> dict:
@@ -96,6 +96,10 @@ def build_v10_config(v9: dict, epochs_override=None) -> dict:
     cfg["corpus_note"] = ("v8's 7,115-row frozen prefix + 1,267 appended locations from "
                           "the 2026-08 supply crawl and label-seeded harvest. Third eval "
                           "instrument: maneuver_uniform_v1 (90 loc, forced eval).")
+    cfg["selection_population"] = (
+        "census + floor (670) — v8/v9-COMPARABLE. The 90 maneuver_uniform locations are "
+        "held out of training AND of checkpoint selection (prereg_v10.json amendment 1); "
+        "attempt 1 selected over all 760 and that moved the objective off v8's.")
     if epochs_override:
         cfg["epochs"] = int(epochs_override)
     return cfg
@@ -200,8 +204,30 @@ def main():
     del probe
     log.info(f"data_config: {data_cfg}")
 
-    eval_canon = [l.canonical() for l in eval_locs]
-    eval_labels = np.asarray([l.label for l in eval_locs])
+    # ---- the SELECTION population (prereg_v10.json amendment 1) ----------------------
+    # `train_resumable` selects on not-bad AP over whatever eval set it is handed, and
+    # `cfg["eval_split_is_val"]` is True — so the eval split IS the model-selection
+    # objective. Attempt 1 handed it all 760 eval locations, which silently moved that
+    # objective: v8 and v9 selected over 670 (census + floor), and 12% of attempt 1's
+    # criterion was a population v8's selection never saw. It cost the census arm 0.10 AUC
+    # — model_last, chosen by nothing, beat the selected checkpoint by +0.1036 there
+    # (tools/v10/diagnose_selection.py).
+    #
+    # So selection is pinned to the v8-COMPARABLE subset, and the uniform-90 becomes a
+    # fully held-out instrument: it touches neither training nor the pick, and is scored
+    # only by tools/v10/eval_v10.py. That is strictly stronger for that arm than attempt 1,
+    # where it influenced the checkpoint it was later used to judge.
+    sel_locs = [l for l in eval_locs if l.source in (CENSUS_SOURCE, FLOOR_SOURCE)]
+    assert len(sel_locs) == n_census + n_floor == 670, (
+        f"selection population is {len(sel_locs)}, expected v8's 670 (census {n_census} + "
+        f"floor {n_floor}) — the v8-comparable subset moved")
+    assert not any(l.source == UNIFORM_SOURCE for l in sel_locs), \
+        "the uniform leg leaked into the selection objective"
+    log.info(f"  SELECTION population: {len(sel_locs)} (census + floor — v8-comparable). "
+             f"The {n_uniform} uniform locations are held out of training AND of the "
+             f"checkpoint pick; see prereg_v10.json amendment 1.")
+    eval_canon = [l.canonical() for l in sel_locs]
+    eval_labels = np.asarray([l.label for l in sel_locs])
 
     log.info(f"=== TRAIN: {len(train_locs)} loc/epoch, batch {cfg['batch_size']}, "
              f"{cfg['epochs']} epochs (patience {cfg['patience']}) ===")
