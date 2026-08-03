@@ -35,24 +35,22 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.slow
+# `slow` because it renders; `version_pinned` because it proves whichever head is
+# live — `pytest -m version_pinned` lists it before a flip, `-m slow` runs it.
+pytestmark = [pytest.mark.slow, pytest.mark.version_pinned]
 
 ROOT = Path(__file__).resolve().parents[2]
 for sub in ("", "tools/mining", "tools/atlas", "tools/scoring", "tools/reframe", "tools/corpus"):
     sys.path.insert(0, str(ROOT / sub) if sub else str(ROOT))
 
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+import eval_slice  # noqa: E402
+from partitions import FT2FAM  # noqa: E402  ledger partition key for a fractal_type token
 from production_pins import ACTIVE_VERSION  # noqa: E402
 
-EVAL_SCORES = ROOT / "data" / ACTIVE_VERSION / f"eval_scores_{ACTIVE_VERSION}.jsonl"
+EVAL_SCORES = eval_slice.path_for(ACTIVE_VERSION)
 MANIFEST = ROOT / "data" / ACTIVE_VERSION / "manifest.jsonl"
 BIN = ROOT / "target/release/fractal-generator.exe"
-
-# Ledger partition key for the manifest's fractal_type token.
-FT2FAM = {"mandelbrot": "mandelbrot", "julia": "julia:mandelbrot",
-          "multibrot3": "multibrot3", "multibrot4": "multibrot4", "multibrot5": "multibrot5",
-          "julia_multibrot3": "julia:multibrot3", "julia_multibrot4": "julia:multibrot4",
-          "julia_multibrot5": "julia:multibrot5", "phoenix": "phoenix"}
 # Rust render-family token for a manifest fractal_type (julia_multibrotN -> julia_multibrotN).
 RENDER_FAMILY = {"julia_multibrot3": "julia_multibrot3", "julia_multibrot4": "julia_multibrot4",
                  "julia_multibrot5": "julia_multibrot5", "mandelbrot": "mandelbrot",
@@ -67,8 +65,7 @@ def _manifest():
 
 def _pick(label, key):
     """The eval-slice row with `label` maximizing/minimizing `key`, joined to its coords."""
-    rows = [json.loads(l) for l in EVAL_SCORES.read_text(encoding="utf-8").splitlines() if l.strip()]
-    cand = [r for r in rows if r["label"] == label]
+    cand = [r for r in eval_slice.load(ACTIVE_VERSION) if r["label"] == label]
     assert cand, f"no label-{label} rows in {EVAL_SCORES}"
     best = max(cand, key=key)
     return best, _manifest()[best["location_id"]]

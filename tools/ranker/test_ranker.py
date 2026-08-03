@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -107,6 +108,7 @@ if __name__ == "__main__":
 # return confident nonsense while the head's certification kept being quoted. These pin
 # that the ranker's feature path cannot move when the discovery gate flips.
 # =========================================================================== #
+@pytest.mark.version_pinned
 def test_ranker_penultimate_is_pinned_not_the_active_checkpoint():
     import sys as _s
     _s.path.insert(0, str(ROOT / "tools" / "scoring"))

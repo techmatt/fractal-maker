@@ -25,6 +25,19 @@ cargo run --release -- sheet --builtins "default cubehelix viridis" --output she
 
 Background long renders / descents; release builds do deep production-res renders in seconds.
 
+**Where the prompts live.** Session prompts are in **`../fractal-maker-controller/prompts/`**
+(a sibling repo, e.g. `C:\Code\fractal-maker-controller\prompts\v10_flip.md`). This repo has
+its OWN `prompts/` directory holding a different set, so a prompt named in a session and not
+found here is in the sibling — check there before globbing the tree.
+
+**Long background runs: redirect to a log file; never pipe through `tail`/`head`.** The pipe
+buffers, so a job that prints progress with `flush=True` shows nothing for its whole runtime
+*and* you lose the header lines that reported what it skipped. Use `... > scratch/<job>.log
+2>&1` (background) and read the file; the τ_h re-derivation was piped through `tail -60`, went
+26 minutes with no visible progress, and cost a separate re-derivation to recover a count the
+header had already printed. Sibling of the ETA rule below: a run reports on itself only if you
+let it.
+
 **The `slow` pytest lane is manual — nothing else runs it.** There is no CI here and every
 git hook is a git-lfs shim, so `-m slow` runs when you type it or never. It is **mandatory
 before committing** a change to the guard field path (`tools/atlas/guard.py`'s
@@ -33,6 +46,14 @@ is the only thing that regresses live-path verdict parity, and the fast `test_gu
 gate only exercises `guard.py`'s arithmetic on a frozen field. `-m slow` is a **filter, not
 a path rule** — naming a slow test's file on the command line still deselects it, and a
 deselect-to-zero run reads as a pass, so the `-m slow` must be there explicitly.
+
+**`version_pinned` is a LABEL, not a lane.** It is excluded from nothing — those tests run in
+the default suite like any other. It exists so the set of things a classifier-version flip
+touches can be *listed* instead of discovered by flipping and reading the wreckage:
+`uv run pytest -m version_pinned --collect-only -q` (~90 tests, 9 files). Pair it with
+`production_pins.COUPLED_ARTIFACTS` (the revert-together set as data, walked by
+`tools/scoring/test_coupled_artifacts.py`) and `classifier_retrain_protocol.md` §5 before any
+`ACTIVE_CKPT` move.
 
 **Windows exe-lock note.** A running binary file-locks
 `target/release/fractal-generator.exe`, so a concurrent `cargo build --release` fails with
@@ -119,6 +140,14 @@ pure function → `crops/<image_id>.jpg`, rebuildable via `present`/`render-one`
 merge that would change a non-null score warns and refuses. A *revision* is no exception —
 it goes to the amendment stream (`labels/<revision>.json`, `merge_amendments.py`) and is
 read back via `label_store.resolve_score`, leaving the original byte-identical.
+
+**Shared owners under `tools/scoring/`** — the version dirs (`v7/`…`v10/`) each used to
+re-declare these, so they are named here to be imported, not rediscovered:
+`production_pins.py` (the pin + `COUPLED_ARTIFACTS`), `derive_t_good.py` (THE version-agnostic
+t_good estimator — a per-version deriver supplies only its slice, population rule and
+objective), `partitions.py` (the `fractal_type` ⟷ ledger-partition map; a source scan in
+`test_partitions.py` fails on a second literal copy) and `eval_slice.py` (a version's frozen
+slice: `data/<v>/eval_scores_<v>.jsonl` and its `<v>_p_ge{2,3,4}` columns).
 
 **The classifier** (`classifier/`, pkg). Weights/metrics in `data/classifier/v5…v10/`,
 **git-LFS tracked in-tree — NOT gitignored** (`.gitattributes` + exact-path `.gitignore`

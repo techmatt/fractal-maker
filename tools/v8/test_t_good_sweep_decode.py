@@ -1,6 +1,6 @@
 """The t_good SWEEP's admission predicate must be the SERVED one, elementwise.
 
-`derive_t_good_v8.keeper_pred` is a vectorized twin of `score_lib.corn_decode(...) >= 3`.
+`scoring/derive_t_good.keeper_pred` is a vectorized twin of `score_lib.corn_decode(...) >= 3`.
 It exists only because LOO-OOF makes O(n^2 * |GRID|) predictions and a per-row call into
 `corn_decode` is the wrong shape for that — but a twin is a duplication, and `corn_decode`'s
 own docstring says in as many words: "reuse it, don't reimplement the >= threshold counting
@@ -40,13 +40,18 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (ROOT, ROOT / "tools" / "v8", ROOT / "tools" / "mining", ROOT / "tools" / "scoring"):
+for _p in (ROOT, ROOT / "tools" / "mining", ROOT / "tools" / "scoring"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-import derive_t_good_v8 as est          # noqa: E402
+import derive_t_good as est             # noqa: E402
+from partitions import partition_of     # noqa: E402
 from production_pins import ACTIVE_VERSION   # noqa: E402
 from score_lib import corn_decode       # noqa: E402
+
+# Coupled to production_pins.ACTIVE_CKPT: `pytest -m version_pinned` lists it.
+pytestmark = pytest.mark.version_pinned
+
 
 
 def _served(nb, gd, gr, t):
@@ -138,7 +143,7 @@ def test_the_alignment_changes_no_admission_on_the_live_slice_and_says_so():
     adopted, baseline = doc["adopted"], doc["baseline"]
     n_diff = 0
     for r in rows:
-        fam = est.FT2FAM.get(r["fractal_type"], r["fractal_type"])
+        fam = partition_of(r["fractal_type"], r["fractal_type"])
         t = adopted.get(fam, baseline)
         nb, gd = r[f"{ACTIVE_VERSION}_p_ge2"], r[f"{ACTIVE_VERSION}_p_ge3"]
         gr = r[f"{ACTIVE_VERSION}_p_ge4"]

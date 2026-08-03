@@ -9,7 +9,7 @@ are confident a human would call good. NOTHING gates on it — admission stays a
 
     keeper(row) := corn_decode(row.p_notbad, row.p_good, keeper_cut_for(partition)) >= 3
 
-Derived exactly like the discovery table (`tools/v8/derive_t_good_v8.py`), from the frozen eval
+Derived exactly like the discovery table (`tools/scoring/derive_t_good.py`), from the frozen eval
 slice of the ACTIVE version — `data/<v>/eval_scores_<v>.jsonl` (label / fractal_type / that
 head's cumulative probs inline, frozen by `tools/<v>/eval_<v>.py`) — with one change: the
 objective is F0.5 (beta=0.5) rather than the discovery table's per-family choice. A partition
@@ -73,22 +73,13 @@ from production_seeder import T_GOOD_BASELINE         # noqa: E402
 # P(>=3), so the default population must move with the pin or `derive()` silently keeps
 # re-deriving the previous head's cut. Was a literal "v8" until the v10 flip.
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
-from production_pins import ACTIVE_VERSION        # noqa: E402
+import eval_slice                                # noqa: E402
+from partitions import FT2FAM                    # noqa: E402  THE map, one copy (was mirrored here)
+from production_pins import ACTIVE_VERSION       # noqa: E402
 
 EVAL_VERSION = ACTIVE_VERSION
-EVAL = ROOT / "data" / EVAL_VERSION / f"eval_scores_{EVAL_VERSION}.jsonl"
+EVAL = eval_slice.path_for(EVAL_VERSION)
 OUT = ROOT / "data" / "atlas" / "keeper_cuts.json"
-
-# fractal_type (Rust kind_str) -> ledger partition key (mirrors derive_t_good.FT2FAM).
-FT2FAM = {
-    "mandelbrot": "mandelbrot",
-    "julia": "julia:mandelbrot",
-    "multibrot3": "multibrot3", "multibrot4": "multibrot4", "multibrot5": "multibrot5",
-    "julia_multibrot3": "julia:multibrot3",
-    "julia_multibrot4": "julia:multibrot4",
-    "julia_multibrot5": "julia:multibrot5",
-    "phoenix": "phoenix",
-}
 # ONE INSTRUMENT PER PARTITION — partition -> the eval `source` it is cut on. A partition
 # absent here takes every row it has. Generalises the original julia:multibrot "Option A"
 # census-only rule to the case v10 introduced (a second unbiased mandelbrot instrument); see
@@ -124,14 +115,15 @@ def load_triples(eval_path: Path = EVAL, version: str = None) -> dict:
     thresholds that are supposed to be comparable stop being comparable."""
     ver = version or EVAL_VERSION
     parts: dict = defaultdict(list)
-    for r in read_jsonl(eval_path):
+    for r in eval_slice.load(ver, path=eval_path):
         part = FT2FAM.get(r["fractal_type"])
         if part is None:
             continue
         want = INSTRUMENT.get(part)
         if want is not None and r.get("source") != want:
             continue
-        parts[part].append((r[f"{ver}_p_ge2"], r[f"{ver}_p_ge3"], r["label"] >= 3))
+        p_nb, p_gd, _ = eval_slice.probs(r, ver)
+        parts[part].append((p_nb, p_gd, r["label"] >= 3))
     return parts
 
 

@@ -26,6 +26,10 @@ sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 
 import production_pins as pins  # noqa: E402
 
+# Coupled to production_pins.ACTIVE_CKPT: `pytest -m version_pinned` lists it.
+pytestmark = pytest.mark.version_pinned
+
+
 # --- pre-split values, recorded 2026-07-31 before the carve-out ---
 # cmd: python -c "import active_ckpt as m; print(m.ACTIVE_CKPT, ...)"  (see the split commit)
 #

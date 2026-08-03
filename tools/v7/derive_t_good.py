@@ -22,8 +22,11 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
 sys.path.insert(0, str(ROOT / "tools" / "mining"))
 sys.path.insert(0, str(ROOT / "tools" / "atlas"))
+sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 
 import label_store as ls                                    # noqa: E402
+# fractal_type (Rust kind_str) <-> ledger partition key — THE map, from its one owner.
+from partitions import FAM2FT, FT2FAM                       # noqa: E402,F401
 from score_lib import corn_decode                           # noqa: E402
 from production_seeder import (                              # noqa: E402
     t_good_for, T_GOOD_OVERRIDES, T_GOOD_BASELINE, julia_partition,
@@ -33,19 +36,7 @@ MANIFEST = ROOT / "data" / "v7" / "manifest.jsonl"
 EVAL = ROOT / "data" / "classifier" / "v7" / "eval_scores_v7.jsonl"
 BATCHES_GLOB = str(ROOT / "data" / "label_corpus" / "batches" / "*" / "images.jsonl")
 
-# fractal_type (Rust kind_str) -> ledger partition key (what t_good_for is keyed on)
-FT2FAM = {
-    "mandelbrot": "mandelbrot",
-    "julia": "julia:mandelbrot",
-    "multibrot3": "multibrot3", "multibrot4": "multibrot4", "multibrot5": "multibrot5",
-    "julia_multibrot3": "julia:multibrot3",
-    "julia_multibrot4": "julia:multibrot4",
-    "julia_multibrot5": "julia:multibrot5",
-    "phoenix": "phoenix",
-}
-FAM2FT = {v: k for k, v in FT2FAM.items()}
-
-MIN_POS = 15                    # gate 3 sufficiency floor
+MIN_POS = 15                  # gate 3 sufficiency floor
 GRID = [round(0.02 + 0.01 * i, 2) for i in range(97)]   # [0.02, 0.98]
 
 

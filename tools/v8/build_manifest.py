@@ -75,9 +75,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
+sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 import label_store as ls   # noqa: E402
 import location as loc_mod  # noqa: E402
 import paths                # noqa: E402
+# family (ledger cloud partition) <-> fractal_type (Rust kind_str) — THE map, one owner.
+from partitions import FAM2FT  # noqa: E402
 
 BATCHES_GLOB = str(ROOT / "data" / "label_corpus" / "batches" / "*" / "images.jsonl")
 OUT = "data/v8/manifest.jsonl"
@@ -89,17 +92,6 @@ SHIFT_FRAC = 0.5
 SCALE_LO, SCALE_HI = 1.0 / 1.5, 1.5
 C_TOL_FRAC = 0.05
 GID_OFFSET_V8 = 8_000_000          # > every prior gid space; no collision if ever unioned
-
-# family (ledger cloud partition) -> fractal_type (Rust kind_str)
-FAM2FT = {
-    "mandelbrot": "mandelbrot",
-    "multibrot3": "multibrot3", "multibrot4": "multibrot4", "multibrot5": "multibrot5",
-    "julia:mandelbrot": "julia",
-    "julia:multibrot3": "julia_multibrot3",
-    "julia:multibrot4": "julia_multibrot4",
-    "julia:multibrot5": "julia_multibrot5",
-    "phoenix": "phoenix",
-}
 
 # --------------------------------------------------------------------------- #
 # The batch registry. FAIL-CLOSED: a batch that is not named here classifies

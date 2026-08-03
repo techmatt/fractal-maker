@@ -21,7 +21,15 @@ rollback-that-forgets go red rather than silent. Overwriting it now would either
 guard or quietly deploy a v9 threshold onto a v8 gate. Build is not flip: the swap happens
 with the ACTIVE_CKPT flip, in its own pass, conditional on the pre-registered bar.
 
-  uv run python tools/v9/keeper_cut_v9.py
+THE STAGED PATH IS NOW DELETED, AND A BARE RUN MUST NOT RECREATE IT.
+`data/atlas/keeper_cuts_v9.json` was removed on 2026-08-02 once v10 was adopted over v9:
+it is a cut on a head that can never gate, and `test_v9_staging.py::
+test_the_staged_v9_keeper_cut_is_gone_and_stays_gone` asserts it stays gone. So `main()`
+prints and writes to `scratch/`; `--adopt` is what writes the durable path, and there is no
+live reason to. The module is kept as the recipe behind a record, not as a live producer.
+
+  uv run python tools/v9/keeper_cut_v9.py            # print + scratch
+  uv run python tools/v9/keeper_cut_v9.py --adopt    # recreate the deleted staged artifact
 """
 from __future__ import annotations
 
@@ -43,7 +51,9 @@ OUT_REL = "data/atlas/keeper_cuts_v9.json"
 LIVE = ROOT / "data" / "atlas" / "keeper_cuts.json"
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    adopt = "--adopt" in argv
     if not EVAL.exists():
         sys.exit(f"missing {EVAL} — run tools/v9/eval_v9.py first (freezes the eval scores)")
     cuts = kc.derive(EVAL, VERSION)
@@ -70,7 +80,11 @@ def main() -> int:
                            "v8_calibrated": bool(v8_cuts.get(part, {}).get("calibrated")),
                            "v9_calibrated": bool(d["calibrated"])}
 
-    out = paths.durable(OUT_REL, mkparents=True)
+    if adopt:
+        out = paths.durable(OUT_REL, mkparents=True)
+    else:
+        out = paths.scratch("v9", "keeper_cuts_v9.json")
+        out.parent.mkdir(parents=True, exist_ok=True)
     kc.write(cuts, out, eval_path=EVAL, version=VERSION)
     # annotate the staged file: it must never be mistaken for the live one
     doc = json.loads(out.read_text(encoding="utf-8"))
@@ -84,7 +98,10 @@ def main() -> int:
         "gate is a number about nothing.")
     out.write_text(json.dumps(doc, indent=2), encoding="utf-8")
 
-    print(f"\nwrote {OUT_REL} (durable, STAGED)")
+    print(f"\nwrote {out} ({'durable, STAGED' if adopt else 'scratch'})")
+    if not adopt:
+        print(f"{OUT_REL} was NOT written — it was deleted with v9's shelving and a test "
+              f"holds it gone. Pass --adopt only if you mean to recreate it.")
     print(f"live  {LIVE.relative_to(ROOT).as_posix()} left UNTOUCHED "
           f"(model={json.loads(LIVE.read_text(encoding='utf-8'))['provenance']['model']})"
           if LIVE.exists() else "")

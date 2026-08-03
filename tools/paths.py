@@ -85,6 +85,27 @@ def bulk(rel) -> Path:
     return _artifacts.resolve(_rel(rel))
 
 
+def _negation_line(rel: str) -> str:
+    """The `.gitignore` line that would re-include `rel`, ready to paste.
+
+    The guard used to say "add a negation re-including it" and stop there — correct, and
+    still a round trip, because the caller then has to work out that the rule needs a
+    leading slash (repo-anchored, not a basename match) and that git cannot re-include a
+    file whose PARENT directory is excluded. Both of those are knowable from the path, so
+    the message emits them instead of describing them."""
+    parts = rel.split("/")
+    lines = []
+    # Re-including a file under an ignored directory requires un-ignoring each ancestor
+    # first: git never descends into an excluded directory, so a bare `!/a/b/c.json` is a
+    # rule that can never match. Emit the ancestors that are actually ignored.
+    for i in range(1, len(parts)):
+        anc = "/".join(parts[:i])
+        if _is_gitignored(str(REPO_ROOT / anc)):
+            lines.append(f"!/{anc}/")
+    lines.append(f"!/{rel}")
+    return "\n".join(f"    {ln}" for ln in lines)
+
+
 def durable(rel, *, mkparents: bool = False) -> Path:
     """Durable artifact under `data/`: return its absolute path, but FIRST assert git
     would keep it. If a `.gitignore` rule (with no re-include) would exclude it, raise
@@ -99,8 +120,11 @@ def durable(rel, *, mkparents: bool = False) -> Path:
             f"durable() path is GITIGNORED and would be silently discarded:\n"
             f"    path : {r}\n"
             f"    class: durable (must be git-tracked under data/)\n"
-            f"Either add a .gitignore negation re-including it, or it is not durable — "
-            f"use scratch() (disposable) or bulk() (regenerable, out-of-tree) instead."
+            f"If it IS durable, append to .gitignore (ancestors first — git will not "
+            f"descend into an excluded directory):\n"
+            f"{_negation_line(r)}\n"
+            f"Otherwise it is not durable — use scratch() (disposable) or bulk() "
+            f"(regenerable, out-of-tree) instead."
         )
     if mkparents:
         abspath.parent.mkdir(parents=True, exist_ok=True)

@@ -22,14 +22,20 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (ROOT / "tools" / "atlas", ROOT / "tools" / "mining", ROOT / "tools" / "scoring",
-           ROOT / "tools" / "v8"):
+for _p in (ROOT / "tools" / "atlas", ROOT / "tools" / "mining", ROOT / "tools" / "scoring"):
     sys.path.insert(0, str(_p))
 
 import production_seeder as ps  # noqa: E402
-import derive_t_good_v8 as est  # noqa: E402  the shared estimator (ALL_FAMS, fbeta, build_table)
+import derive_t_good as est  # noqa: E402  the shared estimator (fbeta, build_table)
+from partitions import ALL_FAMS  # noqa: E402
 from production_pins import ACTIVE_VERSION  # noqa: E402
+
+# Coupled to production_pins.ACTIVE_CKPT: `pytest -m version_pinned` lists it.
+pytestmark = pytest.mark.version_pinned
+
 
 DERIVATION = ROOT / "data" / ACTIVE_VERSION / "t_good_derivation.json"
 
@@ -68,7 +74,7 @@ def test_uncalibrated_partitions_are_named_not_merely_absent():
 def test_every_live_partition_is_classified_either_way():
     # No partition may be silently UNKNOWN: a family that reaches production without being
     # either derived or explicitly stamped uncalibrated is the failure this guards.
-    for part in est.ALL_FAMS:
+    for part in ALL_FAMS:
         assert ps.t_good_status(part) in ("DERIVED", "UNCALIBRATED"), part
     assert not (set(ps.T_GOOD_OVERRIDES) & set(ps.T_GOOD_UNCALIBRATED)), "a partition is both"
 

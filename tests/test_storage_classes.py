@@ -48,6 +48,25 @@ def test_durable_raises_on_gitignored_path():
     assert "durable" in msg.lower()
 
 
+def test_the_error_emits_a_pasteable_gitignore_negation():
+    """The guard knows the path, so it can hand back the exact line rather than describe
+    one. It said "add a negation re-including it" and stopped — correct advice, and still a
+    round trip to work out that the rule is repo-anchored (leading slash) and that a file
+    under an EXCLUDED DIRECTORY cannot be re-included until the directory is."""
+    with pytest.raises(P.DurabilityError) as ei:
+        P.durable(SYNTHETIC_IGNORED)
+    msg = str(ei.value)
+    assert f"!/{SYNTHETIC_IGNORED}" in msg, (
+        f"the message must contain the pasteable negation line, got:\n{msg}")
+    # ...and the emitted lines must actually be valid .gitignore syntax: anchored, negated,
+    # ancestors before the leaf (git will not descend into an excluded directory).
+    lines = [ln.strip() for ln in msg.splitlines() if ln.strip().startswith("!/")]
+    assert lines[-1] == f"!/{SYNTHETIC_IGNORED}", lines
+    for ancestor in lines[:-1]:
+        assert ancestor.endswith("/"), f"an ancestor rule must name a directory: {ancestor}"
+        assert SYNTHETIC_IGNORED.startswith(ancestor.lstrip("!/")), (ancestor, lines)
+
+
 def test_durable_passes_on_reincluded_path():
     """A durable path re-included by a .gitignore negation is accepted (returns its
     absolute in-tree location)."""

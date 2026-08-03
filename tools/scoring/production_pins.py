@@ -63,10 +63,10 @@ ACTIVE_CKPT = "data/classifier/v10/model_best.pt"   # v10 unified location class
 #      data/v10/t_good_derivation.json             — derivation half of (2)
 #
 # Items 2-6 are the v10-stamped threshold files this flip wrote; 1-5 are the four the build
-# metadata already named as coupled. Three guards make a forgetful revert RED rather than
-# silent: tools/atlas/test_steered_frontier.py holds keeper_cuts' provenance stamp AND
-# TAU_H_FIDELITY_BASE_MODEL to ACTIVE_VERSION, and tools/scoring/test_t_good_adoption.py
-# holds T_GOOD_OVERRIDES to the ACTIVE version's derivation artifact.
+# metadata already named as coupled. The list above is PROSE — `COUPLED_ARTIFACTS` at the
+# bottom of this module is the same enumeration as DATA, walked by
+# tools/scoring/test_coupled_artifacts.py, which is what makes each entry's stamp actually
+# checked rather than remembered. Keep the two in step; the test asserts the count matches.
 #
 # ROLLING BACK TO v8 MUST RE-DERIVE ITS TABLE, NOT COPY IT. data/v8/t_good_derivation.json
 # was cut when the sweep's admission predicate was an AND, which is not the rule corn_decode
@@ -117,3 +117,93 @@ def make_scorer(model_path: str):
     """Build a `score_lib.Scorer` on an EXPLICIT checkpoint path (no silent default)."""
     from score_lib import Scorer
     return Scorer(model_path=model_path)
+
+
+# ============================ THE REVERT-TOGETHER SET, AS DATA ============================
+# The block beside ACTIVE_CKPT above says this in prose; `data/<v>/build_metadata.json`
+# says four of them in JSON; four test files each asserted their own slice of it. Three
+# representations, none executable against the others — so "what must move with the pin?"
+# could only be answered by flipping and seeing what went red, which is what the v10 flip
+# actually cost. This is the executable one:
+# `tools/scoring/test_coupled_artifacts.py` walks it, reads every stamp it declares, and
+# holds each to ACTIVE_VERSION.
+#
+# `stamp` says HOW TO READ this artifact's version stamp, as data rather than as an import,
+# so this module stays dependency-free for its ~41 importers:
+#   ("ckpt",)                          -> the pin itself (the dir name of ACTIVE_CKPT)
+#   ("json", relpath, *keys)           -> nested key lookup in a committed JSON artifact.
+#                                         `{v}` in relpath interpolates ACTIVE_VERSION.
+#   ("attr", module, attribute)        -> a module constant, imported by the test
+#   None                               -> carries no stamp of its own; `guard` names the
+#                                         test that holds it to one that does
+# `guard` is the test file that would go RED if this entry alone were left behind.
+COUPLED_ARTIFACTS = (
+    {
+        "what": "tools/scoring/production_pins.ACTIVE_CKPT",
+        "why": "ACTIVE_VERSION derives from it, and with it every decode stamp",
+        "stamp": ("ckpt",),
+        "guard": "tools/scoring/test_production_pins.py",
+    },
+    {
+        "what": "tools/atlas/production_seeder.T_GOOD_OVERRIDES",
+        "why": "per-partition t_good is calibrated to ONE head's p_good scale (protocol §4)",
+        "stamp": None,          # a bare table of floats; its stamp is the derivation below
+        "guard": "tools/scoring/test_t_good_adoption.py",
+    },
+    {
+        "what": "data/{v}/t_good_derivation.json",
+        "why": "the derivation half of T_GOOD_OVERRIDES — the numbers' provenance",
+        "stamp": ("json", "data/{v}/t_good_derivation.json", "model"),
+        "guard": "tools/scoring/test_t_good_adoption.py",
+    },
+    {
+        "what": "data/atlas/keeper_cuts.json",
+        "why": "same scale-bound argument, on the report-time keeper bar",
+        "stamp": ("json", "data/atlas/keeper_cuts.json", "provenance", "model"),
+        "guard": "tools/atlas/test_steered_frontier.py",
+    },
+    {
+        "what": "tools/atlas/steered_frontier.TAU_H_FIDELITY_BASE + TAU_H_FIDELITY_BASE_MODEL",
+        "why": "tau_h is a cut on a specific head's cheap p_good",
+        "stamp": ("attr", "steered_frontier", "TAU_H_FIDELITY_BASE_MODEL"),
+        "guard": "tools/atlas/test_steered_frontier.py",
+    },
+    {
+        "what": "tools/atlas/steered_frontier.TAU_H_CAMPAIGN_FLOOR",
+        "why": "the campaign floor is the same cut, at the campaign's own bar",
+        "stamp": ("attr", "steered_frontier", "TAU_H_CAMPAIGN_FLOOR_MODEL"),
+        "guard": "tools/v10/test_v10_flip.py",
+    },
+    {
+        "what": "data/atlas/tau_h_base_{v}.json",
+        "why": "the provenance record behind the vendored TAU_H_FIDELITY_BASE",
+        "stamp": ("json", "data/atlas/tau_h_base_{v}.json", "model"),
+        "guard": "tools/v10/test_v10_flip.py",
+    },
+)
+
+
+def coupled_stamp(entry: dict, root: Path = ROOT):
+    """Read one `COUPLED_ARTIFACTS` entry's version stamp, or None if it declares none.
+
+    Raises FileNotFoundError / KeyError / ImportError rather than returning a sentinel: an
+    artifact this list names and cannot be read is a broken revert-together set, and the
+    guard that reports "absent" where it means "could not look" is the failure mode this
+    repo has already paid for once."""
+    spec = entry.get("stamp")
+    if spec is None:
+        return None
+    kind = spec[0]
+    if kind == "ckpt":
+        return ACTIVE_VERSION
+    if kind == "json":
+        import json as _json
+        rel = spec[1].format(v=ACTIVE_VERSION)
+        doc = _json.loads((root / rel).read_text(encoding="utf-8"))
+        for key in spec[2:]:
+            doc = doc[key]
+        return doc
+    if kind == "attr":
+        import importlib
+        return getattr(importlib.import_module(spec[1]), spec[2])
+    raise ValueError(f"unknown stamp kind {kind!r} in {entry['what']}")

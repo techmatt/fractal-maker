@@ -97,6 +97,7 @@ def test_fbeta_beta_half_formula():
     assert abs(f - expect) < 1e-9
 
 
+@pytest.mark.version_pinned
 def test_keeper_cuts_rederive_matches_the_committed_constant():
     """The re-derivation drift gate, RESTORED now that its input is durable.
 
@@ -120,6 +121,7 @@ def test_keeper_cuts_rederive_matches_the_committed_constant():
         assert fresh[part]["pos"] == committed[part]["pos"], part
 
 
+@pytest.mark.version_pinned
 def test_keeper_positive_is_label_ge_3_not_eq_3():
     # Under v8's 1..4 labels a class-4 location is the BEST kind of keeper. Scoring it as a
     # negative would push the precision-weighted cut in exactly the wrong direction, and the
@@ -132,6 +134,7 @@ def test_keeper_positive_is_label_ge_3_not_eq_3():
     assert n_pos == n_ge3 > sum(1 for r in rows if r["label"] == 3)
 
 
+@pytest.mark.version_pinned
 def test_keeper_cuts_committed_shape_partitions_and_provenance():
     # LIVE gate on the committed report-only constant data/atlas/keeper_cuts.json — the thing
     # actually consumed (steered_run2_*/keeper_calibrate read it via kc.load_keeper_cuts). It
@@ -343,6 +346,7 @@ def test_the_retired_v7_campaign_floor_is_not_on_the_live_path():
     assert sf.TAU_H_CAMPAIGN_FLOOR_MODEL == sf.TAU_H_FIDELITY_BASE_MODEL
 
 
+@pytest.mark.version_pinned
 def test_vendored_tau_h_stamp_matches_the_active_checkpoint():
     """The stamp is the whole guard, so it must actually be current in the committed tree —
     otherwise every run aborts and the gate reads as broken rather than as protective."""

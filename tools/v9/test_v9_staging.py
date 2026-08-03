@@ -45,6 +45,10 @@ for p in ("tools", "tools/atlas", "tools/mining", "tools/scoring"):
 import active_ckpt                      # noqa: E402
 import steered_frontier as sf           # noqa: E402
 
+# Coupled to production_pins.ACTIVE_CKPT: `pytest -m version_pinned` lists it.
+pytestmark = pytest.mark.version_pinned
+
+
 LIVE_CUTS = ROOT / "data/atlas/keeper_cuts.json"
 STAGED_CUTS = ROOT / "data/atlas/keeper_cuts_v9.json"
 STAGED_TGOOD = ROOT / "data/v9/t_good_derivation.json"

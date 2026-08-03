@@ -4,7 +4,7 @@ r"""Derive v10 per-partition t_good — the ADOPTED discovery table at the v10 f
 t_good is a cut on ONE head's `P(>=3)`; v10's probability scale is not v8's, so the v8 table
 is a set of numbers about nothing on a v10 gate (protocol §4). This re-derives it.
 
-THE ESTIMATOR IS IMPORTED, NOT COPIED. `derive_t_good_v8.build_table` is the derivation —
+THE ESTIMATOR IS IMPORTED, NOT COPIED. `scoring/derive_t_good.build_table` is the derivation —
 grid, F_beta-argmax, tie-break-toward-higher-t, LOO-OOF, plateau width, the >=15-positive
 sufficiency floor and the UNCALIBRATED stamping all run from that module. A copied deriver is
 how two thresholds that are supposed to be comparable stop being comparable.
@@ -59,13 +59,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "v8", ROOT / "tools" / "atlas",
+for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "atlas",
            ROOT / "tools" / "mining", ROOT / "tools" / "scoring"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-import derive_t_good_v8 as est   # noqa: E402  THE estimator, imported not copied
+import derive_t_good as est      # noqa: E402  THE estimator, imported not copied
 import paths                     # noqa: E402
+from partitions import partition_of   # noqa: E402  THE fractal_type -> partition map
 
 VERSION = "v10"
 EVAL_REL = "data/v10/eval_scores_v10.jsonl"
@@ -107,7 +108,7 @@ def select_population(rows) -> tuple[list, dict]:
     """Apply the one-instrument-per-partition rule; return (kept_rows, dropped_report)."""
     kept, dropped = [], {}
     for r in rows:
-        part = est.FT2FAM.get(r["fractal_type"], r["fractal_type"])
+        part = partition_of(r["fractal_type"], r["fractal_type"])
         want = INSTRUMENT.get(part)
         if want is None or r.get("source") == want:
             kept.append(r)

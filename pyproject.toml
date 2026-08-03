@@ -46,6 +46,16 @@ markers = [
     # Opt-in slow tests (e.g. the guard 81-set re-render tripwire, which renders 81
     # tiles through the live f64 field path). Run them with: pytest -m slow.
     "slow: renders/heavy; opt-in, excluded from the default lane by addopts",
+    # NOT a lane — a LABEL, and it is excluded from nothing. These tests run every time.
+    # It exists so the set of things a classifier-version flip must touch can be LISTED:
+    #   uv run pytest -m version_pinned --collect-only -q
+    # Before this marker, "what does flipping ACTIVE_CKPT break?" was answerable only by
+    # flipping it and reading the failures — the v10 flip produced nine, three of which
+    # were tests that hardcoded the old version and went red FOR the flip, not for a
+    # fault. Eight files reference the pin; only the marked ones are flip-coupled, and
+    # that distinction had no expression until now. Mark a test if it would need editing
+    # (or would legitimately fail) when ACTIVE_CKPT moves.
+    "version_pinned: coupled to production_pins.ACTIVE_CKPT; list before a flip",
 ]
 # `slow` was described as opt-in in this file and in every marked module's docstring,
 # but nothing implemented it, so a bare `pytest` ran the whole opt-in lane anyway —

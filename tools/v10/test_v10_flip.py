@@ -26,6 +26,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 for sub in ("", "tools", "tools/atlas", "tools/mining", "tools/scoring", "tools/corpus",
             "tools/emission"):
@@ -34,12 +36,18 @@ for sub in ("", "tools", "tools/atlas", "tools/mining", "tools/scoring", "tools/
         sys.path.insert(0, p)
 
 import corpus_common as cc                       # noqa: E402
+import eval_slice                                # noqa: E402
 import production_seeder as ps                   # noqa: E402
+from partitions import FT2FAM                    # noqa: E402
 from production_pins import ACTIVE_CKPT, ACTIVE_VERSION   # noqa: E402
 from score_lib import corn_decode                # noqa: E402
 from tools.emission import descriptor as D       # noqa: E402
 
-EVAL = ROOT / "data" / ACTIVE_VERSION / f"eval_scores_{ACTIVE_VERSION}.jsonl"
+# Coupled to production_pins.ACTIVE_CKPT: `pytest -m version_pinned` lists it.
+pytestmark = pytest.mark.version_pinned
+
+
+EVAL = eval_slice.path_for(ACTIVE_VERSION)
 MANIFEST = ROOT / "data" / ACTIVE_VERSION / "manifest.jsonl"
 KEEPER_CUTS = ROOT / "data" / "atlas" / "keeper_cuts.json"
 BUILD_META = ROOT / "data" / ACTIVE_VERSION / "build_metadata.json"
@@ -47,11 +55,6 @@ BUILD_META = ROOT / "data" / ACTIVE_VERSION / "build_metadata.json"
 # A committed v8-era discovery ledger: real production rows, written before the flip, left
 # untouched by it. Any of the five 2026-08 v8 ledgers would do; this is the largest.
 STALE_LEDGER = ROOT / "data/discovery/maneuver_v14_exploration/outcome_ledger.jsonl"
-
-FT2FAM = {"mandelbrot": "mandelbrot", "julia": "julia:mandelbrot",
-          "multibrot3": "multibrot3", "multibrot4": "multibrot4", "multibrot5": "multibrot5",
-          "julia_multibrot3": "julia:multibrot3", "julia_multibrot4": "julia:multibrot4",
-          "julia_multibrot5": "julia:multibrot5", "phoenix": "phoenix"}
 
 
 def _rows(p):
@@ -152,9 +155,7 @@ def _ledger_row(evrow, manifest):
     """The persisted shape a discovery run writes, built from an eval-slice row + its coords."""
     part = FT2FAM[evrow["fractal_type"]]
     m = manifest[evrow["location_id"]]
-    p2 = evrow[f"{ACTIVE_VERSION}_p_ge2"]
-    p3 = evrow[f"{ACTIVE_VERSION}_p_ge3"]
-    p4 = evrow[f"{ACTIVE_VERSION}_p_ge4"]
+    p2, p3, p4 = eval_slice.probs(evrow, ACTIVE_VERSION)
     t_good = ps.t_good_for(part)
     return part, {
         "id": f"flip_{evrow['location_id']}", "family": part,
