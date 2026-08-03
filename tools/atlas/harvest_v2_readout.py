@@ -42,35 +42,59 @@ def _jl(p: Path):
             if l.strip()]
 
 
-def mix(summary: dict) -> dict:
+def mix(summary: dict, launch_intended: dict | None = None) -> dict:
     """1. Realized vs intended, three denominations, plus the L1 gap that summarises them.
 
     The L1 gap is half the sum of |delta| — total variation distance — so it reads directly as
     "this fraction of the run's time went to the wrong partition". 0 is a perfect mix; v1's
-    candidate-stream equivalent was catastrophic."""
+    candidate-stream equivalent was catastrophic.
+
+    TWO INTENTS, AND QUOTING ONLY ONE WOULD BE MISLEADING. The allocation is recomputed every
+    pop from LIVE prices, so a partition that turns out expensive has its intended share fall
+    while the run is still serving it — the quota is tracking a moving target, not converging
+    on a fixed one. Observed on the proving run: multibrot3's intent moved 0.139 -> 0.070
+    inside 44 batches purely on price.
+
+    So both are reported. `launch_intended` is the vector PRE-REGISTERED in `run_config.json`
+    before batch 1 and is the honest bar — it is the thing that was written down first. The
+    final intent is what the allocator was actually steering to at the end, and the gap
+    against it is the allocator's own tracking error. A run can legitimately miss the first
+    while hitting the second; that is a statement about the price model, not about the pop."""
     q = summary.get("pop_quota")
     if not q:
         return dict(verdict="ABSENT", why="run has no pop_quota block (allocator was off)")
     m = q["mix"]
+    li = launch_intended or {}
     rows = []
     for p in sorted(m["minutes"]):
+        realized = m["minutes"][p]["realized"]
         rows.append(dict(partition=p,
+                         launch=li.get(p),
                          intended=m["minutes"][p]["intended"],
-                         min=m["minutes"][p]["realized"],
+                         min=realized,
                          cand=m["candidates"][p]["realized"],
                          admit=m["admitted"][p]["realized"],
-                         delta_min=m["minutes"][p]["delta"]))
+                         delta_min=m["minutes"][p]["delta"],
+                         delta_launch=(round(realized - li[p], 4) if p in li else None)))
     gap = m["l1_gap_minutes"]
+    launch_gap = (round(sum(abs(r["delta_launch"]) for r in rows) / 2.0, 4)
+                  if li and all(r["delta_launch"] is not None for r in rows) else None)
     # `worst` is the most UNDER-served partition, not the largest |delta|. In a two-partition
     # miss the two deltas are equal and opposite, so |delta| picks one arbitrarily — and the
     # failure a mix report is about is the starved side: v1's story is "native realized 19.6%
     # of an intended 70%", never "julia over-ran".
     worst = min(rows, key=lambda r: (r["delta_min"], r["partition"]))
-    return dict(l1_gap=gap, per_partition=rows, worst=worst,
+    return dict(l1_gap=gap, l1_gap_vs_launch=launch_gap, per_partition=rows, worst=worst,
                 verdict=("PASS" if gap <= 0.10 else "MISS"),
+                verdict_vs_launch=(None if launch_gap is None else
+                                   ("PASS" if launch_gap <= 0.10 else "MISS")),
                 bar="L1 gap <= 0.10 of minutes (i.e. <=10% of the run's time allocated to the "
                     "wrong partition). Not pre-registered — stated here so the number has a "
-                    "reading, and quoted beside the raw gap either way.")
+                    "reading, and quoted beside the raw gap either way.",
+                two_intents="`intended` is the FINAL (price-updated) allocation; `launch` is "
+                            "the vector pre-registered in run_config.json before batch 1. "
+                            "Prices move the intent during the run, so the two differ and "
+                            "both are quoted.")
 
 
 def floor_vs_deficit(summary: dict) -> dict:
@@ -174,12 +198,20 @@ def readout(run_dir: Path) -> dict:
         raise SystemExit(f"{sp} missing — the run has not finished (or was killed before "
                          f"`finish()`); state.json is not a substitute.")
     s = json.loads(sp.read_text(encoding="utf-8"))
+    # The PRE-REGISTERED intent, read from the config written before batch 1 — the bar that
+    # was written down first, as opposed to the one the price model arrived at.
+    cfg_p = run_dir / "run_config.json"
+    launch = None
+    if cfg_p.exists():
+        cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
+        launch = ((cfg.get("pop_quota") or {}).get("intended") or {}).get("share")
     return dict(
         run=run_dir.name,
         active_min=s.get("active_min"), wall_min=s.get("wall_min"),
         batches=s.get("batches"), wall_over_active=s.get("wall_over_active"),
         totals=s.get("totals"),
-        realized_vs_intended=mix(s),
+        launch_intended=launch,
+        realized_vs_intended=mix(s, launch),
         floor_vs_deficit=floor_vs_deficit(s),
         view_screen=view_screen(s),
         triggered_lineage=triggered_lineage(run_dir),
@@ -205,12 +237,18 @@ def main():
     m = rep["realized_vs_intended"]
     print("\n=== REALIZED vs INTENDED ===", file=sys.stderr)
     if m.get("per_partition"):
-        print(f"{'partition':22s}{'intend':>8}{'min':>8}{'cand':>8}{'admit':>8}{'d(min)':>9}",
-              file=sys.stderr)
+        print(f"{'partition':22s}{'launch':>8}{'intend':>8}{'min':>8}{'cand':>8}"
+              f"{'admit':>8}{'d(launch)':>11}", file=sys.stderr)
         for r in m["per_partition"]:
-            print(f"{r['partition']:22s}{r['intended']:8.3f}{r['min']:8.3f}"
-                  f"{r['cand']:8.3f}{r['admit']:8.3f}{r['delta_min']:+9.3f}", file=sys.stderr)
-        print(f"L1 gap = {m['l1_gap']:.3f}  -> {m['verdict']}", file=sys.stderr)
+            lz = "  n/a  " if r["launch"] is None else f"{r['launch']:8.3f}"
+            dl = "     n/a  " if r["delta_launch"] is None else f"{r['delta_launch']:+11.3f}"
+            print(f"{r['partition']:22s}{lz}{r['intended']:8.3f}{r['min']:8.3f}"
+                  f"{r['cand']:8.3f}{r['admit']:8.3f}{dl}", file=sys.stderr)
+        print(f"L1 gap vs FINAL intent  = {m['l1_gap']:.3f}  -> {m['verdict']}",
+              file=sys.stderr)
+        if m.get("l1_gap_vs_launch") is not None:
+            print(f"L1 gap vs LAUNCH intent = {m['l1_gap_vs_launch']:.3f}  -> "
+                  f"{m['verdict_vs_launch']}   (the pre-registered bar)", file=sys.stderr)
 
 
 if __name__ == "__main__":

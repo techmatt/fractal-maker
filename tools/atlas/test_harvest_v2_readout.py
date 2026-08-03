@@ -76,7 +76,29 @@ def test_a_perfect_mix_passes_and_a_v1_shaped_miss_does_not():
 
 def test_the_mix_carries_all_three_denominations_because_v1_was_quoted_in_the_second():
     r = hr.mix(_summary())["per_partition"][0]
-    assert set(r) == {"partition", "intended", "min", "cand", "admit", "delta_min"}
+    assert set(r) == {"partition", "launch", "intended", "min", "cand", "admit",
+                      "delta_min", "delta_launch"}
+
+
+def test_both_intents_are_reported_because_prices_move_the_intent_mid_run():
+    """The allocation is recomputed every pop from live prices, so a partition that prices
+    expensive has its intended share fall while the run is still serving it. Quoting only the
+    FINAL intent would grade the run against a target the run itself moved; quoting only the
+    launch intent would blame the pop for the price model. Both, or neither means anything."""
+    launch = {"a": 0.9, "b": 0.1}                  # what was pre-registered
+    got = hr.mix(_summary(), launch)               # final intent is 0.5/0.5, realized 0.5/0.5
+    assert got["l1_gap"] == 0.0 and got["verdict"] == "PASS"
+    assert got["l1_gap_vs_launch"] == pytest.approx(0.4)
+    assert got["verdict_vs_launch"] == "MISS"
+    by = {r["partition"]: r for r in got["per_partition"]}
+    assert by["a"]["launch"] == 0.9 and by["a"]["delta_launch"] == pytest.approx(-0.4)
+
+
+def test_no_launch_intent_reads_None_rather_than_zero():
+    """A run config that never recorded one and a run that matched it perfectly are
+    different facts."""
+    got = hr.mix(_summary())
+    assert got["l1_gap_vs_launch"] is None and got["verdict_vs_launch"] is None
 
 
 def test_an_allocator_off_run_reads_ABSENT_not_zero():
