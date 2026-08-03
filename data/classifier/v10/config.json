@@ -64,5 +64,6 @@
   "cap_doc": "docs/design/auto_maxiter.md",
   "recipe_vs_v9": "IDENTICAL \u2014 every hyperparameter is v9's own config value, which was itself asserted identical to v8's. The ONLY change is the population: 1,267 maneuver-view locations appended.",
   "corpus_note": "v8's 7,115-row frozen prefix + 1,267 appended locations from the 2026-08 supply crawl and label-seeded harvest. Third eval instrument: maneuver_uniform_v1 (90 loc, forced eval).",
-  "best_epoch": 20
+  "selection_population": "census + floor (670) \u2014 v8/v9-COMPARABLE. The 90 maneuver_uniform locations are held out of training AND of checkpoint selection (prereg_v10.json amendment 1); attempt 1 selected over all 760 and that moved the objective off v8's.",
+  "best_epoch": 32
 }
