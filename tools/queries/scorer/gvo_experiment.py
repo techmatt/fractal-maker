@@ -33,8 +33,9 @@ from torch.utils.data import DataLoader
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import data as D  # noqa: E402
-import train as TR  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
+from tools.queries.scorer import data as D  # noqa: E402
+from tools.queries.scorer import train as TR  # noqa: E402
 import surfacing_eval as SE  # noqa: E402
 
 # ---- probe output dirs (never v2/) --------------------------------------

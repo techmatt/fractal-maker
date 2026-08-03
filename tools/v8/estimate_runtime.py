@@ -36,9 +36,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(ROOT))
 import paths          # noqa: E402
-import render_cache   # noqa: E402
+from tools.v8 import render_cache   # noqa: E402
 
 PLAN = ROOT / "data" / "v8" / "plan.jsonl"
 COLORMAPS = ROOT / "data" / "v8" / "colormaps.json"

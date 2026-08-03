@@ -23,8 +23,10 @@ import torch
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import data as D  # noqa: E402
-import train as TV2  # noqa: E402  (FROZEN config + mechanics, one source of truth)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(  # repo root:
+    os.path.dirname(os.path.abspath(__file__))))))               # the tools.* imports below
+from tools.queries.scorer import data as D  # noqa: E402
+from tools.queries.scorer import train as TV2  # noqa: E402  (FROZEN config + mechanics)
 
 # ---- config: FROZEN from v3 (== train.py). Only the training pair-set changes. ----
 SEED = TV2.SEED

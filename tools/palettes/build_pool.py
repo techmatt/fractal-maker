@@ -31,7 +31,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # tools/
 import _bootstrap  # noqa: E402,F401  (adds tools/{palettes,corpus,queries} to sys.path)
 import palette_features as pf  # noqa: E402
-import build_features as bf     # noqa: E402
+from tools.palettes import build_features as bf   # noqa: E402
 
 ROOT = pf.ROOT
 SURVEY = os.path.join(ROOT, "out", "extracted_palette_survey.json")

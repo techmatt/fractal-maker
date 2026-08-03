@@ -190,6 +190,16 @@ rather than in a doc about storage or coloring.
   the current state is the worst of both: a centralizing module almost nothing uses, and a
   convention every new file re-derives. This is also the direct cause of method A above
   being hard: there is no dotted name to resolve against.
+  **Correction, 2026-08-02: there IS a dotted name, and it costs nothing.** A directory
+  without `__init__.py` is a PEP 420 *namespace* package, so `from tools.v9 import
+  build_plan` already resolves with the repo root on `sys.path` — no `__init__.py`, no build
+  backend, no editable install, and `uv run python tools/x/y.py` keeps working (a script's
+  own dir is still `sys.path[0]`). The bare-name convention is a habit, not a constraint.
+  It is now **required** wherever the basename is ambiguous: `tests/test_import_hygiene.py`
+  fails on any bare import of a name owned by more than one file, because those resolve by
+  `sys.path` order and `sys.modules` first-write — 10 names and 22 call sites were doing so
+  until that pass converted them. The remaining ~600 bare imports of *unique* names are an
+  ergonomic tax, not a correctness risk, and are unchanged.
   `[measured: 305 of 439 tracked .py (69%) call sys.path.insert directly; _bootstrap has 3
   importers; 2026-07-31]` `[cmd: git ls-files '*.py' | xargs grep -l 'sys.path.insert' | wc -l;
   grep -rlE '^\s*(import|from)\s+_bootstrap' --include='*.py' tools/ | wc -l]`

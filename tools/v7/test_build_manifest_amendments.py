@@ -25,8 +25,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "v7"))
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
-import build_manifest as bm  # noqa: E402
+from tools.v7 import build_manifest as bm  # noqa: E402
 import label_store as ls  # noqa: E402
 
 BATCH = "2026-07-26_amend_probe"

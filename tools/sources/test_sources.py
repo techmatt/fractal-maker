@@ -27,7 +27,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
-for p in (HERE, REPO_ROOT / "tools" / "corpus", REPO_ROOT / "tools" / "descent",
+for p in (HERE, REPO_ROOT, REPO_ROOT / "tools" / "corpus", REPO_ROOT / "tools" / "descent",
           REPO_ROOT / "tools" / "explorer", REPO_ROOT / "tools" / "sourcing"):
     sys.path.insert(0, str(p))
 
@@ -36,7 +36,7 @@ import artifacts as A               # noqa: E402
 import atom_lib as al               # noqa: E402
 import source_store as ss           # noqa: E402
 import render_tiles as rt           # noqa: E402
-import sheet as sh                  # noqa: E402
+from tools.sources import sheet as sh    # noqa: E402
 import sources as S                 # noqa: E402
 import triage_store as ts           # noqa: E402
 import prerender_triage as pre      # noqa: E402

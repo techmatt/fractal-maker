@@ -59,7 +59,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
-sys.path.insert(0, str(ROOT / "tools" / "v9"))
+sys.path.insert(0, str(ROOT))
 import location as loc_mod   # noqa: E402
 import paths                 # noqa: E402
 import active_ckpt as ac     # noqa: E402  (THE production iteration-cap policy)
@@ -67,7 +67,7 @@ import active_ckpt as ac     # noqa: E402  (THE production iteration-cap policy)
 # The recipe is IMPORTED from v9's builder, never restated: the draw order, the seed
 # namespace, the geometry magnitudes and the slot filename are the identity of a tile, and
 # a second copy of them is a second thing that can drift.
-import build_plan as v9p     # noqa: E402
+from tools.v9 import build_plan as v9p   # noqa: E402
 
 MANIFEST = "data/v10/manifest.jsonl"
 V10_META_SRC = "data/v10/build_metadata.json"

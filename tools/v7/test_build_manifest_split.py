@@ -17,7 +17,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "v7"))
-import build_manifest as bm  # noqa: E402
+sys.path.insert(0, str(ROOT))
+from tools.v7 import build_manifest as bm  # noqa: E402
 
 
 def split(batch, ft):

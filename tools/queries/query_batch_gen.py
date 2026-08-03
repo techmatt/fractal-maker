@@ -60,9 +60,9 @@ sys.path.insert(0, str(qs.ROOT / "tools" / "palettes"))
 import palette_features as pf                     # noqa: E402  (farthest_point_order — reused w/ render-space dmat)
 
 # v1 scorer harness — reuse the training pipeline exactly as surfacing_eval does.
-sys.path.insert(0, str(HERE / "scorer"))
-import data as SD                                 # noqa: E402  (build_transform train=False)
-import train as ST                                # noqa: E402  (build_model)
+sys.path.insert(0, str(HERE.parents[1]))
+from tools.queries.scorer import data as SD       # noqa: E402  (build_transform train=False)
+from tools.queries.scorer import train as ST      # noqa: E402  (build_model)
 
 ROOT = qs.ROOT
 V1_DIR = ROOT / "data" / "queries" / "scorer" / "v1"

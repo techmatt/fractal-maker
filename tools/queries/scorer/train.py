@@ -48,7 +48,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import data as D  # noqa: E402  (sibling module, script-style import)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(  # repo root:
+    os.path.dirname(os.path.abspath(__file__))))))               # the tools.* imports below
+from tools.queries.scorer import data as D  # noqa: E402
 
 # ================= NAMED CONSTANTS =================
 SEED = 0

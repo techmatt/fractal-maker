@@ -68,7 +68,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
-sys.path.insert(0, str(ROOT / "tools" / "v8"))
+sys.path.insert(0, str(ROOT))
 import label_store as ls    # noqa: E402
 import location as loc_mod  # noqa: E402
 import paths                # noqa: E402
@@ -76,7 +76,7 @@ import paths                # noqa: E402
 # v8's build is imported, not copied: the clustering predicate, the fail-closed registry
 # and the batch->classification rules must be the SAME code, or "append onto v8's prefix"
 # would silently mean "append onto something v8 would not have produced".
-import build_manifest as v8b  # noqa: E402
+from tools.v8 import build_manifest as v8b  # noqa: E402
 
 BATCHES_GLOB = str(ROOT / "data" / "label_corpus" / "batches" / "*" / "images.jsonl")
 PRIOR_MANIFEST = ROOT / "data" / "v8" / "manifest.jsonl"

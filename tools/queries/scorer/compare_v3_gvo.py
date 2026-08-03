@@ -26,9 +26,11 @@ import torch
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import data as D  # noqa: E402
-import train as TV2  # noqa: E402
-import train_v3 as TV3  # noqa: E402  (collect_pair_records, _acc, _slice)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(  # repo root:
+    os.path.dirname(os.path.abspath(__file__))))))               # the tools.* imports below
+from tools.queries.scorer import data as D  # noqa: E402
+from tools.queries.scorer import train as TV2  # noqa: E402
+from tools.queries.scorer import train_v3 as TV3  # noqa: E402  (collect_pair_records, _acc, _slice)
 
 V3_DIR = os.path.join(D.REPO, "data", "queries", "scorer", "v3")
 V3GVO_DIR = os.path.join(D.REPO, "data", "queries", "scorer", "v3_gvo")

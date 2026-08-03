@@ -29,12 +29,13 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "tools" / "descent"))
 
 import atom_lib as al          # noqa: E402
 import source_store as ss      # noqa: E402
 import render_tiles as rt      # noqa: E402
-import sheet as sh             # noqa: E402
+from tools.sources import sheet as sh   # noqa: E402
 import sources as S            # noqa: E402
 import triage_store as ts      # noqa: E402
 

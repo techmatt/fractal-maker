@@ -80,8 +80,8 @@ from tools import colormap as cm                       # noqa: E402
 from tools.curation import colored_clip as cc          # noqa: E402  cached-field recolor + POOL/FEATURES
 from tools.curation import colored_clip_spread as ccs   # noqa: E402  cell_label + marginal_share_penalty
 import query_batch_gen as P                             # noqa: E402  score_frames (deploy transform)
-import train as ST                                      # noqa: E402  build_model
-import data as SD                                       # noqa: E402  ACTIVE_SCORER_DIR (pref-v3-gvo)
+from tools.queries.scorer import train as ST            # noqa: E402  build_model
+from tools.queries.scorer import data as SD             # noqa: E402  ACTIVE_SCORER_DIR (pref-v3-gvo)
 
 RECORDS = cc.RECORDS
 CATEGORIES = ROOT / "data/palettes/palette_categories.json"

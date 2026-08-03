@@ -69,13 +69,12 @@ import query_batch_gen as P                # noqa: E402  (score_frames — v2/v1
 import diversity_diagnostic as dd          # noqa: E402  (single_linkage_clusters)
 sys.path.insert(0, str(qs.ROOT / "tools" / "palettes"))
 import palette_features as pf              # noqa: E402  (distance_matrix, farthest_point_order — FEATURE space)
-sys.path.insert(0, str(HERE / "scorer"))
-import train as ST                         # noqa: E402  (build_model)
+sys.path.insert(0, str(HERE.parents[1]))
+from tools.queries.scorer import train as ST   # noqa: E402  (build_model)
 
 cm = qs.cm
 ROOT = qs.ROOT
-sys.path.insert(0, str(HERE / "scorer"))
-import data as SD                            # noqa: E402  (ACTIVE_SCORER_DIR single-source pointer)
+from tools.queries.scorer import data as SD    # noqa: E402  (ACTIVE_SCORER_DIR single-source pointer)
 # Deployed pref scorer resolves from the single-source pointer (data.ACTIVE_SCORER_DIR);
 # promoting a retrain is a one-line flip there, not an edit here. Currently pref-v2.
 V2_DIR = Path(SD.ACTIVE_SCORER_DIR)

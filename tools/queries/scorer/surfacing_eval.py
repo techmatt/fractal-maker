@@ -20,8 +20,9 @@ from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import data as D  # noqa: E402
-import train as TR  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
+from tools.queries.scorer import data as D  # noqa: E402
+from tools.queries.scorer import train as TR  # noqa: E402
 
 V1_DIR = os.path.join(D.REPO, "data", "queries", "scorer", "v1")
 OUT_DIR = os.path.join(V1_DIR, "surfacing_eval")

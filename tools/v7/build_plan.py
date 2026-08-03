@@ -37,8 +37,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools" / "v6"))
-import build_plan as v6bp  # noqa: E402  (emit_location + recipe constants, reused verbatim)
+sys.path.insert(0, str(ROOT))
+from tools.v6 import build_plan as v6bp  # noqa: E402  (emit_location + recipe constants, reused verbatim)
 
 MANIFEST = ROOT / "data" / "v7" / "manifest.jsonl"
 ROSTER = ROOT / "data" / "v4" / "aug_roster.json"

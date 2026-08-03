@@ -42,9 +42,10 @@ REPO_ROOT = HERE.parents[1]
 BIN = REPO_ROOT / "target" / "release" / "fractal-generator.exe"
 
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "tools" / "corpus"))
 import store          # noqa: E402
-import app as dh      # noqa: E402
+from tools.descent import app as dh   # noqa: E402
 
 pytestmark = pytest.mark.skipif(not BIN.exists(), reason="release binary not built")
 
