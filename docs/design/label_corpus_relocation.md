@@ -86,7 +86,7 @@ feed.
 ### The in-scope construction sites
 
 Enumerated 2026-07-29 (label corpus only — `data/wallpaper_corpus`,
-`data/render_mode_corpus`, `data/q4_window_corpus`, the coevo round dirs, and the loose0
+`data/render_mode_corpus`, `data/q4_window_corpus`, and the loose0
 `data/label_crops` feed are **separate** stores with their own relocation story and are
 explicitly out of scope):
 

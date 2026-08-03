@@ -214,3 +214,14 @@ an item's evidence, the line points at it rather than restating it.
   730 labeled rows, 2026-08-02]`
   `[code: tools/atlas/view_fit.py::{FEATURES_V11,EXEMPLAR_FEATURES};
   tools/atlas/test_label_seeded_harvest.py::test_v11_drops_the_family_and_the_exemplar_columns]`
+
+- **2026-08-02 — `tools/coevo/` (the guard-OFF v6-gap co-evolution round), deleted.** Two
+  modules — `coevo_round.py` (the driver) and `analyze_round.py` (its readout) — that ran
+  one guard-OFF diagnostic round into `data/discovery/gather/` and were never run again.
+  An all-channels liveness sweep (imports, `sys.path` inserts, `spec_from_file_location`
+  path loads, subprocess argv, launcher scripts) found **no consumer of either module**;
+  the only references left in the tree were prose. Deleted rather than archived, so the
+  cost is stated plainly: `analyze_round.py` was **B-live** in `tools/README.md`'s sense —
+  it produced a committed artifact once — and its deletion removes the only committed
+  description of how that round's gather ledger was made. The artifact stays; the recipe
+  does not. `[code: removed — tools/coevo/{coevo_round,analyze_round}.py]`

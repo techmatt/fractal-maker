@@ -220,7 +220,7 @@ per-location `auto_maxiter` values. The corpus has two render regimes in it:
 | cap regime | who writes it |
 |---|---|
 | `auto_maxiter(fw)` | `build_native_multibrot_band.py`, `descent/store.py`, `rescore_gather_mb4_v7.py`, every `wallpaper/build_*.py` |
-| flat **8000** | `gather_select.py`, `recolor_gather_v6.py`, `build_enrich_batch.py`, `build_rev4_batch.py`, `sourcing/build_minibrot_batch.py`, `coevo/analyze_round.py`, `eda/scale_2x2_build_batch.py`, `mining/score_lib.run_enrich_score`, `mining/harvest.py` |
+| flat **8000** | `gather_select.py`, `recolor_gather_v6.py`, `build_enrich_batch.py`, `build_rev4_batch.py`, `sourcing/build_minibrot_batch.py`, `eda/scale_2x2_build_batch.py`, `mining/score_lib.run_enrich_score`, `mining/harvest.py` |
 
 This does **not** contaminate training — the classifier trains on aug-cache tiles, and
 `render.maxiter` is not one of the fields it sees. It bears on **label quality**: a human
