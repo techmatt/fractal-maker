@@ -75,6 +75,7 @@ BATCHES = (RANKED, NEARMB, UNIFORM)
 N_CHUNK = 290
 
 RENDER_THREADS = 3     # 4 workers x 3 threads = 12 = the box's logical cores
+_PHOENIX_POOL_CACHE: dict = {}
 
 # Absent from the served manifest, asserted absent on the served BYTES.
 LEAK_KEYS = ("fate", "rank_tier", "rank_score", "cheap_eord", "cheap_pgood", "cheap_nb",
@@ -228,6 +229,55 @@ def render_family_of(partition: str) -> str:
     return partition
 
 
+# --------------------------------------------------------------------------- #
+# phoenix parameter recovery
+# --------------------------------------------------------------------------- #
+PHOENIX_POOL = ROOT / "data" / "atlas" / "phoenix_seed_pool.json"
+
+
+def _phoenix_points() -> dict:
+    """`c -> (p, z_{-1})` from the committed seed pool the run was seeded from.
+
+    WHY A JOIN EXISTS AT ALL. The 2026-08-03 run's record-and-rank store wrote only `c` for
+    a phoenix row (`steered_frontier._q4_record`, fixed in the same session but AFTER the
+    run), so its 1,238 phoenix rows cannot rebuild their own fractal from the store alone.
+    They can be rebuilt from the pool: every phoenix root in that run came from
+    `phoenix_seed_pool.json`, whose 96 `c` values are distinct, and all 1,238 rows join.
+    Rows written by a later run carry `phoenix_p_re` etc. directly and never reach here.
+    """
+    if not PHOENIX_POOL.exists():
+        return {}
+    out = {}
+    for e in json.loads(PHOENIX_POOL.read_text(encoding="utf-8")):
+        out[(round(float(e["c_re"]), 12), round(float(e["c_im"]), 12))] = e
+    return out
+
+
+def phoenix_params(r: dict, pool: dict) -> dict:
+    """The `(p, z_{-1})` for one phoenix row. RAISES if it cannot be determined.
+
+    Fail loud, because the silent alternative is the whole problem: a missing p renders the
+    engine's DEFAULT phoenix plane at this row's coordinates, which produces a real-looking
+    image of a different fractal and would ship into a label batch as the thing it is not."""
+    have = {k: r.get(k) for k in ("p_re", "p_im", "zm1_re", "zm1_im")}
+    if all(v is not None for v in have.values()):
+        return have                                   # a directly-parameterised row
+    for pre, zre in (("phoenix_p_re", "phoenix_zm1_re"),):
+        if r.get(pre) is not None and r.get(zre) is not None:
+            return dict(p_re=r["phoenix_p_re"], p_im=r["phoenix_p_im"],
+                        zm1_re=r["phoenix_zm1_re"], zm1_im=r["phoenix_zm1_im"])
+    cre, cim = r.get("c_re") or r.get("julia_c_re"), r.get("c_im") or r.get("julia_c_im")
+    if cre is not None:
+        e = pool.get((round(float(cre), 12), round(float(cim), 12)))
+        if e is not None:
+            return dict(p_re=repr(e["p_re"]), p_im=repr(e["p_im"]),
+                        zm1_re=repr(e["zm1_re"]), zm1_im=repr(e["zm1_im"]))
+    raise SystemExit(
+        f"phoenix row has no (p, z_-1) and does not join {PHOENIX_POOL.name} on c="
+        f"({cre}, {cim}). Refusing to render it: without p it would render the DEFAULT "
+        f"phoenix plane, i.e. a different fractal at the right coordinates.")
+
+
 def _render_block(r: dict) -> dict:
     """The corpus render block for one row, whichever plane it lives on."""
     fam = render_family_of(r.get("family") or r.get("partition") or "mandelbrot")
@@ -243,11 +293,7 @@ def _render_block(r: dict) -> dict:
     if fam == "phoenix":
         # The phoenix identity is the whole (c, p, z_-1) point; a render block carrying only
         # `c` would rebuild a DIFFERENT phoenix at the same coordinates.
-        for k in ("p_re", "p_im", "zm1_re", "zm1_im"):
-            v = r.get(k)
-            if v is None and r.get("phoenix"):
-                v = (r["phoenix"] or {}).get(k)
-            render[k] = v
+        render.update(phoenix_params(r, _PHOENIX_POOL_CACHE))
     return render
 
 
@@ -317,6 +363,7 @@ def write_batch(batch_id: str, rows: list[dict], *, sampling: dict, purpose: str
 
 def stage_draw(args) -> int:
     out = []
+    _PHOENIX_POOL_CACHE.update(_phoenix_points())
     # --- (a) ranked harvest candidates -------------------------------------- #
     q = _jl(queue_path(args.run_dir))
     if q:

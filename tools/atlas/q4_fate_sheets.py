@@ -45,6 +45,9 @@ for _p in (str(HERE), str(ROOT), str(ROOT / "tools"), str(ROOT / "tools" / "corp
 import paths                                    # noqa: E402
 import prescreen                                # noqa: E402
 import steered_frontier as sf                   # noqa: E402  (render_args_for, the fates)
+import build_q4_harvest_batches as bq          # noqa: E402  (the phoenix point joiner)
+
+_POOL = bq._phoenix_points()
 
 VIVID_PALETTE = "blue_orange"
 VIVID_SOURCE = ROOT / "data" / "palettes" / "vivid_blue_orange.json"
@@ -116,11 +119,15 @@ def render_pair(r, canon_dir: Path, vivid_dir: Path):
     fw = r.get("outcome_fw") if r.get("outcome_fw") is not None else r["fw"]
     c6 = None
     if r["partition"] == "phoenix":
-        px = r.get("phoenix") or {}
+        # The run's store recorded only `c` for a phoenix row; the rest of the point is
+        # recovered from the committed seed pool by the batch builder's own joiner, which
+        # RAISES rather than falling back to the engine's default plane.
+        try:
+            pp = bq.phoenix_params(r, _POOL)
+        except SystemExit:
+            return None, None
         c6 = (r.get("julia_c_re"), r.get("julia_c_im"),
-              px.get("p_re"), px.get("p_im"), px.get("zm1_re"), px.get("zm1_im"))
-        if any(v is None for v in c6):
-            return None, None       # a phoenix row without its full point is not renderable
+              pp["p_re"], pp["p_im"], pp["zm1_re"], pp["zm1_im"])
     elif r.get("julia_c_re") is not None:
         c6 = (r["julia_c_re"], r["julia_c_im"])
     try:

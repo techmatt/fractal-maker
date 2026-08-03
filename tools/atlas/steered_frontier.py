@@ -2550,6 +2550,18 @@ class SteeredFrontier:
             # the dynamical parameter, whichever plane this partition lives on
             julia_c_re=(None if jc is None else str(jc[0])),
             julia_c_im=(None if jc is None else str(jc[1])),
+            # PHOENIX NEEDS ALL SIX NUMBERS, and writing two of them is the bug this line
+            # fixes. A phoenix row's identity is the whole (c, p, z_{-1}) point; `julia_c_*`
+            # above captures only `c`, and `phoenix` below is the seed's PROVENANCE
+            # (branch/theta/offset), not its parameters. A store missing p and z_{-1} cannot
+            # rebuild the candidate — it rebuilds the DEFAULT phoenix plane at the right
+            # coordinates, which renders a different fractal that looks like it worked. That
+            # is the same failure `prescreen._render`'s `family_params` kwarg exists to
+            # prevent, reintroduced one layer up.
+            **(dict(phoenix_c_re=str(jc[0]), phoenix_c_im=str(jc[1]),
+                    phoenix_p_re=str(jc[2]), phoenix_p_im=str(jc[3]),
+                    phoenix_zm1_re=str(jc[4]), phoenix_zm1_im=str(jc[5]))
+               if (c["partition"] == "phoenix" and jc is not None and len(jc) == 6) else {}),
             phoenix=c.get("phoenix"),
             # the admitted frame, when there is one — a sheet must show what the ledger holds
             outcome_cx=(None if out is None else out[0]),
