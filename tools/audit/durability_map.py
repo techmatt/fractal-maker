@@ -112,8 +112,10 @@ REGISTRY = [
     ("data/classifier/v{5,6,7}/model_best.pt", "classifier/train_v{5,6,7}.py", DUR_F,
      "a full GPU retrain — which needs the v7 manifest above (gone)", N,
      "MISMATCH (fragile). Tracked via LFS force-add, but the PATH is gitignored, so "
-     "durable() gives a false OK on the existing file and REFUSES any new sibling. The "
-     "live discovery gate's weights are in a directory the contract cannot extend."),
+     "durable() REFUSES it and every new sibling. (Until 2026-08-03 it gave a false OK on "
+     "the existing file — `check-ignore` without `--no-index` answers about the index, not "
+     "the rules; see tools/paths._is_gitignored.) The live discovery gate's weights are in "
+     "a directory the contract cannot extend."),
     ("data/classifier/v7/eval_scores_v7.jsonl", "classifier/train_v7.py (eval-freeze)", UND,
      "a full GPU eval-freeze over the frozen eval slice — whose manifest is gone", Y,
      "MISMATCH. .gitattributes documents it as the frozen input the keeper-calibration "

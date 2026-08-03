@@ -67,6 +67,41 @@ def test_the_error_emits_a_pasteable_gitignore_negation():
         assert SYNTHETIC_IGNORED.startswith(ancestor.lstrip("!/")), (ancestor, lines)
 
 
+def _tracked_but_ignored() -> list[str]:
+    """Repo-relative paths that are IN THE INDEX and would still be excluded by the ignore
+    rules — the `durable(force-add)` class in `tools/audit/durability_map.py`. Derived from
+    git at test time, never listed here: a hardcoded example would rot the day someone
+    force-adds or removes one, and the point is the CLASS, not the member."""
+    import subprocess
+    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=REPO_ROOT,
+                             capture_output=True, text=True)
+    if tracked.returncode != 0:
+        return []
+    got = subprocess.run(["git", "check-ignore", "--no-index", "--stdin", "-z"],
+                         cwd=REPO_ROOT, input=tracked.stdout, capture_output=True, text=True)
+    return [p for p in got.stdout.split("\0") if p.strip()]
+
+
+def test_durable_refuses_a_tracked_but_ignored_path():
+    """THE FALSE-ACCEPT. `git check-ignore` short-circuits on anything in the index and
+    answers "not ignored" whatever the rules say, so without `--no-index` the guard blessed
+    every force-added path — the one class where the rules and the index disagree, and the
+    exact class where the NEXT write to that directory is silently discarded. Red-on-purpose
+    by dropping `--no-index` from `paths._is_gitignored`: this test then fails on all 18.
+
+    Skips only if the repo has no such path left, which would be the contract being HONOURED
+    rather than the test being unable to run."""
+    victims = _tracked_but_ignored()
+    if not victims:
+        pytest.skip("no tracked-but-ignored paths remain — nothing to false-accept")
+    for rel in victims:
+        assert P._is_gitignored(str(REPO_ROOT / rel)), (
+            f"{rel} is tracked AND matched by an ignore rule, but the guard reports it "
+            f"not-ignored — `git check-ignore` is being asked about the index, not the rules")
+        with pytest.raises(P.DurabilityError):
+            P.durable(rel)
+
+
 def test_durable_passes_on_reincluded_path():
     """A durable path re-included by a .gitignore negation is accepted (returns its
     absolute in-tree location)."""

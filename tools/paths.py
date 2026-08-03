@@ -60,10 +60,19 @@ def _is_gitignored(abspath: str) -> bool:
     negation (`!/data/discovery/`), so a re-included durable path correctly reports
     False. Ignore status is fixed within a run, so the result is cached. If git is
     unavailable we cannot prove the path safe, so we treat it as NOT ignored (fail
-    open) rather than block every durable write."""
+    open) rather than block every durable write.
+
+    `--no-index` IS THE WHOLE ASSERTION. Without it, `check-ignore` short-circuits on any
+    path already in the index and reports "not ignored" whatever the rules say — so the
+    guard passed on exactly the class it exists to catch: a file that is tracked ONLY
+    because someone once ran `git add -f` at a gitignored path (18 of them here, the
+    `durable(force-add)` column in `tools/audit/durability_map.py`). The first write
+    succeeds, the guard blesses it, and the next sibling written to the same directory is
+    silently discarded — which is the failure `durable()` was written to make impossible.
+    `--no-index` asks about the RULES, which is the question the durability class asks."""
     try:
         proc = subprocess.run(
-            ["git", "check-ignore", "-q", "--", abspath],
+            ["git", "check-ignore", "-q", "--no-index", "--", abspath],
             cwd=REPO_ROOT, capture_output=True,
         )
     except (OSError, FileNotFoundError):
