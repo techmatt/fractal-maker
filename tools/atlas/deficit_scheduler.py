@@ -177,12 +177,52 @@ class UnseededRunError(RuntimeError):
     absent seed aborts, and the override stamps the run summary (see `seed_record`)."""
 
 
+# The ordered registry of seed SOURCES. Resolution is by existence, first match wins, and the
+# winner is stamped into the seed record (`source` / `emb_dir`) — so this is a documented
+# resolution order, NOT a silent fallback: a reader of a run summary can always tell which
+# source seeded it, and a source that resolved to nothing is visible as the next one winning.
+#
+# campaign1 is first because it is the older and larger library snapshot. It is currently
+# ABSENT (the snapshot was never rebuilt after the derived-artifact wipe and its embeddings
+# lived in `scratch/`, a class whose contract guarantees deletion), which is why the registry
+# exists at all — `library_seed_v2` is the relit seed built from Matt's own >=3 verdicts
+# (`tools/emission/library_seed_v2.py`), and unlike campaign1 its embeddings are rebuildable
+# from its own snapshot.
+SEED_SOURCES = (
+    ("campaign1", INTAKE_ARTIFACT, INTAKE_EMB_DIR),
+    ("library_seed_v2",
+     ROOT / "data" / "emission" / "library_seed_v2" / "intake.json",
+     ROOT / "scratch" / "emission" / "library_seed_v2" / "embs"),
+)
+
+
+def resolve_seed_source() -> tuple[str, Path, Path]:
+    """`(name, intake, emb_dir)` of the first registered source whose snapshot EXISTS.
+
+    Falls back to the FIRST entry when none exists, so the error message names the primary
+    artifact rather than the last one tried — "campaign1 is missing" is the actionable
+    message; "library_seed_v2 is missing" would send a reader to rebuild the wrong thing."""
+    for name, ip, ed in SEED_SOURCES:
+        if Path(ip).exists():
+            return name, Path(ip), Path(ed)
+    name, ip, ed = SEED_SOURCES[0]
+    return name, Path(ip), Path(ed)
+
+
 def library_seed_paths(intake_path: Path | None = None,
                        emb_dir: Path | None = None) -> tuple[Path, Path]:
     """The (intake artifact, embedding dir) a seed would be loaded from. Shared by the loader,
-    the guard and the error message so all three name the same paths."""
-    return (Path(intake_path) if intake_path else INTAKE_ARTIFACT,
-            Path(emb_dir) if emb_dir else INTAKE_EMB_DIR)
+    the guard and the error message so all three name the same paths.
+
+    With neither argument given, the registry resolves (see `resolve_seed_source`). An
+    explicit path always wins and is never mixed with a resolved one — half an explicit pair
+    would silently pair one source's snapshot with another's vectors."""
+    if intake_path is not None or emb_dir is not None:
+        _n, dip, ded = resolve_seed_source()
+        return (Path(intake_path) if intake_path else dip,
+                Path(emb_dir) if emb_dir else ded)
+    _name, ip, ed = resolve_seed_source()
+    return ip, ed
 
 
 def load_library_seed_embeddings(intake_path: Path | None = None,
@@ -229,8 +269,13 @@ def require_library_seed(*, allow_unseeded: bool = False,
     ip, ed = library_seed_paths(intake_path, emb_dir)
     embs = load_library_seed_embeddings(ip, ed)
     n_looks = int(sum(int(m.shape[0]) for m in embs.values()))
+    resolved = next((name for name, sip, _ in SEED_SOURCES
+                     if Path(sip) == Path(ip)), "explicit")
     rec = dict(status="seeded" if n_looks else "unseeded",
                source=str(ip), emb_dir=str(ed), source_exists=bool(ip.exists()),
+               resolved_from=resolved,
+               registry=[dict(name=n, intake=str(p), exists=Path(p).exists())
+                         for n, p, _ in SEED_SOURCES],
                library_looks=n_looks, library_partitions=sorted(embs),
                allow_unseeded=bool(allow_unseeded), embeddings=embs)
     if n_looks:
