@@ -207,11 +207,30 @@ def cells_balanced(rep: dict) -> tuple[bool, str]:
                        else f"max take {mx}, all cells within 1 or drained")
 
 
+def render_family_of(partition: str) -> str:
+    """Ledger PARTITION -> the render `fractal_type` token.
+
+    A partition is namespaced (`julia:multibrot3`); a render family is not
+    (`julia_multibrot3`). Getting only the `julia:mandelbrot -> julia` case right and
+    leaving the three namespaced multibrot twins untouched failed 83 of 290 ranked rows
+    with `unknown family 'julia:multibrot3'` — and failed them at RENDER time, one crop at
+    a time, where it reads as a flaky renderer rather than as a mapping bug.
+
+    Pinned to `steered_frontier.render_family_of` by a test rather than importing it: that
+    module pulls torch, and a batch builder that loads a classifier to translate a string
+    would be paying seconds of import for a dictionary."""
+    if partition in ("mandelbrot", "multibrot3", "multibrot4", "multibrot5", "phoenix"):
+        return partition
+    if partition == "julia:mandelbrot":
+        return "julia"
+    if partition.startswith("julia:multibrot"):
+        return "julia_" + partition.split(":", 1)[1]
+    return partition
+
+
 def _render_block(r: dict) -> dict:
     """The corpus render block for one row, whichever plane it lives on."""
-    fam = r.get("family") or r.get("partition") or "mandelbrot"
-    if fam == "julia:mandelbrot":
-        fam = "julia"
+    fam = render_family_of(r.get("family") or r.get("partition") or "mandelbrot")
     fw = cc.hp_str(r["fw"])
     render = cc.render_block(cx=str(r["cx"]), cy=str(r["cy"]), fw=fw,
                              maxiter=int(dcf._maxiter_for_fw(float(r["fw"]))),

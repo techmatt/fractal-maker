@@ -262,6 +262,25 @@ def test_the_balance_check_is_red_for_a_real_imbalance():
     assert not ok and "b" in detail
 
 
+def test_the_batch_builders_family_map_matches_the_walks():
+    """Two copies of the partition -> render-family map now exist: the walk's
+    (`steered_frontier.render_family_of`) and the batch builder's, which is a separate copy
+    only because importing the walk pulls torch. Nothing structural keeps them equal, and
+    the first version of the builder's copy handled `julia:mandelbrot` and left the three
+    namespaced multibrot twins untouched — 83 of 290 ranked rows failed with
+    `unknown family 'julia:multibrot3'`, at RENDER time, one crop at a time, where it reads
+    as a flaky renderer rather than as a mapping bug (`verification_practice.md` 1.8)."""
+    import steered_frontier as sf
+    b = _b()
+    for p in ("mandelbrot", "multibrot3", "multibrot4", "multibrot5",
+              "phoenix", "julia:mandelbrot", "julia:multibrot3",
+              "julia:multibrot4", "julia:multibrot5"):
+        assert b.render_family_of(p) == sf.render_family_of(p), p
+    # non-vacuity: the map is not the identity, which is the whole reason it exists.
+    assert b.render_family_of("julia:multibrot3") == "julia_multibrot3"
+    assert b.render_family_of("julia:mandelbrot") == "julia"
+
+
 def test_the_draw_takes_best_first_inside_a_cell():
     """Round-robin over CELLS, ranked order WITHIN one — the chunk is the top of the queue
     conditioned on not letting one cell own the page."""
