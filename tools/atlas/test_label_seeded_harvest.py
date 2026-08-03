@@ -387,12 +387,20 @@ def test_p_notbad_is_monotone_in_the_score_but_saturates():
 
 def test_the_live_sort_key_elsewhere_is_still_composite_v3():
     """v1.1 orders THIS queue and nothing else. Nothing in the discovery path may import it
-    — the same staged-not-adopted contract `test_view_fit` holds for v1."""
+    — the same staged-not-adopted contract `test_view_fit` holds for v1.
+
+    Tests the IMPORT, not the substring. The substring form went red on 2026-08-03 for a
+    module that only NAMED view_fit in its written-down pre-registration — see
+    `test_view_fit.imports_view_fit`, which is the one owner of the predicate and is proved
+    red there by injection."""
     import steered_frontier as sf
     import maneuver_view_screen as mvs
-    src = (Path(sf.__file__).read_text(encoding="utf-8")
-           + Path(mvs.__file__).read_text(encoding="utf-8"))
-    assert "view_fit" not in src
+    from test_view_fit import imports_view_fit
+    for mod in (sf, mvs):
+        src = Path(mod.__file__).read_text(encoding="utf-8")
+        assert not imports_view_fit(src), f"{Path(mod.__file__).name} imports view_fit"
+    # ... and the positive half: composite_v3 is still what the walk sorts on.
+    assert "composite_v3" in Path(mvs.__file__).read_text(encoding="utf-8")
 
 
 # =========================================================================== #

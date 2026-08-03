@@ -123,15 +123,23 @@ RENDER_W, RENDER_H, RENDER_SS = 640, 360, 2  # reframe search fidelity
 
 
 def _render(cx, cy, fw, out: Path, *, family: str = "mandelbrot", c=None,
-            timeout: float | None = None) -> tuple[bool, str]:
+            family_params=None, timeout: float | None = None) -> tuple[bool, str]:
     """Render an outcome tile at v5 search fidelity. `family`/`c` select the fractal:
     default (`mandelbrot`, no c) is byte-identical to the historical call; pass e.g.
     `family="multibrot3"` or `family="julia", c=(re, im)` and the family's flags are
-    emitted by `render_one_flags` (the ONE flag builder) off the canonical Location."""
+    emitted by `render_one_flags` (the ONE flag builder) off the canonical Location.
+
+    `family_params` is the per-family EXTRA-constant slot the Location already has and this
+    wrapper used to hard-code empty — `{p_re, p_im, zm1_re, zm1_im}` for phoenix, empty for
+    every other family. It is additive: `None` produces the same `{}` every existing caller
+    got, so no historical call changes. Without it a phoenix tile renders at the engine's
+    DEFAULT p and z_{-1} rather than at the ones the candidate was found under, which is a
+    different fractal wearing the right coordinates — the kind of silent mismatch that only
+    shows up as an inexplicably bad score."""
     out.parent.mkdir(parents=True, exist_ok=True)
     c_re, c_im = (c if c is not None else (None, None))
     loc = loc_mod.Location(family=family, cx=str(cx), cy=str(cy), fw=str(fw),
-                           c_re=c_re, c_im=c_im, family_params={})
+                           c_re=c_re, c_im=c_im, family_params=dict(family_params or {}))
     cmd = [
         str(BIN), "render-one", "--cx", str(cx), "--cy", str(cy), "--fw", repr(float(fw)),
         "--width", str(RENDER_W), "--height", str(RENDER_H), "--supersample", str(RENDER_SS),

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -205,6 +206,28 @@ LIVE_SORT_MODULES = ("view_screen.py", "maneuver_view_screen.py", "steered_front
                      "view_frame_sweep.py", "view_screen_gate.py", "view_rescreen.py")
 
 
+# The contract is "no live sort path IMPORTS the fitted score", and the guard used to test
+# it with `"view_fit" not in source`. That is a guard pinned to PROSE, and it went red on
+# 2026-08-03 for a module that merely NAMED view_fit in a pre-registration record — the
+# written-down statement of the very bar the score is staged against. A guard that a
+# correctly-written pre-registration cannot coexist with is aimed at the wrong thing
+# (`verification_practice.md` §6), so it is re-aimed at the routing decision: any import
+# FORM, plus the positive assertion that `composite_v3` is still the key. It stays red for a
+# real adoption — proved by injection in the test below — and no longer fires on a mention.
+_IMPORT_RE = re.compile(
+    r"^\s*(?:import\s+(?:[\w.]+\.)?view_fit\b"          # import view_fit / tools.atlas.view_fit
+    r"|from\s+(?:[\w.]+\s+import\s+[^\n]*\bview_fit\b"  # from tools.atlas import view_fit
+    r"|[\w.]*view_fit\s+import\b))",                    # from view_fit import ...
+    re.MULTILINE)
+_SPEC_LOAD_RE = re.compile(r"spec_from_file_location\([^)]*view_fit", re.DOTALL)
+
+
+def imports_view_fit(src: str) -> bool:
+    """True iff `src` actually pulls the fitted score in, by any of the three forms this
+    tree uses (dotted import, bare import, `spec_from_file_location` path load)."""
+    return bool(_IMPORT_RE.search(src) or _SPEC_LOAD_RE.search(src))
+
+
 def test_no_live_sort_path_imports_the_fitted_score():
     """The staging contract. `composite_v3` stays the live sort key until an adoption
     decision is made against its own pre-registered bar; this is what makes that a fact
@@ -214,6 +237,22 @@ def test_no_live_sort_path_imports_the_fitted_score():
         p = HERE / name
         assert p.exists(), f"{name} moved — this guard must be re-aimed, not deleted"
         seen += 1
-        assert "view_fit" not in p.read_text(encoding="utf-8"), (
-            f"{name} references view_fit — the fitted score is staged, not adopted")
+        assert not imports_view_fit(p.read_text(encoding="utf-8")), (
+            f"{name} IMPORTS view_fit — the fitted score is staged, not adopted")
     assert seen == len(LIVE_SORT_MODULES)
+
+
+def test_the_import_guard_is_red_for_a_real_adoption():
+    """Prove it red on purpose: a carried red is a guard that is off, and a guard loosened
+    from a substring match to a regex has to show it still catches the thing it exists for."""
+    for adoption in ("import view_fit\n",
+                     "import view_fit as vf\n",
+                     "from tools.atlas import view_fit\n",
+                     "from view_fit import load_model_v11\n",
+                     "    import tools.atlas.view_fit\n",
+                     'spec_from_file_location("view_fit", p)\n'):
+        assert imports_view_fit(adoption), adoption
+    # ... and green for a MENTION, which is what a pre-registration record is.
+    for mention in ('"adopted only if view_fit beats composite_v3 by +0.1181"\n',
+                    "# view_fit is staged, not adopted\n"):
+        assert not imports_view_fit(mention), mention

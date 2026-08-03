@@ -84,6 +84,13 @@ import maneuver_screen as msc            # noqa: E402  (the field half: spawns t
 import maneuver_view_screen as mvs       # noqa: E402  (the same, on the VIEW's own frame)
 import view_field_cache as vfc           # noqa: E402  (the run-local f32 field store)
 import view_screen as vscr               # noqa: E402  (composite_v3 + the reference params)
+# The label-seeded harvest's two primitives (`snap_at_seed`, `enumerate_seed`) are what
+# maneuvers-on-admissions fires, and its `INTERIOR_DISCARD` is the sourcing copy of Matt's
+# rule. Imported rather than restated: a third literal 0.30 in this tree is how the three
+# drift (`verification_practice.md` §1.8).
+import label_seeded_harvest as lsh       # noqa: E402  (pure mpmath + the view screen)
+
+_INTERIOR_DISCARD = lsh.INTERIOR_DISCARD
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -211,6 +218,115 @@ MAN_TOTALS = ("man_probes_rolled", "man_probes_fired", "man_probes_coin_skip",
 # active on the exploration run's population; adding the atom screen's 2.6% on top crosses the
 # ~10% the screen is budgeted at, to produce a second number nothing would select on.
 MAN_VIEW_GAIN_DEFAULT = MAN_RANGE_GAIN_DEFAULT   # same bounded +/- gain/2 term, same reason
+# --- v1.6: RECORD-AND-RANK, and the interior gate at sourcing (2026-08-03) --------------
+# The tail this replaces gates and ADMITS: a candidate below `tau_h` left no trace at all,
+# and a `canon-not-q3` or pre-canonically-duplicated one left a `harvest_log` line and was
+# dropped. That is correct for building a ledger and wrong for a run whose deliverable is a
+# RANKED LIST a human picks a cutoff from — the material just under a cut is exactly the
+# material the cut is being chosen against, and it cannot be reviewed if it was never
+# written down.
+#
+# So: admission is UNCHANGED (the ledger, the clouds, the julia hook and every reconcile
+# identity below behave exactly as before), and a second, wider store is added beside it.
+# Every candidate scoring at or above a low per-partition floor is appended to
+# `q4_candidates.jsonl` with its cheap scores, its canonical scores WHEN IT GOT A CANONICAL
+# RENDER, and its per-stage fate. Nothing above the floor is discarded unrecorded.
+#
+# THE FLOOR IS A RECORDING FLOOR, NOT A RENDERING FLOOR, and the distinction is the whole
+# cost story: a record is a JSONL line, a canonical confirmation is a 640x360 ss2 render.
+# `tau_h` still decides who gets rendered. Rows below it are recorded on their cheap score
+# alone and carry `rank_tier=1`; rows with a canonical decode carry `rank_tier=2`. The two
+# tiers are NOT commensurable and are stamped so a later ranking cannot silently pool them.
+#
+# WHY THIS FLOOR. Sized read-only against `data/atlas/canon_waste_v10.json` (1,092 v10
+# cheap/canonical pairs): at `tau_h` the cut already retains essentially every canonically-q3
+# row it could (multibrot3 53/54, multibrot4 42/42, multibrot5 43/43), so lowering it buys
+# almost no q3 RECALL. What it buys is the sub-cut population being on record at all. Half of
+# `tau_h` roughly doubles the recorded set at zero render cost; the absolute floor stops a
+# partition whose `tau_h` is already tiny (mandelbrot's is 0.023) from recording its entire
+# candidate stream. `min(tau_h, ...)` because the floor must never RAISE a cut.
+# `[measured: 2026-08-03, scratchpad floor_calib.py over canon_waste_v10.json]`
+Q4_REC_FRAC = 0.5          # ... of tau_h
+Q4_REC_FLOOR_ABS = 0.05    # ... but never record below this absolute cheap p_good
+
+
+def _parse_family_weights(spec, families):
+    """`"mandelbrot=0.176,multibrot3=0.281,..."` -> normalized dict, or `{}` when absent.
+
+    FAIL LOUD ON AN UNKNOWN OR MISSING FAMILY rather than defaulting it to zero. A typo'd
+    family name that silently weighted nothing would mute a whole channel for a 4-hour run
+    and show up only as an empty partition in the readout — which is indistinguishable from
+    "that channel found nothing"."""
+    if not spec:
+        return {}
+    out = {}
+    for part in str(spec).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        k, _, v = part.partition("=")
+        k = k.strip()
+        if k not in families:
+            raise SystemExit(f"--family-weights names {k!r}, which is not in --families "
+                             f"({', '.join(families)})")
+        out[k] = float(v)
+    missing = [f for f in families if f not in out]
+    if missing:
+        raise SystemExit(f"--family-weights is missing {missing} — weight every family in "
+                         f"--families explicitly, or omit the flag entirely (B per family)")
+    tot = sum(out.values())
+    if tot <= 0:
+        raise SystemExit("--family-weights must sum to something positive")
+    return {k: v / tot for k, v in out.items()}
+
+
+def derive_tau_rec(tau_h: dict, *, frac: float = Q4_REC_FRAC,
+                   floor_abs: float = Q4_REC_FLOOR_ABS) -> dict:
+    """Per-partition RECORDING floor from the harvest cut. Pure, so the rule is testable.
+
+    Never above `tau_h` (a recording floor that raised a cut would silence the rows it
+    exists to keep) and never below `floor_abs`."""
+    return {p: min(float(t), max(float(floor_abs), float(frac) * float(t)))
+            for p, t in tau_h.items()}
+
+
+# Matt's interior rule at SOURCING — AND IT IS A PARITY TRIPWIRE HERE, NOT A NEW GATE.
+# That correction is the shakedown's, measured rather than reasoned: the rule is
+# `interior_fraction > 0.30 => class 1` (`tools/corpus/apply_interior_rule.py`), and the walk
+# has been enforcing exactly that bound on exactly that quantity all along —
+# `EXPAND_FLAGS` passes `--descent-black-cap ps.BLACK_CAP` and `BLACK_CAP` IS 0.30. So every
+# candidate that reaches Python is already under the threshold by construction, and on the
+# shakedown's 154 recorded candidates the observed maximum was 0.262 with a median of 0.000.
+# `interior_gated` is expected to be ZERO on this path, and that is the point of keeping it:
+#
+#   * it costs one float comparison per candidate and one term in the reconcile identity;
+#   * it fires the moment `BLACK_CAP` and Matt's rule diverge — which is a real hazard,
+#     because they are two independently-owned constants that happen to be equal, and the
+#     engine's is a DESCENT parameter somebody could tune for a different reason entirely;
+#   * a guard whose input is deliberately empty keeps its MECHANISM tested via an injected
+#     value (`verification_practice.md` §2), which is what the unit tests do.
+#
+# So do NOT read `interior_gated: 0` in a readout as "the rule found nothing to reject". It
+# means the engine rejected it one stage earlier. Where the rule is genuinely load-bearing is
+# the label store (crops already rendered) and `label_seeded_harvest`, which screens at the
+# VIEW frame — a different frame from the walk's node frame, and one no black cap covers.
+#
+# The measure itself is free: `--expand` emits `int_frac` per candidate in its own sidecar,
+# the same non-escaped fraction the Rust `render::black_fraction` and `present.rs::BLACK_THRESH`
+# use, on the candidate's OWN frame.
+INTERIOR_GATE_DEFAULT = True
+
+# --- maneuvers-on-admissions (v1.6). The prompt's k set, and it is NOT the walk's.
+# `MAN_K_DEFAULT` is `none,4,16`: the 4x frame answers "is this atom good?", which the walk
+# needs because it is deciding whether to expand. A trigger fires on a location that has
+# ALREADY decoded >= 3 — the atom question is answered — so the 4x frame buys a third field
+# per nucleus to re-ask it. `none` (preserve the admitted frame's scale at the nucleus) and
+# `16` (the framing worth LABELING, `minibrot_maneuvers.md` §7) are the two that produce
+# material this run wants.
+TRIG_K_DEFAULT = "none,16"
+TRIG_MAX_PER_BATCH_DEFAULT = 4   # bounds the bill; the admission rate bounds the opportunity
+TRIG_DEADLINE_S = 45.0           # per-trigger enumeration deadline (mnv honours it internally)
+
 FRONTIER_CAP = 6000      # prune the frontier to the top-N by priority (memory bound)
 MAN_FRONTIER_SHARE = 0.5  # ... of which maneuver nodes may hold at most this fraction. They
                           # are PROTECTED from the pooled priority prune, not exempt from the
@@ -236,11 +352,33 @@ C_PLANE = ("mandelbrot", "multibrot3", "multibrot4", "multibrot5")
 def render_family_of(partition: str) -> str:
     if partition == "mandelbrot" or partition in ("multibrot3", "multibrot4", "multibrot5"):
         return partition
+    if partition == "phoenix":
+        return "phoenix"
     if partition == "julia:mandelbrot":
         return "julia"
     if partition.startswith("julia:multibrot"):
         return "julia_" + partition.split(":", 1)[1]
     raise ValueError(f"unknown partition {partition!r}")
+
+
+# A phoenix candidate's dynamical parameter is a SIX-vector `(c, p, z_{-1})`, not the julia
+# two-vector, and it rides the same `c` slot on the frontier node so `expand_batch`'s
+# group-by-(partition, tuple(c)) keeps working unchanged. These two helpers are the only
+# places that have to know the difference.
+def _phoenix_cpz(c):
+    """`(c_re, c_im, p_re, p_im, zm1_re, zm1_im)` as strings from a phoenix node's `c`."""
+    if c is None or len(c) != 6:
+        raise ValueError(f"phoenix needs a 6-vector (c, p, z_-1); got {c!r}")
+    return [str(v) for v in c]
+
+
+def phoenix_family_params(c) -> dict:
+    """The Location `family_params` for a phoenix node — `p` and `z_{-1}`.
+
+    `location.FAMILY_PARAM_KEYS['phoenix']` is `(p_re, p_im, zm1_re, zm1_im)`; the primary
+    constant `c` goes in the Location's own `c_re`/`c_im`, exactly as julia's does."""
+    v = _phoenix_cpz(c)
+    return {"p_re": v[2], "p_im": v[3], "zm1_re": v[4], "zm1_im": v[5]}
 
 
 def descend_flags(partition: str, c) -> list:
@@ -249,6 +387,12 @@ def descend_flags(partition: str, c) -> list:
         return []
     if partition in ("multibrot3", "multibrot4", "multibrot5"):
         return ["--family", partition]
+    if partition == "phoenix":
+        v = _phoenix_cpz(c)
+        # `--phoenix` is the degree-2 two-state plane and is mutually exclusive with
+        # `--julia` and with `--family multibrot*` (src/guided_descend.rs).
+        return ["--phoenix", "--c", v[0], v[1], "--p", v[2], v[3],
+                "--phoenix-z1", v[4], v[5]]
     if partition == "julia:mandelbrot":
         return ["--julia", "--c", str(c[0]), str(c[1])]
     if partition.startswith("julia:multibrot"):
@@ -257,7 +401,37 @@ def descend_flags(partition: str, c) -> list:
     raise ValueError(f"unknown partition {partition!r}")
 
 
+def render_args_for(partition: str, c) -> dict:
+    """`family` / `c` / `family_params` for `prescreen._render` and `outcome_feature`.
+
+    Exists because a phoenix node's `c` is a 6-vector and those helpers unpack `c` as a
+    PAIR — passing the 6-vector straight through would raise, and passing its first two
+    entries would silently render the DEFAULT phoenix plane at the right coordinates."""
+    if partition == "phoenix":
+        v = _phoenix_cpz(c)
+        return dict(family="phoenix", c=(v[0], v[1]),
+                    family_params=phoenix_family_params(c))
+    return dict(family=render_family_of(partition), c=c, family_params=None)
+
+
+def ident_c(partition: str, c):
+    """The candidate's DUP-IDENTITY vector for `production_seeder.is_distinct`.
+
+    `ps.as_c` coerces to a `(float, float)` pair, which is right for julia and WRONG for
+    phoenix: it would keep only `c` and silently declare two phoenixes with the same `c` but
+    different `p` or `z_{-1}` to be the same point. `ps.near_dup` already accepts the 6-D
+    phoenix identity (`row_phoenix_key` / `row_ident`), so the fix is to hand it the whole
+    vector rather than to widen the coercion."""
+    if partition == "phoenix":
+        return tuple(float(v) for v in _phoenix_cpz(c))
+    return ps.as_c(c)
+
+
 def loc_of(partition: str, c, cx, cy, fw):
+    if partition == "phoenix":
+        v = _phoenix_cpz(c)
+        return ps.make_loc_of("phoenix", (v[0], v[1]),
+                              phoenix_family_params(c))(cx, cy, fw)
     return ps.make_loc_of(render_family_of(partition), c)(cx, cy, fw)
 
 
@@ -708,7 +882,38 @@ class SteeredFrontier:
         self.state_path = self.run_dir / "state.json"
         self.stop_path = self.run_dir / "STOP"
         self.harvest_log = self.run_dir / "harvest_log.jsonl"
+        # v1.6 record-and-rank: beside the ledger and beside the harvest log, on purpose.
+        # The harvest log is the tau_h curve's input and is keyed on CHECKS; this is keyed on
+        # CANDIDATES and is wider by construction (it holds the below-tau_h and gated
+        # populations the harvest log has no row for). Append-only, so a kill loses at most
+        # the batch in flight.
+        self.q4_log = self.run_dir / "q4_candidates.jsonl"
+        self.record_canon_dups = bool(getattr(args, "record_canon_dups", False))
+        self.interior_gate_on = bool(getattr(args, "interior_gate", INTERIOR_GATE_DEFAULT))
+        self.interior_discard = float(getattr(args, "interior_discard", _INTERIOR_DISCARD))
+        # --- v1.6 maneuvers-on-admissions. A PER-BATCH cap rather than a probability:
+        # the trigger fires on an event that is already rare (an admission), so a coin on
+        # top would make the mechanism's rate a property of two rarities multiplied and
+        # unreadable. The cap bounds the bill; the admission rate bounds the opportunity.
+        self.trig_on = bool(getattr(args, "maneuvers_on_admissions", False))
+        self.trig_ks = mnv.parse_k_spec(getattr(args, "trig_k", TRIG_K_DEFAULT))
+        self.trig_nbh_m = int(getattr(args, "trig_nbh_m", mnv.NBH_MAX_FOUND))
+        self.trig_nbh_probes = int(getattr(args, "trig_nbh_probes", mnv.NBH_MAX_PROBES))
+        self.trig_period_max = int(getattr(args, "trig_period_max", lsh.SEED_PERIOD_MAX))
+        self.trig_max_per_batch = int(getattr(args, "trig_max_per_batch",
+                                              TRIG_MAX_PER_BATCH_DEFAULT))
+        self.trig_deadline_s = float(getattr(args, "trig_deadline_s", TRIG_DEADLINE_S))
+        self.trig_fired_this_batch = 0
+        self.trig_probe_s = 0.0
         self.families = [f.strip() for f in args.families.split(",") if f.strip()]
+        # --- v1.6 channel allocation: deficit-by-q4-gap root weights. A lighter instrument
+        # than `--scheduler` on purpose — the scheduler allocates by price-weighted
+        # DISTINCT-LOOK deficit against a target measure and needs a library look seed to
+        # mean anything, and this run's deficit is a plain per-partition class-4 COUNT gap
+        # computed off the label corpus before launch. Normalized here so the run config
+        # records the same numbers the draw uses.
+        self.family_weights = _parse_family_weights(
+            getattr(args, "family_weights", None), self.families)
         for f in self.families:
             if f not in C_PLANE:
                 raise SystemExit(f"--families must be c-plane ({C_PLANE}); got {f!r}")
@@ -727,6 +932,8 @@ class SteeredFrontier:
         # seed_julia_pool). None => current path (julia roots only via the parent-fired hook).
         jp = getattr(args, "julia_seed_pool", None)
         self.julia_seed_pool_path = Path(jp).resolve() if jp else None
+        pp = getattr(args, "phoenix_seed_pool", None)
+        self.phoenix_seed_pool_path = Path(pp).resolve() if pp else None
         # item 5: cross-run coordinate freshness prior — seed this run's dup/rejection clouds
         # from prior-library admitted coords at start (ON by default; --no-freshness-prior off).
         self.freshness_prior = bool(getattr(args, "freshness_prior", False))
@@ -759,6 +966,16 @@ class SteeredFrontier:
         self.partitions = list(self.families)
         if self.julia_hook or self.dive or self.julia_seed_pool_path:
             self.partitions += [ps.julia_partition(f) for f in self.families]
+        # PHOENIX IS A PARTITION, NEVER A `--families` ENTRY, and the asymmetry is the
+        # engine's, not a convention: `production_seeder.resolve_family` refuses `--phoenix`
+        # a parameter plane to prospect ("a single fixed dynamical plane"), so there is no
+        # c-plane seeder to draw roots from and no deficit to fold. What phoenix has instead
+        # is a SEED POOL — points in (c, p, z_{-1}) parameter space from
+        # `phoenix_sampler` — injected as base-scale z-plane roots exactly as
+        # `--julia-seed-pool` injects julia c's. Everything downstream (expand, cheap score,
+        # tau_h, canonical confirm, decode, reframe, admit, ledger) is the shared path.
+        if self.phoenix_seed_pool_path:
+            self.partitions.append("phoenix")
 
         # --- minibrot maneuvers (v1.3). OFF => every path short-circuits on
         # `self.maneuvers is False` and the run is byte-identical to the pre-maneuver
@@ -827,7 +1044,35 @@ class SteeredFrontier:
         reframe.DUMP_GUARD_FIELD = True
         self.scorer = guard.make_guarded_scorer(ps.SCORER_PATH)
 
-        self.tau_h = derive_tau_h(self.partitions)
+        # PHOENIX HAS NO DERIVABLE tau_h AND IS NOT GIVEN AN INVENTED ONE. `derive_tau_h`
+        # cuts on a specific head's CHEAP p_good, and no such population exists for phoenix
+        # under v10: the fidelity records are absent, the vendored base has no phoenix row,
+        # and the only phoenix ledgers in the tree (`phoenix_grid`, `classic_phoenix`) are
+        # v7-scored and carry no cheap column at all. Deriving from them would be precisely
+        # the "a v7 cut on a v10 gate is a number about nothing" failure that function
+        # raises to prevent, so phoenix is cut OUT of the derivation and given an explicit,
+        # stamped, deliberately CONSERVATIVE value instead.
+        #
+        # Conservative in a direction that costs recall and not correctness: the default is
+        # the partition's own `t_good` (0.50), i.e. "only pay for a canonical confirmation
+        # when the CHEAP score already clears the canonical bar". Fewer confirmations, never
+        # wrong ones — and no phoenix material is lost from the deliverable, because the
+        # recording floor still keeps everything from 0.25 up in the record-and-rank store.
+        derived = [p for p in self.partitions if p != "phoenix"]
+        self.tau_h = derive_tau_h(derived)
+        self.tau_h_uncalibrated = {}
+        if "phoenix" in self.partitions:
+            v = getattr(args, "tau_h_phoenix", None)
+            v = ps.t_good_for("phoenix") if v is None else float(v)
+            self.tau_h["phoenix"] = v
+            self.tau_h_uncalibrated["phoenix"] = (
+                f"UNCALIBRATED: no v10 cheap-p_good population exists for phoenix "
+                f"(fidelity records absent; vendored base has no phoenix row; the phoenix "
+                f"ledgers are v7 and carry no cheap column). Serving t_good_for('phoenix')"
+                f"={v} as a conservative cheap cut.")
+        # The RECORDING floor, derived from the harvest cut rather than configured beside it:
+        # a second independent constant would drift off tau_h the first time tau_h moved.
+        self.tau_rec = derive_tau_rec(self.tau_h)
 
         # mutable run state
         self.frontier: list[dict] = []
@@ -846,6 +1091,18 @@ class SteeredFrontier:
                            # of these buckets, checked per batch (see _reconcile_batch).
                            canon_not_q3=0, reframe_not_q3=0, render_failed=0,
                            frontier_pushed=0,
+                           # v1.6 record-and-rank + the sourcing interior gate.
+                           # `interior_gated` is a RECONCILE term (see _reconcile_batch):
+                           # a gate that removes candidates without entering the identity
+                           # is a gate that can silently eat them.
+                           interior_gated=0, interior_unmeasured=0,
+                           q4_recorded=0, q4_recorded_below_tau_h=0,
+                           # TRIGGERED yield, disjoint from every fresh counter by
+                           # construction. Never summed with the `man_*` block: the
+                           # operators feed themselves, so a pooled rate measures the loop.
+                           trig_fired=0, trig_atoms=0, trig_nodes_pushed=0,
+                           trig_admitted=0, trig_unavailable=0, trig_budget_skip=0,
+                           trig_expanded=0, trig_candidates=0,
                            **{k: 0 for k in MAN_TOTALS})
         self.rng = np.random.default_rng(self.seed)
         # per-family native seeders (root source) — re-created fresh on resume.
@@ -1056,6 +1313,15 @@ class SteeredFrontier:
                  if self.scheduler is not None else None)
         for fam in self.families:
             nb = alloc[fam] if alloc is not None else self.B
+            if alloc is None and self.family_weights:
+                # v1.6 DEFICIT-BY-q4-GAP allocation. Total draws are preserved (B per family
+                # summed = B*F), only their DISTRIBUTION moves, so this changes the mix
+                # without changing the run's root budget. Floored at 1 so a channel with a
+                # small weight still gets touched every replenishment — a weight is a
+                # preference, not a mute switch, and a partition that never draws a root
+                # cannot report a zero yield distinguishable from "never tried".
+                nb = max(1, int(round(self.B * len(self.families)
+                                      * self.family_weights.get(fam, 0.0))))
             if nb <= 0:
                 continue
             # run-only cloud: the freshness prior must NOT feed this hard rejection gate (part-0
@@ -1157,6 +1423,43 @@ class SteeredFrontier:
             added += 1
         print(f"[julia-seed-pool] injected {added} sampler-sourced {jpart} roots "
               f"(fw={JULIA_ROOT_FW}) from {self.julia_seed_pool_path.name}", flush=True)
+        return added
+
+    def seed_phoenix_pool(self) -> int:
+        """Inject `phoenix_sampler` seeds as base-scale phoenix z-plane roots at fresh start.
+
+        The phoenix analogue of `seed_julia_pool`, and it exists for the same reason: a
+        z-plane partition cannot be popped into existence, it has to be given roots. Each
+        pool entry is a point in phoenix PARAMETER space `(c, p, z_{-1})` drawn near the
+        closed-form neutral-stability skeleton (`phoenix_seed_sampler_spec.md` §2) — which is
+        the phoenix replacement for "sample near ∂M", since an invertible Hénon map has no
+        critical point and so no honest connectedness locus to sit on the boundary of.
+
+        The 6-vector goes in the node's `c` slot so `expand_batch`'s group-by
+        `(partition, tuple(c))` keeps each `--expand` call homogeneous in kernel, which it
+        must be: p and z_{-1} are engine flags, not per-node data.
+        """
+        if self.phoenix_seed_pool_path is None:
+            return 0
+        pool = json.loads(self.phoenix_seed_pool_path.read_text(encoding="utf-8"))
+        added = 0
+        for e in pool:
+            c6 = (str(e["c_re"]), str(e["c_im"]), str(e["p_re"]), str(e["p_im"]),
+                  str(e.get("zm1_re", 0.0)), str(e.get("zm1_im", 0.0)))
+            nid = self.new_node_id()
+            self.frontier.append(dict(
+                node_id=nid, root_id=nid, partition="phoenix", c=list(c6),
+                cx=0.0, cy=0.0, fw=JULIA_ROOT_FW, depth=1,
+                priority=NEUTRAL_PRIOR + gumbel(self.rng, T_GUMBEL),
+                cheap_eord=None, cheap_pgood=None, branch="phoenix_root",
+                mix_source=f"phoenix_sampler:{e.get('branch', '?')}",
+                phoenix=dict(branch=e.get("branch"), theta=e.get("theta"),
+                             offset=e.get("offset"), abs_p=e.get("abs_p")),
+            ))
+            self.totals["phoenix_roots"] = self.totals.get("phoenix_roots", 0) + 1
+            added += 1
+        print(f"[phoenix-seed-pool] injected {added} sampler-sourced phoenix roots "
+              f"(fw={JULIA_ROOT_FW}) from {self.phoenix_seed_pool_path.name}", flush=True)
         return added
 
     # ------------------------------------------------------------- maneuvers
@@ -1628,7 +1931,7 @@ class SteeredFrontier:
     # ---------------------------------------------------------------- reconcile
     RECONCILE_KEYS = ("candidates", "frontier_pushed", "harvest_checks", "precanon_dup",
                       "canonical_q3", "canon_not_q3", "render_failed", "admitted",
-                      "q3_dup", "guarded", "reframe_not_q3")
+                      "q3_dup", "guarded", "reframe_not_q3", "interior_gated")
 
     def _reconcile_snapshot(self) -> dict:
         return {k: self.totals[k] for k in self.RECONCILE_KEYS}
@@ -1639,8 +1942,12 @@ class SteeredFrontier:
         Two identities have to close on every batch, and a long unattended run that silently
         loses candidates is exactly the failure a summary cannot show you afterwards:
 
-          1. FRONTIER   every scored candidate is pushed:
-                        candidates == frontier_pushed
+          1. FRONTIER   every scored candidate is pushed OR named as gated:
+                        candidates == frontier_pushed + interior_gated
+                        (v1.6: the sourcing interior gate is the only thing allowed to
+                        remove a candidate before the frontier, and it enters the identity
+                        rather than sitting outside it — a gate outside the identity is a
+                        gate that can eat candidates and still balance.)
           2. HARVEST    every check lands in exactly one fate:
                         harvest_checks == precanon_dup + canonical_q3 + canon_not_q3
                         canonical_q3   == admitted + q3_dup + guarded + reframe_not_q3
@@ -1649,9 +1956,10 @@ class SteeredFrontier:
         so they are outside both identities by construction rather than by omission.)"""
         d = {k: self.totals[k] - before[k] for k in self.RECONCILE_KEYS}
         problems = []
-        if d["candidates"] != d["frontier_pushed"]:
+        if d["candidates"] != d["frontier_pushed"] + d["interior_gated"]:
             problems.append(f"frontier: found {d['candidates']} candidates but pushed "
-                            f"{d['frontier_pushed']}")
+                            f"{d['frontier_pushed']} + interior_gated "
+                            f"{d['interior_gated']}")
         if d["harvest_checks"] != d["precanon_dup"] + d["canonical_q3"] + d["canon_not_q3"]:
             problems.append(
                 f"harvest: {d['harvest_checks']} checks != precanon_dup {d['precanon_dup']} "
@@ -1759,6 +2067,15 @@ class SteeredFrontier:
                 # it: op / k / origin node / parent view ride down every rung, so a later
                 # read never has to reconstruct lineage from coordinates.
                 man=parent.get("man"),
+                # ... and the TRIGGERED half of that lineage rides the same way, for the
+                # same reason plus one more: triggered and fresh yield are reported as
+                # separate populations, so a descendant that lost the stamp would be
+                # counted as fresh supply and inflate exactly the number the split exists
+                # to protect (`minibrot_maneuvers.md` §8.0).
+                triggered=parent.get("triggered"),
+                # the phoenix seed's own provenance (branch / theta / offset), so a phoenix
+                # candidate stays attributable to the skeleton point it came from
+                phoenix=parent.get("phoenix"),
                 img=str((gdir / row["img"]).resolve()),
                 int_frac=row["int_frac"], occ=row["occ"],
             ))
@@ -1788,8 +2105,30 @@ class SteeredFrontier:
     # ---------------------------------------------------------------- harvest
     def harvest(self, cands):
         """cheap p_good >= tau_h -> single canonical render + decode -> if q3, reframe +
-        near-dup + admission. Logs every harvest check's (cheap, canonical, decode) triple."""
-        checks = [c for c in cands if c["cheap_pgood"] >= self.tau_h[c["partition"]]]
+        near-dup + admission. Logs every harvest check's (cheap, canonical, decode) triple.
+
+        v1.6 RECORD-AND-RANK. Admission below is byte-for-byte the path it always was; what
+        is added is that every candidate at or above `tau_rec` is APPENDED to
+        `q4_candidates.jsonl` with its scores and its per-stage fate, whatever that fate
+        turns out to be. Three populations that used to leave no reviewable trace now do:
+        rows below `tau_h` (recorded on their cheap score, `rank_tier=1`), pre-canonical
+        coord-dups, and `canon-not-q3` rows.
+
+        THE FATE COUNTERS ARE STILL INCREMENTED EXACTLY ONCE PER CHECK, and deliberately
+        AFTER the render step rather than before it. A pre-canonical dup that is rendered and
+        whose render then fails must leave the population without touching `precanon_dup`, or
+        the batch reconcile stops balancing — so the dup verdict is computed up front, stashed
+        on the row, and only *counted* at the fate branch alongside every other fate.
+        """
+        # -- the recording floor. A record is a line; `tau_h` still decides who is RENDERED.
+        for c in cands:
+            c["q4_checked"] = c["cheap_pgood"] >= self.tau_h[c["partition"]]
+            c["q4_recorded"] = c["cheap_pgood"] >= self.tau_rec[c["partition"]]
+        for c in cands:
+            if c["q4_recorded"] and not c["q4_checked"]:
+                self.totals["q4_recorded_below_tau_h"] += 1
+                self._q4_record(c, fate="below_tau_h")
+        checks = [c for c in cands if c["q4_checked"]]
         if not checks:
             return
         self.totals["harvest_checks"] += len(checks)
@@ -1801,17 +2140,26 @@ class SteeredFrontier:
         # churn (multibrot4 + residual same-c julia descent), not distinct-c julias. The cloud is
         # read as of batch start; the in-loop pre-reframe check below still catches intra-batch
         # admits. Saved renders are counted (precanon_dup) for the readout.
-        kept = []
+        #
+        # v1.6: the SKIP is now optional (`--record-canon-dups`). Dup-ness is a property of the
+        # ledger's coordinate cloud, not of the picture — a candidate inside an admitted q3's
+        # radius can still be the better image, and this run's deliverable is a ranked list a
+        # human cuts, not a set of distinct ledger rows. With the flag on the dup is rendered
+        # and decoded so it can be RANKED, and is still refused admission. The flag exists
+        # because the saving it gives up is large (campaign 2 skipped ~82% of checks this way),
+        # so it is measured in the shakedown rather than assumed affordable.
         for c in checks:
             distinct, dup_of = ps.is_distinct(c["cx"], c["cy"], c["fw"],
                                               self.clouds.get(c["partition"], []), ps.DEDUP_K,
-                                              c=ps.as_c(c["c"]))
-            if distinct:
-                kept.append(c)
-            else:
+                                              c=ident_c(c["partition"], c["c"]))
+            c["precanon_dup_of"] = None if distinct else dup_of
+        if not self.record_canon_dups:
+            for c in [c for c in checks if c["precanon_dup_of"] is not None]:
                 self.totals["precanon_dup"] += 1
-                self._log_harvest(c, admitted=False, reframe_decoded=None, precanon_dup=dup_of)
-        checks = kept
+                self._log_harvest(c, admitted=False, reframe_decoded=None,
+                                  precanon_dup=c["precanon_dup_of"])
+                self._q4_record(c, fate="precanon_dup")
+            checks = [c for c in checks if c["precanon_dup_of"] is None]
         if not checks:
             return
         # 1. batch the single canonical confirmation renders (640x360 ss2, the reward fidelity).
@@ -1823,8 +2171,8 @@ class SteeredFrontier:
             tiles.append(cdir / f"confirm_{i:04d}.jpg")
         with cf.ThreadPoolExecutor(max_workers=ps.WORKERS) as ex:
             futs = {ex.submit(prescreen._render, c["cx"], c["cy"], c["fw"], tiles[i],
-                              family=render_family_of(c["partition"]), c=c["c"],
-                              timeout=self.unit_timeout_s()): i
+                              timeout=self.unit_timeout_s(),
+                              **render_args_for(c["partition"], c["c"])): i
                     for i, c in enumerate(checks)}
             for fut in cf.as_completed(futs):
                 fut.result()
@@ -1856,18 +2204,32 @@ class SteeredFrontier:
         for c in checks:
             admitted = False
             reframe_decoded = None
+            # A pre-canonical dup that was RENDERED anyway (--record-canon-dups) is counted
+            # as the dup it is and never offered to admit(): its canonical scores exist for
+            # the RANK, and admission is untouched by this feature. Counted here rather than
+            # up front so a failed render leaves the population before any fate fires.
+            if c.get("precanon_dup_of") is not None:
+                self.totals["precanon_dup"] += 1
+                self._log_harvest(c, admitted=False, reframe_decoded=None,
+                                  precanon_dup=c["precanon_dup_of"])
+                self._q4_record(c, fate="precanon_dup")
+                continue
             if c["canon_decoded"] >= 3:          # q3+ — a canonical class-4 confirms too
                 self.totals["canonical_q3"] += 1
                 pre_distinct, _ = ps.is_distinct(c["cx"], c["cy"], c["fw"],
                                                  self.clouds.get(c["partition"], []), ps.DEDUP_K,
-                                                 c=ps.as_c(c["c"]))
+                                                 c=ident_c(c["partition"], c["c"]))
                 if not pre_distinct:
                     self.totals["q3_dup"] += 1
+                    c["admit_fate"] = "q3_dup"
                 else:
                     admitted, reframe_decoded = self.admit(c, cdir)
             else:
                 self.totals["canon_not_q3"] += 1
+                c["admit_fate"] = "canon_not_q3"
             self._log_harvest(c, admitted, reframe_decoded)
+            self._q4_record(c, fate=c.get("admit_fate") or "unknown",
+                            reframe_decoded=reframe_decoded)
 
     def admit(self, c, cdir):
         """Existing reframe + near-dup + admission path (guarded scorer, per-partition t_good)."""
@@ -1883,7 +2245,7 @@ class SteeredFrontier:
         distinct, dup_of = (False, None)
         if is_q3:
             distinct, dup_of = ps.is_distinct(ocx, ocy, ofw, self.clouds[c["partition"]],
-                                              ps.DEDUP_K, c=ps.as_c(c["c"]))
+                                              ps.DEDUP_K, c=ident_c(c["partition"], c["c"]))
 
         run_ts = self.run_dir.name
         id_tag = {"mandelbrot": "m"}.get(c["partition"], c["partition"].replace(":", "_"))
@@ -1893,7 +2255,7 @@ class SteeredFrontier:
         if is_q3 and distinct:
             tile = cdir / f"{oid}.jpg"
             feat = ps.outcome_feature(self.scorer, ocx, ocy, ofw, tile,
-                                      family=render_family_of(c["partition"]), c=c["c"])
+                                      **render_args_for(c["partition"], c["c"]))
         row = dict(
             id=oid, ts=run_ts, family=c["partition"], mix_source="steered",
             node_id=c["node_id"], root_id=c["root_id"],
@@ -1915,7 +2277,18 @@ class SteeredFrontier:
         if c.get("man"):                             # maneuver-originated lineage
             row["maneuver"] = c["man"]
             row["mix_source"] = c.get("mix_source") or row["mix_source"]
-        if c["c"] is not None:                       # julia twin outcome carries the parameter c
+        if c["partition"] == "phoenix":
+            # The phoenix analogue of the julia `c` stamp: the FULL parameter point, because
+            # a phoenix row's dup identity is the (c, p, z_{-1}) 6-vector and a row carrying
+            # only `c` would collide with every other p and z_{-1} at the same c
+            # (`production_seeder.row_phoenix_key`).
+            v = _phoenix_cpz(c["c"])
+            row.update(ps.phoenix_ident_fields(c=(float(v[0]), float(v[1])),
+                                               p=(float(v[2]), float(v[3])),
+                                               z_m1=(float(v[4]), float(v[5]))))
+            if c.get("phoenix"):
+                row["phoenix_seed"] = c["phoenix"]    # branch/theta/offset, provenance only
+        elif c["c"] is not None:                     # julia twin outcome carries the parameter c
             row["julia_c_re"], row["julia_c_im"] = c["c"][0], c["c"][1]
             # CAMPAIGN schema (outcome_* = viewport, c = julia_c_*): stamp it so the row is
             # born tagged and no reader has to infer the era from field presence.
@@ -1924,12 +2297,22 @@ class SteeredFrontier:
             row["mix_source"] = "dive"
             row["dive_id"], row["dive_start_group"], row["dive_source_id"] = self.cur_dive
         self.ledger.append(row, feat)
+        # v1.6: the reframed frame + the outcome id ride back on the candidate so the
+        # record-and-rank store points at the frame that was ADMITTED, not the pre-reframe
+        # one. A sheet built off the pre-reframe coords would show a different picture from
+        # the one the ledger holds.
+        c["outcome"] = (ocx, ocy, ofw)
+        c["outcome_oid"] = oid
+        c["outcome_guard_pass"] = guard_pass
         if is_q3 and distinct:
+            c["admit_fate"] = "admitted"
             self.clouds[c["partition"]].append(row)
             self.run_clouds[c["partition"]].append(row)   # keep the rejection-sampler cloud current
             self.totals["admitted"] += 1
             if c.get("man"):
                 self.totals["man_admitted"] += 1
+            if c.get("triggered"):
+                self.totals["trig_admitted"] += 1
             # fold the admitted location's look into morph memory (its cheap emb; reframe only
             # nudges the frame <=0.25*fw, so the candidate's cheap look stands in for it).
             if self.lambda_m > 0.0 and c.get("emb") is not None:
@@ -1943,12 +2326,18 @@ class SteeredFrontier:
             # julia hook: fire per qualifying (admitted-q3) c-plane parent.
             if self.julia_hook and c["partition"] in self.families:
                 self.add_julia_root(c["partition"], (ocx, ocy), oid)
+            # v1.6 MANEUVERS-ON-ADMISSIONS: the admitted location is itself a judged-good
+            # seed, so it gets the label-seeded harvest's own pair of operators, live.
+            self.fire_triggered_maneuvers(c, ocx, ocy, ofw, oid, decoded)
             return True, decoded
         elif is_q3:
             self.totals["q3_dup"] += 1
+            c["admit_fate"] = "q3_dup"
         elif not guard_pass:
             self.totals["guarded"] += 1
+            c["admit_fate"] = "guarded"
         else:
+            c["admit_fate"] = "reframe_not_q3"
             # guard passed but the REFRAMED frame decoded below q3 — previously the one
             # uncounted fate, which is why a per-unit reconcile could not close.
             self.totals["reframe_not_q3"] += 1
@@ -1976,6 +2365,204 @@ class SteeredFrontier:
                 precanon_dup=precanon_dup, mix_source=c.get("mix_source"),
                 maneuver=c.get("man"),   # operator/k/origin ride every check, admitted or not
             )) + "\n")
+
+    # ------------------------------------------- maneuvers-on-admissions (v1.6)
+    def fire_triggered_maneuvers(self, c, ocx, ocy, ofw, oid, decoded) -> int:
+        """Run `snap_at_seed` -> `neighborhood_expand` on a freshly ADMITTED location.
+
+        WHY THIS IS THE SAME MECHANISM AS THE LABEL-SEEDED HARVEST AND NOT A NEW ONE. That
+        harvest seeds from the corpus's own class-3/4 locations — the two generation methods
+        Matt rated top of seven. An admission IS a location this run just decoded at class 3
+        or better, i.e. the same kind of seed, produced hours earlier than a label could
+        arrive. So the primitives are imported from `label_seeded_harvest` verbatim rather
+        than reimplemented; a second copy would let the run's live loop and the offline
+        harvest silently diverge on what "the nucleus at a judged view" means.
+
+        THE YIELD OF THIS IS TALLIED SEPARATELY FROM FRESH-SEED YIELD, ALWAYS. The operators
+        feed themselves (`minibrot_maneuvers.md` §8.0: a view produced by snapping to a
+        nucleus is centred on a nucleus, so snapping it again nearly always succeeds), and a
+        pooled rate becomes a property of the feedback loop rather than of the operator. The
+        `triggered` stamp rides the whole subtree exactly as `man` does, so a descendant three
+        rungs down is still attributable, and every `trig_*` counter is disjoint from the
+        fresh ones.
+
+        c-PLANE ONLY, for the reason `minibrot_maneuvers.md` §6 gives: a julia/phoenix
+        viewport is a z-plane with no nucleus in the parameter-plane sense, so the operators
+        are not defined there and are skipped rather than faked.
+
+        Never raises. A trigger is an enrichment, and losing one must never cost the
+        admission that produced it — the admission is already in the ledger by this point.
+        """
+        if not self.trig_on:
+            return 0
+        deg = mnv.PARTITION_DEGREE.get(c["partition"])
+        if deg is None:                       # julia / phoenix z-plane: undefined, not skipped-as-failed
+            self.totals["trig_unavailable"] += 1
+            return 0
+        if self.trig_fired_this_batch >= self.trig_max_per_batch:
+            self.totals["trig_budget_skip"] += 1
+            return 0
+        seed = dict(seed_id=oid, family=c["partition"], degree=deg,
+                    cx=str(ocx), cy=str(ocy), fw=str(ofw),
+                    score=int(decoded or 3), batch=self.run_dir.name, image_id=oid)
+        t0 = time.time()
+        try:
+            rng = np.random.default_rng(self.seed ^ (hash(oid) & 0xFFFFFFFF))
+            rows, st = lsh.enumerate_seed(
+                seed, self.trig_ks, rng=rng,
+                deadline=t0 + self.trig_deadline_s,
+                max_found=self.trig_nbh_m, max_probes=self.trig_nbh_probes,
+                period_max=self.trig_period_max)
+        except Exception as e:                                        # noqa: BLE001
+            self.totals["trig_unavailable"] += 1
+            print(f"  WARN triggered maneuver on {oid} failed: {type(e).__name__}: "
+                  f"{str(e)[:160]}", flush=True)
+            return 0
+        self.trig_fired_this_batch += 1
+        self.totals["trig_fired"] += 1
+        self.totals["trig_atoms"] += len({r["atom_key"] for r in rows})
+        self.trig_probe_s += time.time() - t0
+        pushed = 0
+        for r in rows:
+            # The SHARED visited key (`atom|k`), so an atom a fresh maneuver already pushed
+            # is not pushed again under a triggered label — the two populations must be
+            # disjoint or the separate tallies are double-counting one node.
+            key = mvs.view_key(r["atom_key"], r["k"])
+            if key in self.man_visited:
+                self.totals["man_avail_unused"] += 1
+                continue
+            self.man_visited.add(key)
+            nid = self.new_node_id()
+            self.frontier.append(dict(
+                node_id=nid, root_id=c["root_id"], partition=c["partition"], c=None,
+                cx=float(r["cx"]), cy=float(r["cy"]), fw=float(r["fw"]),
+                depth=int(c["depth"]),
+                priority=NEUTRAL_PRIOR + gumbel(self.rng, T_GUMBEL),
+                cheap_eord=None, cheap_pgood=None, branch="triggered",
+                mix_source=f"triggered:{r['method']}:k={r['k']}",
+                triggered=True,
+                man=dict(op=r["op"], k=r["k"], origin_node_id=c["node_id"],
+                         atom_id=r["atom_id"], atom_key=r["atom_key"],
+                         period=r["period"], log10_abs_A=r["log10_abs_A"],
+                         window_scale=r["window_scale"], degree=deg,
+                         trigger_oid=oid, triggered=True),
+            ))
+            pushed += 1
+        self.totals["trig_nodes_pushed"] += pushed
+        self._log_maneuver(dict(
+            kind="triggered", batch=self.batch_i, oid=oid, partition=c["partition"],
+            cx=str(ocx), cy=str(ocy), fw=str(ofw), decoded=decoded,
+            rows=len(rows), pushed=pushed, atoms=len({r["atom_key"] for r in rows}),
+            probe_s=round(time.time() - t0, 3), stats=st))
+        return pushed
+
+    # ------------------------------------------------------- record-and-rank
+    # The fates a recorded row can carry. Named once, so the writer, the reconcile and the
+    # readout cannot drift, and so an unhandled branch shows up as the literal string
+    # "unknown" in a count rather than as a silently absent row.
+    Q4_FATES = ("below_tau_h", "precanon_dup", "canon_not_q3", "q3_dup", "guarded",
+                "reframe_not_q3", "admitted", "interior_gt_30", "unknown")
+
+    def _q4_record(self, c, *, fate: str, reframe_decoded=None):
+        """Append one candidate to the run's record-and-rank store.
+
+        EVERY ROW IS RENDERABLE FROM THIS FILE ALONE — geometry, family, and the dynamical
+        parameter (julia seed c, or the phoenix (c, p, z_{-1}) point) — because the whole
+        point of recording a reject is that a human can look at it later, and the julia audit
+        already paid for the version of this that stored fates without coordinates.
+
+        `rank_tier` is stamped, never inferred. A row with a canonical decode (tier 2) and a
+        row carrying only a cheap score (tier 1) are scores from two different geometries
+        (640x360 ss2 against 384x216 ss1) and pooling them into one ordering would be the
+        cap/geometry error `orbital_field_metrics.md` §5 forbids. The ranking sorts WITHIN a
+        tier; the tier is the row's own property and is written down at the moment the
+        distinction is still known.
+        """
+        jc = c.get("c")
+        canon = c.get("canon_eord")
+        out = c.get("outcome")
+        # `cheap_eord` is present for every row the gate sees, because the gate runs AFTER
+        # score_cheap (see run()) — deliberately, so a gated row still records what the
+        # classifier thought of it and "does the head agree with the >0.30 rule?" stays a
+        # read. `.get` rather than `[]` so relocating the gate degrades to an unranked row
+        # instead of killing the batch.
+        cheap = c.get("cheap_eord")
+        rec = dict(
+            batch=self.batch_i, partition=c["partition"], fate=fate,
+            rank_tier=(2 if canon is not None else (1 if cheap is not None else 0)),
+            rank_score=(float(canon) if canon is not None
+                        else (float(cheap) if cheap is not None else None)),
+            node_id=c["node_id"], root_id=c["root_id"], depth=c["depth"],
+            cx=c["cx"], cy=c["cy"], fw=c["fw"],
+            # the dynamical parameter, whichever plane this partition lives on
+            julia_c_re=(None if jc is None else str(jc[0])),
+            julia_c_im=(None if jc is None else str(jc[1])),
+            phoenix=c.get("phoenix"),
+            # the admitted frame, when there is one — a sheet must show what the ledger holds
+            outcome_cx=(None if out is None else out[0]),
+            outcome_cy=(None if out is None else out[1]),
+            outcome_fw=(None if out is None else out[2]),
+            outcome_id=c.get("outcome_oid"),
+            cheap_eord=cheap, cheap_pgood=c.get("cheap_pgood"),
+            cheap_nb=c.get("cheap_nb"),
+            canon_eord=canon, canon_pgood=c.get("canon_pg"), canon_nb=c.get("canon_nb"),
+            canon_pge4=c.get("canon_pge4"), canon_decoded=c.get("canon_decoded"),
+            reframe_decoded=reframe_decoded,
+            tau_h=self.tau_h[c["partition"]], tau_rec=self.tau_rec[c["partition"]],
+            t_good=ps.t_good_for(c["partition"]),
+            int_frac=c.get("int_frac"), occ=c.get("occ"),
+            mix_source=c.get("mix_source"), maneuver=c.get("man"),
+            # TRIGGERED vs FRESH is stamped on the ROW, never derived at readout time from
+            # `mix_source` string-matching: the two yields must never be pooled, and a
+            # readout that has to infer the split will eventually infer it wrong.
+            triggered=bool(c.get("triggered")),
+            branch=c.get("branch"), scorer_version=ps.SCORER_VERSION,
+        )
+        self.totals["q4_recorded"] += 1
+        with open(self.q4_log, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+
+    # ------------------------------------------------- interior gate (sourcing)
+    def interior_gate(self, cands):
+        """Matt's >0.30-interior rule, applied at SOURCING. Returns the surviving candidates.
+
+        FIRST PRODUCTION CONSUMER of the rule inside the walk. `apply_interior_rule.py` applies
+        it to the LABEL STORE after the fact (a crop already rendered and about to be judged);
+        `label_seeded_harvest` applies it at sourcing but only on that harvest's own path. Here
+        it removes the candidate before it can consume a canonical confirmation render, a
+        reframe, a ledger row or a frontier slot.
+
+        THE DISCARD IS RECORDED, NOT SILENT. Every gated candidate lands in the
+        record-and-rank store with `fate="interior_gt_30"`, so "how much did the gate cost?"
+        is a read rather than a re-run — and the count enters the batch reconcile identity
+        below, which is what makes it impossible for the gate to quietly eat candidates.
+
+        Strict `>`: a frame at exactly 0.30 is KEPT, mirroring `present.rs`'s strict `<` on
+        the other side of the same boundary. An off-by-one-side threshold is invisible in a
+        count, which is why the comparison is stated here and asserted by a test.
+
+        A candidate with NO measure is KEPT and counted apart — an absent measure is not a
+        high one, the same rule `apply_interior_rule.fires` uses.
+        """
+        if not self.interior_gate_on:
+            return cands
+        kept, gated = [], []
+        for c in cands:
+            v = c.get("int_frac")
+            if v is None:
+                self.totals["interior_unmeasured"] += 1
+                kept.append(c)
+            elif float(v) > self.interior_discard:
+                gated.append(c)
+            else:
+                kept.append(c)
+        for c in gated:
+            self.totals["interior_gated"] += 1
+            # Recorded unconditionally, not only above the floor: the gate's own population
+            # is the thing a later question about the gate needs, and it is exactly the
+            # population no score was ever computed for.
+            self._q4_record(c, fate="interior_gt_30")
+        return kept
 
     # ---------------------------------------------------------------- push
     def push_children(self, cands):
@@ -2067,6 +2654,75 @@ class SteeredFrontier:
             self.node_embs.pop(n["node_id"], None)
 
     # ---------------------------------------------------------------- state
+    # The pre-registered bars, written to disk BEFORE the first batch. A bar stated after a
+    # readout is not a bar, and `measurement_practice.md`'s "config changes are announced at
+    # decision time, never discovered in a readout" cuts the same way: the file exists before
+    # there is anything to be tempted by.
+    PREREG = {
+        "view_fit_v1_1_vs_composite_v3": {
+            "claim": ("view_fit v1.1 supersedes composite_v3 as the SOURCING order "
+                      "(including --maneuver-view-prior), pipeline-wide."),
+            "adopted_only_if": ("view_fit's ordered top-k beats composite_v3's on THIS "
+                                "run's labeled outcome by delta-AP >= +0.1181"),
+            "margin": 0.1181,
+            "margin_basis": ("the lower bound of the fit-era CI, "
+                             "data/atlas/view_fit_v1_1.json readout."
+                             "ap_delta_v11_vs_composite = 0.1819 [0.1181, 0.2466], "
+                             "n=580, 149 positives, 2000 bootstrap"),
+            "scope": "SOURCING-side only — never ranking, never cross-family.",
+            "read_status": ("DEFERRED. The labels this bar reads do not exist inside the "
+                            "run; both scores are recorded on every row so the read is "
+                            "taken when the batches come back."),
+        },
+        "maneuvers_on_admissions": {
+            "read": "QUALITATIVE this run.",
+            "why": ("the >=3 trigger boundary has no eval instrument, so there is nothing "
+                    "to certify against"),
+            "deliverable": ("the triggered-vs-fresh yield table + sheets — NOT a gate "
+                            "decision, and the two yields are never pooled"),
+        },
+    }
+
+    def write_run_config(self):
+        """`run_config.json`: what this run is, and what it pre-registered, before batch 1."""
+        cfg = dict(
+            run_ts=self.run_dir.name, started=time.strftime("%FT%T"),
+            scorer_version=ps.SCORER_VERSION, ckpt=ACTIVE_CKPT,
+            families=self.families, partitions=self.partitions,
+            family_weights=self.family_weights,
+            budget_min=self.budget_s / 60.0, wall_budget_min=self.wall_budget_s / 60.0,
+            tau_h=self.tau_h, tau_rec=self.tau_rec,
+            tau_h_uncalibrated=self.tau_h_uncalibrated,
+            t_good={p: ps.t_good_for(p) for p in self.partitions},
+            t_good_status={p: ps.t_good_status(p) for p in self.partitions},
+            record_and_rank=dict(
+                frac=Q4_REC_FRAC, floor_abs=Q4_REC_FLOOR_ABS,
+                record_canon_dups=self.record_canon_dups,
+                store="q4_candidates.jsonl", fates=list(self.Q4_FATES),
+                rank_tiers="2 = has a canonical decode; 1 = cheap score only; never pooled"),
+            interior_gate=dict(on=self.interior_gate_on, threshold=self.interior_discard,
+                               comparison="strict >",
+                               measure="expand sidecar int_frac (= render::black_fraction)"),
+            maneuvers_on_admissions=dict(
+                on=self.trig_on, k=[str(k) for k in self.trig_ks],
+                max_per_batch=self.trig_max_per_batch, nbh_m=self.trig_nbh_m,
+                nbh_probes=self.trig_nbh_probes, period_max=self.trig_period_max),
+            julia_seed_pool=(str(self.julia_seed_pool_path)
+                             if self.julia_seed_pool_path else None),
+            phoenix_seed_pool=(str(self.phoenix_seed_pool_path)
+                               if self.phoenix_seed_pool_path else None),
+            prereg=self.PREREG,
+        )
+        p = self.run_dir / "run_config.json"
+        p.write_text(json.dumps(cfg, indent=2, default=str) + "\n", encoding="utf-8")
+        print(f"[prereg] run_config.json written BEFORE batch 1 -> {p}", flush=True)
+        for k, v in self.tau_h_uncalibrated.items():
+            print(f"[tau_h] {k}: {v}", flush=True)
+        if self.family_weights:
+            print(f"[alloc] family weights {self.family_weights} "
+                  f"(root draws = B*F*w, B={self.B}, F={len(self.families)})", flush=True)
+        return p
+
     def save_state(self):
         state = dict(
             run_ts=self.run_dir.name, families=self.families, julia_hook=self.julia_hook,
@@ -2079,6 +2735,14 @@ class SteeredFrontier:
             expansions_per_root=self.expansions_per_root, totals=self.totals,
             frontier=self.frontier, rng=self.rng.bit_generator.state,
         )
+        state["tau_rec"] = self.tau_rec
+        state["tau_h_uncalibrated"] = self.tau_h_uncalibrated
+        state["family_weights"] = self.family_weights
+        # The visited set is maneuver state under `--maneuvers`, but a TRIGGERED run writes
+        # to it with maneuvers off, and losing it on a resume would re-push atoms the ledger
+        # already carries under a second node id.
+        if self.trig_on and not self.maneuvers:
+            state["man_visited"] = sorted(self.man_visited)
         if self.scheduler is not None:
             state["scheduler"] = self.scheduler.state_dict()
         if self.maneuvers:
@@ -2135,6 +2799,18 @@ class SteeredFrontier:
         self.totals.setdefault("distinct_looks", 0)
         for k in MAN_TOTALS:
             self.totals.setdefault(k, 0)
+        # v1.6 keys, absent on any earlier checkpoint. `tau_rec` is RE-DERIVED from the
+        # restored `tau_h` rather than restored, so the two can never come back out of step;
+        # the counters default to 0 because they did not exist, which is a default for a
+        # missing key and not tolerance of a missing one.
+        self.tau_rec = derive_tau_rec(self.tau_h)
+        for k in ("interior_gated", "interior_unmeasured", "q4_recorded",
+                  "q4_recorded_below_tau_h", "trig_fired", "trig_atoms",
+                  "trig_nodes_pushed", "trig_admitted", "trig_unavailable",
+                  "trig_budget_skip", "trig_expanded", "trig_candidates"):
+            self.totals.setdefault(k, 0)
+        if self.trig_on and not self.maneuvers:
+            self.man_visited = set(st.get("man_visited") or [])
         if self.maneuvers and "maneuvers" in st:
             m = st["maneuvers"]
             self.man_visited = set(m.get("visited", []))
@@ -2425,8 +3101,10 @@ class SteeredFrontier:
                       f"tallies={self.scheduler.tally.counts()} "
                       f"(total {self.scheduler.tally.total()}, newly seeded {sum(seeded.values())})", flush=True)
                 print(f"[scheduler] launch look_frac={lf}\n[scheduler] launch deficits={df}", flush=True)
+            self.write_run_config()
             self.draw_roots()
             self.seed_julia_pool()          # PRIMARY julia supply: sampler-sourced roots (probe)
+            self.seed_phoenix_pool()        # phoenix channel: skeleton-sampled parameter points
             self.save_state()
 
         session_t0 = time.time()
@@ -2478,6 +3156,8 @@ class SteeredFrontier:
             self.fold_expanded_into_memory(batch)   # parents join morph memory before scoring
             self.totals["expanded"] += len(batch)
             self.totals["man_nodes_expanded"] += sum(1 for n in batch if n.get("man"))
+            self.totals["trig_expanded"] += sum(1 for n in batch if n.get("triggered"))
+            self.trig_fired_this_batch = 0        # the per-batch trigger budget resets here
             # Maneuvers are proposed off the rungs ABOUT TO BE EXPANDED and are INTERLEAVED
             # into this same walk — never a separate run, which would confound the move with
             # the run. They land on the frontier for a later batch, competing (with a
@@ -2487,6 +3167,14 @@ class SteeredFrontier:
             cands = self.expand_batch(batch)
             self.totals["candidates"] += len(cands)
             self.score_cheap(cands)
+            # v1.6: the interior gate sits AFTER the cheap score and BEFORE the harvest, and
+            # both halves of that placement are deliberate. After, so a gated candidate still
+            # records what the head thought of it (the rule asserts class 1 — whether the
+            # head agrees is a question worth being able to ask, and it is free here because
+            # the cheap score is one batched GPU pass over the whole batch). Before, so a
+            # gated candidate cannot consume a canonical confirmation render, a reframe, a
+            # ledger row or a frontier slot — which is the entire saving.
+            cands = self.interior_gate(cands)
             self.score_morph(cands)                  # embed + cos_max vs memory (parents incl.)
             self.harvest(cands)                      # admissions fold into memory
             self.push_children(cands)                # novelty penalty applied from cos_max
@@ -2759,6 +3447,17 @@ def main():
     ap.add_argument("--julia-hook-spacing", type=float, default=JULIA_HOOK_SPACING,
                     help="c-plane spacing radius for the julia hook: skip a parent whose seed c is "
                          f"within this of an already-hooked one (default {JULIA_HOOK_SPACING})")
+    ap.add_argument("--phoenix-seed-pool", type=str, default=None,
+                    help="the PHOENIX channel: a JSON list of {c_re,c_im,p_re,p_im,"
+                         "zm1_re,zm1_im} parameter points from tools/phoenix/"
+                         "phoenix_q4_seeds.py, injected as base-scale phoenix z-plane roots "
+                         "at fresh start. Phoenix cannot be a --families entry (it has no "
+                         "parameter plane to prospect); a seed pool is how it gets roots. "
+                         "DEFAULT None => no phoenix channel.")
+    ap.add_argument("--tau-h-phoenix", type=float, default=None,
+                    help="phoenix's harvest cut. There is no derivable value under the "
+                         "active head (see __init__), so this is explicit and the run "
+                         "config stamps it UNCALIBRATED. Default: t_good_for('phoenix').")
     ap.add_argument("--julia-seed-pool", type=str, default=None,
                     help="PRIMARY julia supply under test: a JSON list of {c_re,c_im} c's from the "
                          "c-diverse near-∂M sampler, injected as julia:mandelbrot roots at fresh "
@@ -2854,6 +3553,52 @@ def main():
                     help=f"neighborhood_expand: PROBE budget per call — the bound that "
                          f"actually binds, since 88%% of sheet-3's probes returned the "
                          f"parent (default {MAN_NBH_PROBES_DEFAULT})")
+    ap.add_argument("--family-weights", type=str, default=None,
+                    help="deficit-by-q4-gap root allocation, e.g. "
+                         "'mandelbrot=0.176,multibrot3=0.281,multibrot4=0.284,"
+                         "multibrot5=0.259'. Normalized; every family in --families must be "
+                         "named (a missing one is an error, not a zero). Preserves the total "
+                         "root budget and moves only its distribution. Lighter than "
+                         "--scheduler, which allocates by distinct-look deficit against a "
+                         "target measure and needs a library seed.")
+    # --- v1.6: maneuvers-on-admissions (2026-08-03) ---
+    ap.add_argument("--maneuvers-on-admissions", action="store_true",
+                    help="fire the label-seeded harvest's operator pair (snap_at_seed -> "
+                         "neighborhood_expand) on every ADMITTED c-plane location, live. An "
+                         "admission is a location this run just decoded >=3, i.e. the same "
+                         "kind of judged-good seed the offline harvest uses, available hours "
+                         "before a label could arrive. Triggered yield is tallied SEPARATELY "
+                         "from fresh-seed yield everywhere. DEFAULT OFF.")
+    ap.add_argument("--trig-k", type=str, default=TRIG_K_DEFAULT,
+                    help=f"framing set for a triggered maneuver (default "
+                         f"{TRIG_K_DEFAULT!r}; NOT the walk's none,4,16 — the 4x atom "
+                         f"question is already answered by the admission)")
+    ap.add_argument("--trig-max-per-batch", type=int, default=TRIG_MAX_PER_BATCH_DEFAULT,
+                    help=f"cap on triggers per batch — bounds the bill, where the admission "
+                         f"rate bounds the opportunity (default {TRIG_MAX_PER_BATCH_DEFAULT})")
+    ap.add_argument("--trig-nbh-m", type=int, default=mnv.NBH_MAX_FOUND)
+    ap.add_argument("--trig-nbh-probes", type=int, default=mnv.NBH_MAX_PROBES,
+                    help="the probe budget, which is the bound that actually binds "
+                         "(88%% of sheet-3's probes returned the parent)")
+    ap.add_argument("--trig-period-max", type=int, default=lsh.SEED_PERIOD_MAX)
+    ap.add_argument("--trig-deadline-s", type=float, default=TRIG_DEADLINE_S)
+    # --- v1.6: record-and-rank + the sourcing interior gate (2026-08-03) ---
+    ap.add_argument("--record-canon-dups", action="store_true",
+                    help="RENDER a pre-canonically-duplicated check anyway, so it carries "
+                         "canonical scores into the record-and-rank store and can be "
+                         "RANKED. It is still refused admission — dup-ness is a property of "
+                         "the ledger's coordinate cloud, not of the picture. DEFAULT OFF, "
+                         "because the render it gives up is large (campaign 2 skipped ~82%% "
+                         "of checks this way); measure it in a shakedown before a long run.")
+    ap.add_argument("--no-interior-gate", dest="interior_gate", action="store_false",
+                    help="disable the sourcing interior gate (>0.30 interior => class 1, "
+                         "Matt's rule). ON by default; off reproduces the pre-v1.6 "
+                         "candidate population exactly.")
+    ap.set_defaults(interior_gate=INTERIOR_GATE_DEFAULT)
+    ap.add_argument("--interior-discard", type=float, default=_INTERIOR_DISCARD,
+                    help=f"interior-fraction discard threshold, strict > "
+                         f"(default {_INTERIOR_DISCARD}, the one value shared with "
+                         f"label_seeded_harvest and apply_interior_rule)")
     # --- deficit scheduler (default OFF; scheduler-off is byte-identical to pre-change) ---
     ap.add_argument("--scheduler", action="store_true",
                     help="ENABLE the family-level deficit scheduler: cross-partition allocation "

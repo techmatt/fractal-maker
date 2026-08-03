@@ -105,6 +105,44 @@ SUPPLY_CRAWL_EXEMPLAR_BATCHES = {"2026-08-01_supply_crawl_exemplar_v1"}
 # per-row method rides `provenance.method` and is what the stratification balanced on.
 LABEL_SEEDED_V2_BATCHES = {"2026-08-02_label_seeded_v2_a", "2026-08-02_label_seeded_v2_b"}
 
+# --- the 2026-08-03 long harvest (three legs, registered BEFORE the build) ---------------
+# The run is RECORD-AND-RANK: it records every candidate scoring above a low floor with its
+# per-stage fate and ranks them, and Matt picks the cutoff off sheets. That makes the three
+# legs three DIFFERENT selection stories, which is why they are three registrations and not
+# one.
+#
+#   RANKED — the top of the run's own ranked candidate queue. Selected on a score twice over
+#     (the cheap CORN ordinal decides which candidates get a canonical confirmation render,
+#     and the rank Matt reviews is built from those scores), so it is BIASED and train-side.
+#     A q3/q4 rate measured on it is a statement about the ranker, not a base rate.
+#   NEAR-MINIBROT — julia c's sampled at a fixed distance ladder around known minibrot
+#     nuclei. The GENERATION METHOD is systematic (the ladder is 1/4/16 atom radii, drawn
+#     before any score exists), but the rows that reach the batch are the ones that survived
+#     the run's own screens, so it is registered biased/train. Its own batch rather than
+#     folded into RANKED because "near a minibrot at ladder rung r" is a hypothesis with its
+#     own answer, and pooling it into the ranked chunk would make that answer unrecoverable.
+#   UNIFORM EVAL — the one leg with NO score anywhere in the selection: small
+#     score-unconditioned draws for the partitions that have no unbiased eval rows at all
+#     (phoenix, native multibrot, julia:mandelbrot — `production_seeder.T_GOOD_UNCALIBRATED`
+#     names all five). Registered EVAL-ELIGIBLE and unbiased.
+#
+# WHY THIS ONE IS eval WHERE THE SUPPLY CRAWL'S UNIFORM LEG WAS NOT, since the two look alike
+# and the earlier decision went the other way (see SUPPLY_CRAWL_UNIFORM_BATCHES above). That
+# leg was uniform over ONE RUN'S OWN CANDIDATE POPULATION, so it estimates that crawl's base
+# rate and nothing wider — making it eval would have moved the instrument to match whatever
+# the crawl happened to surface. This leg is a systematic draw over a FAMILY'S PARAMETER
+# SPACE, taken before the run scores anything, so it is a sample of the family rather than of
+# the run. That is the difference that makes it an admissible instrument.
+#
+# SCOPE, because "eval-eligible" is the one classification that can move a threshold: this
+# registration affects manifests built AFTER it. It cannot touch v10 — that generation's
+# manifest, plan and eval slice are already frozen on disk — so nothing live re-derives
+# because of this line. The first version to see these rows is the next one, and its
+# derivation is where the decision actually lands.
+Q4_HARVEST_RANKED_BATCHES = {"2026-08-03_q4_harvest_ranked_v1"}
+Q4_NEAR_MINIBROT_BATCHES = {"2026-08-03_q4_near_minibrot_v1"}
+Q4_UNIFORM_EVAL_BATCHES = {"2026-08-03_q4_uniform_eval_v1"}
+
 
 class UF:
     def __init__(self, n): self.p = list(range(n))
@@ -224,6 +262,12 @@ def assign_split(loc):
         return "train", True, "supply_crawl_exemplar"        # top-by-exemplar-similarity
     if b in LABEL_SEEDED_V2_BATCHES:
         return "train", True, "label_seeded_v2"              # judged-good seeds, fit-ordered
+    if b in Q4_HARVEST_RANKED_BATCHES:
+        return "train", True, "q4_harvest_ranked"            # top of the run's ranked queue
+    if b in Q4_NEAR_MINIBROT_BATCHES:
+        return "train", True, "q4_near_minibrot"             # ladder around known nuclei
+    if b in Q4_UNIFORM_EVAL_BATCHES:
+        return "eval", False, "q4_uniform_eval"              # systematic, score-unconditioned
     return "train", True, "unregistered"                     # FAIL CLOSED: biased-by-default
 
 

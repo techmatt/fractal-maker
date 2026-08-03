@@ -491,18 +491,23 @@ def resolve_family(args) -> FamilyResolved:
                           c=c, id_tag=id_tag, julia=julia)
 
 
-def make_loc_of(render_family: str, c):
+def make_loc_of(render_family: str, c, family_params=None):
     """Per-family reframe.Location factory for the raw-screen + reframe reward path
     (mirrors cross_family_shakeout.make_loc_of). `make_loc_of("mandelbrot", None)` is
     byte-identical to step0_reanalysis._mand_location, so the Mandelbrot reward path is
     unchanged; a multibrot/julia factory routes those frames through the same render path
-    (render_one_flags reads the family off the Location)."""
+    (render_one_flags reads the family off the Location).
+
+    `family_params` is the per-family extra-constant slot (phoenix's p and z_{-1}); `None`
+    is the historical `{}`, so every existing call is unchanged. A phoenix reframe without
+    it would search the DEFAULT phoenix plane rather than the candidate's own."""
     from reframe import Location
     c_re, c_im = (c if c is not None else (None, None))
+    fp = dict(family_params or {})
 
     def loc_of(cx, cy, fw):
         return Location(family=render_family, c_re=c_re, c_im=c_im,
-                        cx=str(cx), cy=str(cy), fw=str(fw), family_params={})
+                        cx=str(cx), cy=str(cy), fw=str(fw), family_params=fp)
     return loc_of
 
 
@@ -1036,11 +1041,16 @@ def harvest_walk_reward(scorer, wid, frames, workers, scratch, loc_of=_mand_loca
     }
 
 
-def outcome_feature(scorer, cx, cy, fw, tile: Path, *, family="mandelbrot", c=None) -> np.ndarray:
+def outcome_feature(scorer, cx, cy, fw, tile: Path, *, family="mandelbrot", c=None,
+                    family_params=None) -> np.ndarray:
     """Render the k3 winner's reframed crop once at deploy search fidelity (640x360 ss2,
     twilight_shifted) on the active `family`/`c` and forward it through the v5 penultimate
-    hook -> 1280-D. Default (mandelbrot, no c) is byte-identical to the historical call."""
-    ok, err = prescreen._render(cx, cy, fw, tile, family=family, c=c)
+    hook -> 1280-D. Default (mandelbrot, no c) is byte-identical to the historical call.
+
+    `family_params` passes the per-family extra constants through to `prescreen._render`
+    (phoenix's p and z_{-1}); `None` is the historical `{}`."""
+    ok, err = prescreen._render(cx, cy, fw, tile, family=family, c=c,
+                                family_params=family_params)
     if not ok:
         raise SystemExit(f"outcome tile render failed [{tile.name}]: {err}")
     return prescreen.embed_paths(scorer, [tile])[0]
