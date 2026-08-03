@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-03_q4_combined_label_v1",
+  "presentation_only": true,
+  "purpose": "PRESENTATION MERGE of three registered q4 batches into ONE blind sitting. This directory is NOT a batch: it holds no images.jsonl, no labels, and no registration. Every label exported from it routes back to its own source batch via route.json (merge_scores.py --route); the three registrations are untouched.",
+  "source_batches": [
+    "2026-08-03_q4_harvest_ranked_v1",
+    "2026-08-03_q4_near_minibrot_v1",
+    "2026-08-03_q4_uniform_eval_v1"
+  ],
+  "served_manifest": "sheet.jsonl",
+  "route_map": "route.json",
+  "presentation_seed": 4983601,
+  "presentation_order": "file",
+  "order_rule": "seeded shuffle over the union, then stratified round-robin over every (source_batch x family) cell to +/-1 of proportional share in every prefix",
+  "id_salt": "q4-combined-2026-08-03",
+  "id_rule": "qc<slot>_<blake2b(salt|batch|image_id)>; slot assigned POST-shuffle",
+  "counts": {
+    "total": 870,
+    "by_source": {
+      "2026-08-03_q4_near_minibrot_v1": 290,
+      "2026-08-03_q4_uniform_eval_v1": 290,
+      "2026-08-03_q4_harvest_ranked_v1": 290
+    },
+    "cells": {
+      "2026-08-03_q4_harvest_ranked_v1|julia:mandelbrot": 43,
+      "2026-08-03_q4_harvest_ranked_v1|julia:multibrot3": 36,
+      "2026-08-03_q4_harvest_ranked_v1|julia:multibrot4": 14,
+      "2026-08-03_q4_harvest_ranked_v1|julia:multibrot5": 33,
+      "2026-08-03_q4_harvest_ranked_v1|mandelbrot": 25,
+      "2026-08-03_q4_harvest_ranked_v1|multibrot3": 32,
+      "2026-08-03_q4_harvest_ranked_v1|multibrot4": 26,
+      "2026-08-03_q4_harvest_ranked_v1|multibrot5": 40,
+      "2026-08-03_q4_harvest_ranked_v1|phoenix": 41,
+      "2026-08-03_q4_near_minibrot_v1|julia:mandelbrot": 290,
+      "2026-08-03_q4_uniform_eval_v1|julia:mandelbrot": 48,
+      "2026-08-03_q4_uniform_eval_v1|multibrot3": 48,
+      "2026-08-03_q4_uniform_eval_v1|multibrot4": 48,
+      "2026-08-03_q4_uniform_eval_v1|multibrot5": 48,
+      "2026-08-03_q4_uniform_eval_v1|phoenix": 98
+    }
+  },
+  "vivid_companion": "blue_orange",
+  "calibration_aids": "NONE \u2014 no exemplars, no reference strip, no score shown"
+}

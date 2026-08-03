@@ -1,0 +1,3482 @@
+{
+"qc0000_af65aa38": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40021_8bcf28eb"
+},
+"qc0001_8ddc9215": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40208_46228cef"
+},
+"qc0002_67d9b40c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40277_968cc581"
+},
+"qc0003_9d107879": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40185_389fe572"
+},
+"qc0004_59c45e18": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40086_037abd44"
+},
+"qc0005_e4644e65": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40241_75c0dc9a"
+},
+"qc0006_5be9f130": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40023_38dec33a"
+},
+"qc0007_5770e1cd": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40241_48c51471"
+},
+"qc0008_fc56bc7a": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40142_465eaa50"
+},
+"qc0009_46439dcc": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40247_48ae000f"
+},
+"qc0010_6341a2a5": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40111_7cd9b52f"
+},
+"qc0011_5282b2e1": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40211_d8232d4d"
+},
+"qc0012_8b2cdbc9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40050_bcd4c63d"
+},
+"qc0013_81033e2a": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40053_d09e396f"
+},
+"qc0014_6322794d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40143_f57ed7cb"
+},
+"qc0015_89d930d3": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40184_f9b96334"
+},
+"qc0016_a47b17d7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40124_57628cf6"
+},
+"qc0017_64d40c56": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40166_4f6a072d"
+},
+"qc0018_ab145455": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40176_9b1bc4a0"
+},
+"qc0019_38e9f51e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40197_ef1b1f0e"
+},
+"qc0020_9443dd59": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40106_86b0d697"
+},
+"qc0021_db116bce": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40004_943054fe"
+},
+"qc0022_696fd683": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40171_4df7fd33"
+},
+"qc0023_a1c21869": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40179_7055bf1d"
+},
+"qc0024_8e6a157f": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40047_28870ae0"
+},
+"qc0025_06842fc3": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40249_9e93a006"
+},
+"qc0026_ebd8b8ac": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40272_15e92e5a"
+},
+"qc0027_48718b13": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40147_861c6b1f"
+},
+"qc0028_18d68d52": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40090_0a1012ed"
+},
+"qc0029_f6c11f3d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40142_e07c00a7"
+},
+"qc0030_66c5a0e4": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40252_88bdff29"
+},
+"qc0031_d9840375": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40110_1ef7baac"
+},
+"qc0032_7e6123a1": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40134_52b628da"
+},
+"qc0033_255ba697": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40072_ac5c183b"
+},
+"qc0034_46f3769a": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40115_2b1fbdc1"
+},
+"qc0035_1cd13ea2": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40017_edc62be3"
+},
+"qc0036_ee3a043f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40272_ffafe555"
+},
+"qc0037_d780c9de": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40220_0a9ae2f7"
+},
+"qc0038_fb3ffc7d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40011_c54f77dc"
+},
+"qc0039_fcf8f0d8": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40187_3dc0c27a"
+},
+"qc0040_61c179db": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40122_e82a3acf"
+},
+"qc0041_b248f6cd": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40121_5c01203d"
+},
+"qc0042_9f178540": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40045_d926667b"
+},
+"qc0043_19f0bcb8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40262_727e9915"
+},
+"qc0044_257977e3": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40049_1ff6369a"
+},
+"qc0045_1d26ef1e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40278_3b20bba7"
+},
+"qc0046_ba1dc9e1": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40278_ecfba798"
+},
+"qc0047_ba755c5e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40007_43a86a71"
+},
+"qc0048_e1c390bb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40072_adceede0"
+},
+"qc0049_a6a3c4ea": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40202_acb72f9d"
+},
+"qc0050_8f054cc1": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40032_0d9fef8b"
+},
+"qc0051_f7ab2744": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40173_1dfa653d"
+},
+"qc0052_1016e3d7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40151_490fa9f1"
+},
+"qc0053_05064ce3": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40165_65af44bc"
+},
+"qc0054_78b91117": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40181_06970057"
+},
+"qc0055_b329c45f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40004_606cf703"
+},
+"qc0056_e673ca54": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40192_172ef93f"
+},
+"qc0057_02a4a99d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40009_8c06fe6e"
+},
+"qc0058_000f4528": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40042_34a005b4"
+},
+"qc0059_bce9f6dd": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40046_e6a31fb2"
+},
+"qc0060_96a53df6": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40252_41b5608b"
+},
+"qc0061_f0563bd4": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40127_d1bb21b6"
+},
+"qc0062_c245b920": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40042_893ccced"
+},
+"qc0063_77cbd535": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40181_3d22ef10"
+},
+"qc0064_9c2cd937": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40169_884a7287"
+},
+"qc0065_c85742e9": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40194_a93a86fa"
+},
+"qc0066_55ae87fb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40167_fb8ce6a6"
+},
+"qc0067_34011050": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40233_8d46431c"
+},
+"qc0068_94ffb26a": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40138_4e5836cf"
+},
+"qc0069_3dad82cd": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40169_c78891e4"
+},
+"qc0070_3f76f33a": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40283_5d50c60f"
+},
+"qc0071_4c79bcbd": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40090_360e595b"
+},
+"qc0072_a1543f12": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40163_647ca2d3"
+},
+"qc0073_1367fc93": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40152_332a366c"
+},
+"qc0074_78eb310f": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40266_7d90e08c"
+},
+"qc0075_e32d222f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40043_b50909b6"
+},
+"qc0076_65380e4f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40270_280cc567"
+},
+"qc0077_e27cbd20": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40219_0933ab37"
+},
+"qc0078_69788dc9": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40212_1e688780"
+},
+"qc0079_e74f4c8e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40172_b1503e41"
+},
+"qc0080_989959a1": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40262_92dce48e"
+},
+"qc0081_a6ceeb9b": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40061_a6ab19c7"
+},
+"qc0082_837451fc": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40160_409ad29f"
+},
+"qc0083_d949b6ca": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40204_f5b3f513"
+},
+"qc0084_6adc936e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40224_6f129d9c"
+},
+"qc0085_0913627c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40163_edc585a1"
+},
+"qc0086_035c2d71": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40150_b22409ef"
+},
+"qc0087_70f1e797": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40018_59dcf3c0"
+},
+"qc0088_c0d36d2c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40240_d50747e6"
+},
+"qc0089_2c30b7a4": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40171_33fdde01"
+},
+"qc0090_79156335": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40059_d52e069b"
+},
+"qc0091_994027ae": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40154_33d1a10b"
+},
+"qc0092_e4c38cba": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40094_784c6297"
+},
+"qc0093_6f9ab74f": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40073_dbc6a1cc"
+},
+"qc0094_67765e26": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40026_2e967b8c"
+},
+"qc0095_ec23ade2": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40019_4f1e4083"
+},
+"qc0096_fc174874": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40098_7c15351e"
+},
+"qc0097_504a91e2": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40084_9cf06463"
+},
+"qc0098_b8a1c0a8": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40126_1b83c2a6"
+},
+"qc0099_71e68ed5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40162_8a6220b8"
+},
+"qc0100_bc1921a0": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40032_cdc6884f"
+},
+"qc0101_cb0cbc0c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40179_50b56856"
+},
+"qc0102_bdaf6e71": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40234_6b711e26"
+},
+"qc0103_a7452c8f": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40050_44ec126c"
+},
+"qc0104_da81faf6": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40246_e8c13024"
+},
+"qc0105_1e54f8dc": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40126_6a08ee48"
+},
+"qc0106_9574c86c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40018_7b5f9984"
+},
+"qc0107_c567005b": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40218_19536f5c"
+},
+"qc0108_ab632d57": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40207_61ebf9a9"
+},
+"qc0109_a2a66a49": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40236_b81fddfe"
+},
+"qc0110_ee23831e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40286_028e9e95"
+},
+"qc0111_8bf75ee7": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40052_974b2bae"
+},
+"qc0112_61c6fc54": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40229_f166a3fe"
+},
+"qc0113_5fdda6a9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40084_0f239648"
+},
+"qc0114_482a2a70": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40185_b1ca31c5"
+},
+"qc0115_955cccf8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40051_64a2ea5d"
+},
+"qc0116_35be1dc3": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40164_66a0ecc9"
+},
+"qc0117_473aee02": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40074_5be237fc"
+},
+"qc0118_ec6ac42f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40204_3b690180"
+},
+"qc0119_89aeab52": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40192_76f5451c"
+},
+"qc0120_056538b4": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40022_6e15f162"
+},
+"qc0121_82b4440c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40057_587ad210"
+},
+"qc0122_cd03cdb4": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40176_d3de0f8c"
+},
+"qc0123_8db65663": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40139_d9e14ef5"
+},
+"qc0124_3661ed9d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40190_0ad131f8"
+},
+"qc0125_20fc489d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40089_5eca546a"
+},
+"qc0126_0d3a3774": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40222_a1d8024d"
+},
+"qc0127_8c4e2998": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40062_81935504"
+},
+"qc0128_1af25483": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40221_56b18a33"
+},
+"qc0129_09ff5bf0": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40045_628b0151"
+},
+"qc0130_371c5407": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40265_b896c683"
+},
+"qc0131_caee3873": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40258_5064f4fe"
+},
+"qc0132_69d4e114": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40018_ddd789d2"
+},
+"qc0133_b915dcaa": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40234_48662d63"
+},
+"qc0134_5db420fb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40240_a3ec98de"
+},
+"qc0135_8e07b76c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40028_e5ca3ed5"
+},
+"qc0136_f2d3a8cc": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40041_e73addf0"
+},
+"qc0137_1017aa8d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40048_f60db67f"
+},
+"qc0138_2fe95de6": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40107_e78e33c7"
+},
+"qc0139_98be5bd6": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40215_776fe581"
+},
+"qc0140_516cce19": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40003_e80852ce"
+},
+"qc0141_5a8d6327": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40249_c4ddb6f9"
+},
+"qc0142_5496e8bc": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40287_1b6914d0"
+},
+"qc0143_0f6a6ec6": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40182_02b4bcce"
+},
+"qc0144_c63d2ef4": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40000_e2f3bc69"
+},
+"qc0145_ffa40c80": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40015_fda4efef"
+},
+"qc0146_825d1f06": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40097_6fc78efc"
+},
+"qc0147_b596b8b9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40025_26441754"
+},
+"qc0148_ba4edff8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40081_b6061d86"
+},
+"qc0149_ed7cf9e5": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40014_baf5b011"
+},
+"qc0150_c58ef495": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40228_b56a475a"
+},
+"qc0151_998b5b9c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40022_719b47e1"
+},
+"qc0152_8541b289": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40169_edfb50b9"
+},
+"qc0153_5178c7b5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40129_992d84f3"
+},
+"qc0154_da108cfe": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40038_9c280a2f"
+},
+"qc0155_4ba00fc3": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40110_b758617b"
+},
+"qc0156_eb190f53": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40198_ab6c77e9"
+},
+"qc0157_3cbf6963": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40254_d9463b24"
+},
+"qc0158_e097b8ce": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40120_2df401ad"
+},
+"qc0159_7988aa84": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40230_88457f36"
+},
+"qc0160_a0b96d5c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40057_a16151ff"
+},
+"qc0161_c4fa620f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40117_81fdc0dc"
+},
+"qc0162_709f5296": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40214_de95f094"
+},
+"qc0163_a5cf1a3c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40052_0bd18b46"
+},
+"qc0164_b4c2e4a4": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40113_027e4e33"
+},
+"qc0165_14ed6103": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40106_dcc6c484"
+},
+"qc0166_954620d1": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40006_0b64b5e8"
+},
+"qc0167_b495aa8f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40148_cce67537"
+},
+"qc0168_231d3ea8": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40199_ee3443b3"
+},
+"qc0169_ca5aebe8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40131_f1011cd9"
+},
+"qc0170_429e4b80": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40006_fd8b6d0f"
+},
+"qc0171_c9abfbdf": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40068_e6a6a526"
+},
+"qc0172_d842da4a": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40029_4a00c07d"
+},
+"qc0173_a621c015": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40195_f4daaf37"
+},
+"qc0174_2179e563": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40160_a84072f5"
+},
+"qc0175_e2354513": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40263_5389ff38"
+},
+"qc0176_5f4d3a26": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40289_db43ee55"
+},
+"qc0177_ffa6a92a": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40123_0e4c081a"
+},
+"qc0178_38a9dd74": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40227_c6580879"
+},
+"qc0179_b34db35d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40275_c0295c71"
+},
+"qc0180_ce6dbac5": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40271_0511e082"
+},
+"qc0181_f0afb16c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40245_bd7ad421"
+},
+"qc0182_0de8760a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40092_90d006c5"
+},
+"qc0183_3bc577f4": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40246_61c9326e"
+},
+"qc0184_255168be": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40009_ad4aef9d"
+},
+"qc0185_439206af": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40091_ade118f9"
+},
+"qc0186_000c38ca": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40107_5eed729a"
+},
+"qc0187_60d7d740": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40207_01e5dbc6"
+},
+"qc0188_39e9a893": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40010_265c65ae"
+},
+"qc0189_3670a79c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40211_720c0331"
+},
+"qc0190_b27e2a88": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40020_c4be8666"
+},
+"qc0191_2c88e5ea": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40259_d040d185"
+},
+"qc0192_70d8824e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40158_ea5862ef"
+},
+"qc0193_38413e56": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40171_e211a307"
+},
+"qc0194_cb78adaf": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40129_7cbbe2a3"
+},
+"qc0195_cca2bb93": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40080_9d328179"
+},
+"qc0196_6a83df4e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40036_7e889bdb"
+},
+"qc0197_cf8b9fa6": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40092_198a3b04"
+},
+"qc0198_1c6d381b": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40180_9f033a32"
+},
+"qc0199_da9f26de": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40146_192db3a7"
+},
+"qc0200_4b1886c4": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40266_d64db622"
+},
+"qc0201_80572571": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40058_9040e633"
+},
+"qc0202_f95b1911": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40228_a1ab4814"
+},
+"qc0203_990ff48c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40031_aaefd7ac"
+},
+"qc0204_cd7c9471": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40170_89d894c7"
+},
+"qc0205_a9cfb2e7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40168_45f81abe"
+},
+"qc0206_ab16d4d5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40197_f63d2014"
+},
+"qc0207_ad01e059": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40103_c4423a4b"
+},
+"qc0208_3785edba": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40224_1e6c1aed"
+},
+"qc0209_ba6f547a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40127_2d8b72b4"
+},
+"qc0210_3f9835c0": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40249_fc5cac42"
+},
+"qc0211_0dd8f19e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40275_929114d6"
+},
+"qc0212_d9274caa": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40232_4bf62960"
+},
+"qc0213_85f00cf2": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40224_5402b5d3"
+},
+"qc0214_5549854f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40085_31c3bf49"
+},
+"qc0215_17be4f0e": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40010_4faddbad"
+},
+"qc0216_94945d10": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40253_e0cde2cd"
+},
+"qc0217_bb01aa19": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40182_3db35041"
+},
+"qc0218_93de971a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40156_e2e41e45"
+},
+"qc0219_299e4faa": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40282_40925696"
+},
+"qc0220_1b18f893": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40155_a5587653"
+},
+"qc0221_921fb277": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40077_0924e6ad"
+},
+"qc0222_1b9223c1": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40065_fd23f90a"
+},
+"qc0223_05c24be7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40161_4b0d2ccb"
+},
+"qc0224_610f176d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40239_299f4c9f"
+},
+"qc0225_14abb7c3": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40120_2d83d053"
+},
+"qc0226_37b91b7c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40282_1919c5fc"
+},
+"qc0227_827d5174": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40085_2af7d76b"
+},
+"qc0228_04d986dc": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40070_d17b3b72"
+},
+"qc0229_e52ebb4f": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40236_c32650d5"
+},
+"qc0230_337cd659": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40198_0da59b7e"
+},
+"qc0231_4cd27d39": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40040_9ac71c25"
+},
+"qc0232_02d2176d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40268_e464ea55"
+},
+"qc0233_7a05960f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40162_a556e0d4"
+},
+"qc0234_91d60cb2": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40054_b8b9b05a"
+},
+"qc0235_75adb78c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40191_52b2194a"
+},
+"qc0236_65a67870": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40160_0f775240"
+},
+"qc0237_1ceceed0": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40119_4446ea1d"
+},
+"qc0238_67c307ba": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40134_35289ae4"
+},
+"qc0239_047daeb5": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40175_fdecb760"
+},
+"qc0240_14b51ff4": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40165_3434438c"
+},
+"qc0241_e79bd0ba": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40175_e93ea34a"
+},
+"qc0242_295d76f5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40248_41149150"
+},
+"qc0243_36d2d1f2": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40037_5d82b527"
+},
+"qc0244_ead037c5": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40162_b92bb533"
+},
+"qc0245_369348d7": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40238_949812c8"
+},
+"qc0246_1630e376": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40100_df9d7e85"
+},
+"qc0247_0d3822d6": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40248_51d88a88"
+},
+"qc0248_bafc9527": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40067_69f9b1d8"
+},
+"qc0249_537420ef": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40155_b2d3187f"
+},
+"qc0250_3cf9ac4c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40217_c034b1ba"
+},
+"qc0251_d27488fd": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40033_7ef94098"
+},
+"qc0252_e389d2de": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40000_d8f60a8a"
+},
+"qc0253_eca66dc1": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40104_e7e45bf5"
+},
+"qc0254_1c2a7d2b": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40146_3d5e2fe2"
+},
+"qc0255_f488ea25": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40233_324ee7c5"
+},
+"qc0256_776a2a83": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40092_74d47c70"
+},
+"qc0257_e40202e9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40137_dfc16d1e"
+},
+"qc0258_ae9e6655": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40048_6c79f5f7"
+},
+"qc0259_59661562": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40263_82135490"
+},
+"qc0260_18fab6fc": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40165_e84ade0e"
+},
+"qc0261_9747b815": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40214_d91782e0"
+},
+"qc0262_638908a3": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40210_a508b016"
+},
+"qc0263_d09424d7": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40116_77a7a50a"
+},
+"qc0264_ffa8b922": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40202_44bfc113"
+},
+"qc0265_6bec97c2": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40280_d35ffc02"
+},
+"qc0266_bdb74363": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40218_9d1649d2"
+},
+"qc0267_d6ccabac": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40286_faee578a"
+},
+"qc0268_6318c163": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40075_ce4526be"
+},
+"qc0269_1549ab3a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40232_702c0255"
+},
+"qc0270_52fe6148": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40063_eaf823bd"
+},
+"qc0271_f5f69fc8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40272_d11c977b"
+},
+"qc0272_b7883dd2": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40174_4e6f2ed2"
+},
+"qc0273_bed3223d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40239_002602e9"
+},
+"qc0274_d0a57059": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40288_c696132d"
+},
+"qc0275_c0301d99": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40135_ab0de20e"
+},
+"qc0276_25816706": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40223_6898b6f4"
+},
+"qc0277_ae3896af": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40074_5e5ca01b"
+},
+"qc0278_562f5adb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40253_fa902511"
+},
+"qc0279_212f2403": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40130_dd4f3b28"
+},
+"qc0280_2257d477": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40219_753d9ce5"
+},
+"qc0281_a6287748": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40096_086cc838"
+},
+"qc0282_37077693": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40189_1945104b"
+},
+"qc0283_3fbdbfbf": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40247_0abed4ce"
+},
+"qc0284_9747d6c6": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40118_1e992d1f"
+},
+"qc0285_cb757380": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40238_291e4f60"
+},
+"qc0286_8c631bac": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40150_88f86e70"
+},
+"qc0287_779c2fdb": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40099_590740eb"
+},
+"qc0288_ce0dcf42": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40208_95b5a2f6"
+},
+"qc0289_f4a8fc75": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40093_86842e49"
+},
+"qc0290_956356ed": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40227_323e6ad7"
+},
+"qc0291_4464d576": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40070_bb1a5566"
+},
+"qc0292_234b132a": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40141_cbf905c2"
+},
+"qc0293_5d5a6e7b": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40133_5232a20c"
+},
+"qc0294_2c5fc000": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40087_3c5ea5c5"
+},
+"qc0295_dbcce0a9": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40076_a08de687"
+},
+"qc0296_113c83e0": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40279_9a75c8d4"
+},
+"qc0297_4866904c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40091_74f02e2d"
+},
+"qc0298_3af1f03e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40157_be2a21b3"
+},
+"qc0299_e5926faf": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40283_8a482ae8"
+},
+"qc0300_f7e0226b": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40145_f938684c"
+},
+"qc0301_b8457508": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40143_a9c531e9"
+},
+"qc0302_66c3a9e5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40102_a5823c4b"
+},
+"qc0303_6d0050d0": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40236_35e055e4"
+},
+"qc0304_45b81765": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40216_b4355a77"
+},
+"qc0305_af25b3b1": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40088_5fd475db"
+},
+"qc0306_9948bc14": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40231_cc407f58"
+},
+"qc0307_027564f7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40212_2e63ff1d"
+},
+"qc0308_76bea422": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40120_d95d7e03"
+},
+"qc0309_02a6838d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40047_61c09e61"
+},
+"qc0310_17c43616": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40179_06761346"
+},
+"qc0311_a72c3b27": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40105_7000334c"
+},
+"qc0312_1bfb365d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40095_2daf7375"
+},
+"qc0313_c9b94e9f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40119_84c21449"
+},
+"qc0314_8625c912": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40138_9ca08451"
+},
+"qc0315_449e15b2": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40115_0758b021"
+},
+"qc0316_4d6bc4e1": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40013_f3e58e99"
+},
+"qc0317_4cff3e7a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40095_cd6f058f"
+},
+"qc0318_9f656e50": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40217_e9d3cb84"
+},
+"qc0319_37d5abcf": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40095_dbd0d02b"
+},
+"qc0320_613d1f15": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40079_6d1b5ee0"
+},
+"qc0321_b5d99283": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40199_c4e195f6"
+},
+"qc0322_411aafa4": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40213_423f52ca"
+},
+"qc0323_6f882380": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40152_dc5e40fb"
+},
+"qc0324_b0c71915": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40075_e359e399"
+},
+"qc0325_0d635ded": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40101_8b783fa9"
+},
+"qc0326_9da5ae6e": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40250_37c949b5"
+},
+"qc0327_7560c2c1": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40015_bfbf49b8"
+},
+"qc0328_dbffbe60": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40102_45d248ad"
+},
+"qc0329_4ab5ac04": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40023_8b248c60"
+},
+"qc0330_2132769e": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40038_6e1147c3"
+},
+"qc0331_9d6e560d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40242_54e719bd"
+},
+"qc0332_e4a6ee25": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40172_3ca07eb7"
+},
+"qc0333_7b31b476": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40226_6e25595e"
+},
+"qc0334_633b4c24": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40049_2843f31a"
+},
+"qc0335_adceeddf": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40105_e22c4e3e"
+},
+"qc0336_cec048c8": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40210_c9607700"
+},
+"qc0337_9a9c14bf": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40069_ef878070"
+},
+"qc0338_43810ecd": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40077_803f70ac"
+},
+"qc0339_45f02439": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40284_a2a0c7e9"
+},
+"qc0340_2233ff85": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40012_052e176b"
+},
+"qc0341_cb55780a": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40066_fe5b1365"
+},
+"qc0342_bac2a058": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40218_3f83fbfc"
+},
+"qc0343_3dd5d21b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40044_83eb287c"
+},
+"qc0344_b3cc0b77": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40280_eeb91b5a"
+},
+"qc0345_fe1ff7a8": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40053_928585a0"
+},
+"qc0346_c90d83de": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40167_05186f2f"
+},
+"qc0347_c2338d60": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40096_da8ebe8a"
+},
+"qc0348_7935dab2": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40009_bc2d5657"
+},
+"qc0349_f92caaab": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40121_0a05ad7a"
+},
+"qc0350_dd5b9f95": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40220_2f87bba7"
+},
+"qc0351_7cbfe70c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40108_4f8e1bef"
+},
+"qc0352_b3eb01da": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40181_dc1245e5"
+},
+"qc0353_f3a79487": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40245_7eee9a4c"
+},
+"qc0354_066e472e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40174_4a324f55"
+},
+"qc0355_6718e371": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40273_d6461b87"
+},
+"qc0356_d3c2ebac": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40273_14ba3e21"
+},
+"qc0357_6d93845f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40217_43dbe0f0"
+},
+"qc0358_84303f13": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40073_221133f9"
+},
+"qc0359_19cfcd24": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40056_82a66e08"
+},
+"qc0360_72c7aaed": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40282_cc51cc0f"
+},
+"qc0361_8054111e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40192_b2261aca"
+},
+"qc0362_149ed00f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40022_e20c8a37"
+},
+"qc0363_f068000b": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40035_e9ca2369"
+},
+"qc0364_25932805": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40177_0accb00f"
+},
+"qc0365_7315e7c5": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40145_35d5517c"
+},
+"qc0366_a7371927": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40011_fff140a1"
+},
+"qc0367_5e102ce1": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40252_5aea9ded"
+},
+"qc0368_60709977": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40243_72c48a74"
+},
+"qc0369_23bcae1d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40257_16e33e51"
+},
+"qc0370_c6ca315e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40136_354161fd"
+},
+"qc0371_7c9ab16e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40056_b6264a37"
+},
+"qc0372_7ad213e6": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40230_fcc8e476"
+},
+"qc0373_8ce6685b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40255_7bccd576"
+},
+"qc0374_1be8c687": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40255_20e205fc"
+},
+"qc0375_92bc687f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40021_4b44c627"
+},
+"qc0376_cc2eeb56": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40071_4a7c3827"
+},
+"qc0377_05567734": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40273_ae765085"
+},
+"qc0378_d97804bb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40161_a7d3f4a4"
+},
+"qc0379_67f1dbc8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40040_d57b1b2a"
+},
+"qc0380_719fda20": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40112_2971e8a1"
+},
+"qc0381_8749af2a": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40191_003f547d"
+},
+"qc0382_ccf1b30b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40054_202c48b5"
+},
+"qc0383_d52f64c1": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40049_20fe9de9"
+},
+"qc0384_df3ec105": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40170_bb3128fe"
+},
+"qc0385_485762c7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40275_cb7aa2a0"
+},
+"qc0386_c75f0f14": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40025_c2d79c44"
+},
+"qc0387_cdc77b02": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40150_f994444b"
+},
+"qc0388_c4eab770": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40180_6d851f44"
+},
+"qc0389_aa767319": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40040_aee14f84"
+},
+"qc0390_b09c014c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40089_af7851ce"
+},
+"qc0391_59829c1f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40037_47f4b0d3"
+},
+"qc0392_2a7fa4d8": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40012_d2abb9fc"
+},
+"qc0393_2fd7a05c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40172_cb177df6"
+},
+"qc0394_f89bb090": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40175_1c8bcaef"
+},
+"qc0395_76f29199": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40131_23561f96"
+},
+"qc0396_e8bc3c2d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40028_5b33161b"
+},
+"qc0397_d549bfe2": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40254_754cc27b"
+},
+"qc0398_212ecc86": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40057_368f1c53"
+},
+"qc0399_c3428c63": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40082_0e0a9fdb"
+},
+"qc0400_4afc684d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40089_dfb86904"
+},
+"qc0401_c7514fb0": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40122_40e7ad66"
+},
+"qc0402_24e7fd2a": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40270_c12242dd"
+},
+"qc0403_24a16569": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40058_3cad6c87"
+},
+"qc0404_053b62d3": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40213_36b67a0d"
+},
+"qc0405_445be2fd": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40060_41ffcf32"
+},
+"qc0406_d95b51af": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40231_fe692c59"
+},
+"qc0407_e129da28": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40090_39b553e6"
+},
+"qc0408_0e267082": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40148_d3025d80"
+},
+"qc0409_541a52c9": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40188_12437cf4"
+},
+"qc0410_4c4194bb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40063_c5ed90d5"
+},
+"qc0411_ed9b009e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40182_e4c41aa2"
+},
+"qc0412_164f737f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40206_91ce2af7"
+},
+"qc0413_1c236063": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40117_e1476692"
+},
+"qc0414_7e3bd2f0": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40159_2d7d5c04"
+},
+"qc0415_c52f9fe0": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40195_d3a28b97"
+},
+"qc0416_01a67e40": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40039_9894f4f6"
+},
+"qc0417_f4f762bd": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40004_9e43ce28"
+},
+"qc0418_41838588": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40039_3f6f1ca5"
+},
+"qc0419_bdc735b4": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40277_b3fd7fe8"
+},
+"qc0420_a0923f06": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40071_059c9978"
+},
+"qc0421_952259bc": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40200_e70a98be"
+},
+"qc0422_d951135b": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40114_88ec9138"
+},
+"qc0423_9a532b96": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40154_766e5a29"
+},
+"qc0424_183e9c9d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40088_4e36bb6e"
+},
+"qc0425_53b82ab5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40078_c705512c"
+},
+"qc0426_d94ef598": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40017_6a89b555"
+},
+"qc0427_1ced18b1": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40223_ec86c776"
+},
+"qc0428_43794c2d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40052_7f41d5f4"
+},
+"qc0429_436b5211": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40019_1f5c8896"
+},
+"qc0430_114b3364": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40103_0ecf37b1"
+},
+"qc0431_175f58bf": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40267_64f39436"
+},
+"qc0432_69412552": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40244_5944fb78"
+},
+"qc0433_d9b6c707": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40047_716efff1"
+},
+"qc0434_8cf7511d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40193_27dd2888"
+},
+"qc0435_621a7d17": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40083_526943ca"
+},
+"qc0436_42e5cb61": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40061_d19213f3"
+},
+"qc0437_1e5d8acb": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40201_635bdb03"
+},
+"qc0438_9be0c9cb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40215_4c6be952"
+},
+"qc0439_bab4e534": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40128_4730303e"
+},
+"qc0440_483473b6": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40250_c932c76c"
+},
+"qc0441_5e2b980a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40177_60554aca"
+},
+"qc0442_8e7d8524": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40253_7cfd912e"
+},
+"qc0443_dd13e9f5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40123_0b8f5ee1"
+},
+"qc0444_36ad0fc1": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40270_8f27c2ec"
+},
+"qc0445_2136af6f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40279_45b82a81"
+},
+"qc0446_a5474b1d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40225_69ffe40c"
+},
+"qc0447_d265d2ff": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40158_bff13640"
+},
+"qc0448_81789da8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40003_333c3964"
+},
+"qc0449_b0c399a8": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40157_962c69bb"
+},
+"qc0450_e8c91411": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40186_be7f01f9"
+},
+"qc0451_4ea22dec": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40170_56986eb1"
+},
+"qc0452_57af87f9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40264_bd0a7148"
+},
+"qc0453_4409808a": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40153_1fae2a9b"
+},
+"qc0454_63c993ba": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40082_a1a585f4"
+},
+"qc0455_7f1d5492": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40197_0ebe41c6"
+},
+"qc0456_94ff2418": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40058_cb66382f"
+},
+"qc0457_3eaa0059": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40114_f5c4c2b0"
+},
+"qc0458_bf8abd83": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40079_0d27224c"
+},
+"qc0459_f6cec37d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40008_e183cc9b"
+},
+"qc0460_46bdd702": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40140_e9bf0d38"
+},
+"qc0461_900b7b20": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40154_9bc9be1c"
+},
+"qc0462_02e637cb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40284_60f86f81"
+},
+"qc0463_a636c88c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40002_6074bc4c"
+},
+"qc0464_d8302e5c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40053_560e4931"
+},
+"qc0465_2e8accf6": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40288_14947043"
+},
+"qc0466_06485f1d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40193_98b0ef9e"
+},
+"qc0467_6918f4a8": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40033_2b1bbe6e"
+},
+"qc0468_6193858c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40257_087348e3"
+},
+"qc0469_c1d460b7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40017_2cc363d7"
+},
+"qc0470_0d296ffe": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40061_dbb91434"
+},
+"qc0471_c91ff45d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40278_92b80155"
+},
+"qc0472_c594b9ab": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40266_69f6ca3d"
+},
+"qc0473_a03a312c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40203_bf4d7f71"
+},
+"qc0474_16743031": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40111_772a7f1c"
+},
+"qc0475_b99098b8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40064_3738b2ab"
+},
+"qc0476_cecd4f99": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40044_1100afd1"
+},
+"qc0477_8e6fe95b": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40026_6df4013e"
+},
+"qc0478_52ee261d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40144_07524484"
+},
+"qc0479_78fc11e2": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40153_1d4e6c6d"
+},
+"qc0480_af2b5372": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40020_00d2ee19"
+},
+"qc0481_aa931b94": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40094_1f17df36"
+},
+"qc0482_8e9d7993": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40136_2347b321"
+},
+"qc0483_808322c3": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40235_c6d6bd38"
+},
+"qc0484_1360e1a0": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40149_2a021fb7"
+},
+"qc0485_9a025de4": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40013_f6860d67"
+},
+"qc0486_dab5fe4d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40141_372821f7"
+},
+"qc0487_4feaeead": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40070_c63add23"
+},
+"qc0488_242c5650": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40259_78657b4d"
+},
+"qc0489_cec45023": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40108_9c02c9ab"
+},
+"qc0490_70e15903": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40067_b030954e"
+},
+"qc0491_8b251839": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40190_a98de15a"
+},
+"qc0492_531ec7ac": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40188_c82d9f27"
+},
+"qc0493_bd5f3302": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40259_59d84ac4"
+},
+"qc0494_74086f15": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40027_296d9856"
+},
+"qc0495_e77e6084": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40042_377c7c73"
+},
+"qc0496_6a70ce03": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40091_63cb0d32"
+},
+"qc0497_cbe52ad8": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40069_8118ccb3"
+},
+"qc0498_2afbc2d1": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40012_bbd29b52"
+},
+"qc0499_72259cb8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40050_2237664a"
+},
+"qc0500_4ff2ed3e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40233_fbdf1cb1"
+},
+"qc0501_ccccbef3": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40035_88b9b40a"
+},
+"qc0502_4750437f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40158_5d49548d"
+},
+"qc0503_3c04d5b6": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40083_89b2acdc"
+},
+"qc0504_caa3a5af": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40240_df942cd5"
+},
+"qc0505_2a38e520": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40098_f71d7b79"
+},
+"qc0506_26ce3225": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40177_b3677b88"
+},
+"qc0507_c5407430": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40076_e3bf0fda"
+},
+"qc0508_96ddaad7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40014_0b9dd008"
+},
+"qc0509_0d9ba2f9": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40203_85bdfce6"
+},
+"qc0510_067832fd": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40213_e5542f9c"
+},
+"qc0511_d24fc2c4": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40060_5c88e4d9"
+},
+"qc0512_ffcfdb14": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40263_16984b2a"
+},
+"qc0513_f74a73e5": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40262_b5bca64f"
+},
+"qc0514_99447066": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40001_d0ade1b9"
+},
+"qc0515_04ec01f1": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40176_325a8f26"
+},
+"qc0516_859ecf81": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40209_99eeaa72"
+},
+"qc0517_ce31a2b9": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40199_6416f9c6"
+},
+"qc0518_b02d273e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40261_8b4f53d5"
+},
+"qc0519_24f29bb2": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40222_b4ebeeac"
+},
+"qc0520_8bc51da5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40031_f6fd5f4a"
+},
+"qc0521_23ccad27": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40027_bde2acbd"
+},
+"qc0522_4447d8e0": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40007_dbd5df67"
+},
+"qc0523_3f2cbdb9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40279_1c2658b9"
+},
+"qc0524_703967e0": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40235_4d759a9f"
+},
+"qc0525_da0cc186": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40109_3ba2e5c4"
+},
+"qc0526_67ae8fda": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40059_e39b5b4d"
+},
+"qc0527_11e2e2bd": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40260_319d1672"
+},
+"qc0528_d977bbd5": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40196_6dbafee5"
+},
+"qc0529_f067f167": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40194_f7f74d1b"
+},
+"qc0530_e1d05122": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40143_a2306d85"
+},
+"qc0531_0ab8ce47": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40003_0d13718d"
+},
+"qc0532_0ebf19d8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40237_fd740d19"
+},
+"qc0533_c7f41b76": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40185_7e545445"
+},
+"qc0534_a812cdda": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40223_60bf39a6"
+},
+"qc0535_5d3d466e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40186_6506fd08"
+},
+"qc0536_55d23844": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40101_5b1b33ee"
+},
+"qc0537_7f5b741f": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40132_faf3ec7c"
+},
+"qc0538_8192bdff": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40267_4d75bf8f"
+},
+"qc0539_313defa0": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40064_0a601cdf"
+},
+"qc0540_cf7db7ad": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40194_c11d0bb1"
+},
+"qc0541_390f2ab0": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40225_8b4ab5a5"
+},
+"qc0542_0ec94600": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40078_657b9a69"
+},
+"qc0543_9192cb60": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40195_b42ebf33"
+},
+"qc0544_04a46005": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40251_1aceccb4"
+},
+"qc0545_090907ab": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40204_c775027a"
+},
+"qc0546_0057ad9c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40039_7032ee6f"
+},
+"qc0547_e9579fa6": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40045_eba1301d"
+},
+"qc0548_ab8bed55": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40005_d0d4fff3"
+},
+"qc0549_98c6bbc1": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40109_a2984388"
+},
+"qc0550_18a6b562": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40139_9270ef61"
+},
+"qc0551_fca75740": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40200_f9313db1"
+},
+"qc0552_4dc78fea": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40137_141c8058"
+},
+"qc0553_7841f847": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40153_4a21e70e"
+},
+"qc0554_f014e8cf": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40246_fc23f407"
+},
+"qc0555_d7645971": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40122_29af4ca8"
+},
+"qc0556_dc236ea4": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40226_4a36dca4"
+},
+"qc0557_3b9ef594": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40146_89f139de"
+},
+"qc0558_241b5246": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40183_e45b68fa"
+},
+"qc0559_3966265b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40008_d10aa921"
+},
+"qc0560_ab5e750a": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40144_8dcd72fa"
+},
+"qc0561_b1a3a230": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40216_861f5d62"
+},
+"qc0562_3fef0306": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40239_b1150988"
+},
+"qc0563_3fa5405b": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40151_9befa154"
+},
+"qc0564_b2b3d14d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40205_337b93af"
+},
+"qc0565_b1216e9a": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40135_46262e60"
+},
+"qc0566_34357df0": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40111_4fdf9a70"
+},
+"qc0567_a567234d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40093_1a975aef"
+},
+"qc0568_051e145f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40286_dc14ce4b"
+},
+"qc0569_605b8cc6": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40060_8536dff2"
+},
+"qc0570_c8446217": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40188_827bf4b8"
+},
+"qc0571_1aa6755b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40113_98503c29"
+},
+"qc0572_b432ad61": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40034_b309f661"
+},
+"qc0573_7b8f98f2": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40128_5104f4dd"
+},
+"qc0574_4479c54a": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40043_8c0581c3"
+},
+"qc0575_c763099d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40152_9977fbf0"
+},
+"qc0576_f130ba79": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40288_5eda9056"
+},
+"qc0577_a87d1580": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40156_9084555f"
+},
+"qc0578_c79158f5": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40248_82ccd60d"
+},
+"qc0579_2d7ff2df": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40130_c808a2fa"
+},
+"qc0580_bb2e5e55": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40080_26f51cd1"
+},
+"qc0581_1a3e8392": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40287_a46ceba5"
+},
+"qc0582_ed026665": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40136_80fa3a13"
+},
+"qc0583_ad57d66b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40123_703424f4"
+},
+"qc0584_605a13af": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40200_1c4f77c5"
+},
+"qc0585_b3b4bdd2": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40073_366d9e32"
+},
+"qc0586_5ec81e36": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40221_9c9f6632"
+},
+"qc0587_54201504": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40094_0c7ee415"
+},
+"qc0588_822ecae1": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40038_94f3bc5d"
+},
+"qc0589_ad2b50a9": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40238_c42105af"
+},
+"qc0590_6722f141": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40099_8f4ea6ee"
+},
+"qc0591_efb004a7": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40125_5d50c98f"
+},
+"qc0592_747c74d8": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40269_1af3b0c9"
+},
+"qc0593_59171ae7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40230_822dd673"
+},
+"qc0594_dee0ea4d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40086_a802d330"
+},
+"qc0595_321af4af": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40015_4a5cf622"
+},
+"qc0596_b434d3e5": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40002_52699774"
+},
+"qc0597_c62515cd": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40245_cdf8c492"
+},
+"qc0598_c833b98a": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40164_ea334bf5"
+},
+"qc0599_0ec740b3": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40251_de33a3fb"
+},
+"qc0600_1090360f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40125_86628ec9"
+},
+"qc0601_5128b1cd": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40031_53dbec97"
+},
+"qc0602_e18a5842": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40226_7b1f52ab"
+},
+"qc0603_e316063f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40140_ec1260b3"
+},
+"qc0604_ac6a4d66": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40068_a1e37838"
+},
+"qc0605_c5694e93": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40032_d1b0b1ad"
+},
+"qc0606_734235eb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40065_a2c3eb56"
+},
+"qc0607_3167a28f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40079_b77265db"
+},
+"qc0608_61a6c113": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40029_00068817"
+},
+"qc0609_0e440204": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40205_e065f25d"
+},
+"qc0610_3b72fec7": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40168_dfa690db"
+},
+"qc0611_fb2d1cba": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40244_0fae8d4f"
+},
+"qc0612_2e75abdf": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40062_eac26fc3"
+},
+"qc0613_43223ab3": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40256_280fa917"
+},
+"qc0614_5a5ab8d7": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40001_32bc30a9"
+},
+"qc0615_29627f8d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40071_cf2b45fc"
+},
+"qc0616_2bb05429": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40276_a039cbbf"
+},
+"qc0617_5cb14d3a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40121_1e2c881e"
+},
+"qc0618_635a38cc": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40227_ca99f217"
+},
+"qc0619_1841368e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40108_5461e7fc"
+},
+"qc0620_4a824696": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40190_1fdb839e"
+},
+"qc0621_90470e40": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40283_ca2238da"
+},
+"qc0622_609f2988": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40148_f1b54520"
+},
+"qc0623_2f68de26": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40191_d6250705"
+},
+"qc0624_33a47683": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40081_019eeed8"
+},
+"qc0625_85fefb25": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40196_8ae4618c"
+},
+"qc0626_8400132a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40001_a77de3df"
+},
+"qc0627_f10cd779": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40139_4326dcf0"
+},
+"qc0628_ec778dbb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40005_67909ef4"
+},
+"qc0629_35dfbf2b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40072_c0c2d126"
+},
+"qc0630_df2f5e62": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40210_c353c6df"
+},
+"qc0631_136f9385": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40183_cc7cfe00"
+},
+"qc0632_8d2bbb4b": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40256_50a44dcd"
+},
+"qc0633_1dd96d51": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40221_b6c71eaf"
+},
+"qc0634_ee2ad2fc": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40019_2bdb9118"
+},
+"qc0635_7d42a11c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40180_fba30bb5"
+},
+"qc0636_e83515dc": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40260_d62809b1"
+},
+"qc0637_332f79da": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40112_0e98d605"
+},
+"qc0638_689601c4": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40128_6a9993c8"
+},
+"qc0639_09c98ec6": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40261_7838226a"
+},
+"qc0640_1e2a8129": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40280_8f9e4545"
+},
+"qc0641_8fb942cb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40271_7e208bd0"
+},
+"qc0642_59b270ad": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40041_b3b4310c"
+},
+"qc0643_7455f015": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40187_d919e5be"
+},
+"qc0644_45583a3d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40118_40db1385"
+},
+"qc0645_1401bfd8": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40186_4040510e"
+},
+"qc0646_03497e54": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40000_248e27ec"
+},
+"qc0647_0bf55326": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40189_713b169c"
+},
+"qc0648_2aa20171": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40068_68d4539e"
+},
+"qc0649_b06294f2": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40005_bf5db210"
+},
+"qc0650_7150fd64": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40147_a70023cb"
+},
+"qc0651_acf32488": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40101_cab3cb56"
+},
+"qc0652_357cbb2f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40048_becf7fa0"
+},
+"qc0653_9dcc0037": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40030_01b501ec"
+},
+"qc0654_8f69a601": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40124_728507bf"
+},
+"qc0655_fb623b99": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40174_4133fcf5"
+},
+"qc0656_47234c72": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40281_b47093b1"
+},
+"qc0657_de818b99": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40208_32789474"
+},
+"qc0658_a66905e7": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40054_ece96849"
+},
+"qc0659_8abc062a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40026_aae7f728"
+},
+"qc0660_1b7dd0a5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40082_ef03df63"
+},
+"qc0661_91cc108e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40033_82a00235"
+},
+"qc0662_671d36ed": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40055_b68f5f89"
+},
+"qc0663_efac9418": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40043_6e4fe3a9"
+},
+"qc0664_648331ea": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40107_c2bc1667"
+},
+"qc0665_faccaa4c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40006_1b762626"
+},
+"qc0666_d220e998": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40251_ccd46859"
+},
+"qc0667_7cfbda5c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40173_9296e806"
+},
+"qc0668_94ef2d9d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40102_ba9ae3b4"
+},
+"qc0669_1ca4afe3": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40024_67e30097"
+},
+"qc0670_31220ad7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40205_c6c2c722"
+},
+"qc0671_7adb2d62": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40243_6bb574d3"
+},
+"qc0672_a58d4d81": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40129_5cc34ce4"
+},
+"qc0673_4d2ab640": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40243_acdf2f7d"
+},
+"qc0674_d13ee008": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40265_1a61299c"
+},
+"qc0675_23d6b9a2": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40220_25f90d63"
+},
+"qc0676_3045909d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40080_1e58990f"
+},
+"qc0677_061b0d23": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40237_a8aa31fd"
+},
+"qc0678_99ba8e63": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40216_6ee0e091"
+},
+"qc0679_0f4808cd": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40137_53d70ccd"
+},
+"qc0680_4e56c4b5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40219_6d7dbc9d"
+},
+"qc0681_cca9bdb4": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40113_057d02b9"
+},
+"qc0682_f69d4c96": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40084_eb7f2f46"
+},
+"qc0683_f0057ecc": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40035_7756985c"
+},
+"qc0684_6afa7c3c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40234_f6f23ec1"
+},
+"qc0685_5a115a91": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40133_d4a4351d"
+},
+"qc0686_ce5f477f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40051_091c7241"
+},
+"qc0687_d11df462": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40062_8072b087"
+},
+"qc0688_612c7b75": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40096_9845e99c"
+},
+"qc0689_e84144fd": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40237_dc5fb878"
+},
+"qc0690_da7803c9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40274_9a4fed5a"
+},
+"qc0691_d0b97d6d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40109_d6d7f56f"
+},
+"qc0692_a529bbb1": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40276_12a6a020"
+},
+"qc0693_5efccb6d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40281_9ecbd2a5"
+},
+"qc0694_ff50990d": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40235_cd85e51d"
+},
+"qc0695_9110e217": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40287_0878cf4f"
+},
+"qc0696_a606c4d0": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40112_7f727b05"
+},
+"qc0697_e1ed7c55": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40285_f548d942"
+},
+"qc0698_c2643287": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40196_a7a39191"
+},
+"qc0699_8b6e0d50": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40166_88ea7de6"
+},
+"qc0700_d4bcb267": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40285_fc5ed6f0"
+},
+"qc0701_3f632896": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40247_b6d844cb"
+},
+"qc0702_c431a748": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40100_43b917be"
+},
+"qc0703_9f3a2cf8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40214_8ad089c7"
+},
+"qc0704_e002c7b9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40132_8de276da"
+},
+"qc0705_66c0d281": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40228_efbf6c31"
+},
+"qc0706_a0d5d19b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40126_104c2a52"
+},
+"qc0707_c61bfb03": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40164_6c055d9a"
+},
+"qc0708_eca19d47": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40020_e64e8653"
+},
+"qc0709_035a0ba9": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40203_ac9f43fa"
+},
+"qc0710_787802e8": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40029_0419e0ca"
+},
+"qc0711_e01e1b69": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40156_8c25728d"
+},
+"qc0712_26223ad1": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40277_114eea4c"
+},
+"qc0713_84593032": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40098_c629ed25"
+},
+"qc0714_9652d418": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40281_12111b42"
+},
+"qc0715_f07c94cc": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40063_15c5bf45"
+},
+"qc0716_44af6d8c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40258_d8038fea"
+},
+"qc0717_898f7eb7": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40159_2ad2933c"
+},
+"qc0718_c04236ef": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40207_67060917"
+},
+"qc0719_ea7fa3d7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40250_a3d9a95d"
+},
+"qc0720_d643ecc8": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40241_6fd76f7b"
+},
+"qc0721_b46354ef": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40106_ea33aa2d"
+},
+"qc0722_47a6988b": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40041_44db0e9f"
+},
+"qc0723_e4cee05c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40189_6f2614f7"
+},
+"qc0724_0eaddca3": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40087_6e8597fa"
+},
+"qc0725_33b6c24b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40030_16d445e1"
+},
+"qc0726_db339e89": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40016_94e03e6e"
+},
+"qc0727_eb344df4": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40056_7fee6145"
+},
+"qc0728_1d22f331": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40130_7956ad9b"
+},
+"qc0729_17f4054f": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40231_31ae106a"
+},
+"qc0730_12cde378": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40269_55bd9b67"
+},
+"qc0731_2b3fb323": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40201_cf36ec4d"
+},
+"qc0732_da060439": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40173_ca76ec84"
+},
+"qc0733_d7d89b37": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40023_010118fa"
+},
+"qc0734_34b513a5": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40051_52001d0e"
+},
+"qc0735_0286cefd": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40115_b945b89d"
+},
+"qc0736_0f17f909": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40257_057d7e9f"
+},
+"qc0737_dd9dc65a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40067_06b6a03d"
+},
+"qc0738_b646e648": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40187_1755385d"
+},
+"qc0739_5723485e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40222_10b289e6"
+},
+"qc0740_645ce791": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40289_96e6c2b7"
+},
+"qc0741_9db3227a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40225_b21735d3"
+},
+"qc0742_b823e34b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40138_a28c469a"
+},
+"qc0743_52cc1703": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40131_a5065d00"
+},
+"qc0744_de04bbfc": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40081_31a805af"
+},
+"qc0745_73f455c3": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40261_2b80de19"
+},
+"qc0746_6d1d8b2c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40242_8f1f5a57"
+},
+"qc0747_328eefa4": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40103_2d96d4d4"
+},
+"qc0748_23925a50": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40166_9291ce03"
+},
+"qc0749_05af23da": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40075_6581e837"
+},
+"qc0750_8c6fb59e": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40209_176e83b8"
+},
+"qc0751_f81c4761": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40271_0c96e63e"
+},
+"qc0752_b3efdb9c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40021_4b26b161"
+},
+"qc0753_c2ce6b7e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40149_7c0eb22c"
+},
+"qc0754_3e918201": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40025_7b362e64"
+},
+"qc0755_4e957596": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40163_63721da4"
+},
+"qc0756_1f54eebf": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40046_8481399c"
+},
+"qc0757_ae0291e3": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40268_fc0fd07c"
+},
+"qc0758_52c2fa44": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40099_8bc3d135"
+},
+"qc0759_43d8816a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40124_26544aa7"
+},
+"qc0760_f7ea16c5": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40284_bb46fe39"
+},
+"qc0761_c3a86046": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40074_2a2c1675"
+},
+"qc0762_d91a8562": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40093_17f4b967"
+},
+"qc0763_f066e782": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40086_38a556ea"
+},
+"qc0764_4abc4d5e": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40168_0d81a7c2"
+},
+"qc0765_a3a57b9f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40046_7654498c"
+},
+"qc0766_a4566ce6": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40097_06a56c63"
+},
+"qc0767_cd28a087": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40002_d3fc394b"
+},
+"qc0768_b3c77207": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40276_099d8236"
+},
+"qc0769_a8a07a5a": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40105_96336cfc"
+},
+"qc0770_9561d716": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40044_5b99516a"
+},
+"qc0771_b918da1d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40104_ce490c49"
+},
+"qc0772_26a818b0": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40100_44c9efe9"
+},
+"qc0773_ce38503b": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40110_de9f1ebb"
+},
+"qc0774_1887b6ec": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40104_08463d49"
+},
+"qc0775_afbb93cd": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40264_6780b794"
+},
+"qc0776_34b862ec": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40149_8ba148a1"
+},
+"qc0777_03243838": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40289_d42c38f9"
+},
+"qc0778_7c023968": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40097_2631bffe"
+},
+"qc0779_65ac8d5c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40285_54df0898"
+},
+"qc0780_ae83c382": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40151_12a3da30"
+},
+"qc0781_3bf1cb3f": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40011_2ea80e6c"
+},
+"qc0782_753b8712": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40202_400c0461"
+},
+"qc0783_a2dcbc32": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40232_77c56c3a"
+},
+"qc0784_fec4d018": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40145_0282ea91"
+},
+"qc0785_d7b5059e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40268_a89a9ea9"
+},
+"qc0786_507767bf": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40254_e5435952"
+},
+"qc0787_34737548": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40034_a80b5613"
+},
+"qc0788_39b50266": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40242_2f1579a2"
+},
+"qc0789_85928e0a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40193_e15a2d1f"
+},
+"qc0790_6d764d47": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40117_ab7d2ffe"
+},
+"qc0791_af8f802d": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40265_6e5c0460"
+},
+"qc0792_df685481": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40264_74415096"
+},
+"qc0793_248b2be7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40016_68f981b8"
+},
+"qc0794_e3f759ac": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40034_2155958b"
+},
+"qc0795_25326eff": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40140_e4a2c2e9"
+},
+"qc0796_e9bf6bbc": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40132_0902e975"
+},
+"qc0797_6854e340": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40118_6e5c9fa9"
+},
+"qc0798_7dd32304": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40127_149be704"
+},
+"qc0799_9aa99ed4": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40007_d9d06dec"
+},
+"qc0800_eae035c3": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40119_9076e8e8"
+},
+"qc0801_3fac5768": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40157_44e4a901"
+},
+"qc0802_27f725cf": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40077_37f68855"
+},
+"qc0803_1d469428": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40059_fddfa9cb"
+},
+"qc0804_97915e5c": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40066_0ffa4a97"
+},
+"qc0805_b7aefb3b": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40078_68c7d616"
+},
+"qc0806_41a3b4c6": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40178_bc78860d"
+},
+"qc0807_a6da6ff9": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40206_2369337a"
+},
+"qc0808_1110f340": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40055_51e158ec"
+},
+"qc0809_473f404b": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40014_0d3887c6"
+},
+"qc0810_639a454e": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40037_b0d02fd9"
+},
+"qc0811_8efc5336": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40087_c8ac1c18"
+},
+"qc0812_8678ea3f": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40274_c937bb1e"
+},
+"qc0813_5a56ebe8": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40255_be914b9d"
+},
+"qc0814_10a15800": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40142_4cbd8b9d"
+},
+"qc0815_815137b7": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40229_bfb4ff87"
+},
+"qc0816_3f3a9069": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40055_3fc90de7"
+},
+"qc0817_8afea5ef": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40258_9e13c12a"
+},
+"qc0818_5ecea878": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40198_a60e4041"
+},
+"qc0819_ec3212e9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40178_021c859f"
+},
+"qc0820_5af866d4": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40066_ab40e750"
+},
+"qc0821_9ab7f80a": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40144_17490f54"
+},
+"qc0822_2e08ebb2": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40244_589c542f"
+},
+"qc0823_c6e8fb8e": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40184_6366807f"
+},
+"qc0824_774a4d91": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40183_5b06a79d"
+},
+"qc0825_60697d59": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40076_28fccf78"
+},
+"qc0826_d65aa0d7": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40260_64db144c"
+},
+"qc0827_fdd8465b": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40135_a76525a0"
+},
+"qc0828_d7b2ddd6": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40269_cbcff7e3"
+},
+"qc0829_ed63c913": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40125_d755cfcd"
+},
+"qc0830_65bae146": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40016_a2050f47"
+},
+"qc0831_1358fc7b": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40256_cf5b4281"
+},
+"qc0832_c205c834": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40116_f01a3dc1"
+},
+"qc0833_b9e56b44": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40212_fc7cf000"
+},
+"qc0834_2aa92acb": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40161_1f7b31d2"
+},
+"qc0835_90e70beb": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40065_d5f126c3"
+},
+"qc0836_5716db29": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40206_9a02031a"
+},
+"qc0837_25ccaa81": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40167_9bf7f00f"
+},
+"qc0838_d17bc209": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40028_d7c3a5de"
+},
+"qc0839_98ba74ff": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40024_1d81fdae"
+},
+"qc0840_9d7e4302": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40030_df80760b"
+},
+"qc0841_78996dac": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40083_94328ddf"
+},
+"qc0842_4d4865c0": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40036_b8179ce0"
+},
+"qc0843_28259781": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40064_64777eb5"
+},
+"qc0844_2f118e02": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40147_5500e59c"
+},
+"qc0845_efa39b28": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40141_3af6dc82"
+},
+"qc0846_c0515e0e": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40008_e723f5a9"
+},
+"qc0847_56baeead": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40024_edd356ae"
+},
+"qc0848_ac0444d7": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40229_47da4aa6"
+},
+"qc0849_348aa9c9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40036_648f82b9"
+},
+"qc0850_201830d8": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40201_cdc116f7"
+},
+"qc0851_8dc17bf6": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40013_81908fdc"
+},
+"qc0852_9095fc91": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40069_21dc9549"
+},
+"qc0853_e20e4975": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40159_566a16a3"
+},
+"qc0854_2584de07": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40116_181a9c77"
+},
+"qc0855_029c2afd": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40184_7d6b52f6"
+},
+"qc0856_e5634517": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40211_d98ef76b"
+},
+"qc0857_d9d4d7e9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40085_a9a9df2c"
+},
+"qc0858_24a3da9c": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40215_3e696660"
+},
+"qc0859_f781145c": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40010_4571d113"
+},
+"qc0860_8ab537a9": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40267_918778df"
+},
+"qc0861_742f4eda": {
+"batch": "2026-08-03_q4_harvest_ranked_v1",
+"image_id": "q40134_dba74b13"
+},
+"qc0862_b608d606": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40274_dce38e95"
+},
+"qc0863_404be5fb": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40133_c1f23542"
+},
+"qc0864_87b4f974": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40114_3182e0e9"
+},
+"qc0865_d351fc2b": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40088_4576c5d8"
+},
+"qc0866_1bc7bc96": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40178_ec52430d"
+},
+"qc0867_5ae96546": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40027_a20986cb"
+},
+"qc0868_eb8c6038": {
+"batch": "2026-08-03_q4_uniform_eval_v1",
+"image_id": "q40155_f31186bd"
+},
+"qc0869_dcd0d82d": {
+"batch": "2026-08-03_q4_near_minibrot_v1",
+"image_id": "q40209_57488f0b"
+}
+}

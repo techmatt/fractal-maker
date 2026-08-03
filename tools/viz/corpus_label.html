@@ -138,6 +138,13 @@ const REVEAL_KEY='corpus_reveals::'+BATCH_ID;
 // presentation shuffle seed — overridden by batch.json `presentation_seed` (recorded with the
 // batch so the order is reproducible). ?order=score opts back into best-first (non-blind).
 let SHUFFLE_SEED=0xC0FFEE;
+// presentation ORDER mode. Default 'shuffle' (the seeded in-page shuffle below). A batch whose
+//   FILE order is itself the designed sitting order — a combined sheet stratified round-robin
+//   across its source cells, which an in-page reshuffle would destroy — records
+//   `presentation_order:"file"` in batch.json; `?order=file` forces the same by URL. Recorded in
+//   batch.json rather than left to the URL so retyping the link cannot silently re-randomize a
+//   designed order.
+let ORDER_MODE=QP.get('order')||null;
 let ROWS=[];                         // presentation-ordered rows {image_id, render, provenance, label}
 let scores=loadScores();             // { image_id: 1|2|3|4 }
 let reveals=loadReveals();           // { image_id: 0|1 } — reveal state when the score was set
@@ -162,7 +169,10 @@ function fscore(r){ const v=r.provenance&&r.provenance.filter_score; return (typ
 function buildOrder(rows){
   // DEFAULT: a seeded, reproducible SHUFFLE within the batch (never draw order — arm blocks
   // would drag the bar). ?order=score opts back into v2 best-first (non-blind analysis only).
-  if(QP.get('order')==='score' && rows.some(r=>fscore(r)!==null)){
+  // order=file serves the manifest EXACTLY as written — for a sheet whose file order is the
+  // designed presentation order, so the shuffle below must not touch it.
+  if(ORDER_MODE==='file') return rows.slice();
+  if(ORDER_MODE==='score' && rows.some(r=>fscore(r)!==null)){
     return rows.slice().sort((a,b)=>{
       const fa=fscore(a), fb=fscore(b);
       if(fa===null&&fb===null) return (a.image_id<b.image_id)?-1:1;
@@ -394,7 +404,9 @@ document.getElementById('images-url').textContent=IMAGES_URL;
 setRevealed(revealed);   // paint the toggle button before load
 // fetch batch.json first for the recorded presentation_seed (best-effort), then the rows.
 fetch(BATCH_JSON_URL).then(r=>r.ok?r.json():null).catch(()=>null)
-  .then(bj=>{ if(bj && typeof bj.presentation_seed==='number') SHUFFLE_SEED=bj.presentation_seed>>>0; })
+  .then(bj=>{ if(bj && typeof bj.presentation_seed==='number') SHUFFLE_SEED=bj.presentation_seed>>>0;
+              // batch.json supplies the order mode only if the URL did not (URL wins).
+              if(bj && !ORDER_MODE && typeof bj.presentation_order==='string') ORDER_MODE=bj.presentation_order; })
   .then(()=>fetch(IMAGES_URL).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}))
   .then(t=>init(parseJsonl(t)))
   .catch(err=>{document.getElementById('loader-msg').textContent='auto-load failed ('+err.message+') — use the picker below.';});
