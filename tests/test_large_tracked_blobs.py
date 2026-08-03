@@ -93,8 +93,12 @@ ALLOWLIST = [
     # the population they describe no longer exists (the v4..v7 derived chain was wiped in
     # exactly this way), not because the policy has an exemption for JSONL.
     Entry("data/discovery/", EXCEPTION,
-          "Per-run discovery ledgers (harvest_log / prio_terms / maneuvers / pool). "
-          "~160 MB across runs, LFS. Records of walks that cannot be re-walked."),
+          "Per-run discovery ledgers (harvest_log / prio_terms / maneuvers / pool / "
+          "q4_candidates). ~160 MB across runs, LFS. Records of walks that cannot be "
+          "re-walked. q4_candidates.jsonl (2026-08-03 on) is the record-and-rank "
+          "store: every candidate above a low floor with its per-stage fate, which is "
+          "a SUPERSET of harvest_log — it holds the below-tau_h and gated populations "
+          "the harvest log has no row for."),
     Entry("data/v8/", EXCEPTION,
           "v8 build record: manifest + plan + cache_manifest (~148 MB, mostly LFS). The "
           "split assignment the LIVE deployed checkpoint was trained under."),

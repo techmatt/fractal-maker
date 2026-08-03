@@ -1,0 +1,130 @@
+{
+  "run_ts": "q4_long_harvest_20260803",
+  "started": "2026-08-03T01:43:24",
+  "scorer_version": "v10",
+  "ckpt": "data/classifier/v10/model_best.pt",
+  "families": [
+    "mandelbrot",
+    "multibrot3",
+    "multibrot4",
+    "multibrot5"
+  ],
+  "partitions": [
+    "mandelbrot",
+    "multibrot3",
+    "multibrot4",
+    "multibrot5",
+    "julia:mandelbrot",
+    "julia:multibrot3",
+    "julia:multibrot4",
+    "julia:multibrot5",
+    "phoenix"
+  ],
+  "family_weights": {
+    "mandelbrot": 0.176,
+    "multibrot3": 0.281,
+    "multibrot4": 0.284,
+    "multibrot5": 0.259
+  },
+  "budget_min": 180.0,
+  "wall_budget_min": 200.0,
+  "tau_h": {
+    "mandelbrot": 0.02286625504493713,
+    "multibrot3": 0.36908935904502865,
+    "multibrot4": 0.408690321445465,
+    "multibrot5": 0.3513681888580322,
+    "julia:mandelbrot": 0.412648469209671,
+    "julia:multibrot3": 0.28186094164848324,
+    "julia:multibrot4": 0.05198849514126777,
+    "julia:multibrot5": 0.07040942013263703,
+    "phoenix": 0.5
+  },
+  "tau_rec": {
+    "mandelbrot": 0.02286625504493713,
+    "multibrot3": 0.18454467952251433,
+    "multibrot4": 0.2043451607227325,
+    "multibrot5": 0.1756840944290161,
+    "julia:mandelbrot": 0.2063242346048355,
+    "julia:multibrot3": 0.14093047082424162,
+    "julia:multibrot4": 0.05,
+    "julia:multibrot5": 0.05,
+    "phoenix": 0.25
+  },
+  "tau_h_uncalibrated": {
+    "phoenix": "UNCALIBRATED: no v10 cheap-p_good population exists for phoenix (fidelity records absent; vendored base has no phoenix row; the phoenix ledgers are v7 and carry no cheap column). Serving t_good_for('phoenix')=0.5 as a conservative cheap cut."
+  },
+  "t_good": {
+    "mandelbrot": 0.03,
+    "multibrot3": 0.5,
+    "multibrot4": 0.5,
+    "multibrot5": 0.5,
+    "julia:mandelbrot": 0.5,
+    "julia:multibrot3": 0.27,
+    "julia:multibrot4": 0.03,
+    "julia:multibrot5": 0.06,
+    "phoenix": 0.5
+  },
+  "t_good_status": {
+    "mandelbrot": "DERIVED",
+    "multibrot3": "UNCALIBRATED",
+    "multibrot4": "UNCALIBRATED",
+    "multibrot5": "UNCALIBRATED",
+    "julia:mandelbrot": "UNCALIBRATED",
+    "julia:multibrot3": "DERIVED",
+    "julia:multibrot4": "DERIVED",
+    "julia:multibrot5": "DERIVED",
+    "phoenix": "UNCALIBRATED"
+  },
+  "record_and_rank": {
+    "frac": 0.5,
+    "floor_abs": 0.05,
+    "record_canon_dups": false,
+    "store": "q4_candidates.jsonl",
+    "fates": [
+      "below_tau_h",
+      "precanon_dup",
+      "canon_not_q3",
+      "q3_dup",
+      "guarded",
+      "reframe_not_q3",
+      "admitted",
+      "interior_gt_30",
+      "unknown"
+    ],
+    "rank_tiers": "2 = has a canonical decode; 1 = cheap score only; never pooled"
+  },
+  "interior_gate": {
+    "on": true,
+    "threshold": 0.3,
+    "comparison": "strict >",
+    "measure": "expand sidecar int_frac (= render::black_fraction)"
+  },
+  "maneuvers_on_admissions": {
+    "on": true,
+    "k": [
+      "None",
+      "16.0"
+    ],
+    "max_per_batch": 4,
+    "nbh_m": 8,
+    "nbh_probes": 12,
+    "period_max": 128
+  },
+  "julia_seed_pool": "C:\\Code\\fractal-maker\\data\\atlas\\julia_seed_pool.json",
+  "phoenix_seed_pool": "C:\\Code\\fractal-maker\\data\\atlas\\phoenix_seed_pool.json",
+  "prereg": {
+    "view_fit_v1_1_vs_composite_v3": {
+      "claim": "view_fit v1.1 supersedes composite_v3 as the SOURCING order (including --maneuver-view-prior), pipeline-wide.",
+      "adopted_only_if": "view_fit's ordered top-k beats composite_v3's on THIS run's labeled outcome by delta-AP >= +0.1181",
+      "margin": 0.1181,
+      "margin_basis": "the lower bound of the fit-era CI, data/atlas/view_fit_v1_1.json readout.ap_delta_v11_vs_composite = 0.1819 [0.1181, 0.2466], n=580, 149 positives, 2000 bootstrap",
+      "scope": "SOURCING-side only \u2014 never ranking, never cross-family.",
+      "read_status": "DEFERRED. The labels this bar reads do not exist inside the run; both scores are recorded on every row so the read is taken when the batches come back."
+    },
+    "maneuvers_on_admissions": {
+      "read": "QUALITATIVE this run.",
+      "why": "the >=3 trigger boundary has no eval instrument, so there is nothing to certify against",
+      "deliverable": "the triggered-vs-fresh yield table + sheets \u2014 NOT a gate decision, and the two yields are never pooled"
+    }
+  }
+}

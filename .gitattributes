@@ -6,6 +6,7 @@ data/queries/scorer/v3_gvo/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/harvest_log.jsonl filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/prio_terms.jsonl filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/maneuvers.jsonl filter=lfs diff=lfs merge=lfs -text
+data/discovery/**/q4_candidates.jsonl filter=lfs diff=lfs merge=lfs -text
 # Frozen v7 eval slice: only a full GPU eval-freeze (classifier/train_v7.py) produces it
 # and it's ignored by the blanket /data/* rule, so it must be force-added like the
 # classifier weights. This ensures it lands in LFS when it is: `git add -f
