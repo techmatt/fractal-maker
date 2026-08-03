@@ -250,3 +250,17 @@ def test_the_build_report_accounts_for_every_proposed_c():
     assert rep["n_proposed"] == rep["n_kept"] + rep["n_dropped"]
     for ch, n in rep["proposed"].items():
         assert n == rep["kept"].get(ch, 0) + rep["dropped"].get(ch, 0), ch
+
+
+# =========================================================================== #
+# 6. the routing reaches the run config
+# =========================================================================== #
+def test_the_run_config_stamps_the_routing_table_rather_than_restating_it():
+    """A routing that lives in a launch script cannot be diffed against the labels that set
+    it. The config a reader compares against 870 human labels has to BE the table the code
+    routes on, so the write site is pinned to the module rather than to a literal."""
+    import inspect
+    import steered_frontier as sf
+    src = inspect.getsource(sf.SteeredFrontier.write_run_config)
+    assert "supply_routing=srt.summary()" in src
+    assert "MACHINE_1_DISCARD" not in src, "the table must be imported, not restated"

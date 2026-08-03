@@ -1,0 +1,217 @@
+#!/usr/bin/env python
+r"""harvest_v2_readout.py — the proving run's verification, as a read rather than a recount.
+
+WHAT A PROVING RUN HAS TO ANSWER, in the prompt's own order. Each is a function below, each
+returns a verdict alongside its numbers, and each names the population it was taken on — a
+verdict with no population is the shape `measurement_practice.md` §1 opens with.
+
+  1. REALIZED vs INTENDED MIX — the headline. v1 set 70% and realized 19.6%, so a miss here
+     is a failed shakedown. Reported per partition in three denominations (minutes,
+     candidates, admissions) because they answer different questions and v1's number was
+     quoted in the second.
+  2. FLOOR vs DEFICIT SHARES — reported SEPARATELY, per the addendum, so the split is visible.
+  3. VIEW-SCREEN COVERAGE — do screened rows carry BOTH scores? A ratio nobody prints is a
+     claim nobody checked.
+  4. TRIGGERED STAMPS SURVIVING MULTIPLE GENERATIONS — the §0 fix, verified on live output
+     rather than on the unit fixture: the run's own record must contain triggered-lineage rows
+     at MORE THAN ONE depth beyond the trigger, which is exactly what v1 could not produce.
+  5. PER-STAGE COUNTS PER CHANNEL — where the candidates went, by supply channel.
+  6. UPDATED PER-PARTITION COST-TO-MINE — the prices this run measured, for the next one.
+
+  uv run python tools/atlas/harvest_v2_readout.py --run-dir data/discovery/<run>
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from collections import Counter, defaultdict
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+for _p in (HERE, ROOT, ROOT / "tools", ROOT / "tools" / "scoring"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
+
+def _jl(p: Path):
+    if not Path(p).exists():
+        return []
+    return [json.loads(l) for l in Path(p).read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+
+
+def mix(summary: dict) -> dict:
+    """1. Realized vs intended, three denominations, plus the L1 gap that summarises them.
+
+    The L1 gap is half the sum of |delta| — total variation distance — so it reads directly as
+    "this fraction of the run's time went to the wrong partition". 0 is a perfect mix; v1's
+    candidate-stream equivalent was catastrophic."""
+    q = summary.get("pop_quota")
+    if not q:
+        return dict(verdict="ABSENT", why="run has no pop_quota block (allocator was off)")
+    m = q["mix"]
+    rows = []
+    for p in sorted(m["minutes"]):
+        rows.append(dict(partition=p,
+                         intended=m["minutes"][p]["intended"],
+                         min=m["minutes"][p]["realized"],
+                         cand=m["candidates"][p]["realized"],
+                         admit=m["admitted"][p]["realized"],
+                         delta_min=m["minutes"][p]["delta"]))
+    gap = m["l1_gap_minutes"]
+    # `worst` is the most UNDER-served partition, not the largest |delta|. In a two-partition
+    # miss the two deltas are equal and opposite, so |delta| picks one arbitrarily — and the
+    # failure a mix report is about is the starved side: v1's story is "native realized 19.6%
+    # of an intended 70%", never "julia over-ran".
+    worst = min(rows, key=lambda r: (r["delta_min"], r["partition"]))
+    return dict(l1_gap=gap, per_partition=rows, worst=worst,
+                verdict=("PASS" if gap <= 0.10 else "MISS"),
+                bar="L1 gap <= 0.10 of minutes (i.e. <=10% of the run's time allocated to the "
+                    "wrong partition). Not pre-registered — stated here so the number has a "
+                    "reading, and quoted beside the raw gap either way.")
+
+
+def floor_vs_deficit(summary: dict) -> dict:
+    """2. The addendum's separate read."""
+    q = summary.get("pop_quota")
+    if not q:
+        return dict(verdict="ABSENT")
+    f = q["floor_vs_deficit"]
+    alloc = q["allocation"]
+    return dict(floor_min=f["floor_min"], deficit_min=f["deficit_min"],
+                floor_share=f["floor_share"], deficit_share=f["deficit_share"],
+                floored_partitions=alloc["floored"],
+                intended_floor_claim=alloc["floor_share_total"],
+                per_partition=f["per_partition"],
+                verdict=("OK" if f["floor_min"] is not None else "ABSENT"))
+
+
+def view_screen(summary: dict) -> dict:
+    """3. Did the screen run at all, and does every screened row carry BOTH scores?"""
+    m = summary.get("maneuvers") or {}
+    screened = m.get("view_screened", 0)
+    scored = m.get("view_fit_scored", 0)
+    return dict(view_prior=m.get("view_prior"), screened=screened,
+                unscreenable=m.get("view_unscreenable", 0),
+                vetoed=m.get("view_vetoed", 0),
+                view_fit_model=m.get("view_fit_model"),
+                view_fit_scored=scored, coverage=m.get("view_fit_coverage"),
+                sort_key="composite_v3", view_fit_is_sort_key=m.get("view_fit_is_sort_key"),
+                verdict=("PASS" if screened > 0 and scored == screened else
+                         ("NOT RUN" if screened == 0 else "PARTIAL")),
+                v1_comparison="v1: man_view_screened=0 — the screen never ran, so the "
+                              "pre-registered bar could not be read")
+
+
+def triggered_lineage(run_dir: Path) -> dict:
+    """4. The §0 fix, verified on the run's OWN output.
+
+    The unit test proves `push_children` carries the stamp; this proves the stamp SURVIVED
+    the round trip through the engine. The discriminating fact is DEPTH SPREAD: a triggered
+    node is pushed at its trigger's depth, so a run where the stamp still died after one
+    generation shows triggered rows at exactly one depth per trigger. More than one distinct
+    depth beyond the shallowest is the fix working.
+
+    Cross-checked against `mix_source` lineage, the independent carrier, on every row — a
+    disagreement means the stamp is being written from somewhere other than the lineage."""
+    rows = _jl(run_dir / "q4_candidates.jsonl")
+    if not rows:
+        return dict(verdict="NO ROWS", n=0)
+    stamped = [r for r in rows if r.get("triggered")]
+    lineage = [r for r in rows if str(r.get("mix_source") or "").startswith("triggered:")]
+    disagree = sum(1 for r in rows
+                   if bool(r.get("triggered")) !=
+                   str(r.get("mix_source") or "").startswith("triggered:"))
+    depths = Counter(int(r["depth"]) for r in stamped)
+    by_part = Counter(r["partition"] for r in stamped)
+    generations = len(depths)
+    return dict(n_rows=len(rows), stamped=len(stamped), lineage=len(lineage),
+                carrier_disagreements=disagree,
+                depths=dict(sorted(depths.items())), distinct_depths=generations,
+                by_partition=dict(by_part),
+                verdict=("PASS" if generations > 1 and disagree == 0 else
+                         ("NO TRIGGERS" if not stamped else
+                          "SINGLE GENERATION" if generations <= 1 else "CARRIER MISMATCH")),
+                bar="triggered rows at MORE THAN ONE depth, and zero carrier disagreements")
+
+
+def per_stage_per_channel(run_dir: Path) -> dict:
+    """5. Where the candidates went, by supply channel.
+
+    The channel is read off `mix_source`'s head token (`sampler`, `phoenix_sampler`,
+    `triggered`, `maneuver`, `julia_hook<...`, `native`), which is the tag the root supply
+    stamps and every descendant inherits — so this is per-CHANNEL rather than per-partition and
+    the two are not substitutes."""
+    rows = _jl(run_dir / "q4_candidates.jsonl")
+    per: dict = defaultdict(Counter)
+    for r in rows:
+        ch = str(r.get("mix_source") or "?").split(":")[0].split("<")[0]
+        per[ch][r.get("fate", "?")] += 1
+        per[ch]["_total"] += 1
+    return {ch: dict(sorted(c.items())) for ch, c in sorted(per.items())}
+
+
+def cost_to_mine(summary: dict) -> dict:
+    """6. The prices this run measured, and which of them the clamp bound."""
+    q = summary.get("pop_quota")
+    if not q:
+        return dict(verdict="ABSENT")
+    c = q["cost"]
+    return dict(price=c["price"], price_raw=c["price_raw"], seed=c["seed"],
+                clamped=c["clamped"], clamp_factor=c["clamp_factor"],
+                units_mined=c["units_mined"], min_spent=c["min_spent"],
+                capped=c["capped"],
+                note="price = active-minutes per unit of currency (a decoded 4 = 1.0, a "
+                     "decoded 3 = 0.1) mined as a DISTINCT ADMISSION. A partition with zero "
+                     "units mined still carries its seed price — that is not a measurement.")
+
+
+def readout(run_dir: Path) -> dict:
+    sp = run_dir / "summary.json"
+    if not sp.exists():
+        raise SystemExit(f"{sp} missing — the run has not finished (or was killed before "
+                         f"`finish()`); state.json is not a substitute.")
+    s = json.loads(sp.read_text(encoding="utf-8"))
+    return dict(
+        run=run_dir.name,
+        active_min=s.get("active_min"), wall_min=s.get("wall_min"),
+        batches=s.get("batches"), wall_over_active=s.get("wall_over_active"),
+        totals=s.get("totals"),
+        realized_vs_intended=mix(s),
+        floor_vs_deficit=floor_vs_deficit(s),
+        view_screen=view_screen(s),
+        triggered_lineage=triggered_lineage(run_dir),
+        per_stage_per_channel=per_stage_per_channel(run_dir),
+        cost_to_mine=cost_to_mine(s),
+        library_seed=s.get("library_seed"),
+    )
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--run-dir", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args()
+    rep = readout(Path(a.run_dir))
+    txt = json.dumps(rep, indent=2, default=str)
+    if a.out:
+        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.out).write_text(txt + "\n", encoding="utf-8")
+    print(txt)
+
+    m = rep["realized_vs_intended"]
+    print("\n=== REALIZED vs INTENDED ===", file=sys.stderr)
+    if m.get("per_partition"):
+        print(f"{'partition':22s}{'intend':>8}{'min':>8}{'cand':>8}{'admit':>8}{'d(min)':>9}",
+              file=sys.stderr)
+        for r in m["per_partition"]:
+            print(f"{r['partition']:22s}{r['intended']:8.3f}{r['min']:8.3f}"
+                  f"{r['cand']:8.3f}{r['admit']:8.3f}{r['delta_min']:+9.3f}", file=sys.stderr)
+        print(f"L1 gap = {m['l1_gap']:.3f}  -> {m['verdict']}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
