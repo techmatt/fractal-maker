@@ -8,7 +8,7 @@ label_store.resolve_score) to the grid run, and settles what Phase B marked prov
   §1 human between/within-seed variance decomposition (reuses phoenix_decomp machinery),
      side by side with the machine ICCs; human fertility map (branch / |p| band / z-class)
   §2 v7 calibration on varied phoenix (AUC, Spearman, calibration curve) + a PROPOSED
-     phoenix t_good under the standard per-family F2 methodology (tools/v7/derive_t_good)
+     phoenix t_good under the standard per-family F2 methodology (tools/v7/derive_t_good_v7)
   §4a surrogate viability — spec §5.2 light head (logistic over logged cheap seed features)
       vs human seed-fertility, LOSO-CV over the seeds (held-out Spearman)
 

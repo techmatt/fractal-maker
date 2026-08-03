@@ -2,7 +2,7 @@
 """Re-derive mandelbrot's discovery t_good with the steered-run2 blind labels folded in.
 
 The shipped mandelbrot t_good = 0.14 is the v7 **F2** (recall-weighted) sweep over the v7
-eval slice (tools/v7/derive_t_good.py; n=942, pos=29). The steered_run2 blind human read
+eval slice (tools/v7/derive_t_good_v7.py; n=942, pos=29). The steered_run2 blind human read
 scored **0/16** mandelbrot admissions good — direct evidence that on steered mandelbrot
 output the 0.14 bar over-admits. This pass folds those 16 newly-committed steered labels
 into the mandelbrot slice and re-derives the cut **precision-weighted (F0.5)** for this
@@ -142,7 +142,7 @@ def main():
     doc = f"""# Mandelbrot discovery t_good — re-derivation with steered labels (F0.5)
 
 The shipped mandelbrot discovery `t_good = {old_t}` is the v7 **F2** (recall-weighted) sweep
-over the v7 eval slice (`tools/v7/derive_t_good.py`; n={n_e}, pos={pos_e}). The steered_run2
+over the v7 eval slice (`tools/v7/derive_t_good_v7.py`; n={n_e}, pos={pos_e}). The steered_run2
 blind human read scored **{pos_s}/{n_s}** mandelbrot admissions good — the human uniformly
 rejects what the 0.14 bar admits on steered mandelbrot output (see
 `docs/design/aesthetic_scoring.md` §2). That is direct evidence the bar

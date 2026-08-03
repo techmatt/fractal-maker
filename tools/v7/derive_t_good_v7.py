@@ -5,7 +5,7 @@ The shipped table (production_seeder.T_GOOD_OVERRIDES) is calibrated to v6's p_g
 distribution and is meaningless under v7. This pass re-derives it from the v7 labeled
 eval slice and writes data/v7/t_good_derivation.json. It does NOT edit production_seeder.
 
-  uv run python tools/v7/derive_t_good.py
+  uv run python tools/v7/derive_t_good_v7.py
 
 CPU-only, seconds. Gates are aborts (SystemExit), not asserts-in-prose.
 """
