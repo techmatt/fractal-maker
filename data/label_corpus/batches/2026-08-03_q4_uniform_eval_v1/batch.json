@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-03_q4_uniform_eval_v1",
+  "generator_version": "q4_long_harvest_v1",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 155846659,
+  "vivid_companion": "blue_orange",
+  "served_manifest": "blind.jsonl",
+  "queued_for_labeling": false,
+  "purpose": "score-unconditioned systematic draws for the five partitions with no unbiased eval rows (production_seeder.T_GOOD_UNCALIBRATED). EVAL-eligible and UNBIASED: every row comes from the family's own parameter space by a closed-form or membership rule, with no score, screen or classifier anywhere in the selection.",
+  "counts": {
+    "total": 290
+  },
+  "registration": {
+    "assign_split": [
+      "eval",
+      false,
+      "q4_uniform_eval"
+    ],
+    "registered_explicitly": true,
+    "NOTE": "registered in tools/v7/build_manifest BEFORE the build"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 4,
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "blue_orange",
+    "maxiter": "deep_center_finder._maxiter_for_fw(fw)"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sampling_metaparameters": {
+    "selection_role": "q4_uniform_eval",
+    "cells": {
+      "julia:mandelbrot": {
+        "taken": 48,
+        "available": 48,
+        "drained": true
+      },
+      "multibrot3": {
+        "taken": 48,
+        "available": 48,
+        "drained": true
+      },
+      "multibrot4": {
+        "taken": 48,
+        "available": 48,
+        "drained": true
+      },
+      "multibrot5": {
+        "taken": 48,
+        "available": 48,
+        "drained": true
+      },
+      "phoenix": {
+        "taken": 98,
+        "available": 98,
+        "drained": true
+      }
+    },
+    "population_n": 290,
+    "selection": "round-robin over partition; WITHIN a cell the order is the draw id, which carries no score \u2014 an eval draw may not be score-ordered even in its tie-break",
+    "score_in_selection": false
+  },
+  "calibration_aids": "NONE \u2014 no exemplars, no reference strip, no score shown"
+}

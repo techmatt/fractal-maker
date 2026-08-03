@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-03_q4_near_minibrot_v1",
+  "generator_version": "q4_long_harvest_v1",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 155846659,
+  "vivid_companion": "blue_orange",
+  "served_manifest": "blind.jsonl",
+  "queued_for_labeling": false,
+  "purpose": "julia:mandelbrot c's sampled at 1/4/16 minibrot-atom radii around known degree-2 nuclei (no fresh enumeration). TRAIN-side and biased: the nuclei are ones two prior searches surfaced, and the within-rung order is a score. The RUNG is the question.",
+  "counts": {
+    "total": 290
+  },
+  "registration": {
+    "assign_split": [
+      "train",
+      true,
+      "q4_near_minibrot"
+    ],
+    "registered_explicitly": true,
+    "NOTE": "registered in tools/v7/build_manifest BEFORE the build"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 4,
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "blue_orange",
+    "maxiter": "deep_center_finder._maxiter_for_fw(fw)"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sampling_metaparameters": {
+    "selection_role": "q4_near_minibrot",
+    "cells": {
+      "rung1": {
+        "taken": 97,
+        "available": 120,
+        "drained": false
+      },
+      "rung16": {
+        "taken": 97,
+        "available": 120,
+        "drained": false
+      },
+      "rung4": {
+        "taken": 96,
+        "available": 120,
+        "drained": false
+      }
+    },
+    "population_n": 360,
+    "selection": "round-robin to +/-1 over the LADDER RUNG so all three rungs are equally represented, best-first within a rung",
+    "ladder": "1 / 4 / 16 atom radii, radius = 1/|A| (the A instrument)"
+  },
+  "calibration_aids": "NONE \u2014 no exemplars, no reference strip, no score shown"
+}

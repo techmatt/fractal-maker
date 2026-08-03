@@ -1,0 +1,276 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-03_q4_harvest_ranked_v1",
+  "generator_version": "q4_long_harvest_v1",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 155846659,
+  "vivid_companion": "blue_orange",
+  "served_manifest": "blind.jsonl",
+  "queued_for_labeling": false,
+  "purpose": "q4 candidates from the 2026-08-03 long harvest, ranked. TRAIN-side and BIASED: the cheap ordinal decided which candidates got a canonical confirmation and the rank is built from those scores. No rate measured on this batch is a base rate.",
+  "counts": {
+    "total": 290
+  },
+  "registration": {
+    "assign_split": [
+      "train",
+      true,
+      "q4_harvest_ranked"
+    ],
+    "registered_explicitly": true,
+    "NOTE": "registered in tools/v7/build_manifest BEFORE the build"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 4,
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "blue_orange",
+    "maxiter": "deep_center_finder._maxiter_for_fw(fw)"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sampling_metaparameters": {
+    "selection_role": "q4_harvest_ranked",
+    "cells": {
+      "admitted|julia:mandelbrot": {
+        "taken": 8,
+        "available": 59,
+        "drained": false
+      },
+      "admitted|julia:multibrot3": {
+        "taken": 8,
+        "available": 10,
+        "drained": false
+      },
+      "admitted|julia:multibrot4": {
+        "taken": 2,
+        "available": 2,
+        "drained": true
+      },
+      "admitted|julia:multibrot5": {
+        "taken": 7,
+        "available": 7,
+        "drained": true
+      },
+      "admitted|mandelbrot": {
+        "taken": 5,
+        "available": 5,
+        "drained": true
+      },
+      "admitted|multibrot3": {
+        "taken": 7,
+        "available": 7,
+        "drained": true
+      },
+      "admitted|multibrot4": {
+        "taken": 7,
+        "available": 7,
+        "drained": true
+      },
+      "admitted|multibrot5": {
+        "taken": 8,
+        "available": 8,
+        "drained": true
+      },
+      "admitted|phoenix": {
+        "taken": 8,
+        "available": 23,
+        "drained": false
+      },
+      "below_tau_h|julia:mandelbrot": {
+        "taken": 9,
+        "available": 858,
+        "drained": false
+      },
+      "below_tau_h|julia:multibrot3": {
+        "taken": 8,
+        "available": 103,
+        "drained": false
+      },
+      "below_tau_h|julia:multibrot4": {
+        "taken": 1,
+        "available": 1,
+        "drained": true
+      },
+      "below_tau_h|julia:multibrot5": {
+        "taken": 8,
+        "available": 92,
+        "drained": false
+      },
+      "below_tau_h|multibrot3": {
+        "taken": 8,
+        "available": 87,
+        "drained": false
+      },
+      "below_tau_h|multibrot4": {
+        "taken": 8,
+        "available": 21,
+        "drained": false
+      },
+      "below_tau_h|multibrot5": {
+        "taken": 8,
+        "available": 104,
+        "drained": false
+      },
+      "below_tau_h|phoenix": {
+        "taken": 8,
+        "available": 412,
+        "drained": false
+      },
+      "canon_not_q3|julia:mandelbrot": {
+        "taken": 8,
+        "available": 14,
+        "drained": false
+      },
+      "canon_not_q3|julia:multibrot3": {
+        "taken": 8,
+        "available": 15,
+        "drained": false
+      },
+      "canon_not_q3|julia:multibrot4": {
+        "taken": 1,
+        "available": 1,
+        "drained": true
+      },
+      "canon_not_q3|julia:multibrot5": {
+        "taken": 2,
+        "available": 2,
+        "drained": true
+      },
+      "canon_not_q3|mandelbrot": {
+        "taken": 8,
+        "available": 49,
+        "drained": false
+      },
+      "canon_not_q3|multibrot3": {
+        "taken": 8,
+        "available": 29,
+        "drained": false
+      },
+      "canon_not_q3|multibrot4": {
+        "taken": 3,
+        "available": 3,
+        "drained": true
+      },
+      "canon_not_q3|multibrot5": {
+        "taken": 8,
+        "available": 29,
+        "drained": false
+      },
+      "canon_not_q3|phoenix": {
+        "taken": 8,
+        "available": 24,
+        "drained": false
+      },
+      "precanon_dup|julia:mandelbrot": {
+        "taken": 9,
+        "available": 2462,
+        "drained": false
+      },
+      "precanon_dup|julia:multibrot3": {
+        "taken": 8,
+        "available": 253,
+        "drained": false
+      },
+      "precanon_dup|julia:multibrot4": {
+        "taken": 8,
+        "available": 408,
+        "drained": false
+      },
+      "precanon_dup|julia:multibrot5": {
+        "taken": 8,
+        "available": 715,
+        "drained": false
+      },
+      "precanon_dup|mandelbrot": {
+        "taken": 8,
+        "available": 365,
+        "drained": false
+      },
+      "precanon_dup|multibrot3": {
+        "taken": 8,
+        "available": 184,
+        "drained": false
+      },
+      "precanon_dup|multibrot4": {
+        "taken": 8,
+        "available": 8,
+        "drained": true
+      },
+      "precanon_dup|multibrot5": {
+        "taken": 8,
+        "available": 78,
+        "drained": false
+      },
+      "precanon_dup|phoenix": {
+        "taken": 9,
+        "available": 725,
+        "drained": false
+      },
+      "q3_dup|julia:mandelbrot": {
+        "taken": 8,
+        "available": 48,
+        "drained": false
+      },
+      "q3_dup|julia:multibrot3": {
+        "taken": 4,
+        "available": 4,
+        "drained": true
+      },
+      "q3_dup|julia:multibrot4": {
+        "taken": 2,
+        "available": 2,
+        "drained": true
+      },
+      "q3_dup|julia:multibrot5": {
+        "taken": 8,
+        "available": 10,
+        "drained": false
+      },
+      "q3_dup|mandelbrot": {
+        "taken": 4,
+        "available": 4,
+        "drained": true
+      },
+      "q3_dup|multibrot5": {
+        "taken": 6,
+        "available": 6,
+        "drained": true
+      },
+      "q3_dup|phoenix": {
+        "taken": 8,
+        "available": 16,
+        "drained": false
+      },
+      "reframe_not_q3|julia:mandelbrot": {
+        "taken": 1,
+        "available": 1,
+        "drained": true
+      },
+      "reframe_not_q3|multibrot3": {
+        "taken": 1,
+        "available": 1,
+        "drained": true
+      },
+      "reframe_not_q3|multibrot5": {
+        "taken": 2,
+        "available": 2,
+        "drained": true
+      }
+    },
+    "queue_n": 7264,
+    "selection": "top of the run's TIER-SORTED record-and-rank queue, round-robin to +/-1 over (fate x partition), best-first within a cell",
+    "tiering": "rank_tier 2 (canonical decode, 640x360 ss2) sorts above tier 1 (cheap only, 384x216 ss1) as a BLOCK; the sort runs within a tier, never across \u2014 two geometries are not one ordering",
+    "rejects_included": true,
+    "why_rejects": "Matt is picking a cutoff; a page of admissions only would hide the population the cutoff is chosen against"
+  },
+  "calibration_aids": "NONE \u2014 no exemplars, no reference strip, no score shown"
+}
