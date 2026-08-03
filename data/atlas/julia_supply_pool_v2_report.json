@@ -1,0 +1,45 @@
+{
+  "partition": "julia:mandelbrot",
+  "floor": 0.01,
+  "rung": 1.0,
+  "rung_why": "cost is a tie (3.9% spread across rungs, band 10%), so the tie-break is the one yield column where the rungs separate: one-per-cluster class-4 rate",
+  "merge_order": [
+    "q4_mining_ranked",
+    "q4_mining_recall",
+    "near_minibrot",
+    "seeded_loop"
+  ],
+  "proposed": {
+    "q4_mining_ranked": 123,
+    "q4_mining_recall": 3418,
+    "near_minibrot": 512,
+    "seeded_loop": 534
+  },
+  "kept": {
+    "q4_mining_ranked": 39,
+    "q4_mining_recall": 13,
+    "near_minibrot": 106,
+    "seeded_loop": 381
+  },
+  "dropped": {
+    "q4_mining_ranked": 84,
+    "q4_mining_recall": 3405,
+    "near_minibrot": 406,
+    "seeded_loop": 153
+  },
+  "n_proposed": 4587,
+  "n_kept": 539,
+  "n_dropped": 4048,
+  "thinning_rate": 0.8825,
+  "cspacing_basis": {
+    "measured_on": "data/label_corpus/batches/2026-08-03_q4_near_minibrot_v1 (290 rows, 103 atoms) x scratch/q4_readout/morph_emb_870.npz",
+    "recipe": "library morph CLIP (robustz_tanh_k2_v1, 640x360ss2, vit_base_patch16_clip_224.openai) at cos >= 0.974",
+    "rule": "the coarsest |delta c| bucket boundary at which the near-dup rate reaches the different-atom baseline",
+    "near_dup_rate_at_or_above_floor": 0.024,
+    "near_dup_rate_one_bucket_below": 0.239,
+    "different_atom_baseline": 0.023,
+    "atom_nn_median_dc": 0.000905,
+    "note": "one c per ATOM is NOT sufficient: different atoms at 1e-4..1e-3 are 38% near-dup"
+  },
+  "note": "first-wins thinning ACROSS channels in measured-yield order; the ordering is the policy"
+}

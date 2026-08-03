@@ -1,0 +1,36 @@
+{
+  "1.0": {
+    "n": 24,
+    "mean_s": 0.132,
+    "median_s": 0.1224,
+    "stdev_s": 0.0373,
+    "total_s": 3.17
+  },
+  "4.0": {
+    "n": 24,
+    "mean_s": 0.1343,
+    "median_s": 0.1218,
+    "stdev_s": 0.0443,
+    "total_s": 3.22
+  },
+  "16.0": {
+    "n": 24,
+    "mean_s": 0.1293,
+    "median_s": 0.1183,
+    "stdev_s": 0.0326,
+    "total_s": 3.1
+  },
+  "ratio_vs_rung1": {
+    "1.0": 1.0,
+    "4.0": 1.0174,
+    "16.0": 0.9798
+  },
+  "geometry": "prescreen._render default (the harvest confirmation render)",
+  "design": "paired: every atom contributes all three rungs, interleaved, so machine drift hits the arms equally",
+  "work_count": {
+    "atoms": 24,
+    "renders": 72
+  },
+  "measured_at": "2026-08-03T12:01:41",
+  "population": "2026-08-03_q4_near_minibrot_v1"
+}
