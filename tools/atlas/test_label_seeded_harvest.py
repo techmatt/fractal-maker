@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -392,3 +393,109 @@ def test_the_live_sort_key_elsewhere_is_still_composite_v3():
     src = (Path(sf.__file__).read_text(encoding="utf-8")
            + Path(mvs.__file__).read_text(encoding="utf-8"))
     assert "view_fit" not in src
+
+
+# =========================================================================== #
+# the budget logic — every halt branch, and the resume that has to survive it
+# =========================================================================== #
+# These three mechanisms gated several real multi-hour runs without ever firing, so until
+# 2026-08-02 they were presumed rather than tested. `tools/atlas/livefire_harvest_budget.py`
+# is the end-to-end half — three tiny sink-isolated runs, each deliberately triggered and
+# resumed, all three firing on 2026-08-02 (`active_budget (est 8s > 6s left)` at 13/60 seeds,
+# `wall_budget (est 8s > 7s left)` at 13/60, `stop_sentinel` at 4/60, each resuming to 60/60).
+# It takes ~13 minutes and drives the real engine, so it is a hand-run driver; the BRANCH
+# logic is pinned here instead so it stays tested rather than re-presumed. No engine here: a
+# `Harvest` is built against a tmp run dir and its counters are set directly.
+#
+# One behaviour the live fire turned up and this block does not: with no unit history
+# `unit_estimate()` returns a stated 30 s, so a run given a budget of 30 s or less refuses to
+# start its first unit and halts at zero seeds. Correct — it is "never start a unit you
+# cannot afford" applied to the run's own cold-start guess — but it means a sub-minute budget
+# cannot be used to exercise a mid-run halt.
+def _harvest(tmp_path, *, budget_min, wall_budget_min):
+    return lsh.Harvest(tmp_path / "run", budget_min=budget_min,
+                       wall_budget_min=wall_budget_min, workers=1)
+
+
+def test_the_stop_sentinel_halts_and_outranks_a_wide_open_budget(tmp_path):
+    """The sentinel is the only halt a human can reach mid-run, so it must not be
+    conditional on the budgets — it is checked first, and a run with hours left stops."""
+    h = _harvest(tmp_path, budget_min=600, wall_budget_min=600)
+    assert h.stopping(time.time()) == ""
+    (h.dir / lsh.STOP_SENTINEL).write_text("", encoding="utf-8")
+    assert h.stopping(time.time()) == "stop_sentinel"
+
+
+def test_the_active_cap_halts_before_starting_a_unit_it_cannot_afford(tmp_path):
+    """`active_s` is spent time, not elapsed time. The cap must bind on what the run has
+    SPENT, and it must refuse to start a unit whose estimate exceeds what is left rather
+    than starting it and overrunning."""
+    h = _harvest(tmp_path, budget_min=10, wall_budget_min=600)
+    h.unit_s = [20.0] * 10                       # est/unit = 20 s
+    h.active_s = 9 * 60.0                        # 60 s of active budget left
+    assert h.stopping(time.time()) == ""         # 60 > 20: afford one more
+    h.active_s = 10 * 60.0 - 15.0                # 15 s left, under the estimate
+    assert h.stopping(time.time()).startswith("active_budget")
+
+
+def test_the_wall_cap_halts_on_elapsed_time_even_with_active_budget_to_spare(tmp_path):
+    """The two caps are different quantities and only separate when one binds and the
+    other does not: here the active budget is untouched and the run must still stop."""
+    h = _harvest(tmp_path, budget_min=600, wall_budget_min=10)
+    h.unit_s = [20.0] * 10
+    h.active_s = 0.0                             # nothing spent — the active cap is idle
+    assert h.stopping(time.time() - 9 * 60.0) == ""
+    assert h.stopping(time.time() - (10 * 60.0 - 15.0)).startswith("wall_budget")
+
+
+def test_the_unit_estimate_is_recent_p90_not_the_run_to_date_mean(tmp_path):
+    """A run whose units get more expensive is the case the cap exists for. The run-to-date
+    mean is dominated by the cheap early work and would let exactly that run overrun —
+    CLAUDE.md's "refit from RECENT throughput". The window is 40, so 60 cheap units must
+    not be able to drag the estimate down."""
+    h = _harvest(tmp_path, budget_min=10, wall_budget_min=10)
+    h.unit_s = [1.0] * 60 + [50.0] * 40
+    est, mean = h.unit_estimate(), sum(h.unit_s) / len(h.unit_s)
+    assert est >= 49.0, est
+    assert est > 2 * mean, (est, mean)
+    # ...and with no history it is a stated constant, not a crash or a zero
+    assert lsh.Harvest(tmp_path / "r2", budget_min=1, wall_budget_min=1,
+                       workers=1).unit_estimate() == 30.0
+
+
+def test_a_resume_restores_the_SPENT_budget_and_not_a_fresh_one(tmp_path):
+    """The resume bug this pins: reload the done set but not `active_s`, and every resume
+    hands the run a full budget again, so a 150-minute cap becomes unbounded across enough
+    restarts. The reload must carry the spend, and the cap must bind immediately on it."""
+    h = _harvest(tmp_path, budget_min=10, wall_budget_min=600)
+    h.done = {"sAAA", "sBBB"}
+    h.active_s = 10 * 60.0 - 5.0
+    h.unit_s = [20.0] * 5
+    h.per_seed = [dict(seed_id="sAAA", seconds=1.0), dict(seed_id="sBBB", seconds=2.0)]
+    h.seen_keys = {"k1", "k2"}
+    h.save()
+
+    h2 = _harvest(tmp_path, budget_min=10, wall_budget_min=600)
+    h2.load()
+    assert h2.done == {"sAAA", "sBBB"}
+    assert h2.seen_keys == {"k1", "k2"}
+    assert h2.active_s == pytest.approx(10 * 60.0 - 5.0)
+    assert h2.stopping(time.time()).startswith("active_budget")
+
+
+def test_the_state_write_is_atomic_and_leaves_no_tmp_behind(tmp_path):
+    """`save` writes a sibling `.tmp` and `os.replace`s it, so a kill mid-write cannot
+    leave a truncated state.json — the file a resume refuses to start without."""
+    h = _harvest(tmp_path, budget_min=10, wall_budget_min=10)
+    h.save()
+    assert h.state_path.exists()
+    assert not h.state_path.with_suffix(".json.tmp").exists()
+    json.loads(h.state_path.read_text(encoding="utf-8"))       # parses
+
+
+def test_resume_without_state_refuses_instead_of_starting_over(tmp_path):
+    """A `--resume` that silently started from zero would re-spend the whole budget and
+    duplicate every seed's work into an append-only log."""
+    h = _harvest(tmp_path, budget_min=10, wall_budget_min=10)
+    with pytest.raises(SystemExit, match="cannot --resume"):
+        h.load()
