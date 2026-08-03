@@ -135,14 +135,72 @@ class NewtonResult:
     degree: int = 2      # multibrot power d in z^d + c (2 = Mandelbrot)
 
 
+# ---------------------------------------------------------------------------
+# Divergence abort for `newton_nucleus` (the lever-1 measurement, 2026-08-02).
+#
+# WHY A BUDGET-FEASIBILITY TEST AND NOT A MAGNITUDE THRESHOLD. Far from every root of a
+# degree-n polynomial, Newton moves c -> c(1 - 1/n), so |P| shrinks by (1-1/n)^n -> 1/e:
+# the iteration retires exactly **one nat of |z_p| per step**, independent of period,
+# degree and starting point. Measured on the 36-seed replay the late-phase slope of
+# log10|z_p| is -0.434 for BOTH the converging and the non-converging population, against
+# -log10(e) = -0.4343. So a solve sitting at residual |z_p| needs at least ln|z_p| further
+# steps before it can even reach O(1), whatever else it does — and if that exceeds the
+# budget the caller gave, the solve cannot converge and the remaining steps are certain
+# waste. That is the abort.
+#
+# A flat magnitude threshold was tried first and is WRONG, which is the whole reason this
+# is phrased against the budget: the seahorse p35 fixture sits at |z_35| = 10^66 for 150
+# iterations and converges at iteration 163. Any bound low enough to catch the burners at
+# max_steps=60 kills that solve at max_steps=200. The feasibility form scales with the
+# budget, so the same rule is correct for a 60-step caller (where p35 genuinely cannot
+# finish, and `converged=False` was already the answer) and a 200-step one (where it can,
+# and is left alone).
+# ---------------------------------------------------------------------------
+NEWTON_BITS_PER_STEP = 1.4426950408889634      # 1/ln 2 — one nat per step, in bits
+DIVERGENCE_SAFETY = 4.0                        # fire only at 4x the provable requirement
+
+
+def divergence_bound(remaining_steps, safety: float = DIVERGENCE_SAFETY) -> float:
+    """Bit-magnitude of |z_p(c)| above which a nucleus solve provably cannot finish in
+    `remaining_steps` — `safety` x the bits Newton can retire in that many steps.
+
+    In bits (`mp.mag`) rather than decades because `mp.mag` is an exponent read, ~25x
+    cheaper than `mp.log`, and this runs on every iteration of every solve. `safety` is
+    headroom, not a fit: the worst ratio any of the 6,623 converging solves in the replay
+    reached was 0.84 of the bare (safety=1) bound, and the saving is flat from safety 1 to
+    8 because the burners sit ~51,000 nats above it, so the margin is free."""
+    return safety * NEWTON_BITS_PER_STEP * remaining_steps
+
+
 def newton_nucleus(c0, period, *, degree=2, max_steps=200, tol_dps_margin=6):
-    """Newton on z_p(c) = 0 (period-p nucleus). Returns a NewtonResult."""
+    """Newton on z_p(c) = 0 (period-p nucleus). Returns a NewtonResult.
+
+    **Divergence abort** (see the note above this function). A solve whose residual is so
+    large that Newton's own one-nat-per-step rate could not retire it within the remaining
+    `max_steps` stops with `converged=False` instead of burning the budget. This is a
+    divergence test, NOT a lower iteration cap: the two were both measured and only this
+    one is safe. On the 36-seed neighborhood-operator replay (8,132 solves,
+    `scratch/profiling/l1_trajectories.jsonl`) non-converging solves were 70% of operator
+    wall and every one ran the full budget, while converged solves averaged 10.6
+    iterations — but their p99 is 40 and their max is 60, so an iteration cap at 40 already
+    loses 1.0% of real convergers. The abort fires on 98.2% of the non-converging solves,
+    at a median of 3 iterations, and on ZERO converging ones.
+
+    Every caller discards a non-converged result without reading `c`/`iters`/`residual`
+    (the one exception is this module's own CLI, which prints them as a diagnostic), so the
+    abort is invisible to the roster / nucleus derivations it shares — which is checked,
+    not assumed, by the stored-key round trip in `test_newton_divergence_abort.py`."""
     c = mp.mpc(c0)
     tol = mp.mpf(10) ** (-(mp.mp.dps - tol_dps_margin))
     residual = mp.inf
+    diverged = False
     it = 0
     for it in range(1, max_steps + 1):
         z, d = _orbit(c, period, degree)
+        if mp.mag(z) > divergence_bound(max_steps - it):
+            diverged = True
+            residual = abs(z)
+            break
         residual = abs(z)
         if d == 0:
             break
@@ -150,9 +208,14 @@ def newton_nucleus(c0, period, *, degree=2, max_steps=200, tol_dps_margin=6):
         c = c - step
         if abs(step) < tol and residual < tol:
             break
-    z, _ = _orbit(c, period, degree)
-    residual = abs(z)
-    conv = residual < tol
+    if not diverged:
+        # `c` moved after `residual` was taken, so it has to be re-measured at the final
+        # iterate. On the abort path `c` did NOT move, so `residual` already IS |z_p(c)| —
+        # and skipping the recompute skips the single most expensive orbit pass in the
+        # solve (the escaped one, whose exponents are what cost the bignum work).
+        z, _ = _orbit(c, period, degree)
+        residual = abs(z)
+    conv = residual < tol and not diverged
     return NewtonResult(c=c, converged=bool(conv), iters=it,
                         residual=float(mp.log10(residual)) if residual > 0 else -999.0,
                         kind="nucleus", period=period, degree=degree)
