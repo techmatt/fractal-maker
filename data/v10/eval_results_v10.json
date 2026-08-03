@@ -1,0 +1,232 @@
+{
+  "score_key": "sum_sigma (rank score)",
+  "prereg_source": "data/v10/prereg_v10.json",
+  "prereg": {
+    "version": "v10",
+    "written": "before any v10 eval ran; eval_v10.py loads this file rather than restating its constants",
+    "claim_available": "NON-INFERIORITY on the two frozen instruments (label noise forbids reading small AUC differences on the >=3 boundary, protocol \u00a73); SEPARATION-vs-chance on the new instrument, whose bar is derived from its own power below.",
+    "baseline": "v8 RE-SCORED on the v10 tiles, not v8's own numbers from eval_results_v8.json. v8's flat-8000 cache was deleted 2026-07-31, and the deployed system today renders through the live auto_maxiter policy anyway \u2014 so v8-on-v10-tiles IS the deployed system, and it is what a deploy decision must be made against.",
+    "eval_population": {
+      "prospect_census": {
+        "n": 144,
+        "n_ge2": 121,
+        "n_ge3": 65,
+        "n_eq4": 22
+      },
+      "loose0_v3_floor": {
+        "n": 526,
+        "n_ge2": 188,
+        "n_ge3": 26,
+        "n_eq4": 0
+      },
+      "maneuver_uniform_v1": {
+        "n": 90,
+        "n_ge2": 22,
+        "n_ge3": 0,
+        "n_eq4": 0
+      }
+    },
+    "instrument_check": {
+      "rule": "classifier_retrain_protocol.md \u00a73, the v9 block",
+      "intervention": "TRAINING DATA (1,267 appended locations; 1,265 train-side)",
+      "why_the_check_inverts": "v9's intervention was the render path, so identical eval tiles meant a blind instrument. v10's intervention is the data, so identical eval tiles are CORRECT \u2014 what must move is the model. The failure mode to guard instead is an eval slice that cannot see the population the new labels come from, which is why the uniform-90 exists.",
+      "canonical_tile_delta_vs_v9": {
+        "prospect_census": {
+          "n": 144,
+          "identical_to_v9": 144,
+          "new": 0
+        },
+        "loose0_v3_floor": {
+          "n": 526,
+          "identical_to_v9": 526,
+          "new": 0
+        },
+        "maneuver_uniform_v1": {
+          "n": 90,
+          "identical_to_v9": 0,
+          "new": 90
+        }
+      },
+      "expected": "census-144 and floor-526: 100% identical to v9's tiles. uniform-90: 100% new, because those locations did not exist in v9. Anything else means the recipe moved and the whole battery is measuring that instead.",
+      "what_the_frozen_arms_cannot_see": "every appended location is a NATIVE-plane maneuver view (mandelbrot / multibrot3/4/5); the census is julia:multibrot only. A null on the census is therefore the EXPECTED outcome and reads as non-regression, not as a null result about the appended data."
+    },
+    "arms": {
+      "primary_census144": {
+        "instrument": "prospect_census, 144 locations",
+        "metric": "AUC(label>=3 vs rest), paired DeLong, v10 vs v8 on the same tiles",
+        "n": 144,
+        "n_pos": 65,
+        "bar": "NON-INFERIOR iff AUC_v10 >= AUC_v8_rescored - 0.05 AND the paired DeLong does not put v10 significantly below v8 (p < 0.05 AND delta < 0)",
+        "noninf_margin": 0.05,
+        "gating": true,
+        "style": "identical construction to the v8-vs-v7 and v9-vs-v8 primaries"
+      },
+      "floor_loose0_v3": {
+        "instrument": "loose0_v3_floor, 526 unbiased base-rate mandelbrot locations",
+        "metric": "AUC(label>=3 vs rest), paired DeLong, v10 vs v8 on the same tiles",
+        "n": 526,
+        "n_pos": 26,
+        "bar": "NON-INFERIOR iff AUC_v10 >= AUC_v8_rescored - 0.05 AND the paired DeLong does not put v10 significantly below v8 (p < 0.05 AND delta < 0)",
+        "noninf_margin": 0.05,
+        "gating": true,
+        "note": "SYMMETRIC: v8 and v10 both trained on these locations, so neither arm is flattered."
+      },
+      "new_uniform90": {
+        "instrument": "maneuver_uniform_v1, 90 locations \u2014 the only score-unconditioned draw over the maneuver-view population",
+        "metric": "AUC(label>=2 vs rest); AUC + bootstrap CI reported for BOTH models, plus paired DeLong",
+        "n": 90,
+        "n_pos": 22,
+        "boundary_choice": ">=2, not >=3: the leg came back 0/90 at the >=3 emission floor, so a >=3 read has zero positives and no power at all. >=2 has 22 positives, which is the only boundary on this population with any power.",
+        "power": {
+          "method": "Hanley-McNeil SE at n_pos=22, n_neg=68",
+          "min_detectable_auc_vs_chance": 0.64,
+          "se_at_that_auc": 0.071
+        },
+        "bar": "SEPARATES iff AUC_v10 >= 0.64 AND the 95% bootstrap CI's lower bound > 0.50. Below that the arm is UNDERPOWERED, which per protocol \u00a73 means 'label more', NOT 'the model failed'.",
+        "separation_bar": 0.64,
+        "gating": false,
+        "gating_note": "NOT gating for adoption \u2014 it is a 90-row arm and this is its first run, so it has no prior version to be non-inferior to. It is the reason the retrain exists and is reported at equal prominence; a future v11 can make it gating once a v10 number exists to beat.",
+        "v8_baseline_expectation": "v8 is measured non-separating on this population. That flat result is the number to beat, and it is COMPUTED here rather than assumed \u2014 v8's AUC and CI on these same 90 tiles are reported."
+      },
+      "class4_descriptive": {
+        "instrument": "the 22 class-4 census locations (all julia:multibrot)",
+        "metric": "AUC(label==4 vs rest), reported for v10 and v8",
+        "n_class4_eval": 22,
+        "bar": null,
+        "gating": false,
+        "note": "DESCRIPTIVE, no bar. The 23 appended class-4 locations are ALL train-side and must not appear in any eval number; eval_v10.py asserts the eval slice holds exactly 22 class-4 rows, all census."
+      }
+    },
+    "label_noise_discipline": "No small-AUC-difference reads on the >=3 boundary. Only the bars above are verdicts; every other number in the battery is descriptive and is labeled so.",
+    "adoption": "THIS PROMPT DOES NOT ADOPT. ACTIVE_CKPT stays v8 and no threshold file is touched. Adoption is a separate prompt judged against these bars."
+  },
+  "arms": {
+    "baseline": "v8 re-scored on the v10 tiles \u2014 THE DEPLOYED SYSTEM",
+    "candidate": "v10 on the same tiles",
+    "note": "inputs are held identical between arms by construction, so no diagnostic arm is needed: the only thing that differs is the model."
+  },
+  "primary_census144": {
+    "name": "census-144 q3",
+    "n": 144,
+    "thr": 3,
+    "n_pos": 65,
+    "arm_base": "v8",
+    "arm_cand": "v10",
+    "auc_base": 0.7509,
+    "auc_base_ci95": [
+      0.671,
+      0.8278
+    ],
+    "auc_cand": 0.6598,
+    "auc_cand_ci95": [
+      0.5676,
+      0.7457
+    ],
+    "delta_cand_minus_base": -0.0911,
+    "delong_z": 2.495,
+    "delong_p": 0.0126,
+    "bar": "NON-INFERIOR iff AUC_v10 >= AUC_v8_rescored - 0.05 AND the paired DeLong does not put v10 significantly below v8 (p < 0.05 AND delta < 0)",
+    "verdict": "INFERIOR / inconclusive",
+    "reads": "julia:multibrot only \u2014 cannot see the appended native-plane population; a null is non-regression, not a null about the data"
+  },
+  "floor_loose0_v3": {
+    "name": "mandelbrot-floor q3",
+    "n": 526,
+    "thr": 3,
+    "n_pos": 26,
+    "arm_base": "v8",
+    "arm_cand": "v10",
+    "auc_base": 0.8673,
+    "auc_base_ci95": [
+      0.7882,
+      0.9339
+    ],
+    "auc_cand": 0.8701,
+    "auc_cand_ci95": [
+      0.7935,
+      0.9343
+    ],
+    "delta_cand_minus_base": 0.0028,
+    "delong_z": -0.086,
+    "delong_p": 0.9314,
+    "bar": "NON-INFERIOR iff AUC_v10 >= AUC_v8_rescored - 0.05 AND the paired DeLong does not put v10 significantly below v8 (p < 0.05 AND delta < 0)",
+    "verdict": "NON-INFERIOR",
+    "note": "SYMMETRIC: v8 and v10 both trained on these locations, so neither arm is flattered."
+  },
+  "new_uniform90": {
+    "name": "maneuver-uniform-90 q2",
+    "n": 90,
+    "thr": 2,
+    "n_pos": 22,
+    "arm_base": "v8",
+    "arm_cand": "v10",
+    "auc_base": 0.8483,
+    "auc_base_ci95": [
+      0.7639,
+      0.9206
+    ],
+    "auc_cand": 0.8222,
+    "auc_cand_ci95": [
+      0.7264,
+      0.9054
+    ],
+    "delta_cand_minus_base": -0.0261,
+    "delong_z": 0.577,
+    "delong_p": 0.5641,
+    "bar": "SEPARATES iff AUC_v10 >= 0.64 AND the 95% bootstrap CI's lower bound > 0.50. Below that the arm is UNDERPOWERED, which per protocol \u00a73 means 'label more', NOT 'the model failed'.",
+    "separation_bar": 0.64,
+    "verdict": "SEPARATES",
+    "v8_verdict": "SEPARATES",
+    "gating": false,
+    "reads": "the maneuver-view population the appended labels come from \u2014 the only arm that does"
+  },
+  "class4_descriptive": {
+    "n_census": 144,
+    "n_class4": 22,
+    "auc_v10_q4_vs_rest": 0.6729,
+    "auc_v10_q4_by_pnext": 0.6058,
+    "auc_v8_q4_vs_rest": 0.813,
+    "class4_by_family": {
+      "julia_multibrot3": 6,
+      "julia_multibrot4": 8,
+      "julia_multibrot5": 8
+    },
+    "appended_class4_train_side": 23,
+    "note": "DESCRIPTIVE, no bar. All 23 appended class-4 locations are train-side and are asserted absent from every eval number above."
+  },
+  "palette_invariance": {
+    "n_census": 144,
+    "held_out_palettes": [
+      "cet_cyclic_wrwbw_40_90_c42",
+      "cet_diverging_bwr_40_95_c42",
+      "cet_linear_bmw_5_95_c86",
+      "cet_linear_kry_5_98_c75",
+      "cet_linear_protanopic_deuteranopic_kbw_5_98_c40",
+      "cmr.ocean",
+      "cmr.seasons",
+      "cmr.viola"
+    ],
+    "instrument": "twilight_shifted",
+    "rendered_at_cap": "auto_maxiter(fw) \u2014 the live policy, per row",
+    "spearman_twilight_vs_heldout": {
+      "cet_cyclic_wrwbw_40_90_c42": 0.7196,
+      "cet_diverging_bwr_40_95_c42": 0.829,
+      "cet_linear_bmw_5_95_c86": 0.8977,
+      "cet_linear_kry_5_98_c75": 0.7358,
+      "cet_linear_protanopic_deuteranopic_kbw_5_98_c40": 0.9164,
+      "cmr.ocean": 0.9702,
+      "cmr.seasons": 0.9118,
+      "cmr.viola": 0.9896
+    },
+    "mean_spearman": 0.8713,
+    "range": [
+      0.7196,
+      0.9896
+    ],
+    "pooled_spearman": 0.8573,
+    "v9_reference_mean": 0.9002,
+    "note": "DESCRIPTIVE, no bar.",
+    "delta_vs_v9": -0.0289,
+    "read": "consistent with v9"
+  }
+}
