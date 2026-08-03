@@ -120,16 +120,17 @@ merge that would change a non-null score warns and refuses. A *revision* is no e
 it goes to the amendment stream (`labels/<revision>.json`, `merge_amendments.py`) and is
 read back via `label_store.resolve_score`, leaving the original byte-identical.
 
-**The classifier** (`classifier/`, pkg). Weights/metrics in `data/classifier/v5…v9/`,
+**The classifier** (`classifier/`, pkg). Weights/metrics in `data/classifier/v5…v10/`,
 **git-LFS tracked in-tree — NOT gitignored** (`.gitattributes` + exact-path `.gitignore`
 negation; guarded by `tests/test_tracked_artifacts.py` and the size-guard registry). A weight
 file is a tracked artifact, not scratch. **Never hardcode a version** — the live pin is
-`tools/scoring/production_pins.ACTIVE_CKPT` (v8 today; v9 built but staged, not adopted), read
+`tools/scoring/production_pins.ACTIVE_CKPT` (v10 since 2026-08-02; v8 is the one-flip rollback
+anchor, v9 was built and staged but never adopted and is NOT a rollback rung), read
 by ~41 modules — most of them still through the `active_ckpt` re-export, which is an alias, not
 a copy (`test_production_pins.py`). Every version is a CORN **ordinal** head on
 `mobilenetv4_conv_medium.e250_r384_in12k` emitting K−1 rank-consistent logits; **K is
-per-version — read `data/classifier/<v>/config.json`** (K=3 through v7, labels 1–3; K=4 from
-v9, labels 1–4). Deploy transform = `classifier.data.Transform(train=False)`: the
+per-version — read `data/classifier/<v>/config.json`** (K=3 through v7, labels 1–3; **K=4 from
+v8 onward**, labels 1–4 — v8 is the first K=4 head, not v9). Deploy transform = `classifier.data.Transform(train=False)`: the
 deterministic **1280×720 → 384×224 bicubic stretch + normalize** mirror of `present.rs`'s JPG
 path (no jitter/flips). `model.score_from_logits` returns `Σ σ(logit_k)` ∈ [0,K−1] — the
 monotone rank score used for AP. **P(not-bad) = σ(logit₀)** (= P(rank≥1) = P(label≥2)).

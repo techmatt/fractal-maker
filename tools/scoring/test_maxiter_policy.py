@@ -13,6 +13,17 @@ stale against exactly such a comment). If the raise lands in one copy and not th
 production and navigation silently disagree about how deep to iterate and every
 navigation-sourced measurement drifts off the production distribution.
 
+**There was a THIRD copy and it had already gone stale.** `tools/emission/descriptor.py`
+carried a hand-copied f64 mirror — base 500, clamp 8000 — for the caps it stamps onto every
+`Location` the emission intake mints, and the 2026-07-31 raise never reached it: from that
+date until 2026-08-02 the intake minted caps 8x below production and nothing was red,
+because the comment above it said "mirror" and no test read it. That copy is gone; the
+module now imports `auto_maxiter` from the owning module, and the test below asserts it is
+the SAME FUNCTION OBJECT rather than merely an agreeing one — a re-transcription that
+happens to agree today is the failure this file exists to prevent, so identity is the
+assertion and pointwise agreement is only the backstop. The remaining `float`/`Decimal`
+split is the one duplication that cannot be collapsed by an import.
+
 Also pins the ADOPTED values themselves, so the raise cannot be quietly reverted, and the
 non-binding-clamp claim in docs/design/auto_maxiter.md, so a future manifest that pushes
 the deep tail past the clamp is a red test rather than a silent truncation.
@@ -25,11 +36,13 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "tools" / "scoring"))
 sys.path.insert(0, str(REPO_ROOT / "tools" / "explorer"))
 
 import active_ckpt as prod     # noqa: E402
 import render_core as nav      # noqa: E402
+from tools.emission import descriptor as desc   # noqa: E402  (third caller of the policy)
 
 # The adopted policy (docs/design/auto_maxiter.md). base 500 -> 4000 (x8, the MEDIAN of
 # the measured convergent multiple), clamp 8000 -> 67000, k and min unchanged.
@@ -50,6 +63,24 @@ def test_navigation_constants_equal_production():
     assert nav.MAXITER_MIN == prod.MAXITER_MIN
     assert nav.MAXITER_MAX == prod.MAXITER_MAX
     assert float(nav.FW_HOME) == float(prod.FW_HOME)
+
+
+def test_emission_descriptor_does_not_re_transcribe_the_policy():
+    """`descriptor.auto_maxiter` must BE production's, not a copy of it. Identity, not
+    equality: the stale mirror this replaced also 'agreed' — with a policy two versions
+    old — and only a shared object makes a future raise impossible to miss here."""
+    assert desc.auto_maxiter is prod.auto_maxiter
+    # ...and no private mirror constants left behind to drift back in
+    for name in ("_MAXITER_BASE", "_MAXITER_K", "_MAXITER_MIN", "_MAXITER_MAX", "_FW_HOME"):
+        assert not hasattr(desc, name), f"descriptor re-grew a mirror constant: {name}"
+
+
+def test_emission_descriptor_stamps_the_production_cap():
+    """The consequence the identity check is standing in for: a Location minted by the
+    intake carries the PRODUCTION cap. Pinned at a concrete fw so the number is visible."""
+    fw = 3.92635175e-10
+    assert desc.auto_maxiter(fw) == prod.auto_maxiter(fw)
+    assert desc.auto_maxiter(fw) > ADOPTED["base"], "cap below the production base at depth"
 
 
 def test_the_two_implementations_agree_pointwise():
@@ -110,6 +141,8 @@ def test_clamp_is_non_binding_over_the_v8_manifest():
 if __name__ == "__main__":
     for t in (test_production_constants_are_the_adopted_policy,
               test_navigation_constants_equal_production,
+              test_emission_descriptor_does_not_re_transcribe_the_policy,
+              test_emission_descriptor_stamps_the_production_cap,
               test_the_two_implementations_agree_pointwise,
               test_clamps_are_reachable_and_correct,
               test_raise_is_x8_over_the_superseded_policy,

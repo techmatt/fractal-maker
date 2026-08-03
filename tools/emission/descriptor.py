@@ -36,14 +36,13 @@ loads without torch for unit tests.
 from __future__ import annotations
 
 import json
-import math
 import sys
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-for p in (ROOT, ROOT / "tools" / "corpus"):
+for p in (ROOT, ROOT / "tools" / "corpus", ROOT / "tools" / "scoring"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
@@ -91,17 +90,19 @@ def admit_quality(row: dict) -> bool:
         return (row.get("p_notbad") or 0.0) >= FLOOR_PNOTBAD
     return (row.get("decoded_class") or 0) >= 3
 
-# auto_maxiter policy (mirror tools/scoring/active_ckpt.py — replicated here to keep this
-# module torch-free; it is a pure function of fw).
-_FW_HOME = 3.0
-_MAXITER_BASE, _MAXITER_K, _MAXITER_MIN, _MAXITER_MAX = 500, 0.30, 200, 8000
-
-
-def auto_maxiter(fw: float) -> int:
-    ratio = _FW_HOME / fw if fw > 0 else 1.0
-    lz = math.log2(ratio) if ratio > 0 else 0.0
-    val = _MAXITER_BASE * (1.0 + _MAXITER_K * lz)
-    return int(max(_MAXITER_MIN, min(_MAXITER_MAX, val)))
+# auto_maxiter policy — IMPORTED from the owning module, never re-transcribed. This used to
+# be a hand-copied mirror justified by "keep this module torch-free", and it went stale:
+# it still carried base 500 / clamp 8000 after production raised them to 4000 / 67000 on
+# 2026-07-31 (docs/design/auto_maxiter.md), so every Location this module minted for the
+# emission intake got a cap 8x too low. The torch-free premise was wrong anyway —
+# `production_pins` imports only math/sys/pathlib and defers `score_lib` to inside
+# `make_scorer`. Re-exported under this module's own name because callers and tests reach
+# it as `descriptor.auto_maxiter`; pinned by tools/scoring/test_maxiter_policy.py.
+# Imported BARE (`from production_pins import`), not as `tools.scoring.production_pins`:
+# the two spellings produce two distinct module objects, and the ~41 modules that reach the
+# pins through `active_ckpt` all use the bare one. Matching them is what makes this the same
+# function object rather than a second copy that merely agrees.
+from production_pins import auto_maxiter  # noqa: E402,F401
 
 
 # --------------------------------------------------------------------------- #
@@ -169,7 +170,7 @@ def location_of(row: dict) -> loc_mod.Location:
 def load_admitted(ledger_path: Path, require_current: bool = False) -> list:
     """Yield admitted rows from a run-scoped ledger: current-decode ∧ <quality> ∧
     guard_pass ∧ distinct, where <quality> is source-aware (`admit_quality`): the q3 gate
-    `decoded_class==3` for a normal discovery source, or the v7 badness floor
+    `decoded_class>=3` for a normal discovery source, or the v7 badness floor
     `p_notbad>=FLOOR_PNOTBAD` for a FLOOR_ADMIT_SOURCES row (e.g. `q4_harvest`). With
     `require_current=True` a stale-decoded row RAISES (`cc.StaleDecodeError`) instead of
     being skipped — the strict verdict-trust form used to prove old-ledger rows are
