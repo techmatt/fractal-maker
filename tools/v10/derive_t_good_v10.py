@@ -50,7 +50,16 @@ TWO THINGS THIS PASS DECIDES, both required by protocol §4 and neither inherite
    did not exist when v8 was cut, and the julia leg is re-affirmed *because* the intervening
    supply work bought it nothing.
 
-  uv run python tools/v10/derive_t_good_v10.py
+THE DURABLE WRITE TAKES `--adopt`, matching derive_t_good_v{8,9} and keeper_cut_v9. v10 being
+the ACTIVE head is why the gate is needed, not a reason to skip it: `data/v10/t_good_derivation
+.json` is the record the four live cuts in `production_seeder.T_GOOD_OVERRIDES` were MIRRORED
+from, so a re-derivation over it moves the record while the running gate keeps the old numbers
+— and the desync is silent in both directions. A default-write is also exactly the v8/v9 hazard
+one flip early: the day v10 is superseded, this file becomes a record of a version that is no
+longer live, and nobody will be watching when the next version's build re-runs it.
+
+  uv run python tools/v10/derive_t_good_v10.py            # print + scratch/v10/, no write
+  uv run python tools/v10/derive_t_good_v10.py --adopt    # write data/v10/t_good_derivation.json
 """
 from __future__ import annotations
 
@@ -118,7 +127,13 @@ def select_population(rows) -> tuple[list, dict]:
     return kept, dropped
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    """Re-derive and PRINT. The durable write takes `--adopt` — same gate, same reason, as
+    derive_t_good_v{8,9}: the committed table is a RECORD (the four live cuts in
+    `production_seeder.T_GOOD_OVERRIDES` were mirrored from it), and a re-derivation that
+    lands without a matching mirror edit desyncs the running gate from its own provenance."""
+    argv = sys.argv[1:] if argv is None else argv
+    adopt = "--adopt" in argv
     if not EVAL.exists():
         sys.exit(f"missing {EVAL} — run tools/v10/eval_v10.py first (freezes the eval scores)")
     rows = [json.loads(l) for l in EVAL.read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -150,9 +165,28 @@ def main() -> int:
         for p, d in out["vs_v8"].items():
             print(f"    {p:20s} {d['v8']}  ->  {d[VERSION]}")
 
-    paths.durable(OUT_REL, mkparents=True).write_text(json.dumps(out, indent=2), encoding="utf-8")
-    print(f"\nwrote {OUT_REL} (durable) — ADOPTED table; mirror into "
-          f"production_seeder.T_GOOD_OVERRIDES")
+    blob = json.dumps(out, indent=2)
+    if adopt:
+        paths.durable(OUT_REL, mkparents=True).write_text(blob, encoding="utf-8")
+        print(f"\nwrote {OUT_REL} (durable) — ADOPTED table; mirror into "
+              f"production_seeder.T_GOOD_OVERRIDES in the SAME pass, or the live gate and "
+              f"its provenance disagree")
+        return 0
+
+    dest = paths.scratch("v10", "t_good_rederived.json")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(blob, encoding="utf-8")
+    print(f"\nwrote {dest} (scratch). {OUT_REL} is UNTOUCHED — it is the record the live "
+          f"production_seeder.T_GOOD_OVERRIDES cuts were mirrored from. Pass --adopt to "
+          f"overwrite it, and mirror the new cuts in the same pass.")
+    if (ROOT / OUT_REL).exists():
+        cur = json.loads((ROOT / OUT_REL).read_text(encoding="utf-8")).get("adopted", {})
+        moved = {p: (cur.get(p), out["adopted"].get(p))
+                 for p in sorted(set(cur) | set(out["adopted"]))
+                 if cur.get(p) != out["adopted"].get(p)}
+        print(f"  vs the committed table: "
+              + ("IDENTICAL" if not moved else
+                 ", ".join(f"{p} {a} -> {b}" for p, (a, b) in moved.items())))
     return 0
 
 

@@ -327,6 +327,9 @@ __pycache__/
 # sha256 in that pass, for all four of plan/cache_manifest/colormaps/aug_roster). The
 # negation goes with the file: a negation left behind declares durable a path nothing
 # writes, and the tracked-artifact canary would then trip on a file that is correctly gone.
+# AND SO DOES THE CLASS: build_plan.py writes the pair through paths.bulk(), not durable().
+# durable() asserts its target is not ignored, so while the two disagreed the rebuild that
+# justifies this deletion raised DurabilityError and never reached its own output.
 !/data/v8/aug_roster.json
 # The merged render library the cache tiles were actually coloured through. It is a
 # verbatim concatenation of two committed sources, so it is cheap to rebuild — but a

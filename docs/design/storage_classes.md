@@ -216,14 +216,28 @@ frozen-measurement hazard below]`
 `render_cache.py` (~4.7 h at 6 workers, unchanged) — the plan regeneration adds 15 s to a
 4.7-hour job. `data/v8/aug_cache` stays in `RELOCATED_PREFIXES` for exactly that reason.
 
-**The hazard this exposed, and it is not fixed.** `tools/v8/build_plan.py::amend_metadata`
-rewrites `data/v8/build_metadata.json` unconditionally, and a plain re-run sets
+**The pair is `bulk()`, not `durable()` — the deletion moved its class.** Deleting the files
+took their `.gitignore` negations with them ("the negation goes with the file"), and
+`durable()` asserts its target is not ignored — so from that commit `build_plan.py` raised
+`DurabilityError` on `plan.jsonl` and **the rebuild this deletion rests on could not
+complete**. A byte-reproducible artifact that is deliberately untracked is `bulk()`;
+`data/v8/plan` is not a `RELOCATED_PREFIXES` entry, so it resolves in-tree at the same path
+every reader already opens, merely untracked. `[fixed 2026-08-03; rebuild re-verified:
+plan.jsonl 53,391,652 B and cache_manifest.jsonl 92,985,596 B, both matching the byte counts
+recorded above, then deleted again]`
+
+**The frozen-measurement hazard is fixed.** `tools/v8/build_plan.py::amend_metadata` used to
+rewrite `data/v8/build_metadata.json` unconditionally, and a plain re-run set
 `aug_recipe.marginal_cost` to `null` — the committed palette-vs-geometry timing measurement,
-which only `--measure-marginal` produces. So the rebuild that makes this deletion safe also
-silently destroys a frozen measurement in a neighbouring file. Anyone rebuilding v8's plan
-must `git checkout -- data/v8/build_metadata.json` afterwards, or pass `--measure-marginal`.
-`[reported 2026-08-03; same shape as the derive_t_good_v8/v9 and keeper_cut_v9 hazards, all
-of which were fixed by making the durable write take an explicit flag]`
+which only `--measure-marginal` produces. A plain rebuild now **carries the committed value
+forward** (`carry_marginal`), per target: `build_metadata.json` and `aug_roster.json` hold
+different values and each keeps its own, so a no-flag rebuild leaves both byte-identical.
+Only `--measure-marginal` replaces the measurement. `data/v9/build_plan.py` carries the same
+guard on `data/v9/build_metadata.json`, whose committed value is `null` — the guard is there
+because v9 is permanently staged, so a re-run could only ever destroy the record of what was
+staged. `[fixed 2026-08-03, bracketed red and green; tools/audit/test_frozen_record_writes.py.
+Same shape as the derive_t_good_v8/v9/v10, keeper_cut_v9 and prereg hazards, all fixed by
+making the durable write take an explicit flag]`
 
 #### The preconditions, as they stood before the deletion
 

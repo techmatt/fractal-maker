@@ -597,16 +597,38 @@ def emit_location(r, drawable, plan_rows, cm_rows):
                 })
 
 
-def amend_metadata(recipe_block: dict) -> None:
+def carry_marginal(committed: dict | None, block: dict, measured: bool, label: str) -> dict:
+    """`block`, with `marginal_cost` taken back from the COMMITTED record unless this run
+    actually measured it. Same defect and same fix as `tools/v8/build_plan.py`: it is the one
+    key in the recipe block that records a past timing run rather than deriving from
+    committed inputs, so a plain rebuild used to overwrite it with `null`. v9's committed
+    value IS `null` today — the guard is here because v9 is permanently staged, so a re-run
+    can only ever destroy the record of what was staged, never improve it."""
+    if measured or committed is None:
+        return block
+    old = committed.get("marginal_cost")
+    if old == block.get("marginal_cost"):
+        return block
+    print(f"  PRESERVED {label} aug_recipe.marginal_cost from the committed record "
+          f"(this run did not pass --measure-marginal)")
+    return {**block, "marginal_cost": old}
+
+
+def amend_metadata(recipe_block: dict, measured: bool) -> None:
     """Write `data/v9/build_metadata.json`: v8's population/split block verbatim (v9 reads
     v8's manifest, so those decisions are literally the same ones) plus this build's
-    `aug_recipe`. Idempotent — a re-run rewrites both from the same sources."""
+    `aug_recipe`. Idempotent — a re-run rewrites both from the same sources.
+
+    The recipe's `marginal_cost` is carried back from v9's OWN committed metadata unless
+    `measured`; v8's file is the template for the population block only."""
     p = paths.durable(META_PATH, mkparents=True)
+    committed = json.loads(p.read_text(encoding="utf-8")).get("aug_recipe") \
+        if p.exists() else None
     meta = json.loads((ROOT / V8_META).read_text(encoding="utf-8"))
     meta.pop("aug_recipe", None)                  # v8's recipe block, superseded below
     meta["manifest_source"] = MANIFEST
     meta["manifest_sha256"] = recipe_block["recipe_parity"]["manifest_sha256"]
-    meta["aug_recipe"] = recipe_block
+    meta["aug_recipe"] = carry_marginal(committed, recipe_block, measured, META_PATH)
     p.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
@@ -847,15 +869,19 @@ def main() -> None:
             "one (twilight_shifted, ss2, scale 1.0, center) row per location."),
     }
 
-    paths.durable(ROSTER_OUT, mkparents=True).write_text(
-        json.dumps(recipe_block, indent=2), encoding="utf-8")
+    roster_p = paths.durable(ROSTER_OUT, mkparents=True)
+    roster_committed = json.loads(roster_p.read_text(encoding="utf-8")) \
+        if roster_p.exists() else None
+    roster_p.write_text(
+        json.dumps(carry_marginal(roster_committed, recipe_block, a.measure_marginal,
+                                  ROSTER_OUT), indent=2), encoding="utf-8")
     with paths.durable(PLAN_OUT, mkparents=True).open("w", encoding="utf-8") as f:
         for row in plan_rows:
             f.write(json.dumps(row) + "\n")
     with paths.durable(CACHE_MANIFEST_OUT, mkparents=True).open("w", encoding="utf-8") as f:
         for row in cm_rows:
             f.write(json.dumps(row) + "\n")
-    amend_metadata(recipe_block)
+    amend_metadata(recipe_block, a.measure_marginal)
 
     print(f"WROTE {ROSTER_OUT}")
     print(f"WROTE {PLAN_OUT}            ({len(plan_rows)} rows)")

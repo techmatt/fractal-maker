@@ -75,6 +75,21 @@ roster's own atoms sit a median 9.1e-4 apart, two buckets inside the floor.
 Distinct from the julia **hook** spacing (0.20, or 0.10 after the campaign-2 resume), which is
 10–20× coarser and was set on a different population. The two are not interchangeable.
 
+> **THE BASIS ABOVE IS SUPERSEDED; the value is not (yet).** `CSPACING_FLOOR` is still `1e-2`
+> and no sampler changed — but the table's central claim, "the near-dup rate reaches the
+> different-atom baseline at 1e-2", does not survive holding the **z-viewport fixed**. Each row
+> above pairs two images rendered at their OWN framings, so framing dissimilarity was scored as
+> look dissimilarity. Re-measured with both members of every pair at the same viewport
+> (`tools/studies/julia_c_stationarity.py`, 1,421 c × 3 shared viewports, 4,263 canonical
+> morph_clip embeddings), the near-dup fraction **decays smoothly with no knee and does not
+> reach baseline anywhere below ~3e-1**: 0.35 at 1e-2–3.2e-2 on constructed pairs, 0.13 on the
+> committed v2 pool's own pairs, against a 0.0036 different-region baseline. So 1e-2 is a
+> tolerance, not a saturation point, and the "reaches baseline" rule cannot pick a floor on a
+> smooth decay. `[measured 2026-08-03; curve, covariates and the pool-cost table in
+> scratch/julia_cstat/stationarity.json — rerun: `uv run python
+> tools/studies/julia_c_stationarity.py all` (~25 min). Adoption of a new value is a separate
+> pass; this note exists so the superseded basis is not re-quoted as if it still held.]`
+
 ### The 1×/4×/16× distance ladder buys ~1 look per atom, so v2 emits ONE rung
 
 Yields are flat across the three rungs (labelled ≥3: 68.0 / 63.5 / 68.0%, one-per-cluster

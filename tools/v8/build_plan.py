@@ -54,13 +54,21 @@ REUSE. There is none, and not for a recipe reason: the v4..v7 aug caches were de
   uv run python tools/v8/build_plan.py [--dry-run]
   uv run python tools/v8/build_plan.py --measure-marginal   # palette vs geometry slot cost
 
-Writes (all `paths.durable()`):
-  data/v8/colormaps.json       the merged render library: the 76-name pool + blue_orange
-  data/v8/aug_roster.json      the recipe, the pool, the held-out names, the draw rule
-  data/v8/plan.jsonl           one row per render, for `v4-render-batch`
-  data/v8/cache_manifest.jsonl one row per cached tile, for the trainer's loader
+Writes:
+  data/v8/colormaps.json       durable — the merged render library: the 76-name pool + blue_orange
+  data/v8/aug_roster.json      durable — the recipe, the pool, the held-out names, the draw rule
+  data/v8/plan.jsonl           BULK    — one row per render, for `v4-render-batch`
+  data/v8/cache_manifest.jsonl BULK    — one row per cached tile, for the trainer's loader
 and AMENDS data/v8/build_metadata.json with an `aug_recipe` block (see `amend_metadata`).
 The JPGs themselves are `paths.bulk()` -> ARTIFACTS_ROOT/data/v8/aug_cache/, out of tree.
+
+WHY THE PAIR IS bulk(), NOT durable(). They were durable until 2026-08-03, when 139.6 MiB of
+derived rows were deleted and their `.gitignore` negations went with them ("the negation goes
+with the file"). `durable()` asserts its target is not ignored, so from that commit THIS
+SCRIPT — the rebuild the deletion's whole argument rests on — raised `DurabilityError` on
+`plan.jsonl` and could not complete. Class follows the decision: a byte-reproducible artifact
+that is deliberately untracked is `bulk()`. `data/v8/plan` is not in `RELOCATED_PREFIXES`, so
+bulk() resolves it in-tree at the same path every reader already opens, just untracked.
 """
 from __future__ import annotations
 
@@ -402,16 +410,41 @@ def emit_location(r, drawable, plan_rows, cm_rows):
                 })
 
 
-def amend_metadata(recipe_block: dict) -> None:
+def carry_marginal(committed: dict | None, block: dict, measured: bool, label: str) -> dict:
+    """`block`, with `marginal_cost` taken back from the COMMITTED record unless this run
+    actually measured it.
+
+    `marginal_cost` is the one key in the recipe block that is a RECORD OF A PAST TIMING RUN
+    rather than a function of committed inputs: it is `None` unless `--measure-marginal` was
+    passed, so a plain rebuild used to overwrite a real measurement with `null`. Item 7's
+    byte-reproducibility proof found it that way — four of five files matched, this key was
+    the fifth. Carry-forward is per TARGET (each record keeps its own committed value)
+    because the two targets already disagree: `build_metadata.json` holds the measurement and
+    `aug_roster.json` holds `null`, and a plain rebuild must leave BOTH byte-identical."""
+    if measured or committed is None:
+        return block
+    old = committed.get("marginal_cost")
+    if old == block.get("marginal_cost"):
+        return block
+    print(f"  PRESERVED {label} aug_recipe.marginal_cost from the committed record "
+          f"(this run did not pass --measure-marginal)")
+    return {**block, "marginal_cost": old}
+
+
+def amend_metadata(recipe_block: dict, measured: bool) -> None:
     """Write the recipe into `build_metadata.json` under `aug_recipe`.
 
     That file is OWNED by build_manifest.py (population + split decisions); this adds one
     key and rewrites, idempotently. The ordering invariant is build_manifest -> build_plan,
     which already holds because the plan is derived from the manifest — so a manifest
-    rebuild that drops this key is always followed by the plan build that restores it."""
+    rebuild that drops this key is always followed by the plan build that restores it.
+
+    `measured` says whether this run RE-MEASURED the marginal cost; if it did not, the
+    committed `marginal_cost` is preserved (see `carry_marginal`)."""
     p = paths.durable(META_PATH)
     meta = json.loads(p.read_text(encoding="utf-8"))
-    meta["aug_recipe"] = recipe_block
+    meta["aug_recipe"] = carry_marginal(meta.get("aug_recipe"), recipe_block, measured,
+                                        META_PATH)
     p.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
@@ -607,15 +640,19 @@ def main() -> None:
             "one (twilight_shifted, ss2, scale 1.0, center) row per location."),
     }
 
-    paths.durable(ROSTER_OUT, mkparents=True).write_text(
-        json.dumps(recipe_block, indent=2), encoding="utf-8")
-    with paths.durable(PLAN_OUT, mkparents=True).open("w", encoding="utf-8") as f:
-        for row in plan_rows:
-            f.write(json.dumps(row) + "\n")
-    with paths.durable(CACHE_MANIFEST_OUT, mkparents=True).open("w", encoding="utf-8") as f:
-        for row in cm_rows:
-            f.write(json.dumps(row) + "\n")
-    amend_metadata(recipe_block)
+    roster_p = paths.durable(ROSTER_OUT, mkparents=True)
+    roster_committed = json.loads(roster_p.read_text(encoding="utf-8")) \
+        if roster_p.exists() else None
+    roster_p.write_text(
+        json.dumps(carry_marginal(roster_committed, recipe_block, a.measure_marginal,
+                                  ROSTER_OUT), indent=2), encoding="utf-8")
+    for rel, rws in ((PLAN_OUT, plan_rows), (CACHE_MANIFEST_OUT, cm_rows)):
+        p = paths.bulk(rel)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("w", encoding="utf-8") as f:
+            for row in rws:
+                f.write(json.dumps(row) + "\n")
+    amend_metadata(recipe_block, a.measure_marginal)
 
     print(f"WROTE {ROSTER_OUT}")
     print(f"WROTE {PLAN_OUT}            ({len(plan_rows)} rows)")

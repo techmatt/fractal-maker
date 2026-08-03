@@ -34,8 +34,21 @@ unchanged instrument the v7->v8->v9 chain is comparable on, and breaking that ch
 promote a 90-row arm with 22 positives would trade a comparable series for a noisier read.
 The uniform-90 carries its own pre-registered bar and is reported at equal prominence.
 
-  uv run python tools/v10/prereg.py            # writes data/v10/prereg_v10.json
+THE DEFAULT DOES NOT WRITE THE RECORD, and that is the whole point of the file. `build()`
+derives `eval_population`, the instrument-check delta and the uniform-90's power bar FROM the
+eval slice — so a re-run after the slice moves silently recomputes the "pre-registered" bar
+from post-hoc inputs, and the artifact still says "written before any v10 eval ran". A bar
+that lives in the eval script can be edited after seeing the numbers; a bar in a committed
+artifact that any re-run rewrites is the same defect one file further out.
+
+So: default prints and writes only to `scratch/prereg/`. `--adopt` writes the record, and
+even then it will not REWRITE one — an existing record may only gain APPENDED amendments,
+with every other key byte-identical. That is the invariant the AMENDMENTS block below states
+in prose ("Append only; never rewrite an entry") made checkable.
+
+  uv run python tools/v10/prereg.py            # print + scratch/prereg/prereg_v10.json
   uv run python tools/v10/prereg.py --show     # print the registered bars and exit
+  uv run python tools/v10/prereg.py --adopt    # write data/v10/prereg_v10.json (guarded)
 """
 from __future__ import annotations
 
@@ -298,9 +311,24 @@ AMENDMENTS = [
 ]
 
 
+def _diff_keys(old: dict, new: dict) -> list:
+    """Top-level keys, EXCLUDING `amendments`, on which the two records disagree."""
+    keys = (set(old) | set(new)) - {"amendments"}
+    return sorted(k for k in keys if old.get(k) != new.get(k))
+
+
+def _amendments_extend(old: list, new: list) -> bool:
+    """True iff `new` is `old` plus zero or more APPENDED entries. Append-only, made
+    checkable: a rewritten amendment is not an extension and must not adopt."""
+    return len(new) >= len(old) and new[:len(old)] == old
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--show", action="store_true", help="print and exit; write nothing")
+    ap.add_argument("--adopt", action="store_true",
+                    help="write data/v10/prereg_v10.json. Refuses to REWRITE an existing "
+                         "record: only appended amendments are permitted.")
     a = ap.parse_args()
     d = build()
     print("=" * 80)
@@ -317,9 +345,43 @@ def main():
               f"new={v['new']:>4}")
     if a.show:
         return 0
+
+    blob = json.dumps(d, indent=2)
+    record = paths.durable(OUT)
+    old = json.loads(record.read_text(encoding="utf-8")) if record.exists() else None
+
+    if old is not None:
+        changed = _diff_keys(old, d)
+        appended = _amendments_extend(old.get("amendments", []), d.get("amendments", []))
+        if changed or not appended:
+            print(f"\nREFUSING to rewrite {OUT}: this run does not merely APPEND an "
+                  f"amendment to the committed pre-registration.")
+            if changed:
+                print(f"  keys that differ: {', '.join(changed)}")
+            if not appended:
+                print(f"  amendments: committed {len(old.get('amendments', []))} entries; "
+                      f"this run's list is not an extension of them")
+            print("  The bars were registered before v10 was evaluated. `build()` derives "
+                  "them FROM the eval slice, so a slice that has moved since produces a "
+                  "post-hoc bar wearing a pre-hoc label. Nothing was written.")
+            return 2
+        if not a.adopt:
+            print(f"\n{OUT} exists and this run only appends amendments — pass --adopt to "
+                  f"write it.")
+
+    prev = paths.scratch("prereg", "prereg_v10.json")
+    prev.parent.mkdir(parents=True, exist_ok=True)
+    prev.write_text(blob, encoding="utf-8")
+    print(f"\nwrote {prev} (preview)")
+
+    if not a.adopt:
+        state = "does not exist" if old is None else "exists"
+        print(f"NOT written: {OUT} ({state}). Pass --adopt to write the committed record.")
+        return 0
+
     p = paths.durable(OUT, mkparents=True)
-    p.write_text(json.dumps(d, indent=2), encoding="utf-8")
-    print(f"\nWROTE {OUT}  — commit this BEFORE running eval_v10.py")
+    p.write_text(blob, encoding="utf-8")
+    print(f"WROTE {OUT}  — commit this BEFORE running eval_v10.py")
     return 0
 
 
