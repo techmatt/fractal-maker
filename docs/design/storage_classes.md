@@ -225,6 +225,34 @@ v8 artifacts is absent, so BACKWARD / FIELDS / COUNTS would go quietly green-by-
 fixture narrowed to `eval_slice.jsonl`, which is small, plain-text and not part of the
 deletion. `[code: tools/v8/test_v8_cache_alignment.py::v8]`
 
+**[RE-CHECKED 2026-08-02, after the v10 cache extension] Still blocked — and the set shrank
+from four files to two.** v10 does not rebuild v9's cache; it **extends** it (7,115 prefix
+locations keep naming `data/v9/aug_cache`, 1,267 appended ones render into `data/v10/`), and
+the legitimacy of reusing those 170,760 tiles rests on GATE A in
+`tools/v10/build_plan.py::assert_recipe_parity`: every prefix plan row must be byte-identical
+to its **v9** row. So the pair that arms the live recipe-parity gate is now **v9's**, not
+v8's. `data/v9/plan.jsonl` has three live readers and none is absence-tolerant — that gate
+(an unguarded `read_text`), `tools/v10/prereg.py`, and the `slow`
+`test_v10_build.py::test_prefix_plan_rows_are_byte_identical_to_v9s`. **It is no longer a
+deletion candidate at all**: it is the referent the current training generation is verified
+against. `data/v9/cache_manifest.jsonl` (96 MB) is read only by `train_v9`/`eval_v9`/v9's
+own `verify_cache_alignment`, all v9-scoped.
+
+Neither precondition has been taken, so the *remaining* candidate — v8's pair, 146 MB —
+stays blocked on exactly what blocked it before:
+
+  * **(a) unmet.** `tools/v9/build_plan.py::assert_recipe_parity` still guards both
+    comparisons with `if v8_plan.exists():` / `if v8_cache.exists():` (§3 and §4 of that
+    function). They remain absence-tolerant and neither names a rebuild command. Note the
+    gate they protect is a **v9** rebuild, and v9 is now permanently staged — so the honest
+    read is that hardening them buys a check on a rebuild nobody will run, and the v8 pair's
+    real remaining value is as the referent for a rollback-to-v8 rebuild.
+  * **(b) unmet.** `tools/v8/test_v8_cache_alignment.py`'s module fixture still
+    `pytest.skip`s when any of the four v8 artifacts is absent, so BACKWARD / FIELDS /
+    COUNTS would go green-by-absence the moment the files went.
+
+`[re-checked 2026-08-02 at this commit: `rg -n "v8/plan|v8/cache_manifest|v9/plan|v9/cache_manifest" --glob '*.py'` over tools/, classifier/, tests/, then reading each reader for absence tolerance]`
+
 **The reclaim is working-tree only.** All four are `filter=lfs` in `.gitattributes` and
 re-included by exact-path `.gitignore` negations, so `git rm` frees the working copy and
 `.git/lfs` reclaims **nothing** until a prune — and `git lfs prune --verify-remote` is not
