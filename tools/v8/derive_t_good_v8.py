@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 r"""Derive v8 per-partition t_good — the ADOPTED discovery table.
 
-The decode is the CORN keeper rule: predict "keeper" (label>=3) iff P(>=2) >= 0.5 AND
-P(>=3) >= t. Threshold search is an F_beta-argmax over a p_good grid, per fractal
-partition, on the unbiased eval slice, requiring >=15 positives; tie-break toward higher t.
+The decode is the CORN keeper rule AS SERVED: predict "keeper" (label>=3) iff
+`score_lib.corn_decode(P(>=2), P(>=3), t, P(>=4)) >= 3`, i.e. at least two of the three
+cutpoints met — **counting**, not chaining (see `keeper_pred`; this was an AND until
+2026-08-02, which is the same predicate only on a K=3 head). Threshold search is an
+F_beta-argmax over a p_good grid, per fractal partition, on the unbiased eval slice,
+requiring >=15 positives; tie-break toward higher t.
 
   * OBJECTIVE IS PER-PARTITION, not uniform. **Weight recall where supply is scarce,
     weight precision where supply is abundant.** A missed mandelbrot costs nothing —
@@ -44,7 +47,11 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+for _p in (ROOT, ROOT / "tools" / "mining"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
+from score_lib import corn_decode   # noqa: E402  THE served decode; the sweep must match it
 
 SCORES = ROOT / "data/v8/eval_scores_v8.jsonl"
 OUT = "data/v8/t_good_derivation.json"
@@ -52,6 +59,8 @@ OUT = "data/v8/t_good_derivation.json"
 BASELINE = 0.50
 MIN_POS = 15
 NB_GATE = 0.5                     # the fixed P(>=2) keeper gate (corn_decode)
+T_GREAT = 0.5                     # class 4's natural cutpoint — never calibrated per family
+KEEPER_CLASS = 3                  # admission is decoded-class >= 3
 GRID = np.round(np.arange(0.02, 0.98 + 1e-9, 0.01), 4)
 
 # Per-partition objective. beta > 1 weights RECALL, beta < 1 weights PRECISION. The
@@ -87,8 +96,48 @@ def fbeta(p: float, r: float, beta: float) -> float:
     return ((1.0 + b2) * p * r / denom) if denom > 0 else 0.0
 
 
-def prf_at(t, p_nb, p_gd, y, beta):
-    pred = (p_nb >= NB_GATE) & (p_gd >= t)
+def great_column(rows, version: str):
+    """`<version>_p_ge4` as an array, or None when the slice has no third cutpoint.
+
+    A K=3 slice (v5..v7) has no `p_ge4` column and `None` is the K=3 decode — byte-identical
+    to the AND rule this sweep used to hardcode, so re-deriving an old slice is unchanged.
+    The column is required to be present on ALL rows or none: a slice where only some rows
+    carry it would sweep two different predicates over one population."""
+    key = f"{version}_p_ge4"
+    have = [key in r for r in rows]
+    if not any(have):
+        return None
+    if not all(have):
+        raise SystemExit(f"{key} present on {sum(have)}/{len(have)} rows — a partially K=4 "
+                         f"slice would sweep two predicates over one population")
+    return np.array([r[key] for r in rows])
+
+
+def keeper_pred(p_nb, p_gd, p_gr, t):
+    """Vectorized twin of `corn_decode(p_nb, p_gd, t, p_gr) >= KEEPER_CLASS` — THE SERVED RULE.
+
+    The gate that runs in production is `corn_decode(...) >= 3`, and that rule **counts**
+    thresholds met (`class = 1 + #{p_ge2>=0.5, p_ge3>=t, p_ge4>=t_great}`); it does not chain
+    them. This sweep used to search `(p_ge2>=0.5) & (p_ge3>=t)` — an AND, which equals the
+    served rule only on a **K=3** head. On K=4 (v8 onward) they diverge on exactly the rows
+    where the count reaches 2 without the `p_ge3` leg: `p_ge4>=t_great` together with either
+    `p_ge2>=0.5, p_ge3<t` or `p_ge3>=t, p_ge2<0.5`. Those rows are possible, not hypothetical
+    — CORN's cumulative probabilities are not guaranteed monotone (the monotonicity check in
+    `tools/v6/threshold_sweep.py`), and the FIRST row of `data/v10/eval_scores_v10.jsonl` has
+    `p_ge4` 0.153 above `p_ge3` 0.033. Sweeping a stricter predicate than the served one picks
+    an argmax for a gate that is not the gate.
+
+    Vectorized rather than a `corn_decode` loop because LOO-OOF is O(n^2 * |GRID|) calls;
+    `tools/v8/test_t_good_sweep_decode.py` holds the two forms to elementwise agreement on
+    the live eval slice and on the divergence cases, so this stays a twin and not a fork."""
+    cnt = (p_nb >= NB_GATE).astype(int) + (p_gd >= t).astype(int)
+    if p_gr is not None:
+        cnt = cnt + (p_gr >= T_GREAT).astype(int)
+    return cnt >= (KEEPER_CLASS - 1)
+
+
+def prf_at(t, p_nb, p_gd, p_gr, y, beta):
+    pred = keeper_pred(p_nb, p_gd, p_gr, t)
     tp = int((pred & (y == 1)).sum()); fp = int((pred & (y == 0)).sum())
     fn = int((~pred & (y == 1)).sum())
     prec = tp / (tp + fp) if (tp + fp) else 0.0
@@ -96,7 +145,7 @@ def prf_at(t, p_nb, p_gd, y, beta):
     return prec, rec, fbeta(prec, rec, beta), tp, fp, fn
 
 
-def best_t(p_nb, p_gd, y, beta):
+def best_t(p_nb, p_gd, p_gr, y, beta):
     """F_beta-argmax over GRID, tie-break toward HIGHER t (protocol).
 
     Also reports the argmax PLATEAU — the contiguous run of grid steps around the winner
@@ -106,7 +155,7 @@ def best_t(p_nb, p_gd, y, beta):
     best = (-1.0, -1.0, None)  # (f, t, block)
     curve = []
     for t in GRID:
-        prec, rec, fb, tp, fp, fn = prf_at(t, p_nb, p_gd, y, beta)
+        prec, rec, fb, tp, fp, fn = prf_at(t, p_nb, p_gd, p_gr, y, beta)
         curve.append((float(t), fb))
         if fb > best[0] + 1e-12 or (abs(fb - best[0]) <= 1e-12 and t > best[1]):
             best = (fb, float(t), {"t": float(t), "precision": round(prec, 4),
@@ -119,7 +168,7 @@ def best_t(p_nb, p_gd, y, beta):
     return blk
 
 
-def loo_fbeta(p_nb, p_gd, y, beta):
+def loo_fbeta(p_nb, p_gd, p_gr, y, beta):
     """Leave-one-out OOF F_beta: for each held-out location, choose t on the rest, predict the
     held-out, then score F_beta over the pooled OOF predictions. Optimism estimate."""
     n = len(y)
@@ -127,8 +176,9 @@ def loo_fbeta(p_nb, p_gd, y, beta):
     idx = np.arange(n)
     for i in range(n):
         m = idx != i
-        t = best_t(p_nb[m], p_gd[m], y[m], beta)["t"]
-        preds[i] = int((p_nb[i] >= NB_GATE) and (p_gd[i] >= t))
+        t = best_t(p_nb[m], p_gd[m], None if p_gr is None else p_gr[m], y[m], beta)["t"]
+        preds[i] = int(corn_decode(p_nb[i], p_gd[i], t,
+                                   None if p_gr is None else p_gr[i], T_GREAT) >= KEEPER_CLASS)
     tp = int(((preds == 1) & (y == 1)).sum()); fp = int(((preds == 1) & (y == 0)).sum())
     fn = int(((preds == 0) & (y == 1)).sum())
     prec = tp / (tp + fp) if (tp + fp) else 0.0
@@ -139,18 +189,21 @@ def loo_fbeta(p_nb, p_gd, y, beta):
 def derive_partition(grp, betas=(0.5, 2.0), version: str = "v8") -> dict:
     """Every objective's argmax + OOF for one partition, keyed 'F0.5'/'F2'.
 
-    `version` selects the score-column prefix (`<version>_p_ge2` / `_p_ge3`) and defaults to
-    "v8", so every existing call is byte-unchanged. It exists so a NEW eval slice is
-    re-derived through THIS estimator rather than a copy of it — a copied deriver is how two
-    thresholds that are supposed to be comparable stop being comparable."""
+    `version` selects the score-column prefix (`<version>_p_ge2` / `_p_ge3` / `_p_ge4`) and
+    defaults to "v8". It exists so a NEW eval slice is re-derived through THIS estimator
+    rather than a copy of it — a copied deriver is how two thresholds that are supposed to be
+    comparable stop being comparable. `_p_ge4` is read when the slice has it (K=4, v8 onward)
+    because the SERVED decode counts it; a K=3 slice has no such column and decodes as it
+    always did."""
     y = np.array([1 if g["label"] >= 3 else 0 for g in grp])
     p_nb = np.array([g[f"{version}_p_ge2"] for g in grp])
     p_gd = np.array([g[f"{version}_p_ge3"] for g in grp])
+    p_gr = great_column(grp, version)
     out = {}
     for beta in betas:
-        blk = best_t(p_nb, p_gd, y, beta)
+        blk = best_t(p_nb, p_gd, p_gr, y, beta)
         blk["beta"] = beta
-        blk["fbeta_oof"] = loo_fbeta(p_nb, p_gd, y, beta)
+        blk["fbeta_oof"] = loo_fbeta(p_nb, p_gd, p_gr, y, beta)
         out[beta_name(beta)] = blk
     return out
 
@@ -180,7 +233,10 @@ def build_table(rows, version: str = "v8", eval_slice: str = None, objective: di
     print(f"{version} t_good — PER-FAMILY objective (recall where supply is scarce, precision "
           "where it is abundant)")
     print("=" * 104)
-    print(f"  decode: keeper(label>=3) iff P(>=2)>={NB_GATE} AND P(>=3)>=t   grid {GRID[0]}..{GRID[-1]}")
+    k4 = great_column(rows, version) is not None
+    print(f"  decode: keeper(label>=3) iff corn_decode(P(>=2), P(>=3), t"
+          f"{', P(>=4)' if k4 else ''}) >= {KEEPER_CLASS}  [threshold COUNTING, the served rule"
+          f"{'' if k4 else '; K=3 slice, == the historical AND'}]   grid {GRID[0]}..{GRID[-1]}")
     print(f"  UNCALIBRATED -> runs at baseline {BASELINE} where <{MIN_POS} positives or no unbiased "
           f"eval slice; NO class-4 t; NO native tightening\n")
     print(f"  {'partition':20s} {'obj':>5} {'n':>4} {'pos':>4}  {'t_good':>7} {'prec':>6} {'rec':>6} "
@@ -250,7 +306,10 @@ def build_table(rows, version: str = "v8", eval_slice: str = None, objective: di
                                "money) -> F2."),
         "objective_by_partition": {k: beta_name(v) for k, v in obj.items()},
         "default_objective": beta_name(DEFAULT_BETA),
-        "decode": f"keeper(label>=3) iff P(>=2)>={NB_GATE} AND P(>=3)>=t",
+        "decode": (f"keeper(label>=3) iff score_lib.corn_decode(P(>=2), P(>=3), t"
+                   f"{', P(>=4)' if k4 else ''}, t_great={T_GREAT}) >= {KEEPER_CLASS} — the "
+                   f"SERVED rule, which COUNTS thresholds met rather than chaining them"
+                   f"{'' if k4 else ' (K=3 slice: identical to the historical AND)'}"),
         "baseline": BASELINE, "min_pos": MIN_POS,
         "no_class4_threshold": True,
         "class4_decode": "natural cutpoint P(>=4) >= 0.5, no per-family calibration",

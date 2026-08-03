@@ -11,7 +11,7 @@
     "julia:multibrot5": "F2"
   },
   "default_objective": "F2",
-  "decode": "keeper(label>=3) iff P(>=2)>=0.5 AND P(>=3)>=t",
+  "decode": "keeper(label>=3) iff score_lib.corn_decode(P(>=2), P(>=3), t, P(>=4), t_great=0.5) >= 3 \u2014 the SERVED rule, which COUNTS thresholds met rather than chaining them",
   "baseline": 0.5,
   "min_pos": 15,
   "no_class4_threshold": true,
@@ -30,7 +30,7 @@
       "status": "DERIVED",
       "by_objective": {
         "F0.5": {
-          "t": 0.47,
+          "t": 0.48,
           "precision": 0.6364,
           "recall": 0.7368,
           "fbeta": 0.6542,
@@ -39,9 +39,9 @@
           "fn": 5,
           "plateau": [
             0.47,
-            0.47
+            0.48
           ],
-          "plateau_steps": 1,
+          "plateau_steps": 2,
           "beta": 0.5,
           "fbeta_oof": 0.5285
         },
@@ -74,19 +74,19 @@
       "by_objective": {
         "F0.5": {
           "t": 0.55,
-          "precision": 0.68,
-          "recall": 0.7083,
-          "fbeta": 0.6855,
-          "tp": 17,
-          "fp": 8,
-          "fn": 7,
+          "precision": 0.6667,
+          "recall": 0.75,
+          "fbeta": 0.6818,
+          "tp": 18,
+          "fp": 9,
+          "fn": 6,
           "plateau": [
             0.55,
             0.55
           ],
           "plateau_steps": 1,
           "beta": 0.5,
-          "fbeta_oof": 0.6667
+          "fbeta_oof": 0.6641
         },
         "F2": {
           "t": 0.03,
@@ -116,20 +116,20 @@
       "status": "DERIVED",
       "by_objective": {
         "F0.5": {
-          "t": 0.55,
-          "precision": 0.8125,
-          "recall": 0.5909,
-          "fbeta": 0.7558,
-          "tp": 13,
-          "fp": 3,
-          "fn": 9,
+          "t": 0.06,
+          "precision": 0.7037,
+          "recall": 0.8636,
+          "fbeta": 0.7308,
+          "tp": 19,
+          "fp": 8,
+          "fn": 3,
           "plateau": [
-            0.49,
-            0.55
+            0.03,
+            0.06
           ],
-          "plateau_steps": 7,
+          "plateau_steps": 4,
           "beta": 0.5,
-          "fbeta_oof": 0.6667
+          "fbeta_oof": 0.6132
         },
         "F2": {
           "t": 0.06,
@@ -237,12 +237,11 @@
     "mandelbrot": 0.03
   },
   "notes": [
-    "julia:multibrot3: F0.5 picks t=0.47 vs F2 t=0.27 \u2014 objective choice is load-bearing, not cosmetic",
+    "julia:multibrot3: F0.5 picks t=0.48 vs F2 t=0.27 \u2014 objective choice is load-bearing, not cosmetic",
     "julia:multibrot3: adopted F2 in-sample 0.880 vs OOF 0.841 (gap +0.039) \u2014 threshold overfit at n=54, pos=19; the OOF value is the honest one",
     "julia:multibrot4: F0.5 picks t=0.55 vs F2 t=0.03 \u2014 objective choice is load-bearing, not cosmetic",
     "julia:multibrot4: adopted F2 in-sample 0.851 vs OOF 0.791 (gap +0.060) \u2014 threshold overfit at n=51, pos=24; the OOF value is the honest one",
     "julia:multibrot4: adopted t=0.03 sits on a 2-step plateau \u2014 knife-edge, re-derive rather than nudge",
-    "julia:multibrot5: F0.5 picks t=0.55 vs F2 t=0.06 \u2014 objective choice is load-bearing, not cosmetic",
     "julia:multibrot5: adopted F2 in-sample 0.826 vs OOF 0.789 (gap +0.037) \u2014 threshold overfit at n=39, pos=22; the OOF value is the honest one",
     "mandelbrot: adopted F0.5 in-sample 0.395 vs OOF 0.357 (gap +0.038) \u2014 threshold overfit at n=526, pos=26; the OOF value is the honest one",
     "mandelbrot: adopted t=0.03 sits on a 1-step plateau \u2014 knife-edge, re-derive rather than nudge"

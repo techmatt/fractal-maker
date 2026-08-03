@@ -67,6 +67,15 @@ ACTIVE_CKPT = "data/classifier/v10/model_best.pt"   # v10 unified location class
 # silent: tools/atlas/test_steered_frontier.py holds keeper_cuts' provenance stamp AND
 # TAU_H_FIDELITY_BASE_MODEL to ACTIVE_VERSION, and tools/scoring/test_t_good_adoption.py
 # holds T_GOOD_OVERRIDES to the ACTIVE version's derivation artifact.
+#
+# ROLLING BACK TO v8 MUST RE-DERIVE ITS TABLE, NOT COPY IT. data/v8/t_good_derivation.json
+# was cut when the sweep's admission predicate was an AND, which is not the rule corn_decode
+# serves on a K=4 head; re-derived through the aligned estimator (2026-08-02) v8's mandelbrot
+# t_good is 0.14, not the committed 0.85. The artifact is left as the record of what v8
+# actually served, so a rollback that copies it reinstates a threshold chosen against the
+# wrong predicate — and test_t_good_adoption's drift gate will go red on mandelbrot the
+# moment ACTIVE_VERSION is v8. v10's table is unaffected (byte-identical under both rules);
+# the divergence and its 8 causal rows are pinned by tools/v8/test_t_good_sweep_decode.py.
 # ================================================================================
 V8_CKPT_ROLLBACK = "data/classifier/v8/model_best.pt"   # one-flip rollback anchor
 V7_CKPT_ROLLBACK = "data/classifier/v7/model_best.pt"   # also the frozen pref_loc_v1 ranker pin
