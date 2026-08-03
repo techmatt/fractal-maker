@@ -155,11 +155,22 @@ def stage_queue(args) -> int:
 # draw — round-robin over cells, best-first inside a cell
 # =========================================================================== #
 def draw_round_robin(rows, cell_of, n: int, *, order_key):
-    """`n` rows, round-robin to +/-1 over `cell_of`, best-first inside each cell.
+    """`n` rows, round-robin over `cell_of`, best-first inside each cell.
 
     Floor-then-remainder over the cells — every non-empty cell gives up its best remaining
     row before any cell gives up its second — so the chunk is the top of the queue
-    CONDITIONED on not letting one cell own the page."""
+    CONDITIONED on not letting one cell own the page.
+
+    "BALANCED TO +/-1" IS AN INVARIANT ABOUT NON-EXHAUSTED CELLS, and stating it as a flat
+    spread over all cells is wrong — measured on this run's own queue, where the flat spread
+    is 78 while the draw is behaving perfectly. Real cells differ in SUPPLY by two orders of
+    magnitude (`precanon_dup|julia:mandelbrot` has hundreds of rows, `canon_not_q3|mandelbrot`
+    has one), and a cell that gave up everything it had cannot be faulted for giving up less
+    than a cell that did not. So the returned per-cell record carries `available` beside
+    `taken`, and the acceptance check is: every cell is within 1 of the maximum take, OR it
+    was drained. A flat-spread assertion here would have gone red on a correct draw, which is
+    the failure mode `verification_practice.md` §4 calls getting trained out.
+    """
     cells = defaultdict(list)
     for r in rows:
         cells[cell_of(r)].append(r)
@@ -178,7 +189,22 @@ def draw_round_robin(rows, cell_of, n: int, *, order_key):
         for k in keys:
             if _round < take[k]:
                 out.append(cells[k][_round])
-    return out, {str(k): take[k] for k in keys}
+    rep = {str(k): dict(taken=take[k], available=len(cells[k]),
+                        drained=take[k] >= len(cells[k])) for k in keys}
+    return out, rep
+
+
+def cells_balanced(rep: dict) -> tuple[bool, str]:
+    """The acceptance predicate for a round-robin draw. Pure, so `verify` and a test share it.
+
+    Balanced iff every cell is within 1 of the maximum take OR was drained."""
+    if not rep:
+        return True, "no cells"
+    mx = max(v["taken"] for v in rep.values())
+    bad = {k: v for k, v in rep.items()
+           if v["taken"] < mx - 1 and not v["drained"]}
+    return (not bad), (f"max take {mx}; under-taken and NOT drained: {bad}" if bad
+                       else f"max take {mx}, all cells within 1 or drained")
 
 
 def _render_block(r: dict) -> dict:
@@ -486,9 +512,17 @@ def stage_verify(args) -> int:
         check("no calibration aids", bj.get("calibration_aids", "").startswith("NONE"))
         check("canonical crop recipe stamped",
               bj["render_recipe"]["path"] == cc.CANONICAL_CROP_RECIPE)
-        cells = Counter(r["provenance"].get("stratum") for r in rows)
-        spread = max(cells.values()) - min(cells.values()) if cells else 0
-        check("cells balanced to +/-1", spread <= 1, f"spread {spread}: {dict(cells)}")
+        # The invariant is per-cell, not a flat spread: a drained cell gave up everything it
+        # had. `batch.json` carries the draw's own `taken/available/drained` record, which is
+        # what makes this checkable on the built bytes rather than re-derivable.
+        rep = (bj.get("sampling_metaparameters") or {}).get("cells") or {}
+        okc, detail = cells_balanced(rep)
+        check("cells balanced to +/-1 among non-drained cells", okc, detail)
+        served_cells = Counter(r["provenance"].get("stratum") for r in rows)
+        check("every drawn cell is present in the built batch",
+              set(served_cells) == {k for k, v in rep.items() if v["taken"] > 0},
+              f"{len(served_cells)} cells in bytes vs "
+              f"{sum(1 for v in rep.values() if v['taken'] > 0)} drawn")
         if batch_id == UNIFORM:
             # The one property that makes this an instrument rather than a sample of a run.
             bad = [r for r in rows if any(

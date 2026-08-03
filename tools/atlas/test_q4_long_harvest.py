@@ -217,6 +217,64 @@ def test_the_walk_already_enforces_the_interior_rule_at_the_engine():
 
 
 # =========================================================================== #
+# the round-robin draw
+# =========================================================================== #
+def _b():
+    sys.path.insert(0, str(ROOT / "tools" / "sourcing"))
+    import build_q4_harvest_batches as b
+    return b
+
+
+def test_the_draw_balances_cells_that_have_supply():
+    b = _b()
+    rows = [dict(cell="a", k=i) for i in range(50)] + \
+           [dict(cell="b", k=i) for i in range(50)]
+    out, rep = b.draw_round_robin(rows, lambda r: r["cell"], 20,
+                                  order_key=lambda r: r["k"])
+    assert len(out) == 20
+    assert rep["a"]["taken"] == rep["b"]["taken"] == 10
+    assert b.cells_balanced(rep)[0]
+
+
+def test_a_drained_cell_does_not_fail_the_balance_check():
+    """The defect a flat-spread assertion has: real cells differ in supply by two orders of
+    magnitude, so a correct draw shows a large spread and a flat check goes red on it. On
+    this run's own queue the flat spread was 78 with the draw behaving perfectly."""
+    b = _b()
+    rows = [dict(cell="big", k=i) for i in range(200)] + [dict(cell="tiny", k=0)]
+    out, rep = b.draw_round_robin(rows, lambda r: r["cell"], 100,
+                                  order_key=lambda r: r["k"])
+    assert rep["tiny"] == dict(taken=1, available=1, drained=True)
+    assert rep["big"]["taken"] == 99
+    flat_spread = max(v["taken"] for v in rep.values()) - \
+        min(v["taken"] for v in rep.values())
+    assert flat_spread == 98, "the flat spread a naive check would have asserted on"
+    ok, detail = b.cells_balanced(rep)
+    assert ok, detail          # ... and the correct invariant passes
+
+
+def test_the_balance_check_is_red_for_a_real_imbalance():
+    """Prove it red: a cell that is under-taken while it still HAD rows is the defect."""
+    b = _b()
+    rep = {"a": dict(taken=10, available=50, drained=False),
+           "b": dict(taken=2, available=50, drained=False)}
+    ok, detail = b.cells_balanced(rep)
+    assert not ok and "b" in detail
+
+
+def test_the_draw_takes_best_first_inside_a_cell():
+    """Round-robin over CELLS, ranked order WITHIN one — the chunk is the top of the queue
+    conditioned on not letting one cell own the page."""
+    b = _b()
+    rows = [dict(cell="a", k=k) for k in (5, 1, 3)] + \
+           [dict(cell="b", k=k) for k in (2, 9)]
+    out, _ = b.draw_round_robin(rows, lambda r: r["cell"], 4,
+                                order_key=lambda r: r["k"])
+    assert [r["k"] for r in out if r["cell"] == "a"] == [1, 3]
+    assert [r["k"] for r in out if r["cell"] == "b"] == [2, 9]
+
+
+# =========================================================================== #
 # the reconcile identity
 # =========================================================================== #
 def test_the_gate_is_inside_the_batch_reconcile_identity():
