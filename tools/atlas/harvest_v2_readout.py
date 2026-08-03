@@ -42,7 +42,8 @@ def _jl(p: Path):
             if l.strip()]
 
 
-def mix(summary: dict, launch_intended: dict | None = None) -> dict:
+def mix(summary: dict, launch_intended: dict | None = None,
+        effective: dict | None = None) -> dict:
     """1. Realized vs intended, three denominations, plus the L1 gap that summarises them.
 
     The L1 gap is half the sum of |delta| — total variation distance — so it reads directly as
@@ -71,12 +72,26 @@ def mix(summary: dict, launch_intended: dict | None = None) -> dict:
         rows.append(dict(partition=p,
                          launch=li.get(p),
                          intended=m["minutes"][p]["intended"],
+                         effective=m["minutes"][p].get("effective"),
                          min=realized,
                          cand=m["candidates"][p]["realized"],
                          admit=m["admitted"][p]["realized"],
                          delta_min=m["minutes"][p]["delta"],
+                         delta_effective=m["minutes"][p].get("delta_effective"),
                          delta_launch=(round(realized - li[p], 4) if p in li else None)))
     gap = m["l1_gap_minutes"]
+    eff_gap = m.get("l1_gap_minutes_effective")
+    if eff_gap is None and effective:
+        # The summary predates the live instrumentation: score against the vector recomputed
+        # from the trace by `effective_from_trace`, and say so in the record.
+        ev = effective.get("batch_weighted_mean") or {}
+        for r in rows:
+            p = r["partition"]
+            if p in ev:
+                r["effective"] = ev[p]
+                r["delta_effective"] = round(r["min"] - ev[p], 4)
+        if all(r["delta_effective"] is not None for r in rows):
+            eff_gap = round(sum(abs(r["delta_effective"]) for r in rows) / 2.0, 4)
     launch_gap = (round(sum(abs(r["delta_launch"]) for r in rows) / 2.0, 4)
                   if li and all(r["delta_launch"] is not None for r in rows) else None)
     # `worst` is the most UNDER-served partition, not the largest |delta|. In a two-partition
@@ -84,17 +99,67 @@ def mix(summary: dict, launch_intended: dict | None = None) -> dict:
     # failure a mix report is about is the starved side: v1's story is "native realized 19.6%
     # of an intended 70%", never "julia over-ran".
     worst = min(rows, key=lambda r: (r["delta_min"], r["partition"]))
-    return dict(l1_gap=gap, l1_gap_vs_launch=launch_gap, per_partition=rows, worst=worst,
+    return dict(l1_gap=gap, l1_gap_vs_launch=launch_gap, l1_gap_effective=eff_gap,
+                per_partition=rows, worst=worst,
                 verdict=("PASS" if gap <= 0.10 else "MISS"),
                 verdict_vs_launch=(None if launch_gap is None else
                                    ("PASS" if launch_gap <= 0.10 else "MISS")),
+                verdict_effective=(None if eff_gap is None else
+                                   ("PASS" if eff_gap <= 0.10 else "MISS")),
+                headline_verdict=(None if eff_gap is None else
+                                  ("PASS" if eff_gap <= 0.10 else "MISS")),
                 bar="L1 gap <= 0.10 of minutes (i.e. <=10% of the run's time allocated to the "
                     "wrong partition). Not pre-registered — stated here so the number has a "
                     "reading, and quoted beside the raw gap either way.",
-                two_intents="`intended` is the FINAL (price-updated) allocation; `launch` is "
-                            "the vector pre-registered in run_config.json before batch 1. "
-                            "Prices move the intent during the run, so the two differ and "
-                            "both are quoted.")
+                three_intents=(
+                    "THE HEADLINE IS `l1_gap_effective`. Three vectors, and which one a gap "
+                    "is taken against decides what it is a statement about. "
+                    "`launch` is what run_config.json pre-registered before batch 1 — the "
+                    "fixed bar, and a gap against it mixes the pop's error with everything "
+                    "the price model learned afterwards. `intended` is the FINAL "
+                    "price-updated allocation; a gap against it grades the run on a target "
+                    "the run itself moved. `effective` is the time-weighted mean of the "
+                    "vector the pop ACTUALLY ACTED ON: a julia partition cannot be popped "
+                    "into existence, so when its queue is empty its demand folds into its "
+                    "c-plane parent by the documented routing rule, and a run that serves "
+                    "the parent is following instructions. Only the third is a statement "
+                    "about the allocator."))
+
+
+def effective_from_trace(run_dir: Path) -> dict | None:
+    """Recompute the EFFECTIVE intent from `quota_trace.jsonl` for a run whose summary
+    predates the live instrumentation.
+
+    Uses the SHIPPED `pop_quota.fold_julia_intent` on each traced batch's `(intended,
+    queue_lens)` rather than a local reimplementation — a second copy of the fold rule here
+    would let the readout and the pop disagree about what the pop did, which is the one thing
+    this function exists to establish.
+
+    BATCH-weighted, and that is not the same as the live TIME-weighted mean. Per-batch
+    durations are not in the trace, so this is the weaker of the two and is labelled as such;
+    the `final` vector (the last batch's) is reported beside it because it needs no weighting
+    assumption at all."""
+    rows = _jl(run_dir / "quota_trace.jsonl")
+    if not rows or "intended" not in rows[0]:
+        return None
+    import pop_quota as pq                                    # noqa: E402
+    parts = list(rows[0]["intended"])
+    acc = {p: 0.0 for p in parts}
+    last = None
+    for r in rows:
+        eff = (r.get("effective")
+               or pq.fold_julia_intent(r["intended"], r.get("queue_lens") or {}, parts))
+        last = eff
+        for p in parts:
+            acc[p] += eff.get(p, 0.0)
+    n = len(rows)
+    return dict(batch_weighted_mean={p: round(v / n, 4) for p, v in acc.items()},
+                final={p: round(v, 4) for p, v in (last or {}).items()},
+                n_batches=n,
+                weighting="BATCH-weighted (per-batch durations are not in the trace); the "
+                          "live path accumulates a TIME-weighted mean, which is the stronger "
+                          "one",
+                source="recomputed via pop_quota.fold_julia_intent")
 
 
 def floor_vs_deficit(summary: dict) -> dict:
@@ -205,13 +270,15 @@ def readout(run_dir: Path) -> dict:
     if cfg_p.exists():
         cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
         launch = ((cfg.get("pop_quota") or {}).get("intended") or {}).get("share")
+    eff_trace = effective_from_trace(run_dir)
     return dict(
         run=run_dir.name,
         active_min=s.get("active_min"), wall_min=s.get("wall_min"),
         batches=s.get("batches"), wall_over_active=s.get("wall_over_active"),
         totals=s.get("totals"),
         launch_intended=launch,
-        realized_vs_intended=mix(s, launch),
+        effective_intent=eff_trace,
+        realized_vs_intended=mix(s, launch, eff_trace),
         floor_vs_deficit=floor_vs_deficit(s),
         view_screen=view_screen(s),
         triggered_lineage=triggered_lineage(run_dir),
@@ -237,18 +304,23 @@ def main():
     m = rep["realized_vs_intended"]
     print("\n=== REALIZED vs INTENDED ===", file=sys.stderr)
     if m.get("per_partition"):
-        print(f"{'partition':22s}{'launch':>8}{'intend':>8}{'min':>8}{'cand':>8}"
-              f"{'admit':>8}{'d(launch)':>11}", file=sys.stderr)
+        print(f"{'partition':22s}{'launch':>8}{'intend':>8}{'effect':>8}{'min':>8}"
+              f"{'cand':>8}{'admit':>8}{'d(eff)':>9}", file=sys.stderr)
         for r in m["per_partition"]:
             lz = "  n/a  " if r["launch"] is None else f"{r['launch']:8.3f}"
-            dl = "     n/a  " if r["delta_launch"] is None else f"{r['delta_launch']:+11.3f}"
-            print(f"{r['partition']:22s}{lz}{r['intended']:8.3f}{r['min']:8.3f}"
-                  f"{r['cand']:8.3f}{r['admit']:8.3f}{dl}", file=sys.stderr)
-        print(f"L1 gap vs FINAL intent  = {m['l1_gap']:.3f}  -> {m['verdict']}",
+            ef = "  n/a  " if r["effective"] is None else f"{r['effective']:8.3f}"
+            de = "    n/a  " if r["delta_effective"] is None else f"{r['delta_effective']:+9.3f}"
+            print(f"{r['partition']:22s}{lz}{r['intended']:8.3f}{ef}{r['min']:8.3f}"
+                  f"{r['cand']:8.3f}{r['admit']:8.3f}{de}", file=sys.stderr)
+        print(f"L1 gap vs FINAL     intent = {m['l1_gap']:.3f}  -> {m['verdict']}",
               file=sys.stderr)
         if m.get("l1_gap_vs_launch") is not None:
-            print(f"L1 gap vs LAUNCH intent = {m['l1_gap_vs_launch']:.3f}  -> "
-                  f"{m['verdict_vs_launch']}   (the pre-registered bar)", file=sys.stderr)
+            print(f"L1 gap vs LAUNCH    intent = {m['l1_gap_vs_launch']:.3f}  -> "
+                  f"{m['verdict_vs_launch']}   (pre-registered, fixed)", file=sys.stderr)
+        if m.get("l1_gap_effective") is not None:
+            print(f"L1 gap vs EFFECTIVE intent = {m['l1_gap_effective']:.3f}  -> "
+                  f"{m['verdict_effective']}   <-- THE HEADLINE (what the pop acted on)",
+                  file=sys.stderr)
 
 
 if __name__ == "__main__":

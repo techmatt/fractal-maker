@@ -475,7 +475,23 @@ class PopQuota:
             admitted={p: 0 for p in self.partitions})
         self.trace_path = self.run_dir / "quota_trace.jsonl"
         self._last_alloc: Allocation | None = None
+        self._last_eff: dict | None = None
         self._served: str | None = None
+        # TIME-WEIGHTED MEAN EFFECTIVE INTENT, accumulated as the run goes.
+        #
+        # This is the vector the realized mix must actually be scored against, and leaving it
+        # to be recomputed offline is what made the first proving run read as a MISS. The
+        # STATED intent contains demand for julia partitions that cannot be popped into
+        # existence; by the §3 routing rule that demand folds into the c-plane parent, so a
+        # run that serves the parent correctly is scored as over-serving a native. Measured on
+        # harvest_v2_proving_20260803: L1 gap 0.352 against the stated intent, 0.091 against
+        # the effective one — the same run, and only the second is a statement about the pop.
+        #
+        # Weighted by MINUTES rather than by batches because the effective vector changes with
+        # queue occupancy, and an intent that held while an expensive batch ran governed more
+        # of the run than one that held through a cheap one.
+        self._eff_accum: dict = {p: 0.0 for p in self.partitions}
+        self._eff_weight: float = 0.0
 
     # ---- allocation ----------------------------------------------------- #
     def allocation(self) -> Allocation:
@@ -487,9 +503,17 @@ class PopQuota:
         servable = {p for p, n in queue_lens.items() if n > 0}
         eff = fold_julia_intent(alloc.share, queue_lens, self.partitions,
                                 self.julia_route_gain)
+        self._last_eff = eff
         part = choose_partition(eff, self.state.realized_min, servable, self.cost.capped)
         self._served = part
         return part
+
+    def effective_intent(self) -> dict:
+        """The time-weighted mean of the vector the pop actually acted on. Falls back to the
+        current allocation before any time has been charged."""
+        if self._eff_weight <= 0:
+            return dict(self._last_eff or self.allocation().share)
+        return {p: v / self._eff_weight for p, v in self._eff_accum.items()}
 
     # ---- accounting ----------------------------------------------------- #
     def charge(self, partition: str, minutes: float) -> bool:
@@ -502,6 +526,10 @@ class PopQuota:
         bucket = (self._last_alloc.bucket(partition) if self._last_alloc else "deficit")
         b = st.realized_by_bucket.setdefault(partition, {"floor": 0.0, "deficit": 0.0})
         b[bucket] = b.get(bucket, 0.0) + minutes
+        if self._last_eff:
+            for p, v in self._last_eff.items():
+                self._eff_accum[p] = self._eff_accum.get(p, 0.0) + v * minutes
+            self._eff_weight += minutes
         return self.cost.charge(partition, minutes)
 
     def credit_decode(self, partition: str, decoded_class):
@@ -536,15 +564,25 @@ class PopQuota:
         `discovery_pipeline.md` §3.1 measured the 19.6% in; admissions is what the corpus
         actually gains."""
         alloc = self._last_alloc or self.allocation()
+        eff = self.effective_intent()
         out = {}
         for denom in ("minutes", "candidates", "admitted", "pops"):
             got = self.realized_share(denom)
             out[denom] = {p: dict(intended=round(alloc.share.get(p, 0.0), 4),
+                                  effective=round(eff.get(p, 0.0), 4),
                                   realized=round(got.get(p, 0.0), 4),
-                                  delta=round(got.get(p, 0.0) - alloc.share.get(p, 0.0), 4))
+                                  delta=round(got.get(p, 0.0) - alloc.share.get(p, 0.0), 4),
+                                  delta_effective=round(got.get(p, 0.0) - eff.get(p, 0.0), 4))
                           for p in self.partitions}
         out["l1_gap_minutes"] = round(
             sum(abs(out["minutes"][p]["delta"]) for p in self.partitions) / 2.0, 4)
+        # THE GAP THAT IS A STATEMENT ABOUT THE POP. The stated intent carries demand for
+        # julia partitions that cannot be popped into existence; §3's routing folds that
+        # demand into the c-plane parent, so scoring against the stated vector charges a run
+        # for serving the parent exactly as instructed.
+        out["l1_gap_minutes_effective"] = round(
+            sum(abs(out["minutes"][p]["delta_effective"]) for p in self.partitions) / 2.0, 4)
+        out["effective_intent"] = {p: round(v, 4) for p, v in sorted(eff.items())}
         return out
 
     def floor_vs_deficit(self) -> dict:
@@ -564,6 +602,9 @@ class PopQuota:
         rec = dict(batch=batch, chosen=chosen,
                    bucket=(alloc.bucket(chosen) if chosen else None),
                    intended={p: round(alloc.share.get(p, 0.0), 4) for p in self.partitions},
+                   # The vector the pop ACTED on, logged rather than left to be recomputed
+                   # from `intended` + `queue_lens` by a reader who knows the fold rule.
+                   effective={p: round(v, 4) for p, v in (self._last_eff or {}).items()},
                    realized={p: round(v, 4)
                              for p, v in self.realized_share("minutes").items()},
                    deficit={p: round(self.deficit.get(p, 0.0), 3) for p in self.partitions},

@@ -405,3 +405,54 @@ def test_no_p_good_or_classifier_score_reaches_the_pop_decision():
     body = inspect.getsource(pq.choose_partition).split('"""')[-1]
     for banned in ("p_good", "eord", "pgood", "score"):
         assert banned not in body, banned
+
+
+# =========================================================================== #
+# 8. the EFFECTIVE intent — the vector the pop actually acts on
+# =========================================================================== #
+def test_the_effective_intent_is_what_the_pop_acted_on(tmp_path):
+    """A julia partition with no queue cannot be popped; §3's routing folds its demand into
+    its c-plane parent. So a run that serves the parent is following instructions, and
+    scoring it against the STATED vector charges it for obeying them."""
+    q = _quota(tmp_path, {"multibrot3": 0.0, "julia:multibrot3": 0.0})
+    q.pick({"multibrot3": 5, "julia:multibrot3": 0})       # twin unservable -> folds
+    eff = q.effective_intent()
+    assert eff["julia:multibrot3"] == 0.0
+    assert eff["multibrot3"] == pytest.approx(1.0)
+
+
+def test_the_effective_intent_is_time_weighted_not_batch_weighted(tmp_path):
+    """The effective vector changes with queue occupancy, and an intent that held while an
+    expensive batch ran governed more of the run than one that held through a cheap one."""
+    q = _quota(tmp_path, {"multibrot3": 0.0, "julia:multibrot3": 0.0})
+    q.pick({"multibrot3": 5, "julia:multibrot3": 0})       # folded: mb3 gets it all
+    q.charge("multibrot3", 90.0)                            # ... for 90 minutes
+    q.pick({"multibrot3": 5, "julia:multibrot3": 5})       # both servable: 50/50
+    q.charge("julia:multibrot3", 10.0)                      # ... for 10
+    eff = q.effective_intent()
+    assert eff["multibrot3"] == pytest.approx(0.9 * 1.0 + 0.1 * 0.5)
+
+
+def test_the_mix_report_carries_both_gaps_and_they_can_disagree(tmp_path):
+    """The proving run's headline correction: L1 0.352 against the stated intent and 0.091
+    against the effective one, on the same run. Only the second is a statement about the pop.
+    Both are reported, because the first is what a fixed target would have wanted."""
+    q = _quota(tmp_path, {"multibrot3": 0.0, "julia:multibrot3": 0.0})
+    q.pick({"multibrot3": 5, "julia:multibrot3": 0})
+    q.charge("multibrot3", 60.0)
+    m = q.mix_report()
+    assert m["l1_gap_minutes"] == pytest.approx(0.5)            # vs stated 50/50
+    assert m["l1_gap_minutes_effective"] == pytest.approx(0.0)  # vs effective 100/0
+    assert m["effective_intent"]["multibrot3"] == pytest.approx(1.0)
+
+
+def test_the_trace_logs_the_effective_vector_rather_than_leaving_it_derivable(tmp_path):
+    """Telemetry, not arithmetic. The first proving run's effective intent had to be
+    recomputed offline from `intended` + `queue_lens` by someone who knew the fold rule."""
+    q = _quota(tmp_path, {"multibrot3": 0.0, "julia:multibrot3": 0.0})
+    q.pick({"multibrot3": 5, "julia:multibrot3": 0})
+    q.log_choice(1, "multibrot3", {"multibrot3": 5, "julia:multibrot3": 0})
+    rec = json.loads((tmp_path / "quota_trace.jsonl").read_text(encoding="utf-8").strip())
+    assert rec["effective"]["multibrot3"] == pytest.approx(1.0)
+    assert rec["effective"]["julia:multibrot3"] == 0.0
+    assert rec["intended"] != rec["effective"]

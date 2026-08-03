@@ -76,8 +76,28 @@ def test_a_perfect_mix_passes_and_a_v1_shaped_miss_does_not():
 
 def test_the_mix_carries_all_three_denominations_because_v1_was_quoted_in_the_second():
     r = hr.mix(_summary())["per_partition"][0]
-    assert set(r) == {"partition", "launch", "intended", "min", "cand", "admit",
-                      "delta_min", "delta_launch"}
+    assert set(r) == {"partition", "launch", "intended", "effective", "min", "cand", "admit",
+                      "delta_min", "delta_effective", "delta_launch"}
+
+
+def test_the_effective_gap_is_the_headline_and_can_pass_where_the_stated_one_misses():
+    """The proving run's own correction. julia:multibrot3/4/5 had empty queues for 81-97% of
+    batches, so their demand folded into the c-plane parents by the documented routing rule.
+    Scored against the STATED vector that reads as natives over-running (L1 0.352); scored
+    against what the pop ACTED on it is 0.091. Same run."""
+    s = _summary()
+    s["pop_quota"]["mix"]["minutes"] = {
+        "mb3": dict(intended=0.05, effective=0.395, realized=0.378, delta=0.328,
+                    delta_effective=-0.017),
+        "j:mb3": dict(intended=0.95, effective=0.605, realized=0.622, delta=-0.328,
+                      delta_effective=0.017)}
+    for d in ("candidates", "admitted"):
+        s["pop_quota"]["mix"][d] = {k: dict(v) for k, v in s["pop_quota"]["mix"]["minutes"].items()}
+    s["pop_quota"]["mix"]["l1_gap_minutes"] = 0.328
+    s["pop_quota"]["mix"]["l1_gap_minutes_effective"] = 0.017
+    got = hr.mix(s)
+    assert got["verdict"] == "MISS" and got["verdict_effective"] == "PASS"
+    assert got["headline_verdict"] == "PASS"
 
 
 def test_both_intents_are_reported_because_prices_move_the_intent_mid_run():
