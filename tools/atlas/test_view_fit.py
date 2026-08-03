@@ -17,6 +17,7 @@ Run:  uv run python -m pytest tools/atlas/test_view_fit.py -q
 """
 from __future__ import annotations
 
+import inspect
 import json
 import math
 import re
@@ -205,6 +206,27 @@ def test_the_uniform_leg_is_never_in_the_fit(record):
 LIVE_SORT_MODULES = ("view_screen.py", "maneuver_view_screen.py", "steered_frontier.py",
                      "view_frame_sweep.py", "view_screen_gate.py", "view_rescreen.py")
 
+# RE-AIMED A SECOND TIME (harvest v2 §3, 2026-08-03), and for the same class of reason the
+# comment below records for the first re-aiming.
+#
+# The contract has always been "the fitted score does not ORDER anything until its bar is
+# read". The guard implemented that as "no live sort path IMPORTS it", which held only while
+# nobody needed the score for anything else. Harvest v2 needs exactly that: `view_fit_v1.1`
+# recorded as a COLUMN on every screened row, because the pre-registered bar reads at a
+# SITTING's labels and the q4 sitting could not read it — neither score existed on any row,
+# so NOT-ADOPT was the absence of evidence rather than a measured loss. Recording requires
+# importing, so an import ban now forbids the one thing that would let the bar be read, while
+# still not testing the thing it cares about.
+#
+# So the modules split by DUTY:
+#   * IMPORT_BANNED — pure sort / gate / sweep paths with no recording duty. The import ban
+#     stays exactly as it was, and it is still a real tripwire.
+#   * RECORDING — the two modules that must write the column. They may import; what they may
+#     NOT do is let it order anything, and that is asserted FUNCTIONALLY below (a row with a
+#     huge `view_fit` and a poor `composite` must still sort last) rather than by grep.
+RECORDING_MODULES = ("maneuver_view_screen.py", "steered_frontier.py")
+IMPORT_BANNED_MODULES = tuple(m for m in LIVE_SORT_MODULES if m not in RECORDING_MODULES)
+
 
 # The contract is "no live sort path IMPORTS the fitted score", and the guard used to test
 # it with `"view_fit" not in source`. That is a guard pinned to PROSE, and it went red on
@@ -228,18 +250,44 @@ def imports_view_fit(src: str) -> bool:
     return bool(_IMPORT_RE.search(src) or _SPEC_LOAD_RE.search(src))
 
 
-def test_no_live_sort_path_imports_the_fitted_score():
-    """The staging contract. `composite_v3` stays the live sort key until an adoption
-    decision is made against its own pre-registered bar; this is what makes that a fact
-    about the tree rather than a sentence in a module doc."""
+def test_no_pure_sort_path_imports_the_fitted_score():
+    """The staging contract for every module with no recording duty. `composite_v3` stays
+    the live sort key until an adoption decision is made against its own pre-registered bar;
+    this is what makes that a fact about the tree rather than a sentence in a module doc."""
     seen = 0
-    for name in LIVE_SORT_MODULES:
+    for name in IMPORT_BANNED_MODULES:
         p = HERE / name
         assert p.exists(), f"{name} moved — this guard must be re-aimed, not deleted"
         seen += 1
         assert not imports_view_fit(p.read_text(encoding="utf-8")), (
             f"{name} IMPORTS view_fit — the fitted score is staged, not adopted")
-    assert seen == len(LIVE_SORT_MODULES)
+    assert seen == len(IMPORT_BANNED_MODULES) >= 4
+
+
+def test_the_recording_modules_record_the_column_and_do_not_order_by_it():
+    """The two modules that MAY import it. Non-vacuous in both directions: the column must
+    actually be produced (a "staged" score nobody records is the state that made the bar
+    unreadable), and the sort key must still be `composite`."""
+    import maneuver_view_screen as mvs
+    src = (HERE / "maneuver_view_screen.py").read_text(encoding="utf-8")
+    assert imports_view_fit(src), "the recording module must import the score it records"
+    assert "view_fit" in mvs.STATE_KEYS, "the column must survive a checkpoint"
+    sort_src = inspect.getsource(mvs.composite_sort_key)
+    assert "composite" in sort_src and "view_fit" not in sort_src
+
+
+def test_a_high_view_fit_cannot_outrank_a_high_composite():
+    """The FUNCTIONAL half, and the one that would survive a refactor a grep would not:
+    two screened rows, the first with a far better `view_fit` and a far worse `composite`.
+    `composite_sort_key` must still put the second one on top. If the fitted score were ever
+    quietly promoted to the key, this inverts."""
+    import maneuver_view_screen as mvs
+    fit_wins = dict(screened=True, composite=0.10, view_fit=99.0)
+    comp_wins = dict(screened=True, composite=0.90, view_fit=-99.0)
+    assert mvs.composite_sort_key(comp_wins) > mvs.composite_sort_key(fit_wins)
+    # ... and an unscreened row still sorts below both, which is the older contract this
+    # must not have broken on the way past.
+    assert mvs.composite_sort_key(dict(screened=False)) < mvs.composite_sort_key(fit_wins)
 
 
 def test_the_import_guard_is_red_for_a_real_adoption():

@@ -35,6 +35,7 @@ per-tile statistic is a numpy pass rather than a second engine pass over the who
 """
 from __future__ import annotations
 
+import math
 import sys
 import tempfile
 import time
@@ -50,6 +51,7 @@ for _p in (HERE, ROOT / "tools" / "orbital", ROOT / "tools"):
 import field_metrics as fm           # noqa: E402
 import maneuver_screen as msc        # noqa: E402  (the cap policy + the spawn-shaped pool)
 import view_screen as vs             # noqa: E402  (the measures and composite_v3)
+import view_fit as vfit              # noqa: E402  (the staged v1.1 fitted score)
 
 SCREEN_WORKERS = msc.SCREEN_WORKERS  # concurrent engine PROCESSES (the CLAUDE.md cap)
 SCREEN_THREADS = msc.SCREEN_THREADS  # per process: a 64x36 field wants exactly one
@@ -70,7 +72,9 @@ def view_key(atom_key, k) -> str:
 # rewriting ~25 MB, 840 times, to re-derive numbers already on disk twice.
 STATE_KEYS = ("screened", "screen_reason", "composite", "vetoed", "size_factor",
               "radial_range", "radial_rings", "interior_fraction",
-              "band_coverage", "band_coverage_q25", "view_fw", fm.POLICY_KEY)
+              "band_coverage", "band_coverage_q25", "view_fw", fm.POLICY_KEY,
+              # harvest v2: BOTH sourcing scores ride every screened row (see `_score`).
+              "view_fit", "view_fit_p_notbad", "view_fit_model", "view_fit_reason")
 
 
 def compact(rec: dict) -> dict:
@@ -115,33 +119,104 @@ class ViewScreenCache:
     """
 
     def __init__(self, params, *, workers: int = SCREEN_WORKERS,
-                 threads: int = SCREEN_THREADS, fields=None):
+                 threads: int = SCREEN_THREADS, fields=None, fit_model=None):
         self.params = params
         self.by_key: dict[str, dict] = {}
         self.workers, self.threads = int(workers), int(threads)
         self.fields = fields                 # RunFieldCache | None
+        # The staged `view_fit_v1.1` model. RECORDED, never a sort key: the pre-registered
+        # adoption bar (delta-AP >= +0.1181 on labelled outcome) has not been read, and the
+        # q4 sitting could not read it because NEITHER score existed on any row. That is the
+        # gap this closes — carrying both columns is what makes the bar readable at the first
+        # v2 sitting. `None` disables it; the column then says WHY it is absent rather than
+        # silently not appearing.
+        self.fit_model = fit_model
         self.n_hits = self.n_screened = self.n_fields_cached = 0
+        self.n_view_fit = 0
         self.screen_s = 0.0
 
     def get(self, key: str):
         return self.by_key.get(key)
 
-    def _score(self, rec: dict) -> dict:
-        """Attach the composite and the two terms a readout needs to explain it.
+    def _view_fit(self, rec: dict, field, window_scale) -> dict:
+        """`view_fit_v1.1` on this row. Never raises — a scoring failure must cost the column,
+        never the candidate, exactly as a field-cache failure must not cost the screen.
+
+        Two of the twelve features are not in the screen record and are supplied here:
+        `falloff_rate`/`falloff_half` come from `view_fit.falloff_features(field)` on the SAME
+        array the measures were taken from (so a cached re-score and a live score are the same
+        computation), and `log10_size_rel` needs the ATOM's `window_scale`, which only a
+        maneuver-originated view has. A row without one is not dropped: the model's own
+        recorded `impute` median covers it and `view_fit_reason` names the substitution, so a
+        later read can partition on it instead of discovering it as a distribution shift."""
+        if self.fit_model is None:
+            return dict(view_fit=None, view_fit_p_notbad=None, view_fit_model=None,
+                        view_fit_reason="no_model_loaded")
+        try:
+            fw = float(rec.get("view_fw") or 0.0)
+            reason = None
+            feats = {
+                "band_coverage": float(rec["band_coverage"]),
+                "band_coverage_q25": float(rec["band_coverage_q25"]),
+                "log1p_radial_range": math.log1p(max(0.0, float(rec["radial_range"]))),
+                "log1p_radial_rings": math.log1p(max(0.0, float(rec["radial_rings"]))),
+                "interior_fraction": float(rec["interior_fraction"]),
+                "log10_fw": math.log10(fw) if fw > 0 else 0.0,
+                "cap_headroom": (float(rec["cap_headroom"])
+                                 if rec.get("cap_headroom") is not None else float("nan")),
+                "clamped": 1.0 if rec.get("clamped") else 0.0,
+                "composite_v3": float(rec["composite"]),
+            }
+            if window_scale and fw > 0:
+                feats["log10_size_rel"] = math.log10(float(window_scale) / fw)
+            else:
+                feats["log10_size_rel"] = float("nan")
+                reason = "imputed:log10_size_rel"
+            if field is not None:
+                ff = vfit.falloff_features(field)
+                feats["falloff_rate"] = float(ff["falloff_rate"])
+                feats["falloff_half"] = float(ff["falloff_half"])
+            else:
+                feats["falloff_rate"] = feats["falloff_half"] = float("nan")
+                reason = ("imputed:falloff" if reason is None
+                          else reason + "+falloff")
+            return dict(view_fit=round(self.fit_model.score(feats), 6),
+                        view_fit_p_notbad=round(self.fit_model.p_notbad(feats), 6),
+                        view_fit_model=vfit.MODEL_ID_V11, view_fit_reason=reason)
+        except Exception as e:                                   # noqa: BLE001
+            return dict(view_fit=None, view_fit_p_notbad=None,
+                        view_fit_model=vfit.MODEL_ID_V11,
+                        view_fit_reason=f"error:{type(e).__name__}:{str(e)[:80]}")
+
+    def _score(self, rec: dict, *, field=None, window_scale=None) -> dict:
+        """Attach BOTH sourcing scores plus the terms a readout needs to explain them.
 
         `composite` is `composite_v3` — the LIVE sort key (`view_screen`'s module doc; v4 was
-        measured and rejected). An unscreened row gets `composite=None`, never a sentinel
-        number: a sentinel would sort somewhere, and "we could not measure this" is not a
-        position on the quality axis. Selection handles the None by sorting it last, which
-        is a selection decision and belongs there, not here.
+        measured and rejected). `view_fit` is the staged v1.1 fitted score, recorded beside
+        it and NOT used to order anything: the pre-registered bar decides that, and it reads
+        at a sitting's labels, not here. Recording both is the whole point — the q4 sitting
+        recorded neither, so the bar was unreadable and NOT-ADOPT was the absence of evidence
+        rather than a measured loss.
+
+        An unscreened row gets `composite=None`, never a sentinel number: a sentinel would
+        sort somewhere, and "we could not measure this" is not a position on the quality axis.
+        Selection handles the None by sorting it last, which is a selection decision and
+        belongs there, not here. `view_fit` is None there for the same reason AND because it
+        takes `composite_v3` as one of its own twelve features.
         """
         if not rec.get("screened"):
-            return dict(rec, composite=None, vetoed=None, size_factor=None)
+            return dict(rec, composite=None, vetoed=None, size_factor=None,
+                        view_fit=None, view_fit_p_notbad=None, view_fit_model=None,
+                        view_fit_reason="unscreened")
         p = self.params
-        return dict(rec,
-                    composite=round(float(vs.composite_v3(rec, p)), 6),
-                    vetoed=bool(vs.is_vetoed(rec, p.veto)),
-                    size_factor=round(float(vs.size_factor(rec, p)), 6))
+        out = dict(rec,
+                   composite=round(float(vs.composite_v3(rec, p)), 6),
+                   vetoed=bool(vs.is_vetoed(rec, p.veto)),
+                   size_factor=round(float(vs.size_factor(rec, p)), 6))
+        out.update(self._view_fit(out, field, window_scale))
+        if out.get("view_fit") is not None:
+            self.n_view_fit += 1
+        return out
 
     def screen_many(self, jobs: list[dict], *, budget_s: float | None = None) -> dict:
         """`jobs` are `{view_key, cx, cy, fw, family, ...}`. Returns view_key -> record.
@@ -185,7 +260,7 @@ class ViewScreenCache:
         with ThreadPoolExecutor(max_workers=max(1, min(self.workers, len(items)))) as ex:
             for j, rec, field in ex.map(one, items):
                 key = j["view_key"]
-                rec = self._score(rec)
+                rec = self._score(rec, field=field, window_scale=j.get("window_scale"))
                 self.by_key[key] = rec
                 out[key] = rec
                 self.n_screened += 1
@@ -209,7 +284,7 @@ class ViewScreenCache:
     def state_dict(self) -> dict:
         return dict(by_key={k: compact(v) for k, v in self.by_key.items()},
                     n_hits=self.n_hits, n_screened=self.n_screened,
-                    n_fields_cached=self.n_fields_cached,
+                    n_fields_cached=self.n_fields_cached, n_view_fit=self.n_view_fit,
                     screen_s=round(self.screen_s, 3))
 
     def load_state(self, d: dict):
@@ -217,6 +292,7 @@ class ViewScreenCache:
         self.n_hits = int(d.get("n_hits", 0))
         self.n_screened = int(d.get("n_screened", 0))
         self.n_fields_cached = int(d.get("n_fields_cached", 0))
+        self.n_view_fit = int(d.get("n_view_fit", 0))
         self.screen_s = float(d.get("screen_s", 0.0))
 
 

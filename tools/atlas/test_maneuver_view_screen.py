@@ -280,6 +280,109 @@ def test_state_round_trips_through_the_checkpoint(monkeypatch):
 
 
 # =========================================================================== #
+# harvest v2 §3 — BOTH sourcing scores on every screened row
+# =========================================================================== #
+def _screened_rec(fw=1e-3):
+    return dict(screened=True, radial_range=5.0, radial_rings=10.0, interior_fraction=0.05,
+                band_coverage=0.8, band_coverage_q25=0.7, view_fw=float(fw),
+                cap_headroom=0.9, clamped=False)
+
+
+def _fit_cache(monkeypatch, *, field=_field(0), rec=None):
+    import view_fit as vfit
+    monkeypatch.setattr(mvs, "screen_view",
+                        lambda cx, cy, fw, **kw: (dict(rec or _screened_rec(fw)), field))
+    return mvs.ViewScreenCache(_params(), workers=1, fit_model=vfit.load_model_v11())
+
+
+def test_a_screened_row_carries_BOTH_sourcing_scores(monkeypatch):
+    """The whole of §3, in one assertion. The q4 sitting could not read the pre-registered
+    +0.1181 bar because NEITHER score existed on any row — so the bar's NOT-ADOPT was the
+    absence of evidence, not a measured loss. A screened row must now carry both."""
+    c = _fit_cache(monkeypatch)
+    rec = c.screen_many([dict(view_key="a|16.0", cx="0", cy="0", fw=1e-3,
+                              window_scale=1e-4)])["a|16.0"]
+    assert rec["composite"] is not None
+    assert rec["view_fit"] is not None and rec["view_fit_p_notbad"] is not None
+    assert rec["view_fit_model"] == "view_fit_v1.1"
+    assert rec["view_fit_reason"] is None, "nothing should have needed imputing here"
+    assert c.n_view_fit == 1
+
+
+def test_both_scores_survive_the_checkpoint(monkeypatch):
+    """A column that dies at a resume is a column the second half of a run does not have."""
+    c = _fit_cache(monkeypatch)
+    c.screen_many([dict(view_key="a|16.0", cx="0", cy="0", fw=1e-3, window_scale=1e-4)])
+    blob = json.loads(json.dumps(c.state_dict()))
+    c2 = mvs.ViewScreenCache(_params(), workers=1)
+    c2.load_state(blob)
+    assert c2.get("a|16.0")["view_fit"] == c.get("a|16.0")["view_fit"]
+    assert c2.n_view_fit == 1
+
+
+def test_a_missing_window_scale_imputes_and_says_so(monkeypatch):
+    """`log10_size_rel` needs the ATOM's size, which a non-maneuver view does not have. The
+    row is scored on the model's own recorded median and NAMES the substitution, so a later
+    read can partition on it instead of meeting it as an unexplained distribution shift."""
+    c = _fit_cache(monkeypatch)
+    rec = c.screen_many([dict(view_key="a|16.0", cx="0", cy="0", fw=1e-3)])["a|16.0"]
+    assert rec["view_fit"] is not None
+    assert rec["view_fit_reason"] == "imputed:log10_size_rel"
+
+
+def test_a_missing_field_imputes_the_falloff_pair_and_says_so(monkeypatch):
+    c = _fit_cache(monkeypatch, field=None)
+    rec = c.screen_many([dict(view_key="a|16.0", cx="0", cy="0", fw=1e-3,
+                              window_scale=1e-4)])["a|16.0"]
+    assert rec["view_fit"] is not None and rec["view_fit_reason"] == "imputed:falloff"
+
+
+def test_the_two_scores_are_not_the_same_number(monkeypatch):
+    """VACUITY GUARD. If `view_fit` were accidentally wired to return the composite, every
+    test above would still pass and the bar would compare a score with itself."""
+    c = _fit_cache(monkeypatch)
+    out = [c.screen_many([dict(view_key=f"a|{i}", cx="0", cy="0", fw=1e-3,
+                               window_scale=10.0 ** (-3 - i))])[f"a|{i}"]
+           for i in range(3)]
+    assert len({r["composite"] for r in out}) == 1        # composite ignores window_scale
+    assert len({r["view_fit"] for r in out}) == 3         # view_fit does not
+    assert all(r["view_fit"] != r["composite"] for r in out)
+
+
+def test_an_unscreened_row_carries_neither_score_and_names_why(monkeypatch):
+    import view_fit as vfit
+    monkeypatch.setattr(mvs, "screen_view", lambda *a, **k: (
+        dict(screened=False, screen_reason="f64_spacing_wall_at_screen_geometry"), None))
+    c = mvs.ViewScreenCache(_params(), workers=1, fit_model=vfit.load_model_v11())
+    rec = c.screen_many([dict(view_key="a|None", cx="0", cy="0", fw=1e-30)])["a|None"]
+    assert rec["composite"] is None and rec["view_fit"] is None
+    assert rec["view_fit_reason"] == "unscreened"
+    assert c.n_view_fit == 0
+
+
+def test_a_scoring_failure_costs_the_column_not_the_candidate(monkeypatch):
+    """Same contract the field cache has: the screen must never raise. A row with a broken
+    measure comes back with `composite` intact and `view_fit` naming its own error."""
+    c = _fit_cache(monkeypatch)
+    monkeypatch.setattr(c.fit_model, "score",
+                        lambda feats: (_ for _ in ()).throw(RuntimeError("boom")))
+    rec = c.screen_many([dict(view_key="a|16.0", cx="0", cy="0", fw=1e-3,
+                              window_scale=1e-4)])["a|16.0"]
+    assert rec["composite"] is not None
+    assert rec["view_fit"] is None and rec["view_fit_reason"].startswith("error:RuntimeError")
+
+
+def test_no_model_means_the_column_says_so_rather_than_vanishing(monkeypatch):
+    """A missing column and a column that could not be computed read identically in a
+    readout six months later, and only one of them is a defect."""
+    monkeypatch.setattr(mvs, "screen_view",
+                        lambda cx, cy, fw, **kw: (_screened_rec(fw), _field(0)))
+    c = mvs.ViewScreenCache(_params(), workers=1)          # fit_model=None
+    rec = c.screen_many([dict(view_key="a|16.0", cx="0", cy="0", fw=1e-3)])["a|16.0"]
+    assert rec["view_fit"] is None and rec["view_fit_reason"] == "no_model_loaded"
+
+
+# =========================================================================== #
 # the seam: what the WALK does with the view screen
 # =========================================================================== #
 import minibrot_maneuvers as mnv          # noqa: E402

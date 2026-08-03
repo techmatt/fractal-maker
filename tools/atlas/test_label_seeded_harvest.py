@@ -9,6 +9,7 @@ corpus tree; `verify` is the standing check and it is a driver, not a test.
 """
 from __future__ import annotations
 
+import inspect
 import json
 import math
 import sys
@@ -386,21 +387,31 @@ def test_p_notbad_is_monotone_in_the_score_but_saturates():
 
 
 def test_the_live_sort_key_elsewhere_is_still_composite_v3():
-    """v1.1 orders THIS queue and nothing else. Nothing in the discovery path may import it
-    — the same staged-not-adopted contract `test_view_fit` holds for v1.
+    """v1.1 orders THIS queue and nothing else — the staged-not-adopted contract.
 
-    Tests the IMPORT, not the substring. The substring form went red on 2026-08-03 for a
-    module that only NAMED view_fit in its written-down pre-registration — see
-    `test_view_fit.imports_view_fit`, which is the one owner of the predicate and is proved
-    red there by injection."""
+    RE-AIMED 2026-08-03 (harvest v2 §3), and the routing decision is `test_view_fit`'s:
+    the discovery path now RECORDS `view_fit_v1.1` as a column on every screened row,
+    because the pre-registered bar reads at a sitting's labels and no row had ever carried
+    either score. Recording requires importing, so the import ban would forbid the one thing
+    that lets the bar be read. What is asserted instead is the thing the contract is
+    actually about — that the discovery path still ORDERS on `composite_v3` — and it is
+    asserted where the ordering lives rather than by grepping a 3,900-line module.
+
+    `test_view_fit` owns the full pair (the import ban for every module with no recording
+    duty, plus a functional assertion that a huge `view_fit` cannot outrank a good
+    `composite`). This is the harvest-side restatement of the positive half."""
     import steered_frontier as sf
     import maneuver_view_screen as mvs
-    from test_view_fit import imports_view_fit
-    for mod in (sf, mvs):
-        src = Path(mod.__file__).read_text(encoding="utf-8")
-        assert not imports_view_fit(src), f"{Path(mod.__file__).name} imports view_fit"
-    # ... and the positive half: composite_v3 is still what the walk sorts on.
-    assert "composite_v3" in Path(mvs.__file__).read_text(encoding="utf-8")
+    # the reserved-slot fill order and the neighbourhood top-n both sort on the composite
+    for fn in (sf.SteeredFrontier._split_reserved, sf.SteeredFrontier._nbh_top_n):
+        src = inspect.getsource(fn)
+        assert "view_fit" not in src, f"{fn.__name__} sorts on the staged score"
+    assert "composite" in inspect.getsource(sf.SteeredFrontier._nbh_top_n)
+    assert mvs.composite_sort_key is sf.mvs.composite_sort_key
+    # and the walk's own prior is taken against the composite percentile, not the fit
+    prior_src = inspect.getsource(sf.SteeredFrontier._consume_maneuver)
+    assert "man_comp_dist.percentile_of" in prior_src
+    assert "view_fit" not in prior_src.split("prior = NEUTRAL_PRIOR")[-1]
 
 
 # =========================================================================== #
