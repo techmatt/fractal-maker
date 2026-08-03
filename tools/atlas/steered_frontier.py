@@ -288,7 +288,7 @@ def loc_of(partition: str, c, cx, cy, fw):
 #
 # It would be a no-op even if applied — every re-derived v8 base (0.199..0.704) is already
 # far above every v7 floor (0.216..0.269) — but "harmless today" is not why it is empty.
-TAU_H_CAMPAIGN_FLOOR_MODEL = "v8"
+TAU_H_CAMPAIGN_FLOOR_MODEL = "v10"
 TAU_H_CAMPAIGN_FLOOR: dict = {}
 # The v7 table, kept for the record only. NEVER read by the code path.
 TAU_H_CAMPAIGN_FLOOR_V7_RETIRED = {
@@ -325,36 +325,54 @@ TAU_H_CAMPAIGN_FLOOR_V7_RETIRED = {
 # harvest_log.jsonl). Until then the loud failure is the correct state — emission is dark
 # after a flip anyway, so nothing is blocked that was not already waiting on a discovery run.
 #
-# RE-DERIVED UNDER v8 on 2026-07-31 by `tools/atlas/tau_h_rederive.py`, which is the
+# RE-DERIVED UNDER v10 on 2026-08-02 by `tools/atlas/tau_h_rederive.py`, which is the
 # regeneration path this comment's failure message points at. Provenance artifact:
-# `data/atlas/tau_h_base_v8.json` (per-partition n, t_good, both population estimates).
+# `data/atlas/tau_h_base_v10.json` (per-partition n, t_good, both population estimates,
+# and `arms_used`). 3,492 rows re-rendered at both presentations and re-scored.
 # Method — the fidelity study's estimator verbatim, on a population the harvest logs make
 # re-renderable: each sampled harvest-check geometry is re-rendered at BOTH presentations
 # (384x216 ss1 cheap / 640x360 ss2 canonical) and re-scored under the ACTIVE head, then
 # tau_h = the 10th percentile of cheap p_good among frames whose canonical p_good clears
-# the family's t_good. All 8 partitions cut on their OWN population (n_pass 39..285); no
-# partition fell back to the pooled cut.
+# the family's t_good.
 #
-# The values move a LOT versus v7 (mandelbrot 0.201 -> 0.704) and that is the point: v8's
-# per-partition t_good is a different, much stricter bar (mandelbrot 0.85), so the frames
-# that clear it sit far higher on the cheap axis. Serving the v7 numbers to a v8 gate would
-# have rendered confirmations for a population v8 does not consider q3 at all.
+# EVERY PARTITION IS CUT ON ITS OWN POPULATION — the pooled cross-family fallback is gone,
+# and its removal changed two numbers. Under v10 the native multibrot partitions run at the
+# 0.50 UNCALIBRATED baseline while v10's canonical p_good sits lower than v8's, so their
+# WALK-arm pass counts collapsed (multibrot3 12 -> 1, multibrot5 11 -> 3, both under the
+# min_n=5 floor). The old code would have handed both the pooled quantile 0.0393 — a cut
+# derived mostly from OTHER families' frames, ~9x looser than their own harvest estimates
+# (0.369 / 0.351) — and `combine=min` would have served it. A pooled cut on a partition is
+# the same category error as a v8 threshold on a v10 gate. Those two arms are now recorded
+# UNAVAILABLE and the minimum is taken over the arms that exist.
 #
-# ONE BIAS, STATED. The harvest log only holds checks that already cleared the PREVIOUS
-# head's tau_h, so it is left-truncated and its quantile is an UPPER bound. The untruncated
+# CONSEQUENCE, STATED: multibrot3 and multibrot5 have NO untruncated cross-check under v10.
+# Their tau_h rests on the harvest arm alone, which is left-truncated, so for those two the
+# value is an upper bound with nothing bounding it from below. Read `arms_used` before
+# comparing either against a prior version.
+#
+# The values move a LOT versus v8 (mandelbrot 0.704 -> 0.0229) and that is the point: v10's
+# per-partition t_good is a different, far looser bar (mandelbrot 0.85 -> 0.03), so the
+# frames that clear it reach much further down the cheap axis. Serving the v8 numbers to a
+# v10 gate would have rendered confirmations for a tiny fraction of what v10 calls q3.
+#
+# ONE BIAS, STATED. The harvest log only holds checks that already cleared a PREVIOUS head's
+# tau_h, so it is left-truncated and its quantile is an UPPER bound. The untruncated
 # walk-outcome ledger (prospect_run1: uniform-random gate survivors, never tau-selected) is
 # re-derived alongside it as a cross-check, and the committed value is the per-partition
-# MINIMUM of the two — the conservative side, since a too-high cut sheds admissions.
-TAU_H_FIDELITY_BASE_MODEL = "v8"
+# MINIMUM over the available arms — the conservative side, since a too-high cut sheds
+# admissions. Campaign1's harvest rows carry no geometry and are permanently not
+# re-scoreable (37,853 of 66,864 checks, 56.6%); they are EXCLUDED, never approximated, so
+# the harvest arm rests on campaign2 + the julia parent probe alone.
+TAU_H_FIDELITY_BASE_MODEL = "v10"
 TAU_H_FIDELITY_BASE = {
-    "mandelbrot": 0.704061222076416,
-    "multibrot3": 0.41670822501182553,
-    "multibrot4": 0.550365686416626,
-    "multibrot5": 0.4374629855155945,
-    "julia:mandelbrot": 0.3485920131206512,
-    "julia:multibrot3": 0.38111798763275145,
-    "julia:multibrot4": 0.19956488609313963,
-    "julia:multibrot5": 0.19899649918079373,
+    "mandelbrot": 0.02286625504493713,
+    "multibrot3": 0.36908935904502865,
+    "multibrot4": 0.408690321445465,
+    "multibrot5": 0.3513681888580322,
+    "julia:mandelbrot": 0.412648469209671,
+    "julia:multibrot3": 0.28186094164848324,
+    "julia:multibrot4": 0.05198849514126777,
+    "julia:multibrot5": 0.07040942013263703,
 }
 
 

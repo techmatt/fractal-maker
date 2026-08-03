@@ -1,0 +1,267 @@
+{
+  "model": "v10",
+  "ckpt": "data/classifier/v10/model_best.pt",
+  "keep": 0.9,
+  "seed": 0,
+  "combine": "min",
+  "per_partition": 300,
+  "n_rows_harvest": 2400,
+  "n_rows_walk": 1092,
+  "harvest_runs": [
+    "campaign1/breadth",
+    "campaign1/dive",
+    "campaign2/breadth",
+    "campaign2/dive",
+    "julia_parent_probe/breadth"
+  ],
+  "walk_ledger": "C:\\Code\\fractal-maker\\data\\discovery\\fresh_runs\\prospect_run1\\outcome_ledger.jsonl",
+  "t_good": {
+    "julia:mandelbrot": 0.5,
+    "julia:multibrot3": 0.27,
+    "julia:multibrot4": 0.03,
+    "julia:multibrot5": 0.06,
+    "mandelbrot": 0.03,
+    "multibrot3": 0.5,
+    "multibrot4": 0.5,
+    "multibrot5": 0.5
+  },
+  "t_good_status": {
+    "julia:mandelbrot": "UNCALIBRATED",
+    "julia:multibrot3": "DERIVED",
+    "julia:multibrot4": "DERIVED",
+    "julia:multibrot5": "DERIVED",
+    "mandelbrot": "DERIVED",
+    "multibrot3": "UNCALIBRATED",
+    "multibrot4": "UNCALIBRATED",
+    "multibrot5": "UNCALIBRATED"
+  },
+  "tau_h_base": {
+    "julia:mandelbrot": 0.412648469209671,
+    "julia:multibrot3": 0.28186094164848324,
+    "julia:multibrot4": 0.05198849514126777,
+    "julia:multibrot5": 0.07040942013263703,
+    "mandelbrot": 0.02286625504493713,
+    "multibrot3": 0.36908935904502865,
+    "multibrot4": 0.408690321445465,
+    "multibrot5": 0.3513681888580322
+  },
+  "harvest_estimate": {
+    "julia:mandelbrot": 0.42664492726325987,
+    "julia:multibrot3": 0.28186094164848324,
+    "julia:multibrot4": 0.06839367374777792,
+    "julia:multibrot5": 0.07087318599224089,
+    "mandelbrot": 0.03803509101271629,
+    "multibrot3": 0.36908935904502865,
+    "multibrot4": 0.4327857345342636,
+    "multibrot5": 0.3513681888580322
+  },
+  "walk_estimate": {
+    "julia:mandelbrot": 0.412648469209671,
+    "julia:multibrot3": 0.2995148003101349,
+    "julia:multibrot4": 0.05198849514126777,
+    "julia:multibrot5": 0.07040942013263703,
+    "mandelbrot": 0.02286625504493713,
+    "multibrot3": null,
+    "multibrot4": 0.408690321445465,
+    "multibrot5": null
+  },
+  "harvest_detail": {
+    "julia:mandelbrot": {
+      "n_rows": 300,
+      "n_pass": 128,
+      "t_good": 0.5,
+      "value": 0.42664492726325987,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot3": {
+      "n_rows": 300,
+      "n_pass": 175,
+      "t_good": 0.27,
+      "value": 0.28186094164848324,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot4": {
+      "n_rows": 300,
+      "n_pass": 284,
+      "t_good": 0.03,
+      "value": 0.06839367374777792,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot5": {
+      "n_rows": 300,
+      "n_pass": 249,
+      "t_good": 0.06,
+      "value": 0.07087318599224089,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "mandelbrot": {
+      "n_rows": 300,
+      "n_pass": 261,
+      "t_good": 0.03,
+      "value": 0.03803509101271629,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot3": {
+      "n_rows": 300,
+      "n_pass": 64,
+      "t_good": 0.5,
+      "value": 0.36908935904502865,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot4": {
+      "n_rows": 300,
+      "n_pass": 186,
+      "t_good": 0.5,
+      "value": 0.4327857345342636,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot5": {
+      "n_rows": 300,
+      "n_pass": 46,
+      "t_good": 0.5,
+      "value": 0.3513681888580322,
+      "source": "own",
+      "pooled_would_have_been": null
+    }
+  },
+  "walk_detail": {
+    "julia:mandelbrot": {
+      "n_rows": 102,
+      "n_pass": 46,
+      "t_good": 0.5,
+      "value": 0.412648469209671,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot3": {
+      "n_rows": 54,
+      "n_pass": 31,
+      "t_good": 0.27,
+      "value": 0.2995148003101349,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot4": {
+      "n_rows": 54,
+      "n_pass": 53,
+      "t_good": 0.03,
+      "value": 0.05198849514126777,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot5": {
+      "n_rows": 39,
+      "n_pass": 33,
+      "t_good": 0.06,
+      "value": 0.07040942013263703,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "mandelbrot": {
+      "n_rows": 300,
+      "n_pass": 63,
+      "t_good": 0.03,
+      "value": 0.02286625504493713,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot3": {
+      "n_rows": 239,
+      "n_pass": 1,
+      "t_good": 0.5,
+      "value": null,
+      "source": "UNAVAILABLE (<5 own passing rows)",
+      "pooled_would_have_been": 0.039269
+    },
+    "multibrot4": {
+      "n_rows": 169,
+      "n_pass": 5,
+      "t_good": 0.5,
+      "value": 0.408690321445465,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot5": {
+      "n_rows": 135,
+      "n_pass": 3,
+      "t_good": 0.5,
+      "value": null,
+      "source": "UNAVAILABLE (<5 own passing rows)",
+      "pooled_would_have_been": 0.039269
+    }
+  },
+  "arms_used": {
+    "julia:mandelbrot": {
+      "picked": "walk",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "julia:multibrot3": {
+      "picked": "harvest",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "julia:multibrot4": {
+      "picked": "walk",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "julia:multibrot5": {
+      "picked": "walk",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "mandelbrot": {
+      "picked": "walk",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "multibrot3": {
+      "picked": "harvest",
+      "available": [
+        "harvest"
+      ]
+    },
+    "multibrot4": {
+      "picked": "walk",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "multibrot5": {
+      "picked": "harvest",
+      "available": [
+        "harvest"
+      ]
+    }
+  },
+  "pooled_harvest": {
+    "pooled": 0.0828760057687759,
+    "n_pooled": 1393
+  },
+  "pooled_walk": {
+    "pooled": 0.03926875442266464,
+    "n_pooled": 235
+  },
+  "pooled_fallback_allowed": false,
+  "caveat": "The harvest population is LEFT-TRUNCATED at the previous head's tau_h, so its quantile is an UPPER bound on the untruncated value; the walk-outcome population is untruncated but off-distribution (walk outcomes, not frontier candidates). combine=min takes the conservative side.",
+  "no_pooling": "EVERY partition is cut on its OWN population. An arm with fewer than min_n=5 own passing rows is UNAVAILABLE and contributes nothing; the pooled cross-family quantile is computed and reported but NEVER served. `arms_used` names, per partition, which arms existed and which was taken \u2014 read it before comparing a partition against a prior version."
+}

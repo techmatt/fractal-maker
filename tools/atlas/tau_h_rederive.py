@@ -247,10 +247,26 @@ def render_and_score(rows, scorer, tiles: Path, out_jsonl: Path, chunk: int = 48
 # --------------------------------------------------------------------------- #
 # the estimator
 # --------------------------------------------------------------------------- #
-def derive(rows, partitions, keep, t_good_for, min_n=5):
+def derive(rows, partitions, keep, t_good_for, min_n=5, allow_pooled=False):
     """The fidelity-study estimator: per partition, the (1-keep) quantile of cheap p_good
-    over rows whose canonical p_good clears that partition's t_good. Thin partitions fall
-    back to the pooled cross-family cut, exactly as the original did."""
+    over rows whose canonical p_good clears that partition's t_good.
+
+    NO POOLED FALLBACK by default (`allow_pooled=False`, changed at the v10 flip). A partition
+    too thin to cut on its OWN population yields `None` — the arm is UNAVAILABLE for it, and
+    the caller takes its per-partition minimum over the arms that actually produced a number.
+
+    Why the original behaviour had to go. The pooled cut is a cross-family quantile: it is
+    dominated by whichever partitions happen to have the most passing rows, and handing it to
+    a thin partition is the same category error as serving a v8 threshold on a v10 gate — a
+    number derived on a population that is not this one. It was harmless under v8 (every
+    partition cut on its own on both arms) and stopped being harmless under v10: the native
+    multibrot partitions run at the 0.50 UNCALIBRATED baseline, v10's canonical p_good sits
+    lower than v8's, so walk-arm pass counts collapsed (multibrot3 12 -> 1, multibrot5 11 -> 3)
+    and BOTH would have silently taken a pooled 0.039 in place of their own ~0.35 — a ~9x
+    looser harvest gate, sourced from other families' frames.
+
+    The pooled value is still COMPUTED and reported, because "what would the pooled cut have
+    been" is useful context; it is simply never served."""
     q = 1.0 - keep
     by = defaultdict(list)
     for r in rows:
@@ -268,9 +284,15 @@ def derive(rows, partitions, keep, t_good_for, min_n=5):
     for p in partitions:
         sel = [r for r in by.get(p, []) if r["canon_pgood"] >= t_good_for(p)]
         v, n = cut(sel)
-        out[p] = pooled if v is None else v
+        if v is None:
+            out[p] = pooled if allow_pooled else None
+            src = "pooled_fallback" if allow_pooled else f"UNAVAILABLE (<{min_n} own passing rows)"
+        else:
+            out[p] = v
+            src = "own"
         detail[p] = dict(n_rows=len(by.get(p, [])), n_pass=n, t_good=t_good_for(p),
-                         value=out[p], source=("pooled_fallback" if v is None else "own"))
+                         value=out[p], source=src,
+                         pooled_would_have_been=(round(pooled, 6) if v is None else None))
     return out, detail, dict(pooled=pooled, n_pooled=n_pooled)
 
 
@@ -327,11 +349,28 @@ def main():
     w_val, w_det, w_pool = derive(w_rows, partitions, args.keep, ps.t_good_for) if w_rows \
         else ({}, {}, {})
 
-    final = {}
+    # `combine=min` over the arms that ACTUALLY produced a number on this partition's own
+    # population. An arm that came back UNAVAILABLE (too few own passing rows) contributes
+    # nothing — it is not replaced by a pooled cross-family cut, and it does not silently
+    # become the other arm's value under a `walk`/`harvest` selection either.
+    final, arms_used = {}, {}
     for p in partitions:
-        cands = [h_val[p]] + ([w_val[p]] if p in w_val else [])
-        final[p] = {"min": min(cands), "harvest": h_val[p],
-                    "walk": w_val.get(p, h_val[p])}[args.combine]
+        cands = {k: v for k, v in (("harvest", h_val.get(p)), ("walk", w_val.get(p)))
+                 if v is not None}
+        if not cands:
+            raise SystemExit(
+                f"tau_h: partition {p!r} has NO arm cut on its own population "
+                f"(harvest n_pass={h_det[p]['n_pass']}, walk "
+                f"n_pass={(w_det.get(p) or {}).get('n_pass', 0)}). Raise --per-partition or "
+                f"accept that {p} cannot be cut under {ACTIVE_VERSION}; a pooled cross-family "
+                f"quantile is NOT a substitute.")
+        if args.combine == "min":
+            pick = min(cands, key=cands.get)
+        elif args.combine in cands:
+            pick = args.combine
+        else:                       # requested arm unavailable -> fall to the one that exists
+            pick = next(iter(cands))
+        final[p], arms_used[p] = cands[pick], {"picked": pick, "available": sorted(cands)}
 
     art = dict(
         model=ACTIVE_VERSION, ckpt=ACTIVE_CKPT, keep=args.keep, seed=args.seed,
@@ -341,24 +380,42 @@ def main():
         t_good={p: ps.t_good_for(p) for p in partitions},
         t_good_status={p: ps.t_good_status(p) for p in partitions},
         tau_h_base=final, harvest_estimate=h_val, walk_estimate=w_val,
-        harvest_detail=h_det, walk_detail=w_det,
-        pooled_harvest=h_pool, pooled_walk=w_pool,
+        harvest_detail=h_det, walk_detail=w_det, arms_used=arms_used,
+        pooled_harvest=h_pool, pooled_walk=w_pool, pooled_fallback_allowed=False,
         caveat=("The harvest population is LEFT-TRUNCATED at the previous head's tau_h, so "
                 "its quantile is an UPPER bound on the untruncated value; the walk-outcome "
                 "population is untruncated but off-distribution (walk outcomes, not frontier "
                 "candidates). combine=min takes the conservative side."),
+        no_pooling=("EVERY partition is cut on its OWN population. An arm with fewer than "
+                    "min_n=5 own passing rows is UNAVAILABLE and contributes nothing; the "
+                    "pooled cross-family quantile is computed and reported but NEVER served. "
+                    "`arms_used` names, per partition, which arms existed and which was "
+                    "taken — read it before comparing a partition against a prior version."),
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(art, indent=2), encoding="utf-8")
 
     print(f"\n=== tau_h base under {ACTIVE_VERSION} (keep={args.keep}, combine={args.combine}) ===")
     print(f"{'partition':22s} {'harvest':>9s} {'walk':>9s} {'FINAL':>9s}  t_good  n_pass(h/w)")
+    def _f(v):
+        return f"{v:9.4f}" if v is not None else f"{'n/a':>9s}"
+
     for p in partitions:
-        hv, wv = h_val[p], w_val.get(p)
-        print(f"{p:22s} {hv:9.4f} {(wv if wv is not None else float('nan')):9.4f} "
+        # Print BOTH arms' availability. The old line printed only the harvest arm's source,
+        # so a walk arm that had silently fallen back to the pooled cut still read "[own]".
+        print(f"{p:22s} {_f(h_val.get(p))} {_f(w_val.get(p))} "
               f"{final[p]:9.4f}  {ps.t_good_for(p):.2f}   "
               f"{h_det[p]['n_pass']}/{(w_det.get(p, {}) or {}).get('n_pass', 0)}"
-              f"  [{h_det[p]['source']}]")
+              f"  [{'+'.join(arms_used[p]['available'])} -> {arms_used[p]['picked']}]")
+    unavail = {p: d for p, d in list(h_det.items()) + list(w_det.items())
+               if d["source"].startswith("UNAVAILABLE")}
+    if unavail:
+        print("\n  arms UNAVAILABLE (cut on own population impossible; NOT pooled):")
+        for p in partitions:
+            for nm, det in (("harvest", h_det.get(p)), ("walk", w_det.get(p))):
+                if det and det["source"].startswith("UNAVAILABLE"):
+                    print(f"    {p:20s} {nm:8s} n_pass={det['n_pass']} "
+                          f"(pooled would have been {det['pooled_would_have_been']})")
     print(f"\nartifact -> {args.out}")
     print("\nPaste into tools/atlas/steered_frontier.py (BOTH lines together):")
     print(f'TAU_H_FIDELITY_BASE_MODEL = "{ACTIVE_VERSION}"')
