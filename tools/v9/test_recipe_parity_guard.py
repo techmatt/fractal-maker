@@ -24,6 +24,7 @@ So the guard is pinned from three directions, because one alone rots:
 """
 from __future__ import annotations
 
+import importlib.util
 import inspect
 import re
 import sys
@@ -31,11 +32,24 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
 for p in ("tools", "tools/v9", "tools/corpus", "tools/scoring", "tools/mining"):
     sys.path.insert(0, str(ROOT / p))
 
-import build_plan as bp                  # noqa: E402  (tools/v9/build_plan.py)
+
+def _load(name: str, path: Path):
+    """Load a sibling under a UNIQUE module name. `import build_plan` would be ambiguous —
+    seven versions ship one, and the first import in the interpreter wins for the rest of
+    the session (`tests/test_import_hygiene.py`). Same pattern as the v5/v6 parity tests."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+bp = _load("v9_build_plan", HERE / "build_plan.py")
+v8bp = _load("v8_build_plan_for_parity_guard", ROOT / "tools" / "v8" / "build_plan.py")
 
 
 def test_a_missing_v8_artifact_raises_and_names_the_rebuild_command():
@@ -63,18 +77,29 @@ def test_no_exists_guard_survives_in_assert_recipe_parity():
         f"route it through _require_v8 instead. Found: {hits}")
 
 
-def test_the_guard_is_armed_with_paths_that_actually_exist():
-    """A guard pointed at a path that never existed is a guard against a typo. Every rel
-    handed to `_require_v8` is read out of the source and checked on disk, so a rename of
-    a v8 artifact fails here rather than at the top of a rebuild."""
-    src = inspect.getsource(bp.assert_recipe_parity) + inspect.getsource(bp)
+def test_the_guard_is_armed_with_paths_the_v8_builder_actually_produces():
+    """A guard pointed at a path nothing produces is a guard against a typo.
+
+    NOT "the file is on disk": two of the three are `data/v8/{plan,cache_manifest}.jsonl`,
+    deleted 2026-08-03 precisely because `tools/v8/build_plan.py` reproduces them
+    byte-identically on demand — being absent is the intended steady state, and the error
+    message tells you to run that builder. What must hold is that the builder really does
+    write them. So every rel handed to `_require_v8` is checked against v8's own output
+    constants, and a rename on either side fails here rather than at the top of a rebuild
+    that then cannot be completed."""
+    src = inspect.getsource(bp)
     rels = set(re.findall(r'_require_v8\(\s*"([^"]+)"\s*\)', src))
     # ...plus the ones passed by module constant
     for name in re.findall(r"_require_v8\(\s*([A-Z_][A-Z_0-9]*)\s*\)", src):
         rels.add(getattr(bp, name))
     rels.discard("data/v8/__absent_for_this_test__.jsonl")
     assert rels, "no _require_v8 call sites found — the parity check was restructured"
-    missing = sorted(r for r in rels if not (ROOT / r).exists())
-    assert not missing, (
-        f"the parity guard is armed with {missing}, which are not on disk. Either they "
-        f"were deleted (rebuild: uv run python tools/v8/build_plan.py) or renamed.")
+
+    produced = {v for k, v in vars(v8bp).items()
+                if k.endswith(("_OUT", "_PATH")) and isinstance(v, str) and v.startswith("data/v8/")}
+    assert produced, "tools/v8/build_plan.py declares no data/v8/ outputs — constants renamed"
+    unproducible = sorted(r for r in rels if r not in produced and not (ROOT / r).exists())
+    assert not unproducible, (
+        f"the parity guard is armed with {unproducible}, which are neither on disk nor "
+        f"written by tools/v8/build_plan.py ({sorted(produced)}). The rebuild command in "
+        f"the guard's own error message would not restore them.")

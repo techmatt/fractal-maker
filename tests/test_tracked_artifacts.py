@@ -313,6 +313,53 @@ def test_v8_durability_wiring_coherent():
     )
 
 
+# Tracked build-tree files that deliberately have NO exact-path negation: they survive by
+# `git add -f` at a gitignored path (the `durable(force-add)` class in
+# tools/audit/durability_map.py). `tools/paths.durable()` refuses to write into these dirs,
+# which is why they are called out rather than negated — and why the set must not grow.
+FORCE_ADDED_UNNEGATED = {
+    "data/classifier/v6/model_best.pt",
+    "data/classifier/v7/model_best.pt",
+    "data/classifier/v8/model_best.pt",
+}
+
+
+def test_every_tracked_build_artifact_is_covered_by_a_negation():
+    """THE OTHER DIRECTION, and the one a deletion pass can silently break.
+
+    Every test below walks the set derived FROM the negations, so removing a negation
+    shrinks the set — and a smaller parametrization is a quieter test run, not a failure.
+    That is how a deletion could take coverage off a file that is still there: drop the
+    `!/data/v8/x.jsonl` line, keep the file, and nothing goes red.
+
+    So the coverage is asserted from git's side instead: every TRACKED file under a
+    versioned build tree must be declared durable by an exact-path negation, or be a known
+    force-added exception. Deleting a file AND its negation together stays green (nothing
+    tracked, nothing to cover); deleting only the negation goes red on the file that is
+    still there.
+
+    `[the 2026-08-03 deletion of data/v8/{plan,cache_manifest}.jsonl removed two negations;
+      this is what proves it removed coverage of nothing else]`"""
+    tracked = subprocess.run(["git", "ls-files", "data/"], cwd=REPO_ROOT,
+                             capture_output=True, text=True)
+    assert tracked.returncode == 0, tracked.stderr
+    build = [p for p in tracked.stdout.split("\n") if p.strip() and _is_build_path(p.strip())]
+    assert len(build) > 20, f"only {len(build)} tracked build-tree files — the walk broke"
+    declared = set(V8_DURABLE)
+    uncovered = sorted(p for p in build if p not in declared and p not in FORCE_ADDED_UNNEGATED)
+    assert not uncovered, (
+        f"{len(uncovered)} tracked build artifact(s) have NO exact-path .gitignore "
+        f"negation, so nothing declares them durable and the canary below does not cover "
+        f"them:\n    {uncovered}\n"
+        f"Either add `!/<path>` to .gitignore, or — if the file is genuinely gone — remove "
+        f"it from the index too. Do not add it to FORCE_ADDED_UNNEGATED to go green; that "
+        f"set is for paths git could not track any other way.")
+    stale = sorted(FORCE_ADDED_UNNEGATED - set(build))
+    assert not stale, (
+        f"FORCE_ADDED_UNNEGATED names {stale}, which is no longer tracked — drop the entry "
+        f"rather than leaving an exemption for a file that does not exist")
+
+
 @pytest.mark.parametrize("path", V8_DURABLE)
 def test_v8_durable_declared_paths_tracked(path):
     """A data/v8/ path declared durable by an exact-path .gitignore negation must be

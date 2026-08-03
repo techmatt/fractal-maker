@@ -129,8 +129,10 @@ correctly and is never checked.
 
 **A literal stays registered after its data is deleted, if the data can be rebuilt.**
 `data/v8/aug_cache` kept its line when the 12.13 GB / 171,384-tile tree was deleted on
-2026-07-31, because a rebuild from the committed `data/v8/plan.jsonl` must land
-out-of-tree exactly as the first render did. Dropping the literal — as was done for
+2026-07-31, because a rebuild must land out-of-tree exactly as the first render did. That
+rebuild became two steps on 2026-08-03, when `data/v8/plan.jsonl` was deleted as well:
+`tools/v8/build_plan.py` regenerates it byte-identically from the committed manifest,
+then `render_cache.py` renders through it. Dropping the literal — as was done for
 v4..v7 — is right only when the family can never come back. This is the same
 live-forward-declaration judgement §5 makes for the size-guard registry, applied to the
 resolver. `[code: tools/corpus/artifacts.py::RELOCATED_PREFIXES comment;

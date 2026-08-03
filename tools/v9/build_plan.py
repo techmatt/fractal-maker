@@ -717,7 +717,7 @@ def main() -> None:
     print(f"  cache root     : {paths.bulk(V9_CACHE_DIR)}  (bulk, out-of-tree)")
     _v8 = paths.bulk(V8_CACHE_DIR)
     print(f"  v8 cache root  : {_v8}  "
-          f"({'on disk' if _v8.exists() else 'DELETED 2026-07-31 — rebuild from data/v8/plan.jsonl'})")
+          f"({'on disk' if _v8.exists() else 'DELETED 2026-07-31 — rebuild: tools/v8/build_plan.py then tools/v8/render_cache.py'})")
 
     if a.dry_run:
         print("\n--dry-run: nothing written.")

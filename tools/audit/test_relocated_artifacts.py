@@ -380,8 +380,9 @@ def test_live_aug_caches_are_registered():
     v9 (the v8 corpus re-rendered at the raised iteration cap) was built as a SECOND live
     tree rather than a replacement, with v8's 12.1 GB held as the rollback anchor; v8's
     tree was then deleted on 2026-07-31, once v9 was trained and evaluated. Its prefix
-    stays registered regardless: a rebuild from the committed data/v8/plan.jsonl must land
-    out-of-tree exactly as the first render did. Registration must happen BEFORE the first
+    stays registered regardless: a rebuild must land out-of-tree exactly as the first render
+    did (two steps since 2026-08-03 — tools/v8/build_plan.py regenerates the deleted
+    plan.jsonl from the committed manifest, then render_cache.py renders through it). Registration must happen BEFORE the first
     render — storage_classes.md rule 5, a new bulk family is born out-of-tree — so this
     asserts the registry rather than the disk, which is why deleting the tiles leaves it
     green."""

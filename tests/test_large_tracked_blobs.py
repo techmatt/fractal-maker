@@ -136,7 +136,17 @@ def _lfs_pointer_sizes() -> dict[str, int]:
     """{path: true object size} for LFS-tracked paths, parsed from the POINTER blob.
 
     Exact by construction — the pointer's own `size` line — rather than parsed back out
-    of `git lfs ls-files -s`'s human-rounded "34 MB"."""
+    of `git lfs ls-files -s`'s human-rounded "34 MB".
+
+    THE PAIRING MUST SURVIVE A MISSING NAME. `git lfs ls-files` reports HEAD's LFS files,
+    so a path staged for deletion is still NAMED here while `:path` no longer resolves in
+    the index — `git cat-file --batch` answers `<spec> missing` with no blob, and a parse
+    that only advanced its name cursor on a blob header shifted every subsequent size onto
+    the wrong path. It failed SILENTLY and in the safe-looking direction: the last two
+    names simply got no size, so two multi-MB weights fell back to their 133-byte pointer
+    and the inventory reported them as tiny. Found 2026-08-03 by staging the deletion of
+    `data/v8/{plan,cache_manifest}.jsonl`, whose only crime was being LFS and deleted.
+    Every response now advances the cursor, and the count is asserted."""
     names = [ln.strip() for ln in _run(["git", "lfs", "ls-files", "-n"]).splitlines()
              if ln.strip()]
     if not names:
@@ -147,17 +157,24 @@ def _lfs_pointer_sizes() -> dict[str, int]:
     out, body = {}, proc.stdout.splitlines()
     i, idx = 0, 0
     while i < len(body) and idx < len(names):
-        # "<sha> blob <n>" header, then the pointer text, then a blank line.
-        if len(body[i].split()) == 3 and body[i].split()[1] == "blob":
-            size = None
+        parts = body[i].split()
+        if len(parts) == 3 and parts[1] == "blob":
+            # "<sha> blob <n>" header, then the pointer text, then a blank line.
             for ln in body[i + 1:i + 6]:
                 if ln.startswith("size "):
-                    size = int(ln.split()[1])
+                    out[names[idx]] = int(ln.split()[1])
                     break
-            if size is not None:
-                out[names[idx]] = size
+            idx += 1
+        elif parts and parts[-1] in ("missing", "ambiguous"):
+            # Named by `git lfs ls-files` (from HEAD) but not resolvable in the index —
+            # a staged deletion. No size, but the cursor MUST advance or every name after
+            # this one is credited with another path's size.
             idx += 1
         i += 1
+    assert idx == len(names), (
+        f"cat-file returned {idx} responses for {len(names)} LFS names — the pointer-size "
+        f"pairing is positional and has desynchronized; sizes below would be attributed to "
+        f"the wrong paths")
     return out
 
 

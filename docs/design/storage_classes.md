@@ -199,14 +199,33 @@ A surviving producer is not reproducibility. Two failure shapes, both live in th
 So the KEEP question is not *does something still produce this*, it is *would running it
 again produce this*. `[verdict: Matt]`
 
-### Preconditions for the approved v8/v9 `plan` + `cache_manifest` deletion
+### The v8 `plan` + `cache_manifest` deletion — TAKEN 2026-08-03
 
-Four tracked LFS files — `data/v{8,9}/{plan,cache_manifest}.jsonl`, **285 MiB**, one row per
-augmentation tile — are the single largest block of non-weight tracked bulk, and their
-deletion is **approved but blocked**. They are derived from committed inputs and both trees
-have a committed builder, so the usefulness test above does not save them on its own. What
-blocks it is that two guards over them are absence-tolerant, and taking the deletion first
-would silently turn them off. Before it is ever taken:
+`data/v8/{plan,cache_manifest}.jsonl`, **139.6 MiB** (53,391,652 + 92,985,596 B), one row per
+augmentation tile, are **gone**. What follows is the record of the preconditions and how each
+was met; v9's and v10's pairs are NOT in the same position and are covered at the end.
+
+**The rebuild is byte-identical, and that was measured, not argued.** `uv run python
+tools/v8/build_plan.py` (~15 s) regenerates the pair from `data/v8/manifest.jsonl` plus the
+committed colormap sources. Proved by rebuilding over the originals and comparing sha256:
+`plan.jsonl`, `cache_manifest.jsonl`, `colormaps.json` and `aug_roster.json` all matched.
+`[measured 2026-08-03; the one file that did NOT match is `build_metadata.json` — see the
+frozen-measurement hazard below]`
+
+**A rollback-to-v8 cache rebuild is now two steps**, `build_plan.py` then
+`render_cache.py` (~4.7 h at 6 workers, unchanged) — the plan regeneration adds 15 s to a
+4.7-hour job. `data/v8/aug_cache` stays in `RELOCATED_PREFIXES` for exactly that reason.
+
+**The hazard this exposed, and it is not fixed.** `tools/v8/build_plan.py::amend_metadata`
+rewrites `data/v8/build_metadata.json` unconditionally, and a plain re-run sets
+`aug_recipe.marginal_cost` to `null` — the committed palette-vs-geometry timing measurement,
+which only `--measure-marginal` produces. So the rebuild that makes this deletion safe also
+silently destroys a frozen measurement in a neighbouring file. Anyone rebuilding v8's plan
+must `git checkout -- data/v8/build_metadata.json` afterwards, or pass `--measure-marginal`.
+`[reported 2026-08-03; same shape as the derive_t_good_v8/v9 and keeper_cut_v9 hazards, all
+of which were fixed by making the durable write take an explicit flag]`
+
+#### The preconditions, as they stood before the deletion
 
 **(a) Make the guards hard-fail, naming the rebuild command.** The two `.exists()` guards
 that read these files are both in `tools/v9/build_plan.py::assert_recipe_parity` — the
@@ -238,28 +257,37 @@ deletion candidate at all**: it is the referent the current training generation 
 against. `data/v9/cache_manifest.jsonl` (96 MB) is read only by `train_v9`/`eval_v9`/v9's
 own `verify_cache_alignment`, all v9-scoped.
 
-Neither precondition has been taken, so the *remaining* candidate — v8's pair, 146 MB —
-stays blocked on exactly what blocked it before:
+**[2026-08-03] Both preconditions met, plus one the list did not name.**
 
-  * **(a) unmet.** `tools/v9/build_plan.py::assert_recipe_parity` still guards both
-    comparisons with `if v8_plan.exists():` / `if v8_cache.exists():` (§3 and §4 of that
-    function). They remain absence-tolerant and neither names a rebuild command. Note the
-    gate they protect is a **v9** rebuild, and v9 is now permanently staged — so the honest
-    read is that hardening them buys a check on a rebuild nobody will run, and the v8 pair's
-    real remaining value is as the referent for a rollback-to-v8 rebuild.
-  * **(b) unmet.** `tools/v8/test_v8_cache_alignment.py`'s module fixture still
-    `pytest.skip`s when any of the four v8 artifacts is absent, so BACKWARD / FIELDS /
-    COUNTS would go green-by-absence the moment the files went.
+  * **(a) met.** All THREE `.exists()` comparisons in
+    `tools/v9/build_plan.py::assert_recipe_parity` (the colormap library as well as the two
+    the list named) now route through `_require_v8`, which raises naming the missing file and
+    `tools/v8/build_plan.py`. Proved red by hiding `data/v8/plan.jsonl`: exit 1, no plan
+    written. `tools/v9/test_recipe_parity_guard.py` pins the raise, pins that no `.exists()`
+    guard returns to that function, and pins that the paths it is armed with exist.
+  * **(b) met.** BACKWARD / FIELDS / COUNTS are DELETED from
+    `tools/v8/test_v8_cache_alignment.py`, not skipped, and its fixture is gone — the census
+    test reads `eval_slice.jsonl` directly and asserts its presence rather than skipping on it.
+  * **(c) the one the list did not name: the coverage derivation.** `test_tracked_artifacts.py`
+    derives its guarded set FROM the `.gitignore` negations, so removing two negations shrinks
+    the parametrization — and a smaller parametrization is a quieter run, not a red. Removing a
+    negation while leaving its file would therefore have silently dropped coverage. Now
+    asserted from git's side too: every TRACKED file under a versioned build tree must carry an
+    exact-path negation or be one of the three known force-added classifier weights
+    (`test_every_tracked_build_artifact_is_covered_by_a_negation`, proved red by deleting a
+    negation whose file remains). Guarded set went 36 → 34, LFS rules 9 → 7, both accounted.
 
-`[re-checked 2026-08-02 at this commit: `rg -n "v8/plan|v8/cache_manifest|v9/plan|v9/cache_manifest" --glob '*.py'` over tools/, classifier/, tests/, then reading each reader for absence tolerance]`
+`[re-checked 2026-08-02 at this commit: `rg -n "v8/plan|v8/cache_manifest|v9/plan|v9/cache_manifest" --glob '*.py'` over tools/, classifier/, tests/, then reading each reader for absence tolerance. Re-run 2026-08-03 before the deletion: the eight remaining readers of v8's pair — `tools/v8/{render_cache,dump_fanout,estimate_runtime,verify_cache_alignment,eval_v8}.py`, `tools/v9/{verify_cache_alignment,eval_v9}.py`, `classifier/train_v8.py` — all read with an unguarded `read_text`/`open`, so every one fails loudly rather than going stale. None is exercised by a test.]`
 
-**The reclaim is working-tree only.** All four are `filter=lfs` in `.gitattributes` and
-re-included by exact-path `.gitignore` negations, so `git rm` frees the working copy and
-`.git/lfs` reclaims **nothing** until a prune — and `git lfs prune --verify-remote` is not
-usable here (it reports "missing on remote" when it merely could not authenticate, the one
-condition under which you must not prune). Any actual reclaim goes through the
-batch-API + sha256 procedure in [`artifacts_resolver.md`](artifacts_resolver.md) §5.
-`[measured: 298,820,096 B across the four files, 2026-07-31, `ls -l data/v8 data/v9`]`
+**The reclaim is working-tree only, and that is what was taken.** These were `filter=lfs` in
+`.gitattributes` and re-included by exact-path `.gitignore` negations; `git rm` freed the
+139.6 MiB working copy and `.git/lfs` reclaimed **nothing**, because that needs a prune — and
+`git lfs prune --verify-remote` is not usable here (it reports "missing on remote" when it
+merely could not authenticate, the one condition under which you must not prune). It was
+**not run**. Any actual `.git/lfs` reclaim goes through the batch-API + sha256 procedure in
+[`artifacts_resolver.md`](artifacts_resolver.md) §5.
+`[measured: 298,820,096 B across the four files, 2026-07-31, `ls -l data/v8 data/v9`;
+146,377,248 B of that removed 2026-08-03]`
 
 ## Git history is a durability tier too, and this repo's floor is 2026-07-24
 

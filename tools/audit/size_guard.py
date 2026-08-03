@@ -167,11 +167,14 @@ REGISTRY: list[Entry] = [
           "committed palette definitions (harvested 746-palette pool + features); "
           "load-bearing config for the palette system, tracked, no smaller form"),
     Entry("data/v8/", KEEP, None, "tracked",
-          "v8 classifier build: manifest.jsonl IS the training population + split; "
-          "plan/cache_manifest are 171,624 rows each (~55/79 MB, LFS) and are the ONLY "
-          "thing that maps a cached tile back to a location — losing them is exactly how "
-          "the v4..v7 caches became 243k unattributable JPGs. durable() + canaried; the "
-          "aug_cache JPGs themselves are bulk() and out-of-tree. CANARY.", canary=True),
+          "v8 classifier build: manifest.jsonl IS the training population + split, and it "
+          "is what makes everything else here rebuildable — losing IT is exactly how the "
+          "v4..v7 caches became 243k unattributable JPGs. plan/cache_manifest were "
+          "DELETED 2026-08-03 (146 MB): unlike the manifest they are DERIVED, and "
+          "tools/v8/build_plan.py reproduces both byte-identically from it (proved by "
+          "rebuild + sha256). A rollback-to-v8 cache rebuild is now two steps, build_plan "
+          "then render_cache. durable() + canaried; the aug_cache JPGs themselves are "
+          "bulk() and out-of-tree. CANARY.", canary=True),
     Entry("data/v9/", KEEP, None, "tracked",
           "v9 classifier build — the v8 corpus re-rendered at the raised iteration cap "
           "(docs/design/auto_maxiter.md). Same shape and same reason as data/v8/ above: "
