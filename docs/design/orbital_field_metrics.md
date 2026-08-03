@@ -869,6 +869,46 @@ sheet with its verdict (`v3_q5_sheet_leaving_top_quintile`) rather than only the
 fell. Under the survivable `cross` floors 0–2 of those 18 leave the top quintile and the field
 of blue is not among them: there is no pattern to check, because the formulation does not fire
 on the class.
+
+### 11.8 Test surface of the view-screen group — and the gaps, stated
+
+`tools/atlas/test_view_screen.py` (68 tests as of 2026-08-02; the v3 report's 52 predates the
+v4 rejection's guards) covers `view_screen.py`, `view_rescreen.py`,
+`view_screen_gate.py`, `view_frame_sweep.py` and `view_screen_sheets.py`. §10 is the
+`tools/orbital/` surface and does **not** cover these. Recorded in the same shape as §10's
+"gaps, stated because a reader will assume otherwise", because every clause below is a place
+where green means *untested*, not *correct*.
+
+`[extracted 2026-08-02 from scratch/view_screen_v2_report.md §5 and
+scratch/view_screen/REPORT_composite_v3.md §5, which were deleted at that commit;
+cmd: uv run python -m pytest tools/atlas/test_view_screen.py -q]`
+
+**Not covered at all.**
+- **The engine seam.** No test drives `measure_view` against the real binary on a
+  non-trivial field. The one engine-touching test exercises the `fw = 0` refusal path, so
+  the field-dump → measure seam is asserted only through synthetic arrays.
+- **Concurrency and resume.** `sweep_best`'s parallelism and the drivers' resume/append
+  loops are untested apart from the cap-policy guard.
+- **Every image.** The pair and quintile PNGs are unguarded end to end; only the pure halves
+  (`stratify`, `agreement`, `quintile_index`, the k-mix and interior tables) have tests.
+- **The hand-rolled Spearman** in `view_screen_sheets` is checked by nothing beyond a
+  reversed-sort sign.
+- **Any non-grid sweep.** `anchor_retained` is general `Decimal` geometry, but every test
+  exercises it on the fixed 3×3 × {1, 2} grid.
+
+**Covered, but weaker than it reads.**
+- **The gate tests pin percentiles from the committed record**, so they go red on any
+  legitimate re-measurement. That is the intent, and it also means they are not independent
+  of the record they check.
+- **`band_coverage`'s grid, floor and min-finite constants are pinned by BEHAVIOUR, not by
+  value** — a coordinated change to all three keeps every test green.
+- **Nothing says the v3 parameters are right, only that they are consistent.** No test says
+  the cap multiple 2× is correct (only that the caps derive from the strongest reference and
+  clip no reference); the band edge 0.12 and exponent 8 are pinned only as *relations* (flat
+  below the edge, monotone above, the 0.17 tile below the 0.12 tile) that survive a re-fit,
+  with the values living in `view_screen_gate.json` rather than in a test; and the anchor
+  margin's test asserts the **insensitivity interval on this grid**, which is a statement
+  about the grid and not about 0.8.
 ---
 
 ## Corrections made against the record this doc was written from
