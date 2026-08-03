@@ -324,10 +324,21 @@ Two further facts worth keeping:
 ## [CORRECTION] Why v9 is shelved
 
 v9 — the v8 corpus re-rendered at the raised cap — is **trained, evaluated, and staged.
-It is deliberately not deployed.** `ACTIVE_CKPT` remains `data/classifier/v8/model_best.pt`,
-`keeper_cuts_v9.json` remains unadopted, and the re-derived thresholds sit staged beside
-the live v8 gate rather than replacing it. This is a decision, not an unfinished step, and
-it needs recording because everything about the artifact says "ready".
+It is deliberately not deployed.** As written (2026-07-31) `ACTIVE_CKPT` was
+`data/classifier/v8/model_best.pt`, `keeper_cuts_v9.json` was unadopted, and the re-derived
+thresholds sat staged beside the live v8 gate rather than replacing it. This is a decision,
+not an unfinished step, and it needs recording because everything about the artifact says
+"ready".
+
+**[2026-08-02] The shelving became permanent, and the staged cut is gone.** `ACTIVE_CKPT`
+flipped to **v10** — v8's recipe on the same re-rendered corpus plus 1,267 appended
+maneuver-view locations — so v9 was skipped over rather than merely deferred, and the
+rollback ladder in `data/v10/build_metadata.json` names v10 → v8 → v7 → v6 → v5 with v9
+explicitly **not a rung**. `data/atlas/keeper_cuts_v9.json` was deleted at that point: it
+was a threshold on a head no gate will ever run, and a staged cut that outlives its
+version's last chance of deployment is only a thing to mistake for live. The reasoning
+below is why it was shelved and stays exactly as measured; `tools/v9/keeper_cut_v9.py`
+still exists, so the file is rebuildable if a question ever needs it back.
 
 **Reason 1 — the pre-registered instrument could not see the change.** The eval bar was
 committed at `2171bbc`, before the numbers existed, exactly as it should have been. v9

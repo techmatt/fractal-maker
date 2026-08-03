@@ -9,7 +9,8 @@ easy to violate by one overwrite, so it is checked:
   * the LIVE keeper cut names the ACTIVE version, so `test_steered_frontier`'s guard
     is intact and a v9 threshold is not sitting on another head's gate;
   * `production_seeder.T_GOOD_OVERRIDES` mirrors the ACTIVE head's derived table, not v9's;
-  * the staged v9 artifacts, when present, are stamped STAGED and carry the v9 model.
+  * the staged v9 artifacts, when present, are stamped STAGED and carry the v9 model —
+    except the keeper recut, which was deleted outright once v10 was adopted over v9.
 
 And the τ_h half of §7: τ_h is left FATAL and was NOT re-derived by THIS pass. What is
 confirmed is that the version-mismatch raise reports **v9** by name once v9 is the active
@@ -93,15 +94,21 @@ def test_production_seeder_t_good_never_mirrors_the_staged_v9_table():
 # --------------------------------------------------------------------------- #
 # The staged artifacts are stamped as staged (skipped until §7 produces them).
 # --------------------------------------------------------------------------- #
-@pytest.mark.skipif(not STAGED_CUTS.exists(), reason="v9 keeper recut not produced yet")
-def test_staged_keeper_cuts_are_v9_and_marked_staged():
-    doc = json.loads(STAGED_CUTS.read_text(encoding="utf-8"))
-    assert doc["provenance"]["model"] == "v9"
-    assert doc["eval"] == "data/v9/eval_scores_v9.jsonl"
-    assert "STAGED" in doc.get("status", "")
-    assert doc.get("keeper_predicate") == "label >= 3"
-    # ...and it is genuinely a different file from the live one
-    assert STAGED_CUTS.resolve() != LIVE_CUTS.resolve()
+def test_the_staged_v9_keeper_cut_is_gone_and_stays_gone():
+    """`data/atlas/keeper_cuts_v9.json` was DELETED 2026-08-02.
+
+    It was checked here by a `skipif(not exists)` guard, which was right while the file was
+    a pending §7 output — but once v10 was adopted over v9 that guard degrades to a
+    permanent silent skip, and a test that can only skip is a memory of a test. The file is
+    a keeper threshold on a head no gate will ever run; the invariant worth keeping is not
+    "it is stamped STAGED" but "it is not there at all", which is also the strongest form of
+    `test_live_keeper_cut_still_names_the_active_head`'s negative. `tools/v9/keeper_cut_v9.py`
+    still exists, so re-running it is the way to get the file back — and if that ever happens
+    this test is the thing that says out loud that it did."""
+    assert not STAGED_CUTS.exists(), (
+        f"{STAGED_CUTS} is back. It was deleted as a threshold on a never-deployed head "
+        f"(v9 is not a rollback rung — data/v10/build_metadata.json:rollback_ladder). If a "
+        f"question genuinely needs it, say so here rather than letting it sit unexplained.")
 
 
 @pytest.mark.skipif(not STAGED_TGOOD.exists(), reason="v9 t_good not derived yet")
