@@ -3,14 +3,14 @@
   "beta": 0.5,
   "min_pos": 15,
   "baseline": 0.5,
-  "eval": "data/v8/eval_scores_v8.jsonl",
+  "eval": "data/v10/eval_scores_v10.jsonl",
   "provenance": {
-    "model": "v8",
+    "model": "v10",
     "verified": true,
-    "population": "data/v8/eval_scores_v8.jsonl",
+    "population": "data/v10/eval_scores_v10.jsonl",
     "durable_population": true,
-    "detail": "frozen eval slice (paths.durable, committed); julia:multibrot* census-only (source=='prospect_census') per Option A; keeper positive = label >= 3",
-    "basis": "model + population named by the derivation code path: keeper_cut.load_triples reads v8_p_ge2/v8_p_ge3 from EVAL (data/v8/eval_scores_v8.jsonl); not inferred from history. The population is committed, so `derive()` re-runs and this stamp is verifiable rather than asserted."
+    "detail": "frozen eval slice (paths.durable, committed); ONE INSTRUMENT PER PARTITION ({'mandelbrot': 'loose0_v3_floor', 'julia:multibrot3': 'prospect_census', 'julia:multibrot4': 'prospect_census', 'julia:multibrot5': 'prospect_census'}) \u2014 never pooled; keeper positive = label >= 3",
+    "basis": "model + population named by the derivation code path: keeper_cut.load_triples reads v10_p_ge2/v10_p_ge3 from EVAL (data/v10/eval_scores_v10.jsonl); not inferred from history. The population is committed, so `derive()` re-runs and this stamp is verifiable rather than asserted."
   },
   "cuts": {
     "julia:mandelbrot": {
@@ -24,49 +24,49 @@
       "oof_f": null
     },
     "julia:multibrot3": {
-      "t": 0.62,
+      "t": 0.47,
       "calibrated": true,
       "n": 54,
       "pos": 19,
-      "prec": 0.5625,
-      "rec": 0.9474,
-      "f": 0.6122,
-      "oof_f": 0.6122
+      "prec": 0.6364,
+      "rec": 0.7368,
+      "f": 0.6542,
+      "oof_f": 0.5285
     },
     "julia:multibrot4": {
-      "t": 0.81,
+      "t": 0.55,
       "calibrated": true,
       "n": 51,
       "pos": 24,
-      "prec": 0.75,
-      "rec": 0.625,
-      "f": 0.7212,
-      "oof_f": 0.6466
+      "prec": 0.68,
+      "rec": 0.7083,
+      "f": 0.6855,
+      "oof_f": 0.6667
     },
     "julia:multibrot5": {
-      "t": 0.71,
+      "t": 0.55,
       "calibrated": true,
       "n": 39,
       "pos": 22,
-      "prec": 0.8333,
-      "rec": 0.6818,
-      "f": 0.7979,
-      "oof_f": 0.7778
+      "prec": 0.8125,
+      "rec": 0.5909,
+      "f": 0.7558,
+      "oof_f": 0.6667
     },
     "mandelbrot": {
-      "t": 0.85,
+      "t": 0.03,
       "calibrated": true,
       "n": 526,
       "pos": 26,
-      "prec": 0.5714,
-      "rec": 0.1538,
-      "f": 0.3704,
-      "oof_f": 0.3
+      "prec": 0.3659,
+      "rec": 0.5769,
+      "f": 0.3947,
+      "oof_f": 0.3571
     },
     "multibrot3": {
       "t": 0.5,
       "calibrated": false,
-      "n": 0,
+      "n": 24,
       "pos": 0,
       "prec": null,
       "rec": null,
@@ -76,7 +76,7 @@
     "multibrot4": {
       "t": 0.5,
       "calibrated": false,
-      "n": 0,
+      "n": 25,
       "pos": 0,
       "prec": null,
       "rec": null,
@@ -86,7 +86,7 @@
     "multibrot5": {
       "t": 0.5,
       "calibrated": false,
-      "n": 0,
+      "n": 29,
       "pos": 0,
       "prec": null,
       "rec": null,

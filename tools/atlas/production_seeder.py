@@ -305,66 +305,86 @@ def julia_partition(fam: str) -> str:
 # Every value is stamped per outcome row (`t_good`) so the ledger self-describes across
 # the mixed-threshold eras.
 #
-# THRESHOLDS ARE SCALE-BOUND. Every value below is the **v8** derivation
-# (tools/v8/derive_t_good_v8.py -> data/v8/t_good_derivation.json, the unbiased v8 eval
-# slice data/v8/eval_scores_v8.jsonl). They REPLACE the v7 table wholesale: v8's p_good
-# distribution is its own scale, so a v7 cut carried forward would be a number with no
-# meaning. tools/v8/test_derive_t_good_v8.py holds this table to the derivation artifact,
-# so the two cannot drift apart silently.
+# THRESHOLDS ARE SCALE-BOUND. Every value below is the **v10** derivation
+# (tools/v10/derive_t_good_v10.py -> data/v10/t_good_derivation.json, the unbiased v10 eval
+# slice data/v10/eval_scores_v10.jsonl). They REPLACE the v8 table wholesale: v10's p_good
+# distribution is its own scale, so a v8 cut carried forward would be a number with no
+# meaning. tools/scoring/test_t_good_adoption.py holds this table to the ACTIVE version's
+# derivation artifact, so the two cannot drift apart silently.
 #
 # OBJECTIVE IS PER-FAMILY, and the reason is SUPPLY, not model behaviour:
 #   **weight recall where supply is scarce, weight precision where supply is abundant.**
-# A false admit costs the same everywhere; the cost of a MISS is what differs. Mandelbrot
-# is effectively unlimited — a missed mandelbrot costs nothing, the next hunt finds more —
-# so mandelbrot derives at F0.5 (precision-weighted). julia:multibrot supply saturates, so
-# a miss there costs real money, and those derive at F2 (recall-weighted). Uniform-F2 on
-# mandelbrot lands at t=0.14 / precision 0.292: roughly three and a half bad locations per
-# good one, on the largest family in the corpus. v7's split objective was right for a
-# reason the new mandelbrot eval floor does not remove. See
-# docs/design/classifier_retrain_protocol.md §4.
+# A false admit costs the same everywhere; the cost of a MISS is what differs. Re-read at the
+# v10 flip against 2026-08 evidence rather than inherited: the 2026-08-01 supply crawl drew
+# mandelbrot 156 / mb3 181 / mb4 193 / mb5 200 and the 2026-08-02 label-seeded harvest 374
+# mandelbrot seeds, so native supply stays abundant -> F0.5. BOTH efforts were 100%
+# native-plane — zero julia:multibrot locations were drawn or harvested — so that family's
+# supply has not grown at all since v8 and is if anything scarcer -> F2. Unchanged choices,
+# re-affirmed on new evidence. See docs/design/classifier_retrain_protocol.md §4.
+#
+# POPULATION RULE: one instrument per partition, never pooled. v10's eval slice carries a
+# THIRD unbiased instrument (maneuver_uniform_v1, 90 rows). mandelbrot stays on the identical
+# 526 loose0_v3_floor rows v8 used, so the v8->v10 move reads as a head change; the 12
+# maneuver_uniform mandelbrot rows are dropped rather than pooled into its precision
+# denominator (pooling moves the argmax 0.03 -> 0.08 and collapses OOF F0.5 0.357 -> 0.100).
 #
 #   partition          obj     n  pos      t   prec    rec      F  F_OOF   plateau
-#   mandelbrot        F0.5   526   26   0.85  0.571  0.154  0.370  0.300  [0.79,0.85]
-#   julia:multibrot3    F2    54   19   0.39  0.513  1.000  0.841  0.804  [0.34,0.39]
-#   julia:multibrot4    F2    51   24   0.14  0.545  1.000  0.857  0.797  [0.13,0.14]
-#   julia:multibrot5    F2    39   22   0.20  0.677  0.955  0.882  0.813  [0.20,0.20]
+#   mandelbrot        F0.5   526   26   0.03  0.366  0.577  0.395  0.357  [0.03,0.03]
+#   julia:multibrot3    F2    54   19   0.27  0.594  1.000  0.880  0.841  [0.22,0.27]
+#   julia:multibrot4    F2    51   24   0.03  0.533  1.000  0.851  0.791  [0.02,0.03]
+#   julia:multibrot5    F2    39   22   0.06  0.704  0.864  0.826  0.789  [0.03,0.06]
 #
-# Read the OOF column: every julia:multibrot cut is threshold-overfit at small n (in-sample
-# F2 0.84/0.86/0.88 vs OOF 0.80/0.80/0.81), and mb4/mb5 sit on 2-step and 1-step plateaus.
-# They are the honest optimum available at this n, not a stable one — re-derive on more
-# labels, do NOT hand-nudge. Mandelbrot's F0.5 optimum spans [0.79, 0.85] and the protocol's
-# tie-break-toward-higher-t lands it at 0.85, one grid step below a cliff (0.86 drops a true
-# positive: F0.5 0.370 -> 0.300). The cliff is on the TIGHTER side of a fixed threshold, so
-# nothing drifts across it at runtime; it is a statement about how fragile the estimate is,
-# which the OOF gap (0.370 -> 0.300) already says.
+# READ THIS BEFORE TRUSTING THE MANDELBROT NUMBER. Every cut moved DOWN, hard, because v10's
+# P(>=3) sits lower than v8's on the same rows — that is a calibration shift, and re-deriving
+# it is exactly what protocol §4 exists for. But mandelbrot's is not merely lower, it is
+# UNDECIDABLE at the top: on v10 the F0.5 curve is flat and low (precision ~0.35 everywhere
+# below t=0.7) and the argmax falls to the grid's bottom step, 1-step plateau, and F0.5 and F2
+# now pick the SAME t — under v8 they picked 0.85 vs 0.14, so the objective was load-bearing
+# and now is not. The precision-weighted objective has nothing left to grab: v10 admits only
+# 3/526 at t=0.85 where v8 admitted 7/526. Consequence, measured not guessed: the mandelbrot
+# admit rate on this slice goes 1.3% (v8 @0.85) -> 7.8% (v10 @0.03) at precision 0.571 ->
+# 0.366. That is the opposite of the feared failure (a library that stops growing) and it is
+# NOT a free win — it is ~2 bad admits per good one on the largest family in the corpus.
+# The protocol's answer to an undecidable partition is LABEL MORE, not nudge; nothing here is
+# hand-adjusted. Watch the first v10-era run's mandelbrot precision.
+#
+# julia:multibrot4's t=0.03 sits on a 2-step plateau and mb3/mb5 carry OOF gaps of +0.04/+0.04
+# at n=54/39. Honest optima at this n, not stable ones — re-derive on more labels, do NOT
+# hand-nudge.
 #
 # NO class-4 threshold: class 4 decodes at its natural cutpoint P(>=4) >= 0.5 with no
 # per-family calibration (score_lib.corn_decode t_great). NO native-multibrot tightening.
 # =========================================================================== #
 T_GOOD_BASELINE = 0.50    # conservative default for every unswept / undecidable partition
 T_GOOD_OVERRIDES = {
-    "mandelbrot": 0.85,        # v8 F0.5-argmax, loose0_v3 floor (n=526, pos=26) — supply abundant
-    "julia:multibrot3": 0.39,  # v8 F2-argmax, census slice (n=54, pos=19) — supply scarce
-    "julia:multibrot4": 0.14,  # v8 F2-argmax, census slice (n=51, pos=24) — supply scarce
-    "julia:multibrot5": 0.20,  # v8 F2-argmax, census slice (n=39, pos=22) — supply scarce
+    "mandelbrot": 0.03,        # v10 F0.5-argmax, loose0_v3 floor (n=526, pos=26) — supply abundant
+    "julia:multibrot3": 0.27,  # v10 F2-argmax, census slice (n=54, pos=19) — supply scarce
+    "julia:multibrot4": 0.03,  # v10 F2-argmax, census slice (n=51, pos=24) — supply scarce
+    "julia:multibrot5": 0.06,  # v10 F2-argmax, census slice (n=39, pos=22) — supply scarce
 }
 
-# UNCALIBRATED — these partitions RUN at T_GOOD_BASELINE but were never DERIVED under v8:
-# the v8 eval slice has zero rows for them. A baseline 0.50 and a derived 0.50 are
-# indistinguishable as a bare number, and six months from now nobody remembers which is
-# which — so the distinction lives here explicitly rather than in absence-from-a-table.
-# Their v7 overrides (julia:mandelbrot 0.22, phoenix 0.45) are RETIRED, not carried: they
-# were cuts on v7's p_good scale and mean nothing on v8's.
+# UNCALIBRATED — these partitions RUN at T_GOOD_BASELINE but were never DERIVED under v10.
+# A baseline 0.50 and a derived 0.50 are indistinguishable as a bare number, and six months
+# from now nobody remembers which is which — so the distinction lives here explicitly rather
+# than in absence-from-a-table. Their v7 overrides (julia:mandelbrot 0.22, phoenix 0.45) are
+# RETIRED, not carried: they were cuts on v7's p_good scale.
 #
-# PHOENIX IS THE ONE TO WATCH: 573 v8 training locations and the only partition where
+# THE SET IS UNCHANGED FROM v8 BUT TWO OF THE REASONS ARE NOT, and the difference matters.
+# v10 is the first version with an unbiased NATIVE-plane eval instrument (maneuver_uniform_v1,
+# 90 rows): multibrot3/4/5 now have 24/25/29 base-rate draws each and are uncalibrated because
+# **not one of the 78 was a keeper**, not because nobody has looked. julia:mandelbrot and
+# phoenix are still the never-looked case. `data/v10/t_good_derivation.json` carries the two
+# reasons verbatim per partition.
+#
+# PHOENIX IS THE ONE TO WATCH: 573 training locations and the only partition where
 # class 4 outnumbers class 3, yet no unbiased eval whatsoever. It is running on a
 # conservative default, not on evidence.
 T_GOOD_UNCALIBRATED = frozenset({
-    "julia:mandelbrot",   # v7 had 0.22 (n=178, pos=25); no v8 eval rows
-    "multibrot3",         # never calibrated in any version
-    "multibrot4",
-    "multibrot5",
-    "phoenix",            # v7 had 0.45 (Phase-B grid); no v8 eval rows
+    "julia:mandelbrot",   # v7 had 0.22 (n=178, pos=25); no unbiased eval rows in v8 or v10
+    "multibrot3",         # v10: n=24 unbiased draws, 0 keepers — looked, undecidable
+    "multibrot4",         # v10: n=25 unbiased draws, 0 keepers
+    "multibrot5",         # v10: n=29 unbiased draws, 0 keepers
+    "phoenix",            # v7 had 0.45 (Phase-B grid); no unbiased eval rows in v8 or v10
 })
 
 
@@ -678,23 +698,45 @@ def build_cloud(rows: list[dict], family: str) -> list[dict]:
     return cloud
 
 
+# ---- WATCH (not a gate) raised at the v10 flip, 2026-08-02 -------------------------------- #
+# v10's class-4 descriptive AP fell 0.813 -> 0.728 versus v8 on the census leg. It carries NO
+# pre-registered bar and n=22 positives on one family (julia:multibrot) puts the move inside
+# label noise, so it is deliberately NOT a gate and NOT a threshold: nothing here changes any
+# decision. What it earns is an EYE on the first v10-era run's q4 yield — if class-4 emission
+# is visibly thin, that number stops being noise and becomes evidence.
+#
+# It lives in `cloud_diagnostic` because that is the run's first eyeball of the decode
+# distribution, and it is keyed on SCORER_VERSION so it appears for v10-era runs and vanishes
+# by itself when the head moves on — a watch nobody has to remember to retire.
+Q4_WATCH_VERSION = "v10"
+Q4_WATCH = ("class-4 descriptive AP moved 0.813 -> 0.728 at the v10 flip "
+            "(n=22, julia:multibrot, no bar, inside label noise). Not a gate — give this "
+            "run's class-4 yield a qualitative look before trusting it.")
+
+
 def cloud_diagnostic(rows: list[dict], cloud: list[dict], family: str) -> dict:
     """Startup summary scoped to the active `family` partition: partition rows, guard_pass
     count, class-1/2/3/4 split among guard-clean *decoded* partition rows (pre-decoded_class
     rows are not counted), and the distinct q3+ cloud size after dedup.
 
     The split spans 1..4 since v8: a K=4 head's class-4 rows would otherwise vanish from the
-    startup summary, and the summary is where a run's decode distribution is first eyeballed."""
+    startup summary, and the summary is where a run's decode distribution is first eyeballed.
+
+    Carries `q4_watch` while the v10 head is live (see Q4_WATCH above) — a note, never a
+    verdict, attached to the one readout that shows the class-4 count."""
     fam_rows = [r for r in rows if r.get("family", "mandelbrot") == family]
     guard_clean = [r for r in fam_rows
                    if r.get("guard_pass", True) and r.get("decoded_class") is not None]
     split = {c: sum(1 for r in guard_clean if r["decoded_class"] == c) for c in (1, 2, 3, 4)}
     n_undecoded = sum(1 for r in fam_rows
                       if r.get("guard_pass", True) and r.get("decoded_class") is None)
-    return {"family": family, "total_rows": len(rows), "partition_rows": len(fam_rows),
-            "guard_pass": sum(1 for r in fam_rows if r.get("guard_pass", True)),
-            "guard_clean_decoded": len(guard_clean), "undecoded_guard_pass": n_undecoded,
-            "class_split": split, "cloud_size": len(cloud)}
+    out = {"family": family, "total_rows": len(rows), "partition_rows": len(fam_rows),
+           "guard_pass": sum(1 for r in fam_rows if r.get("guard_pass", True)),
+           "guard_clean_decoded": len(guard_clean), "undecoded_guard_pass": n_undecoded,
+           "class_split": split, "cloud_size": len(cloud)}
+    if SCORER_VERSION == Q4_WATCH_VERSION:
+        out["q4_watch"] = Q4_WATCH
+    return out
 
 
 # =========================================================================== #
@@ -1220,12 +1262,18 @@ def _run(args, fam: FamilyResolved):
     # logs going forward.
     cloud = build_cloud(ledgers.rows, fam.partition)
     diag = cloud_diagnostic(ledgers.rows, cloud, fam.partition)
+    # class 4 IS printed. It was omitted here while the dict already carried it, so a
+    # q4-capable head's best rows were invisible in the line a run is actually read from —
+    # and the v10 flip raised a class-4 WATCH that would have had nowhere to land.
     print(f"ledgers: {diag['total_rows']} rows ({diag['partition_rows']} in partition "
           f"'{fam.partition}'), {diag['guard_pass']} guard_pass "
-          f"({diag['guard_clean_decoded']} decoded; class1/2/3="
-          f"{diag['class_split'][1]}/{diag['class_split'][2]}/{diag['class_split'][3]}; "
+          f"({diag['guard_clean_decoded']} decoded; class1/2/3/4="
+          f"{diag['class_split'][1]}/{diag['class_split'][2]}/{diag['class_split'][3]}"
+          f"/{diag['class_split'][4]}; "
           f"{diag['undecoded_guard_pass']} pre-decode rows excluded)"
           f"  | q3 cloud {diag['cloud_size']} distinct places")
+    if diag.get("q4_watch"):
+        print(f"  WATCH: {diag['q4_watch']}")
 
     rng = np.random.default_rng(args.seed)
     native = NativeSeeder(args.seed, scratch, rng, fam.flags)

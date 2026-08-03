@@ -5,16 +5,22 @@ written to a staged path; the live gate keeps running on v8 until the ACTIVE_CKP
 which is its own pass and is conditional on the pre-registered bar. That is easy to say and
 easy to violate by one overwrite, so it is checked:
 
-  * `ACTIVE_CKPT` still points at v8 (the flip has not happened here);
-  * the LIVE keeper cut still names the ACTIVE version, so `test_steered_frontier`'s guard
-    is intact and a v9 threshold is not sitting on a v8 gate;
-  * `production_seeder.T_GOOD_OVERRIDES` still mirrors v8's derived table, not v9's;
+  * `ACTIVE_CKPT` has never pointed at v9;
+  * the LIVE keeper cut names the ACTIVE version, so `test_steered_frontier`'s guard
+    is intact and a v9 threshold is not sitting on another head's gate;
+  * `production_seeder.T_GOOD_OVERRIDES` mirrors the ACTIVE head's derived table, not v9's;
   * the staged v9 artifacts, when present, are stamped STAGED and carry the v9 model.
 
 And the τ_h half of §7: τ_h is left FATAL and was NOT re-derived by THIS pass. What is
 confirmed is that the version-mismatch raise reports **v9** by name once v9 is the active
 head — checked by simulating the active version rather than by flipping it, because flipping
 it is exactly what this pass must not do.
+
+  UPDATE 2026-08-02 — the flip happened, to **v10**, not to v9. Three checks here named "v8"
+  as a literal and went red for the flip rather than for a violation; that is a test measuring
+  its own edit. They now assert what this file is actually about and what stays true for every
+  future flip: **v9 was never deployed**, and the live thresholds name whichever head IS. The
+  premise did not weaken — v9 remains the one version built, staged and skipped.
 
   UPDATE 2026-07-31 — the launch-time re-derivation the τ_h tests always pointed at has now
   happened, under the ACTIVE (v8) head, for the minibrot-maneuver shakedown
@@ -47,36 +53,41 @@ V8_TGOOD = ROOT / "data/v8/t_good_derivation.json"
 # --------------------------------------------------------------------------- #
 # The flip has NOT happened.
 # --------------------------------------------------------------------------- #
-def test_active_ckpt_is_still_v8():
-    """The cap raise + retrain does not deploy anything. If this goes red, either the flip
-    happened (and this file belongs to the flip pass, not this one) or ACTIVE_CKPT was
-    edited by accident — which would silently point every discovery gate at an unmeasured
-    head."""
-    assert active_ckpt.ACTIVE_VERSION == "v8", (
-        f"ACTIVE_CKPT names {active_ckpt.ACTIVE_VERSION!r}; the v9 build pass must NOT flip "
-        f"it (the flip is conditional on the pre-registered bar and is its own pass)")
+def test_v9_was_never_deployed():
+    """v9 is the version that was built, evaluated, staged — and skipped. Its primary arm
+    passed on inputs byte-identical to the baseline's, so the verdict was true and empty.
+    Deploying it later, by accident or by a rollback that mistakes it for a rung, would
+    point every discovery gate at a head no certification ever cleared."""
+    assert active_ckpt.ACTIVE_VERSION != "v9", (
+        "ACTIVE_CKPT names v9 — v9 was never certified for deployment and is explicitly not "
+        "a rollback rung (data/v10/build_metadata.json:rollback_ladder.why_not_v9)")
 
 
 def test_live_keeper_cut_still_names_the_active_head():
-    """The live cuts describe v8's p_good scale. Overwriting them with the v9 recut would
-    put a v9 threshold on a v8 gate — a number about nothing, exactly as a v7 cut on a v8
-    gate was."""
+    """The live cuts describe the ACTIVE head's p_good scale. Overwriting them with the v9
+    recut would put a v9 threshold on another head's gate — a number about nothing, exactly
+    as a v7 cut on a v8 gate was."""
     doc = json.loads(LIVE_CUTS.read_text(encoding="utf-8"))
-    assert doc["provenance"]["model"] == active_ckpt.ACTIVE_VERSION
-    assert doc["eval"] == "data/v8/eval_scores_v8.jsonl"
+    active = active_ckpt.ACTIVE_VERSION
+    assert doc["provenance"]["model"] == active
+    assert doc["eval"] == f"data/{active}/eval_scores_{active}.jsonl"
+    assert doc["provenance"]["model"] != "v9", "the STAGED v9 cut was promoted to the live path"
 
 
-def test_production_seeder_t_good_still_mirrors_v8():
-    """`T_GOOD_OVERRIDES` is the ADOPTED table. It must keep mirroring v8's derivation
-    while v8 is deployed; the v9 table is staged in data/v9/t_good_derivation.json and is
-    mirrored by the flip pass."""
+def test_production_seeder_t_good_never_mirrors_the_staged_v9_table():
+    """`T_GOOD_OVERRIDES` is the ADOPTED table and must mirror the DEPLOYED head's
+    derivation (held exactly by tools/scoring/test_t_good_adoption.py). What this file adds
+    is the negative: the staged v9 table must never be the one in production, whichever head
+    is live."""
     import production_seeder as ps
-    v8 = json.loads(V8_TGOOD.read_text(encoding="utf-8"))["adopted"]
-    for fam, t in v8.items():
-        assert ps.T_GOOD_OVERRIDES.get(fam) == t, (
-            f"production_seeder.T_GOOD_OVERRIDES[{fam!r}]={ps.T_GOOD_OVERRIDES.get(fam)!r} "
-            f"but v8's derived table says {t!r} — the adopted table drifted off the "
-            f"deployed head's derivation")
+    active = active_ckpt.ACTIVE_VERSION
+    live_doc = ROOT / "data" / active / "t_good_derivation.json"
+    assert live_doc.exists(), f"no t_good derivation for the live head {active}"
+    assert json.loads(live_doc.read_text(encoding="utf-8"))["adopted"] ==         {k: float(v) for k, v in ps.T_GOOD_OVERRIDES.items()}
+    if STAGED_TGOOD.exists() and active != "v9":
+        v9 = json.loads(STAGED_TGOOD.read_text(encoding="utf-8"))["adopted"]
+        assert {k: float(v) for k, v in ps.T_GOOD_OVERRIDES.items()} != v9, (
+            "the adopted table equals the STAGED v9 table while v9 is not deployed")
 
 
 # --------------------------------------------------------------------------- #

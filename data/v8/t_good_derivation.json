@@ -245,5 +245,5 @@
     "mandelbrot: F0.5 picks t=0.85 vs F2 t=0.14 \u2014 objective choice is load-bearing, not cosmetic",
     "mandelbrot: adopted F0.5 in-sample 0.370 vs OOF 0.300 (gap +0.070) \u2014 threshold overfit at n=526, pos=26; the OOF value is the honest one"
   ],
-  "note": "ADOPTED \u2014 production_seeder.T_GOOD_OVERRIDES mirrors `adopted`, and the `uncalibrated` partitions are named in production_seeder.T_GOOD_UNCALIBRATED (they RUN at the baseline but were never derived; the two 0.50s must stay distinguishable). tools/v8/test_derive_t_good_v8.py holds them in agreement."
+  "note": "ADOPTED \u2014 production_seeder.T_GOOD_OVERRIDES mirrors `adopted`, and the `uncalibrated` partitions are named in production_seeder.T_GOOD_UNCALIBRATED (they RUN at the baseline but were never derived; the two 0.50s must stay distinguishable). tools/scoring/test_t_good_adoption.py holds the ACTIVE version's artifact and the adopted table in agreement."
 }

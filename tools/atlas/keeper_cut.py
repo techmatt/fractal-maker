@@ -9,14 +9,19 @@ are confident a human would call good. NOTHING gates on it — admission stays a
 
     keeper(row) := corn_decode(row.p_notbad, row.p_good, keeper_cut_for(partition)) >= 3
 
-Derived exactly like the discovery table (`tools/v8/derive_t_good_v8.py`), from the frozen v8
-eval slice `data/v8/eval_scores_v8.jsonl` (label / fractal_type / v8 cumulative probs inline,
-frozen by tools/v8/eval_v8.py), with one change: the objective is F0.5 (beta=0.5) rather than the
-discovery table's per-family choice. A partition with < MIN_POS positives is UNCALIBRATED and
-falls back to the discovery baseline 0.50, flagged. Prediction uses `corn_decode` (the fixed
-`p_notbad>=0.5` gate AND `p_good>=t`), matching how an admitted keeper decodes.
+Derived exactly like the discovery table (`tools/v8/derive_t_good_v8.py`), from the frozen eval
+slice of the ACTIVE version — `data/<v>/eval_scores_<v>.jsonl` (label / fractal_type / that
+head's cumulative probs inline, frozen by `tools/<v>/eval_<v>.py`) — with one change: the
+objective is F0.5 (beta=0.5) rather than the discovery table's per-family choice. A partition
+with < MIN_POS positives is UNCALIBRATED and falls back to the discovery baseline 0.50,
+flagged. Prediction uses `corn_decode` (the fixed `p_notbad>=0.5` gate AND `p_good>=t`),
+matching how an admitted keeper decodes.
 
-RECUT AGAINST v8 (was the v7 slice). Two substantive changes beyond the model:
+RECUT AGAINST v10 at the 2026-08-02 flip (was v8, before that v7). The population and column
+prefix now resolve from `production_pins.ACTIVE_VERSION` rather than a literal, so the default
+derivation moves with the pin instead of quietly re-deriving the previous head's cut.
+
+Two substantive changes beyond the model, both dating from the v8 recut and still in force:
 
   * The population is now DURABLE. The v7 cuts were derived from
     `data/classifier/v7/eval_scores_v7.jsonl`, which was gitignored, was never committed, and
@@ -28,10 +33,23 @@ RECUT AGAINST v8 (was the v7 slice). Two substantive changes beyond the model:
     best locations in the corpus — as a keeper NEGATIVE, which would push the precision-weighted
     cut in exactly the wrong direction.
 
-The v8 slice covers two partitions (the julia:multibrot census and the mandelbrot loose0_v3
-floor); julia:mandelbrot and phoenix, which v7 could calibrate, now fall to UNCALIBRATED. That
-is a real loss of coverage and it is reported as such rather than papered over with a v7 value
-carried onto a v8 scale.
+The v10 slice calibrates the same two partitions the v8 slice did (the julia:multibrot census
+and the mandelbrot loose0_v3 floor). Its third instrument, `maneuver_uniform_v1` (90 rows), adds
+unbiased NATIVE-plane rows for mandelbrot and multibrot{3,4,5} but carries ZERO keeper
+positives, so it calibrates nothing here either — those partitions stay UNCALIBRATED, now
+because we looked rather than because we hadn't. julia:mandelbrot and phoenix, which v7 could
+calibrate, remain UNCALIBRATED: a real loss of coverage, reported rather than papered over with
+a stale-scale value carried forward.
+
+POPULATION: ONE INSTRUMENT PER PARTITION (`INSTRUMENT` below), the same rule the v10 discovery
+derivation uses. The julia:multibrot census-only rule ("Option A") is the original case; the
+v10 flip added the mandelbrot case, because v10's slice is the first to carry a SECOND
+unbiased mandelbrot instrument (12 `maneuver_uniform_v1` rows alongside the 526-row
+`loose0_v3_floor`). Pooling them is not a rounding difference — it moves the mandelbrot cut
+0.03 -> 0.08 and collapses the LOO-OOF F0.5 from 0.357 to 0.100, which is 12 zero-positive rows
+destabilising the argmax rather than informing it. Cutting on the floor alone is also the
+comparability-preserving choice: it is the identical 526 rows v8's keeper cut used, so the
+v8 -> v10 move reads as a head change.
 
   uv run python tools/atlas/keeper_cut.py            # print table + write data/atlas/keeper_cuts.json
 """
@@ -49,11 +67,16 @@ sys.path.insert(0, str(ROOT / "tools" / "atlas"))
 from score_lib import corn_decode                    # noqa: E402
 from production_seeder import T_GOOD_BASELINE         # noqa: E402
 
-EVAL = ROOT / "data" / "v8" / "eval_scores_v8.jsonl"
-# Column prefix of the scorer whose probabilities the slice carries. eval_v8 writes
-# `v8_p_ge2` / `v8_p_ge3` / `v8_p_ge4`; the v7-era slice wrote `v7_p_not_bad` / `v7_p_good`.
-# Derived from the slice's own filename so the two cannot disagree.
-EVAL_VERSION = "v8"
+# Column prefix of the scorer whose probabilities the slice carries. `eval_v<N>` writes
+# `v<N>_p_ge2` / `_p_ge3` / `_p_ge4`; the v7-era slice wrote `v7_p_not_bad` / `v7_p_good`.
+# RESOLVED FROM THE PIN, not hardcoded: the keeper cut is a threshold on the ACTIVE head's
+# P(>=3), so the default population must move with the pin or `derive()` silently keeps
+# re-deriving the previous head's cut. Was a literal "v8" until the v10 flip.
+sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+from production_pins import ACTIVE_VERSION        # noqa: E402
+
+EVAL_VERSION = ACTIVE_VERSION
+EVAL = ROOT / "data" / EVAL_VERSION / f"eval_scores_{EVAL_VERSION}.jsonl"
 OUT = ROOT / "data" / "atlas" / "keeper_cuts.json"
 
 # fractal_type (Rust kind_str) -> ledger partition key (mirrors derive_t_good.FT2FAM).
@@ -66,6 +89,18 @@ FT2FAM = {
     "julia_multibrot5": "julia:multibrot5",
     "phoenix": "phoenix",
 }
+# ONE INSTRUMENT PER PARTITION — partition -> the eval `source` it is cut on. A partition
+# absent here takes every row it has. Generalises the original julia:multibrot "Option A"
+# census-only rule to the case v10 introduced (a second unbiased mandelbrot instrument); see
+# the module docstring for why pooling two instruments is a different cut, not a bigger one.
+# A source named here that the slice does not carry yields an empty partition -> UNCALIBRATED,
+# which is the correct read: the instrument this cut is defined on is absent.
+INSTRUMENT = {
+    "mandelbrot": "loose0_v3_floor",
+    "julia:multibrot3": "prospect_census",
+    "julia:multibrot4": "prospect_census",
+    "julia:multibrot5": "prospect_census",
+}
 MIN_POS = 15                                          # sufficiency floor (== discovery derivation)
 BETA = 0.5                                            # precision-weighted (keeper) objective
 GRID = [round(0.02 + 0.01 * i, 2) for i in range(97)]   # [0.02, 0.98]
@@ -76,7 +111,7 @@ def read_jsonl(p):
 
 
 def load_triples(eval_path: Path = EVAL, version: str = None) -> dict:
-    """{partition: [(p_notbad, p_good, is_pos)]}. julia:multibrot* -> census-only (Option A).
+    """{partition: [(p_notbad, p_good, is_pos)]}. One instrument per partition (`INSTRUMENT`).
 
     `is_pos` is `label >= 3` — a class-4 location is emphatically a keeper. Under v7's 1..3
     labels `== 3` was the same predicate; under v8's 1..4 it would score the best locations in
@@ -93,7 +128,8 @@ def load_triples(eval_path: Path = EVAL, version: str = None) -> dict:
         part = FT2FAM.get(r["fractal_type"])
         if part is None:
             continue
-        if part.startswith("julia:multibrot") and r.get("source") != "prospect_census":
+        want = INSTRUMENT.get(part)
+        if want is not None and r.get("source") != want:
             continue
         parts[part].append((r[f"{ver}_p_ge2"], r[f"{ver}_p_ge3"], r["label"] >= 3))
     return parts
@@ -223,8 +259,8 @@ def provenance_stamp(eval_path: Path = None, version: str = None) -> dict:
         verified=True,
         population=eval_rel,
         durable_population=True,
-        detail=("frozen eval slice (paths.durable, committed); julia:multibrot* census-only "
-                "(source=='prospect_census') per Option A; keeper positive = label >= 3"),
+        detail=("frozen eval slice (paths.durable, committed); ONE INSTRUMENT PER PARTITION "
+                f"({INSTRUMENT}) — never pooled; keeper positive = label >= 3"),
         basis=(f"model + population named by the derivation code path: keeper_cut.load_triples reads "
                f"{EVAL_MODEL_VERSION}_p_ge2/{EVAL_MODEL_VERSION}_p_ge3 from EVAL ({eval_rel}); "
                f"not inferred from history. The population is committed, so `derive()` re-runs and "

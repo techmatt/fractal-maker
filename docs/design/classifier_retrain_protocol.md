@@ -103,8 +103,25 @@ the *economic* one.
 Future derivations inherit the principle, not the numbers. Where in-sample and OOF
 disagree, prefer the OOF-honest choice and **say so in the report**.
 
-(Current durable outcome: the v8 table in `production_seeder.T_GOOD_OVERRIDES` —
-mandelbrot 0.85 via F0.5, `julia:multibrot{3,4,5}` 0.39/0.14/0.20 via F2, five partitions
+**One instrument per partition, never pooled.** Where a partition has more than one unbiased
+eval instrument, cut it on ONE — its own — and say which. Pooling two unbiased populations
+into a single precision denominator is a different cut, not a bigger one: at the v10 flip,
+adding 12 zero-positive `maneuver_uniform_v1` rows to mandelbrot's 526-row floor moved the
+argmax five grid steps and collapsed the LOO-OOF F0.5 from 0.357 to 0.100. Cutting on the
+instrument the previous version used is also what keeps a version-over-version threshold move
+readable as a head change rather than a population change.
+
+**A zero-positive instrument still changes the record.** A partition with unbiased draws and
+no keepers is UNCALIBRATED for a different reason than one nobody has ever sampled, and the
+artifact must carry the two reasons separately — "we looked and found none" is evidence,
+"we have never looked" is not.
+
+(Current durable outcome: the **v10** table in `production_seeder.T_GOOD_OVERRIDES` —
+mandelbrot 0.03 via F0.5, `julia:multibrot{3,4,5}` 0.27/0.03/0.06 via F2, five partitions
 UNCALIBRATED. The *values* live in `production_seeder.py`, the *derivation* in
-`tools/v8/derive_t_good_v8.py` → `data/v8/t_good_derivation.json`, and
-`tools/v8/test_derive_t_good_v8.py` holds the two in agreement. The *method* lives here.)
+`tools/v10/derive_t_good_v10.py` → `data/v10/t_good_derivation.json` (which imports the
+estimator from `tools/v8/derive_t_good_v8.py` rather than copying it), and
+`tools/scoring/test_t_good_adoption.py` holds the ACTIVE version's artifact and that table in
+agreement. The *method* lives here. NOTE for the next version: v10's mandelbrot cut is the
+first that fell to the grid floor with F0.5 and F2 agreeing — an undecidable partition, whose
+protocol answer is *label more*, not nudge.)

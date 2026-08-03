@@ -377,6 +377,10 @@ __pycache__/
 !/data/v10/eval_scores_v10.jsonl
 !/data/v10/eval_results_v10.json
 !/data/v10/prereg_v10.json
+# The ADOPTED discovery t_good table at the v10 flip (tools/v10/derive_t_good_v10.py).
+# production_seeder.T_GOOD_OVERRIDES mirrors it and tools/scoring/test_t_good_adoption.py
+# holds the two equal, so this file is the derivation half of a live production gate.
+!/data/v10/t_good_derivation.json
 # Backstop only — the v10 aug cache is bulk() and resolves out-of-tree through
 # artifacts.RELOCATED_PREFIXES. If it ever reappears here it stays un-committable.
 /data/v10/aug_cache/

@@ -140,10 +140,15 @@ TRACKED_CANARIES = [
     "data/label_corpus/batches/2026-08-01_supply_crawl_strat_a_v1/rule_labels_interior_gt30_v1.json",
     "data/label_corpus/batches/2026-08-01_supply_crawl_strat_b_v1/rule_labels_interior_gt30_v1.json",
     # Committed classifier weights (force-tracked; not reproducible under GPU float
-    # nondeterminism, so no rebuild path). v8 is the LIVE deployed model; v7 is the
-    # one-flip rollback anchor (the role v6 held before the v8 promotion) AND the frozen
-    # penultimate the pref_loc_v1 ranker is pinned to; v6/v5 are the deeper rollbacks.
+    # nondeterminism, so no rebuild path). v10 is the LIVE deployed model (flipped
+    # 2026-08-02); v8 is the one-flip rollback anchor (the role v7 held before the v10
+    # promotion); v7 is a deeper rung AND the frozen penultimate the pref_loc_v1 ranker is
+    # pinned to; v6/v5 are the deepest rollbacks. v9 is deliberately NOT here: it was built,
+    # staged and never deployed, so it is not a rung of the ladder
+    # (data/v10/build_metadata.json:rollback_ladder.why_not_v9) — it is covered by the
+    # relational data/classifier/v<N>/ guard instead.
     # Every other v{2..4} weight is gitignored under data/*.
+    "data/classifier/v10/model_best.pt",
     "data/classifier/v8/model_best.pt",
     "data/classifier/v7/model_best.pt",
     "data/classifier/v6/model_best.pt",

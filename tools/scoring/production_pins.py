@@ -36,18 +36,40 @@ PALETTE = "twilight_shifted"           # v4/v5 deploy-canonical palette
 # checkpoint from here. Flip ACTIVE_CKPT and the whole gate moves; nothing else hardcodes
 # a version. The load path is version-agnostic (score_lib.Scorer reads mean/std/head from
 # the checkpoint's own config), so only this string changes between versions.
-ACTIVE_CKPT = "data/classifier/v8/model_best.pt"    # v8 unified location classifier (LIVE)
-# v8 is the first K=4 head: it emits THREE cutpoint logits (P>=2, P>=3, P>=4) where v5..v7
-# emitted two, so it can decode class 4. The load path stays version-agnostic — score_lib.Scorer
-# reads num_classes/mean/std/geometry off the checkpoint's own config — but a K=3-shaped consumer
-# that hardcoded two logits will now fail loudly on the state-dict shape rather than mis-score.
-# Rollback: point ACTIVE_CKPT back at v7 (the one-flip rollback anchor, the role v6 held) to
-# restore the prior gate; v6/v5 remain the deeper rollbacks. A rollback must also revert the
-# per-partition t_good table (production_seeder.T_GOOD_OVERRIDES) and the keeper cut
-# (data/atlas/keeper_cuts.json) — those thresholds are calibrated to v8's p_good scale and are
-# meaningless on v7's. tools/atlas/test_steered_frontier.py holds keeper_cuts to the active
-# version, so a rollback that forgets goes red rather than silent.
-V7_CKPT_ROLLBACK = "data/classifier/v7/model_best.pt"
+ACTIVE_CKPT = "data/classifier/v10/model_best.pt"   # v10 unified location classifier (LIVE)
+# ADOPTED 2026-08-02 (the v10 flip). v10 is v8's recipe on a re-rendered corpus at the raised
+# iteration cap plus 1,267 appended maneuver-view locations; K=4, same three cutpoint logits.
+# It CERTIFIED non-inferior on both pre-registered gating arms (census-144 q3 Δ−0.0090 p=0.79;
+# floor-526 q3 Δ+0.0042 p=0.84) and gained nothing measurable on any arm — adoption is on the
+# certified bar, not on a win. The load path stays version-agnostic (score_lib.Scorer reads
+# num_classes/mean/std/geometry off the checkpoint's own config).
+#
+# ============================ THE REVERT-TOGETHER SET ============================
+# Rolling back the pin ALONE leaves live thresholds calibrated to a head that is no longer
+# serving — cuts on a specific head's p_good are numbers about nothing on another's. The
+# ladder is `data/v10/build_metadata.json:rollback_ladder` — v10 -> v8 -> v7 -> v6 -> v5 (v9
+# is NOT a rung: built, staged, never deployed). Reverting one rung means reverting ALL of:
+#
+#   1. ACTIVE_CKPT (here)                          — ACTIVE_VERSION and every decode stamp
+#                                                    (corpus_common.is_current_decoded,
+#                                                    production_seeder.SCORER_VERSION) follow it
+#   2. production_seeder.T_GOOD_OVERRIDES          — v10: mandelbrot 0.03 / j:mb{3,4,5}
+#                                                    0.27/0.03/0.06 (was 0.85/0.39/0.14/0.20)
+#   3. data/atlas/keeper_cuts.json                 — stamped model="v10"
+#   4. steered_frontier.TAU_H_FIDELITY_BASE
+#      + TAU_H_FIDELITY_BASE_MODEL                 — vendored base, stamped "v10"
+#   5. data/atlas/tau_h_base_v10.json              — provenance for (4)
+#   6. tools/v10/derive_t_good_v10.py's output
+#      data/v10/t_good_derivation.json             — derivation half of (2)
+#
+# Items 2-6 are the v10-stamped threshold files this flip wrote; 1-5 are the four the build
+# metadata already named as coupled. Three guards make a forgetful revert RED rather than
+# silent: tools/atlas/test_steered_frontier.py holds keeper_cuts' provenance stamp AND
+# TAU_H_FIDELITY_BASE_MODEL to ACTIVE_VERSION, and tools/scoring/test_t_good_adoption.py
+# holds T_GOOD_OVERRIDES to the ACTIVE version's derivation artifact.
+# ================================================================================
+V8_CKPT_ROLLBACK = "data/classifier/v8/model_best.pt"   # one-flip rollback anchor
+V7_CKPT_ROLLBACK = "data/classifier/v7/model_best.pt"   # also the frozen pref_loc_v1 ranker pin
 V6_CKPT_ROLLBACK = "data/classifier/v6/model_best.pt"
 V5_CKPT_ROLLBACK = "data/classifier/v5/model_best.pt"
 DEFAULT_MODEL = ACTIVE_CKPT             # unified location-quality model (== ACTIVE_CKPT)

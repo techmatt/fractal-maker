@@ -1,13 +1,14 @@
 #!/usr/bin/env python
-r"""END-TO-END PROOF OF THE v8 FLIP — the deployed path, not a mock of it.
+r"""END-TO-END PROOF OF THE LIVE FLIP — the deployed path, not a mock of it.
 
 A flip that merely LANDS is not a flip that WORKS. What this proves, by driving the real
 production machinery (`guard.make_guarded_scorer` on `ACTIVE_CKPT` -> `reframe.reframe_location`
 -> `production_seeder._chosen_probs` -> `corn_decode` -> `Ledgers.append_outcome`) against
-labeled class-4 and class-1 locations from the frozen v8 eval slice:
+labeled class-4 and class-1 locations from the ACTIVE version's frozen eval slice:
 
   1. the loaded scorer IS the active checkpoint and IS K=4 (three cutpoint logits);
-  2. a written ledger row is **v8-stamped** (`scorer_version`, via the ledger's own append);
+  2. a written ledger row is stamped with the ACTIVE version (`scorer_version`, via the
+     ledger's own append);
   3. the row **records the third probability** (`p_ge4`), so it is re-decodable from disk;
   4. it **decodes correctly at the `>= 3` boundary** — a known class-4 location decodes to 4 and
      is admitted by the q3+ predicate and by the emission intake, and a known class-1 location
@@ -18,8 +19,13 @@ stamped, and structurally incapable of ever expressing class 4. That failure is 
 every unit test that supplies its own probabilities, which is why this one renders and scores
 for real.
 
+WAS `tools/v8/test_flip_end_to_end.py`, with "v8" hardcoded in the eval-slice path, the
+manifest path, the score-column prefix and two stamp assertions — so the proof of a flip went
+red at the NEXT flip, which is the one moment it most needs to run. It now resolves the version
+from `production_pins.ACTIVE_VERSION` and proves whichever head is live.
+
 `slow` — needs the release binary + a CUDA-capable torch and renders ~24 tiles per location.
-    uv run pytest tools/v8/test_flip_end_to_end.py -q -m slow
+    uv run pytest tools/scoring/test_flip_end_to_end.py -q -m slow
 """
 from __future__ import annotations
 
@@ -35,8 +41,11 @@ ROOT = Path(__file__).resolve().parents[2]
 for sub in ("", "tools/mining", "tools/atlas", "tools/scoring", "tools/reframe", "tools/corpus"):
     sys.path.insert(0, str(ROOT / sub) if sub else str(ROOT))
 
-EVAL_SCORES = ROOT / "data/v8/eval_scores_v8.jsonl"
-MANIFEST = ROOT / "data/v8/manifest.jsonl"
+sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+from production_pins import ACTIVE_VERSION  # noqa: E402
+
+EVAL_SCORES = ROOT / "data" / ACTIVE_VERSION / f"eval_scores_{ACTIVE_VERSION}.jsonl"
+MANIFEST = ROOT / "data" / ACTIVE_VERSION / "manifest.jsonl"
 BIN = ROOT / "target/release/fractal-generator.exe"
 
 # Ledger partition key for the manifest's fractal_type token.
@@ -76,8 +85,8 @@ def scorer():
 
 def test_the_loaded_production_scorer_is_the_active_k4_checkpoint(scorer):
     import active_ckpt
-    assert active_ckpt.ACTIVE_VERSION == "v8", (
-        f"this proof is about the v8 flip; active is {active_ckpt.ACTIVE_VERSION}")
+    assert active_ckpt.ACTIVE_VERSION == ACTIVE_VERSION, (
+        f"the pins module disagrees with itself: {active_ckpt.ACTIVE_VERSION} vs {ACTIVE_VERSION}")
     assert scorer.k == 4, f"deployed head is K={scorer.k}; a K=3 head cannot express class 4"
     assert int(scorer.cfg["num_classes"]) == 4
     # three cutpoint logits actually come out of the forward, not just out of the config
@@ -126,16 +135,17 @@ def _drive_production_path(scorer, mrow, tmp_path, monkeypatch):
     return json.loads(lines[0]), partition
 
 
-def test_a_class4_location_writes_a_v8_stamped_q4_row(scorer, tmp_path, monkeypatch):
+def test_a_class4_location_writes_an_active_stamped_q4_row(scorer, tmp_path, monkeypatch):
     import production_seeder as ps
     from score_lib import corn_decode
     from tools.emission import descriptor as desc
 
-    _, mrow = _pick(4, key=lambda r: r["v8_p_ge4"])
+    _, mrow = _pick(4, key=lambda r: r[f"{ACTIVE_VERSION}_p_ge4"])
     row, partition = _drive_production_path(scorer, mrow, tmp_path, monkeypatch)
 
-    # (2) v8-stamped, by the ledger's own append
-    assert row["scorer_version"] == "v8", f"ledger row is stamped {row['scorer_version']!r}"
+    # (2) stamped with the ACTIVE version, by the ledger's own append
+    assert row["scorer_version"] == ACTIVE_VERSION, (
+        f"ledger row is stamped {row['scorer_version']!r}, active is {ACTIVE_VERSION!r}")
 
     # (3) the third probability is on disk, and the row re-decodes from what was persisted
     assert row["p_ge4"] is not None, "the third probability was dropped — the row cannot ever be q4"
@@ -159,10 +169,11 @@ def test_a_class1_location_is_refused_at_the_same_boundary(scorer, tmp_path, mon
     import production_seeder as ps
     from tools.emission import descriptor as desc
 
-    _, mrow = _pick(1, key=lambda r: -r["v8_score"])   # the most confidently-bad label-1 location
+    # the most confidently-bad label-1 location
+    _, mrow = _pick(1, key=lambda r: -r[f"{ACTIVE_VERSION}_score"])
     row, partition = _drive_production_path(scorer, mrow, tmp_path, monkeypatch)
 
-    assert row["scorer_version"] == "v8"
+    assert row["scorer_version"] == ACTIVE_VERSION
     assert row["p_ge4"] is not None            # recorded even when it does not promote
     assert row["decoded_class"] < 3, (
         f"a human-labeled class-1 location decoded to {row['decoded_class']} — the q3+ boundary "

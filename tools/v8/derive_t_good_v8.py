@@ -29,7 +29,8 @@ partition, on the unbiased eval slice, requiring >=15 positives; tie-break towar
 
 Reads data/v8/eval_scores_v8.jsonl (frozen by eval_v8). Writes data/v8/t_good_derivation.json
 (durable) and prints the table. `production_seeder.T_GOOD_OVERRIDES` is the ADOPTED copy of
-the `adopted` block below; tools/v8/test_derive_t_good_v8.py holds the two in agreement.
+the `adopted` block below; tools/scoring/test_t_good_adoption.py holds the ACTIVE
+version's derivation and that table in agreement.
 
   uv run python tools/v8/derive_t_good_v8.py
 """
@@ -135,11 +136,16 @@ def loo_fbeta(p_nb, p_gd, y, beta):
     return round(fbeta(prec, rec, beta), 4)
 
 
-def derive_partition(grp, betas=(0.5, 2.0)) -> dict:
-    """Every objective's argmax + OOF for one partition, keyed 'F0.5'/'F2'."""
+def derive_partition(grp, betas=(0.5, 2.0), version: str = "v8") -> dict:
+    """Every objective's argmax + OOF for one partition, keyed 'F0.5'/'F2'.
+
+    `version` selects the score-column prefix (`<version>_p_ge2` / `_p_ge3`) and defaults to
+    "v8", so every existing call is byte-unchanged. It exists so a NEW eval slice is
+    re-derived through THIS estimator rather than a copy of it — a copied deriver is how two
+    thresholds that are supposed to be comparable stop being comparable."""
     y = np.array([1 if g["label"] >= 3 else 0 for g in grp])
-    p_nb = np.array([g["v8_p_ge2"] for g in grp])
-    p_gd = np.array([g["v8_p_ge3"] for g in grp])
+    p_nb = np.array([g[f"{version}_p_ge2"] for g in grp])
+    p_gd = np.array([g[f"{version}_p_ge3"] for g in grp])
     out = {}
     for beta in betas:
         blk = best_t(p_nb, p_gd, y, beta)
@@ -149,19 +155,30 @@ def derive_partition(grp, betas=(0.5, 2.0)) -> dict:
     return out
 
 
-def main():
-    if not SCORES.exists():
-        sys.exit(f"missing {SCORES} — run tools/v8/eval_v8.py first (freezes the eval scores)")
-    rows = [json.loads(l) for l in SCORES.read_text(encoding="utf-8").splitlines() if l.strip()]
+def build_table(rows, version: str = "v8", eval_slice: str = None, objective: dict = None,
+                uncal_reason: dict = None) -> dict:
+    """The whole per-partition table for ONE eval slice — the derivation, not a report of it.
 
+    Extracted verbatim from `main()` so a later version re-derives through THIS code rather
+    than a copy. Callers supply the rows (so a population rule — e.g. one instrument per
+    partition — is applied by the caller and stated there, not hidden here), the score-column
+    `version` prefix, and optionally a re-chosen `objective` map (protocol §4 requires the
+    per-family objective to be re-decided from CURRENT supply, not inherited).
+
+    `uncal_reason` lets a caller state a MORE specific reason than "no unbiased eval slice"
+    for a partition it knows something about — the difference between "we have never looked"
+    and "we looked and there were no keepers" is real and is lost if both print the same
+    string."""
+    obj = OBJECTIVE if objective is None else objective
+    uncal_reason = uncal_reason or {}
     by_fam = defaultdict(list)
     for r in rows:
         by_fam[FT2FAM.get(r["fractal_type"], r["fractal_type"])].append(r)
 
     derived, uncal, adopted, notes = {}, {}, {}, []
     print("=" * 104)
-    print("v8 t_good — PER-FAMILY objective (recall where supply is scarce, precision where "
-          "it is abundant)")
+    print(f"{version} t_good — PER-FAMILY objective (recall where supply is scarce, precision "
+          "where it is abundant)")
     print("=" * 104)
     print(f"  decode: keeper(label>=3) iff P(>=2)>={NB_GATE} AND P(>=3)>=t   grid {GRID[0]}..{GRID[-1]}")
     print(f"  UNCALIBRATED -> runs at baseline {BASELINE} where <{MIN_POS} positives or no unbiased "
@@ -174,15 +191,16 @@ def main():
         y = np.array([1 if g["label"] >= 3 else 0 for g in grp])
         n, pos = len(grp), int(y.sum())
         if pos < MIN_POS or pos == n:
-            reason = (f"<{MIN_POS} positives" if pos < MIN_POS else "no negatives")
+            reason = uncal_reason.get(
+                fam, f"<{MIN_POS} positives" if pos < MIN_POS else "no negatives")
             uncal[fam] = {"n": n, "pos": pos, "t_good": BASELINE,
                           "status": "UNCALIBRATED", "reason": reason}
             print(f"  {fam:20s} {'—':>5} {n:>4} {pos:>4}  {BASELINE:>7.2f} {'—':>6} {'—':>6} "
                   f"{'—':>6} {'—':>7} {'—':>13}  UNCALIBRATED ({reason})")
             continue
 
-        beta = OBJECTIVE.get(fam, DEFAULT_BETA)
-        blocks = derive_partition(grp)
+        beta = obj.get(fam, DEFAULT_BETA)
+        blocks = derive_partition(grp, version=version)
         chosen = blocks[beta_name(beta)]
         derived[fam] = {"n": n, "pos": pos, "objective": beta_name(beta), "beta": beta,
                         "objective_rationale": ("precision-weighted (supply abundant)" if beta < 1
@@ -211,10 +229,11 @@ def main():
     for f in ALL_FAMS:
         if f in derived or f in uncal:
             continue
+        reason = uncal_reason.get(f, "no unbiased eval slice")
         uncal[f] = {"n": 0, "pos": 0, "t_good": BASELINE, "status": "UNCALIBRATED",
-                    "reason": "no unbiased eval slice"}
+                    "reason": reason}
         print(f"  {f:20s} {'—':>5} {0:>4} {0:>4}  {BASELINE:>7.2f} {'—':>6} {'—':>6} {'—':>6} "
-              f"{'—':>7} {'—':>13}  UNCALIBRATED (no unbiased eval slice)")
+              f"{'—':>7} {'—':>13}  UNCALIBRATED ({reason})")
 
     if notes:
         print("\n  read-carefully:")
@@ -229,15 +248,15 @@ def main():
                                "effectively unlimited (a miss costs nothing, the next hunt finds "
                                "more) -> F0.5. julia:multibrot supply saturates (a miss costs real "
                                "money) -> F2."),
-        "objective_by_partition": {k: beta_name(v) for k, v in OBJECTIVE.items()},
+        "objective_by_partition": {k: beta_name(v) for k, v in obj.items()},
         "default_objective": beta_name(DEFAULT_BETA),
         "decode": f"keeper(label>=3) iff P(>=2)>={NB_GATE} AND P(>=3)>=t",
         "baseline": BASELINE, "min_pos": MIN_POS,
         "no_class4_threshold": True,
         "class4_decode": "natural cutpoint P(>=4) >= 0.5, no per-family calibration",
         "native_multibrot_tightening": "NOT adopted (fork-scheduled proposals left on record)",
-        "eval_slice": "data/v8/eval_scores_v8.jsonl",
-        "model": "v8",
+        "eval_slice": eval_slice or "data/v8/eval_scores_v8.jsonl",
+        "model": version,
         "derived": derived,
         "uncalibrated": uncal,
         "adopted": adopted,
@@ -245,8 +264,17 @@ def main():
         "note": ("ADOPTED — production_seeder.T_GOOD_OVERRIDES mirrors `adopted`, and the "
                  "`uncalibrated` partitions are named in production_seeder.T_GOOD_UNCALIBRATED "
                  "(they RUN at the baseline but were never derived; the two 0.50s must stay "
-                 "distinguishable). tools/v8/test_derive_t_good_v8.py holds them in agreement."),
+                 "distinguishable). tools/scoring/test_t_good_adoption.py holds the ACTIVE "
+                 "version's artifact and the adopted table in agreement."),
     }
+    return out
+
+
+def main():
+    if not SCORES.exists():
+        sys.exit(f"missing {SCORES} — run tools/v8/eval_v8.py first (freezes the eval scores)")
+    rows = [json.loads(l) for l in SCORES.read_text(encoding="utf-8").splitlines() if l.strip()]
+    out = build_table(rows, version="v8", eval_slice="data/v8/eval_scores_v8.jsonl")
     sys.path.insert(0, str(ROOT / "tools"))
     import paths  # noqa: E402
     paths.durable(OUT, mkparents=True).write_text(json.dumps(out, indent=2), encoding="utf-8")
