@@ -126,6 +126,7 @@ V8_META = "data/v8/build_metadata.json"
 V8_ROSTER = "data/v8/aug_roster.json"
 V8_COLORMAPS = "data/v8/colormaps.json"
 V8_PLAN = "data/v8/plan.jsonl"
+V8_CACHE_MANIFEST = "data/v8/cache_manifest.jsonl"
 META_PATH = "data/v9/build_metadata.json"
 POOL_SRC = "data/palettes/score3_colormaps.json"        # the committed curated 76
 BLUE_ORANGE_SRC = "data/palettes/vivid_blue_orange.json"  # the labeler's map, its own file
@@ -338,6 +339,30 @@ def _sha256(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
+def _require_v8(rel: str) -> Path:
+    """A v8 artifact this parity check compares against — MISSING IS FATAL.
+
+    Each of these three reads used to be `if p.exists():`, so a v9 rebuild on a tree
+    without v8's artifacts skipped the comparison and printed a parity block that simply
+    omitted the line. The absent line is the only signal, and nobody reads a table for the
+    row that is not there — which is the exact shape `verification_practice.md` §2 names: a
+    gate that degrades to silence cannot protect against the removal of its own input. The
+    check exists to prove v9's corpus is v8's corpus at a different cap; without the v8
+    side there is no claim, so the build must stop rather than emit a plan whose central
+    assertion was never made."""
+    p = ROOT / rel
+    if not p.exists():
+        raise SystemExit(
+            f"RECIPE PARITY CANNOT RUN: {rel} is missing.\n"
+            f"    v9's plan is only meaningful as 'v8's corpus at a different cap', and this\n"
+            f"    file is the v8 side of that comparison. Rebuilding without it would emit a\n"
+            f"    plan whose load-bearing check never ran.\n"
+            f"    Rebuild it:  uv run python tools/v8/build_plan.py\n"
+            f"    (which needs data/v8/manifest.jsonl; rebuild that first with\n"
+            f"     uv run python tools/v8/build_manifest.py)")
+    return p
+
+
 # Fields a v9 plan row is ALLOWED to differ from its v8 twin on. Anything else differing
 # means the recipe moved, and the whole premise of this build is that it did not.
 PLAN_DELTA_ALLOWED = {"maxiter", "out"}
@@ -359,68 +384,65 @@ def assert_recipe_parity(plan_rows, cm_rows, library) -> dict:
     out["manifest_path"] = MANIFEST
 
     # 2. the colormap library rebuilds byte-identically from the same committed sources
-    v8_cm = ROOT / V8_COLORMAPS
+    v8_cm = _require_v8(V8_COLORMAPS)
     built = json.dumps(library, indent=1)
-    if v8_cm.exists():
-        same = built == v8_cm.read_text(encoding="utf-8")
-        if not same:
-            raise SystemExit(
-                f"colormap library differs from {V8_COLORMAPS} — the palette sources moved "
-                f"under the recipe; that is not 'only the cap changed'")
-        out["colormaps_identical_to_v8"] = True
+    if built != v8_cm.read_text(encoding="utf-8"):
+        raise SystemExit(
+            f"colormap library differs from {V8_COLORMAPS} — the palette sources moved "
+            f"under the recipe; that is not 'only the cap changed'")
+    out["colormaps_identical_to_v8"] = True
 
     # 3. every v9 plan row equals its v8 twin except on the allowed fields, and the
     #    24 slot filenames per location are the same set (same seeds, same draws).
-    v8_plan = ROOT / V8_PLAN
-    if v8_plan.exists():
-        v8_rows = [json.loads(l) for l in v8_plan.read_text(encoding="utf-8").splitlines()
-                   if l.strip()]
-        if len(v8_rows) != len(plan_rows):
-            raise SystemExit(f"plan row count {len(plan_rows)} != v8's {len(v8_rows)} — "
-                             f"the corpus moved, not just the cap")
-        # key on (loc_id, slot filename) — the recipe's identity for a row
-        def key(r):
-            p = Path(r["out"])
-            return (p.parent.name, p.name)
-        v8_by = {key(r): r for r in v8_rows}
-        new_by = {key(r): r for r in plan_rows}
-        if set(v8_by) != set(new_by):
-            only_new = sorted(set(new_by) - set(v8_by))[:3]
-            only_old = sorted(set(v8_by) - set(new_by))[:3]
-            raise SystemExit(f"slot identity set changed — the seeded draw moved. "
-                             f"e.g. new-only {only_new}, v8-only {only_old}")
-        bad = []
-        for k, nr in new_by.items():
-            pr = v8_by[k]
-            diff = {f for f in set(nr) | set(pr) if nr.get(f) != pr.get(f)}
-            if diff - PLAN_DELTA_ALLOWED:
-                bad.append((k, sorted(diff - PLAN_DELTA_ALLOWED)))
-        if bad:
-            raise SystemExit(f"{len(bad)} plan rows differ from v8 outside "
-                             f"{sorted(PLAN_DELTA_ALLOWED)}: e.g. {bad[:3]}")
-        # ...and the cap really did move on every row (a no-op rebuild is also a failure)
-        unchanged = sum(1 for k, nr in new_by.items()
-                        if nr["maxiter"] == SUPERSEDED_FLAT_MAXITER)
-        out["plan_rows_compared_to_v8"] = len(new_by)
-        out["plan_rows_still_at_flat_8000"] = unchanged
-        out["plan_recipe_identical_to_v8_except"] = sorted(PLAN_DELTA_ALLOWED)
+    v8_plan = _require_v8(V8_PLAN)
+    v8_rows = [json.loads(l) for l in v8_plan.read_text(encoding="utf-8").splitlines()
+               if l.strip()]
+    if len(v8_rows) != len(plan_rows):
+        raise SystemExit(f"plan row count {len(plan_rows)} != v8's {len(v8_rows)} — "
+                         f"the corpus moved, not just the cap")
+
+    # key on (loc_id, slot filename) — the recipe's identity for a row
+    def key(r):
+        p = Path(r["out"])
+        return (p.parent.name, p.name)
+    v8_by = {key(r): r for r in v8_rows}
+    new_by = {key(r): r for r in plan_rows}
+    if set(v8_by) != set(new_by):
+        only_new = sorted(set(new_by) - set(v8_by))[:3]
+        only_old = sorted(set(v8_by) - set(new_by))[:3]
+        raise SystemExit(f"slot identity set changed — the seeded draw moved. "
+                         f"e.g. new-only {only_new}, v8-only {only_old}")
+    bad = []
+    for k, nr in new_by.items():
+        pr = v8_by[k]
+        diff = {f for f in set(nr) | set(pr) if nr.get(f) != pr.get(f)}
+        if diff - PLAN_DELTA_ALLOWED:
+            bad.append((k, sorted(diff - PLAN_DELTA_ALLOWED)))
+    if bad:
+        raise SystemExit(f"{len(bad)} plan rows differ from v8 outside "
+                         f"{sorted(PLAN_DELTA_ALLOWED)}: e.g. {bad[:3]}")
+    # ...and the cap really did move on every row (a no-op rebuild is also a failure)
+    unchanged = sum(1 for k, nr in new_by.items()
+                    if nr["maxiter"] == SUPERSEDED_FLAT_MAXITER)
+    out["plan_rows_compared_to_v8"] = len(new_by)
+    out["plan_rows_still_at_flat_8000"] = unchanged
+    out["plan_recipe_identical_to_v8_except"] = sorted(PLAN_DELTA_ALLOWED)
 
     # 4. cache-manifest recipe fields (everything the trainer keys on) are unchanged
-    v8_cache = ROOT / "data/v8/cache_manifest.jsonl"
-    if v8_cache.exists():
-        keys = ("location_id", "label", "split", "group_id", "source", "biased",
-                "palette", "palette_family", "scale", "shift_id", "geom_id",
-                "shift_frac", "shift_angle", "shift_dx", "shift_dy", "aa_level",
-                "ss", "filter", "fractal_type")
-        v8_cm_rows = [json.loads(l) for l in
-                      v8_cache.read_text(encoding="utf-8").splitlines() if l.strip()]
-        if len(v8_cm_rows) != len(cm_rows):
-            raise SystemExit(f"cache rows {len(cm_rows)} != v8's {len(v8_cm_rows)}")
-        for i, (a, b) in enumerate(zip(v8_cm_rows, cm_rows)):
-            if tuple(a.get(k) for k in keys) != tuple(b.get(k) for k in keys):
-                raise SystemExit(f"cache_manifest row {i} differs on a recipe field: "
-                                 f"{ {k: (a.get(k), b.get(k)) for k in keys if a.get(k) != b.get(k)} }")
-        out["cache_manifest_recipe_fields_identical_to_v8"] = True
+    v8_cache = _require_v8(V8_CACHE_MANIFEST)
+    keys = ("location_id", "label", "split", "group_id", "source", "biased",
+            "palette", "palette_family", "scale", "shift_id", "geom_id",
+            "shift_frac", "shift_angle", "shift_dx", "shift_dy", "aa_level",
+            "ss", "filter", "fractal_type")
+    v8_cm_rows = [json.loads(l) for l in
+                  v8_cache.read_text(encoding="utf-8").splitlines() if l.strip()]
+    if len(v8_cm_rows) != len(cm_rows):
+        raise SystemExit(f"cache rows {len(cm_rows)} != v8's {len(v8_cm_rows)}")
+    for i, (a, b) in enumerate(zip(v8_cm_rows, cm_rows)):
+        if tuple(a.get(k) for k in keys) != tuple(b.get(k) for k in keys):
+            raise SystemExit(f"cache_manifest row {i} differs on a recipe field: "
+                             f"{ {k: (a.get(k), b.get(k)) for k in keys if a.get(k) != b.get(k)} }")
+    out["cache_manifest_recipe_fields_identical_to_v8"] = True
     return out
 
 
