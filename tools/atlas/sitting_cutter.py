@@ -153,7 +153,25 @@ def stage_morph_dedup(rows, ctx):
     ss2 smooth field -> robust-z tanh gray -> CLIP vit_base_patch16_clip_224.openai — the same
     recipe emission clusters at 0.974, so this threshold means what it means everywhere else).
     A row the embedder cannot reach is KEPT and counted, because "we could not measure this"
-    is not "this is a duplicate"."""
+    is not "this is a duplicate".
+
+    MEASURED AT FULL SITTING SCALE, 2026-08-03 (`sitting_cutter.py dry-run --run-dir
+    data/discovery/q4_long_harvest_20260803 --embed-limit 1000`): **15 m 36 s for 1,000
+    embeds**, 587 removed, **413 looks kept** (2.42 rows per look — the harvest-v1 sitting
+    measured 2.37, so the knee holds at 2.5x the population). Nothing degraded: 0
+    unembeddable, 0 exceptions, the accounting closed.
+
+    Two numbers that change how a live sitting is sized:
+      * **0.93 s/row, not 0.26.** A 25-row calibration off the head of the queue said 0.26;
+        the queue is tier-sorted and the expensive rows are later, so the prefix sample
+        underestimated by 3.6x. `CLAUDE.md`'s run-order rule, hit again.
+      * **the cap does not bound this stage.** Dedup runs BEFORE `draw_balanced`, and must —
+        the cap is denominated in looks. So a live cut embeds the whole post-(a)-post-(c)
+        population, 7,244 rows here, not the 1,000 that reach the page: **~1.9 h**, not the
+        15 minutes this bounded run took. `--embed-limit` is a dry-run instrument only.
+      * the duplicate rate is NOT a population constant — 30.5% at 400 embeds, 58.7% at
+        1,000. A leader-radius accumulates leaders, so a cut sized from a small pilot will
+        over-estimate how many looks survive."""
     import numpy as np
     embed = ctx.get("embed")
     if embed is None:
