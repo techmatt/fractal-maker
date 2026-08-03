@@ -1,0 +1,236 @@
+{
+ "artifact": "q4_uniform_eval_v1 human base rates",
+ "written": "2026-08-03T10:48:01",
+ "command": "uv run python tools/corpus/q4_combined_readout.py readout --apply",
+ "sitting": "2026-08-03_q4_combined_label_v1",
+ "batch": "2026-08-03_q4_uniform_eval_v1",
+ "run": "data/discovery/q4_long_harvest_20260803",
+ "population": "290 rows drawn with NO viability screen and NO classifier screen: near-dM_d shell eps=0.02 for mandelbrot/multibrot3/4/5 and julia:mandelbrot, phoenix skeleton closed form. Registered eval/unbiased; labeled blind inside an 870-row combined sitting.",
+ "labels": "human, 1..4 (bad/okay/good/exceptional); label_store.resolve_score",
+ "first_eval_instrument_for": [
+  "phoenix",
+  "multibrot3",
+  "multibrot4",
+  "multibrot5",
+  "julia:mandelbrot"
+ ],
+ "intended_use": "calibration input for the NEXT model version's t_good. v10 is frozen; nothing in this record flips a live threshold.",
+ "caveats": [
+  "The native-multibrot cells are 0/48 at >=2 for all three degrees; that is a measurement of the DRAW (an eps=0.02 shell with no screen), not a ceiling on the family.",
+  "Cluster-weighted variants are included because these rows are not independent: 126 of the 290 fall in one single-linkage morph component.",
+  "No `mandelbrot` cell: the uniform leg drew none."
+ ],
+ "morph": {
+  "producer": "robustz_tanh_k2_v1",
+  "geometry": "640x360ss2",
+  "clip_model": "vit_base_patch16_clip_224.openai",
+  "cut": 0.974
+ },
+ "rates": {
+  "julia:mandelbrot": {
+   "ge2": {
+    "k": 23,
+    "n": 48,
+    "rate": 0.4791666666666667,
+    "wilson95": [
+     0.34471090015787464,
+     0.6167100436401562
+    ],
+    "rate_one_per_look_linkage": 0.45454545454545453,
+    "n_looks_linkage": 44,
+    "rate_one_per_look_ball": 0.4666666666666667,
+    "n_looks_ball": 45
+   },
+   "ge3": {
+    "k": 8,
+    "n": 48,
+    "rate": 0.16666666666666666,
+    "wilson95": [
+     0.08695410039453222,
+     0.29578100037396254
+    ],
+    "rate_one_per_look_linkage": 0.1590909090909091,
+    "n_looks_linkage": 44,
+    "rate_one_per_look_ball": 0.17777777777777778,
+    "n_looks_ball": 45
+   },
+   "eq4": {
+    "k": 0,
+    "n": 48,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.0741026511527422
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 44,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 45
+   }
+  },
+  "multibrot3": {
+   "ge2": {
+    "k": 0,
+    "n": 48,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.0741026511527422
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 6,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 14
+   },
+   "ge3": {
+    "k": 0,
+    "n": 48,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.0741026511527422
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 6,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 14
+   },
+   "eq4": {
+    "k": 0,
+    "n": 48,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.0741026511527422
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 6,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 14
+   }
+  },
+  "multibrot4": {
+   "ge2": {
+    "k": 0,
+    "n": 48,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.0741026511527422
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 1,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 13
+   },
+   "ge3": {
+    "k": 0,
+    "n": 48,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.0741026511527422
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 1,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 13
+   },
+   "eq4": {
+    "k": 0,
+    "n": 48,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.0741026511527422
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 1,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 13
+   }
+  },
+  "multibrot5": {
+   "ge2": {
+    "k": 0,
+    "n": 48,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.0741026511527422
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 7,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 18
+   },
+   "ge3": {
+    "k": 0,
+    "n": 48,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.0741026511527422
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 7,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 18
+   },
+   "eq4": {
+    "k": 0,
+    "n": 48,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.0741026511527422
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 7,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 18
+   }
+  },
+  "phoenix": {
+   "ge2": {
+    "k": 39,
+    "n": 98,
+    "rate": 0.3979591836734694,
+    "wilson95": [
+     0.3066643027632052,
+     0.49695229399096996
+    ],
+    "rate_one_per_look_linkage": 0.4724489795918367,
+    "n_looks_linkage": 70,
+    "rate_one_per_look_ball": 0.46314102564102566,
+    "n_looks_ball": 78
+   },
+   "ge3": {
+    "k": 6,
+    "n": 98,
+    "rate": 0.061224489795918366,
+    "wilson95": [
+     0.028358937185437583,
+     0.1271924288575154
+    ],
+    "rate_one_per_look_linkage": 0.075,
+    "n_looks_linkage": 70,
+    "rate_one_per_look_ball": 0.07692307692307693,
+    "n_looks_ball": 78
+   },
+   "eq4": {
+    "k": 0,
+    "n": 98,
+    "rate": 0.0,
+    "wilson95": [
+     0.0,
+     0.037721324095458045
+    ],
+    "rate_one_per_look_linkage": 0.0,
+    "n_looks_linkage": 70,
+    "rate_one_per_look_ball": 0.0,
+    "n_looks_ball": 78
+   }
+  }
+ }
+}
