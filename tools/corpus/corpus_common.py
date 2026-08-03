@@ -138,6 +138,26 @@ PROVENANCE_KEYS = (
     "fit_model", "fit_score", "queue_rank", "falloff_rate", "falloff_half",
     "log10_size_rel", "cap_headroom", "clamped", "f64_margin_deploy_decades",
     "parent_atom_id", "scale_ratio_decades",
+    # q4 long harvest (2026-08-03), three legs. RECORD-AND-RANK columns: `fate` is the
+    # per-stage outcome (admitted / q3_dup / canon_not_q3 / reframe_not_q3 / guarded /
+    # precanon_dup / below_tau_h / interior_gt_30 / render_failed), and `rank_tier` says
+    # which SCORE the row was ranked on — 2 = a canonical decode at 640x360 ss2, 1 = a cheap
+    # score at 384x216 ss1. The two tiers are different geometries and are never pooled into
+    # one ordering, so the tier has to survive onto the row or a later reader cannot tell
+    # them apart. `cheap_*`/`canon_*` are those scores; `tau_h`/`tau_rec`/`t_good` are the
+    # cuts they were judged against, recorded because all three are per-partition and two of
+    # them are UNCALIBRATED for some partitions. `triggered` marks a row descended from a
+    # maneuver fired on an admission — never pooled with fresh-seed yield, because the
+    # operators feed themselves. NEAR-MINIBROT leg: `ladder_rung`/`ladder_radius` are the
+    # experiment (1/4/16 x the atom's own 1/|A| radius) and `atom_*` place the nucleus it was
+    # drawn around. UNIFORM EVAL leg: `draw_rule` is the closed-form or membership rule that
+    # selected the row, which is the whole basis for that batch being eval-eligible.
+    # Bias loop and analysis only; the classifier sees `render`.
+    "fate", "rank_tier", "rank_score", "cheap_eord", "cheap_pgood",
+    "canon_eord", "canon_pgood", "canon_decoded", "reframe_decoded",
+    "tau_h", "tau_rec", "t_good", "triggered", "mix_source", "int_frac", "occ",
+    "ladder_rung", "ladder_radius", "atom_size", "atom_period", "atom_id",
+    "atom_source", "draw_rule", "eord", "p_good", "p_notbad", "scorer_version",
 )
 
 
