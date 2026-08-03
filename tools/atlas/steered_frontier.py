@@ -2227,6 +2227,13 @@ class SteeredFrontier:
         missing = [i for i, t in enumerate(tiles) if not t.exists()]
         if missing:
             self.totals["render_failed"] += len(missing)
+            # v1.6: a check whose confirmation render FAILED still gets a record. It cleared
+            # the floor, so "nothing scoring above the floor is discarded unrecorded" covers
+            # it — and the row that vanishes on a render failure is exactly the row a later
+            # question about render failures would need. It carries its cheap score and
+            # `rank_tier=1`, because the canonical scores it would have had do not exist.
+            for i in missing:
+                self._q4_record(checks[i], fate="render_failed")
             keep = [i for i in range(len(checks)) if i not in set(missing)]
             checks = [checks[i] for i in keep]
             tiles = [tiles[i] for i in keep]
@@ -2507,7 +2514,7 @@ class SteeredFrontier:
     # readout cannot drift, and so an unhandled branch shows up as the literal string
     # "unknown" in a count rather than as a silently absent row.
     Q4_FATES = ("below_tau_h", "precanon_dup", "canon_not_q3", "q3_dup", "guarded",
-                "reframe_not_q3", "admitted", "interior_gt_30", "unknown")
+                "reframe_not_q3", "admitted", "interior_gt_30", "render_failed", "unknown")
 
     def _q4_record(self, c, *, fate: str, reframe_decoded=None):
         """Append one candidate to the run's record-and-rank store.

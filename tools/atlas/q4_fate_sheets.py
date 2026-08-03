@@ -56,7 +56,7 @@ DRAW_SEED = 20260803
 # rows is SKIPPED and NAMED in the header rather than silently omitted — "this run produced
 # no guarded rejects" and "the sheet forgot guarded" are different facts.
 FATE_ORDER = ("admitted", "q3_dup", "canon_not_q3", "reframe_not_q3", "guarded",
-              "precanon_dup", "below_tau_h", "interior_gt_30")
+              "precanon_dup", "below_tau_h", "interior_gt_30", "render_failed")
 
 
 def load_rows(run_dir: Path) -> list[dict]:
