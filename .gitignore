@@ -185,6 +185,11 @@ __pycache__/
 # artifact is a tiny (~12KB) load-bearing object the proposer reloads (atlas.py) --
 # commit it like the calibration artifacts. Its round0 viz PNGs stay in scratch/.
 !/data/atlas/
+# ...but NOT the tau_h re-derivation work dir: bulk (a literal in RELOCATED_PREFIXES),
+# so tools/atlas/tau_h_rederive.py resolves it OUT of the tree. This rule is the
+# belt-and-braces half — without it, the `!/data/atlas/` re-include above would COMMIT
+# rows.jsonl and any straggler tile if a writer ever bypassed the resolver.
+/data/atlas/tau_h_rederive/
 
 # Production discovery seeder ledgers (tools/atlas/production_seeder.py): the durable
 # cross-run outcome/cell ledgers + per-outcome features + per-run summaries are

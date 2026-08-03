@@ -392,6 +392,33 @@ def test_live_aug_caches_are_registered():
     assert not A.is_relocated("data/v9/aug_cache_notes/x.jpg")
 
 
+def test_tau_h_rederive_work_dir_is_registered_and_would_not_be_committed_in_tree():
+    """`tools/atlas/tau_h_rederive.py` declares its work dir `bulk()`. Two things must hold,
+    and the second is specific to THIS family: `data/atlas/` carries a `!/data/atlas/`
+    re-include (the fitted theta_hat artifact is tracked), so an in-tree write here would
+    not merely sit in the tree — it would be COMMITTED. The resolver keeps it out; the
+    .gitignore stanza is the belt-and-braces half for a writer that bypassed the resolver."""
+    import subprocess
+    assert "data/atlas/tau_h_rederive" in A.RELOCATED_PREFIXES
+    root = A.artifacts_root()
+    assert A.is_relocated("data/atlas/tau_h_rederive")
+    assert A.resolve("data/atlas/tau_h_rederive") == root / "data/atlas/tau_h_rederive"
+    # `check-ignore` is asked about FILES: the stanza is directory-scoped, and git cannot
+    # apply a dir-only rule to a bare path that does not exist on disk.
+    for rel in ("data/atlas/tau_h_rederive/rows.jsonl",
+                "data/atlas/tau_h_rederive/tiles/h_campaign1_breadth_1_0_cheap.jpg"):
+        assert A.is_relocated(rel), rel
+        assert A.resolve(rel) == root / rel, rel
+        ignored = subprocess.run(["git", "check-ignore", "-q", "--", rel],
+                                 cwd=A.REPO_ROOT, capture_output=True).returncode == 0
+        assert ignored, f"{rel} is NOT gitignored — an in-tree straggler would be committed"
+    # the tracked artifact the tool WRITES beside it must stay in-tree and committable
+    assert not A.is_relocated("data/atlas/tau_h_base_v10.json")
+    assert A.resolve("data/atlas/tau_h_base_v10.json") == A.REPO_ROOT / "data/atlas/tau_h_base_v10.json"
+    assert subprocess.run(["git", "check-ignore", "-q", "--", "data/atlas/tau_h_base_v10.json"],
+                          cwd=A.REPO_ROOT, capture_output=True).returncode != 0
+
+
 def test_backslash_and_dotslash_normalized():
     assert A.is_relocated("data\\v8\\aug_cache\\1\\x.jpg")
     assert A.is_relocated("./data/v8/aug_cache/1/x.jpg")

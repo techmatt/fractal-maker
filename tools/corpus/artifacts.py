@@ -71,6 +71,15 @@ RELOCATED_PREFIXES = (
     # the alternative (deleting them) throws away the only rollback anchor. Registered
     # before the first render, same rule as v8.
     "data/v9/aug_cache",
+    # The tau_h re-derivation work dir (tools/atlas/tau_h_rederive.py): rows.jsonl (one
+    # rendered+scored pair per sampled harvest/walk row) plus its transient tile chunks.
+    # A LITERAL rather than a class, because it is one fixed path, not a family that grows
+    # a new member per run. It lived under scratch/ and was re-rendered from zero TWICE
+    # after a scratch wipe — expensive (GPU scoring + 2 renders/row) but fully
+    # deterministic given the committed ledgers and the active weights, i.e. textbook
+    # bulk(). Registered here rather than left in-tree because `!/data/atlas/` re-includes
+    # this subtree: in-tree it would be COMMITTED, not merely present.
+    "data/atlas/tau_h_rederive",
 )
 
 

@@ -59,6 +59,7 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "atlas", ROOT / "tools" / "cor
         sys.path.insert(0, str(_p))
 
 import location as loc_mod                                   # noqa: E402
+import paths                                                 # noqa: E402
 from active_ckpt import (                                    # noqa: E402
     BIN, PALETTE, JPG_Q, auto_maxiter, make_scorer, ACTIVE_CKPT, ACTIVE_VERSION,
 )
@@ -83,7 +84,14 @@ HARVEST_RUNS = [
 # gate survivor per rung and never scores, so this ledger is not selected on any tau.
 WALK_LEDGER = ROOT / "data/discovery/fresh_runs/prospect_run1/outcome_ledger.jsonl"
 
-WORK = ROOT / "scratch" / "tau_h_rederive"
+# BULK, not scratch. `rows.jsonl` is one rendered+scored (cheap, canonical) pair per
+# sampled row — hours of render + GPU scoring — and it is EXACTLY reproducible from the
+# committed ledgers plus the active weights, which is the bulk class by definition
+# (docs/design/storage_classes.md). It sat under `scratch/` and was consequently
+# re-rendered from zero twice after a scratch wipe. `bulk()` resolves it out-of-tree via
+# ARTIFACTS_ROOT (registered in artifacts.RELOCATED_PREFIXES), so it survives
+# `rm -r scratch/*` and never costs the working tree a traversal.
+WORK = paths.bulk("data/atlas/tau_h_rederive")
 ARTIFACT = ROOT / "data" / "atlas" / f"tau_h_base_{ACTIVE_VERSION}.json"
 WORKERS = 4            # concurrent render-one PROCESSES (project cap)
 
@@ -222,15 +230,22 @@ def render_and_score(rows, scorer, tiles: Path, out_jsonl: Path, chunk: int = 48
         ok = [r for r in blk if (tiles / f"{r['key']}_cheap.jpg").exists()
               and (tiles / f"{r['key']}_canon.jpg").exists()]
         if ok:
-            cheap = scorer.score_paths([str(tiles / f"{r['key']}_cheap.jpg") for r in ok])
-            canon = scorer.score_paths([str(tiles / f"{r['key']}_canon.jpg") for r in ok])
+            # K-AWARE (`score_paths_k`, not `score_paths`). The K=3-shaped reader drops the
+            # third cutpoint, so on the K=4 active head a stored row could not reproduce the
+            # SERVED decode — `corn_decode(nb, pg, t_good, pg4)`, which is what the harvest
+            # gate actually applies (steered_frontier.harvest). Rows written without p_ge4
+            # are capped at class 3 by the reader, not by the head. `None` on a K=3 head.
+            cheap = scorer.score_paths_k([str(tiles / f"{r['key']}_cheap.jpg") for r in ok])
+            canon = scorer.score_paths_k([str(tiles / f"{r['key']}_canon.jpg") for r in ok])
             with open(out_jsonl, "a", encoding="utf-8") as fh:
                 for r, ch, cn in zip(ok, cheap, canon):
                     fh.write(json.dumps(dict(
                         key=r["key"], pop=r["pop"], run=r["run"], partition=r["partition"],
                         depth=r["depth"], fw=float(r["fw"]),
                         cheap_eord=float(ch[0]), cheap_nb=float(ch[1]), cheap_pgood=float(ch[2]),
+                        cheap_pge4=(float(ch[3]) if len(ch) > 3 else None),
                         canon_eord=float(cn[0]), canon_nb=float(cn[1]), canon_pgood=float(cn[2]),
+                        canon_pge4=(float(cn[3]) if len(cn) > 3 else None),
                         model=ACTIVE_VERSION,
                     )) + "\n")
         for r in blk:                                   # tiles are bulk; drop as we go
@@ -242,6 +257,24 @@ def render_and_score(rows, scorer, tiles: Path, out_jsonl: Path, chunk: int = 48
         n = min(i + chunk, len(todo))
         print(f"  {n}/{len(todo)} rows  {el:.0f}s  ({el/max(n,1):.2f}s/row, "
               f"eta {(len(todo)-n)*el/max(n,1)/60:.1f}m)", flush=True)
+
+
+def assert_rows_current(rows, rows_jsonl):
+    """Refuse a cache that is not what THIS head, at THIS row shape, would have written.
+
+    Two ways a resumed `rows.jsonl` can be silently wrong, and neither is detectable from
+    the derived number afterwards: rows scored under a different checkpoint, and rows
+    written before the scorer went K-aware. The second is tested on KEY PRESENCE, not
+    truthiness — `None` is the legitimate value for `p_ge4` on a K=3 head, so a `.get()`
+    test would wave through exactly the rows it exists to catch."""
+    stale = [r for r in rows if r.get("model") != ACTIVE_VERSION]
+    if stale:
+        raise SystemExit(f"{len(stale)} cached rows were scored under a different model than "
+                         f"{ACTIVE_VERSION} — delete {rows_jsonl} and re-run")
+    pre_k = [r for r in rows if "canon_pge4" not in r or "cheap_pge4" not in r]
+    if pre_k:
+        raise SystemExit(f"{len(pre_k)} cached rows were written by the pre-K-aware scorer "
+                         f"(no p_ge4 column) — delete {rows_jsonl} and re-run")
 
 
 # --------------------------------------------------------------------------- #
@@ -338,10 +371,7 @@ def main():
         render_and_score(picked, scorer, tiles, rows_jsonl)
 
     rows = [json.loads(l) for l in open(rows_jsonl, encoding="utf-8") if l.strip()]
-    stale = [r for r in rows if r.get("model") != ACTIVE_VERSION]
-    if stale:
-        raise SystemExit(f"{len(stale)} cached rows were scored under a different model than "
-                         f"{ACTIVE_VERSION} — delete {rows_jsonl} and re-run")
+    assert_rows_current(rows, rows_jsonl)
     h_rows = [r for r in rows if r["pop"] == "harvest"]
     w_rows = [r for r in rows if r["pop"] == "walk"]
 
