@@ -43,6 +43,47 @@ tools/atlas/build_julia_seed_pool.py]`
 no run record in this tree reproduces them, and no committed tool reports a knee. Only
 `POOL_TARGET = 750`, `SHELL_EPS = 0.02` and the ~40% viability rate are checkable here.]`
 
+## The `c`-spacing floor — measured, and it is not an atom-level rule
+
+**Two julia `c` values closer than `|Δc| = 1e-2` are near-duplicate LOOKS, whatever search
+found them.** That is the minimum separation the near-minibrot supply channel draws at
+(`supply_routing.CSPACING_FLOOR`), and it is derived rather than inherited.
+
+`[measured 2026-08-03: data/label_corpus/batches/2026-08-03_q4_near_minibrot_v1 (290 labelled
+rows / 103 atoms) × scratch/q4_readout/morph_emb_870.npz, library morph CLIP at cos ≥ 0.974]`
+
+| \|Δc\| bucket | pairs | median cos | frac ≥ 0.974 |
+|---|---|---|---|
+| 1e-5 – 1e-4 | 75 | 0.9824 | 0.813 |
+| 1e-4 – 1e-3 | 659 | 0.9708 | 0.417 |
+| 1e-3 – 1e-2 | 2,196 | 0.9622 | 0.239 |
+| **1e-2 – 1e-1** | 1,866 | 0.9267 | **0.024** |
+| ≥ 1e-1 | 36,964 | 0.8992 | 0.004 |
+| *different-atom pairs, any distance (reference)* | 41,627 | 0.9036 | *0.023* |
+
+The floor is the coarsest bucket boundary at which the near-dup rate reaches the
+different-atom baseline (2.4% against 2.3%); one bucket finer it is ten times that. Stated as
+a bucket boundary, not a fitted knee, because the measurement is bucketed.
+
+**This corrects the atom-level framing it came from.** The q4 sitting's readout found "same
+atom, different rung ⇒ same look" (median cos 0.9825, 74.1% at or above the cut) and stopped
+there, which reads as a rule about atom identity. Restricting to DIFFERENT-atom pairs shows
+the saturation is a property of the c-plane distance: different atoms at 1e-4–1e-3 are still
+38% near-dup, sixteen times baseline. So **"one `c` per atom" is not sufficient** — the
+roster's own atoms sit a median 9.1e-4 apart, two buckets inside the floor.
+
+Distinct from the julia **hook** spacing (0.20, or 0.10 after the campaign-2 resume), which is
+10–20× coarser and was set on a different population. The two are not interchangeable.
+
+### The 1×/4×/16× distance ladder buys ~1 look per atom, so v2 emits ONE rung
+
+Yields are flat across the three rungs (labelled ≥3: 68.0 / 63.5 / 68.0%, one-per-cluster
+61.8 / 65.3 / 66.7%; every pair's Wilson interval overlaps), and a paired cost measurement
+(`tools/atlas/near_minibrot_rung.py`, 24 atoms × 3 rungs interleaved) puts the render-cost
+spread at **3.9%** — flat too. With neither yield nor cost separating them, the choice falls to
+the one column that does: one-per-cluster class-4, 8.6% / 4.0% / 3.7%. **Rung 1.** The ladder
+as a three-rung emitter is retired (`retired.md`); it bought 3× the label cost for ~1 look.
+
 ## The interior-lake fraction is the determinant
 
 `interior_frac` is what scalar Mandelbrot proximity / richness **cannot see**:

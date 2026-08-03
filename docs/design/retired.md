@@ -225,3 +225,34 @@ an item's evidence, the line points at it rather than restating it.
   it produced a committed artifact once — and its deletion removes the only committed
   description of how that round's gather ledger was made. The artifact stays; the recipe
   does not. `[code: removed — tools/coevo/{coevo_round,analyze_round}.py]`
+
+- **2026-08-03 — the near-minibrot 1×/4×/16× distance LADDER as a three-rung emitter.** The
+  ladder was the experiment that answered "at what multiple of an atom's own radius should a
+  julia `c` be drawn?", and it answered it: **nowhere in particular**. Yields are flat across
+  the rungs (labelled ≥3: 68.0 / 63.5 / 68.0%, one-per-cluster 61.8 / 65.3 / 66.7%, every
+  pair's Wilson interval overlapping) and the three rungs of one atom are **one look** —
+  same-atom different-rung pairs sit at median cos **0.9825** with **74.1%** at or above the
+  0.974 near-dup cut. So the ladder bought ~1 distinct look per atom for 3× the label cost.
+  A paired render-cost measurement was taken to break the tie the prompt expected cost to
+  break, and **cost is flat too** (3.9% spread, 24 atoms × 3 rungs interleaved), so the single
+  rung was chosen on the one column that separates — one-per-cluster class-4, 8.6% / 4.0% /
+  3.7% — giving **rung 1**.
+  **Scope: the LADDER, not the channel.** Near-minibrot sourcing is very much alive and is one
+  of the four `julia:mandelbrot` channels; it now emits one `c` per nucleus. The rung constant
+  and the flat-yield table stay in code (`supply_routing.LADDER_YIELD`) so a later question
+  about distance is a read rather than a re-run.
+  `[measured: data/label_corpus/batches/2026-08-03_q4_near_minibrot_v1, 290 labelled rows /
+  103 atoms; data/atlas/near_minibrot_rung_v2.json, 2026-08-03]`
+  `[code: tools/atlas/supply_routing.py::rung_choice; tools/atlas/near_minibrot_rung.py]`
+
+- **2026-08-03 — the unscreened ∂M_d-shell draw for native multibrot3/4/5, priced at zero.**
+  The score-unconditioned leg of the q4 sitting drew from the degree-`d` boundary shell at
+  ε = 0.02 with no screen, and **0 of 144 rows reached ≥2** (48 per family, Wilson [0, 7.4%]
+  each; no class-4 anywhere in the leg). It is not built in harvest v2.
+  **Scope: a verdict on the DRAW, not a ceiling on the families.** The same three partitions
+  reach ≥3 at 55.0% through triggered maneuvers against a partition-matched 25.5% fresh, so
+  native multibrot supply is routed through seeds + triggered maneuvers instead. Named in
+  `supply_routing.RETIRED_CHANNELS` rather than omitted, because a channel that is absent and
+  a channel that measured zero read identically in a config.
+  `[measured: data/label_corpus/batches/2026-08-03_q4_uniform_eval_v1, 2026-08-03]`
+  `[code: tools/atlas/supply_routing.py::RETIRED_CHANNELS]`

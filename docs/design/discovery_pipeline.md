@@ -100,6 +100,56 @@ whatever multiplies fastest inside it. That is precisely what the §3 deficit sc
 price-weighted pop does, which is the argument for using it rather than the light flag when
 the mix actually matters.
 
+### 3.2 The pop QUOTA — steering a mix is not enforcing one (harvest v2)
+
+`tools/atlas/pop_quota.py`, `--pop-quota`. Supersedes §3's scheduler as the live allocator;
+the two are mutually exclusive by construction (two owners of the pop is two mixes and no
+readable number).
+
+§3.1's conclusion is necessary but not sufficient. The §3 scheduler already pops rather than
+draws, and it still only **steers**: `choose_partition` is a per-batch stochastic argmax on
+price-weighted deficit, so it never MEASURES the mix it produces. A stale price, a partition
+that happens to expand cheaply, or an unrepresentative early stretch all move the realized
+share with nothing to pull it back. The quota closes that loop — it computes an intended share
+vector, tracks the realized share of active minutes, and serves whichever servable partition
+is furthest below its intent. Deterministic, because a quota allowed to be lucky is not
+evidence about the allocator.
+
+Three things changed with it, each a decision rather than a port:
+
+- **Currency.** Deficits are denominated in **human labels** — `count(label==4) + 0.1 ×
+  count(label==3)`, through the amendment overlay + library — against a **uniform** target
+  (level every partition to the richest holding, so the richest lands at exactly zero
+  deficit). §3's distinct-look denomination measured variety; this measures the thing the
+  corpus is short of. No machine score touches the deficit: a q3/q4 count measures the
+  classifier, not the family, until a human looks.
+- **Price.** Measured **active-minutes per currency unit mined**, credited only on a DISTINCT
+  ADMISSION (a q3_dup adds nothing to the corpus the deficit counts against, and pricing dups
+  as production would make the churniest partition look cheapest). The classifier does reach
+  the price here, so it is **clamped** to a bounded band around its seed — a head that
+  over-calls 4s in one family can move that family's service by at most a factor.
+- **A universal floor.** Every partition, including the currency-rich ones, receives ~5% of
+  TOTAL time; the remainder is deficit-allocated. Implemented as floor-constrained
+  proportional water-filling, which is what makes both halves true at once — a zero-deficit
+  partition still gets its 5%, and a partition already allocated above it gets nothing extra.
+  (The naive "reserve n×floor, split the rest" form fails the second half, and is
+  algebraically identical to the correct one whenever the unfloored deficits are equal.) At
+  nine partitions the floor's claim is bounded by 45% and its reachable maximum is 40%
+  (8 pinned). Rationale, recorded in every run config: spending 100% of the time on a stubborn
+  deficit partition means never learning anything new about the rich ones — the floor keeps
+  per-partition prices fresh, keeps rich-type material flowing to emission's diversity
+  targets, and keeps the cross-feed alive, since rich-base admissions are what trigger
+  maneuvers and julia hooks into the deficit partitions.
+
+Julia routing is inherited unchanged: a `julia:X` with intent but no queue folds its share
+into its c-plane parent's EFFECTIVE intent, while the realized-vs-intended report is scored
+against the ORIGINAL vector — grading a run on a target it moved is not a grade.
+
+**Realized-vs-intended is the headline metric**, reported per partition in three denominations
+(minutes, candidates, admissions) and summarised as a total-variation gap. Candidates is there
+because §3.1's 19.6% was quoted in it.
+`[code: tools/atlas/pop_quota.py; tools/atlas/test_pop_quota.py]`
+
 **Metering is worth keeping regardless**, for a second reason: a pool consumed as the walk
 asks for roots is `julia_c_sourcing.md`'s "run to the knee, then refill" by construction,
 where a pool dumped at t=0 is run straight into its tail. `--seed-pool-rate 0` restores
