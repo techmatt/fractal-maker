@@ -1,0 +1,12 @@
+{
+  "store": "C:\\Code\\fractal-maker\\data\\discovery\\q4_long_harvest_20260803\\q4_candidates.jsonl",
+  "rows": 7423,
+  "stamped_before": 178,
+  "stamped_after": 794,
+  "backfilled": 616,
+  "lineage": 794,
+  "maneuver_rec": 794,
+  "carriers_agreed_on_all_rows": true,
+  "rule": "triggered := mix_source.startswith('triggered:') == (maneuver.triggered and maneuver.trigger_oid is not None)",
+  "direction": "False/absent -> True only"
+}

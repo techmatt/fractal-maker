@@ -79,11 +79,14 @@ import julia_ledger_schema as jls       # noqa: E402  (campaign/walk julia schem
 from score_lib import corn_decode       # noqa: E402
 from active_ckpt import ACTIVE_CKPT, auto_maxiter  # noqa: E402
 import deficit_scheduler as dsched       # noqa: E402  (pure; torch-free scheduling logic)
+import pop_quota as pquota               # noqa: E402  (harvest v2 allocator; pure, torch-free)
+import supply_routing as srt             # noqa: E402  (harvest v2 channel table; pure data)
 import minibrot_maneuvers as mnv         # noqa: E402  (pure mpmath; no subprocess, no torch)
 import maneuver_screen as msc            # noqa: E402  (the field half: spawns the engine)
 import maneuver_view_screen as mvs       # noqa: E402  (the same, on the VIEW's own frame)
 import view_field_cache as vfc           # noqa: E402  (the run-local f32 field store)
 import view_screen as vscr               # noqa: E402  (composite_v3 + the reference params)
+import view_fit as vfit                  # noqa: E402  (the staged view_fit v1.1 fitted score)
 # The label-seeded harvest's two primitives (`snap_at_seed`, `enumerate_seed`) are what
 # maneuvers-on-admissions fires, and its `INTERIOR_DISCARD` is the sourcing copy of Matt's
 # rule. Imported rather than restated: a third literal 0.30 in this tree is how the three
@@ -1030,8 +1033,23 @@ class SteeredFrontier:
             self.man_view_params = vscr.screen_params(vscr.load_refs())
             self.man_fields = vfc.RunFieldCache(self.run_dir / "view_fields",
                                                 policy=msc.screen_policy_token())
+            # harvest v2 §3: the screen records BOTH sourcing scores on every screened row.
+            # `composite_v3` remains the live sort key; `view_fit_v1.1` rides beside it as a
+            # column only, because its adoption bar (delta-AP >= +0.1181) is pre-registered
+            # against a SITTING's labels and has never been read — the q4 sitting recorded
+            # neither score, so its NOT-ADOPT was the absence of evidence rather than a
+            # measured loss. Load failure is loud: a run that silently dropped the column
+            # would reproduce exactly that unreadable state.
+            try:
+                fit_model = vfit.load_model_v11()
+            except Exception as e:                                       # noqa: BLE001
+                raise SystemExit(
+                    f"--maneuver-view-prior needs the staged view_fit v1.1 record so both "
+                    f"sourcing scores can be recorded ({vfit.RECORD_V11_REL}): "
+                    f"{type(e).__name__}: {e}")
             self.man_views = mvs.ViewScreenCache(self.man_view_params,
-                                                 fields=self.man_fields)
+                                                 fields=self.man_fields,
+                                                 fit_model=fit_model)
         # Wall-clock cap (0 = off). Distinct from --budget: see the check in run().
         self.wall_budget_s = float(getattr(args, "wall_budget", 0.0) or 0.0) * 60.0
         self.wall_s_base = 0.0             # wall seconds spent by PREVIOUS sessions
@@ -1161,6 +1179,27 @@ class SteeredFrontier:
             self._sched_seeded = self.scheduler.seed_from_library(
                 record=getattr(args, "_library_seed", None),
                 allow_unseeded=bool(getattr(args, "allow_unseeded", False)))
+
+        # --- POP QUOTA (harvest v2; default OFF). The v1 replacement for the cross-partition
+        # allocation, and it supersedes `--scheduler` rather than tuning it: the scheduler
+        # STEERS the mix (per-batch stochastic argmax on price-weighted deficit) where this
+        # ENFORCES it (deterministic pop of whichever servable partition is furthest below its
+        # intended share of realized time). `discovery_pipeline.md` §3.1 is the measurement
+        # that made the difference matter. The two are mutually exclusive — running both would
+        # give two owners of the pop and no readable mix number.
+        self.quota = None
+        if getattr(args, "pop_quota", False):
+            if self.scheduler is not None:
+                raise SystemExit("--pop-quota and --scheduler both name the pop; pick one "
+                                 "(--pop-quota is the harvest-v2 allocator)")
+            pcfg = {}
+            pp = getattr(args, "quota_prices", None)
+            if pp and Path(pp).exists():
+                pcfg = json.loads(Path(pp).read_text(encoding="utf-8"))
+            self.quota = pquota.PopQuota(
+                self.partitions, self.run_dir,
+                floor=float(getattr(args, "quota_floor", pquota.FLOOR_FRAC)),
+                prices_config=pcfg)
 
     def build_clouds(self) -> dict:
         """Per-partition q3 cloud from (prior-library rows ⊕ this run's ledger rows). Prior rows
@@ -1656,8 +1695,12 @@ class SteeredFrontier:
             if key in seen:
                 continue
             seen.add(key)
+            # `window_scale` rides the job because `view_fit_v1.1` needs `log10_size_rel`
+            # (the nucleus size relative to the frame) and the screen record does not carry
+            # it — the screen measures the FIELD, and the atom's size is the operator's fact.
             jobs.append(dict(view_key=key, cx=m.cx, cy=m.cy, fw=m.fw, atom_key=m.atom_key,
-                             k=m.k, family=item["parent"]["partition"]))
+                             k=m.k, family=item["parent"]["partition"],
+                             window_scale=m.window_scale))
         if not jobs:
             return {}
         t0 = time.time()
@@ -1782,7 +1825,13 @@ class SteeredFrontier:
             man["screen_frame"] = "view" if view_prior else "atom4x"
             if view_prior:
                 for key in ("composite", "vetoed", "size_factor", "band_coverage",
-                            "band_coverage_q25", "interior_fraction", "view_fw"):
+                            "band_coverage_q25", "interior_fraction", "view_fw",
+                            # harvest v2 §3: BOTH sourcing scores ride the NODE, so they
+                            # reach the harvest record and the ledger and are on a labelled
+                            # row when the pre-registered bar is finally read. A score that
+                            # lives only in `maneuvers.jsonl` is a score no sitting can see.
+                            "view_fit", "view_fit_p_notbad", "view_fit_model",
+                            "view_fit_reason"):
                     man[key] = screen.get(key)
         prior = NEUTRAL_PRIOR
         if self.man_range_prior:
@@ -1940,6 +1989,45 @@ class SteeredFrontier:
         pool = [n for n in self.frontier if n["partition"] == part]
         pool.sort(key=lambda n: -n["priority"])
         batch, _rest = self._split_reserved(pool)   # maneuver floor is WITHIN the served partition
+        taken = {n["node_id"] for n in batch}
+        self.frontier = [n for n in self.frontier if n["node_id"] not in taken]
+        for n in batch:
+            self.expansions_per_root[str(n["root_id"])] = \
+                self.expansions_per_root.get(str(n["root_id"]), 0) + 1
+        return batch
+
+    def pop_batch_quota(self) -> list[dict]:
+        """Harvest-v2 pop: the cross-partition CHOICE is the quota's (intended vs realized
+        time share only), the within-partition ORDER is the unchanged priority sort over that
+        ONE partition's nodes.
+
+        Structurally identical to `pop_batch_scheduled` — same capped-root eviction, same
+        maneuver floor applied WITHIN the served partition — and deliberately so: the two
+        allocators must differ in the partition CHOICE and in nothing else, or a
+        realized-mix comparison between them measures the other differences.
+
+        The ranker boundary is inherited verbatim: `pref_loc_*` ranks admitted output for
+        keeper/emission ordering and never enters scheduling. It is absent here, as it is
+        from `_split_reserved` and `pop_batch_scheduled`."""
+        live = []
+        for n in self.frontier:
+            if self.expansions_per_root.get(str(n["root_id"]), 0) >= M_CAP:
+                self.node_embs.pop(n["node_id"], None)
+            else:
+                live.append(n)
+        self.frontier = live
+        self.totals["cap_hits"] = sum(1 for v in self.expansions_per_root.values() if v >= M_CAP)
+        queue_lens: dict = {}
+        for n in self.frontier:
+            queue_lens[n["partition"]] = queue_lens.get(n["partition"], 0) + 1
+        part = self.quota.pick(queue_lens)
+        self.quota.log_choice(self.batch_i, part, queue_lens)
+        self._served_partition = part
+        if part is None:
+            return []
+        pool = [n for n in self.frontier if n["partition"] == part]
+        pool.sort(key=lambda n: -n["priority"])
+        batch, _rest = self._split_reserved(pool)
         taken = {n["node_id"] for n in batch}
         self.frontier = [n for n in self.frontier if n["node_id"] not in taken]
         for n in batch:
@@ -2376,6 +2464,16 @@ class SteeredFrontier:
                 emb = self.scheduler_embed_admitted(row)
                 if self.scheduler.on_admission(c["partition"], emb):
                     self.totals["distinct_looks"] = self.totals.get("distinct_looks", 0) + 1
+            # POP QUOTA: this partition just MINED currency, so its measured cost-to-mine
+            # updates here. The credit is taken on a DISTINCT ADMISSION only — not on every
+            # canonical decode >= 3 — because a q3_dup and a pre-canonical dup add nothing to
+            # the corpus the deficit is counted against, and pricing them as production would
+            # make the churniest partition look the cheapest. The weight is the reframed
+            # decode's own class through `CLASS_WEIGHT`, so a class-4 admission is worth 10
+            # distinct class-3s, exactly as the deficit denominates them.
+            if self.quota is not None:
+                self.quota.note_admission(c["partition"])
+                self.quota.credit_decode(c["partition"], decoded)
             # julia hook: fire per qualifying (admitted-q3) c-plane parent.
             if self.julia_hook and c["partition"] in self.families:
                 self.add_julia_root(c["partition"], (ocx, ocy), oid)
@@ -2475,6 +2573,40 @@ class SteeredFrontier:
         self.totals["trig_fired"] += 1
         self.totals["trig_atoms"] += len({r["atom_key"] for r in rows})
         self.trig_probe_s += time.time() - t0
+        # harvest v2 §3: the TRIGGERED channel is screened too. In v1 it was not — triggered
+        # views were pushed with a bare neutral prior — so the one channel §2 promotes to a
+        # budgeted supply source was also the one channel whose rows carried neither sourcing
+        # score. One batched pass over this trigger's distinct views, on the same cache and
+        # the same budget clamp as the fresh operators, so a view already screened as a fresh
+        # maneuver is a cache hit rather than a second field.
+        screens: dict = {}
+        if self.man_views is not None and rows:
+            jobs, seen = [], set()
+            for r in rows:
+                key = mvs.view_key(r["atom_key"], r["k"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                jobs.append(dict(view_key=key, cx=r["cx"], cy=r["cy"], fw=r["fw"],
+                                 atom_key=r["atom_key"], k=r["k"],
+                                 family=c["partition"],
+                                 window_scale=r.get("window_scale")))
+            ts = time.time()
+            before = set(self.man_views.by_key)
+            screens = self.man_views.screen_many(jobs, budget_s=self.unit_timeout_s())
+            self.man_screen_s += time.time() - ts
+            for key, rec in screens.items():
+                if key in before:
+                    continue
+                if rec.get("screened"):
+                    self.totals["man_view_screened"] += 1
+                    self.man_comp_dist.add(rec.get("composite"))
+                    if rec.get("vetoed"):
+                        self.totals["man_view_vetoed"] += 1
+                else:
+                    self.totals["man_view_unscreenable"] += 1
+            self.totals["man_screen_cache_hits"] = self.man_views.n_hits
+            self.totals["man_view_fields_cached"] = self.man_views.n_fields_cached
         pushed = 0
         for r in rows:
             # The SHARED visited key (`atom|k`), so an atom a fresh maneuver already pushed
@@ -2486,6 +2618,22 @@ class SteeredFrontier:
                 continue
             self.man_visited.add(key)
             nid = self.new_node_id()
+            man = dict(op=r["op"], k=r["k"], origin_node_id=c["node_id"],
+                       atom_id=r["atom_id"], atom_key=r["atom_key"],
+                       period=r["period"], log10_abs_A=r["log10_abs_A"],
+                       window_scale=r["window_scale"], degree=deg,
+                       trigger_oid=oid, triggered=True)
+            sc = screens.get(key)
+            if sc is not None:
+                man["screened"] = bool(sc.get("screened"))
+                man["screen_policy"] = sc.get(mvs.fm.POLICY_KEY)
+                man["screen_frame"] = "view"
+                for fld in ("composite", "vetoed", "size_factor", "band_coverage",
+                            "band_coverage_q25", "interior_fraction", "view_fw",
+                            "radial_range", "radial_rings",
+                            "view_fit", "view_fit_p_notbad", "view_fit_model",
+                            "view_fit_reason"):
+                    man[fld] = sc.get(fld)
             self.frontier.append(dict(
                 node_id=nid, root_id=c["root_id"], partition=c["partition"], c=None,
                 cx=float(r["cx"]), cy=float(r["cy"]), fw=float(r["fw"]),
@@ -2493,12 +2641,7 @@ class SteeredFrontier:
                 priority=NEUTRAL_PRIOR + gumbel(self.rng, T_GUMBEL),
                 cheap_eord=None, cheap_pgood=None, branch="triggered",
                 mix_source=f"triggered:{r['method']}:k={r['k']}",
-                triggered=True,
-                man=dict(op=r["op"], k=r["k"], origin_node_id=c["node_id"],
-                         atom_id=r["atom_id"], atom_key=r["atom_key"],
-                         period=r["period"], log10_abs_A=r["log10_abs_A"],
-                         window_scale=r["window_scale"], degree=deg,
-                         trigger_oid=oid, triggered=True),
+                triggered=True, man=man,
             ))
             pushed += 1
         self.totals["trig_nodes_pushed"] += pushed
@@ -2646,6 +2789,22 @@ class SteeredFrontier:
                 cheap_eord=c["cheap_eord"], cheap_pgood=c["cheap_pgood"], branch=c["branch"],
                 mix_source=c.get("mix_source"),   # carry root supply down the tree (probe attribution)
                 man=c.get("man"),                 # maneuver provenance, if this lineage has one
+                # THE LINEAGE STAMPS RIDE THE REBUILT NODE, NOT ONLY THE CANDIDATE. This
+                # dict is a FRESH node, so anything not named here is dropped — and
+                # `expand_group` reads these back off the parent NODE to stamp the next
+                # generation's candidates. Omitting one does not lose it once; it truncates
+                # it at generation 1 and every descendant is then stamped with the DEFAULT,
+                # which reads as a positive fact about a different population:
+                #   `triggered`  — a triggered descendant counted as FRESH supply inflates
+                #                  exactly the arm the split exists to protect
+                #                  (`minibrot_maneuvers.md` §8.0). Measured on
+                #                  q4_long_harvest_20260803: 178 of 794 triggered-lineage
+                #                  rows kept the stamp, 616 were written as fresh.
+                #   `phoenix`    — the (branch, theta, offset) of the skeleton point the
+                #                  seed came from; without it a phoenix row is unattributable
+                #                  to its sampler branch. Same run: 17 of 1,238 kept it.
+                triggered=c.get("triggered"),
+                phoenix=c.get("phoenix"),
             ))
             self.totals["frontier_pushed"] += 1
             if c.get("emb") is not None:
@@ -2777,7 +2936,41 @@ class SteeredFrontier:
             phoenix_seed_pool=(str(self.phoenix_seed_pool_path)
                                if self.phoenix_seed_pool_path else None),
             prereg=self.PREREG,
+            # WHICH SUPPLY CHANNEL FEEDS WHICH PARTITION, and the measurement that priced it.
+            # Stamped from `supply_routing` rather than restated, so the config a reader
+            # diffs against the labels is the same table the code routes on.
+            supply_routing=srt.summary(),
         )
+        if self.quota is not None:
+            # THE ALLOCATION IS ANNOUNCED AT DECISION TIME, NEVER DISCOVERED IN A READOUT
+            # (`measurement_practice.md`). The intended mix, the currency it was computed
+            # from, and the floor's recorded rationale all land here before batch 1, so the
+            # realized-vs-intended read at the end is scored against a target that was
+            # written down first.
+            q = self.quota
+            cfg["pop_quota"] = dict(
+                floor=q.floor, julia_route_gain=q.julia_route_gain,
+                currency="count(label==4) + 0.1*count(label==3), through the amendment "
+                         "overlay + library",
+                target_rule="uniform: level every partition to the richest holding",
+                census=q.census.summary(), deficit={p: round(v, 3)
+                                                    for p, v in q.deficit.items()},
+                intended=q.allocation().summary(),
+                seed_prices=q.cost.summary()["seed"],
+                price="measured active-minutes per currency unit mined, EMA %.2f, clamped to "
+                      "[seed/%.0f, seed*%.0f]" % (q.cost.ema, q.cost.clamp, q.cost.clamp),
+                floor_rationale=(
+                    "Every partition — including the q4-rich ones — receives a floor of ~5% "
+                    "of total time. Spending 100% of the time on a stubborn deficit partition "
+                    "means never learning anything new about the rich ones; the floor keeps "
+                    "per-partition cost-to-mine prices fresh for the scheduler, keeps "
+                    "rich-type material flowing to emission's diversity targets, and keeps "
+                    "the cross-feed alive (rich-base admissions trigger maneuvers/hooks into "
+                    "deficit partitions). It is a FLOOR, not a quota: a partition whose "
+                    "deficit allocation already exceeds 5% gets nothing extra."),
+                headline_metric="realized vs intended mix, per partition, in minutes / "
+                                "candidates / admissions",
+            )
         p = self.run_dir / "run_config.json"
         p.write_text(json.dumps(cfg, indent=2, default=str) + "\n", encoding="utf-8")
         print(f"[prereg] run_config.json written BEFORE batch 1 -> {p}", flush=True)
@@ -2811,6 +3004,8 @@ class SteeredFrontier:
             state["man_visited"] = sorted(self.man_visited)
         if self.scheduler is not None:
             state["scheduler"] = self.scheduler.state_dict()
+        if self.quota is not None:
+            state["pop_quota"] = self.quota.state_dict()
         if self.maneuvers:
             # The visited-atom set and the governor's region cache are the two pieces of
             # maneuver state a resume must not lose: without them a restart re-pays the
@@ -2898,6 +3093,12 @@ class SteeredFrontier:
         # distinct-look tally reloaded from its npz in the scheduler's __init__.
         if self.scheduler is not None and "scheduler" in st:
             self.scheduler.load_state(st["scheduler"], reopen_caps=True)
+        # The quota restores its REALIZED tally (a resume that reset it would re-serve the
+        # partitions the previous session already paid for) but RE-CENSUSES its deficit from
+        # the live corpus, because a sitting may have landed between sessions — see
+        # `PopQuota.load_state`.
+        if self.quota is not None and "pop_quota" in st:
+            self.quota.load_state(st["pop_quota"], reopen_caps=True)
         # cloud is rebuilt from the DURABLE ledger (source of truth) ⊕ the freshness prior, not
         # the checkpoint, so a kill between ledger-append and checkpoint cannot lose/duplicate an
         # admission. build_clouds folds self.prior_rows (set in __init__ before load_state).
@@ -3171,6 +3372,19 @@ class SteeredFrontier:
                       f"tallies={self.scheduler.tally.counts()} "
                       f"(total {self.scheduler.tally.total()}, newly seeded {sum(seeded.values())})", flush=True)
                 print(f"[scheduler] launch look_frac={lf}\n[scheduler] launch deficits={df}", flush=True)
+            if self.quota is not None:
+                a = self.quota.allocation()
+                print(f"[pop-quota] ON — floor={self.quota.floor:.0%} of total time per "
+                      f"partition (up to {self.quota.floor*len(self.partitions):.0%} floored); "
+                      f"currency = n4 + 0.1*n3 through the amendment overlay + library",
+                      flush=True)
+                print(f"[pop-quota] census={ {p: round(v, 1) for p, v in self.quota.census.currency.items()} } "
+                      f"(defaulted_rows={self.quota.census.defaulted_rows}, "
+                      f"sources={self.quota.census.sources})", flush=True)
+                print(f"[pop-quota] deficit={ {p: round(v, 1) for p, v in self.quota.deficit.items()} }",
+                      flush=True)
+                print(f"[pop-quota] INTENDED mix={ {p: round(v, 3) for p, v in sorted(a.share.items())} } "
+                      f"floored={sorted(a.floored)}", flush=True)
             self.write_run_config()
             self.draw_roots()
             # At fresh start these inject the WHOLE pool when `--seed-pool-rate` is 0 (the
@@ -3220,10 +3434,19 @@ class SteeredFrontier:
 
             tb = time.time()
             self.batch_i += 1
-            batch = self.pop_batch_scheduled() if self.scheduler is not None else self.pop_batch()
+            if self.quota is not None:
+                batch = self.pop_batch_quota()
+            elif self.scheduler is not None:
+                batch = self.pop_batch_scheduled()
+            else:
+                batch = self.pop_batch()
             if not batch:
-                # scheduler: an empty pop with a non-empty frontier means every servable
+                # allocator: an empty pop with a non-empty frontier means every servable
                 # partition is PRICE-capped -> reopen (redistribute demand) and retry.
+                if self.quota is not None and self.frontier:
+                    self.quota.cost.reopen_caps()
+                    self.batch_i -= 1
+                    continue
                 if self.scheduler is not None and self.frontier:
                     self.scheduler.prices.reopen_caps()
                     self.batch_i -= 1
@@ -3269,6 +3492,16 @@ class SteeredFrontier:
             # attempt-cap accounting). Cross-partition arithmetic only; no p_good.
             if self.scheduler is not None and self._served_partition is not None:
                 self.scheduler.charge(self._served_partition, dt / 60.0)
+            # POP QUOTA: the realized-time tally is what the quota corrects against, so the
+            # charge is the single most load-bearing line in the loop — an uncharged batch is
+            # a batch the quota believes never happened, and the realized mix would drift
+            # exactly as far as the charges are missing. Candidates are attributed to the
+            # partition they were EXPANDED under (not each candidate's own field), so the
+            # per-denomination shares stay comparable with `discovery_pipeline.md` §3.1's
+            # candidate-stream number.
+            if self.quota is not None and self._served_partition is not None:
+                self.quota.charge(self._served_partition, dt / 60.0)
+                self.quota.note_candidates(self._served_partition, len(cands))
             self.save_state()
             if self.batch_i % 1 == 0:
                 sat = ""
@@ -3307,6 +3540,13 @@ class SteeredFrontier:
             tau_h=self.tau_h, totals=self.totals,
             cloud_sizes={p: len(v) for p, v in self.clouds.items()},
         )
+        if self.quota is not None:
+            summary["pop_quota"] = self.quota.summary()
+            # The headline is lifted to the TOP level too. v1's realized 19.6% against an
+            # intended 70% had to be reconstructed from a candidate stream after the fact;
+            # this run's equivalent number is the first thing in its own summary.
+            summary["realized_vs_intended"] = summary["pop_quota"]["mix"]
+            summary["floor_vs_deficit"] = summary["pop_quota"]["floor_vs_deficit"]
         vf = self.finalize_view_fields()
         summary["maneuvers"] = self.maneuver_summary()
         if vf:
@@ -3329,12 +3569,23 @@ class SteeredFrontier:
             # by construction — but "the key is missing" and "the seed was missing" read
             # identically in a summary six months later, which is exactly how campaign-2's
             # seeded/unseeded status became unrecoverable. Say which it is, in the file.
+            # A --pop-quota run is ALSO scheduler-off, and its reason is different: the quota
+            # denominates demand in HUMAN LABELS (n4 + 0.1*n3 through the amendment overlay
+            # + library), not in distinct looks, so it has no look tally to seed and its
+            # deficits are library-wide WITHOUT one. Saying "no deficit scheduler" for it
+            # would read as the same missing-seed hazard the scheduler has, which it is not.
+            reason = ("run has --pop-quota: demand is denominated in HUMAN LABELS, not in "
+                      "distinct looks, so there is no look tally to seed and the deficits "
+                      "are library-wide without one (see summary.pop_quota.currency)"
+                      if self.quota is not None else
+                      "run has --scheduler OFF: no deficit scheduler, therefore no "
+                      "distinct-look tally and nothing to seed")
             summary["library_seed"] = dict(
-                status="never_attempted", reason="run has --scheduler OFF: no deficit "
-                "scheduler, therefore no distinct-look tally and nothing to seed",
+                status="never_attempted", reason=reason,
                 source=str(dsched.library_seed_paths()[0]),
                 emb_dir=str(dsched.library_seed_paths()[1]),
-                source_exists=dsched.library_seed_paths()[0].exists())
+                source_exists=dsched.library_seed_paths()[0].exists(),
+                resolved_from=dsched.resolve_seed_source()[0])
         (self.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print("\n=== STEERED FRONTIER SUMMARY ===")
         print(f"  active {self.active_s/60:.1f}m over {self.batch_i} batches")
@@ -3353,6 +3604,22 @@ class SteeredFrontier:
               f"novelty_hits={self.totals['novelty_hits']} sat_frac={sf} "
               f"morph_mem={len(self.morph)} (perm {self.morph.n_perm} + recency {self.morph.n_recency})")
         print(f"  cloud: {summary['cloud_sizes']}")
+        if self.quota is not None:
+            q = summary["pop_quota"]
+            print(f"  POP QUOTA (floor {q['allocation']['floor']:.0%}): "
+                  f"L1 mix gap = {q['mix']['l1_gap_minutes']:.1%} of minutes")
+            print(f"    {'partition':20s} {'intend':>7} {'min':>7} {'cand':>7} {'admit':>7}")
+            for p in self.partitions:
+                m = q["mix"]
+                print(f"    {p:20s} {m['minutes'][p]['intended']:7.3f} "
+                      f"{m['minutes'][p]['realized']:7.3f} "
+                      f"{m['candidates'][p]['realized']:7.3f} "
+                      f"{m['admitted'][p]['realized']:7.3f}")
+            f = q["floor_vs_deficit"]
+            print(f"    floor {f['floor_min']:.1f}m ({f['floor_share']}) vs deficit "
+                  f"{f['deficit_min']:.1f}m ({f['deficit_share']})")
+            print(f"    price={q['cost']['price']} clamped={q['cost']['clamped']} "
+                  f"capped={q['cost']['capped']}\n    trace -> {self.quota.trace_path}")
         if self.scheduler is not None:
             s = summary["scheduler"]
             print(f"  SCHEDULER: distinct_looks={self.totals.get('distinct_looks',0)} "
@@ -3390,6 +3657,9 @@ class SteeredFrontier:
                       f"({vshare} of scored)")
                 print(f"      composite dist n={m['view_dist_n']} gain={m['view_gain']}; "
                       f"fields cached {m['view_fields_cached']} -> {m['view_fields']}")
+                print(f"      view_fit ({m['view_fit_model']}) scored "
+                      f"{m['view_fit_scored']}/{m['view_screened']} = "
+                      f"{m['view_fit_coverage']} — RECORDED ONLY, composite_v3 still sorts")
         print(f"  ledger -> {self.ledger.path}\n  summary -> {self.run_dir/'summary.json'}")
 
     def maneuver_summary(self) -> dict:
@@ -3436,6 +3706,18 @@ class SteeredFrontier:
             view_params=(None if not self.man_view_prior
                          else dict(self.man_view_params._asdict())),
             view_fields=(None if self.man_fields is None else str(self.man_fields.root)),
+            # --- harvest v2 §3: BOTH sourcing scores, and the COVERAGE of the second one.
+            # `view_fit_scored` vs `view_screened` is the verification the prompt asks for —
+            # "screened rows carry both scores" is a ratio, and a ratio nobody prints is a
+            # claim nobody checked. `view_fit_model` is stamped so a later reader knows which
+            # fit produced the column without re-deriving it.
+            view_fit_model=(None if self.man_views is None or self.man_views.fit_model is None
+                            else vfit.MODEL_ID_V11),
+            view_fit_scored=(0 if self.man_views is None else self.man_views.n_view_fit),
+            view_fit_coverage=((self.man_views.n_view_fit / t["man_view_screened"])
+                               if (self.man_views is not None
+                                   and t["man_view_screened"]) else None),
+            view_fit_is_sort_key=False,     # RECORDED ONLY — composite_v3 still orders
             log=str(self.man_log),
         )
 
@@ -3702,6 +3984,21 @@ def main():
                     help="proceed with --scheduler even though the library look seed is absent "
                          "or empty. Deficits then measure RUN-LOCAL scarcity, not library-wide; "
                          "the run summary is permanently stamped library_seed.status=unseeded.")
+    # --- pop quota (harvest v2; default OFF, and mutually exclusive with --scheduler) ---
+    ap.add_argument("--pop-quota", action="store_true",
+                    help="ENABLE the harvest-v2 POP QUOTA: per-partition allocation ENFORCED "
+                         "at the population level (serve whichever servable partition is "
+                         "furthest below its intended share of realized active time). "
+                         "Deficit = shortfall of n4 + 0.1*n3 through the amendment overlay + "
+                         "library against a UNIFORM target, price-weighted by measured "
+                         "cost-to-mine. Supersedes --scheduler; DEFAULT OFF.")
+    ap.add_argument("--quota-floor", type=float, default=pquota.FLOOR_FRAC,
+                    help="universal per-partition floor as a fraction of TOTAL time "
+                         "(default %(default)s). A floor, not a quota: a partition already "
+                         "allocated above it gets nothing extra.")
+    ap.add_argument("--quota-prices", type=str, default=None,
+                    help="seed cost-to-mine prices + EMA/clamp/cap config for --pop-quota "
+                         "(JSON; keys: prices, seed_price, price_ema, price_clamp, cap_minutes)")
     # --- dive mode ---
     ap.add_argument("--dive", action="store_true",
                     help="single-track descent off a completed run's admissions (uses dive_state.json)")

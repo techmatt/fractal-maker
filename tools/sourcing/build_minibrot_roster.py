@@ -75,7 +75,32 @@ MARGIN_MIN_DECADES = 1.0                      # admit iff deploy margin >= this
 
 # Newton / dedup precision (matches the study draw so keys are comparable).
 NUCLEUS_DPS = 60
-NEWTON_STEPS = 60
+# 60 -> 600 (2026-08-03, Matt-dictated). This is THE production Newton budget for the whole
+# tree — `atom_lib`, `build_triage_pool`, `sources` and the minibrot maneuvers all re-export
+# it — so the number is argued here rather than at any of the call sites.
+#
+# WHY IT WAS 60. Before the divergence abort, a non-converging seed burned the whole budget,
+# so the budget WAS the cost: raising it multiplied the price of every failure, and failures
+# are the majority of a Newton grid. 60 was the affordable cap, and it was silently a QUALITY
+# knob — a slow converger that needed 61 steps was recorded as "no nucleus here", which is
+# indistinguishable in the output from "no nucleus exists".
+#
+# WHY IT IS 600 NOW. `deep_center_finder`'s divergence abort ends a seed as soon as its
+# residual exceeds what the REMAINING budget could retire, which drops a burner to a few
+# orbit passes (~2% of the old cost) while provably losing zero convergers. That decouples
+# the budget from the failure bill, and 60 then costs real supply: it was discarding 18.8% of
+# findable nuclei. 600 buys those back for approximately the convergers' own extra iterations.
+#
+# NOTE the abort's bound SCALES with the remaining budget (`divergence_bound`), so 600 also
+# makes the abort more permissive per step — which is the correct direction and is exactly
+# what `test_the_same_seed_aborts_on_a_tight_budget_and_survives_a_generous_one` pins. The
+# zero-lost-convergers property is re-verified at this setting by the slow-lane grid
+# differential, which reads this constant rather than a literal.
+#
+# The COMMITTED roster (`data/minibrot_roster/roster.jsonl`) was built at 60 and is not
+# rebuilt by this change; every one of its atoms still converges under the larger budget
+# (more budget can only add convergers), which the round-trip test asserts.
+NEWTON_STEPS = 600
 DEDUP_DPS = 22
 ORIGIN_EPS = mp.mpf("1e-6")                   # reject the c~0 period-1 degenerate
 

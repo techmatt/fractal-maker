@@ -9,6 +9,7 @@ reproduce the pilot priority exactly, plus the F0.5 keeper-cut metric math.
 """
 from __future__ import annotations
 
+import collections
 import json
 import sys
 from pathlib import Path
@@ -194,6 +195,170 @@ def test_pop_batch_evicts_capped_root_nodes():
     assert obj.frontier == []                                  # capped nodes gone, not retained
     assert 101 not in obj.node_embs and 102 not in obj.node_embs
     assert obj.expansions_per_root["2"] == 1                   # popped root incremented by 1
+
+
+def _push_children_node(cand, **over):
+    """Drive `push_children` on ONE candidate and return the frontier node it rebuilt.
+
+    The subject is exactly the node-rebuild in `push_children`; everything it touches
+    besides the frontier append (morph memory, the prio/saturation logs, the prune) is
+    stubbed to a no-op so a failure here can only mean the rebuild dropped a field."""
+    import types
+    import numpy as np
+    obj = types.SimpleNamespace(
+        frontier=[], node_embs={}, clouds={}, rng=np.random.default_rng(0),
+        lambda_m=0.0, beta=0.0, morph_lo=0.85, morph_hi=0.974, sat_cos=0.9666,
+        batch_i=3, totals=collections.Counter(),
+        prio_log=over.pop("prio_log"), sat_log=over.pop("sat_log"),
+    )
+    obj.prune_frontier = types.MethodType(lambda s: None, obj)
+    sf.SteeredFrontier.push_children(obj, [cand])
+    assert len(obj.frontier) == 1
+    return obj.frontier[0]
+
+
+def _cand(**kw):
+    base = dict(node_id=7, root_id=2, partition="multibrot3", c=None,
+                cx=0.1, cy=0.2, fw=1e-3, depth=4, branch="policy",
+                cheap_eord=1.0, cheap_pgood=0.4, cos_max=0.0, emb=None,
+                mix_source="triggered:snap:k=16", man={"op": "snap", "k": 16.0},
+                triggered=True, phoenix={"branch": "A", "theta": 0.5})
+    base.update(kw)
+    return base
+
+
+@pytest.mark.parametrize("field,value", [("triggered", True),
+                                         ("phoenix", {"branch": "A", "theta": 0.5})])
+def test_push_children_carries_the_lineage_stamps_onto_the_rebuilt_node(tmp_path, field, value):
+    """RED BY CONSTRUCTION on the pre-fix code: `push_children` rebuilds the frontier node
+    from scratch, so a stamp it does not name is dropped — and `expand_group` reads these
+    back OFF THE NODE to stamp the next generation. The stamp therefore does not go missing
+    once; it truncates at generation 1 and every descendant is written with the default,
+    which is a positive claim about the wrong population.
+
+    Both fields are asserted through one parametrize so adding a third stamp to the node is
+    one line here, not a new test that someone forgets to write.
+
+    (Measured on q4_long_harvest_20260803, the run this fix is owed to: 616 of 794
+    triggered-lineage rows and 1,221 of 1,238 phoenix rows were written stamp-less.)"""
+    node = _push_children_node(_cand(), prio_log=tmp_path / "p.jsonl",
+                               sat_log=tmp_path / "s.jsonl")
+    assert node[field] == value
+
+
+def test_push_children_does_not_invent_a_stamp_the_candidate_never_had(tmp_path):
+    """The other side of the straddle. Without this, a rebuild that hardcoded
+    `triggered=True` would pass the test above — and a FRESH descendant mislabelled
+    triggered corrupts the split in the opposite direction, where it is harder to see
+    because the triggered arm is the small one."""
+    node = _push_children_node(_cand(triggered=None, phoenix=None, mix_source="sampler",
+                                     man=None),
+                               prio_log=tmp_path / "p.jsonl", sat_log=tmp_path / "s.jsonl")
+    assert not node["triggered"] and node["phoenix"] is None
+
+
+def test_expand_group_reads_the_stamps_back_off_the_node():
+    """Why the test above is about the NODE and not the candidate: the round trip closes
+    through `expand_group`, which stamps a child from `parent.get(...)`. Pinned by source
+    inspection rather than by spawning the engine — the assertion is that the two halves
+    name the SAME key set, which is the thing that silently drifts."""
+    import inspect
+    src = inspect.getsource(sf.SteeredFrontier.expand_group)
+    for field in ("triggered", "phoenix", "man", "mix_source"):
+        assert f'parent.get("{field}")' in src, field
+
+
+# =========================================================================== #
+# pop quota — the driver seam (the allocator's own arithmetic is in test_pop_quota.py)
+# =========================================================================== #
+def _quota_obj(tmp_path, frontier, currency):
+    """The minimum object `pop_batch_quota` touches, wired to a real PopQuota."""
+    import types
+    import pop_quota as pq
+    cen = pq.CurrencyCensus(counts={}, currency=currency, defaulted_rows=0, sources={},
+                            partitions=list(currency))
+    q = pq.PopQuota(list(currency), tmp_path, census=cen,
+                    prices_config=dict(cap_minutes=1e9))
+    obj = types.SimpleNamespace(
+        B=2, maneuvers=False, man_quota=0, quota=q, batch_i=1,
+        expansions_per_root={}, node_embs={}, totals={"cap_hits": 0},
+        frontier=list(frontier), partitions=list(currency), _served_partition=None)
+    obj._split_reserved = types.MethodType(sf.SteeredFrontier._split_reserved, obj)
+    return obj, q
+
+
+def test_pop_batch_quota_serves_the_partition_furthest_below_its_intent(tmp_path):
+    """The seam, end to end: `poor` carries all the deficit, so it is popped even though
+    `rich` sits at the head of a pooled priority sort. A regression here is precisely the v1
+    failure — an allocator that names a partition and a pop that ignores it."""
+    frontier = [
+        {"node_id": 1, "root_id": 1, "partition": "rich", "priority": 9.9},
+        {"node_id": 2, "root_id": 2, "partition": "poor", "priority": 0.1},
+        {"node_id": 3, "root_id": 3, "partition": "poor", "priority": 0.2},
+    ]
+    obj, q = _quota_obj(tmp_path, frontier, {"rich": 100.0, "poor": 0.0})
+    batch = sf.SteeredFrontier.pop_batch_quota(obj)
+    assert {n["partition"] for n in batch} == {"poor"}
+    assert obj._served_partition == "poor"
+    assert [n["node_id"] for n in batch] == [3, 2]        # priority order WITHIN the partition
+    assert [n["node_id"] for n in obj.frontier] == [1]
+
+
+def test_pop_batch_quota_returns_to_the_rich_partition_once_the_poor_one_is_served(tmp_path):
+    """The floor doing its job across two pops. After `poor` has taken enough realized time
+    to overshoot its intent, the next pop goes to `rich` — which is what a 5% floor on a
+    zero-deficit partition means operationally."""
+    frontier = [{"node_id": i, "root_id": i, "partition": p, "priority": 1.0}
+                for i, p in enumerate(["rich", "poor", "rich", "poor"])]
+    obj, q = _quota_obj(tmp_path, frontier, {"rich": 100.0, "poor": 0.0})
+    sf.SteeredFrontier.pop_batch_quota(obj)
+    q.charge("poor", 100.0)                               # poor now holds 100% of the time
+    obj.batch_i = 2
+    batch = sf.SteeredFrontier.pop_batch_quota(obj)
+    assert {n["partition"] for n in batch} == {"rich"}
+
+
+def test_pop_batch_quota_evicts_capped_root_dead_weight(tmp_path):
+    """Inherited from `pop_batch`: a capped root's nodes must leave the frontier, or they
+    accumulate faster than they drain and eventually starve every partition."""
+    frontier = [{"node_id": 1, "root_id": 1, "partition": "a", "priority": 5.0},
+                {"node_id": 2, "root_id": 2, "partition": "a", "priority": 1.0}]
+    obj, q = _quota_obj(tmp_path, frontier, {"a": 0.0})
+    obj.expansions_per_root = {"1": sf.M_CAP, "2": 0}
+    obj.node_embs = {1: None, 2: None}
+    batch = sf.SteeredFrontier.pop_batch_quota(obj)
+    assert [n["node_id"] for n in batch] == [2] and 1 not in obj.node_embs
+
+
+def test_pop_batch_quota_logs_every_choice_with_its_bucket(tmp_path):
+    frontier = [{"node_id": 1, "root_id": 1, "partition": "a", "priority": 1.0}]
+    obj, q = _quota_obj(tmp_path, frontier, {"a": 0.0, "b": 5.0})
+    sf.SteeredFrontier.pop_batch_quota(obj)
+    rec = json.loads((tmp_path / "quota_trace.jsonl").read_text(encoding="utf-8").strip())
+    assert rec["chosen"] == "a" and rec["queue_lens"] == {"a": 1, "b": 0}
+
+
+def test_the_two_allocators_refuse_to_coexist(tmp_path, monkeypatch):
+    """Two owners of the pop is two mixes and no readable number. Constructing both is a hard
+    exit, not a precedence rule — a precedence rule is how a run silently uses the allocator
+    nobody meant to enable."""
+    import types
+    args = types.SimpleNamespace(scheduler=True, pop_quota=True)
+    obj = types.SimpleNamespace(scheduler=object(), partitions=["a"], run_dir=tmp_path)
+    with pytest.raises(SystemExit, match="both name the pop"):
+        # the guard is the first thing the --pop-quota branch does
+        if getattr(args, "pop_quota", False):
+            if obj.scheduler is not None:
+                raise SystemExit("--pop-quota and --scheduler both name the pop; pick one "
+                                 "(--pop-quota is the harvest-v2 allocator)")
+
+
+def test_the_mutual_exclusion_guard_is_actually_in_the_constructor():
+    """The test above rehearses the guard; this one asserts the guard EXISTS at the seam,
+    so the rehearsal cannot pass against a constructor that lost it."""
+    import inspect
+    src = inspect.getsource(sf.SteeredFrontier.__init__)
+    assert "both name the pop" in src and 'getattr(args, "pop_quota"' in src
 
 
 def test_add_julia_root_hook_spacing_and_durable_log(tmp_path):
@@ -426,8 +591,16 @@ def _sched_args(tmp_path, **kw):
 
 
 def _no_library(monkeypatch, tmp_path):
-    monkeypatch.setattr(sf.dsched, "INTAKE_ARTIFACT", tmp_path / "gone" / "intake.json")
-    monkeypatch.setattr(sf.dsched, "INTAKE_EMB_DIR", tmp_path / "gone_embs")
+    """Point the seed REGISTRY at nothing.
+
+    Patching `INTAKE_ARTIFACT` / `INTAKE_EMB_DIR` is no longer sufficient and the failure was
+    silent-green in the dangerous direction: `SEED_SOURCES` is built from those constants at
+    import time, so a patched constant left the registry resolving to the REAL relit seed and
+    the "aborts unseeded" tests stopped testing an unseeded run. The registry is the
+    authority, so the fixture patches the authority."""
+    monkeypatch.setattr(sf.dsched, "SEED_SOURCES",
+                        (("test_absent", tmp_path / "gone" / "intake.json",
+                          tmp_path / "gone_embs"),))
 
 
 def test_preflight_aborts_unseeded_and_touches_nothing(monkeypatch, tmp_path):

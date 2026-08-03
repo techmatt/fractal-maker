@@ -74,7 +74,7 @@ import triage_store as ts                # noqa: E402  (atom_id + the framing co
 
 DEGREE = 2                               # this batch is degree 2 ONLY (deliberate scope cut)
 NUCLEUS_DPS = brs.NUCLEUS_DPS            # 60
-NEWTON_STEPS = brs.NEWTON_STEPS          # 60
+NEWTON_STEPS = brs.NEWTON_STEPS          # 600 (see build_minibrot_roster for the argument)
 DEDUP_DPS = brs.DEDUP_DPS                # 22
 ORIGIN_EPS = brs.ORIGIN_EPS
 EMIT_DIGITS = dcf.emit_digits_for_fw(1e-20)
