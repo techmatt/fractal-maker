@@ -1,0 +1,92 @@
+{
+  "id": "allocator_scheduler_v1_vs_popquota_v2",
+  "written": "2026-08-04T07:30-07:00",
+  "written_at_commit": "ba7e2840d334153c657735743dfbc326c47a1882",
+  "written_before": "arm B's launch — this file is committed BEFORE tools/atlas/steered_frontier.py is invoked for arm B, and arm A was already COMPLETE and on record when it was written. The windows below are therefore pre-registered against arm B and post-hoc against arm A; arm A's numbers were read once (see `arm_a_anchors`) and are frozen here so a later read cannot move them.",
+
+  "question": "Over one unattended night at a fixed wall budget, does the harvest-v2 pop-quota allocator (deficit-derived quotas + a universal 5% floor) admit more distinct-q3 locations than the deficit scheduler?",
+
+  "arms": {
+    "A": {
+      "run_id": "continuous_v1_20260803",
+      "allocator": "--scheduler",
+      "status": "COMPLETE (stopped on its own wall cap at 519.86 of 520 min)",
+      "run_dir": "data/discovery/continuous_v1_20260803"
+    },
+    "B": {
+      "run_id": "popquota_v2_20260804",
+      "allocator": "--pop-quota",
+      "status": "to be launched immediately after this file is committed",
+      "run_dir": "data/discovery/popquota_v2_20260804"
+    }
+  },
+
+  "matched_on": [
+    "code: both launched from the steered_frontier at ba7e284's content EXCEPT the root-draw budget (see known_confounds)",
+    "julia supply pool: data/atlas/julia_supply_pool_v3.json (209 c, min |dc| 3.20e-2), resolved by default in both",
+    "phoenix seed pool: data/atlas/phoenix_seed_pool.json",
+    "--seed 20260803",
+    "--wall-budget 520 --budget 510",
+    "--families mandelbrot,multibrot3,multibrot4,multibrot5 --julia-hook --freshness-prior --maneuvers-on-admissions",
+    "scorer: data/classifier/v10/model_best.pt (ACTIVE_CKPT)",
+    "same box, detached, --below-normal"
+  ],
+
+  "differs_by_construction": [
+    "--pop-quota instead of --scheduler (mutually exclusive; both name the pop). This IS the treatment.",
+    "the library look seed: --pop-quota denominates demand in HUMAN LABELS, so it never attempts the seed and stamps library_seed.status=never_attempted. Arm A stamped status=seeded (168 looks in the artifact / 154 after the medoid dedup). This is not a separable nuisance — it is part of what the allocator IS."
+  ],
+
+  "primary_estimand": "cumulative admissions (totals.admitted = distinct q3) at each arm's own 520-minute WALL cap.",
+
+  "windows": {
+    "matched_wall": {
+      "point": "each arm's own wall cap, 520 min (arm A landed at 519.86)",
+      "why_terminal_only": "cumulative WALL is not reconstructible at intermediate points for arm A: the per-batch run.log line stamps per-batch seconds and CUMULATIVE ACTIVE minutes only (their sum, 453.3 m, reproduces active_min 453.58, not wall_min 519.86), and the ledger's `ts` field carries the run id, not a timestamp. The 15% wall-over-active gap is in-loop root replenishment, which is unstamped. So the only honest matched-wall point is the shared terminal cap.",
+      "reports": ["admissions", "admissions per active-min", "active_min", "wall_min", "wall_over_active"],
+      "contingency": "if arm B stops on something other than its wall cap (active cap, STOP sentinel, crash), the matched-wall read is VOID as a matched read: report both arms at their own stop with the wall gap named, and let the matched-batch and late-marginal windows carry the comparison. Do not rescale."
+    },
+    "matched_batch": {
+      "indices": [137, 328, 500, 750, 1000, 1250],
+      "terminal": "B_star = min(last batch index in each arm's harvest_log.jsonl)",
+      "reports": ["cumulative admissions at each index", "ratio B/A"],
+      "note": "index 137 is where the 59.5-minute proving run stopped; it is kept only so the earlier 2.6x reading is legible on the same axis, NOT because it is a fair comparison point."
+    },
+    "late_marginal": {
+      "batch_window": "the last 300 batches of [1, B_star] — i.e. batches (B_star-300, B_star]",
+      "active_window_min": 90,
+      "reports": ["admissions in the window", "admissions per batch", "admissions per active-min"],
+      "why": "arm A's rate ROSE monotonically all night (0.49/active-min at b328 to 0.74 cumulative, ~0.86 marginal late). A cumulative average therefore compares two different mixtures of cold and warm frontier; the marginal window is the one that answers 'which allocator is better once both frontiers have built'.",
+      "instrument_note": "the per-batch ACTIVE clock comes from each run's run.log (gitignored, present on disk). If a run.log is missing the active-normalized figures are reported UNKNOWN — never omitted, never back-filled from the mean batch cost, which would assume a uniform per-batch cost the run visibly does not have."
+    }
+  },
+
+  "decision_rule": {
+    "adopt_pop_quota_as_default_allocator_iff": "arm B beats arm A by >= +10% relative on BOTH the primary (matched-wall cumulative admissions) AND the late-marginal window (admissions per active-min over the last 300 batches).",
+    "keep_scheduler_iff": "arm A beats arm B by >= +10% relative on both.",
+    "otherwise": "REPORT DISAGREE and adopt neither. Two reads that can fail in opposite directions are the point: a cumulative win with a marginal loss means the winner front-loaded, and one night of each is not enough to spend that.",
+    "margin_basis": "10% is a tolerance, not a knee. Arm A's own late-vs-cumulative spread is 0.86 vs 0.74 (16%), so a gap under 10% is inside the variation one run shows against itself across its own night."
+  },
+
+  "arm_a_anchors_frozen": {
+    "admissions_at_batch": {"137": 26, "328": 49, "500": 78, "750": 146, "1000": 211, "1250": 273, "1474": 336},
+    "last_batch_in_harvest_log": 1474,
+    "batches": 1481,
+    "admitted": 336,
+    "distinct_looks": 309,
+    "active_min": 453.58,
+    "wall_min": 519.86,
+    "wall_over_active": 1.15,
+    "admissions_per_active_min": 0.7408
+  },
+
+  "known_confounds": [
+    "ROOT-DRAW BUDGET: arm A launched before ROOT_DRAW_BUDGET_S was raised 25 -> 40 min (commits 468127b/16cc9e9, after arm A started). Arm B carries 40. The bound is a hang backstop OUTSIDE both caps and did not bind in arm A (pre-loop draw took 9.17 min against it), so it cannot move either arm's in-cap yield — but 'same code' is not literally true and this is the difference.",
+    "VARIETY IS NOT COMPARABLE. Arm A reports 309 distinct looks; a --pop-quota run has no scheduler and stamps totals.distinct_looks = 0 (the proving run did). The comparison is therefore denominated in ADMISSIONS, not in distinct looks, which is the denomination the discovery pipeline actually prefers. Reading a variety difference off this pair requires a post-hoc embed pass over both ledgers that is NOT part of this pre-registration.",
+    "BOX CONTENTION. Arm A ran overnight on an otherwise quiet box. Arm B launches during a labeling session on the same box. Labeling is GPU-light and engine-free, but this is not a matched condition and it can only hurt arm B.",
+    "SINGLE RUN PER ARM. No seed replication. A 10% margin on n=1 per arm is a tolerance for reading the direction, not a confidence interval.",
+    "The 59.5-minute proving run (harvest_v2_proving_20260803) is BACKGROUND ONLY — different code era, julia_supply_pool_v2, and it stopped inside the cold phase arm A crossed at 0.19 admissions/min. It is not a third arm."
+  ],
+
+  "reader": "tools/atlas/compare_allocator_runs.py — loads this file and NEVER restates a window."
+}
