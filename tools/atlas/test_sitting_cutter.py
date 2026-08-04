@@ -244,12 +244,99 @@ def test_the_cut_balances_across_partition_and_tier_cells():
     assert got == {"julia:mandelbrot": 5, "phoenix": 5}
 
 
-def test_the_cli_never_serves_a_sitting():
-    """v2 builds and dry-runs the cutter; it does not cut one. Pinned so a later
-    `--apply` has to be a deliberate edit here as well as there."""
+# =========================================================================== #
+# serving: the batch id, the registration, and the bar-readability slice
+#
+# (The v2 "the CLI never serves a sitting" pin is gone on purpose: it was a statement about
+# the prompt that built the cutter, and it was superseded the moment a sitting was served.
+# What replaces it is a pin on the decisions that outlive that — which batch, registered
+# where, and served through what.)
+# =========================================================================== #
+def test_the_sitting_batch_id_is_the_same_string_in_all_three_places():
+    """The id is declared in three modules that cannot import each other cheaply: the cutter
+    (which writes the batch), `build_manifest` (which classifies it) and the sheet SPECS
+    (which serves it). A typo in any one of them fails SILENTLY in the worst direction —
+    `assign_split` falls closed to `unregistered`, which still returns train/biased, so the
+    batch builds, looks right, and records that nobody classified it."""
+    from tools.v7 import build_manifest as bm
+    sys.path.insert(0, str(ROOT / "tools" / "corpus"))
+    import build_combined_label_sheet as bcs
+    assert sc.SITTING_BATCH in bm.V2_SITTING_BATCHES
+    assert bcs.V2_SITTING.sources == (sc.SITTING_BATCH,)
+
+
+def test_the_sitting_batch_is_registered_explicitly_train_side_and_biased():
+    from tools.v7 import build_manifest as bm
+    split, biased, source = bm.assign_split({"batch": sc.SITTING_BATCH, "ft": "mandelbrot"})
+    assert source != "unregistered", "the fail-closed default is not a registration"
+    assert (split, biased) == ("train", True)
+    assert not bm.registration_contradictions(
+        [{"batch": sc.SITTING_BATCH, "biased": biased}])
+
+
+def test_draw_refuses_an_unregistered_batch(monkeypatch):
+    """The fail-closed default is SAFE (train/biased) but it is not a decision, and a sitting
+    built under it records that nobody classified it. So `draw` aborts rather than proceeds."""
+    import types
+    monkeypatch.setattr(sc, "SITTING_BATCH", "2099-01-01_never_registered")
+    with pytest.raises(SystemExit) as e:
+        sc.stage_draw(types.SimpleNamespace(run_dir="/nonexistent", max_rows=10))
+    assert "NOT registered" in str(e.value)
+
+
+@pytest.mark.parametrize("prov,ok", [
+    ({"fit_model": "view_fit_v1.1", "fit_score": 1.0, "composite": 2.0}, True),
+    ({"fit_model": "view_fit_v1.1", "fit_score": 0.0, "composite": 0.0}, True),   # 0 is a score
+    ({"fit_model": "view_fit_v1.1", "fit_score": 1.0, "composite": None}, False),
+    ({"fit_model": "view_fit_v1.1", "fit_score": None, "composite": 2.0}, False),
+    ({"fit_model": None, "fit_score": 1.0, "composite": 2.0}, False),
+    ({"fit_model": "view_fit_v1.0", "fit_score": 1.0, "composite": 2.0}, False),
+    ({}, False),
+])
+def test_bar_readability_needs_both_scores_and_the_right_model(prov, ok):
+    """BOTH, and from the pre-registered model. A row with one of the two cannot contribute to
+    a delta-AP between them, and a zero is a score — the `is not None` is what keeps a legit
+    0.0 in the slice, which a truthiness test would silently drop."""
+    assert sc.is_bar_readable(prov) is ok
+
+
+def test_the_screen_columns_ride_on_EXISTING_provenance_keys():
+    """Nothing is renamed, which is what lets a v2-screened row pool with a supply-crawl or
+    label-seeded one — same view frame, same composite_v3, same terms."""
+    sys.path.insert(0, str(ROOT / "tools" / "corpus"))
+    import corpus_common as cc
+    unknown = [k for k in sc.SCREEN_PROV if k not in cc.PROVENANCE_KEYS]
+    assert not unknown, f"{unknown} are not modeled provenance keys"
+    assert sc.SCREEN_PROV["fit_score"] == "view_fit"
+    assert sc.SCREEN_PROV["composite"] == "composite"
+
+
+def test_render_writes_through_a_tmp_and_renames():
+    """A kill mid-render must not leave a truncated jpg — which reads as rendered forever, and
+    is the one failure an idempotent skip-if-exists resume cannot recover from."""
     import inspect
-    src = inspect.getsource(sc.main)
-    assert '"dry-run"' in src
-    assert "--apply" not in src
-    for banned in ("write_batch", "blind.jsonl", "images.jsonl"):
-        assert banned not in src, banned
+    src = inspect.getsource(sc._render_one)
+    assert ".jpg.tmp" in src and "os.replace" in src
+    assert "if out.exists():" in src and "continue" in src, "resume must skip finished crops"
+
+
+def test_the_dedup_embeds_the_FRAME_THE_CROP_RENDERS():
+    """The presentation dedup and the crop must be looking at the same picture.
+
+    A row can carry a reframed `outcome_*` viewport beside its own `cx/cy/fw`; the render
+    block uses the latter, so the morph embed must too. Measured on the harvest-v2 population:
+    70 rows carried `outcome_*` and 49 were a genuinely different frame, so a dedup reading
+    `outcome_*` thinned 1.4% of the sitting on a picture nobody would ever be shown. Asserted
+    against `_render_block` itself rather than against a literal — that is the module the
+    frame has to agree with."""
+    sys.path.insert(0, str(ROOT / "tools" / "sourcing"))
+    import build_q4_harvest_batches as bq
+    r = dict(partition="julia:mandelbrot", cx="0.25", cy="-0.5", fw="0.125",
+             outcome_cx="0.9", outcome_cy="0.9", outcome_fw="0.001",
+             julia_c_re="0.3", julia_c_im="0.5", _palette="magma")
+    led = sc._ledger_row(r)
+    rb = bq._render_block(dict(r))
+    assert (led["outcome_cx"], led["outcome_cy"], str(led["outcome_fw"])) == \
+           (rb["cx"], rb["cy"], str(float(rb["fw"]))), \
+        "the embedded frame and the rendered frame diverged"
+    assert led["outcome_cx"] == "0.25", "the reframed outcome_* viewport must NOT win"

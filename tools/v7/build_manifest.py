@@ -143,6 +143,25 @@ Q4_HARVEST_RANKED_BATCHES = {"2026-08-03_q4_harvest_ranked_v1"}
 Q4_NEAR_MINIBROT_BATCHES = {"2026-08-03_q4_near_minibrot_v1"}
 Q4_UNIFORM_EVAL_BATCHES = {"2026-08-03_q4_uniform_eval_v1"}
 
+# --- the harvest-v2 sitting (2026-08-03), registered BEFORE the cut ---------------------
+# ONE registration for the whole sitting, because `assign_split` classifies a BATCH and every
+# row in this one shares a single selection story: the harvest-v2 proving run's own
+# record-and-rank queue, tier-sorted, then cut by the three non-optional sitting filters
+# (>30%-interior auto-1, per-partition machine-1 discard, presentation morph-dedup) and drawn
+# round-robin over (partition x rank_tier). The per-row cell rides `provenance.stratum`.
+#
+# BIASED, TRAIN-SIDE, and it is biased more than once: the cheap CORN ordinal decided which
+# candidates earned a canonical confirmation render, the rank Matt sees is built from those
+# scores, and the maneuver supply that produced part of the population was itself selected on
+# `view_screen.composite_v3`. No rate measured on this batch is a base rate for anything.
+#
+# NOT eval, and the contrast with Q4_UNIFORM_EVAL_BATCHES is the reason to say so: that leg
+# was a systematic draw over a family's parameter space taken before any score existed. This
+# one is the top of a scored queue. Registering it eval would move the instrument to match
+# whatever the harvest happened to surface — the same error the supply crawl's uniform leg
+# was kept out of.
+V2_SITTING_BATCHES = {"2026-08-03_v2_sitting_v1"}
+
 
 class UF:
     def __init__(self, n): self.p = list(range(n))
@@ -268,6 +287,8 @@ def assign_split(loc):
         return "train", True, "q4_near_minibrot"             # ladder around known nuclei
     if b in Q4_UNIFORM_EVAL_BATCHES:
         return "eval", False, "q4_uniform_eval"              # systematic, score-unconditioned
+    if b in V2_SITTING_BATCHES:
+        return "train", True, "v2_sitting"                   # screened + ranked harvest-v2 cut
     return "train", True, "unregistered"                     # FAIL CLOSED: biased-by-default
 
 

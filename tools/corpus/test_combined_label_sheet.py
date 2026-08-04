@@ -205,3 +205,36 @@ def test_batch_and_route_are_mutually_exclusive(monkeypatch, tmp_path, capsys):
         monkeypatch.setattr(sys, "argv", argv)
         with pytest.raises(SystemExit):
             ms.main()
+
+
+# --------------------------------------------------------------------------- #
+# the SPECS registry — a second sheet must not collide with the first
+# --------------------------------------------------------------------------- #
+def test_every_spec_is_distinct_where_a_collision_would_be_silent():
+    """Three fields decide whether two sheets can coexist. A shared `sheet_id` writes one
+    sitting over another; a shared `salt`+`id_prefix` mints the same opaque id for two
+    different rows, and `route.json` is keyed on that id — so an export would route a label to
+    the wrong batch, which no downstream check can detect."""
+    specs = list(B.SPECS.values())
+    assert len({s.name for s in specs}) == len(specs)
+    assert len({s.sheet_id for s in specs}) == len(specs)
+    assert len({(s.salt, s.id_prefix) for s in specs}) == len(specs)
+
+
+def test_every_spec_names_registered_source_batches():
+    """A sheet over an UNREGISTERED batch serves rows nobody classified. `assign_split` falls
+    closed to train/biased, so the sitting would build and look correct."""
+    from tools.v7 import build_manifest as bm
+    for s in B.SPECS.values():
+        assert s.sources, s.name
+        for b in s.sources:
+            _split, _biased, source = bm.assign_split({"batch": b, "ft": "mandelbrot"})
+            assert source != "unregistered", f"{s.name} -> {b}"
+
+
+def test_a_sheet_id_is_never_also_a_source_batch_id():
+    """The sheet dir must not be one of the batches it serves — it would gain an images.jsonl
+    and be unioned into training as a duplicate of every row it presents."""
+    ids = {s.sheet_id for s in B.SPECS.values()}
+    srcs = {b for s in B.SPECS.values() for b in s.sources}
+    assert not (ids & srcs)
