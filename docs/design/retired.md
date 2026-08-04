@@ -292,3 +292,32 @@ an item's evidence, the line points at it rather than restating it.
   parity over 8 windows of mb00_p04; 2026-08-04]`
   `[code: tools/studies/q4_stage1_labelset.py::{FIELDS,_require_field}; .gitattributes;
   .gitignore; tools/audit/{size_guard,durability_map}.py; tests/test_large_tracked_blobs.py]`
+
+- **2026-08-04 — `--scheduler` retired as the PRODUCTION allocator. `--pop-quota` is the
+  standing one (Matt's decision).** The retirement is **policy, not deletion**: the flag still
+  parses, the deficit scheduler still runs, and `tools/atlas/steered_frontier.py` is unchanged
+  by this entry. What is retired is its standing as the allocator a production discovery run
+  reaches for by default.
+  **Basis, stated exactly.** Two things, and neither is a comparison. (1) `--pop-quota` is the
+  stated allocation design — demand denominated in human labels (n4 + 0.1·n3 through the
+  amendment overlay), which is the currency the corpus is actually short of. (2) The 2026-08-04
+  mid-run **mechanism** read showed it steering correctly over the set it could serve: batch-
+  weighted **L1 0.041** against effective intent renormalized over the SERVABLE partitions,
+  tighter than the proving run's 0.093.
+  **What this is NOT based on.** The pre-registered scheduler-vs-pop-quota comparison
+  (`data/discovery/allocator_prereg_v1.json`) produced **no result**: amendment 1, same date,
+  voids it as an allocator read — both arms were supply-bound rather than allocation-bound
+  (globally-blind `ROOT_LOW_WATER`, inverted price sampling, a julia hook closed by a pool/hook
+  spacing conflict), so the estimand could not see the allocator. Arm B's 92 admissions against
+  arm A's 336 are **not** the reason and are not comparable; arm B was stopped on its sentinel
+  at 143 of 510 active minutes once the confound was established. This decision is a design
+  call taken on the mechanism, and it is written down that way so a later reader does not
+  reconstruct a verdict the record explicitly withdrew.
+  **Re-use needs a new dated `UN-RETIRED` entry**, per this file's rules — including a re-run
+  of the comparison, which would first need the three supply-loop fixes named in the amendment.
+  `[decision: Matt, 2026-08-04]`
+  `[measured: data/discovery/allocator_prereg_v1_mechanism_read_20260804.md — mechanism read at
+  b381 / 129.5 active min, 2026-08-04]`
+  `[code: data/discovery/allocator_prereg_v1.json amendment 1;
+  tools/atlas/compare_allocator_runs.py::voided_windows (the void binds the reader);
+  tools/atlas/steered_frontier.py `--scheduler` — unchanged, deliberately]`

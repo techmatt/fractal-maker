@@ -88,5 +88,71 @@
     "The 59.5-minute proving run (harvest_v2_proving_20260803) is BACKGROUND ONLY — different code era, julia_supply_pool_v2, and it stopped inside the cold phase arm A crossed at 0.19 admissions/min. It is not a third arm."
   ],
 
+  "AMENDMENTS": "Append only; never rewrite an entry. An amendment records what became known AFTER this file was written. It may VOID a window; it may never move one, and it may never add one. `compare_allocator_runs.py` loads `amendments` and refuses to compute a verdict for any window listed in a `voids` array — the amendment binds the instrument rather than sitting beside it as prose.",
+
+  "amendments": [
+    {
+      "n": 1,
+      "date": "2026-08-04",
+      "declared": "AFTER arm B stopped and after its terminal numbers were visible. That is what makes this a VOID and not a re-specification: a window that can be moved once the numbers are in is not pre-registered, so the only honest post-hoc move is to withdraw the read, not to redraw it.",
+      "voids": ["matched_wall", "matched_batch", "late_marginal", "decision_rule"],
+      "verdict": "VOID as an allocator comparison. No arm wins, no arm loses, and neither `adopt_pop_quota_as_default_allocator_iff` nor `keep_scheduler_iff` was evaluated. This is NOT a DISAGREE — DISAGREE is an outcome of the rule; this is the rule never becoming applicable.",
+
+      "what_was_wrong": "The estimand is confounded. `primary_estimand` reads cumulative admissions as a measure of ALLOCATION quality, which requires that each allocator was free to spend its minutes where it chose. It was not: the mid-run mechanism read found the run's yield set by SUPPLY — which partitions had a non-empty queue at pop time — rather than by the allocator's decision. Measuring an allocator against a servable set that has collapsed to one partition measures the collapse.",
+
+      "supply_loop_defects": [
+        {
+          "defect": "global low-water refill, blind to per-partition starvation",
+          "where": "tools/atlas/steered_frontier.py — in-loop replenishment fires on `len(self.frontier) < ROOT_LOW_WATER`, and ROOT_LOW_WATER == B == 32 while the frontier runs in the hundreds-to-thousands.",
+          "effect_measured_in_arm_b": "`draw_roots` did not fire once in-loop. Eight of nine partition queues were empty at b381 inside a 944-node frontier that was 97% julia:mandelbrot (862 nodes); julia:mandelbrot expansions beget julia:mandelbrot, so the collapse is self-locking. 46% of post-fold intent pointed at partitions with an empty queue.",
+          "shared_code": true
+        },
+        {
+          "defect": "inverted price sampling",
+          "where": "the pop-quota price EMA: a sample is dry-minutes divided by the units of a SINGLE decode, so an isolated class-3 (0.1 unit) samples ~10x the gap while decodes clustered in one batch sample ~0.",
+          "effect_measured_in_arm_b": "the two genuinely most expensive partitions were priced cheapest and, since share is proportional to deficit/price, drew the largest deficit intent. Aggregate min_spent/units vs EMA price: multibrot4 14.3 vs 4.69, multibrot5 11.4 vs 2.48, against mandelbrot 1.80 vs 9.24 and julia:mandelbrot 3.0 vs 13.54 (clamped). Caps never fired, so caps explain none of it.",
+          "shared_code": false,
+          "arm_specific": "B — `--scheduler` has no such price term."
+        },
+        {
+          "defect": "twin hook closed by a pool/hook spacing conflict",
+          "where": "the julia hook's 0.2 spacing against `data/atlas/julia_supply_pool_v3.json`, whose 209 injected c are at 3.2e-2 min spacing — the injected pool saturates the hook's own spacing rule.",
+          "effect_measured_in_arm_b": "the hook fired 46 times and manufactured 8 roots; julia:mandelbrot was rejected 28 of 28 times. That channel is closed by construction, not by scarcity.",
+          "shared_code": true,
+          "note": "the pool is in `matched_on`, so both arms carried it."
+        }
+      ],
+
+      "supply_bound_not_allocation_bound": {
+        "claim": "Both arms were supply-bound rather than allocation-bound, so neither arm's admission count is attributable to its allocator.",
+        "arm_b": "MEASURED. See `supply_loop_defects` above and the frozen mechanism read. The allocator itself steered well over the set it could actually serve — L1 mix gap 0.041 against effective intent renormalized over the SERVABLE partitions, tighter than the proving run's 0.093 — while the unrenormalized gap was 0.427. The gap is supply, not steering.",
+        "arm_a": "NOT SEPARATELY MEASURED, and this file will not pretend otherwise. Two of the three defects are in shared loop code and one (the julia pool) is in `matched_on`, so arm A carried them; but arm A's wall_over_active of 1.15 says its GLOBAL low-water did trip repeatedly, which is a different regime from arm B's 1.05, and no per-partition queue read was taken over arm A. The arm-A limb of the claim is an inference from shared code, not an observation.",
+        "consequence": "Either limb alone is enough to void the comparison: a confound established in one arm and only inferred in the other is still a confound the estimand cannot see past."
+      },
+
+      "evidence": [
+        "data/discovery/allocator_prereg_v1_mechanism_read_20260804.md — the 09:55 PDT mid-run mechanism read, frozen beside this file because this amendment rests on it. Written at b381/129.5 active min, BEFORE arm B's terminal numbers existed; read-only over the run dir; explicitly descriptive and unregistered.",
+        "scratch/armB_midrun_read_20260804.md — the disposable original of the same document."
+      ],
+
+      "arm_b_stop": {
+        "reason": "STOP sentinel at a batch boundary, 2026-08-04 10:10 PDT, batch 427.",
+        "not_the_wall_cap": "arm B used 150.22 of its 520 wall minutes and 143.28 of its 510 active minutes. `windows.matched_wall.contingency` already voids the matched-wall read on any stop that is not the wall cap; this amendment voids the remaining two windows as well, and for a different reason — the contingency is about the clock, this is about the estimand.",
+        "why_stopped_early": "the mechanism read had already established the confound, so the remaining ~6 hours would have bought a longer measurement of the same unmeasurable thing."
+      },
+
+      "descriptive_line_NOT_A_VERDICT": "Terminal admissions (distinct q3): arm A 336 over 453.58 active min / 1481 batches; arm B 92 over 143.28 active min / 427 batches. NOT COMPARABLE and NOT a result — the arms ran to different depths on different clocks, arm B's frontier had collapsed to one partition, and the estimand is confounded per this amendment. Recorded so the numbers exist in the file rather than only in a run log.",
+
+      "before_a_rerun_would_mean_anything": [
+        "per-partition low-water refill (the global ROOT_LOW_WATER cannot see a starved partition inside a healthy frontier)",
+        "price sampling aggregated over units rather than sampled per decode",
+        "hook/pool spacing reconciled (an injected supply pool must not saturate the hook spacing that reads it)"
+      ],
+      "these_fixes_are_not_part_of_this_amendment": "Named so the next launch does not rediscover them. None were started; nothing was relaunched; this amendment changes no code path other than making the reader honor `voids`.",
+
+      "what_survives": "The mechanism read itself. `--pop-quota` conforms to its own instruction over the set it can serve (L1 0.041), which is a fact about the allocator and not about the arms — and it is the basis on which `--pop-quota` was made the standing production allocator on 2026-08-04 (docs/design/retired.md, same date). That decision is a design call, NOT this comparison's output; this comparison has no output."
+    }
+  ],
+
   "reader": "tools/atlas/compare_allocator_runs.py — loads this file and NEVER restates a window."
 }

@@ -15,6 +15,12 @@ Three axes, all pre-registered:
   matched batch   cumulative admissions at fixed batch indices + at B* = min(last batch).
   late marginal   the last N batches of [1, B*], and the final M active minutes.
 
+AMENDMENTS bind this reader. The prereg's `amendments` array is append-only and may VOID a
+window (never move one); every window named in an entry's `voids` is reported with its numbers
+still visible but marked VOIDED, and a voided `decision_rule` makes the verdict VOID rather
+than ADOPT/KEEP/DISAGREE. An amendment that only a human reads is prose; this is the sentence
+made binding, so a withdrawn read cannot be printed as a result by running the tool again.
+
 The admissions series comes from each run's TRACKED `harvest_log.jsonl` (one row per
 harvest check, `batch` + `admitted`). The per-batch ACTIVE clock comes from `run.log`,
 which is gitignored: when it is absent the active-normalized cells report **UNKNOWN**, not
@@ -143,6 +149,23 @@ def _fmt(v, spec="{:.3f}"):
     return UNKNOWN if v is None else spec.format(v)
 
 
+def voided_windows(prereg: dict) -> dict[str, dict]:
+    """window name -> the amendment that voided it (last one wins if two ever name it).
+
+    Absent `amendments` is the normal pre-amendment state, not an error: an unamended
+    pre-registration voids nothing."""
+    out: dict[str, dict] = {}
+    for a in prereg.get("amendments", []) or []:
+        for w in a.get("voids", []) or []:
+            out[w] = a
+    return out
+
+
+def _void_stamp(am: dict) -> dict:
+    return {"voided_by_amendment": am.get("n"), "date": am.get("date"),
+            "verdict": am.get("verdict"), "what_was_wrong": am.get("what_was_wrong")}
+
+
 def compare(prereg: dict, arm_b_override: str | None = None) -> dict:
     spec_a = _need(prereg, "arms", "A")
     spec_b = dict(_need(prereg, "arms", "B"))
@@ -151,9 +174,11 @@ def compare(prereg: dict, arm_b_override: str | None = None) -> dict:
         spec_b["run_dir"] = f"data/discovery/{arm_b_override}"
     A, B = Arm("A", spec_a), Arm("B", spec_b)
 
+    voided = voided_windows(prereg)
     out = {"prereg_id": prereg["id"], "prereg_written": prereg["written"],
            "arm_a": A.run_id, "arm_b": B.run_id,
-           "arm_a_present": A.present, "arm_b_present": B.present}
+           "arm_a_present": A.present, "arm_b_present": B.present,
+           "voided_windows": {w: _void_stamp(am) for w, am in voided.items()}}
 
     if not A.present:
         raise SystemExit(f"arm A absent at {A.dir} — nothing to compare against.")
@@ -239,7 +264,7 @@ def compare(prereg: dict, arm_b_override: str | None = None) -> dict:
     out["late_marginal"] = lm
 
     # --- the pre-registered decision rule ------------------------------------
-    out["verdict"] = _verdict(prereg, wall, lm)
+    out["verdict"] = _verdict(prereg, wall, lm, voided.get("decision_rule"))
     return out
 
 
@@ -252,7 +277,15 @@ def _wall_capped(summary: dict) -> bool:
     return (wb - w) <= 1.0
 
 
-def _verdict(prereg: dict, wall: dict, lm: dict) -> dict:
+def _verdict(prereg: dict, wall: dict, lm: dict, void_am: dict | None = None) -> dict:
+    """VOID short-circuits before the ratios are even read. A voided rule is not a rule that
+    came out ambiguous (that is DISAGREE, an outcome) — it is a rule that never became
+    applicable, and computing its ratios anyway is how a withdrawn read gets quoted."""
+    if void_am is not None:
+        return {"verdict": "VOID", "voided_by_amendment": void_am.get("n"),
+                "date": void_am.get("date"), "why": void_am.get("verdict"),
+                "what_was_wrong": void_am.get("what_was_wrong"),
+                "descriptive_only": void_am.get("descriptive_line_NOT_A_VERDICT")}
     rule = _need(prereg, "decision_rule")
     margin = 0.10
     m = re.search(r">=\s*\+?(\d+)%", rule["adopt_pop_quota_as_default_allocator_iff"])
@@ -276,13 +309,22 @@ def render(out: dict) -> str:
     L = [f"PRE-REGISTERED ALLOCATOR READ — {out['prereg_id']}",
          f"  windows loaded from {PREREG.relative_to(ROOT).as_posix()} (written {out['prereg_written']})",
          f"  A = {out['arm_a']} (scheduler)   B = {out['arm_b']} (pop-quota)", ""]
+    voided = out.get("voided_windows") or {}
+    if voided:
+        ns = sorted({v["voided_by_amendment"] for v in voided.values()})
+        L.append(f"  !! AMENDED — amendment(s) {ns} VOID: {', '.join(sorted(voided))}")
+        L.append("     numbers below are DESCRIPTIVE ONLY; a voided window is not a result.")
+        L.append("")
     if not out.get("arm_b_present"):
         L.append(f"  {out.get('status')}")
         return "\n".join(L)
 
+    def _v(name):
+        return "  [VOIDED]" if name in voided else ""
+
     w = out["matched_wall"]
     L.append(f"1) MATCHED WALL (terminal, both capped at their own wall budget) "
-             f"— matched={w['matched']}")
+             f"— matched={w['matched']}{_v('matched_wall')}")
     for k in ("A", "B"):
         d = w[k]
         L.append(f"   {k}: admitted={d['admitted']}  active={_fmt(d['active_min'],'{:.1f}')}m  "
@@ -295,7 +337,7 @@ def render(out: dict) -> str:
         L.append(f"   !! NOT MATCHED AT WALL: {w['void_note']}")
 
     L.append("")
-    L.append(f"2) MATCHED BATCH INDEX (B* = {out['b_star']})")
+    L.append(f"2) MATCHED BATCH INDEX (B* = {out['b_star']}){_v('matched_batch')}")
     for r in out["matched_batch"]:
         if "note" in r:
             L.append(f"   b{r['batch']:>5}: {r['note']}")
@@ -305,7 +347,8 @@ def render(out: dict) -> str:
 
     lm = out["late_marginal"]
     L.append("")
-    L.append(f"3) LATE MARGINAL — batches {lm['window_batches'][0]}..{lm['window_batches'][1]}")
+    L.append(f"3) LATE MARGINAL — batches {lm['window_batches'][0]}.."
+             f"{lm['window_batches'][1]}{_v('late_marginal')}")
     for k in ("A", "B"):
         d = lm[k]
         L.append(f"   {k}: adm={d['admissions']}  /batch={_fmt(d['per_batch'])}  "
@@ -326,6 +369,13 @@ def render(out: dict) -> str:
 
     v = out["verdict"]
     L.append("")
+    if v["verdict"] == "VOID":
+        L.append(f"VERDICT: VOID — withdrawn by amendment {v.get('voided_by_amendment')} "
+                 f"({v.get('date')}). The rule was never evaluated.")
+        for k in ("why", "what_was_wrong", "descriptive_only"):
+            if v.get(k):
+                L.append(f"   {k}: {v[k]}")
+        return "\n".join(L)
     L.append(f"VERDICT (pre-registered rule, margin {v.get('margin', 0.1):.0%}): {v['verdict']}")
     if v.get("rule"):
         L.append(f"   {v['rule']}")
