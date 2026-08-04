@@ -1151,6 +1151,13 @@ class SteeredFrontier:
                            # is a gate that can silently eat them.
                            interior_gated=0, interior_unmeasured=0,
                            q4_recorded=0, q4_recorded_below_tau_h=0,
+                           # Root-draw backstop utilisation. Initialised to 0 rather than
+                           # created on first fire, so "the bound never bound" is a positive
+                           # statement in every summary instead of an absent key — the same
+                           # reason `never_attempted` is reported and not omitted. NOT
+                           # reconcile terms (RECONCILE_KEYS is an explicit list): a skipped
+                           # family draws no candidates, so no identity has a hole in it.
+                           root_draw_truncated=0, root_draw_timeouts=0,
                            # TRIGGERED yield, disjoint from every fresh counter by
                            # construction. Never summed with the `man_*` block: the
                            # operators feed themselves, so a pooled rate measures the loop.
@@ -3216,7 +3223,8 @@ class SteeredFrontier:
         for k in ("interior_gated", "interior_unmeasured", "q4_recorded",
                   "q4_recorded_below_tau_h", "trig_fired", "trig_atoms",
                   "trig_nodes_pushed", "trig_admitted", "trig_unavailable",
-                  "trig_budget_skip", "trig_expanded", "trig_candidates"):
+                  "trig_budget_skip", "trig_expanded", "trig_candidates",
+                  "root_draw_truncated", "root_draw_timeouts"):
             self.totals.setdefault(k, 0)
         if self.trig_on and not self.maneuvers:
             self.man_visited = set(st.get("man_visited") or [])
