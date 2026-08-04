@@ -310,3 +310,47 @@ def test_the_run_config_stamps_the_routing_table_rather_than_restating_it():
     src = inspect.getsource(sf.SteeredFrontier.write_run_config)
     assert "supply_routing=srt.summary()" in src
     assert "MACHINE_1_DISCARD" not in src, "the table must be imported, not restated"
+
+
+# =========================================================================== #
+# 6. the SUPERSEDED pool is not reachable from any live supply path
+# =========================================================================== #
+# v2 stays on disk as the record of the 1e-2 selection (see the test above). What must not
+# survive is a live path that LOADS it — which is precisely what happened: v3 was built and
+# committed, nothing was repointed, and harvest_v2_proving_20260803 ran on v2.
+STATIONARITY_EXEMPT = "tools/studies/julia_c_stationarity.py"
+
+
+def test_no_live_supply_path_loads_the_superseded_v2_pool():
+    """Source scan, in the shape `test_partitions.py` uses for its second-literal check.
+
+    ONE file is exempt and it is named, not pattern-excused: `julia_c_stationarity.py` is the
+    study that MEASURED the floor, and `CSPACING_BASIS['measured_on']` quotes "the 539-c
+    committed v2 pool" as part of its population. Re-pointing it at v3 would silently change
+    what the recorded measurement was taken over — a committed record keeps what was true
+    when it was written."""
+    import subprocess
+    files = subprocess.run(["git", "ls-files", "*.py"], capture_output=True, text=True,
+                           cwd=ROOT).stdout.split()
+    offenders = []
+    for f in files:
+        name = Path(f).name
+        if name.startswith("test_") or f.replace("\\", "/") == STATIONARITY_EXEMPT:
+            continue
+        txt = (ROOT / f).read_text(encoding="utf-8", errors="replace")
+        for i, line in enumerate(txt.splitlines(), 1):
+            if "julia_supply_pool_v2.json" in line and not line.lstrip().startswith("#"):
+                offenders.append(f"{f}:{i}: {line.strip()}")
+    assert not offenders, (
+        "a live path names the SUPERSEDED v2 pool (floor 1e-2, superseded by "
+        f"{sr.CSPACING_FLOOR}):\n  " + "\n  ".join(offenders))
+
+
+def test_the_exemption_is_real_and_still_needed():
+    """An exemption nobody re-checks becomes a hole. If the stationarity study stops naming
+    v2, this fails and the exemption comes out — rather than sitting there excusing a file
+    that no longer needs it."""
+    txt = (ROOT / STATIONARITY_EXEMPT).read_text(encoding="utf-8", errors="replace")
+    assert "julia_supply_pool_v2.json" in txt, (
+        f"{STATIONARITY_EXEMPT} no longer loads v2 — delete STATIONARITY_EXEMPT")
+    assert "539-c committed v2 pool" in sr.CSPACING_BASIS["measured_on"]

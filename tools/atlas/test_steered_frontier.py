@@ -821,3 +821,115 @@ def test_every_caller_reaches_the_one_definition():
     assert sf.set_below_normal_priority() == cc.set_below_normal_priority()
     src = Path(__file__).resolve().parents[1] / "atlas" / "sitting_cutter.py"
     assert "cc.set_below_normal_priority()" in src.read_text(encoding="utf-8")
+
+
+# =========================================================================== #
+# The julia c-supply pool: wired to v3, and the floor enforced at LOAD.
+#
+# `seed_julia_pool` bypasses the hook-spacing gate by design (the pool is far denser than
+# the 0.2 hook radius), and nothing replaced that gate — so before this, the c-spacing a run
+# applied was whatever the passed FILE carried, with no check anywhere and nothing in the run
+# config recording it. harvest_v2_proving_20260803 ran on v2, i.e. the superseded 1e-2 floor.
+# =========================================================================== #
+def _pool_loader(tmp_path, rows):
+    """Drive `load_julia_supply_pool` off a stub rather than a constructed SteeredFrontier:
+    the method reads exactly two attributes, and building a real frontier would drag a
+    scorer, a ledger and a run dir into a test about a closest-pair check."""
+    import types
+    p = tmp_path / "pool.json"
+    p.write_text(json.dumps(rows), encoding="utf-8")
+    stub = types.SimpleNamespace(julia_seed_pool_path=p, _julia_pool_cache=None)
+    return stub, lambda: sf.SteeredFrontier.load_julia_supply_pool(stub)
+
+
+def test_the_default_julia_supply_is_the_pool_built_at_the_current_floor():
+    """v3 was built, committed, and loaded by NOTHING. The default is the wiring."""
+    import build_julia_supply_pool_v2 as b
+    import supply_routing as sr
+    assert sf.JULIA_SUPPLY_POOL == sf.ROOT / b.POOL_REL
+    assert sf.JULIA_SUPPLY_POOL.name == "julia_supply_pool_v3.json"
+    assert sf.JULIA_SUPPLY_POOL.exists()
+    # The parser is built inside `main()`, so there is no factory to call. Assert the flag's
+    # default from SOURCE rather than behind a `hasattr` guard — a guarded assertion that
+    # silently skips when the factory it names does not exist proves nothing at all, which is
+    # what the first version of this test did.
+    import inspect
+    import re
+    src = inspect.getsource(sf.main)
+    m = re.search(r'add_argument\(\s*"--julia-seed-pool".*?default=(.+?),\s*$', src,
+                  re.S | re.M)
+    assert m, "--julia-seed-pool is no longer declared in main()"
+    assert m.group(1).strip() == "str(JULIA_SUPPLY_POOL)", m.group(1)
+    pool = json.loads(sf.JULIA_SUPPLY_POOL.read_text(encoding="utf-8"))
+    acc = []
+    for r in pool:
+        assert sr.cspacing_ok((r["c_re"], r["c_im"]), acc)
+        acc.append((r["c_re"], r["c_im"]))
+
+
+def test_the_live_pool_passes_the_load_time_check(tmp_path):
+    """The production file goes through the real loader, not a re-implementation of it."""
+    import types
+    stub = types.SimpleNamespace(julia_seed_pool_path=sf.JULIA_SUPPLY_POOL,
+                                 _julia_pool_cache=None)
+    pool = sf.SteeredFrontier.load_julia_supply_pool(stub)
+    assert len(pool) == 209
+    assert stub._julia_pool_min_dc >= __import__("supply_routing").CSPACING_FLOOR * (1 - 1e-6)
+
+
+@pytest.mark.parametrize("rel,expected_min", [
+    ("data/atlas/julia_supply_pool_v2.json", 1.0e-2),    # the SUPERSEDED floor
+    ("data/atlas/julia_seed_pool.json", 6.0e-3),         # q4_decisive MIN_SEP
+])
+def test_the_loader_REFUSES_the_pools_that_were_actually_being_used(rel, expected_min):
+    """INJECTION, and the injected values are not synthetic — these are the two files that
+    were reachable, one of which the last live run really did pass. A guard demonstrated only
+    against a hand-made counterexample would not show that it catches THIS mistake."""
+    import types
+    import supply_routing as sr
+    p = sf.ROOT / rel
+    assert p.exists(), p
+    stub = types.SimpleNamespace(julia_seed_pool_path=p, _julia_pool_cache=None)
+    with pytest.raises(SystemExit, match="c-spacing floor"):
+        sf.SteeredFrontier.load_julia_supply_pool(stub)
+    rows = json.loads(p.read_text(encoding="utf-8"))
+    closest = min(
+        ((rows[i]["c_re"] - rows[j]["c_re"]) ** 2 + (rows[i]["c_im"] - rows[j]["c_im"]) ** 2)
+        for i in range(len(rows)) for j in range(i + 1, len(rows))) ** 0.5
+    assert closest == pytest.approx(expected_min, rel=0.05)
+    assert closest < sr.CSPACING_FLOOR
+
+
+def test_a_pool_exactly_AT_the_floor_is_accepted(tmp_path):
+    """The tolerance half. A pool thinned at the floor stores rounded decimals, so its
+    closest surviving pair can sit a few ulp under the float it was thinned against —
+    refusing that would reject the very file the builder emits."""
+    import supply_routing as sr
+    f = sr.CSPACING_FLOOR
+    _stub, load = _pool_loader(tmp_path, [
+        dict(c_re=0.0, c_im=0.0, channel="x"),
+        dict(c_re=f * (1 - 1e-12), c_im=0.0, channel="x"),
+    ])
+    assert len(load()) == 2
+
+
+def test_the_pool_is_read_and_verified_ONCE_not_per_batch(tmp_path):
+    """`seed_julia_pool` runs per batch. A per-batch re-read is not the cost — a per-batch
+    verification that could disagree with the first one is, and `pool_cursor` indexes into
+    whatever list came back."""
+    stub, load = _pool_loader(tmp_path, [dict(c_re=0.0, c_im=0.0, channel="x")])
+    first = load()
+    stub.julia_seed_pool_path.write_text("[]", encoding="utf-8")   # mutate underneath
+    assert load() is first
+
+
+def test_an_inherited_default_does_not_break_a_run_with_no_julia_mandelbrot():
+    """Making the pool a DEFAULT must not turn every phoenix-only run into a hard failure.
+    Naming a pool with nowhere to put it stays fatal; inheriting one does not."""
+    import types
+    stub = types.SimpleNamespace(julia_seed_pool_path=sf.JULIA_SUPPLY_POOL,
+                                 partitions=["phoenix"], julia_pool_explicit=False)
+    assert sf.SteeredFrontier.seed_julia_pool(stub) == 0
+    stub.julia_pool_explicit = True
+    with pytest.raises(SystemExit, match="needs 'mandelbrot'"):
+        sf.SteeredFrontier.seed_julia_pool(stub)

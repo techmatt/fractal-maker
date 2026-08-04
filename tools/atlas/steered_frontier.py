@@ -102,6 +102,25 @@ except Exception:
 
 BIN = ps.prescreen.BIN
 
+# The julia:mandelbrot c-supply pool, and the floor it must clear.
+#
+# THE FLOOR WAS NEVER ENFORCED AT RUN TIME. `seed_julia_pool` deliberately bypasses the
+# hook-spacing gate (the pool is far denser than the 0.20 hook radius), and nothing replaced
+# it — so the c-spacing a run actually applied was whatever the passed FILE happened to
+# carry, invisibly. Measured on the three pools in the tree:
+#
+#     julia_seed_pool.json     534 c   min |dc| = 6.09e-3   (q4_decisive MIN_SEP, 5.3x under)
+#     julia_supply_pool_v2     539 c   min |dc| = 1.00e-2   (the SUPERSEDED floor)
+#     julia_supply_pool_v3     209 c   min |dc| = 3.20e-2   (== CSPACING_FLOOR)
+#
+# The last live run (data/discovery/harvest_v2_proving_20260803) passed **v2**, i.e. it ran
+# at the 1e-2 floor that `supply_routing.CSPACING_BASIS.supersedes` records as an artifact of
+# pairs rendered at their own viewports. v3 was built and committed and nothing loaded it.
+# So: v3 is the default, and the file is VERIFIED against the floor at load rather than
+# trusted — a pool is a config input, and this one silently decides how much of the c-plane
+# a whole campaign covers.
+JULIA_SUPPLY_POOL = ROOT / "data" / "atlas" / "julia_supply_pool_v3.json"
+
 # --- steering knobs ---
 JULIA_HOOK_SPACING = 0.20   # item 3: hard 1-neighbour spacing (in the c/parameter plane) for the
                             # julia hook — don't hook a parent whose seed c is within this radius of
@@ -937,6 +956,12 @@ class SteeredFrontier:
         # seed_julia_pool). None => current path (julia roots only via the parent-fired hook).
         jp = getattr(args, "julia_seed_pool", None)
         self.julia_seed_pool_path = Path(jp).resolve() if jp else None
+        # Whether the operator NAMED a pool or inherited the default. It decides one thing:
+        # what a run without 'mandelbrot' in --families does. Naming a pool and getting no
+        # julia:mandelbrot partition to inject it into is a contradiction and stays fatal;
+        # inheriting the default on a phoenix-only run is not, and must not be — the default
+        # exists so the common case gets the right pool, not so every other case fails.
+        self.julia_pool_explicit = bool(jp) and str(jp) != str(JULIA_SUPPLY_POOL)
         pp = getattr(args, "phoenix_seed_pool", None)
         self.phoenix_seed_pool_path = Path(pp).resolve() if pp else None
         # item 5: cross-run coordinate freshness prior — seed this run's dup/rejection clouds
@@ -1460,13 +1485,59 @@ class SteeredFrontier:
         self.pool_cursor[cursor_key] = i + len(chunk)
         return chunk
 
+    def load_julia_supply_pool(self) -> list:
+        """The julia c-supply pool, VERIFIED against `supply_routing.CSPACING_FLOOR`.
+
+        Read once and cached: this is called per batch, and re-reading is not the cost — a
+        per-batch verification that could disagree with the first one is.
+
+        REFUSES rather than thins. Thinning would be the friendlier failure and it is the
+        wrong one twice over: `pool_cursor` is persisted in state.json and indexes into this
+        list, so silently returning a shorter list makes a resume land somewhere else in the
+        supply; and a pool is a config input whose length is quoted in the run record, so
+        quietly replacing 539 c with 210 would put a number in that record nobody chose. The
+        pool that clears the floor already exists — this names it."""
+        if getattr(self, "_julia_pool_cache", None) is not None:
+            return self._julia_pool_cache
+        pool = json.loads(self.julia_seed_pool_path.read_text(encoding="utf-8"))
+        floor = srt.CSPACING_FLOOR
+        pts = [(float(r["c_re"]), float(r["c_im"])) for r in pool]
+        worst, wi, wj = float("inf"), -1, -1
+        for i in range(len(pts)):
+            for j in range(i + 1, len(pts)):
+                d = math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1])
+                if d < worst:
+                    worst, wi, wj = d, i, j
+        # A hair of tolerance: a pool thinned AT the floor stores rounded decimals, so its
+        # closest surviving pair can sit a few ulp under the float it was thinned against.
+        if len(pts) > 1 and worst < floor * (1 - 1e-6):
+            raise SystemExit(
+                f"--julia-seed-pool {self.julia_seed_pool_path} does NOT clear the adopted "
+                f"c-spacing floor.\n"
+                f"    closest pair : |dc| = {worst:.6g}  (rows {wi} and {wj} of {len(pts)})\n"
+                f"    floor        : {floor:.6g}  (supply_routing.CSPACING_FLOOR)\n"
+                f"This pool was thinned against a superseded floor, and NOTHING downstream "
+                f"would have caught it: seed_julia_pool bypasses the hook-spacing gate, so "
+                f"the c-spacing a run applies is whatever this file carries. The 1e-2 floor "
+                f"it probably came from was an artifact of pairs rendered at their own "
+                f"viewports (supply_routing.CSPACING_BASIS['supersedes']).\n"
+                f"Use {JULIA_SUPPLY_POOL.name}, or rebuild with "
+                f"`uv run python tools/atlas/build_julia_supply_pool_v2.py`.")
+        self._julia_pool_cache = pool
+        self._julia_pool_min_dc = worst if len(pts) > 1 else None
+        print(f"[julia-seed-pool] {self.julia_seed_pool_path.name}: {len(pool)} c, "
+              f"closest pair |dc|={worst:.4g} >= floor {floor:.4g}", flush=True)
+        return pool
+
     def seed_julia_pool(self) -> int:
         """PRIMARY julia supply under test (julia_parent_sourcing_probe). Inject the c-diverse
         near-∂M sampler pool as julia:mandelbrot base-scale z-plane roots at fresh start.
 
-        Deliberately BYPASSES add_julia_root's hook-spacing gate: the sampler already dedups its
-        c's at MIN_SEP (0.006) « the 0.2 hook spacing, so routing them through the gate would
-        collapse the pool to a handful. Each injected c is registered in `hooked_c` so a later
+        Deliberately BYPASSES add_julia_root's hook-spacing gate: the pool is thinned far
+        below the 0.2 hook spacing, so routing it through the gate would collapse it to a
+        handful. That bypass is why `load_julia_supply_pool` verifies the file against
+        `CSPACING_FLOOR` — with the gate skipped, the file IS the only floor in the live
+        path. Each injected c is registered in `hooked_c` so a later
         parent-fired hook whose seed c lands within spacing of a sampler c is suppressed — the
         hook stays available (§1 secondary path) but does not re-cover the sampler's ground.
         The pool is degree-2 near-∂M (z²+c), so every root is the julia:mandelbrot twin."""
@@ -1474,8 +1545,11 @@ class SteeredFrontier:
             return 0
         jpart = ps.julia_partition("mandelbrot")
         if jpart not in self.partitions:
-            raise SystemExit(f"--julia-seed-pool needs 'mandelbrot' in --families (for {jpart})")
-        pool = json.loads(self.julia_seed_pool_path.read_text(encoding="utf-8"))
+            if self.julia_pool_explicit:
+                raise SystemExit(
+                    f"--julia-seed-pool needs 'mandelbrot' in --families (for {jpart})")
+            return 0        # inherited default on a run with no julia:mandelbrot — not an error
+        pool = self.load_julia_supply_pool()
         chunk = self._take_from_pool(pool, "julia")
         if not chunk:
             return 0
@@ -2933,6 +3007,16 @@ class SteeredFrontier:
                 nbh_probes=self.trig_nbh_probes, period_max=self.trig_period_max),
             julia_seed_pool=(str(self.julia_seed_pool_path)
                              if self.julia_seed_pool_path else None),
+            # The c-spacing this run's julia supply ACTUALLY carries — derived from the pool
+            # file, not restated from the constant it is checked against. The floor was
+            # invisible in every prior run config (only the path was stamped, and the path
+            # does not say which floor thinned it), which is how harvest_v2_proving ran the
+            # superseded 1e-2 without that being legible anywhere afterwards.
+            julia_seed_pool_cspacing=dict(
+                floor=srt.CSPACING_FLOOR,
+                pool_min_dc=getattr(self, "_julia_pool_min_dc", None),
+                verified_at_load=self.julia_seed_pool_path is not None,
+                explicit=self.julia_pool_explicit),
             phoenix_seed_pool=(str(self.phoenix_seed_pool_path)
                                if self.phoenix_seed_pool_path else None),
             prereg=self.PREREG,
@@ -3813,11 +3897,13 @@ def main():
                     help="phoenix's harvest cut. There is no derivable value under the "
                          "active head (see __init__), so this is explicit and the run "
                          "config stamps it UNCALIBRATED. Default: t_good_for('phoenix').")
-    ap.add_argument("--julia-seed-pool", type=str, default=None,
-                    help="PRIMARY julia supply under test: a JSON list of {c_re,c_im} c's from the "
+    ap.add_argument("--julia-seed-pool", type=str, default=str(JULIA_SUPPLY_POOL),
+                    help="PRIMARY julia supply: a JSON list of {c_re,c_im} c's from the "
                          "c-diverse near-∂M sampler, injected as julia:mandelbrot roots at fresh "
                          "start (bypasses the hook-spacing gate; requires 'mandelbrot' in --families). "
-                         "DEFAULT None => julia roots only via the parent-fired hook.")
+                         f"DEFAULT {JULIA_SUPPLY_POOL.name} — the pool thinned at the ADOPTED "
+                         f"c-spacing floor. Whatever file is passed is verified against "
+                         f"supply_routing.CSPACING_FLOOR at load; pass '' for hook-only julia.")
     ap.add_argument("--freshness-prior", action="store_true",
                     help="ENABLE the cross-run coordinate freshness prior: seed this run's DEDUP "
                          "clouds (pre-canonical + admission near-dup + steering) from prior-library "
