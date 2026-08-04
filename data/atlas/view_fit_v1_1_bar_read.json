@@ -1,0 +1,60 @@
+{
+ "schema_version": 1,
+ "prereg": "steered_frontier.SteeredFrontier.PREREG['view_fit_v1_1_vs_composite_v3']",
+ "margin": 0.1181,
+ "margin_basis": "lower bound of the fit-era CI, data/atlas/view_fit_v1_1.json",
+ "batch": "2026-08-03_v2_sitting_v1",
+ "slice": {
+  "definition": "sitting_cutter.is_bar_readable \u2014 fit_model==view_fit_v1.1 and fit_score and composite all present",
+  "n": 268,
+  "of": 1000,
+  "by_partition": {
+   "multibrot5": 131,
+   "multibrot3": 89,
+   "mandelbrot": 32,
+   "multibrot4": 16
+  },
+  "label_dist": {
+   "1": 10,
+   "2": 198,
+   "3": 56,
+   "4": 4
+  }
+ },
+ "target": "label >= 2",
+ "n_pos": 258,
+ "n_neg": 10,
+ "base_rate": 0.9627,
+ "ap": {
+  "view_fit_v1_1": 0.9755,
+  "composite_v3": 0.9679,
+  "delta": 0.0076
+ },
+ "auc": {
+  "view_fit_v1_1": 0.6374,
+  "composite_v3": 0.5203
+ },
+ "bootstrap": {
+  "delta": 0.0077,
+  "lo": -0.0161,
+  "hi": 0.0325,
+  "n_boot": 2000,
+  "seed": 20260802,
+  "unit": "row (paired)"
+ },
+ "attainable": {
+  "max_abs_delta_ap": 0.1256,
+  "bar_attainable_ratio": 0.9403,
+  "why": "AP is base-rate dependent; this is AP(perfect) - AP(worst) on THIS slice, the ceiling on any delta two orderings of these rows can produce."
+ },
+ "vetoed_sensitivity": {
+  "delta": 0.0078,
+  "lo": -0.0138,
+  "hi": 0.0301,
+  "n_boot": 2000
+ },
+ "verdict": "NOT MET",
+ "verdict_qualifier": "UNINFORMATIVE \u2014 the margin is 94% of the entire attainable delta-AP range on this slice, so NOT MET is not evidence against view_fit v1.1.",
+ "population_caveat": "Native-plane multibrot MANEUVER views only (the slice carries no julia and no phoenix row). Any verdict is scoped to that population, not to the pipeline.",
+ "scope": "SOURCING-side only. This module reads; it changes no order."
+}
