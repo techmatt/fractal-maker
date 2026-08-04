@@ -78,6 +78,9 @@ import paths                # noqa: E402
 # would silently mean "append onto something v8 would not have produced".
 from tools.v8 import build_manifest as v8b  # noqa: E402
 
+sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+import batch_registry as br  # noqa: E402  — THE batch table, one owner
+
 BATCHES_GLOB = str(ROOT / "data" / "label_corpus" / "batches" / "*" / "images.jsonl")
 PRIOR_MANIFEST = ROOT / "data" / "v8" / "manifest.jsonl"
 OUT = "data/v10/manifest.jsonl"
@@ -85,11 +88,13 @@ EVAL_OUT = "data/v10/eval_slice.jsonl"
 META_OUT = "data/v10/build_metadata.json"
 
 # --------------------------------------------------------------------------- #
-# The one registration change of this build. Everything else inherits v8's registry
-# (CENSUS_BATCHES, FLOOR_BATCHES, the fail-closed default) from tools/v8/build_manifest.
+# The uniform leg's registration used to live HERE, as a third copy of the batch table
+# on top of v7's and v8's. It now lives with every other batch in
+# `tools/scoring/batch_registry.py`; these names are derived reads of that one table, kept
+# because GATE 13 pins this specific instrument.
 # --------------------------------------------------------------------------- #
-UNIFORM_BATCHES = {"2026-08-01_supply_crawl_uniform_v1"}
-UNIFORM_SOURCE = "maneuver_uniform_v1"
+UNIFORM_SOURCE = br.SOURCE_MANEUVER_UNIFORM
+UNIFORM_BATCHES = br.batches_with_source(UNIFORM_SOURCE)
 N_UNIFORM_EXPECTED = 90        # the pre-registered maneuver-view instrument
 N_RULE_LABELED_EXPECTED = 81   # interior_gt30_v1 auto-rejects across the three crawl legs
 RULE_LABEL_FILE = "rule_labels_interior_gt30_v1.json"
@@ -117,23 +122,16 @@ NEW_BATCHES = {
 
 
 def classify_batch(batch_id, ft):
-    """(eval_eligible, biased, source). v8's rule plus the uniform leg."""
-    if batch_id in UNIFORM_BATCHES:
-        return True, False, UNIFORM_SOURCE
+    """(eval_eligible, biased, manifest_source) — THE registry, via v8's seam."""
     return v8b.classify_batch(batch_id, ft)
 
 
 def classify_location(d):
-    """v8's fold, with the uniform leg counted as a third forced-eval instrument."""
-    cls = [classify_batch(b, d["ft"]) for b in sorted(d["batches"])]
-    d["biased"] = any(c[1] for c in cls)
-    d["eval_eligible"] = all(c[0] for c in cls)
-    d["census"] = (d["ft"].startswith("julia_multibrot")
-                   and any(b in v8b.CENSUS_BATCHES for b in d["batches"]))
-    d["floor"] = any(b in v8b.FLOOR_BATCHES for b in d["batches"])
-    d["uniform"] = any(b in UNIFORM_BATCHES for b in d["batches"])
-    d["forced_eval"] = d["census"] or d["floor"] or d["uniform"]
-    d["source"] = "+".join(sorted({c[2] for c in cls}))
+    """v8's fold, verbatim. The uniform leg is no longer a special case here: it is an
+    eval-eligible entry in the registry like the census and the floor, so `d["uniform"]`
+    is a derived read of the instrument set rather than a fourth batch list."""
+    v8b.classify_location(d)
+    d["uniform"] = UNIFORM_SOURCE in d["instruments"]
 
 
 def collect_atom_keys():
@@ -383,12 +381,13 @@ def main():
     assert len({r["loc_id"] for r in rows}) == len(rows), "GATE 2 FAIL: duplicate loc_id"
     print(f"  [ 2] 0 identity straddle           OK (train {len(tr_ids)} / eval {len(ev_ids)})")
 
-    g_split = defaultdict(set)
-    for r in rows:
-        g_split[r["group_id"]].add(r["split"])
-    span = [g for g, s in g_split.items() if len(s) > 1]
-    assert not span, f"GATE 3 FAIL: {len(span)} groups span the split"
-    print(f"  [ 3] 0 group straddle              OK ({len(g_split)} groups)")
+    illegal, exempt_straddle = v8b.straddle_report(kept)
+    assert not illegal, (f"GATE 3 FAIL: {len(illegal)} groups span the split with a "
+                         f"non-exempt eval member, e.g. {illegal[:5]}")
+    n_exempt_mates = sum(1 for d in kept if d.get("exempt_group_mate"))
+    print(f"  [ 3] group straddle                OK ({len({r['group_id'] for r in rows})} "
+          f"groups; {len(exempt_straddle)} straddle by the score-unconditioned exemption, "
+          f"holding {n_exempt_mates} biased train group-mates the drop rule would have cut)")
 
     biased_eval = [r for r in rows if r["split"] == "eval" and r.get("biased")]
     assert not biased_eval, f"GATE 4 FAIL: {len(biased_eval)} biased rows in eval"
@@ -401,8 +400,9 @@ def main():
     assert all(d["split"] == "eval" for d in forced), "GATE 5 FAIL: a forced-eval loc is not eval"
     assert all(d["forced_eval"] for d in kept if d["split"] == "eval"), \
         "GATE 5 FAIL: a non-forced-eval location reached eval"
-    print(f"  [ 5] forced assignment holds       OK ({len(census)} census + {len(floor)} floor "
-          f"+ {len(uniform)} uniform = {len(forced)} -> eval)")
+    by_instr = Counter(s for d in forced for s in d["instruments"])
+    print(f"  [ 5] forced assignment holds       OK ({len(forced)} -> eval: "
+          f"{dict(sorted(by_instr.items()))})")
 
     from_batches = set()
     for d in all_locs:
@@ -536,25 +536,52 @@ def main():
     # appended location whose atom is shared, the merge carries it along. That is the
     # union-find working, not a collision. What must not happen is two v8 rows newly
     # sharing a group *because of* the atom pass, which would mean the pass re-partitioned
-    # the frozen corpus; GATE 12's `coarsened == 0` is exactly that statement, so here we
-    # only count the pull-along and assert the leak is closed.
+    # the frozen corpus.
+    #
+    # That quantity is computed here directly, from the pre-atom vs post-atom partition of
+    # the prefix rows. It used to be read off GATE 12's `merged`, which is the set of v8
+    # groups that coarsened for ANY reason — and GATE 12 permits spatial coarsening by an
+    # appended bridge in the same breath (26 of them on today's corpus, 0 on the corpus v10
+    # was frozen against). Two gates cannot disagree about whether coarsening is allowed;
+    # `merged` was measuring the wrong quantity (`verification_practice.md` §1.1).
     v8_pulled = [pr["loc_id"] for pr, nr in prefix_rows
                  if pre_atom_gid.get(v8b.ident(pr)) != nr["group_id"]]
-    assert not merged, (
-        f"GATE 14 FAIL: {len(merged)} pair(s) of v8 rows newly share a group — the atom "
-        f"pass re-partitioned the frozen corpus rather than only the appended rows")
-    uni_atoms = {(d["ft"], atom_of[v8b.ident_of_loc(d)]) for d in kept
-                 if d.get("uniform") and v8b.ident_of_loc(d) in atom_of}
+    pre_part, post_part = defaultdict(set), defaultdict(set)
+    for pr, nr in prefix_rows:
+        pre_part[pre_atom_gid[v8b.ident(pr)]].add(pr["loc_id"])
+        post_part[nr["group_id"]].add(pr["loc_id"])
+    pre_sets = {frozenset(v) for v in pre_part.values()}
+    atom_merged = [s for s in {frozenset(v) for v in post_part.values()} if s not in pre_sets]
+    assert not atom_merged, (
+        f"GATE 14 FAIL: {len(atom_merged)} group(s) of v8 rows newly share a group BECAUSE "
+        f"of the atom pass — it re-partitioned the frozen corpus rather than only the "
+        f"appended rows: {[sorted(s)[:4] for s in atom_merged[:2]]}")
+    # Same-subject leak. An instrument scoring a subject it was trained on at another zoom
+    # is the model-quality failure the atom union exists to close — and it is exactly the
+    # protection the score-unconditioned exemption gives up on purpose. So the assertion is
+    # scoped to instruments that did NOT claim the exemption, and the exempted twins are
+    # COUNTED rather than allowed to vanish into a relaxed gate.
+    instr_atoms, exempt_atoms = {}, set()
+    for d in kept:
+        i = v8b.ident_of_loc(d)
+        if d["split"] == "eval" and i in atom_of:
+            k = (d["ft"], atom_of[i])
+            instr_atoms[k] = d
+            if d["score_unconditioned"]:
+                exempt_atoms.add(k)
     twins = [d for d in kept if d["split"] == "train"
              and v8b.ident_of_loc(d) in atom_of
-             and (d["ft"], atom_of[v8b.ident_of_loc(d)]) in uni_atoms]
-    assert not twins, (
-        f"GATE 14 FAIL: {len(twins)} TRAIN locations share a minibrot atom with a uniform "
-        f"eval location — the instrument would be scoring a subject it was trained on at "
-        f"another zoom")
+             and (d["ft"], atom_of[v8b.ident_of_loc(d)]) in instr_atoms]
+    hard = [d for d in twins
+            if (d["ft"], atom_of[v8b.ident_of_loc(d)]) not in exempt_atoms]
+    assert not hard, (
+        f"GATE 14 FAIL: {len(hard)} TRAIN locations share a minibrot atom with a "
+        f"NON-exempt eval location — the instrument would be scoring a subject it was "
+        f"trained on at another zoom")
     print(f"  [14] atom-union same-subject leak  OK ({atom_spanning} atoms spanned groups, "
           f"{atom_merges} merges, {len(v8_pulled)} v8 rows pulled into a merged group, "
-          f"0 train twins of a uniform atom)")
+          f"0 non-exempt train twins; {len(twins)} exempt train twins of a "
+          f"score-unconditioned instrument atom)")
 
     if a.dry_run:
         print("\n--dry-run: nothing written.")

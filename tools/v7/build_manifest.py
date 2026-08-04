@@ -41,6 +41,8 @@ sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 import label_store as ls  # noqa: E402
 # family (ledger cloud partition) <-> fractal_type (Rust kind_str) — THE map, one owner.
 from partitions import FAM2FT, FT2FAM  # noqa: E402,F401
+# THE batch registry — one owner, shared with the manifest realizer (tools/v8, tools/v10).
+import batch_registry as br  # noqa: E402
 
 V6_MANIFEST = ROOT / "data" / "v6" / "manifest.jsonl"
 BATCHES_GLOB = str(ROOT / "data" / "label_corpus" / "batches" / "*" / "images.jsonl")
@@ -55,112 +57,30 @@ GID_OFFSET_V7 = 3_000_000          # > v6 max group_id (2_000_624); no collision
 
 N_V6 = 5261                        # frozen v6 prefix row count (loc_ids 0..5260)
 
-# Forced split rules, by batch (the plan §2 decomposition).
-CENSUS_BATCHES = {"2026-07-17_prospect_run1_baserate_R_v1",
-                  "2026-07-17_prospect_run1_baserate_v1"}
-BAND_BATCHES = {"2026-07-11_jm3_band_v1", "2026-07-12_jm45_band_v1"}
-BLINDSPOT_BATCH = "2026-07-12_blindspot_v6reject_v1"
+# --------------------------------------------------------------------------- #
+# The batch registry MOVED to `tools/scoring/batch_registry.py` on 2026-08-04. It was
+# duplicated here and in `tools/v8|v10/build_manifest.classify_batch`, and the two copies
+# had drifted: this one still called loose0_v3 train/unbiased a week after v8 realized it
+# as the mandelbrot eval floor. The category names below are DERIVED from the one table
+# (a dozen live callers import them), so a name can no longer drift from the decision.
+# `tools/scoring/test_batch_registry.py` fails on any second literal copy.
+# --------------------------------------------------------------------------- #
+CENSUS_BATCHES = br.batches_with_source(br.SOURCE_CENSUS)
+BAND_BATCHES = br.batches_with_source("jm_band")
+BLINDSPOT_BATCH = next(iter(br.batches_with_source("blindspot_v6reject")))
 
-# Unbiased/eval-eligibility is EXPLICIT, never a fall-through. `assign_split` fails CLOSED:
-# a batch not named in CENSUS / BAND / BLINDSPOT / UNBIASED_TRAIN below is classified
-# biased→train. The only unbiased-given-descent draw is the census (julia→eval); the only
-# unbiased train source is the v5-era flat re-labels (loose0_v3). Any new unbiased or
-# eval-eligible batch MUST be added here — a biased batch that someone forgets to register
-# is then still safe (biased/train), which is the failure mode the old `return "train",
-# False, "loose0_v3"` default got backwards (it tagged every unregistered batch unbiased).
-UNBIASED_TRAIN_BATCHES = {"2026-06-23_flat_generate_loose0_v3"}  # flat unbiased re-labels
-
-# --- the 2026-08-01 supply crawl (three generation methods, registered BEFORE the build) ---
-# All three are TRAIN-side. Registering them explicitly rather than letting the fail-closed
-# default absorb them is the point: the default is a safety net, and a safety net records
-# "nobody thought about this batch", which is not what happened here. Each is named so a
-# later reader can tell the three draws apart in one place, which the shared default cannot.
-#
-#   STRATIFIED — round-robin over (degree x operator x composite-v3 bin) across ALL recorded
-#     candidates, pushed and passed over. A screen score chose the strata, so it is BIASED by
-#     construction; the low bins are in it precisely to supply the negative class.
-#   UNIFORM — uniform over the same recorded population with NO score anywhere in the
-#     selection. That makes it the one leg whose label distribution estimates the crawl's own
-#     base rate, so it is registered UNBIASED — but still TRAIN, not eval. Eval-eligibility
-#     would move the instrument the run is being measured against, and this run adopts no
-#     threshold and no checkpoint; that is a separate decision with its own evidence.
-#   EXEMPLAR — top by exemplar similarity, i.e. selected on a score, i.e. biased. It is its
-#     own method and not folded into the stratified chunks so that "closer to the exemplars
-#     = better" can be read AGAINST the stratified label distribution instead of out of it.
-SUPPLY_CRAWL_STRATIFIED_BATCHES = {"2026-08-01_supply_crawl_strat_a_v1",
-                                   "2026-08-01_supply_crawl_strat_b_v1"}
-SUPPLY_CRAWL_UNIFORM_BATCHES = {"2026-08-01_supply_crawl_uniform_v1"}
-SUPPLY_CRAWL_EXEMPLAR_BATCHES = {"2026-08-01_supply_crawl_exemplar_v1"}
-
-# --- the label-seeded harvest (2026-08-02) ---------------------------------------------
-# BIASED TWICE OVER, and both have to be said or the registration understates it.
-#   (1) the SEEDS are the corpus's own class-3/4 locations, so the population is conditioned
-#       on Matt's past verdicts — a q3 rate measured here estimates "the neighbourhood of
-#       things already judged good", never the discovery base rate; and
-#   (2) the QUEUE ORDER is a fitted score (`view_fit_v1.1`), and the two chunks are its top,
-#       so selection is on a model of the label as well.
-# ONE registered method for both chunks, not one per generation method, because the chunks
-# are stratified ACROSS (method x degree) by construction: every chunk holds both
-# `snap_at_seed` and `neighborhood_expand` rows, and `assign_split` classifies a BATCH. The
-# per-row method rides `provenance.method` and is what the stratification balanced on.
-LABEL_SEEDED_V2_BATCHES = {"2026-08-02_label_seeded_v2_a", "2026-08-02_label_seeded_v2_b"}
-
-# --- the 2026-08-03 long harvest (three legs, registered BEFORE the build) ---------------
-# The run is RECORD-AND-RANK: it records every candidate scoring above a low floor with its
-# per-stage fate and ranks them, and Matt picks the cutoff off sheets. That makes the three
-# legs three DIFFERENT selection stories, which is why they are three registrations and not
-# one.
-#
-#   RANKED — the top of the run's own ranked candidate queue. Selected on a score twice over
-#     (the cheap CORN ordinal decides which candidates get a canonical confirmation render,
-#     and the rank Matt reviews is built from those scores), so it is BIASED and train-side.
-#     A q3/q4 rate measured on it is a statement about the ranker, not a base rate.
-#   NEAR-MINIBROT — julia c's sampled at a fixed distance ladder around known minibrot
-#     nuclei. The GENERATION METHOD is systematic (the ladder is 1/4/16 atom radii, drawn
-#     before any score exists), but the rows that reach the batch are the ones that survived
-#     the run's own screens, so it is registered biased/train. Its own batch rather than
-#     folded into RANKED because "near a minibrot at ladder rung r" is a hypothesis with its
-#     own answer, and pooling it into the ranked chunk would make that answer unrecoverable.
-#   UNIFORM EVAL — the one leg with NO score anywhere in the selection: small
-#     score-unconditioned draws for the partitions that have no unbiased eval rows at all
-#     (phoenix, native multibrot, julia:mandelbrot — `production_seeder.T_GOOD_UNCALIBRATED`
-#     names all five). Registered EVAL-ELIGIBLE and unbiased.
-#
-# WHY THIS ONE IS eval WHERE THE SUPPLY CRAWL'S UNIFORM LEG WAS NOT, since the two look alike
-# and the earlier decision went the other way (see SUPPLY_CRAWL_UNIFORM_BATCHES above). That
-# leg was uniform over ONE RUN'S OWN CANDIDATE POPULATION, so it estimates that crawl's base
-# rate and nothing wider — making it eval would have moved the instrument to match whatever
-# the crawl happened to surface. This leg is a systematic draw over a FAMILY'S PARAMETER
-# SPACE, taken before the run scores anything, so it is a sample of the family rather than of
-# the run. That is the difference that makes it an admissible instrument.
-#
-# SCOPE, because "eval-eligible" is the one classification that can move a threshold: this
-# registration affects manifests built AFTER it. It cannot touch v10 — that generation's
-# manifest, plan and eval slice are already frozen on disk — so nothing live re-derives
-# because of this line. The first version to see these rows is the next one, and its
-# derivation is where the decision actually lands.
-Q4_HARVEST_RANKED_BATCHES = {"2026-08-03_q4_harvest_ranked_v1"}
-Q4_NEAR_MINIBROT_BATCHES = {"2026-08-03_q4_near_minibrot_v1"}
-Q4_UNIFORM_EVAL_BATCHES = {"2026-08-03_q4_uniform_eval_v1"}
-
-# --- the harvest-v2 sitting (2026-08-03), registered BEFORE the cut ---------------------
-# ONE registration for the whole sitting, because `assign_split` classifies a BATCH and every
-# row in this one shares a single selection story: the harvest-v2 proving run's own
-# record-and-rank queue, tier-sorted, then cut by the three non-optional sitting filters
-# (>30%-interior auto-1, per-partition machine-1 discard, presentation morph-dedup) and drawn
-# round-robin over (partition x rank_tier). The per-row cell rides `provenance.stratum`.
-#
-# BIASED, TRAIN-SIDE, and it is biased more than once: the cheap CORN ordinal decided which
-# candidates earned a canonical confirmation render, the rank Matt sees is built from those
-# scores, and the maneuver supply that produced part of the population was itself selected on
-# `view_screen.composite_v3`. No rate measured on this batch is a base rate for anything.
-#
-# NOT eval, and the contrast with Q4_UNIFORM_EVAL_BATCHES is the reason to say so: that leg
-# was a systematic draw over a family's parameter space taken before any score existed. This
-# one is the top of a scored queue. Registering it eval would move the instrument to match
-# whatever the harvest happened to surface — the same error the supply crawl's uniform leg
-# was kept out of.
-V2_SITTING_BATCHES = {"2026-08-03_v2_sitting_v1"}
+# Every other category, DERIVED from the same table. The prose that justified each
+# registration lives with the entry (`batch_registry.Registration.why`), not here — one
+# place to read, one place to edit.
+UNBIASED_TRAIN_BATCHES = br.unbiased_train_batches()
+SUPPLY_CRAWL_STRATIFIED_BATCHES = br.batches_with_source("supply_crawl_stratified")
+SUPPLY_CRAWL_UNIFORM_BATCHES = br.batches_with_source(br.SOURCE_MANEUVER_UNIFORM)
+SUPPLY_CRAWL_EXEMPLAR_BATCHES = br.batches_with_source("supply_crawl_exemplar")
+LABEL_SEEDED_V2_BATCHES = br.batches_with_source("label_seeded_v2")
+Q4_HARVEST_RANKED_BATCHES = br.batches_with_source("q4_harvest_ranked")
+Q4_NEAR_MINIBROT_BATCHES = br.batches_with_source("q4_near_minibrot")
+Q4_UNIFORM_EVAL_BATCHES = br.batches_with_source(br.SOURCE_Q4_UNIFORM)
+V2_SITTING_BATCHES = br.batches_with_source("v2_sitting")
 
 
 class UF:
@@ -255,41 +175,15 @@ def load_post_freeze(v6_ids):
 
 
 def assign_split(loc):
-    """(split, biased, source) forced by batch — the plan §2 rule set, FAIL-CLOSED. Census
-    julia -> eval (unbiased); band/blindspot/native/unregistered -> biased->train; the one
-    explicitly-registered unbiased train source (loose0_v3) -> train (unbiased). An
-    UNREGISTERED batch classifies biased->train: unbiased/eval-eligibility requires explicit
-    registration (CENSUS/UNBIASED_TRAIN), so a biased batch nobody remembered to list is
-    still safe. This inverts the old default, which fell every unregistered batch through to
-    ("train", False, "loose0_v3") and silently tagged it unbiased."""
-    b, ft = loc["batch"], loc["ft"]
-    if b in CENSUS_BATCHES:
-        if ft.startswith("julia_multibrot"):
-            return "eval", False, "prospect_census"          # the eval instrument
-        return "train", True, "prospect_native"              # native-plane, descent-screened
-    if b in BAND_BATCHES:
-        return "train", True, "jm_band"                      # model-band-selected
-    if b == BLINDSPOT_BATCH:
-        return "train", True, "blindspot_v6reject"           # negative-by-construction
-    if b in UNBIASED_TRAIN_BATCHES:
-        return "train", False, "loose0_v3"                   # unbiased flat re-labels
-    if b in SUPPLY_CRAWL_STRATIFIED_BATCHES:
-        return "train", True, "supply_crawl_stratified"      # composite-v3-stratified draw
-    if b in SUPPLY_CRAWL_UNIFORM_BATCHES:
-        return "train", False, "supply_crawl_uniform"        # no score in the selection
-    if b in SUPPLY_CRAWL_EXEMPLAR_BATCHES:
-        return "train", True, "supply_crawl_exemplar"        # top-by-exemplar-similarity
-    if b in LABEL_SEEDED_V2_BATCHES:
-        return "train", True, "label_seeded_v2"              # judged-good seeds, fit-ordered
-    if b in Q4_HARVEST_RANKED_BATCHES:
-        return "train", True, "q4_harvest_ranked"            # top of the run's ranked queue
-    if b in Q4_NEAR_MINIBROT_BATCHES:
-        return "train", True, "q4_near_minibrot"             # ladder around known nuclei
-    if b in Q4_UNIFORM_EVAL_BATCHES:
-        return "eval", False, "q4_uniform_eval"              # systematic, score-unconditioned
-    if b in V2_SITTING_BATCHES:
-        return "train", True, "v2_sitting"                   # screened + ranked harvest-v2 cut
-    return "train", True, "unregistered"                     # FAIL CLOSED: biased-by-default
+    """(split, biased, source) for a location — a thin read of THE registry.
+
+    The rules and the prose that justify them live in `tools/scoring/batch_registry.py`;
+    this signature is kept because a dozen batch builders under `tools/atlas/`,
+    `tools/sourcing/` and `tools/corpus/` call it as the authority and freeze its tuple
+    into their `batch.json`. Split is DERIVED from eval-eligibility there, and the
+    fail-closed default (unregistered -> biased/train) is unchanged.
+    """
+    return br.assign_split(loc["batch"], loc["ft"])
 
 
 def registration_contradictions(locs):

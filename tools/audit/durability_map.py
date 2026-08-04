@@ -230,9 +230,9 @@ REGISTRY = [
      "OK as a class (regenerable crop feeds). Absent; label_crops has 1 file out-of-tree."),
     ("data/generated/loose0/{locations.jsonl,manifest.json}", "generate (src/) + import_loose0_v3.py",
      DUR_F, "re-run generate — a different draw, not this one", Y,
-     "MISMATCH (fragile). It is the location list the loose0_v3 unbiased-train batch is "
-     "keyed to (assign_split's only UNBIASED_TRAIN_BATCHES entry). Tracked by force-add "
-     "at a gitignored path."),
+     "MISMATCH (fragile). It is the location list the loose0_v3 batch is keyed to — since "
+     "2026-08-04 the mandelbrot EVAL FLOOR in batch_registry, not an unbiased-train entry "
+     "(that category is now empty). Tracked by force-add at a gitignored path."),
     ("data/root_field/field_8192x8192_m1000*.{f32,json}", "dump-field (src/, Rust)", UND,
      "re-dump the field (deterministic, pure compute)", N,
      "OK. Ignored, untracked, 8 files in-tree — a genuine regenerable cache. Arguably "

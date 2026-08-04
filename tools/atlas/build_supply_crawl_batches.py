@@ -64,6 +64,8 @@ import build_minibrot_batch as BMB              # noqa: E402  (coords / palettes
 import maneuver_inspection_sheet as mis         # noqa: E402  (the population loader)
 import deep_center_finder as dcf                # noqa: E402  (the corpus crop cap policy)
 from tools.v7 import build_manifest as bm       # noqa: E402  (assign_split — the authority)
+sys.path.insert(0, str(bm.ROOT / "tools" / "scoring"))
+import batch_registry as br                     # noqa: E402  (THE registry bm reads)
 
 STAMP = "2026-08-01"
 GEN_VERSION = "supply_crawl_v1"
@@ -713,11 +715,21 @@ def stage_verify(args) -> int:
         split, biased, source = bm.assign_split({"batch": batch_id, "ft": "mandelbrot"})
         check("registered EXPLICITLY in assign_split (not the fail-closed default)",
               source != "unregistered", f"-> {(split, biased, source)}")
-        check("classified TRAIN-side", split == "train")
         exp_biased = batch_id != UNIFORM
+        check(f"classified {'EVAL' if batch_id == UNIFORM else 'TRAIN'}-side",
+              split == ("eval" if batch_id == UNIFORM else "train"))
         check(f"biased == {exp_biased}", biased is exp_biased)
-        check("batch.json records the same classification",
-              bj["registration"]["assign_split"] == [split, biased, source])
+        # batch.json is a FROZEN record: it keeps the tuple that was true when the crawl
+        # was drawn (2026-08-01). The uniform leg's side moved on 2026-08-02 when Matt made
+        # it the v10 maneuver-view instrument, so the live tuple and the frozen one
+        # legitimately differ — and the registry records exactly what it superseded. A
+        # difference that is NOT the recorded supersession is still a failure.
+        recorded = bj["registration"]["assign_split"]
+        prior = br.lookup(batch_id, "mandelbrot").superseded
+        check("batch.json records the live classification, or the one it superseded",
+              recorded == [split, biased, source]
+              or (prior is not None and recorded == list(prior)),
+              f"frozen {recorded} vs live {[split, biased, source]}")
         check("every label is null (nothing is labeled)",
               all(r["label"]["score"] is None for r in rows))
         check("image_id is opaque `sc<slot>_<hash>`",

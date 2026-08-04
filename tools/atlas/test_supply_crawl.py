@@ -228,15 +228,35 @@ def test_a_population_mixing_screen_frames_is_refused(tmp_path, monkeypatch):
 # registration
 # =========================================================================== #
 def test_every_batch_is_registered_explicitly_before_it_is_built():
-    """Fail-closed would land all four train-side anyway. "Nobody registered this" and
-    "this is a biased train draw" are different facts, and only one of them is true here."""
+    """Fail-closed would land the three biased legs train-side anyway. "Nobody registered
+    this" and "this is a biased train draw" are different facts, and only one of them is
+    true here.
+
+    The UNIFORM leg's side moved after the crawl was drawn: registered train-side on
+    2026-08-01, then made the maneuver-view eval instrument by Matt in the v10 build
+    (2026-08-02) — which is what `data/v10/manifest.jsonl` realizes, 90 rows sourced
+    `maneuver_uniform_v1`. The registry carried the stale train-side value until the
+    2026-08-04 unification; this batch's `batch.json` keeps the tuple that was true when
+    it was written, and `batch_registry` records it as the entry's `superseded` value."""
     for bid in bsc.BATCHES:
         split, biased, source = bm.assign_split({"batch": bid, "ft": "mandelbrot"})
-        assert split == "train", bid
+        assert split == ("eval" if bid == bsc.UNIFORM else "train"), bid
         assert source != "unregistered", bid
         assert biased is (bid != bsc.UNIFORM), bid
     assert bm.assign_split({"batch": "never_registered", "ft": "mandelbrot"}) == \
         ("train", True, "unregistered")
+
+
+def test_the_uniform_legs_superseded_registration_is_recorded_not_overwritten():
+    """The crawl's `batch.json` froze ("train", False, "supply_crawl_uniform"). A frozen
+    record keeps what was true when written, so the registry has to say what replaced it
+    — otherwise the only explanation for the disagreement is "someone edited a table"."""
+    import sys
+    sys.path.insert(0, str(bm.ROOT / "tools" / "scoring"))
+    import batch_registry as br
+    reg = br.lookup(bsc.UNIFORM, "mandelbrot")
+    assert reg.superseded == ("train", False, "supply_crawl_uniform")
+    assert br.split_of(reg) == "eval" and reg.score_unconditioned is True
 
 
 def test_the_uniform_batch_does_not_contradict_the_biased_registry():

@@ -53,10 +53,15 @@ UNCHANGED = [
     # blindspot negatives -> train (biased)
     (("2026-07-12_blindspot_v6reject_v1", "mandelbrot"),
      ("train", True, "blindspot_v6reject")),
-    # the one explicitly-registered unbiased train source -> train (unbiased)
-    (("2026-06-23_flat_generate_loose0_v3", "mandelbrot"),
-     ("train", False, "loose0_v3")),
 ]
+
+# loose0_v3 is NOT in UNCHANGED: it is the one entry the 2026-08-04 registry unification
+# CORRECTED. This module said ("train", False, "loose0_v3") while
+# `tools/v8/build_manifest` had made it the mandelbrot eval floor on 2026-07-29 — and the
+# floor is what 526 rows of `data/v8/manifest.jsonl` are sourced to, so the realizer was
+# the live truth and this side was a week-stale copy. Asserted in both directions, plus
+# the recorded supersession, in `tools/scoring/test_batch_registry.py`.
+LOOSE0_V3 = "2026-06-23_flat_generate_loose0_v3"
 
 
 # 1. An unregistered batch name lands biased / train.
@@ -91,6 +96,16 @@ def test_old_unbiased_default_is_gone(batch, ft):
 @pytest.mark.parametrize("inp,expected", UNCHANGED)
 def test_correctly_classified_batches_unchanged(inp, expected):
     assert split(*inp) == expected
+
+
+# 5. The one entry the unification moved, bracketed on both sides (§3): the stale tuple is
+#    gone AND the live truth is what replaced it — not merely "something changed".
+def test_loose0_v3_is_the_mandelbrot_eval_floor_not_an_unbiased_train_source():
+    assert split(LOOSE0_V3, "mandelbrot") != ("train", False, "loose0_v3")
+    assert split(LOOSE0_V3, "mandelbrot") == ("eval", False, "loose0_v3_floor")
+    assert bm.UNBIASED_TRAIN_BATCHES == set(), (
+        "loose0_v3 vacated the unbiased-train category when it became an instrument; a "
+        "non-empty set here means something re-entered it without a registration")
 
 
 # ---- the label_store cross-check gate (registration_contradictions) ----

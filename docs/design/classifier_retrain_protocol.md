@@ -24,6 +24,33 @@ manifest and the cache-manifest rows.
   Children inherit their seed's split — any parent-derived location (julia twins, dives off a seed) takes the seed's train/eval assignment, so a descendant can't leak the seed's morphology across the split. (The c-bucket union-find mostly enforces this, but stating it explicitly closes the gap where a child's c drifts into a different bucket.)
 Manifest-build gates abort-all — if any build gate fails, abort the whole build rather than emit a partial manifest.
 
+**One registry (2026-08-04).** Every batch's classification lives in
+`tools/scoring/batch_registry.py` and nowhere else. It is read twice — by
+`tools/v7/build_manifest.assign_split` (what a batch builder consults BEFORE it draws)
+and by `tools/v8|v10/build_manifest.classify_batch` (what a build realizes) — and those
+were two independently-edited tables until they disagreed about `loose0_v3` for a week.
+Split is DERIVED from eval-eligibility, never stored. `tools/scoring/test_batch_registry.py`
+fails on a second literal copy and on any corpus batch id inside a manifest-build module.
+
+**The score-unconditioned exemption (Matt, 2026-08-04).** The property that qualifies an
+eval instrument is **score-unconditioned draw**, not neighborhood isolation. A group
+holding a forced-eval location used to have its biased members DROPPED (they can be
+neither eval, which is biased-in-eval, nor train, which straddles the group). For an
+instrument registered `score_unconditioned=True` the third constraint gives instead: the
+group straddles, the instrument's own locations go eval, and a biased group-mate stays
+TRAIN. Measured on the 2026-08-04 corpus under the unified registry, the drop rule cost
+**687 train locations (193 threes, 50 fours)** and the exemption recovers all of them
+(`uv run python tools/v10/build_manifest.py --dry-run`).
+
+> **Caveat, and it is why the flag is per-instrument data rather than a global switch:**
+> model-performance numbers read off an exempted leg are **mildly optimistic** wherever a
+> train group-mate exists — on that corpus, 50 straddling groups and 18 train locations
+> sharing a minibrot atom with an instrument location. Fine for **base rates and `t_good`
+> calibration**, which is what these instruments are for. **Not** fine for fine-grained AUC
+> comparisons between checkpoints. An instrument drawn for a model-quality read should
+> register `score_unconditioned=False` and keep the drop rule; GATE 3 and GATE 14 stay at
+> full strength for it, and count the exempted cases for every other.
+
 Labels attach to **locations**, and training **re-renders from coordinates** — so a
 batch's stored crops never constrain training. But the **deploy presentation point**
 (geometry / palette / AA) must be covered by the aug fan-out, or the residual covariate

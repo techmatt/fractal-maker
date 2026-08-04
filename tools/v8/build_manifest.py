@@ -81,6 +81,8 @@ import location as loc_mod  # noqa: E402
 import paths                # noqa: E402
 # family (ledger cloud partition) <-> fractal_type (Rust kind_str) — THE map, one owner.
 from partitions import FAM2FT  # noqa: E402
+# THE batch registry — one owner, shared with the batch builders (tools/v7/build_manifest).
+import batch_registry as br  # noqa: E402
 
 BATCHES_GLOB = str(ROOT / "data" / "label_corpus" / "batches" / "*" / "images.jsonl")
 OUT = "data/v8/manifest.jsonl"
@@ -94,30 +96,15 @@ C_TOL_FRAC = 0.05
 GID_OFFSET_V8 = 8_000_000          # > every prior gid space; no collision if ever unioned
 
 # --------------------------------------------------------------------------- #
-# The batch registry. FAIL-CLOSED: a batch that is not named here classifies
-# biased -> train. Unbiasedness and eval-eligibility require EXPLICIT registration, so
-# a biased batch nobody remembered to list is still safe. Do NOT add a batch here to
-# work around a classification you dislike — if a batch is misclassified, fix its
-# registration and say why.
+# The batch registry is `tools/scoring/batch_registry.py` — ONE table, shared with
+# `tools/v7/build_manifest.assign_split` (what every batch builder consults before it
+# draws a batch). It used to be re-declared here, and the two copies had drifted:
+# loose0_v3 was the mandelbrot eval floor in THIS module and train/unbiased over there.
+# The category sets below are DERIVED, so no name can drift from the decision again;
+# `tools/scoring/test_batch_registry.py` fails on any second literal copy.
 # --------------------------------------------------------------------------- #
-
-# The one unbiased-given-descent draw that exists: prospect run-1 base-rate. Its
-# julia:multibrot rows are the CENSUS = the primary eval instrument (forced 100% eval). Its
-# native-plane rows are descent-screened, so they are biased -> train.
-CENSUS_BATCHES = {"2026-07-17_prospect_run1_baserate_R_v1",
-                  "2026-07-17_prospect_run1_baserate_v1"}
-# The MANDELBROT EVAL FLOOR (Matt's call, 2026-07-29). loose0_v3 is the unbiased base-rate
-# flat-generate draw over the mandelbrot plane (526 locations). Registering it eval-eligible
-# gives the mandelbrot slice — 59% of the corpus — a regression instrument it otherwise
-# lacks: the census is julia:multibrot only. It qualifies because the bias that disqualifies
-# an eval population is *model-driven* selection (candidates a model liked), and an unbiased
-# base-rate draw is not that. This REVERSES the prior eval_is_census_only decision on the
-# record; it is a SECONDARY, additive instrument — the census-144 slice below is untouched
-# and stays the pinned primary. Both are forced 100% eval by the same group rule.
-FLOOR_BATCHES = {"2026-06-23_flat_generate_loose0_v3"}
-# Unbiased but train-side (none currently: loose0_v3 moved to FLOOR_BATCHES above). Kept as
-# the registry slot for a future unbiased-but-not-eval batch; empty is the fail-closed state.
-UNBIASED_TRAIN_BATCHES = set()
+CENSUS_BATCHES = br.batches_with_source(br.SOURCE_CENSUS)
+FLOOR_BATCHES = br.batches_with_source(br.SOURCE_FLOOR)
 
 N_CENSUS_EXPECTED = 144            # the pre-registered census eval slice (protocol §3, n~144)
 
@@ -226,16 +213,12 @@ def load_all_labeled():
 
 
 def classify_batch(batch_id, ft):
-    """(eval_eligible, biased, source) for one (batch, fractal_type). FAIL-CLOSED."""
-    if batch_id in CENSUS_BATCHES:
-        if ft.startswith("julia_multibrot"):
-            return True, False, "prospect_census"     # the primary eval instrument
-        return False, True, "prospect_native"         # native-plane, descent-screened
-    if batch_id in FLOOR_BATCHES:
-        return True, False, "loose0_v3_floor"         # unbiased base-rate -> mandelbrot eval floor
-    if batch_id in UNBIASED_TRAIN_BATCHES:
-        return False, False, "loose0_v3"              # unbiased, train-side
-    return False, True, "biased:" + batch_id          # FAIL CLOSED
+    """(eval_eligible, biased, manifest_source) for one (batch, fractal_type).
+
+    A thin read of THE registry, kept as a named function because it is the seam the
+    realizer classifies through — `tools/scoring/test_batch_registry.py` asserts no build
+    module reaches a split decision any other way. FAIL-CLOSED lives in the registry."""
+    return br.classify_batch(batch_id, ft)
 
 
 def classify_location(d):
@@ -243,17 +226,33 @@ def classify_location(d):
 
     biased        = OR  over its batches  (any biased contributor taints the location)
     eval_eligible = AND over its batches  (every contributor must be eval-eligible)
-    Both directions are the conservative one: the cardinal sin is biased-in-eval."""
-    cls = [classify_batch(b, d["ft"]) for b in sorted(d["batches"])]
-    d["biased"] = any(c[1] for c in cls)
-    d["eval_eligible"] = all(c[0] for c in cls)
-    d["census"] = (d["ft"].startswith("julia_multibrot")
-                   and any(b in CENSUS_BATCHES for b in d["batches"]))
-    d["floor"] = any(b in FLOOR_BATCHES for b in d["batches"])
-    # forced_eval drives the split (below). Both instruments force their group 100% eval by
-    # the SAME rule; a biased neighbour chained into a forced group is dropped either way.
-    d["forced_eval"] = d["census"] or d["floor"]
-    d["source"] = "+".join(sorted({c[2] for c in cls}))
+    Both directions are the conservative one: the cardinal sin is biased-in-eval.
+
+    `instruments` is the set of eval-eligible SOURCE names the location carries (empty
+    for a train location), so the gates below can name an instrument without a second
+    batch-id list. `score_unconditioned` is the exemption flag — see the module docstring
+    of `batch_registry` and `assign_split_by_group`."""
+    regs = [br.lookup(b, d["ft"]) for b in sorted(d["batches"])]
+    d["biased"] = any(r.biased for r in regs)
+    d["eval_eligible"] = all(r.eval_eligible for r in regs)
+    d["instruments"] = frozenset(
+        br.manifest_source_of(r, b) for b, r in zip(sorted(d["batches"]), regs)
+        if r.eval_eligible)
+    d["census"] = br.SOURCE_CENSUS in d["instruments"]
+    d["floor"] = br.SOURCE_FLOOR in d["instruments"]
+    d["exempt_group_mate"] = False      # set by assign_split_by_group; see its docstring
+    # forced_eval drives the split (below). Every instrument forces its group to eval by the
+    # SAME rule; what differs is what happens to a BIASED neighbour chained into that group.
+    # Membership, not eval-eligibility: a location touched by an instrument batch AND by a
+    # biased one is still pulled into the forced group, where it is dropped (and GATE 6/7
+    # then say so out loud) rather than quietly classified train.
+    d["forced_eval"] = bool(d["instruments"])
+    # The exemption applies only when EVERY registration that made this location an
+    # instrument was a score-unconditioned draw — AND, the conservative direction.
+    d["score_unconditioned"] = d["forced_eval"] and all(
+        r.score_unconditioned for r in regs if r.eval_eligible)
+    d["source"] = "+".join(sorted(
+        {br.manifest_source_of(r, b) for b, r in zip(sorted(d["batches"]), regs)}))
 
 
 def assign_groups(locs):
@@ -312,20 +311,42 @@ def assign_split_by_group(locs):
     the c-bucket to model-band-selected neighbours; the floor hits it on the mandelbrot
     side, where base-rate flat locations chain to guided-descent neighbours). Three
     constraints collide there — forced 100% eval, zero biased-in-eval, zero group
-    straddle — and only one resolution satisfies all three: DROP the biased neighbours
-    from the manifest. Keeping them in train would leak the eval neighbourhood into
-    training, which is exactly what the group unit exists to prevent. They are counted and
-    named in build_metadata, never silently discarded. Returns (kept, dropped)."""
+    straddle — and v8's resolution was to DROP the biased neighbours from the manifest.
+
+    THE SCORE-UNCONDITIONED EXEMPTION (Matt, 2026-08-04). The third constraint is the one
+    that gives: for an instrument whose registration is flagged `score_unconditioned`,
+    forced-eval applies to the instrument's OWN locations and a biased group-mate stays
+    TRAIN — the group straddles, deliberately. What the drop rule buys is protection
+    against spatial leakage in a MODEL-QUALITY read; an instrument's products (base rates,
+    t_good calibration) do not need it, and the rule cost 687 train locations (193 threes,
+    50 fours) under the live registry. The caveat rides with the exemption: performance
+    numbers read off an exempted leg are mildly optimistic wherever a train group-mate
+    exists — fine for base rates and thresholds, not for fine AUC comparisons. See
+    `batch_registry`'s module docstring and `classifier_retrain_protocol.md` §2.
+
+    A biased location that is ITSELF an instrument location is still dropped, exempt or
+    not: keeping it in train would put an instrument row on the training side, which no
+    reading of the exemption asks for.
+
+    Drops are counted and named in build_metadata, never silently discarded.
+    Returns (kept, dropped)."""
     by_gid = defaultdict(list)
     for d in locs:
         by_gid[d["group_id"]].append(d)
     kept, dropped = [], []
     for _gid, members in by_gid.items():
-        if any(m["forced_eval"] for m in members):
+        forced = [m for m in members if m["forced_eval"]]
+        if forced:
+            exempt = all(m["score_unconditioned"] for m in forced)
             for m in members:
                 if m["biased"]:
-                    m["split"] = None
-                    dropped.append(m)
+                    if exempt and not m["forced_eval"]:
+                        m["split"] = "train"
+                        m["exempt_group_mate"] = True
+                        kept.append(m)
+                    else:
+                        m["split"] = None
+                        dropped.append(m)
                 else:
                     m["split"] = "eval"
                     kept.append(m)
@@ -334,6 +355,28 @@ def assign_split_by_group(locs):
                 m["split"] = "train"
                 kept.append(m)
     return kept, dropped
+
+
+def straddle_report(kept):
+    """(illegal, exempt) group ids that hold BOTH splits.
+
+    Zero straddle used to be unconditional. Under the score-unconditioned exemption a
+    group straddles by design — the instrument's own locations are eval, a biased
+    group-mate stays train — so the gate splits into a hard half and a counted half: a
+    straddle is legal iff EVERY eval member of the group is a score-unconditioned
+    instrument location. A group straddling for any other reason is still an abort, and
+    the exempt count is printed so the exemption's cost stays visible rather than
+    disappearing into a relaxed gate (`verification_practice.md` §1.4)."""
+    by_gid = defaultdict(list)
+    for d in kept:
+        by_gid[d["group_id"]].append(d)
+    illegal, exempt = [], []
+    for gid, members in by_gid.items():
+        if len({m["split"] for m in members}) < 2:
+            continue
+        ev = [m for m in members if m["split"] == "eval"]
+        (exempt if ev and all(m["score_unconditioned"] for m in ev) else illegal).append(gid)
+    return illegal, exempt
 
 
 def fmt_hist(h, n):
@@ -479,13 +522,15 @@ def main():
     print(f"  [ 2] 0 identity straddle           OK (train {len(tr_ids)} / eval {len(ev_ids)}, "
           f"0 dupes)")
 
-    # Gate 3: 0 group_ids straddling.
-    g_split = defaultdict(set)
-    for r in rows:
-        g_split[r["group_id"]].add(r["split"])
-    span = [g for g, s in g_split.items() if len(s) > 1]
-    assert not span, f"GATE 3 FAIL: {len(span)} groups span the split, e.g. {span[:5]}"
-    print(f"  [ 3] 0 group straddle              OK ({len(g_split)} groups in the manifest)")
+    # Gate 3: no group straddles the split except by the score-unconditioned exemption.
+    illegal, exempt_straddle = straddle_report(kept)
+    assert not illegal, (f"GATE 3 FAIL: {len(illegal)} groups span the split with a "
+                         f"non-exempt eval member, e.g. {illegal[:5]}")
+    n_exempt_mates = sum(1 for d in kept if d.get("exempt_group_mate"))
+    n_groups = len({r["group_id"] for r in rows})
+    print(f"  [ 3] group straddle                OK ({n_groups} "
+          f"groups; {len(exempt_straddle)} straddle by the score-unconditioned exemption, "
+          f"holding {n_exempt_mates} biased train group-mates v8's drop rule would have cut)")
 
     # Gate 4: 0 BIASED locations in eval — the cardinal sin (protocol §2).
     biased_eval = [r for r in rows if r["split"] == "eval" and r.get("biased")]

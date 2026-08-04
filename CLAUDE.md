@@ -165,8 +165,13 @@ re-declare these, so they are named here to be imported, not rediscovered:
 `production_pins.py` (the pin + `COUPLED_ARTIFACTS`), `derive_t_good.py` (THE version-agnostic
 t_good estimator — a per-version deriver supplies only its slice, population rule and
 objective), `partitions.py` (the `fractal_type` ⟷ ledger-partition map; a source scan in
-`test_partitions.py` fails on a second literal copy) and `eval_slice.py` (a version's frozen
-slice: `data/<v>/eval_scores_<v>.jsonl` and its `<v>_p_ge{2,3,4}` columns).
+`test_partitions.py` fails on a second literal copy), `eval_slice.py` (a version's frozen
+slice: `data/<v>/eval_scores_<v>.jsonl` and its `<v>_p_ge{2,3,4}` columns) and
+`batch_registry.py` (THE batch → split classification table, read by
+`v7/build_manifest.assign_split` **and** `v8|v10/build_manifest.classify_batch`; split is
+derived from eval-eligibility, `score_unconditioned` is the exemption flag, and
+`test_batch_registry.py` fails on a second literal copy **or** on any corpus batch id inside
+a manifest-build module).
 
 **The classifier** (`classifier/`, pkg). Weights/metrics in `data/classifier/v5…v10/`,
 **git-LFS tracked in-tree — NOT gitignored** (`.gitattributes` + exact-path `.gitignore`
