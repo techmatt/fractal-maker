@@ -363,14 +363,19 @@ MIN_UNIT_TIMEOUT_S = 60  # floor for the budget-clamped per-unit backstop (unit_
 # started. A backstop longer than the job's budget is not a backstop, so the clamp is the
 # load-bearing half, not the constant.
 #
-# SIZED FROM A MEASUREMENT, and the first one was too tight. `wall_elapsed_s` records ~12 min
-# for four families; a 2026-08-03 shakedown measured **11.4 min for TWO** (mandelbrot +
-# multibrot3, `scratch/shakedown/e_sched.log`) — ~5.7 min/family, i.e. ~23 min for the
-# four-family production mix, against a 25 min bound. That box was running two other smokes
-# concurrently so the number is an upper bound rather than the quiet-box rate, but sizing a
-# backstop off the optimistic case is how a backstop starts truncating real work: a
-# pre-loop truncation costs whichever family is LAST its fresh-start roots entirely. 40 min
-# keeps ~1.7x headroom over the contended measurement and is still ~8% of one night.
+# SIZED FROM A MEASUREMENT, and CONTENTION DOMINATES IT — three numbers, 2026-08-03:
+#   * 11.4 min for TWO families, box running two other smokes (`scratch/shakedown/e_sched.log`)
+#     -> ~5.7 min/family, which projected ~23 min for the four-family mix;
+#   * 9.2 min for FOUR families on a QUIET box (`data/discovery/continuous_v1_20260803/run.log`,
+#     the launch this bound was raised for) -> ~2.3 min/family. The contended projection
+#     over-estimated by 2.5x.
+#   * `wall_elapsed_s` records ~12 min for four families, consistent with the quiet number.
+# So the honest reading is that this cost is set by what else is on the box, not by the family
+# count alone, and a pre-loop draw cannot know what else is on the box. The bound stays at the
+# PESSIMISTIC end deliberately: a backstop sized off the quiet case starts truncating real work
+# the first busy night, and a pre-loop truncation costs whichever family is LAST its fresh-start
+# roots entirely. 40 min is ~1.7x the contended projection, ~4.3x the quiet measurement, and
+# still ~8% of one night — cheap insurance against a hang, which is what it is actually for.
 ROOT_DRAW_BUDGET_S = 40 * 60
 MIN_ROOT_DRAW_S = 120    # floor: never shoot a draw merely for being the last thing running
 ROOT_LOW_WATER = None    # replenish roots when frontier < this (set to B at runtime)
