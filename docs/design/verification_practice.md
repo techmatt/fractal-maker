@@ -80,6 +80,13 @@ last two are in `storage_classes.md`.
 - **Bracket a fix on both sides:** old behaviour was wrong AND new behaviour is right AND
   the fix does not over-correct. Never blind-rebaseline an oracle a policy change moved.
   `[code: auto_maxiter.md, the cap-change checklist item 2]`
+- **During a shakedown, ONE engine-spawning job at a time** (2026-08-03): all three
+  self-inflicted errors of that night's shakedown came from a second engine job running
+  concurrently — a seeder smoke beside `prospect_orchestrator`, whose sweep documents
+  itself safe only when no seeder is running. `[verdict: Matt's box]`
+- **Kill by PID, never by image name** (2026-08-03): an image-name `taskkill` killed a
+  concurrent orchestrator's engines, and a `kill -9` on the wrong half of the `.venv`
+  launcher/real-python pair left the run alive and voided the resume test.
 
 ## 4. A guard that goes red during ordinary workflow gets trained out
 
