@@ -340,3 +340,18 @@ def test_the_dedup_embeds_the_FRAME_THE_CROP_RENDERS():
            (rb["cx"], rb["cy"], str(float(rb["fw"]))), \
         "the embedded frame and the rendered frame diverged"
     assert led["outcome_cx"] == "0.25", "the reframed outcome_* viewport must NOT win"
+
+
+def test_the_ss_deviation_is_local_and_recorded_not_a_shared_constant_edit():
+    """This sitting renders at ss2 where the corpus renders at ss4. Two things must hold, and
+    the second is the one that matters later: the deviation is LOCAL (the shared
+    `build_minibrot_batch.CROP_SS` is untouched, so a batch that says nothing still gets the
+    corpus default), and it is RECORDED in the version-invariant render block, so a crop is
+    still a pure function of its own row rather than of what someone chose that day."""
+    sys.path.insert(0, str(ROOT / "tools" / "sourcing"))
+    import build_minibrot_batch as BMB
+    import build_q4_harvest_batches as bq
+    assert BMB.CROP_SS == 4 and bq.CROP_SS == 4, "the corpus default must not be edited"
+    assert sc.SITTING_CROP_SS != BMB.CROP_SS
+    import corpus_common as cc
+    assert "ss" in cc.RENDER_KEYS, "the deviation is only safe because ss is version-invariant"

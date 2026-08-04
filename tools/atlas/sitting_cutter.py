@@ -441,6 +441,19 @@ SITTING_BATCH = "2026-08-03_v2_sitting_v1"      # pinned to the registrations by
 GEN_VERSION = "v2_sitting_v1"
 PRESENTATION_SEED = 0x5177_0803
 
+# SUPERSAMPLE, AND THIS BATCH DEVIATES FROM THE CORPUS. Every other label-corpus batch renders
+# its crops at `build_minibrot_batch.CROP_SS` = 4; this sitting renders at 2, at Matt's call
+# (2026-08-03), to buy back roughly 4x the sample count on ~1000 rows x 2 crops. Consequences,
+# stated rather than left to be discovered:
+#   * `ss` is part of the VERSION-INVARIANT render block, so each crop stays self-describing
+#     and rebuildable from its own row — this is a recorded difference, never a silent one.
+#   * it is a real batch-level difference from the rest of the corpus. The classifier's deploy
+#     transform stretches 1280x720 -> 384x224 bicubic, which absorbs most of an ss4-vs-ss2
+#     antialiasing difference, but "most" is not "all" and no one has measured it here.
+# The shared constant is NOT edited: the deviation is local to this batch, so a later batch
+# that says nothing still gets the corpus default.
+SITTING_CROP_SS = 2
+
 # The v2 view screen's columns, as they ride onto a corpus row. Names are the label-seeded /
 # supply-crawl block's EXISTING provenance keys, deliberately unrenamed: a screened row here
 # and a screened row there are the same measurement on the same frame, so they pool
@@ -555,7 +568,9 @@ def stage_draw(args) -> int:
     full = []
     for r in sitting:
         r["_palette"] = names[BMB._stable_seed(r["image_id"]) % len(names)]
-        full.append(cc.make_row(r["image_id"], bq._render_block(r),
+        render = bq._render_block(r)
+        render["ss"] = SITTING_CROP_SS      # the recorded deviation; see SITTING_CROP_SS
+        full.append(cc.make_row(r["image_id"], render,
                                 _provenance(r, cc, SITTING_BATCH), cc.label_block()))
 
     readable = [r for r in full if is_bar_readable(r["provenance"])]
@@ -585,7 +600,12 @@ def stage_draw(args) -> int:
         registration=dict(assign_split=[split, biased, source],
                           registered_explicitly=(source != "unregistered"),
                           NOTE="registered in tools/v7/build_manifest BEFORE the cut"),
-        render_defaults=dict(width=bq.CROP_W, height=bq.CROP_H, ss=bq.CROP_SS,
+        render_defaults=dict(width=bq.CROP_W, height=bq.CROP_H, ss=SITTING_CROP_SS,
+                             ss_deviates_from_corpus_default=dict(
+                                 corpus_default=bq.CROP_SS, this_batch=SITTING_CROP_SS,
+                                 why="Matt's call 2026-08-03 — ~4x fewer samples over "
+                                     "~1000 rows x 2 crops; see sitting_cutter."
+                                     "SITTING_CROP_SS for what it costs"),
                              filter=bq.CROP_FILTER, interior_mode=bq.INTERIOR_MODE,
                              composition=bq.COMPOSITION,
                              palette_roster="data/palettes/score3_colormaps.json",
