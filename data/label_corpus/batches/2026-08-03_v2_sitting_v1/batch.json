@@ -1,0 +1,303 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-03_v2_sitting_v1",
+  "generator_version": "v2_sitting_v1",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 1366755331,
+  "vivid_companion": "blue_orange",
+  "served_manifest": null,
+  "served_via": "a PRESENTATION SHEET, not this directory: build_combined_label_sheet.py --spec v2_sitting. This batch holds the rows and the provenance; the sheet holds the blind order the labeler sees, and the export routes back here.",
+  "queued_for_labeling": false,
+  "purpose": "The harvest-v2 proving run's ONE labelling sitting. TRAIN-side and BIASED more than once: the cheap CORN ordinal decided which candidates earned a canonical confirmation, the rank is built from those scores, and part of the supply was itself selected on view_screen.composite_v3. No rate measured on this batch is a base rate.",
+  "counts": {
+    "total": 1000,
+    "by_partition": {
+      "julia:mandelbrot": 158,
+      "julia:multibrot3": 65,
+      "julia:multibrot4": 54,
+      "julia:multibrot5": 210,
+      "mandelbrot": 39,
+      "multibrot3": 110,
+      "multibrot4": 22,
+      "multibrot5": 136,
+      "phoenix": 206
+    },
+    "by_tier": {
+      "1": 819,
+      "2": 181
+    },
+    "bar_readable": 268
+  },
+  "registration": {
+    "assign_split": [
+      "train",
+      true,
+      "v2_sitting"
+    ],
+    "registered_explicitly": true,
+    "NOTE": "registered in tools/v7/build_manifest BEFORE the cut"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "ss_deviates_from_corpus_default": {
+      "corpus_default": 4,
+      "this_batch": 2,
+      "why": "Matt's call 2026-08-03 \u2014 ~4x fewer samples over ~1000 rows x 2 crops; see sitting_cutter.SITTING_CROP_SS for what it costs"
+    },
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "blue_orange",
+    "maxiter": "deep_center_finder._maxiter_for_fw(fw)"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sitting_cut": {
+    "run_dir": "data/discovery/harvest_v2_proving_20260803",
+    "max_rows": 1000,
+    "n_in": 3547,
+    "n_sitting": 1000,
+    "n_over_cap": 122,
+    "stages": [
+      {
+        "stage": "interior_gt30",
+        "removed": 5,
+        "unmeasured_kept": 0,
+        "rule_id": "interior_gt30_v1",
+        "threshold": 0.3,
+        "comparison": "strict >",
+        "disposition": "auto-labelled class 1, NEVER presented"
+      },
+      {
+        "stage": "machine_1_discard",
+        "removed": 15,
+        "no_canonical_verdict_kept": {
+          "julia:mandelbrot": 768,
+          "phoenix": 837,
+          "multibrot5": 112,
+          "julia:multibrot4": 168,
+          "julia:multibrot5": 1014,
+          "multibrot3": 110,
+          "julia:multibrot3": 284,
+          "multibrot4": 18
+        },
+        "table": {
+          "julia:mandelbrot": false,
+          "julia:multibrot3": false,
+          "julia:multibrot4": false,
+          "julia:multibrot5": false,
+          "mandelbrot": false,
+          "multibrot3": true,
+          "multibrot4": true,
+          "multibrot5": true,
+          "phoenix": true
+        },
+        "by_partition": {
+          "multibrot3": 9,
+          "phoenix": 1,
+          "multibrot5": 5
+        },
+        "disposition": "discarded from the SITTING; the discovery record keeps them"
+      },
+      {
+        "stage": "morph_dedup",
+        "removed": 2405,
+        "unembeddable_kept": 0,
+        "threshold": 0.974,
+        "budget_not_reached": 0,
+        "embedded": 3527,
+        "unembeddable_reasons": {},
+        "recipe": "library morph CLIP (640x360 ss2 -> robustz_tanh_k2_v1 -> vit_base_patch16_clip_224.openai)",
+        "looks_kept": 1122,
+        "disposition": "PRESENTATION only \u2014 the discovery record keeps every candidate"
+      }
+    ],
+    "cells": {
+      "('julia:mandelbrot', 1)": {
+        "taken": 136,
+        "available": 136,
+        "drained": true
+      },
+      "('julia:mandelbrot', 2)": {
+        "taken": 22,
+        "available": 22,
+        "drained": true
+      },
+      "('julia:multibrot3', 1)": {
+        "taken": 51,
+        "available": 51,
+        "drained": true
+      },
+      "('julia:multibrot3', 2)": {
+        "taken": 14,
+        "available": 14,
+        "drained": true
+      },
+      "('julia:multibrot4', 1)": {
+        "taken": 51,
+        "available": 51,
+        "drained": true
+      },
+      "('julia:multibrot4', 2)": {
+        "taken": 3,
+        "available": 3,
+        "drained": true
+      },
+      "('julia:multibrot5', 1)": {
+        "taken": 194,
+        "available": 249,
+        "drained": false
+      },
+      "('julia:multibrot5', 2)": {
+        "taken": 16,
+        "available": 16,
+        "drained": true
+      },
+      "('mandelbrot', 2)": {
+        "taken": 39,
+        "available": 39,
+        "drained": true
+      },
+      "('multibrot3', 1)": {
+        "taken": 85,
+        "available": 85,
+        "drained": true
+      },
+      "('multibrot3', 2)": {
+        "taken": 25,
+        "available": 25,
+        "drained": true
+      },
+      "('multibrot4', 1)": {
+        "taken": 16,
+        "available": 16,
+        "drained": true
+      },
+      "('multibrot4', 2)": {
+        "taken": 6,
+        "available": 6,
+        "drained": true
+      },
+      "('multibrot5', 1)": {
+        "taken": 92,
+        "available": 92,
+        "drained": true
+      },
+      "('multibrot5', 2)": {
+        "taken": 44,
+        "available": 44,
+        "drained": true
+      },
+      "('phoenix', 1)": {
+        "taken": 194,
+        "available": 261,
+        "drained": false
+      },
+      "('phoenix', 2)": {
+        "taken": 12,
+        "available": 12,
+        "drained": true
+      }
+    },
+    "balances": true,
+    "cut_wall_s": 6.1,
+    "morph_cache": {
+      "path": "C:\\Code\\fractal-maker-artifacts\\data\\morph_embed_cache\\morph_clip_v1.mec",
+      "created": false,
+      "records_at_open": 3576,
+      "records_now": 3576,
+      "hits": 3527,
+      "misses": 0,
+      "appends": 0,
+      "bytes_dropped": 0,
+      "truncated_at": null,
+      "size_bytes": 12230191
+    },
+    "auto_labeled_never_presented": [
+      {
+        "cx": 0.26405237622484395,
+        "cy": 1.0829147244275847,
+        "fw": 0.0006001566559483728,
+        "partition": "multibrot3",
+        "score": 1,
+        "labeler": "rule:interior_gt30_v1",
+        "rule_id": "interior_gt30_v1",
+        "measure": "int_frac",
+        "value": 0.30010609567901236,
+        "threshold": 0.3,
+        "comparison": "strict >"
+      },
+      {
+        "cx": -0.50390625,
+        "cy": -0.15234375000000003,
+        "fw": 1.460369141897869,
+        "partition": "julia:mandelbrot",
+        "score": 1,
+        "labeler": "rule:interior_gt30_v1",
+        "rule_id": "interior_gt30_v1",
+        "measure": "int_frac",
+        "value": 0.30029899691358025,
+        "threshold": 0.3,
+        "comparison": "strict >"
+      },
+      {
+        "cx": 0.49476588449290554,
+        "cy": 0.05502922586354684,
+        "fw": 0.00010956257475633877,
+        "partition": "multibrot3",
+        "score": 1,
+        "labeler": "rule:interior_gt30_v1",
+        "rule_id": "interior_gt30_v1",
+        "measure": "int_frac",
+        "value": 0.30040750385802467,
+        "threshold": 0.3,
+        "comparison": "strict >"
+      },
+      {
+        "cx": -0.47911974793308093,
+        "cy": 0.043698165888804576,
+        "fw": 0.060859606659699646,
+        "partition": "multibrot3",
+        "score": 1,
+        "labeler": "rule:interior_gt30_v1",
+        "rule_id": "interior_gt30_v1",
+        "measure": "int_frac",
+        "value": 0.3000096450617284,
+        "threshold": 0.3,
+        "comparison": "strict >"
+      },
+      {
+        "cx": 0.2776572655306687,
+        "cy": 0.9871270706317394,
+        "fw": 0.005505150614213978,
+        "partition": "multibrot3",
+        "score": 1,
+        "labeler": "rule:interior_gt30_v1",
+        "rule_id": "interior_gt30_v1",
+        "measure": "int_frac",
+        "value": 0.3003592785493827,
+        "threshold": 0.3,
+        "comparison": "strict >"
+      }
+    ]
+  },
+  "bar_readability": {
+    "n": 268,
+    "of": 1000,
+    "definition": "served rows carrying BOTH view_fit_v1.1 (provenance.fit_score / fit_model) and composite_v3 (provenance.composite) \u2014 the slice the pre-registered +0.1181 delta-AP margin reads on",
+    "by_partition": {
+      "multibrot5": 131,
+      "multibrot4": 16,
+      "multibrot3": 89,
+      "mandelbrot": 32
+    }
+  },
+  "calibration_aids": "NONE \u2014 no exemplars, no reference strip, no score shown"
+}

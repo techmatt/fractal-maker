@@ -148,7 +148,12 @@ V2_SITTING = SheetSpec(
              "rows live in the registered batch named in source_batches; the single export "
              "routes back through route.json (merge_scores.py --route)."),
     max_run_source=10_000,      # one source: every run is single-source by construction
-    max_run_family=6,
+    # One step above the MEASURED spread, same rule as q4's 4/5. The built sheet's longest
+    # same-family run is 1 — nine cells of comparable size interleave perfectly — and a
+    # 5-seed sweep over plausible re-mixes of this population gave 2. 3 leaves room for a
+    # reseed without going slack; a run of 4+ here would mean the mix collapsed onto one
+    # family, which is worth failing on.
+    max_run_family=3,
 )
 
 SPECS = {s.name: s for s in (Q4_COMBINED, V2_SITTING)}
