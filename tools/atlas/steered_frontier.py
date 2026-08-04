@@ -105,7 +105,7 @@ BIN = ps.prescreen.BIN
 # The julia:mandelbrot c-supply pool, and the floor it must clear.
 #
 # THE FLOOR WAS NEVER ENFORCED AT RUN TIME. `seed_julia_pool` deliberately bypasses the
-# hook-spacing gate (the pool is far denser than the 0.20 hook radius), and nothing replaced
+# hook-spacing gate (which was then 0.20, far coarser than the pool), and nothing replaced
 # it — so the c-spacing a run actually applied was whatever the passed FILE happened to
 # carry, invisibly. Measured on the three pools in the tree:
 #
@@ -122,14 +122,35 @@ BIN = ps.prescreen.BIN
 JULIA_SUPPLY_POOL = ROOT / "data" / "atlas" / "julia_supply_pool_v3.json"
 
 # --- steering knobs ---
-JULIA_HOOK_SPACING = 0.20   # item 3: hard 1-neighbour spacing (in the c/parameter plane) for the
-                            # julia hook — don't hook a parent whose seed c is within this radius of
-                            # an already-hooked parent THIS run. Replaces the old Q3_DENSITY_CAP
-                            # density gate on hooked_c. Radius from the audit's chain-neighbour
-                            # collision scale: genuine near-c dups sat <0.20, distinct-c over-kills
-                            # sat >=1.0, so 0.20 spaces out redundant near-c hooks while leaving
-                            # every genuinely distinct-c hook free to fire. Config knob
-                            # (--julia-hook-spacing). See docs/design/morphology_dedup.md §5.
+# THE HOOK SPACING IS THE POOL FLOOR. One c-spacing floor, one constant, referenced not
+# restated — and the reconciliation is a fix for a channel that was closed by construction.
+#
+# The two gates ask the identical question ("may this julia parameter be accepted, given the
+# ones already accepted?") over the identical set: `seed_julia_pool` registers every injected
+# pool c into `hooked_c`, which is exactly what `add_julia_root` measures a parent's c
+# against. So the pool and the hook were two floors on ONE population, and they disagreed by
+# 6.25x. With 209 pool c thinned at 3.2e-2 spanning the near-dM shell, a 0.20 hook radius
+# covers the shell outright: arm B of allocator_prereg_v1 hooked julia:mandelbrot 0 times in
+# 28 attempts, twin queues were empty in >80% of batches, and the twin demand silently folded
+# to the c-plane parent. `julia_supply_pool_v3.json` cannot serve a gate coarser than the
+# floor it was thinned at.
+#
+# Which constant moves is settled by which one was measured. 3.2e-2 is the adopted floor from
+# the fixed-viewport re-measurement (`supply_routing.CSPACING_BASIS`, 4,263 embeddings, Matt's
+# decision 2026-08-03) — 7.4% near-dup among the closest pairs it admits. 0.20 came off the
+# audit's chain-neighbour collision scale on a different population and has no near-dup rate
+# attached to it. Adopting the floor cannot reintroduce what the floor was chosen to prevent:
+# a hooked c now clears exactly the separation every pool c already clears.
+#
+# The INVARIANT, not the value, is what `test_supply_routing.py` pins: the hook spacing may
+# never EXCEED the pool floor, or the pool saturates the hook again the moment either moves.
+JULIA_HOOK_SPACING = srt.CSPACING_FLOOR
+                            # hard 1-neighbour spacing (in the c/parameter plane) for the julia
+                            # hook — don't hook a parent whose seed c is within this radius of
+                            # an already-hooked c THIS run (injected pool c included). Replaces
+                            # the old Q3_DENSITY_CAP density gate on hooked_c. Config knob
+                            # (--julia-hook-spacing). See docs/design/morphology_dedup.md §5
+                            # and julia_c_sourcing.md § the c-spacing floor.
 B_DEFAULT = 32            # nodes popped + expanded per batch
 T_GUMBEL = 0.08          # priority exploration temperature (Gumbel scale)
 M_CAP = 40               # hard cap on expansions per root_id
@@ -379,6 +400,25 @@ MIN_UNIT_TIMEOUT_S = 60  # floor for the budget-clamped per-unit backstop (unit_
 ROOT_DRAW_BUDGET_S = 40 * 60
 MIN_ROOT_DRAW_S = 120    # floor: never shoot a draw merely for being the last thing running
 ROOT_LOW_WATER = None    # replenish roots when frontier < this (set to B at runtime)
+
+# --- per-partition root low-water (the fix for a starved partition inside a healthy frontier).
+#
+# `ROOT_LOW_WATER` is GLOBAL, and a global low-water mark cannot see per-partition starvation:
+# arm B of allocator_prereg_v1 ran 427 batches with `draw_roots` firing exactly zero times
+# in-loop, because the frontier held 944 nodes against a low-water of 32 the whole time. Eight
+# of nine partition queues were empty at b381 and the survivor held 97% of the frontier
+# (julia:mandelbrot expansions beget julia:mandelbrot, so the collapse is self-locking); 46% of
+# post-fold pop intent pointed at a partition with an empty queue. The frontier was healthy and
+# the run was starving.
+#
+# So the check is per-partition, and it is the SAME lever — a family below its own floor is
+# drawn even when nothing global is low, and when everything is low every family is starved,
+# which is the old behaviour exactly. Two bounds keep a targeted refill from eating the run,
+# because it is not free: arm B's 4-family pre-loop draw cost 9.2 min against a ~0.34 min
+# batch, i.e. ~7 batches of mining per family drawn.
+PARTITION_LOW_WATER = None   # a partition below this many frontier nodes is STARVED (=B at runtime)
+ROOT_REFILL_COOLDOWN = 10    # batches a family must wait between targeted refills
+ROOT_REFILL_SHARE = 0.25     # in-loop root-draw seconds may not exceed this share of loop wall
 
 # Steered production walk config (mirror of production_seeder; keeps the gates identical).
 EXPAND_FLAGS = [
@@ -964,6 +1004,17 @@ class SteeredFrontier:
             if f not in C_PLANE:
                 raise SystemExit(f"--families must be c-plane ({C_PLANE}); got {f!r}")
         self.B = args.batch or B_DEFAULT
+        # Per-partition root low-water. Default is B — one batch's worth — because that is
+        # the quantity servability is denominated in: a partition that cannot fill a pop is a
+        # partition the allocator's intent for it cannot be spent on.
+        plw = getattr(args, "partition_low_water", None)
+        self.partition_low_water = int(plw) if plw is not None else int(self.B)
+        self.root_refill_cooldown = int(getattr(args, "root_refill_cooldown",
+                                                ROOT_REFILL_COOLDOWN))
+        self.root_refill_share = float(getattr(args, "root_refill_share",
+                                               ROOT_REFILL_SHARE))
+        self.root_draw_s = 0.0        # cumulative IN-LOOP root-draw wall (excl. the pre-loop draw)
+        self.last_refill_batch: dict = {}
         self.budget_s = args.budget * 60.0
         self.seed = args.seed
         # --- dive mode (single-track descent off a completed run's admissions) ---
@@ -1171,6 +1222,11 @@ class SteeredFrontier:
                            # reconcile terms (RECONCILE_KEYS is an explicit list): a skipped
                            # family draws no candidates, so no identity has a hole in it.
                            root_draw_truncated=0, root_draw_timeouts=0,
+                           # Per-partition refill, same rule: zero is a statement. A run that
+                           # reports root_refills=0 with queues at zero is a run whose fix did
+                           # not fire, and that has to be visible in the summary rather than
+                           # inferred from a missing key.
+                           root_refills=0, root_refill_families=0, root_refill_deferred=0,
                            # TRIGGERED yield, disjoint from every fresh counter by
                            # construction. Never summed with the `man_*` block: the
                            # operators feed themselves, so a pooled rate measures the loop.
@@ -1412,10 +1468,16 @@ class SteeredFrontier:
         remaining = max(0.0, self.wall_budget_s - self.wall_elapsed_s())
         return float(min(ROOT_DRAW_BUDGET_S, max(MIN_ROOT_DRAW_S, remaining)))
 
-    def draw_roots(self):
+    def draw_roots(self, only=None):
         """Draw a batch of native depth-1 seeds per family (q3-density rejection +
         depth-2 descendability probe) and enter the survivors as depth-1 frontier nodes
         with a neutral prior priority — exactly the current path's root pipeline.
+
+        `only` restricts the draw to a subset of families (the per-partition refill); None
+        draws every family, which is the unchanged global path. The scheduler's root
+        allocation is recomputed OVER THE SUBSET rather than sliced out of the full one — a
+        targeted refill that handed a starved family its proportional share of B would draw
+        the starved family a rounding error, which is the failure it exists to fix.
 
         BOUNDED, at two granularities, because one alone does not cover the failure. The
         per-probe `timeout` bounds a HUNG engine subprocess (that call had no backstop at
@@ -1423,15 +1485,19 @@ class SteeredFrontier:
         catches — nine families each finishing just inside their own timeout is still hours.
         A truncated draw is REPORTED and counted, never silent: a short draw and a fast draw
         produce the same frontier length, and only one of them is a problem."""
+        fams = list(self.families) if only is None else \
+            [f for f in self.families if f in set(only)]
+        if not fams:
+            return 0
         added = 0
         t0 = time.time()
         budget = self.root_draw_budget_s()
         skipped = []
         # item 7: deficit-aware root mix. Scheduler ON => split the B draws across families by
         # their price-weighted, julia-twin-inclusive deficit; OFF => B per family (unchanged).
-        alloc = (self.scheduler.root_allocation(self.families, self.B, self.rng)
+        alloc = (self.scheduler.root_allocation(fams, self.B, self.rng)
                  if self.scheduler is not None else None)
-        for fam in self.families:
+        for fam in fams:
             nb = alloc[fam] if alloc is not None else self.B
             if alloc is None and self.family_weights:
                 # v1.6 DEFICIT-BY-q4-GAP allocation. Total draws are preserved (B per family
@@ -1488,6 +1554,74 @@ class SteeredFrontier:
                   f"budget — {added} roots added, families not drawn: {skipped}. "
                   f"(wall {self.wall_elapsed_s()/3600:.2f}h of "
                   f"{self.wall_budget_s/3600:.2f}h)", flush=True)
+        return added
+
+    # ------------------------------------------------- per-partition refill
+    def queue_lens(self) -> dict:
+        """Frontier node count per partition — the servability the pop reads, and the
+        quantity a low-water mark has to be measured in."""
+        q: dict = {}
+        for n in self.frontier:
+            q[n["partition"]] = q.get(n["partition"], 0) + 1
+        return q
+
+    def starved_families(self, queue_lens: dict | None = None) -> list[str]:
+        """c-plane families below the per-partition low-water and off cooldown.
+
+        c-plane ONLY, and that is a scope statement rather than an omission: `draw_roots` is
+        the native seeder, and a julia twin or phoenix CANNOT be drawn into existence — those
+        partitions are fed by the metered pools (`seed_julia_pool` / `seed_phoenix_pool`, per
+        batch) and by the hook. A julia queue at zero is a hook/pool problem, and listing it
+        here would produce a refill request no draw can serve."""
+        q = self.queue_lens() if queue_lens is None else queue_lens
+        out = []
+        for fam in self.families:
+            if q.get(fam, 0) >= self.partition_low_water:
+                continue
+            last = self.last_refill_batch.get(fam)
+            if last is not None and (self.batch_i - last) < self.root_refill_cooldown:
+                continue
+            out.append(fam)
+        return out
+
+    def refill_affordable(self) -> bool:
+        """Have in-loop root draws stayed inside their share of the loop's wall clock?
+
+        Expressed against total loop wall (`active + root-draw`) rather than against
+        `active_s` alone so it is well-defined at zero: the first refill of a run always
+        clears it, and a run that has spent nothing but drawing roots always fails it. This
+        is the bound that keeps a family whose depth-2 probe rejects everything from being
+        re-drawn forever at ~2 min a time — the cooldown spaces the retries, this caps their
+        total. Root-draw seconds sit OUTSIDE `active_s` by construction (the active timer
+        wraps the batch block only), so the two do not double-count."""
+        total = self.active_s + self.root_draw_s
+        return self.root_draw_s <= self.root_refill_share * total
+
+    def refill_starved(self) -> int:
+        """Draw fresh roots for the starved c-plane families only. Returns roots added.
+
+        Cost is charged to `root_draw_s` whether or not the draw produced anything: a draw
+        that survives nothing still spent the wall clock, and an affordability bound fed only
+        by successful draws is a bound that loosens exactly when the draws stop working."""
+        starved = self.starved_families()
+        if not starved:
+            return 0
+        if not self.refill_affordable():
+            self.totals["root_refill_deferred"] = \
+                self.totals.get("root_refill_deferred", 0) + 1
+            return 0
+        t0 = time.time()
+        added = self.draw_roots(only=starved)
+        self.root_draw_s += time.time() - t0
+        for fam in starved:
+            self.last_refill_batch[fam] = self.batch_i
+        self.totals["root_refills"] = self.totals.get("root_refills", 0) + 1
+        self.totals["root_refill_families"] = \
+            self.totals.get("root_refill_families", 0) + len(starved)
+        print(f"[root-refill] b{self.batch_i}: {starved} below the per-partition low-water "
+              f"({self.partition_low_water}) — drew {added} roots in "
+              f"{time.time()-t0:.0f}s (root-draw {self.root_draw_s/60:.1f}m of "
+              f"{(self.active_s + self.root_draw_s)/60:.1f}m loop wall)", flush=True)
         return added
 
     def add_julia_root(self, partition: str, c, parent_oid: str):
@@ -1613,11 +1747,15 @@ class SteeredFrontier:
         """PRIMARY julia supply under test (julia_parent_sourcing_probe). Inject the c-diverse
         near-∂M sampler pool as julia:mandelbrot base-scale z-plane roots at fresh start.
 
-        Deliberately BYPASSES add_julia_root's hook-spacing gate: the pool is thinned far
-        below the 0.2 hook spacing, so routing it through the gate would collapse it to a
-        handful. That bypass is why `load_julia_supply_pool` verifies the file against
-        `CSPACING_FLOOR` — with the gate skipped, the file IS the only floor in the live
-        path. Each injected c is registered in `hooked_c` so a later
+        Deliberately BYPASSES add_julia_root's hook-spacing gate. That predates the spacing
+        reconciliation (the gate was 6.25x coarser than the pool and would have collapsed it
+        to a handful) and it stays for a second reason the reconciliation does not touch:
+        `pool_cursor` is persisted and indexes into this list, so a gate that dropped entries
+        would make the cursor mean something different on resume. It is now a no-op in
+        substance — the pool is thinned AT `CSPACING_FLOOR` and the gate is `CSPACING_FLOOR`,
+        so every entry clears it up to float equality. `load_julia_supply_pool` verifies the
+        file against the floor regardless: with the gate skipped, the file IS the floor in the
+        live path. Each injected c is registered in `hooked_c` so a later
         parent-fired hook whose seed c lands within spacing of a sampler c is suppressed — the
         hook stays available (§1 secondary path) but does not re-cover the sampler's ground.
         The pool is degree-2 near-∂M (z²+c), so every root is the julia:mandelbrot twin."""
@@ -3094,6 +3232,17 @@ class SteeredFrontier:
                 record_canon_dups=self.record_canon_dups,
                 store="q4_candidates.jsonl", fates=list(self.Q4_FATES),
                 rank_tiers="2 = has a canonical decode; 1 = cheap score only; never pooled"),
+            # SUPPLY LOOP: the two low-water marks and the julia c-spacing, stamped together
+            # because the three of them are what decides whether the allocator's intent is
+            # servable at all. Arm B of allocator_prereg_v1 was supply-bound on all three.
+            root_supply=dict(
+                global_low_water=self.B, partition_low_water=self.partition_low_water,
+                refill_cooldown_batches=self.root_refill_cooldown,
+                refill_share_cap=self.root_refill_share,
+                scope="c-plane families only; julia twins and phoenix are pool/hook-fed",
+                julia_hook_spacing=self.julia_hook_spacing,
+                cspacing_floor=srt.CSPACING_FLOOR,
+                spacing_reconciled=(self.julia_hook_spacing <= srt.CSPACING_FLOOR)),
             interior_gate=dict(on=self.interior_gate_on, threshold=self.interior_discard,
                                comparison="strict >",
                                measure="expand sidecar int_frac (= render::black_fraction)"),
@@ -3174,6 +3323,11 @@ class SteeredFrontier:
             frontier=self.frontier, rng=self.rng.bit_generator.state,
         )
         state["pool_cursor"] = self.pool_cursor
+        # Refill accounting is CHECKPOINTED for the same reason `wall_s` is: a kill/resume
+        # loop that reset the root-draw spend would reset the bound that caps it, and a
+        # resumed run could then spend its whole share again every session.
+        state["root_draw_s"] = self.root_draw_s
+        state["last_refill_batch"] = self.last_refill_batch
         state["tau_rec"] = self.tau_rec
         state["tau_h_uncalibrated"] = self.tau_h_uncalibrated
         state["family_weights"] = self.family_weights
@@ -3244,6 +3398,9 @@ class SteeredFrontier:
         # much of each pool this run has already consumed, and a resume that reset it would
         # re-inject roots the ledger already carries.
         self.pool_cursor = dict(st.get("pool_cursor") or {})
+        self.root_draw_s = float(st.get("root_draw_s") or 0.0)
+        self.last_refill_batch = {k: int(v)
+                                  for k, v in (st.get("last_refill_batch") or {}).items()}
         # v1.6 keys, absent on any earlier checkpoint. `tau_rec` is RE-DERIVED from the
         # restored `tau_h` rather than restored, so the two can never come back out of step;
         # the counters default to 0 because they did not exist, which is a default for a
@@ -3253,7 +3410,8 @@ class SteeredFrontier:
                   "q4_recorded_below_tau_h", "trig_fired", "trig_atoms",
                   "trig_nodes_pushed", "trig_admitted", "trig_unavailable",
                   "trig_budget_skip", "trig_expanded", "trig_candidates",
-                  "root_draw_truncated", "root_draw_timeouts"):
+                  "root_draw_truncated", "root_draw_timeouts",
+                  "root_refills", "root_refill_families", "root_refill_deferred"):
             self.totals.setdefault(k, 0)
         if self.trig_on and not self.maneuvers:
             self.man_visited = set(st.get("man_visited") or [])
@@ -3498,15 +3656,20 @@ class SteeredFrontier:
     def run(self):
         if self.dive:
             return self.run_dive()
-        global ROOT_LOW_WATER
+        global ROOT_LOW_WATER, PARTITION_LOW_WATER
         ROOT_LOW_WATER = self.B
+        PARTITION_LOW_WATER = self.partition_low_water
         if self.args.resume and self.state_path.exists():
             self.load_state()
         else:
             print(f"[fresh] run {self.run_dir.name}: families={self.families} "
                   f"julia_hook={self.julia_hook} budget={self.budget_s/60:.0f}m B={self.B} "
                   f"lambda_m={self.lambda_m} beta={self.beta} recency_k={self.recency_k}", flush=True)
+            print(f"[root-refill] per-partition low-water={self.partition_low_water} "
+                  f"(global={ROOT_LOW_WATER}), cooldown={self.root_refill_cooldown} batches, "
+                  f"share cap={self.root_refill_share:.0%} of loop wall", flush=True)
             print(f"[dup-fix] julia_hook_spacing={self.julia_hook_spacing} "
+                  f"(== supply_routing.CSPACING_FLOOR={srt.CSPACING_FLOOR}) "
                   f"freshness_prior={self.freshness_prior} "
                   f"(prior_rows={len(self.prior_rows)}) "
                   f"seeded_cloud_sizes={ {p: len(v) for p, v in self.clouds.items()} }", flush=True)
@@ -3607,8 +3770,17 @@ class SteeredFrontier:
                       f"{self.wall_budget_s/3600:.2f}h wall cap — stopping "
                       f"(active {self.active_s/60:.1f}m).", flush=True)
                 break
+            # ROOT REPLENISHMENT, at two granularities. The global mark is the emergency one
+            # and is unchanged (unbounded by cooldown or share — a frontier under B is a run
+            # about to stop). The per-partition mark is the fix: it fires on a starved family
+            # inside a frontier the global mark calls healthy, which is the state arm B spent
+            # all 427 of its batches in.
             if len(self.frontier) < ROOT_LOW_WATER:
+                _rt0 = time.time()
                 self.draw_roots()
+                self.root_draw_s += time.time() - _rt0
+            else:
+                self.refill_starved()
             # The metered z-plane pools top up PER BATCH, not per replenishment, and the
             # difference is the whole fix. `ROOT_LOW_WATER` is B (32) while the frontier runs
             # in the thousands, so replenishment almost never fires — hanging the meter on it
@@ -3641,8 +3813,13 @@ class SteeredFrontier:
                     self.scheduler.prices.reopen_caps()
                     self.batch_i -= 1
                     continue
-                # everything capped; try fresh roots, else stop.
-                if self.draw_roots() == 0:
+                # everything capped; try fresh roots, else stop. Timed like every other draw
+                # — an emergency draw is still wall clock the refill share has to see, or the
+                # share reports less root-drawing than the run did.
+                _ct0 = time.time()
+                _cadd = self.draw_roots()
+                self.root_draw_s += time.time() - _ct0
+                if _cadd == 0:
                     print("[frontier] all roots capped (M) and no fresh seeds — stopping.", flush=True)
                     break
                 self.batch_i -= 1
@@ -3727,6 +3904,17 @@ class SteeredFrontier:
                                if getattr(self, "pre_loop_draw_s", None) is not None
                                else None),
             root_draw_budget_min=round(ROOT_DRAW_BUDGET_S / 60.0, 2),
+            # IN-LOOP root draws (global replenishment + per-partition refill), and the share
+            # of loop wall they took. The share is the affordability bound's own utilisation:
+            # a run that reports it pinned at the cap spent its whole allowance on refills and
+            # the next run's low-water/cooldown should be sized from that number.
+            root_draw_min=round(self.root_draw_s / 60.0, 2),
+            root_draw_share=(round(self.root_draw_s / (self.active_s + self.root_draw_s), 4)
+                             if (self.active_s + self.root_draw_s) > 0 else None),
+            partition_low_water=self.partition_low_water,
+            root_refill_cooldown=self.root_refill_cooldown,
+            root_refill_share_cap=self.root_refill_share,
+            final_queue_lens=self.queue_lens(),
             lambda_m=self.lambda_m, beta=self.beta, recency_k=self.recency_k,
             morph_mem=len(self.morph), morph_perm=self.morph.n_perm,
             morph_recency=self.morph.n_recency,
@@ -3992,6 +4180,21 @@ def main():
     ap.add_argument("--julia-hook-spacing", type=float, default=JULIA_HOOK_SPACING,
                     help="c-plane spacing radius for the julia hook: skip a parent whose seed c is "
                          f"within this of an already-hooked one (default {JULIA_HOOK_SPACING})")
+    ap.add_argument("--partition-low-water", type=int, default=None,
+                    help="a c-plane family with fewer than N frontier nodes is STARVED and "
+                         "gets a targeted root draw, even when the global frontier is healthy "
+                         "(default: B, one batch's worth). The global --batch low-water is "
+                         "blind to this and arm B of allocator_prereg_v1 ran 427 batches with "
+                         "8 of 9 queues empty and zero in-loop draws because of it.")
+    ap.add_argument("--root-refill-cooldown", type=int, default=ROOT_REFILL_COOLDOWN,
+                    help=f"batches a family waits between targeted refills (default "
+                         f"{ROOT_REFILL_COOLDOWN}); stops a family whose depth-2 probe "
+                         f"rejects everything from being re-drawn every batch.")
+    ap.add_argument("--root-refill-share", type=float, default=ROOT_REFILL_SHARE,
+                    help=f"cap on in-loop root-draw seconds as a share of loop wall "
+                         f"(default {ROOT_REFILL_SHARE}); refills above it are deferred and "
+                         f"counted (totals.root_refill_deferred). The global low-water "
+                         f"emergency draw is NOT subject to it.")
     ap.add_argument("--phoenix-seed-pool", type=str, default=None,
                     help="the PHOENIX channel: a JSON list of {c_re,c_im,p_re,p_im,"
                          "zm1_re,zm1_im} parameter points from tools/phoenix/"

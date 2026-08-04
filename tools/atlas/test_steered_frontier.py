@@ -269,6 +269,144 @@ def test_expand_group_reads_the_stamps_back_off_the_node():
 
 
 # =========================================================================== #
+# per-partition root low-water — the supply half of the allocator.
+#
+# The scenario every test here reproduces is arm B of `allocator_prereg_v1`: a 944-node
+# frontier that is 97% one partition, with the other eight queues empty and `draw_roots`
+# firing zero times in-loop because the GLOBAL low-water (B = 32) never saw a frontier under
+# 32. The allocator's intent was correct and unservable.
+# =========================================================================== #
+def _refill_obj(frontier, families, *, drawn=None, low_water=32, cooldown=10,
+                share=0.25, batch_i=100, active_s=600.0, root_draw_s=0.0):
+    """The minimum object the refill path touches. `draw_roots` is REPLACED by a recorder —
+    the native seeder spawns the engine, and what is under test is which families get asked
+    and whether they get asked at all."""
+    import types
+    obj = types.SimpleNamespace(
+        frontier=list(frontier), families=list(families), batch_i=batch_i,
+        partition_low_water=low_water, root_refill_cooldown=cooldown,
+        root_refill_share=share, root_draw_s=root_draw_s, active_s=active_s,
+        last_refill_batch={}, totals={})
+    calls = [] if drawn is None else drawn
+    obj.draw_roots = lambda only=None: (calls.append(list(only) if only else None), 7)[1]
+    obj._draw_calls = calls
+    for m in ("queue_lens", "starved_families", "refill_affordable", "refill_starved"):
+        setattr(obj, m, types.MethodType(getattr(sf.SteeredFrontier, m), obj))
+    return obj
+
+
+def _armb_frontier():
+    """944 nodes, 862 of them one partition — arm B at b381, to the node."""
+    f = [{"node_id": i, "partition": "julia:mandelbrot"} for i in range(862)]
+    f += [{"node_id": 900 + i, "partition": "mandelbrot"} for i in range(82)]
+    return f
+
+
+def test_the_global_low_water_is_blind_to_the_collapse_the_fix_is_for():
+    """OLD BEHAVIOUR WAS WRONG — asserted against the real numbers rather than described.
+    A 944-node frontier is nowhere near a 32-node global mark, so the v1 condition is False
+    while three of four families hold zero nodes."""
+    frontier = _armb_frontier()
+    assert len(frontier) == 944
+    assert not (len(frontier) < 32), "the global low-water cannot fire on this frontier"
+    obj = _refill_obj(frontier, ["mandelbrot", "multibrot3", "multibrot4", "multibrot5"])
+    q = obj.queue_lens()
+    assert q.get("multibrot3", 0) == 0 and q.get("multibrot4", 0) == 0
+    assert q["julia:mandelbrot"] / len(frontier) > 0.9
+
+
+def test_the_per_partition_mark_fires_on_exactly_the_starved_families():
+    """NEW BEHAVIOUR IS RIGHT, and does not over-correct: `mandelbrot` holds 82 nodes and is
+    NOT redrawn, so the refill is targeted rather than a full draw wearing a new name."""
+    obj = _refill_obj(_armb_frontier(),
+                      ["mandelbrot", "multibrot3", "multibrot4", "multibrot5"])
+    assert obj.refill_starved() == 7
+    assert obj._draw_calls == [["multibrot3", "multibrot4", "multibrot5"]]
+    assert obj.totals["root_refills"] == 1 and obj.totals["root_refill_families"] == 3
+
+
+def test_a_healthy_frontier_draws_nothing():
+    """Non-vacuity from the other end: the fixture can fail. Every family above the mark ->
+    no draw at all, so a refill that fired unconditionally would not pass."""
+    frontier = [{"node_id": i, "partition": p}
+                for p in ("mandelbrot", "multibrot3") for i in range(40)]
+    obj = _refill_obj(frontier, ["mandelbrot", "multibrot3"])
+    assert obj.refill_starved() == 0 and obj._draw_calls == []
+    assert obj.totals.get("root_refills", 0) == 0
+
+
+def test_julia_twins_and_phoenix_are_never_asked_for_a_root_draw():
+    """SCOPE, and it is a correctness property: `draw_roots` is the c-plane native seeder, so
+    a starved julia twin routed to it would produce a refill request no draw can serve — a
+    silent no-op consuming the cooldown and the share budget every time it fired."""
+    frontier = [{"node_id": i, "partition": "mandelbrot"} for i in range(100)]
+    obj = _refill_obj(frontier, ["mandelbrot"])
+    obj.frontier += [{"node_id": 500, "partition": "julia:mandelbrot"}]
+    assert obj.starved_families() == []          # julia:mandelbrot at 1 node is NOT requested
+    assert obj.refill_starved() == 0
+
+
+def test_the_cooldown_stops_a_barren_family_being_redrawn_every_batch():
+    """A family whose depth-2 probe survives nothing stays starved, so without a cooldown it
+    is redrawn every batch at ~2 min a draw against a ~0.34 min batch — the run becomes a
+    root-draw loop. Second batch: refused. After the cooldown: allowed again."""
+    frontier = [{"node_id": i, "partition": "mandelbrot"} for i in range(100)]
+    obj = _refill_obj(frontier, ["mandelbrot", "multibrot3"], cooldown=10, batch_i=100)
+    assert obj.refill_starved() == 7 and obj._draw_calls == [["multibrot3"]]
+    for b in range(101, 110):
+        obj.batch_i = b
+        assert obj.refill_starved() == 0, f"b{b} is inside the cooldown"
+    assert len(obj._draw_calls) == 1
+    obj.batch_i = 110
+    assert obj.refill_starved() == 7
+    assert obj._draw_calls == [["multibrot3"], ["multibrot3"]]
+
+
+def test_the_share_cap_defers_a_refill_and_counts_it():
+    """A cooldown spaces retries; it does not bound their total. The share cap does, and a
+    deferral is COUNTED — a refill that silently did not happen reads exactly like a frontier
+    that was never starved."""
+    frontier = [{"node_id": i, "partition": "mandelbrot"} for i in range(100)]
+    # 400 s of root draws against 600 s of active work = 40% of loop wall, over a 25% cap.
+    obj = _refill_obj(frontier, ["mandelbrot", "multibrot3"],
+                      active_s=600.0, root_draw_s=400.0, share=0.25)
+    assert obj.refill_affordable() is False
+    assert obj.refill_starved() == 0 and obj._draw_calls == []
+    assert obj.totals["root_refill_deferred"] == 1
+    # ...and it re-opens once the run has mined enough to afford it again.
+    obj.active_s = 3000.0
+    assert obj.refill_affordable() is True
+    assert obj.refill_starved() == 7
+
+
+def test_the_first_refill_of_a_run_is_always_affordable():
+    """The share is defined against total loop wall, not against `active_s`, so it is
+    well-defined at zero. A cap that blocked the first refill would make the fix unreachable
+    on exactly the run that starts starved."""
+    obj = _refill_obj([], ["mandelbrot"], active_s=0.0, root_draw_s=0.0)
+    assert obj.refill_affordable() is True
+
+
+def test_the_loop_calls_the_per_partition_refill_at_the_replenishment_seam():
+    """The tests above drive the mechanism; this one asserts the LOOP reaches it, so they
+    cannot all pass against a run() that still only checks the global mark."""
+    import inspect
+    src = inspect.getsource(sf.SteeredFrontier.run)
+    assert "self.refill_starved()" in src
+    assert "len(self.frontier) < ROOT_LOW_WATER" in src, "the global emergency draw stays"
+
+
+def test_draw_roots_restricted_to_a_subset_reallocates_over_that_subset():
+    """A scheduler-driven refill must recompute `root_allocation` over the STARVED families.
+    Slicing the full allocation would hand a starved family its proportional share of B — a
+    rounding error — which is the starvation the refill exists to end."""
+    import inspect
+    src = inspect.getsource(sf.SteeredFrontier.draw_roots)
+    assert "root_allocation(fams" in src
+    assert "for fam in fams:" in src
+
+
+# =========================================================================== #
 # pop quota — the driver seam (the allocator's own arithmetic is in test_pop_quota.py)
 # =========================================================================== #
 def _quota_obj(tmp_path, frontier, currency):

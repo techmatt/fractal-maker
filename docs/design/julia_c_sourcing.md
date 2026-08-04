@@ -119,8 +119,39 @@ distance framing is what survives: **"one `c` per atom" is not sufficient**, bec
 roster's own atoms sit a median 9.1e-4 apart — two decades inside the floor — and different
 atoms that close are near-duplicates of each other whatever their provenance says.
 
-Distinct from the julia **hook** spacing (0.20, or 0.10 after the campaign-2 resume), which is
-3–6× coarser and was set on a different population. The two are not interchangeable.
+### The julia hook spacing is this floor — reconciled 2026-08-04
+
+The hook's own spacing was **0.20** (0.10 after the campaign-2 resume), read as an independent
+constant set on a different population. It is not independent: `seed_julia_pool` registers
+every injected pool `c` into `hooked_c`, and `hooked_c` is exactly the set `add_julia_root`
+measures a candidate parent's `c` against. One population, two floors, 6.25× apart — and the
+coarser one wins, so the pool saturated the gate that reads it.
+
+Measured on the shipped pool: **182 of 209 `c` in `julia_supply_pool_v3.json` are rejected by
+a 0.20 gate** once their predecessors are hooked. Live consequence in arm B of
+`allocator_prereg_v1` (2026-08-04): the hook fired 46 times, `julia:mandelbrot` was refused
+**28 of 28**, twin queues were empty in >80% of batches, and twin demand silently folded into
+the c-plane parent — a channel closed by construction, not by policy.
+
+`steered_frontier.JULIA_HOOK_SPACING` is now `supply_routing.CSPACING_FLOOR` by reference.
+0.20 came off the audit's chain-neighbour collision scale and carries no near-dup rate; 3.2e-2
+is the adopted floor from the fixed-viewport re-measurement above. A hooked `c` now clears
+exactly the separation every pool `c` already clears, so the reconciliation cannot reintroduce
+what the floor was chosen to prevent. `tools/atlas/test_supply_routing.py` pins the
+**invariant** — hook spacing ≤ pool floor, plus the shipped pool actually clearing the gate —
+rather than either value.
+
+**What the reconciliation buys is smaller than "closed → open", and the number matters for
+sizing the twin channel.** Replaying arm B's 46 logged hook decisions at 3.2e-2 admits **4 of
+its 38 rejections**, all `julia:mandelbrot` (0/28 → 4/28); the `julia:multibrot3/5` rejections
+(8 and 2) stay refused. The median `nearest_c_dist` among rejected parents is **1.02e-2** —
+two-thirds of them genuinely sit inside the adopted floor, so the binding constraint is no
+longer the gate but the fact that admitted c-plane parents land on ground the 209-`c` pool
+already covers. The channel is no longer closed *by construction*; it is now floor-limited
+like every other. `[measured 2026-08-04 over
+data/discovery/popquota_v2_20260804/julia_hooks.jsonl, 46 decisions, arm B's parent stream
+only — the distances were recorded against the hooked set as it then stood, so this is a lower
+bound on a re-run where the 4 admissions would themselves become neighbours]`
 
 ### Raising the floor does not mean re-thinning the old pool
 

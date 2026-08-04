@@ -126,12 +126,58 @@ def test_thinning_returns_what_it_dropped_rather_than_only_what_it_kept():
     assert len(kept) + len(dropped) == len(rows)
 
 
-def test_the_floor_is_not_the_julia_hook_spacing():
-    """They are two different spacings measured on two different populations, and reusing
-    one for the other is the mistake this assertion exists to make visible."""
+def test_the_hook_spacing_cannot_saturate_the_pool_that_feeds_it():
+    """The two spacings gate ONE population, and the coarser one wins by construction.
+
+    `seed_julia_pool` registers every injected pool `c` into `hooked_c`, which is exactly the
+    set `add_julia_root` measures a parent's `c` against. So a hook radius wider than the
+    pool's own spacing covers the pool's whole span and the hook channel closes: arm B of
+    `allocator_prereg_v1` rejected julia:mandelbrot 28 of 28 times with a 209-`c` pool at
+    3.2e-2 against a 0.20 hook.
+
+    This replaces `test_the_floor_is_not_the_julia_hook_spacing`, which asserted the opposite
+    (`FLOOR < HOOK`) as a they-are-different-populations guard. It was true, it was green
+    through arm B, and it pinned the defect: the populations are the same and the ordering it
+    required is the one that closes the channel. The invariant is pinned, not the value —
+    either constant may move as long as the pool stays servable."""
     import steered_frontier as sf
-    assert sr.CSPACING_FLOOR != sf.JULIA_HOOK_SPACING
-    assert sr.CSPACING_FLOOR < sf.JULIA_HOOK_SPACING
+    assert sf.JULIA_HOOK_SPACING <= sr.CSPACING_FLOOR, (
+        f"hook {sf.JULIA_HOOK_SPACING} > pool floor {sr.CSPACING_FLOOR}: the injected pool "
+        f"saturates the hook and the julia-twin channel is closed by construction")
+
+
+def test_the_v3_pool_is_actually_servable_through_the_hook_gate():
+    """The invariant above, executed against the real pool file rather than its floor.
+
+    Every `c` in the shipped pool is fed through `add_julia_root`'s own spacing predicate
+    against the pool accumulated so far; all of them must clear it. Not a restatement of the
+    floor check in `load_julia_supply_pool` — that one asks whether the FILE clears the floor,
+    this one asks whether the GATE admits the file, and arm B is the run where those two
+    answers differed."""
+    import steered_frontier as sf
+    pool = json.loads(sf.JULIA_SUPPLY_POOL.read_text(encoding="utf-8"))
+    assert len(pool) > 100, f"{sf.JULIA_SUPPLY_POOL} has {len(pool)} c — not the v3 pool"
+    accepted, rejected = [], 0
+    for e in pool:
+        cr, ci = float(e["c_re"]), float(e["c_im"])
+        nearest = min((math.hypot(hr - cr, hi - ci) for hr, hi in accepted),
+                      default=float("inf"))
+        if nearest < sf.JULIA_HOOK_SPACING:
+            rejected += 1
+        else:
+            accepted.append((cr, ci))
+    assert rejected == 0, (
+        f"{rejected} of {len(pool)} pool c would be rejected by the hook gate at spacing "
+        f"{sf.JULIA_HOOK_SPACING}")
+
+
+def test_the_hook_gate_still_rejects_a_sub_floor_c():
+    """Non-vacuity for the two above: the gate is a gate, not a pass-through. A `c` one
+    decade inside the floor is still refused, so the reconciliation did not buy servability
+    by disabling the near-dup protection the floor exists for."""
+    import steered_frontier as sf
+    assert not sr.cspacing_ok((0.3, -0.1), [(0.3 + sr.CSPACING_FLOOR / 10, -0.1)])
+    assert sr.CSPACING_FLOOR / 10 < sf.JULIA_HOOK_SPACING
 
 
 # =========================================================================== #

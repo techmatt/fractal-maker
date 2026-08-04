@@ -83,9 +83,12 @@ absolute distance rather than a per-atom cap: the roster's atoms sit a median 9.
 and different atoms that close are near-duplicates of each other whatever their provenance
 says. "One c per atom" was never enough.
 
-Compare the julia HOOK's spacing (0.20, or 0.10 after the campaign-2 resume): that is 3-6x
-coarser and was set on a different population, so the two are not interchangeable and this
-one is not derived from it.
+The julia HOOK's spacing IS this floor, by reference (`steered_frontier.JULIA_HOOK_SPACING`),
+reconciled 2026-08-04. It was 0.20 — set on a different population, with no near-dup rate
+attached — and the two are not independent: the injected pool's c are registered into the very
+set the hook gate measures against, so 182 of the v3 pool's 209 c were rejected by their own
+predecessors and the julia-twin channel was closed by construction. See
+`julia_c_sourcing.md` § "The julia hook spacing is this floor".
 
 THE SINGLE RUNG
 ---------------
