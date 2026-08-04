@@ -836,7 +836,8 @@ class NativeSeeder:
 # Depth-2 descendability probe (reuse prescreen.prescreen VERBATIM; read the walks it
 # writes for per-seed reached + cause). reached>=2 -> survivor; else probe-reject.
 # =========================================================================== #
-def depth2_probe(props: list[dict], workdir: Path, seed: int, family_flags: list | None = None):
+def depth2_probe(props: list[dict], workdir: Path, seed: int, family_flags: list | None = None,
+                 timeout: float | None = None):
     """Returns (survivors, rejects, causes) where survivor rows carry the proposal +
     reached, reject rows carry seed_cx/cy/reached/cause/child_occ. `family_flags` thread
     the active family's grammar into the depth-2 probe (c-plane families only; a --julia
@@ -844,7 +845,7 @@ def depth2_probe(props: list[dict], workdir: Path, seed: int, family_flags: list
     cloud = np.array([[p["seed_cx"], p["seed_cy"]] for p in props], float)
     fw = np.array([p["fw"] for p in props], float)
     scr = prescreen.prescreen(cloud, fw, workdir, NODE_WIDTH, OCC_FLOOR, BLACK_CAP, seed,
-                              extra_flags=family_flags)
+                              extra_flags=family_flags, timeout=timeout)
     reached = scr["reached"]
     # per-seed cause + chosen-child occupancy from the probe's own walks.jsonl (row
     # order == proposal order). child_occ is the engine's OWN depth-2 admission-point

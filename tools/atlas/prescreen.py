@@ -60,7 +60,7 @@ def write_seed_list(path: Path, cx, cy, fw):
 
 def prescreen(cloud: np.ndarray, fw: np.ndarray, workdir: Path,
               node_width: int, occ_floor: float, black_cap: float, seed: int,
-              extra_flags: list | None = None) -> dict:
+              extra_flags: list | None = None, timeout: float | None = None) -> dict:
     """Descendability pre-screen = guided-descend's OWN step-1, run for real.
 
     A seed's descendability is NOT a property of its (wide) root frame — the occupancy
@@ -95,7 +95,19 @@ def prescreen(cloud: np.ndarray, fw: np.ndarray, workdir: Path,
         "--preview-width", "48", "--cols", "40",
         "--out-dir", str(pool),
     ] + (list(extra_flags) if extra_flags else [])
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    # `timeout=None` (the default) is the historical behaviour, byte-identical — same
+    # contract as `render_one` below. This call had NO backstop at all, and it is the
+    # subprocess the pre-loop root draw spends all its time in: a hung engine here hangs the
+    # whole run before the batch loop is ever entered, where neither the active cap nor the
+    # wall cap has started counting. A TimeoutExpired is raised, not swallowed: the caller
+    # decides whether a dead probe is fatal or a family to skip, and it cannot decide what
+    # it is not told.
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(
+            f"guided-descend depth-2 probe exceeded {timeout}s on {len(cloud)} seeds "
+            f"({workdir})") from None
     if r.returncode != 0:
         raise SystemExit(f"guided-descend probe failed:\n{r.stderr[-2000:]}")
     walks = {}

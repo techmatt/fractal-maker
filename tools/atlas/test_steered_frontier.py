@@ -933,3 +933,115 @@ def test_an_inherited_default_does_not_break_a_run_with_no_julia_mandelbrot():
     stub.julia_pool_explicit = True
     with pytest.raises(SystemExit, match="needs 'mandelbrot'"):
         sf.SteeredFrontier.seed_julia_pool(stub)
+
+
+# =========================================================================== #
+# The root-draw backstop — the pre-loop draw is outside BOTH caps.
+#
+# `active_s` counts only the timed batch block and `wall_elapsed_s` starts when the loop is
+# entered, so the one-time pre-loop `draw_roots` (measured ~12 min for four families, and the
+# production mix is nine partitions) ran with no bound of any kind. The subprocess it spends
+# that time in — prescreen's depth-2 probe — had no timeout either.
+# =========================================================================== #
+def test_the_prescreen_probe_had_no_backstop_and_now_takes_one():
+    """RED-BEFORE, by signature. The probe is the subprocess the pre-loop draw lives in; an
+    unbounded `subprocess.run` there hangs the night before either cap starts counting."""
+    import inspect
+    import prescreen
+    assert "timeout" in inspect.signature(prescreen.prescreen).parameters
+    src = inspect.getsource(prescreen.prescreen)
+    assert "timeout=timeout" in src, "the timeout is accepted but not passed to the subprocess"
+    # and it must be threaded from the caller the frontier actually uses
+    assert "timeout" in inspect.signature(sf.ps.depth2_probe).parameters
+
+
+def test_the_root_draw_bound_is_clamped_to_the_REMAINING_wall_budget():
+    """A backstop longer than the job's budget is not a backstop. With 4 minutes of wall
+    budget left, a 25-minute bound would let one draw more than double the run."""
+    import types
+    stub = types.SimpleNamespace(wall_budget_s=0.0, wall_s_base=0.0, _session_t0=None)
+    # The real `wall_elapsed_s`, not a stubbed number: the clamp's whole job is to reflect
+    # the clock the wall cap actually reads, and a hand-fed elapsed value would let the two
+    # drift apart in exactly the direction that makes the backstop useless.
+    stub.wall_elapsed_s = lambda: sf.SteeredFrontier.wall_elapsed_s(stub)
+    budget = sf.SteeredFrontier.root_draw_budget_s(stub)
+    assert budget == float(sf.ROOT_DRAW_BUDGET_S), "no wall budget => the standing bound"
+
+    stub.wall_budget_s = 10 * 3600.0                      # 10h cap
+    stub.wall_s_base = 10 * 3600.0 - 4 * 60.0             # 4 minutes left
+    clamped = sf.SteeredFrontier.root_draw_budget_s(stub)
+    assert clamped == pytest.approx(4 * 60.0), clamped
+    assert clamped < sf.ROOT_DRAW_BUDGET_S
+
+    stub.wall_s_base = 10 * 3600.0 + 900.0                # already over
+    assert sf.SteeredFrontier.root_draw_budget_s(stub) == float(sf.MIN_ROOT_DRAW_S), \
+        "floored: a legitimately slow draw is not shot merely for being last"
+
+    stub.wall_s_base = 0.0                                # plenty left
+    assert sf.SteeredFrontier.root_draw_budget_s(stub) == float(sf.ROOT_DRAW_BUDGET_S)
+
+
+def test_a_SLOW_draw_stops_drawing_families_and_SAYS_SO(monkeypatch, capsys):
+    """The granularity a per-probe timeout cannot cover: nine families each finishing just
+    inside their own timeout is still hours. The deadline is checked between families.
+
+    And the truncation must be REPORTED — a short draw and a fast draw leave the same
+    frontier length behind, and only one of them is a problem."""
+    import types
+    fams = ["mandelbrot", "multibrot3", "multibrot4", "multibrot5"]
+    stub = types.SimpleNamespace(
+        families=fams, scheduler=None, B=2, family_weights=None,
+        rng=None, run_clouds={f: [] for f in fams}, totals={},
+        seeders={f: types.SimpleNamespace(draw_batch=lambda c, n: [{"seed_cx": 0.0}])
+                 for f in fams},
+        scratch=Path("."), seed=0, batch_i=0, frontier=[],
+        wall_budget_s=0.0, wall_s_base=0.0, _session_t0=None,
+        new_node_id=lambda: 1, _flags=lambda f: [],
+    )
+    stub.root_draw_budget_s = lambda: sf.SteeredFrontier.root_draw_budget_s(stub)
+    stub.wall_elapsed_s = lambda: sf.SteeredFrontier.wall_elapsed_s(stub)
+    # Budget of 0 => the deadline is already blown at the first family, so every family is
+    # skipped and none of them runs a probe. The probe is made to explode to prove that.
+    monkeypatch.setattr(sf, "ROOT_DRAW_BUDGET_S", 0)
+    monkeypatch.setattr(sf.ps, "depth2_probe",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("probe ran")))
+    added = sf.SteeredFrontier.draw_roots(stub)
+    assert added == 0
+    assert stub.totals["root_draw_truncated"] == 1
+    out = capsys.readouterr().out
+    assert "BOUND HIT" in out and all(f in out for f in fams), out
+
+
+def test_a_HUNG_probe_costs_that_family_not_the_run(monkeypatch, capsys):
+    """A TimeoutError from the probe must skip ONE family, be counted, and be named — not
+    kill the run, and not vanish into a family that silently contributed no roots (which is
+    indistinguishable from a family that was never tried)."""
+    import types
+    fams = ["mandelbrot", "multibrot3"]
+    calls = []
+
+    def _probe(props, pw, seed, flags, timeout=None):
+        calls.append(timeout)
+        if len(calls) == 1:
+            raise TimeoutError("probe wedged")
+        return ([], [], {})
+
+    stub = types.SimpleNamespace(
+        families=fams, scheduler=None, B=2, family_weights=None, rng=None,
+        run_clouds={f: [] for f in fams}, totals={},
+        seeders={f: types.SimpleNamespace(draw_batch=lambda c, n: [{"seed_cx": 0.0}])
+                 for f in fams},
+        scratch=Path("."), seed=0, batch_i=0, frontier=[],
+        wall_budget_s=0.0, wall_s_base=0.0, _session_t0=None,
+        new_node_id=lambda: 1, _flags=lambda f: [],
+    )
+    stub.root_draw_budget_s = lambda: sf.SteeredFrontier.root_draw_budget_s(stub)
+    stub.wall_elapsed_s = lambda: sf.SteeredFrontier.wall_elapsed_s(stub)
+    monkeypatch.setattr(sf.ps, "depth2_probe", _probe)
+    added = sf.SteeredFrontier.draw_roots(stub)
+    assert added == 0
+    assert stub.totals["root_draw_timeouts"] == 1
+    assert len(calls) == 2, "the second family must still be attempted"
+    assert all(t is not None and t > 0 for t in calls), calls
+    out = capsys.readouterr().out
+    assert "TIMED OUT" in out and "mandelbrot" in out

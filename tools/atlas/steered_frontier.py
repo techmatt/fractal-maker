@@ -356,6 +356,15 @@ MAN_FRONTIER_SHARE = 0.5  # ... of which maneuver nodes may hold at most this fr
 JULIA_ROOT_FW = 3.0      # fixed z-plane base-scale root view (matches --julia-root-fw)
 EXPAND_TIMEOUT_S = 900   # hard-kill backstop on a hung --expand call
 MIN_UNIT_TIMEOUT_S = 60  # floor for the budget-clamped per-unit backstop (unit_timeout_s)
+# Standing bound on ONE `draw_roots` call. Sized off the measured pre-loop cost — ~12 min
+# for four families (`wall_elapsed_s`) — with room for the nine-partition production mix,
+# then clamped to what is left of the wall budget by `root_draw_budget_s`. The PRE-LOOP draw
+# is the one that needed this: it runs before `_session_t0` is set and before `active_s`
+# starts accruing, so it is outside BOTH caps, and a hung engine there hangs the night with
+# every budget check still believing the run has not started. A backstop longer than the
+# job's budget is not a backstop, so the clamp is the load-bearing half, not the constant.
+ROOT_DRAW_BUDGET_S = 25 * 60
+MIN_ROOT_DRAW_S = 120    # floor: never shoot a draw merely for being the last thing running
 ROOT_LOW_WATER = None    # replenish roots when frontier < this (set to B at runtime)
 
 # Steered production walk config (mirror of production_seeder; keeps the gates identical).
@@ -1368,11 +1377,36 @@ class SteeredFrontier:
         return self.node_ctr
 
     # ---------------------------------------------------------------- roots
+    def root_draw_budget_s(self) -> float:
+        """Wall bound for ONE `draw_roots` call, clamped to the remaining wall budget.
+
+        Same shape as `unit_timeout_s`, and here for a sharper reason. The PRE-LOOP draw runs
+        before `_session_t0` is set and before `active_s` accrues, so it is outside BOTH
+        caps — a slow or hung draw there eats the night while every budget check reports the
+        run has not started. Clamped so the backstop can never be longer than what is left of
+        the run (the failure `unit_timeout_s` was written for), floored at
+        `MIN_ROOT_DRAW_S` so a legitimately slow draw near the end is not shot for being slow.
+        No wall budget => the standing constant, which is still a bound where there was none."""
+        if not self.wall_budget_s:
+            return float(ROOT_DRAW_BUDGET_S)
+        remaining = max(0.0, self.wall_budget_s - self.wall_elapsed_s())
+        return float(min(ROOT_DRAW_BUDGET_S, max(MIN_ROOT_DRAW_S, remaining)))
+
     def draw_roots(self):
         """Draw a batch of native depth-1 seeds per family (q3-density rejection +
         depth-2 descendability probe) and enter the survivors as depth-1 frontier nodes
-        with a neutral prior priority — exactly the current path's root pipeline."""
+        with a neutral prior priority — exactly the current path's root pipeline.
+
+        BOUNDED, at two granularities, because one alone does not cover the failure. The
+        per-probe `timeout` bounds a HUNG engine subprocess (that call had no backstop at
+        all); the per-call deadline bounds a merely SLOW draw, which no single timeout
+        catches — nine families each finishing just inside their own timeout is still hours.
+        A truncated draw is REPORTED and counted, never silent: a short draw and a fast draw
+        produce the same frontier length, and only one of them is a problem."""
         added = 0
+        t0 = time.time()
+        budget = self.root_draw_budget_s()
+        skipped = []
         # item 7: deficit-aware root mix. Scheduler ON => split the B draws across families by
         # their price-weighted, julia-twin-inclusive deficit; OFF => B per family (unchanged).
         alloc = (self.scheduler.root_allocation(self.families, self.B, self.rng)
@@ -1390,6 +1424,10 @@ class SteeredFrontier:
                                       * self.family_weights.get(fam, 0.0))))
             if nb <= 0:
                 continue
+            spent = time.time() - t0
+            if spent >= budget:
+                skipped.append(fam)
+                continue
             # run-only cloud: the freshness prior must NOT feed this hard rejection gate (part-0
             # sterilization finding) — only this run's own accruing q3 places spread new seeds.
             cloud = self.run_clouds[fam]
@@ -1397,7 +1435,22 @@ class SteeredFrontier:
             if not props:
                 continue
             pw = self.scratch / f"roots_b{self.batch_i:04d}_{fam}"
-            survivors, rejects, _ = ps.depth2_probe(props, pw, self.seed, self._flags(fam))
+            try:
+                # The per-family probe gets what is left of the draw's own budget, so one
+                # family cannot spend the whole allowance and leave the rest unbounded.
+                survivors, rejects, _ = ps.depth2_probe(
+                    props, pw, self.seed, self._flags(fam),
+                    timeout=max(MIN_ROOT_DRAW_S, budget - spent))
+            except TimeoutError as e:
+                # A dead probe costs this family's roots, not the run. Counted and named:
+                # a family that silently contributes no roots is indistinguishable from one
+                # that was never tried, which is the reading `draw_roots` must not allow.
+                self.totals["root_draw_timeouts"] = \
+                    self.totals.get("root_draw_timeouts", 0) + 1
+                skipped.append(f"{fam}(timeout)")
+                print(f"[root-draw] {fam} depth-2 probe TIMED OUT — skipping this family's "
+                      f"roots this draw: {e}", flush=True)
+                continue
             for sv in survivors:
                 nid = self.new_node_id()
                 self.frontier.append(dict(
@@ -1408,6 +1461,13 @@ class SteeredFrontier:
                     mix_source=sv.get("mix_source", "native"),
                 ))
                 added += 1
+        if skipped:
+            self.totals["root_draw_truncated"] = \
+                self.totals.get("root_draw_truncated", 0) + 1
+            print(f"[root-draw] BOUND HIT after {time.time()-t0:.0f}s of a {budget:.0f}s "
+                  f"budget — {added} roots added, families not drawn: {skipped}. "
+                  f"(wall {self.wall_elapsed_s()/3600:.2f}h of "
+                  f"{self.wall_budget_s/3600:.2f}h)", flush=True)
         return added
 
     def add_julia_root(self, partition: str, c, parent_oid: str):
@@ -3470,7 +3530,16 @@ class SteeredFrontier:
                 print(f"[pop-quota] INTENDED mix={ {p: round(v, 3) for p, v in sorted(a.share.items())} } "
                       f"floored={sorted(a.floored)}", flush=True)
             self.write_run_config()
+            # THE PRE-LOOP DRAW, the one outside both caps. Bounded by `root_draw_budget_s`
+            # like every other draw, and additionally TIMED and recorded — a cost that no cap
+            # counts must at least be a number in the summary, or the next run's wall-clock
+            # projection is built from a clock that never saw it.
+            _pre_t0 = time.time()
             self.draw_roots()
+            self.pre_loop_draw_s = time.time() - _pre_t0
+            print(f"[root-draw] pre-loop draw took {self.pre_loop_draw_s/60:.1f}m "
+                  f"(outside the active and wall caps by design; bounded at "
+                  f"{self.root_draw_budget_s()/60:.0f}m)", flush=True)
             # At fresh start these inject the WHOLE pool when `--seed-pool-rate` is 0 (the
             # historical behaviour) and only the first metered chunk when it is set.
             self.seed_julia_pool()          # PRIMARY julia supply: sampler-sourced roots (probe)
@@ -3613,6 +3682,14 @@ class SteeredFrontier:
             # the gap between them.
             wall_over_active=(round(self.wall_elapsed_s() / self.active_s, 2)
                               if self.active_s > 0 else None),
+            # The pre-loop draw, which NO cap counts (`wall_elapsed_s` starts at the loop).
+            # Recorded because an ETA projected from `wall_min` alone is short by exactly
+            # this, and because a bound nobody can see the utilisation of is a bound nobody
+            # can size. `None` on a resume — the pre-loop draw is a fresh-start cost.
+            pre_loop_draw_min=(round(self.pre_loop_draw_s / 60.0, 2)
+                               if getattr(self, "pre_loop_draw_s", None) is not None
+                               else None),
+            root_draw_budget_min=round(ROOT_DRAW_BUDGET_S / 60.0, 2),
             lambda_m=self.lambda_m, beta=self.beta, recency_k=self.recency_k,
             morph_mem=len(self.morph), morph_perm=self.morph.n_perm,
             morph_recency=self.morph.n_recency,
