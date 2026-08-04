@@ -495,3 +495,117 @@ def test_red_before_old_call_shape_continued_silently(tmp_path):
     sch_new = _sched(tmp_path / "b", ["mandelbrot"])
     with pytest.raises(D.UnseededRunError):
         sch_new.seed_from_library(intake_path=missing, emb_dir=tmp_path / "gone_embs")
+
+
+# =========================================================================== #
+# Seed-path CLASS refusal — a scratch path is refused at RESOLVE time.
+#
+# Both seed sources have now been lost to `scratch/`: campaign1's vectors (permanently —
+# its snapshot went with them) and library_seed_v2's (recoverable, 168 vectors). In both
+# cases every check in the tree was green right up to the wipe, because a scratch path that
+# has not been deleted YET is indistinguishable from a durable one. So the check has to be
+# on the PATH's class, not on the file's presence, and it has to fire where the path is
+# produced rather than where it is read.
+# =========================================================================== #
+def test_no_seed_source_resolves_under_scratch():
+    """The registry invariant, over the LIVE table — not a synthetic one.
+
+    This is the assertion whose absence cost both seeds. It reads `SEED_SOURCES` directly
+    rather than going through `resolve_seed_source`, because resolution stops at the first
+    source that EXISTS: routing through it would leave a dormant scratch path in a
+    not-yet-resolving entry unchecked, which is exactly campaign1's shape."""
+    for name, intake, emb in D.SEED_SOURCES:
+        D._refuse_scratch_class(f"intake ({name})", intake)
+        D._refuse_scratch_class(f"embeddings ({name})", emb)
+
+
+@pytest.mark.parametrize("victim", ["intake", "emb"])
+def test_an_INJECTED_scratch_source_is_refused_at_resolve_time(tmp_path, monkeypatch, victim):
+    """INJECTION-PROVEN. The invariant test above passes trivially on a clean registry, so
+    it cannot on its own show the guard would catch a regression. Plant a scratch path in
+    the registry — one half at a time, since a source that got its snapshot right and its
+    vectors wrong is precisely what shipped — and require resolution to REFUSE.
+
+    Planted under a fake repo root so the real tree is untouched, and the path is made to
+    EXIST: a guard that only fires on missing files would be the presence check all over
+    again, and the whole point is that the live scratch path was present and healthy."""
+    fake_root = tmp_path / "repo"
+    good = fake_root / "data" / "emission" / "x"
+    bad = fake_root / "scratch" / "emission" / "x"
+    for d in (good, bad):
+        d.mkdir(parents=True)
+    (good / "intake.json").write_text("{}", encoding="utf-8")
+    (bad / "intake.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(D, "ROOT", fake_root)
+    ip = (bad if victim == "intake" else good) / "intake.json"
+    ed = (bad if victim == "emb" else good) / "embs"
+    monkeypatch.setattr(D, "SEED_SOURCES", (("planted", ip, ed),))
+
+    with pytest.raises(D.SeedPathClassError, match="scratch"):
+        D.resolve_seed_source()
+    # ...and it is refused through every seam a run can reach it by, not just the first
+    with pytest.raises(D.SeedPathClassError):
+        D.library_seed_paths()
+    with pytest.raises(D.SeedPathClassError):
+        D.require_library_seed(allow_unseeded=True)
+
+
+def test_an_EXPLICIT_scratch_path_is_refused_too(tmp_path, monkeypatch):
+    """The easier hole of the two. The registry is reviewed; a `--intake`/`--emb-dir` on a
+    launch line is not, and "just point it at the copy in scratch for now" is how a
+    temporary path becomes the production one. `allow_unseeded` must NOT wave it through:
+    that flag means "the seed is absent and I accept run-local numbers", not "the seed is
+    misconfigured and I accept whatever happens"."""
+    monkeypatch.setattr(D, "ROOT", tmp_path)
+    bad = tmp_path / "scratch" / "embs"
+    bad.mkdir(parents=True)
+    with pytest.raises(D.SeedPathClassError):
+        D.library_seed_paths(emb_dir=bad)
+    with pytest.raises(D.SeedPathClassError):
+        D.require_library_seed(allow_unseeded=True, emb_dir=bad)
+    with pytest.raises(D.SeedPathClassError):
+        D.library_seed_paths(intake_path=tmp_path / "scratch" / "intake.json")
+
+
+def test_both_disposable_trees_are_refused_not_just_scratch(tmp_path, monkeypatch):
+    """`scratchpad/` is refused as well as `scratch/`. CLAUDE.md names BOTH disposable —
+    "neither scratch tree is a dependency tier" — and `scratchpad/visual_dup/embed.py` was
+    load-bearing, uncommitted, and vanished. A guard that covered only `scratch/` would send
+    the next seed one directory sideways into the same failure.
+
+    Note this deliberately differs from `artifacts._is_discovery_scratch`, which excludes
+    `scratchpad` — that predicate answers "which family relocates", a different question
+    from "may a seed live here"."""
+    monkeypatch.setattr(D, "ROOT", tmp_path)
+    for bad in ("scratch", "scratchpad"):
+        with pytest.raises(D.SeedPathClassError, match=bad):
+            D._refuse_scratch_class("x", tmp_path / bad / "emission" / "embs")
+
+
+def test_the_refusal_is_component_exact_and_root_relative(tmp_path, monkeypatch):
+    """Two false-positive classes the guard must NOT hit, or it becomes noise someone routes
+    around: a component that merely STARTS with "scratch" is a different directory (the same
+    component-exact rule `artifacts._is_discovery_scratch` uses), and an ARTIFACTS_ROOT that
+    happens to contain the letters "scratch" in its own prefix is not the disposable class —
+    that prefix is the operator's volume name, not our contract."""
+    monkeypatch.setattr(D, "ROOT", tmp_path)
+    D._refuse_scratch_class("x", tmp_path / "data" / "scratch_notes" / "embs")
+    D._refuse_scratch_class("x", tmp_path / "data" / "emission" / "scratches" / "e")
+    weird = tmp_path / "my_scratch_volume"
+    monkeypatch.setattr(D._artifacts, "artifacts_root", lambda: weird)
+    D._refuse_scratch_class("x", weird / "data" / "emission" / "library_seed_v2" / "embs")
+    # ...but a real `scratch/` component UNDER that root is still refused
+    with pytest.raises(D.SeedPathClassError):
+        D._refuse_scratch_class("x", weird / "scratch" / "embs")
+
+
+def test_the_live_seed_is_bulk_registered_so_bulk_does_not_mean_in_tree():
+    """`bulk()` relocates a REGISTERED family and otherwise resolves in-tree. The old seed
+    declared `bulk()` at its write site and still landed in `scratch/`, so the declaration
+    alone proves nothing — the registration is the half that does the work, and
+    `!/data/emission/` means an unregistered path here would be COMMITTED rather than merely
+    present (the tau_h_rederive precedent)."""
+    import artifacts as A
+    for rel in ("data/emission/library_seed_v2/embs", "data/emission/campaign1/embs"):
+        assert A.is_relocated(rel), f"{rel} would resolve in-tree and be committed"
+        assert A.resolve(rel) == A.artifacts_root() / rel

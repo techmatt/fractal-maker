@@ -53,6 +53,8 @@ for _p in (ROOT,):
         sys.path.insert(0, str(_p))
 
 from tools.emission import cells as C  # noqa: E402  (pure; no torch)
+from tools import paths as _paths      # noqa: E402  (storage-class declaration at the seam)
+from tools.corpus import artifacts as _artifacts   # noqa: E402  (ARTIFACTS_ROOT, for the class check)
 
 # ------------------------------------------------------------------------- #
 # Defaults / paths.
@@ -60,7 +62,12 @@ from tools.emission import cells as C  # noqa: E402  (pure; no torch)
 DEFAULT_TARGET_PATH = ROOT / "data" / "emission" / "target_measure.json"
 DEFAULT_PRICES_PATH = ROOT / "data" / "atlas" / "scheduler_prices.json"
 INTAKE_ARTIFACT = ROOT / "data" / "emission" / "campaign1" / "intake.json"   # durable snapshot
-INTAKE_EMB_DIR = ROOT / "scratch" / "emission" / "campaign1" / "embs"         # bulk (regenerable)
+# bulk (regenerable), resolved through the ARTIFACTS_ROOT resolver. It was
+# `scratch/emission/campaign1/embs`, and that is the whole reason campaign1 is dark today:
+# `scratch/` is the one class whose contract GUARANTEES deletion, so the vectors were
+# wiped and — campaign1's snapshot having gone with them — cannot be rebuilt. Never
+# reintroduce a scratch path here; `_refuse_scratch_class` now makes it raise.
+INTAKE_EMB_DIR = _paths.bulk("data/emission/campaign1/embs")
 
 NEAR_DUP_THRESHOLD = 0.974   # distinct-look cosine knee (== emission/descriptor)
 EMB_DIM = 768                # CLIP vit_base_patch16_clip_224.openai
@@ -192,8 +199,56 @@ SEED_SOURCES = (
     ("campaign1", INTAKE_ARTIFACT, INTAKE_EMB_DIR),
     ("library_seed_v2",
      ROOT / "data" / "emission" / "library_seed_v2" / "intake.json",
-     ROOT / "scratch" / "emission" / "library_seed_v2" / "embs"),
+     _paths.bulk("data/emission/library_seed_v2/embs")),
 )
+
+
+class SeedPathClassError(RuntimeError):
+    """A seed-critical path resolved to somewhere under `scratch/`.
+
+    BOTH seed sources have now been lost this way — campaign1 permanently — so the class
+    error is raised at RESOLVE time rather than left to be discovered at read time. The
+    difference matters: a scratch path that has not been wiped YET reads as perfectly
+    healthy, seeds a run, and is indistinguishable from a durable one until the wipe. By
+    then the run is over and its numbers are already on record as library-wide. Refusing
+    the path itself is the only check that fires while the mistake is still cheap.
+
+    Deliberately NOT an `UnseededRunError`: that one means "the seed is absent, and you may
+    proceed anyway with `--allow-unseeded`". This one means "the seed is misconfigured",
+    which no run flag should be able to wave through."""
+
+
+def _refuse_scratch_class(kind: str, p) -> Path:
+    """Return `p`, or raise `SeedPathClassError` if it names a disposable-class directory.
+
+    Matched on PATH COMPONENTS below the two resolver roots, not on substring: an
+    ARTIFACTS_ROOT that merely happens to contain the letters "scratch" is not the
+    disposable class, and `data/discovery/<run>/scratchpad` is a different directory from
+    `scratch/`. Anything outside both roots is checked component-wise in full — an absolute
+    path we cannot relate to a root is exactly the case where we know least."""
+    path = Path(p)
+    rel_parts = path.parts
+    for root in (ROOT, _artifacts.artifacts_root()):
+        try:
+            rel_parts = path.resolve().relative_to(Path(root).resolve()).parts
+            break
+        except (ValueError, OSError):
+            continue
+    hit = next((c for c in rel_parts if c.lower() in ("scratch", "scratchpad")), None)
+    if hit is None:
+        return path
+    raise SeedPathClassError(
+        f"seed {kind} resolves under the disposable `{hit}/` class, which GUARANTEES "
+        f"deletion:\n"
+        f"    path : {path}\n"
+        f"A seed that a `rm -r scratch/*` can delete is a seed that will silently become "
+        f"empty, and an empty seed makes a run measure RUN-LOCAL scarcity while every "
+        f"reader assumes library-wide. campaign1 was lost exactly this way and cannot be "
+        f"rebuilt.\n"
+        f"Declare the class at the write site and name a path that agrees with it: "
+        f"`paths.bulk('data/.../embs')` (register the prefix in "
+        f"`tools/corpus/artifacts.RELOCATED_PREFIXES`), or `paths.durable(...)`."
+    )
 
 
 def resolve_seed_source() -> tuple[str, Path, Path]:
@@ -201,12 +256,18 @@ def resolve_seed_source() -> tuple[str, Path, Path]:
 
     Falls back to the FIRST entry when none exists, so the error message names the primary
     artifact rather than the last one tried — "campaign1 is missing" is the actionable
-    message; "library_seed_v2 is missing" would send a reader to rebuild the wrong thing."""
+    message; "library_seed_v2 is missing" would send a reader to rebuild the wrong thing.
+
+    Both halves of the winner are class-checked before they are returned (see
+    `_refuse_scratch_class`), so a scratch path cannot enter the pipeline by being
+    registered — which is how both seeds were lost."""
     for name, ip, ed in SEED_SOURCES:
         if Path(ip).exists():
-            return name, Path(ip), Path(ed)
+            return name, _refuse_scratch_class(f"intake ({name})", ip), \
+                _refuse_scratch_class(f"embeddings ({name})", ed)
     name, ip, ed = SEED_SOURCES[0]
-    return name, Path(ip), Path(ed)
+    return (name, _refuse_scratch_class(f"intake ({name})", ip),
+            _refuse_scratch_class(f"embeddings ({name})", ed))
 
 
 def library_seed_paths(intake_path: Path | None = None,
@@ -216,11 +277,17 @@ def library_seed_paths(intake_path: Path | None = None,
 
     With neither argument given, the registry resolves (see `resolve_seed_source`). An
     explicit path always wins and is never mixed with a resolved one — half an explicit pair
-    would silently pair one source's snapshot with another's vectors."""
+    would silently pair one source's snapshot with another's vectors.
+
+    An EXPLICIT path is class-checked too. It is the easier hole of the two: the registry is
+    reviewed, a `--intake`/`--emb-dir` flag on a launch line is not, and "just point it at
+    the copy in scratch for now" is how a temporary path becomes a production one."""
     if intake_path is not None or emb_dir is not None:
         _n, dip, ded = resolve_seed_source()
-        return (Path(intake_path) if intake_path else dip,
-                Path(emb_dir) if emb_dir else ded)
+        return (_refuse_scratch_class("intake (explicit)", intake_path)
+                if intake_path else dip,
+                _refuse_scratch_class("embeddings (explicit)", emb_dir)
+                if emb_dir else ded)
     _name, ip, ed = resolve_seed_source()
     return ip, ed
 

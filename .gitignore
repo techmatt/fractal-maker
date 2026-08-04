@@ -152,6 +152,16 @@ __pycache__/
 # part of the deficit definition, not a regenerable artifact — commit it.
 !/data/emission/
 !/data/emission/target_measure.json
+# The relit library look-seed's per-medoid CLIP vectors: bulk, resolved OUT of the tree by
+# artifacts.RELOCATED_PREFIXES. `!/data/emission/` above re-includes this subtree, so an
+# in-tree straggler would be COMMITTED rather than merely present — this stanza is the
+# belt-and-braces half for a writer that bypassed the resolver. The snapshot beside it
+# (library_seed_v2/intake.json) stays tracked: it is durable, and not under `embs/`.
+/data/emission/library_seed_v2/embs/
+# campaign1's per-medoid vectors: same class, same stanza. The family is dark (its
+# snapshot was never rebuilt after the derived-artifact wipe); the rule exists so a relight
+# cannot commit 168+ vectors by default.
+/data/emission/campaign1/embs/
 # Permanent label corpus (see data/label_corpus/CORPUS_SCHEMA.md): commit the
 # tiny, irreplaceable metadata (schema, batch.json, images.jsonl, scores.json);
 # gitignore crops/ — each crop is a pure function of its row's `render` block,

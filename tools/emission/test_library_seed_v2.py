@@ -149,10 +149,25 @@ def test_the_snapshot_is_durable_and_the_embeddings_are_bulk():
     """The tree's own split (`test_intake_durable.py` pins it for the campaign-1 pair): the
     snapshot is git-tracked, the regenerable per-look vectors are not. This one is SAFE to
     split that way because `embed` rebuilds the vectors from the snapshot's own render
-    blocks — the property the campaign-1 seed did not have, which is why it is dark."""
+    blocks — the property the campaign-1 seed did not have, which is why it is dark.
+
+    BULK IS NOT SCRATCH. This asserted `"scratch" in ls2.EMB_REL` and was green while all
+    168 vectors sat in the one class whose contract guarantees deletion — then the wipe came
+    and the seed went dark. `bulk()` relocates a REGISTERED family out-of-tree and otherwise
+    resolves in-tree, so declaring the class at the write site did nothing while the path
+    itself said `scratch/`. The path and the class have to agree, and that is what is
+    pinned now: registered, out-of-tree, and refused by the scheduler's own rule if it ever
+    slides back."""
+    import artifacts as A
+    import deficit_scheduler as dsched
     assert str(paths.durable(ls2.INTAKE_REL)).replace("\\", "/").endswith(
         "data/emission/library_seed_v2/intake.json")
-    assert "scratch" in ls2.EMB_REL
+    assert ls2.EMB_REL == "data/emission/library_seed_v2/embs"
+    assert A.is_relocated(ls2.EMB_REL), (
+        f"{ls2.EMB_REL} is not a registered relocated family, so bulk() resolves it IN-TREE "
+        f"— and `!/data/emission/` would then commit all 168 vectors")
+    assert paths.bulk(ls2.EMB_REL) == A.artifacts_root() / ls2.EMB_REL
+    dsched._refuse_scratch_class("embeddings", paths.bulk(ls2.EMB_REL))
     snap = json.loads(ls2.INTAKE_JSON.read_text(encoding="utf-8"))
     for e in snap["entries"].values():
         assert e["render"].get("cx") is not None and e["render"].get("fw") is not None

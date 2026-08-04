@@ -90,6 +90,26 @@ RELOCATED_PREFIXES = (
     # the locations, i.e. textbook bulk(). Registered BEFORE the first write, per
     # storage_classes.md rule 5.
     "data/morph_embed_cache",
+    # The relit library look-seed's per-medoid CLIP vectors
+    # (tools/emission/library_seed_v2.py `embed`). A LITERAL for the same reason as
+    # tau_h_rederive and morph_embed_cache — one fixed path, not a family that grows a
+    # member per run — and registered here rather than left in-tree for the SAME reason
+    # tau_h_rederive is: `!/data/emission/` re-includes this subtree, so in-tree these 168
+    # vectors would be COMMITTED, not merely present. They are textbook bulk(): 168 renders
+    # + one CLIP forward pass each, fully deterministic from the snapshot's own render
+    # blocks. Their previous home was `scratch/emission/library_seed_v2/embs` — declared
+    # bulk() but named under the ONE class whose contract guarantees deletion, so `bulk()`
+    # resolved it in-tree under scratch/ and a wipe took it. That is the failure this
+    # literal (and `deficit_scheduler`'s resolve-time scratch refusal) exist to prevent.
+    "data/emission/library_seed_v2/embs",
+    # campaign1's per-medoid vectors. The family is DARK — its snapshot was never rebuilt
+    # after the derived-artifact wipe and its inputs are gone — so nothing writes here
+    # today. The line exists so the registry invariant is uniform rather than special-cased:
+    # every seed source in `deficit_scheduler.SEED_SOURCES` names a registered bulk family,
+    # never a scratch path (`test_no_seed_source_resolves_under_scratch`). campaign1's
+    # vectors lived in `scratch/` and that is precisely why it is dark; if it is ever
+    # relit, rule 5 says the rebuild is born out-of-tree, and this is where.
+    "data/emission/campaign1/embs",
 )
 
 

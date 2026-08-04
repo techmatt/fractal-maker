@@ -250,10 +250,20 @@ REGISTRY = [
      "re-dump each atom's screen field (deterministic, expensive)", N,
      "Regenerable -> scratch() is survivable, but it is the input three committed tools "
      "need (interior_band, interior_bakeoff, gcf_arm). bulk() is the class that fits."),
-    ("scratch/emission/campaign1/embs/*.npy", "tools/emission/campaign1_intake.py", SCR,
+    ("data/emission/campaign1/embs/*.npy", "tools/emission/campaign1_intake.py", BULK,
      "re-embed the intake's medoids — needs intake.json, which is gone", N,
-     "Class correct by contract (declared bulk-regenerable in deficit_scheduler), but "
-     "unrebuildable in fact because its own input is gone. Already deleted."),
+     "Was scratch/emission/campaign1/embs and that is why campaign1 is DARK: the vectors "
+     "were wiped and the snapshot went with them, so 'regenerable by contract' was false in "
+     "fact. Repointed to a registered bulk family on 2026-08-03 so a relight cannot land in "
+     "the deletable class again; nothing writes here today."),
+    ("data/emission/library_seed_v2/embs/*.npy", "tools/emission/library_seed_v2.py", BULK,
+     "re-embed the snapshot's 168 medoids from their own render blocks (~13 min, and "
+     "verified BYTE-IDENTICAL on the 2026-08-03 regeneration)", N,
+     "OK. This is the seed the scheduler actually resolves to. It was "
+     "scratch/emission/library_seed_v2/embs — declared bulk() at the write site while the "
+     "path itself said scratch/, so bulk() resolved it in-tree under scratch/ and the wipe "
+     "took all 168. Registered in artifacts.RELOCATED_PREFIXES now, and "
+     "deficit_scheduler._refuse_scratch_class refuses a scratch path at resolve time."),
     ("scratch/<subcommand>/** (renders, sheets, reports, logs)",
      "every subcommand + most tools/", SCR,
      "re-run the producing command", N,

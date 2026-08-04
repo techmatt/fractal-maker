@@ -57,9 +57,20 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "atlas", ROOT / "tools" / "cor
 import paths                                            # noqa: E402
 
 INTAKE_REL = "data/emission/library_seed_v2/intake.json"
-EMB_REL = "scratch/emission/library_seed_v2/embs"
+# BULK, and named under `data/` so it RESOLVES like bulk. It was `scratch/emission/...`:
+# declared `bulk()` at the write site but named under the one class whose contract
+# guarantees deletion, so `bulk()` — which relocates a registered family and otherwise
+# resolves in-tree — handed back a path inside `scratch/`, and the next wipe took all 168
+# vectors. Declaring a class and naming a path that contradicts it is the same bug the
+# campaign-1 seed died of, one layer up. `data/emission/library_seed_v2/embs` is registered
+# in `artifacts.RELOCATED_PREFIXES`, so it lands out-of-tree under ARTIFACTS_ROOT (it must
+# not be committed: `!/data/emission/` would otherwise track all 168).
+EMB_REL = "data/emission/library_seed_v2/embs"
 INTAKE_JSON = ROOT / INTAKE_REL
-EMB_DIR = ROOT / EMB_REL
+# Through the resolver, never `ROOT / EMB_REL`: `EMB_REL` names a RELOCATED family, so
+# joining it onto the repo root yields an in-tree path that nothing writes and nothing
+# reads — the shape that makes a stale constant look like a live one.
+EMB_DIR = paths.bulk(EMB_REL)
 
 SOURCE_QUEUE = (ROOT / "data" / "discovery" / "q4_long_harvest_20260803" /
                 "human_q3plus_queue.jsonl")
