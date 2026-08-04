@@ -3745,34 +3745,18 @@ def set_below_normal_priority() -> str:
     reframe's own renders), and on win32 a child inherits the parent's priority class — so
     lowering the driver once covers all of them, without threading `creationflags` through
     every launcher. The thread-count half of the pairing stays with the engine defaults
-    (`corpus_common.DEFAULT_ENGINE_THREADS`); this is only the priority half."""
-    if sys.platform != "win32":
-        try:
-            os.nice(10)
-            return "nice+10"
-        except Exception as e:
-            return f"unavailable ({e})"
-    try:
-        import ctypes
-        from corpus_common import BELOW_NORMAL_PRIORITY_CLASS
-        # A PRIVATE kernel32 handle, with `use_last_error=True`. Two reasons, both about
-        # the failure path rather than the success path:
-        #   * `ctypes.windll.kernel32` is a process-global CACHED library object, so the
-        #     restype/argtypes below would mutate it for every other user in the process.
-        #   * that cached object is created WITHOUT use_last_error, so
-        #     `ctypes.get_last_error()` always reads 0 — the old error branch could only
-        #     ever print "FAILED (err 0)", which is a silent failure wearing a report.
-        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        # restypes/argtypes are load-bearing: GetCurrentProcess returns the pseudo-handle
-        # (HANDLE)-1, and without c_void_p ctypes truncates it to a 32-bit int that
-        # SetPriorityClass rejects — the call then "fails" for a reason nothing reports.
-        k32.GetCurrentProcess.restype = ctypes.c_void_p
-        k32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint]
-        k32.SetPriorityClass.restype = ctypes.c_int
-        ok = k32.SetPriorityClass(k32.GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS)
-        return "BELOW_NORMAL" if ok else f"FAILED (err {ctypes.get_last_error()})"
-    except Exception as e:                                   # never fatal
-        return f"unavailable ({e})"
+    (`corpus_common.DEFAULT_ENGINE_THREADS`); this is only the priority half.
+
+    DELEGATES to `corpus_common.set_below_normal_priority`, which now holds the one
+    definition — it lives beside `BELOW_NORMAL_PRIORITY_CLASS` and `default_creationflags`,
+    the rest of the same pairing, and a second driver needed it. Kept as a name here because
+    `main()` and the tests call it, and because a `from ... import` would read as a
+    re-definition to the no-duplication scan. The ctypes subtleties (private WinDLL,
+    `use_last_error`, the c_void_p pseudo-handle) moved WITH the code and are documented
+    there; they are exactly what a copy of this silently loses.
+    """
+    from corpus_common import set_below_normal_priority as _impl
+    return _impl()
 
 
 def preflight_library_seed(args):

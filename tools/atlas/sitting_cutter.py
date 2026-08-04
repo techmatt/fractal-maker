@@ -474,7 +474,18 @@ SCREEN_PROV = {
     "interior_fraction": "interior_fraction",
     "op": "op", "k": "k", "degree": "degree", "period": "period",
     "log10_abs_A": "log10_abs_A", "window_scale": "window_scale",
-    "parent_depth": "parent_depth", "atom_key": "atom_key", "atom_id": "atom_id",
+    "parent_depth": "parent_depth", "atom_id": "atom_id",
+    # `atom_key` is DELIBERATELY WITHHELD, and this is the note that says so rather than
+    # leaving it to read as an oversight. It is not just a column: `v10/build_manifest.
+    # collect_atom_keys` unions groups across every row that records one, and GATE 14's scope
+    # argument is "only the six 2026-08 batches record provenance.atom_key, so this pass can
+    # only union APPENDED locations". A fresh 1,000-row train batch carrying it silently
+    # enlists in that union — and the union's own rationale records that it already pulled 18
+    # train-side rows into a group with a uniform-leg EVAL row, so enlisting a new batch is an
+    # eval-contamination question, not a serving one. Nobody has re-argued that scope, so this
+    # batch does not opt in. `atom_id` still names the atom for analysis; only the union KEY is
+    # withheld. Pinned by tools/v10/test_v10_build.py::test_only_the_2026_08_batches_record_an
+    # _atom_key, which is what caught it.
 }
 VIEW_FIT_MODEL = "view_fit_v1.1"
 

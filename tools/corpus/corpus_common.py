@@ -432,23 +432,51 @@ def default_creationflags() -> int:
     return BELOW_NORMAL_PRIORITY_CLASS if sys.platform == "win32" else 0
 
 
-def set_below_normal_priority() -> bool:
-    """Drop THIS process to BELOW_NORMAL, so every child it spawns inherits the class.
+def set_below_normal_priority() -> str:
+    """Drop THIS process to BELOW_NORMAL, which every child it spawns inherits.
 
-    The companion to `default_creationflags()` for the case that flag cannot reach: a long
-    Python driver whose engine launches go through a helper that takes no `creationflags`
-    (`library_annotate.ensure_field` is the live one). Setting the parent's class covers every
-    such child at once, because a Windows child inherits its parent's priority class.
-    Returns True iff the class was actually changed (False off win32, or on failure — a
-    priority hint that cannot be applied must not take a job down with it)."""
+    THE ONE DEFINITION. It lives here rather than in any driver because this module already
+    owns the other half of the pairing (`BELOW_NORMAL_PRIORITY_CLASS`,
+    `default_creationflags`, `DEFAULT_ENGINE_THREADS`), and because a COPY of it is worse than
+    useless: the naive spelling below the fold silently does nothing and still reports
+    success, so every run record claiming "BELOW_NORMAL" would be false.
+    `test_steered_frontier.py::test_the_priority_helper_is_not_duplicated_anywhere` keeps it
+    single; import it, never re-derive it.
+
+    It is the companion to `default_creationflags()` for the case that flag cannot reach: a
+    long Python driver whose engine launches go through a helper taking no `creationflags`
+    (`library_annotate.ensure_field`, and `steered_frontier`'s several launch sites). On win32
+    a child inherits its parent's priority class, so lowering the parent once covers all of
+    them. The thread-count half stays with the engine defaults; this is only the priority half.
+
+    Returns what actually happened, never a bool: "BELOW_NORMAL", "nice+10",
+    "FAILED (err N)" or "unavailable (...)". A priority hint that cannot be applied must not
+    take a job down with it, but it must not be reported as applied either."""
     if sys.platform != "win32":
-        return False
+        try:
+            return "nice+10" if os.nice(10) is not None else "nice+10"
+        except Exception as e:                               # noqa: BLE001
+            return f"unavailable ({e})"
     try:
         import ctypes
-        h = ctypes.windll.kernel32.GetCurrentProcess()
-        return bool(ctypes.windll.kernel32.SetPriorityClass(h, BELOW_NORMAL_PRIORITY_CLASS))
-    except Exception:                                        # noqa: BLE001
-        return False
+        # A PRIVATE kernel32 handle, with `use_last_error=True`. Two reasons, both about
+        # the failure path rather than the success path:
+        #   * `ctypes.windll.kernel32` is a process-global CACHED library object, so the
+        #     restype/argtypes below would mutate it for every other user in the process.
+        #   * that cached object is created WITHOUT use_last_error, so
+        #     `ctypes.get_last_error()` always reads 0 — an error branch on it could only
+        #     ever print "FAILED (err 0)", which is a silent failure wearing a report.
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        # restypes/argtypes are load-bearing: GetCurrentProcess returns the pseudo-handle
+        # (HANDLE)-1, and without c_void_p ctypes truncates it to a 32-bit int that
+        # SetPriorityClass rejects — the call then "fails" for a reason nothing reports.
+        k32.GetCurrentProcess.restype = ctypes.c_void_p
+        k32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        k32.SetPriorityClass.restype = ctypes.c_int
+        ok = k32.SetPriorityClass(k32.GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS)
+        return "BELOW_NORMAL" if ok else f"FAILED (err {ctypes.get_last_error()})"
+    except Exception as e:                                   # never fatal
+        return f"unavailable ({e})"
 
 
 def default_engine_env(env: dict | None = None, threads: int | None = None) -> dict:

@@ -778,12 +778,22 @@ def test_the_failure_branch_can_report_a_real_error_code():
     assert ctypes.get_last_error() == 6   # ERROR_INVALID_HANDLE
 
 
+PRIORITY_HELPER_HOME = "tools/corpus/corpus_common.py"
+
+
 def test_the_priority_helper_is_not_duplicated_anywhere():
     """The loose end this closes: if the ctypes priority path had been COPIED into other
     drivers, each copy would have carried the truncation and every one of their run records'
     "BELOW_NORMAL" claims would have been false. There is exactly one definition, and every
     other BELOW_NORMAL site goes through `creationflags` on subprocess (a CreateProcess flag,
-    which never involved a handle). Keep it that way: share this function, don't re-derive it."""
+    which never involved a handle). Keep it that way: share this function, don't re-derive it.
+
+    The one definition MOVED (2026-08-03) from this driver to `corpus_common`, beside the rest
+    of the same pairing (`BELOW_NORMAL_PRIORITY_CLASS`, `default_creationflags`,
+    `DEFAULT_ENGINE_THREADS`), when a second driver needed it — `sitting_cutter` copied it
+    first, this test caught the copy, and the copy did carry the truncation exactly as
+    predicted. `steered_frontier.set_below_normal_priority` is now a delegating wrapper, so
+    what this scan asserts is unchanged: ONE file contains the ctypes call."""
     import subprocess
     repo = Path(__file__).resolve().parents[2]
     files = subprocess.run(["git", "ls-files", "*.py"], cwd=repo, capture_output=True,
@@ -796,6 +806,18 @@ def test_the_priority_helper_is_not_duplicated_anywhere():
         t = (repo / rel).read_text(encoding="utf-8", errors="ignore")
         if "SetPriorityClass" in t:
             hits.append(rel)
-    assert hits == ["tools/atlas/steered_frontier.py"], (
+    assert hits == [PRIORITY_HELPER_HOME], (
         "SetPriorityClass appears outside the one helper — a copy carries the "
         f"pseudo-handle truncation with it: {hits}")
+
+
+def test_every_caller_reaches_the_one_definition():
+    """The scan above is satisfied by a helper nobody can reach. Both live entry points must
+    resolve to the SAME function object, or one driver is quietly running at NORMAL."""
+    import corpus_common as cc
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "atlas"))
+    import sitting_cutter as sc  # noqa: F401  (its call sites go through corpus_common)
+    assert sf.set_below_normal_priority.__module__ != cc.set_below_normal_priority.__module__
+    assert sf.set_below_normal_priority() == cc.set_below_normal_priority()
+    src = Path(__file__).resolve().parents[1] / "atlas" / "sitting_cutter.py"
+    assert "cc.set_below_normal_priority()" in src.read_text(encoding="utf-8")
