@@ -30,8 +30,19 @@ sys.path.insert(0, str(ROOT / "classifier"))
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 
 from classifier.data import Transform, SRC_W, SRC_H, TARGET_W, TARGET_H  # noqa: E402
+from production_pins import ACTIVE_CKPT as _ACTIVE_CKPT_REL  # noqa: E402
 
-ACTIVE_CKPT = ROOT / "data" / "classifier" / "v7" / "model_best.pt"
+# Resolved from the pin, NOT hardcoded. This file read `data/classifier/v7/model_best.pt`
+# from the day it was written through the v8, v9 and v10 heads — so every assertion below
+# was checking deploy parity on a SUPERSEDED checkpoint while its docstrings claimed the
+# live one, and a flip that broke preprocessing on the served head would have left it
+# green. That is the failure mode CLAUDE.md's "never hardcode a version" rule names.
+ACTIVE_CKPT = ROOT / _ACTIVE_CKPT_REL
+
+# It follows the pin now, so a flip needs no edit here — but a new head whose config
+# drifts from the documented recipe makes this go legitimately red, which is exactly what
+# `pytest -m version_pinned --collect-only -q` should list before an ACTIVE_CKPT move.
+pytestmark = pytest.mark.version_pinned
 
 
 def _sample_1280x720() -> Image.Image:

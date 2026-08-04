@@ -52,6 +52,32 @@ METADATA_KEYS = {
 }
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _no_artifacts_root_leak():
+    """`_redirect` sets FRACTAL_ARTIFACTS_ROOT process-wide and nothing put it back, so a
+    redirected test leaked a tmp artifacts root into every test that ran after it *in the
+    same process*. That matters because `artifacts_root()` is read at CALL time while
+    several modules bake their `bulk()` paths at IMPORT time — `tau_h_rederive.WORK` is
+    one — so the leak makes `test_tau_h_rederive` pass or fail on file order alone.
+    Serial order happened to be safe; under `-n 4 --dist loadfile` file→worker assignment
+    is dynamic, which is how it surfaced. `restore_triage_store` below covers the same env
+    var but is opt-in, so it protected only the tests that asked for it.
+
+    MODULE-scoped, and that is load-bearing: `full_pool_dir` is itself module-scoped and
+    redirects during ITS setup, so a function-scoped restore would run afterwards and
+    snapshot the already-redirected value — which is exactly the leak that escaped
+    (`popen-gw0/triage_full_pool0`) on the first attempt at this fix.
+    """
+    old = os.environ.get("FRACTAL_ARTIFACTS_ROOT")
+    try:
+        yield
+    finally:
+        if old is None:
+            os.environ.pop("FRACTAL_ARTIFACTS_ROOT", None)
+        else:
+            os.environ["FRACTAL_ARTIFACTS_ROOT"] = old
+
+
 def _redirect(tmp: Path):
     """Point the durable triage store (and the out-of-tree thumb family) at `tmp`."""
     tmp = Path(tmp)

@@ -12,8 +12,9 @@ A Rust engine for generating orbit-trap Mandelbrot/Julia fractal images as wallp
 cargo build --release            # always release — debug is ~50-200x slower
 cargo test                       # tests/*.rs + unit tests; --test <file> or a name substring narrows
 
-uv run pytest                    # Python suite, default lane (~2 min); slow tests excluded
-uv run pytest -m slow            # the opt-in lane (~50s) — see below for when it's mandatory
+uv run pytest                    # Python suite, default lane, serial (~185s); slow excluded
+uv run pytest -n 4 --dist loadfile   # SAME suite in ~90s (2.06x). The full-suite command.
+uv run pytest -m slow            # the opt-in lane — MUST stay serial, see below
 
 # Single render (no subcommand → one PNG):
 cargo run --release -- --center-re -0.743643887 --center-im 0.131825904 \
@@ -29,6 +30,24 @@ Background long renders / descents; release builds do deep production-res render
 (a sibling repo, e.g. `C:\Code\fractal-maker-controller\prompts\v10_flip.md`). This repo has
 its OWN `prompts/` directory holding a different set, so a prompt named in a session and not
 found here is in the sibling — check there before globbing the tree.
+
+**Run the full suite parallel; run a single file serial.** `-n 4 --dist loadfile` halves
+the suite (185s → 90s, measured 2026-08-03). Three constraints, each load-bearing:
+**`-n 4`, never `-n auto`** — `-n` bounds concurrent `fractal-generator.exe`, so `auto`
+(12 here) blows the 4-process cap below; `-n 6` measured no faster anyway. **Never
+`-n` with `-m slow`** — the guard tripwire spawns its own 4 engine subprocesses. **Never
+`-n` on a single file** — `loadfile` gives it zero parallelism and costs ~4s, and it
+breaks `-s`/pdb. It is deliberately NOT in `addopts`: forgetting `-m slow` silently loses
+coverage, forgetting `-n 4` only costs time. Full rationale + the order-dependence bug
+adoption exposed: [`pytest_suite_cost.md`](docs/design/pytest_suite_cost.md) §5–6.
+
+**Set process-global state in tests through `monkeypatch`, never a bare
+`os.environ[...] =`.** `artifacts_root()` reads `FRACTAL_ARTIFACTS_ROOT` at call time
+while modules bake `bulk()` paths at import time, so an unrestored env var makes unrelated
+tests pass or fail on file order — invisible in serial, red under `-n 4`. Where the setter
+is a plain function that cannot take `monkeypatch`, pair it with an autouse restore
+fixture **at least as broad as the broadest fixture that redirects** (a function-scoped
+restore under a module-scoped redirect snapshots the already-redirected value).
 
 **Long background runs: redirect to a log file; never pipe through `tail`/`head`.** The pipe
 buffers, so a job that prints progress with `flush=True` shows nothing for its whole runtime
@@ -50,7 +69,7 @@ deselect-to-zero run reads as a pass, so the `-m slow` must be there explicitly.
 **`version_pinned` is a LABEL, not a lane.** It is excluded from nothing — those tests run in
 the default suite like any other. It exists so the set of things a classifier-version flip
 touches can be *listed* instead of discovered by flipping and reading the wreckage:
-`uv run pytest -m version_pinned --collect-only -q` (~90 tests, 9 files). Pair it with
+`uv run pytest -m version_pinned --collect-only -q` (93 tests, 10 files). Pair it with
 `production_pins.COUPLED_ARTIFACTS` (the revert-together set as data, walked by
 `tools/scoring/test_coupled_artifacts.py`) and `classifier_retrain_protocol.md` §5 before any
 `ACTIVE_CKPT` move.

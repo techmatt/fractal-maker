@@ -27,8 +27,17 @@ Three cases, bracketing the fix on both sides:
      no crop, rather than over-correcting into silently emitting a different image.
      The verdict still survives.
 
+**The staging is driven ONCE** (`_staged_master`, module-scoped) and each test runs
+against a fresh *copy* of that tree with `dh.SESSIONS` restored from a snapshot. Every
+test here is about `/emit`; `open → nav_box → quality` is shared setup, and it is two
+production-fidelity renders (~13.5s), so paying it four times cost 54s of the suite's
+284s to re-derive bytes that are a pure function of the same inputs. Each test still
+gets full isolation — its own store root, artifacts root and session dict — because two
+of them mutate that state destructively (the `rmtree`, the corrupted block).
+
 Run:  uv run python -m pytest tools/descent/test_emit_staging.py -q
 """
+import copy
 import json
 import os
 import shutil
@@ -64,10 +73,39 @@ def _redirect_store(tmp: Path):
     store._ensure_dirs()
 
 
-def _stage(tmp_path):
-    """Drive open → one box descent → quality, and return the client, the atom id and
-    the bytes of the two staged crops as the human judged them."""
-    _redirect_store(tmp_path)
+@pytest.fixture(scope="module", autouse=True)
+def _no_artifacts_root_leak():
+    """`_redirect_store` sets FRACTAL_ARTIFACTS_ROOT process-wide with no teardown, so it
+    leaked a tmp artifacts root into every later test in the same process.
+    `artifacts_root()` is read at CALL time while modules bake `bulk()` paths at IMPORT
+    time (`tau_h_rederive.WORK`), so the leak decided that test's verdict by file order.
+    Harmless under the serial ordering; `-n 4 --dist loadfile` assigns files to workers
+    dynamically and surfaced it.
+
+    Module-scoped so it wraps `_staged_master` (which redirects during ITS setup) — a
+    function-scoped restore would snapshot the already-redirected value. Every test here
+    re-points the root through `staged`, so one restore at module teardown is enough."""
+    old = os.environ.get("FRACTAL_ARTIFACTS_ROOT")
+    try:
+        yield
+    finally:
+        if old is None:
+            os.environ.pop("FRACTAL_ARTIFACTS_ROOT", None)
+        else:
+            os.environ["FRACTAL_ARTIFACTS_ROOT"] = old
+
+
+@pytest.fixture(scope="module")
+def _staged_master(tmp_path_factory):
+    """Drive open → one box descent → quality ONCE, into a master tree no test writes to.
+
+    Returns the master dir plus everything a test needs to reconstitute that state: the
+    atom/view ids, the judged bytes, and a snapshot of the session dict. The `/quality`
+    renders are the expensive part and are a pure function of (atom, view), so one pass
+    serves every case below.
+    """
+    master = tmp_path_factory.mktemp("staged_master")
+    _redirect_store(master)
     dh.SESSIONS.clear()
     client = dh.app.test_client()
     atom_id = next(a["id"] for a in store.load_selection() if a["degree"] == 2)
@@ -84,7 +122,22 @@ def _stage(tmp_path):
     canon_staged, vivid_staged = store.quality_scratch_paths(atom_id, view_id)
     assert canon_staged.exists() and vivid_staged.exists()
     judged = (canon_staged.read_bytes(), vivid_staged.read_bytes())
-    return client, atom_id, view_id, judged
+    return master, atom_id, view_id, judged, copy.deepcopy(dh.SESSIONS)
+
+
+@pytest.fixture
+def staged(_staged_master, tmp_path):
+    """A private, writable replica of the staged state: `tmp_path` gets its own copy of
+    the master tree, the store/artifacts roots point at it, and `dh.SESSIONS` is restored
+    from the snapshot. Tests may wipe the scratch tree or corrupt a recorded block
+    without reaching each other.
+    """
+    master, atom_id, view_id, judged, sessions = _staged_master
+    shutil.copytree(master, tmp_path, dirs_exist_ok=True)
+    _redirect_store(tmp_path)
+    dh.SESSIONS.clear()
+    dh.SESSIONS.update(copy.deepcopy(sessions))
+    return dh.app.test_client(), atom_id, view_id, judged
 
 
 def _emits():
@@ -95,8 +148,8 @@ def _emits():
 # --------------------------------------------------------------------------- #
 # 1 · cache PRESENT — the ordinary path still emits exactly what was judged
 # --------------------------------------------------------------------------- #
-def test_emit_uses_the_staged_cache_and_matches_the_judged_bytes(tmp_path):
-    client, atom_id, _view, (canon_judged, vivid_judged) = _stage(tmp_path)
+def test_emit_uses_the_staged_cache_and_matches_the_judged_bytes(staged):
+    client, atom_id, _view, (canon_judged, vivid_judged) = staged
 
     r = client.post("/emit", json={"atom_id": atom_id, "class": 4})
     assert r.status_code == 200, r.get_data(as_text=True)[:300]
@@ -112,8 +165,8 @@ def test_emit_uses_the_staged_cache_and_matches_the_judged_bytes(tmp_path):
 # 2 · cache ABSENT — the guard. RED against the pre-fix code (unhandled 500,
 #     zero rows in emits.jsonl).
 # --------------------------------------------------------------------------- #
-def test_emit_survives_a_scratch_wipe_between_judging_and_emitting(tmp_path):
-    client, atom_id, _view, (canon_judged, vivid_judged) = _stage(tmp_path)
+def test_emit_survives_a_scratch_wipe_between_judging_and_emitting(staged):
+    client, atom_id, _view, (canon_judged, vivid_judged) = staged
 
     shutil.rmtree(store.SCRATCH_DIR)              # `rm -r scratch/*`
     assert not store.SCRATCH_DIR.exists()
@@ -136,11 +189,11 @@ def test_emit_survives_a_scratch_wipe_between_judging_and_emitting(tmp_path):
         "rebuilt vivid crop is not the crop that was judged"
 
 
-def test_session_holds_render_parameters_not_scratch_paths(tmp_path):
+def test_session_holds_render_parameters_not_scratch_paths(staged):
     """(b) of the fix: a path is not a record. The staged file is derivable from
     (atom_id, view_id); what the session must carry is the parameter set the judged
     image is a pure function of."""
-    _client, atom_id, view_id, _judged = _stage(tmp_path)
+    _client, atom_id, view_id, _judged = staged
     qq = dh.SESSIONS[atom_id]["quality"][view_id]
     assert set(qq) == {"canonical_block", "vivid_block"}, (
         f"session quality entry carries more than the render parameters: {sorted(qq)}")
@@ -157,8 +210,8 @@ def test_session_holds_render_parameters_not_scratch_paths(tmp_path):
 # --------------------------------------------------------------------------- #
 # 3 · the other bracket — do not over-correct into silently emitting something else
 # --------------------------------------------------------------------------- #
-def test_unrebuildable_emit_fails_loudly_and_still_keeps_the_verdict(tmp_path):
-    client, atom_id, view_id, _judged = _stage(tmp_path)
+def test_unrebuildable_emit_fails_loudly_and_still_keeps_the_verdict(staged):
+    client, atom_id, view_id, _judged = staged
 
     # corrupt the recorded parameters so the crop genuinely cannot be reconstructed
     # (`location.render_one_flags` refuses an unknown family)
@@ -179,11 +232,6 @@ def test_unrebuildable_emit_fails_loudly_and_still_keeps_the_verdict(tmp_path):
 
 
 if __name__ == "__main__":
-    import tempfile
-    for fn in (test_emit_uses_the_staged_cache_and_matches_the_judged_bytes,
-               test_emit_survives_a_scratch_wipe_between_judging_and_emitting,
-               test_session_holds_render_parameters_not_scratch_paths,
-               test_unrebuildable_emit_fails_loudly_and_still_keeps_the_verdict):
-        with tempfile.TemporaryDirectory() as td:
-            fn(Path(td))
-            print(f"{fn.__name__}: PASS")
+    # The cases take their staged state from fixtures now, so hand-calling them would
+    # re-render four times — the cost this file was restructured to stop paying.
+    raise SystemExit(pytest.main([__file__, "-q"]))

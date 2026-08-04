@@ -34,6 +34,24 @@ import corpus_common as cc  # noqa: E402
 pytestmark = pytest.mark.skipif(not BIN.exists(), reason="release binary not built")
 
 
+@pytest.fixture(autouse=True)
+def _no_artifacts_root_leak():
+    """`_redirect_store` sets FRACTAL_ARTIFACTS_ROOT process-wide with no teardown, so it
+    leaked a tmp artifacts root into every later test in the same process.
+    `artifacts_root()` is read at CALL time while modules bake `bulk()` paths at IMPORT
+    time (`tau_h_rederive.WORK`), so the leak decided that test's verdict by file order.
+    Harmless under the serial ordering; `-n 4 --dist loadfile` assigns files to workers
+    dynamically and surfaced it."""
+    old = os.environ.get("FRACTAL_ARTIFACTS_ROOT")
+    try:
+        yield
+    finally:
+        if old is None:
+            os.environ.pop("FRACTAL_ARTIFACTS_ROOT", None)
+        else:
+            os.environ["FRACTAL_ARTIFACTS_ROOT"] = old
+
+
 def _redirect_store(tmp: Path):
     tmp = Path(tmp)
     store.DH_DIR = tmp / "data" / "descent_harness"      # in-tree records analog

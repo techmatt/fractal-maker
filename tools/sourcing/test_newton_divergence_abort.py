@@ -270,12 +270,32 @@ def _grid_parity(n_ang, n_rad, degrees, max_steps=None):
     return n, n_conv, lost, mismatch, aborted
 
 
+# The default-lane grids are 2 ang x 2 rad. Their cost is essentially LINEAR IN THE
+# NUMBER OF NON-CONVERGERS — the live arm aborts on the first orbit pass, so what is
+# being paid for is the reference arm burning its whole `max_steps` on each one
+# (~0.22 s per non-converger at 600). Measured 2026-08-03 on the 12-core box, via
+# `_grid_parity(n_ang, 2, DEGREES)` at max_steps=600:
+#
+#   ang=6  45.7s  624 solves  433 conv  191 nonconv  191 aborted   <- was the default
+#   ang=4  29.4s  416         291       125          125
+#   ang=3  20.8s  312         216        96           96
+#   ang=2  13.0s  208         145        63           63           <- now
+#
+# `lost` and `mismatch` are 0 and `aborted` == nonconv at EVERY density, i.e. the abort
+# fires on 100% of non-convergers and the population is homogeneous with respect to
+# everything this test asserts. Denser grids buy more solves of the same kind, not a new
+# kind of evidence, and the committed 64 x 8 density is what the `slow` lane below is
+# for. n_rad must stay >= 2: at n_rad=1 every seed converges (0 non-convergers), the
+# abort never fires and both tests go vacuous.
+GRID_ANG, GRID_RAD = 2, 2
+
+
 def test_roster_ring_seed_grid_loses_no_converger_and_aborts_real_burners():
     """The derivation-shaped population: the roster builder's own ring seeds x periods
     3..15, at a reduced ring count so it stays a default-lane test. Zero convergers lost,
     zero converged solves changed, and the abort demonstrably fires — the last clause is
     what stops this passing because nothing happened."""
-    n, n_conv, lost, mismatch, aborted = _grid_parity(6, 2, brs.DEGREES)
+    n, n_conv, lost, mismatch, aborted = _grid_parity(GRID_ANG, GRID_RAD, brs.DEGREES)
     assert n_conv > 0 and n - n_conv > 0, f"need both populations, got {n_conv}/{n}"
     assert lost == 0, f"{lost} converged solves lost of {n_conv}"
     assert mismatch == 0, f"{mismatch} converged solves changed value of {n_conv}"
@@ -283,11 +303,15 @@ def test_roster_ring_seed_grid_loses_no_converger_and_aborts_real_burners():
 
 
 def test_the_grid_stays_parity_clean_at_the_library_default_budget():
-    """The same grid at max_steps=200, the default `scan`/CLI/emit_deep_pool budget. A
-    bigger budget admits SLOW convergers the 60-step arm never sees, which is the exact
-    population a budget-blind bound destroys. Kept small here (the reference arm burns the
-    whole 200 on every failure); the dense version is in the `slow` lane below."""
-    n, n_conv, lost, mismatch, aborted = _grid_parity(3, 2, brs.DEGREES, max_steps=200)
+    """The same grid at max_steps=200, the default `scan`/CLI/emit_deep_pool budget —
+    a TIGHTER budget than the roster's own `NEWTON_STEPS` (600) that the sibling above
+    runs. That matters because the bound is proportional to the remaining budget: the
+    same seed must be judged against 200 steps' worth of retirable residual here and 600
+    there, so a bound that had quietly become a magnitude threshold would show up as a
+    converger lost at exactly one of the two budgets."""
+    n, n_conv, lost, mismatch, aborted = _grid_parity(GRID_ANG, GRID_RAD, brs.DEGREES,
+                                                      max_steps=200)
+    assert n_conv > 0 and n - n_conv > 0, f"need both populations, got {n_conv}/{n}"
     assert lost == 0, f"{lost} converged solves lost of {n_conv} at max_steps=200"
     assert mismatch == 0, f"{mismatch} converged solves changed value of {n_conv}"
     assert aborted > 0, "the abort never fired at max_steps=200"
