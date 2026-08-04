@@ -239,17 +239,33 @@ REGISTRY = [
      "belongs in bulk() rather than an ignored data/ path, but nothing is at risk."),
 
     # ---------------- scratch/ that is on a dependency path -----------------------
-    ("scratch/interior_band_batch/cand/<atom>.json",
-     "tools/sourcing/build_interior_band_batch.py", SCR,
-     "re-sweep every position on 160 atoms' fields (fields survive; the sweep does not)", Y,
-     "MISMATCH. Two committed tools READ it — build_gcf_arm_batch.py draws the parked "
-     "G_cf batch from it, and the interior-clause inertness study quotes its argmax. It IS "
-     "the candidate population both sets of numbers are quoted against, and it sits in the "
-     "one class whose contract guarantees deletion."),
-    ("scratch/minibrot_batch/fields/<atom>.bin", "tools/sourcing/build_minibrot_batch.py", SCR,
-     "re-dump each atom's screen field (deterministic, expensive)", N,
-     "Regenerable -> scratch() is survivable, but it is the input three committed tools "
-     "need (interior_band, interior_bakeoff, gcf_arm). bulk() is the class that fits."),
+    ("data/minibrot_roster/interior_band_v1/cand/<atom>.json",
+     "tools/sourcing/build_interior_band_batch.py", DUR,
+     "re-sweep every position on 160 atoms' fields — a DIFFERENT reservoir draw, not this "
+     "one (the full swept grid was never kept)", Y,
+     "RESOLVED 2026-08-04. Was scratch/interior_band_batch/cand and was wiped; the copy "
+     "that survived did so in a trash directory. Two committed tools read it "
+     "(build_gcf_arm_batch draws the parked G_cf batch from it; the interior-clause "
+     "inertness study quotes its argmax) and it IS the candidate population both sets of "
+     "numbers are quoted against — impossible-class, so durable(). Restored byte-identical "
+     "(160 files, sha256 over the set matches the trash copy) beside the manifest it "
+     "defines, and durable() now asserts at write time that git will keep it."),
+    ("data/minibrot_batch/fields/<atom>.bin", "tools/sourcing/build_minibrot_batch.py", BULK,
+     "re-dump each atom's screen field (deterministic, expensive: 160 full-frame f64 renders)", N,
+     "RESOLVED 2026-08-04. Was scratch/minibrot_batch/fields and was wiped (all 320 files). "
+     "Regenerable, so scratch() was survivable ON PAPER — in fact it is the input three "
+     "committed tools need (interior_band, interior_bakeoff, gcf_arm) and recovering it "
+     "cost a trash directory rather than a re-dump. Registered in "
+     "artifacts.RELOCATED_PREFIXES and restored out-of-tree byte-identical (1.6 GB / 320 "
+     "files, sha256 over the .bin set and the .json set both match)."),
+    ("scratch/q4_stage1/fields/<mb_id>.bin", "tools/studies/q4_stage1_labelset.py", SCR,
+     "re-dump the 66 labelset fields (deterministic, expensive)", N,
+     "OPEN — a class decision for Matt, not resolved here. Restored to scratch/ on "
+     "2026-08-04 (66 files / 336 MB, from the same trash tree) because it BLOCKS both "
+     "restorations above: q4_multibrot_transfer._fit_model reads it, and that fit gates "
+     "build_minibrot_batch screen, build_interior_band_batch sweep and interior_bakeoff "
+     "audit/features. A scratch input that gates the deployed screen model's fit is the "
+     "same shape of mismatch as the two above; it is left in scratch() pending a decision."),
     ("data/emission/campaign1/embs/*.npy", "tools/emission/campaign1_intake.py", BULK,
      "re-embed the intake's medoids — needs intake.json, which is gone", N,
      "Was scratch/emission/campaign1/embs and that is why campaign1 is DARK: the vectors "
@@ -302,7 +318,10 @@ PROBES = {
     "data/classifier/v7/eval_scores_v7.jsonl": "data/classifier/v7/eval_scores_v7.jsonl",
     "data/calibration/energy_calibration.json": "data/calibration/energy_calibration.json",
     "data/emission/campaign1/intake.json": "data/emission/campaign1/intake.json",
-    "scratch/interior_band_batch/cand/<atom>.json": "scratch/interior_band_batch/cand",
+    "data/minibrot_roster/interior_band_v1/cand/<atom>.json":
+        "data/minibrot_roster/interior_band_v1/cand",
+    "data/minibrot_batch/fields/<atom>.bin": "data/minibrot_batch/fields",
+    "scratch/q4_stage1/fields/<mb_id>.bin": "scratch/q4_stage1/fields",
 }
 
 

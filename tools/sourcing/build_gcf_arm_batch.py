@@ -70,7 +70,8 @@ Stages:
   uv run python tools/sourcing/build_gcf_arm_batch.py render [--workers 1]
   uv run python tools/sourcing/build_gcf_arm_batch.py verify
 
-Reads:  scratch/interior_band_batch/cand/<atom>.json   (G_cf already computed there)
+Reads:  data/minibrot_roster/interior_band_v1/cand/<atom>.json  (G_cf already computed
+                                                    there; DURABLE, via IBB.CAND)
         data/minibrot_roster/roster.jsonl
 Writes: data/minibrot_roster/gcf_arm_v1/draw.jsonl                       (durable manifest)
         data/label_corpus/batches/2026-07-28_gcf_arm_v1/{images,blind}.jsonl, batch.json
@@ -124,7 +125,7 @@ PALETTE_SOURCE = BMB.PALETTE_SOURCE            # data/palettes/score3_colormaps.
 VIVID_PALETTE, VIVID_SOURCE = BMB.VIVID_PALETTE, BMB.VIVID_SOURCE
 
 SCR = paths.scratch("gcf_arm_batch")
-CAND = IBB.CAND                                # scratch/interior_band_batch/cand
+CAND = IBB.CAND                                # data/minibrot_roster/interior_band_v1/cand
 DIR_REL = "data/minibrot_roster/gcf_arm_v1"
 DRAW_REL = f"{DIR_REL}/draw.jsonl"
 

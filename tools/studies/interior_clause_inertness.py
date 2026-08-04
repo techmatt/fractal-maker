@@ -23,8 +23,9 @@ three is actually binding, as opposed to which one we have been arguing about.
 POPULATION — read this before quoting any number below.
 The full swept positions do NOT survive. `build_interior_band_batch._sweep_one` cached only
 its reservoir: <= CAND_CAP (24) windows per (atom, band, scale), plus per-bucket `seen`
-counts. The raw fields DO survive (scratch/minibrot_batch/fields/*.bin, 160 atoms), so a
-full-grid argmax is reconstructible — but this study is read-only and does not re-sweep.
+counts. The raw fields DO survive (data/minibrot_batch/fields/*.bin, 160 atoms, bulk —
+resolved out-of-tree), so a full-grid argmax is reconstructible — but this study is
+read-only and does not re-sweep.
 
 That reservoir is BAND-STRATIFIED, so a reservoir argmax is not a sweep argmax, and the bias
 has a direction that must be named: every band gets the same cap regardless of how many
@@ -45,7 +46,8 @@ Read-only: no re-sweep, no config change, no threshold touched. `q4_stage1_linea
 
   uv run python tools/studies/interior_clause_inertness.py
 
-Reads:  scratch/interior_band_batch/cand/<atom>.json   (G_cf precomputed per candidate)
+Reads:  data/minibrot_roster/interior_band_v1/cand/<atom>.json  (G_cf precomputed per
+        candidate; DURABLE, addressed through `IBB.CAND` rather than a second literal)
 Writes: scratch/interior_clause_inertness/{report.txt,per_atom.jsonl}
 """
 from __future__ import annotations
@@ -64,9 +66,14 @@ for _p in (_HERE, os.path.join(_ROOT, "tools"), os.path.join(_ROOT, "tools", "so
         sys.path.insert(0, _p)
 
 import paths                                              # noqa: E402
+import build_interior_band_batch as IBB                   # noqa: E402 (the candidate cache)
 from tools.studies import q4_stage1_linear_fit as LF      # noqa: E402 (constants only)
 
-CAND = paths.scratch("interior_band_batch", "cand")
+# The candidate cache has ONE definition, in the module that writes it. This used to be a
+# second `paths.scratch("interior_band_batch", "cand")` here, and when the cache moved to
+# its durable home that copy would have kept pointing at a path the wipe already emptied —
+# a study that reads nothing and reports on it.
+CAND = IBB.CAND
 OUT = paths.scratch("interior_clause_inertness")
 
 # The deployed ceilings, read from the deployed module — never restated as literals here.

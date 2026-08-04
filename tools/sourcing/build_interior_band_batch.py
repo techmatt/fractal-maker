@@ -60,8 +60,11 @@ Run (background sweep + render; both are long):
   uv run python tools/sourcing/build_interior_band_batch.py report
 
 Reads:   data/minibrot_roster/roster.jsonl
-         scratch/minibrot_batch/fields/<atom>.bin   (the 487's own cached parent fields)
-Writes:  scratch/interior_band_batch/{cand,fields,report.txt,band_sheet.png}  (regenerable)
+         data/minibrot_batch/fields/<atom>.bin  (the 487's own cached parent fields; BULK,
+                                                 resolved out-of-tree via artifacts.resolve)
+Writes:  data/minibrot_roster/interior_band_v1/cand/<atom>.json   (DURABLE — the candidate
+                                                 population two registered batches drew from)
+         scratch/interior_band_batch/{fields,report.txt,band_sheet.png}  (regenerable)
          data/minibrot_roster/interior_band_v1/{draw.jsonl,interior_features.jsonl}
          data/label_corpus/batches/2026-07-27_interior_band_v1/{images.jsonl,batch.json}
 
@@ -131,10 +134,17 @@ CAND_CAP = 24                                  # reservoir size per (atom, band,
 SCALE_MIX = {0.06: 422 / 487, 0.09: 50 / 487, 0.14: 15 / 487}
 
 SCR = paths.scratch("interior_band_batch")
-CAND = SCR / "cand"
 CROP_FIELDS = SCR / "fields"
-FIELDS = BMB.FIELDS                            # scratch/minibrot_batch/fields
+FIELDS = BMB.FIELDS                            # the roster atoms' parent fields (bulk)
 DIR_REL = "data/minibrot_roster/interior_band_v1"
+# The candidate reservoir is DURABLE, not scratch. It is the candidate POPULATION two
+# registered batches were drawn from (this one and gcf_arm_v1) and the population the
+# interior-clause inertness study quotes its argmax against; the full swept grid was never
+# kept, so regenerating it means re-sweeping ~2M featurize calls over 160 atoms to get a
+# DIFFERENT reservoir draw, not this one. It lived under `scratch/` and a wipe took it —
+# the copy that survived did so in a trash directory, by luck. It now sits beside the
+# manifest it defines, and `durable()` asserts at write time that git will keep it.
+CAND = paths.durable(f"{DIR_REL}/cand")
 DRAW_REL = f"{DIR_REL}/draw.jsonl"
 FEAT_REL = f"{DIR_REL}/interior_features.jsonl"
 

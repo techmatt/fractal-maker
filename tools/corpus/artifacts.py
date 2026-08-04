@@ -110,6 +110,19 @@ RELOCATED_PREFIXES = (
     # vectors lived in `scratch/` and that is precisely why it is dark; if it is ever
     # relit, rule 5 says the rebuild is born out-of-tree, and this is where.
     "data/emission/campaign1/embs",
+    # The roster atoms' cached parent screen fields (tools/sourcing/build_minibrot_batch.py
+    # `screen`): 160 atoms x (2176x1224 f64 field .bin + a metadata .json), 1.6 GB. A
+    # LITERAL for the same reason as tau_h_rederive — one fixed path, not a family that
+    # grows a member per run. Textbook bulk(): deterministic to re-dump from the committed
+    # roster, and expensive (one full-frame f64 render per atom). Their home was
+    # `scratch/minibrot_batch/fields`, and the wipe took all 320 files; the copy that
+    # survived did so in a trash directory. THREE committed tools read them —
+    # build_interior_band_batch (the sweep), interior_bakeoff (the crop/parent features) and
+    # build_gcf_arm_batch through the first — so "regenerable, therefore survivable" was
+    # true on paper and cost a 160-atom re-dump in fact. Unlike tau_h_rederive there is no
+    # `!/data/minibrot_batch/` re-include, so `/data/*` already ignores an in-tree
+    # straggler; the resolver is what keeps 1.6 GB out of the working tree at all.
+    "data/minibrot_batch/fields",
 )
 
 

@@ -35,7 +35,9 @@ Run (background the screen; it is >30s):
   uv run python tools/sourcing/build_minibrot_batch.py report
 
 Reads:   data/minibrot_roster/roster.jsonl
-Writes:  scratch/minibrot_batch/{fields,screen}/           (regenerable cache)
+Writes:  data/minibrot_batch/fields/                       (BULK: cached parent screen
+                                                           fields, resolved out-of-tree)
+         scratch/minibrot_batch/screen/                    (regenerable cache)
          data/minibrot_roster/batch_v1/draw.jsonl          (durable draw manifest)
          data/minibrot_roster/batch_v1/anchor_minibrot_picks.jsonl (for the anchor batch)
          data/label_corpus/batches/<BATCH_ID>/{images.jsonl,batch.json}
@@ -104,7 +106,10 @@ PER_ATOM_CAP = 3
 ANCHOR_MINIBROT_N = 8
 
 SCR_DIR = paths.scratch("minibrot_batch")
-FIELDS = SCR_DIR / "fields"
+# The parent screen fields are BULK, not scratch: 1.6 GB that three committed tools read
+# and that costs a 160-atom full-frame f64 re-dump to rebuild. Registered in
+# artifacts.RELOCATED_PREFIXES, so `bulk()` resolves them OUT of the working tree.
+FIELDS = paths.bulk("data/minibrot_batch/fields")
 SCREEN = SCR_DIR / "screen"
 DRAW_DIR_REL = "data/minibrot_roster/batch_v1"
 

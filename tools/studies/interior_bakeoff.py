@@ -45,7 +45,8 @@ board ~5 s; audit ~4 min with 4 workers (background it).
 
 Reads:   data/minibrot_roster/batch_v1/draw.jsonl, roster.jsonl
          data/label_corpus/batches/2026-07-26_minibrot_roster_v2/images.jsonl (labels)
-         scratch/minibrot_batch/fields/<atom>.bin (cached parent screen fields)
+         data/minibrot_batch/fields/<atom>.bin (cached parent screen fields; BULK,
+                                               resolved out-of-tree)
 Writes:  scratch/interior_bakeoff/{fields,cropfeat,sweep}/   (regenerable cache)
          data/minibrot_roster/batch_v1/interior_features.jsonl  (durable feature table)
          scratch/interior_bakeoff/{board,audit}.json           (numbers for the findings doc)
@@ -75,7 +76,7 @@ BATCH_ID = "2026-07-26_minibrot_roster_v2"
 BATCH_DIR = ROOT / "data" / "label_corpus" / "batches" / BATCH_ID
 DRAW = ROOT / "data" / "minibrot_roster" / "batch_v1" / "draw.jsonl"
 ROSTER = ROOT / "data" / "minibrot_roster" / "roster.jsonl"
-PARENT_FIELDS = paths.scratch("minibrot_batch", "fields")
+PARENT_FIELDS = paths.bulk("data/minibrot_batch/fields")   # == build_minibrot_batch.FIELDS
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 
 SCR = paths.scratch("interior_bakeoff")
