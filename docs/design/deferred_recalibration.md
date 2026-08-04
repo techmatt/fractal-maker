@@ -71,6 +71,25 @@ Four things from that pass that outlive it:
 100% native-plane while the class-4 signal and half the eval power are `julia:multibrot`. A
 corpus-mix read belongs before the next labeling round.
 
+**The watch's qualitative look, taken 2026-08-04** on the first v10-era labeled draw
+(`2026-08-03_v2_sitting_v1`, 1,000 rows, merged that day; command:
+`uv run python tools/atlas/pop_quota.py` for the census half). **Class 4 is 35/1000 = 3.5%
+[2.5, 4.8]**, and one-per-cluster at the leader/radius 0.95 cut it is 3.2% over 295 looks —
+so the rate is not a near-dup pile-up. **Where it landed is the part worth keeping: 26 of the
+35 are parameter-plane** (julia:mandelbrot 16, julia:multibrot5 8, julia:multibrot4 2) **and 5
+more are phoenix**, against 4 in native multibrot and **0 in mandelbrot**, which took 0 of its
+39 rows past class 2. Class 4 remains a `julia:multibrot`-and-phoenix phenomenon under v10;
+nothing here says the head lost the tier. Read it as descriptive only — the draw is
+screened-and-ranked and biased more than once (`batch.json § purpose`), so it is a yield, not
+a base rate.
+
+That also closes the mix half of the open item above: this sitting is **69.3%
+parameter-plane** (487 julia + 206 phoenix), the first appended labels that are not
+native-plane, and its currency lands where the deficits are — `julia:mandelbrot` +23.2,
+phoenix +15.1, `julia:multibrot5` +14.5 of +67.8 total, with **+0.0 to `mandelbrot`**, the
+partition that sets the uniform target level. Every other partition's deficit narrowed and the
+target did not move.
+
 ## Ranker growth (`pref_loc_v1`)
 
 - **Why parked:** the growth loop is paused alongside the blind-read deferral — it feeds on
