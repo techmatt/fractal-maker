@@ -132,11 +132,13 @@ def _partition_of_render(render: dict) -> str:
     carrying ~160 currency units into one partition is exactly the kind of thing a deficit
     should not be allowed to hide.
 
-    VERIFIED 2026-08-03 (`corpus_reader.iter_labeled`, census by batch): all 4,935 defaulted
-    rows are genuinely mandelbrot, and they carry 159.2 of mandelbrot's 186.8 currency — so
-    this default is load-bearing for the partition that SETS the uniform target level (its
-    deficit is 0 by construction), not just for its own share. They come from exactly six
-    batches, all created 2026-06-23..25: `flat_generate_loose0_v3`, `guided_descend_rev4`,
+    VERIFIED 2026-08-03, and RE-VERIFIED independently the same day (`corpus_reader.iter_labeled`,
+    census by batch; the re-run reproduced 4,935 / 159.2 / max |c| = 1.7762 exactly): all 4,935
+    defaulted rows are genuinely mandelbrot, and they carry 159.2 of mandelbrot's 186.8
+    currency — so this default is load-bearing for the partition that SETS the uniform target
+    level (its deficit is 0 by construction), not just for its own share. The price does not
+    move. They come from exactly six batches — of the LABELED population; see the caveat
+    below — all created 2026-06-23..25: `flat_generate_loose0_v3`, `guided_descend_rev4`,
     `guided_descend_rev4occfix_v2filtered`, `mining_v3guided_v1`, `scale_2x2_labelset`,
     `scale_controlled_2x2`. Three independent reasons, not one:
       * `julia_ladder_j0` (created 2026-06-25, the same day as the last of them) is the batch
@@ -148,7 +150,19 @@ def _partition_of_render(render: dict) -> str:
       * all 5,050 centers lie inside the mandelbrot c-plane box (re ∈ [-2.05, 0.75],
         |im| <= 1.25; max |c| = 1.78) — `flat_generate`'s own sampling box is that rectangle.
     No re-render was needed. Nothing to correct: mandelbrot's price and its floored 5% share
-    stand as the proving run reported them."""
+    stand as the proving run reported them.
+
+    THE SIX IS A FACT ABOUT THE LABELED POPULATION, NOT ABOUT THE CORPUS. Eleven batches
+    carry token-less render blocks; the other five (`anchor_class4_v1`, `revisit_class3_c1..c4`,
+    541 rows) hold ZERO scored rows today, which is the only reason the census sees six. They
+    were created 2026-07-26..28, a month AFTER the schema extension, so reason (1) above — the
+    dating argument — does NOT cover them. Reasons (2) and (3) do: 0 of the 541 carry
+    `c_re`/`c_im` and all 541 centers are inside the mandelbrot box (max |c| = 1.353), so they
+    would route correctly if labeled. That is checked, not assumed:
+    `test_pop_quota.py::test_every_defaulted_row_is_mandelbrot_SHAPED` asserts the shape
+    invariant over every token-less row in the corpus, labeled or not, so a future batch that
+    defaults to mandelbrot without earning it goes red. The COUNT is deliberately not pinned —
+    it moves the day Matt labels the revisit batches, and that is not a regression."""
     from partitions import partition_of                     # noqa: E402 (tools/scoring)
     ft = render.get("fractal_type") or render.get("family")
     return partition_of(ft, ft) if ft else "mandelbrot"

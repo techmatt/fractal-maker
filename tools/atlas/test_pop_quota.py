@@ -456,3 +456,88 @@ def test_the_trace_logs_the_effective_vector_rather_than_leaving_it_derivable(tm
     assert rec["effective"]["multibrot3"] == pytest.approx(1.0)
     assert rec["effective"]["julia:multibrot3"] == 0.0
     assert rec["intended"] != rec["effective"]
+
+
+# =========================================================================== #
+# The default-fractal_type routing, over the REAL corpus.
+#
+# mandelbrot's cost-to-mine rests on rows that were routed to it by a default rather than by
+# a token, and mandelbrot is the partition that SETS the uniform target level — so a row that
+# defaults there without earning it moves every other partition's deficit too.
+# =========================================================================== #
+def _token_less_rows():
+    """Every render block in the corpus with no family token — labeled or not.
+
+    Deliberately NOT `iter_labeled`: the census only sees SCORED rows, and that is exactly
+    what made the population look like six batches when eleven carry token-less renders. The
+    five unlabeled ones are a future census's rows, and the invariant has to hold for them
+    before they are labeled, not after."""
+    import json
+    base = ROOT / "data" / "label_corpus" / "batches"
+    for bd in sorted(base.iterdir()):
+        f = bd / "images.jsonl"
+        if not f.exists():
+            continue
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            r = (json.loads(line).get("render") or {})
+            if not (r.get("fractal_type") or r.get("family")):
+                yield bd.name, r
+
+
+def test_every_defaulted_row_is_mandelbrot_SHAPED():
+    """The two reasons that survive as testable INVARIANTS, over the whole corpus.
+
+    The third reason in `_partition_of_render` — "no token dates the row to before any other
+    family existed" — is a fact about six batches created 2026-06-23..25 and it does NOT
+    generalize: five later batches carry token-less renders too. So the dating argument is
+    not what is asserted here. These two are:
+
+      (a) a parameter-plane family writes `c_re`/`c_im`; a token-less row that carries them
+          is not a degree-2 c-plane row and must not default to mandelbrot;
+      (b) `flat_generate`'s sampling box IS the mandelbrot c-plane rectangle, so a center
+          outside it did not come from that sampler.
+
+    The COUNT is not pinned on purpose: it moves the day the revisit batches are labeled,
+    and that is a labeling event, not a regression."""
+    import math
+    bad_c, bad_box, n = [], [], 0
+    per_batch = {}
+    for batch, r in _token_less_rows():
+        n += 1
+        per_batch[batch] = per_batch.get(batch, 0) + 1
+        if r.get("c_re") is not None or r.get("c_im") is not None:
+            bad_c.append((batch, r.get("c_re"), r.get("c_im")))
+        cx, cy = float(r["cx"]), float(r["cy"])
+        if not (-2.05 <= cx <= 0.75 and abs(cy) <= 1.25):
+            bad_box.append((batch, cx, cy))
+    assert n > 4000, f"only {n} token-less rows found — is the corpus reachable?"
+    assert not bad_c, (
+        "token-less render blocks carrying c_re/c_im would default to mandelbrot but are "
+        f"parameter-plane rows: {bad_c[:5]}")
+    assert not bad_box, (
+        "token-less render blocks centered outside the mandelbrot c-plane box "
+        f"(re in [-2.05, 0.75], |im| <= 1.25): {bad_box[:5]}")
+
+
+def test_the_labeled_defaulted_population_still_carries_mandelbrots_currency():
+    """The number the price rests on, re-derived rather than quoted. Asserted as a SHARE with
+    room to move — labeling adds rows — because pinning 159.2 would make every labeling
+    session a red suite, and the decision this supports is only "does the default carry
+    enough currency to matter", which a band answers."""
+    import corpus_reader as cr
+    cur_def = cur_all = 0.0
+    for lc in cr.iter_labeled(None):
+        r = lc.render or {}
+        w = pq.CLASS_WEIGHT.get(int(lc.score), 0.0)   # only 3s and 4s are currency
+        if not (r.get("fractal_type") or r.get("family")):
+            cur_def += w
+        if pq._partition_of_render(r) == "mandelbrot":
+            cur_all += w
+    assert cur_all > 0
+    share = cur_def / cur_all
+    assert 0.5 < share < 1.0, (
+        f"defaulted rows carry {cur_def:.1f} of mandelbrot's {cur_all:.1f} currency "
+        f"({share:.1%}). Outside the band this default stopped being the thing that "
+        f"determines mandelbrot's price — re-read pop_quota._partition_of_render.")
