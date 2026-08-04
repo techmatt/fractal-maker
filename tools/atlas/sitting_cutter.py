@@ -160,8 +160,14 @@ def stage_morph_dedup(rows, ctx):
     THE EMBED IS NOW COMPUTED ONCE, EVER (`tools/wallpaper/morph_embed_cache.py`). The cost
     below is what a COLD population pays; a re-cut of overlapping material pays ~nothing,
     because a location's morph vector is a pure function of (location, morph recipe, embedder)
-    and that triple is the store's key. The cold/warm pair measured on the live population is
-    recorded at the end of this docstring.
+    and that triple is the store's key. MEASURED on the harvest-v2 proving population,
+    2026-08-03 (3,527 rows surviving (a)+(c); `dry-run --run-dir
+    data/discovery/harvest_v2_proving_20260803`): **cold 2,033 s / 3,527 embeds -> warm 3.95 s
+    / 0 embeds, 515x**. The store is 12.2 MB for 3,576 vectors. Two notes a future sizing
+    decision needs: the cold rate here is **0.576 s/row, not the 0.93 below** — same recipe,
+    shallower population (median maxiter 3,000), so size from YOUR population's fw/maxiter
+    profile and not from either number; and a fully-warm pass never loads the model, so it
+    never checks the embedder digest (see `morph_embed_cache`).
 
     MEASURED AT FULL SITTING SCALE, 2026-08-03 (`sitting_cutter.py dry-run --run-dir
     data/discovery/q4_long_harvest_20260803 --embed-limit 1000`): **15 m 36 s for 1,000
