@@ -356,14 +356,22 @@ MAN_FRONTIER_SHARE = 0.5  # ... of which maneuver nodes may hold at most this fr
 JULIA_ROOT_FW = 3.0      # fixed z-plane base-scale root view (matches --julia-root-fw)
 EXPAND_TIMEOUT_S = 900   # hard-kill backstop on a hung --expand call
 MIN_UNIT_TIMEOUT_S = 60  # floor for the budget-clamped per-unit backstop (unit_timeout_s)
-# Standing bound on ONE `draw_roots` call. Sized off the measured pre-loop cost — ~12 min
-# for four families (`wall_elapsed_s`) — with room for the nine-partition production mix,
-# then clamped to what is left of the wall budget by `root_draw_budget_s`. The PRE-LOOP draw
-# is the one that needed this: it runs before `_session_t0` is set and before `active_s`
-# starts accruing, so it is outside BOTH caps, and a hung engine there hangs the night with
-# every budget check still believing the run has not started. A backstop longer than the
-# job's budget is not a backstop, so the clamp is the load-bearing half, not the constant.
-ROOT_DRAW_BUDGET_S = 25 * 60
+# Standing bound on ONE `draw_roots` call, clamped to what is left of the wall budget by
+# `root_draw_budget_s`. The PRE-LOOP draw is the one that needed this: it runs before
+# `_session_t0` is set and before `active_s` starts accruing, so it is outside BOTH caps, and
+# a hung engine there hangs the night with every budget check still believing the run has not
+# started. A backstop longer than the job's budget is not a backstop, so the clamp is the
+# load-bearing half, not the constant.
+#
+# SIZED FROM A MEASUREMENT, and the first one was too tight. `wall_elapsed_s` records ~12 min
+# for four families; a 2026-08-03 shakedown measured **11.4 min for TWO** (mandelbrot +
+# multibrot3, `scratch/shakedown/e_sched.log`) — ~5.7 min/family, i.e. ~23 min for the
+# four-family production mix, against a 25 min bound. That box was running two other smokes
+# concurrently so the number is an upper bound rather than the quiet-box rate, but sizing a
+# backstop off the optimistic case is how a backstop starts truncating real work: a
+# pre-loop truncation costs whichever family is LAST its fresh-start roots entirely. 40 min
+# keeps ~1.7x headroom over the contended measurement and is still ~8% of one night.
+ROOT_DRAW_BUDGET_S = 40 * 60
 MIN_ROOT_DRAW_S = 120    # floor: never shoot a draw merely for being the last thing running
 ROOT_LOW_WATER = None    # replenish roots when frontier < this (set to B at runtime)
 
