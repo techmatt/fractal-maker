@@ -185,10 +185,23 @@ def test_all_three_stages_are_in_the_pipeline_and_there_is_no_way_to_skip_one():
     names = [f.__name__ for f in sc.STAGES]
     assert names == ["stage_interior", "stage_machine_1", "stage_morph_dedup"]
     import inspect
-    src = inspect.getsource(sc.cut_sitting)
-    assert "for fn in STAGES:" in src
+    import textwrap
+    src = textwrap.dedent(inspect.getsource(sc.cut_sitting))
+    lines = src.splitlines()
+    head = next(i for i, ln in enumerate(lines) if ln.strip() == "for fn in STAGES:")
+    indent = len(lines[head]) - len(lines[head].lstrip())
+    # THE LOOP BODY, by indentation — not "everything up to the next landmark". The text-span
+    # form went red on 2026-08-04 for an `if` that was AFTER the loop (the calibration
+    # reservation), i.e. it was guarding a region rather than the thing it names.
+    body = []
+    for ln in lines[head + 1:]:
+        if ln.strip() and (len(ln) - len(ln.lstrip())) <= indent:
+            break
+        body.append(ln)
+    assert [ln for ln in body if ln.strip()], "loop body did not parse — the guard is vacuous"
     # no conditional guards the loop body — every stage runs on every cut
-    assert "if " not in src.split("for fn in STAGES:")[1].split("sitting, cells")[0]
+    assert not any(ln.strip().startswith(("if ", "elif ", "try:", "continue"))
+                   for ln in body), body
 
 
 def test_the_expensive_stage_runs_last():
@@ -242,6 +255,179 @@ def test_the_cut_balances_across_partition_and_tier_cells():
     res = sc.cut_sitting(rows, max_rows=10, embed=_embed_by_key(e))
     got = res["report"]["by_partition"]
     assert got == {"julia:mandelbrot": 5, "phoenix": 5}
+
+
+# =========================================================================== #
+# the calibration reservation (Matt, 2026-08-04)
+#
+# A GENERAL rule keyed on labelled positives, not a phoenix:classic special case. The tests
+# below are in two groups on purpose: the plan (arithmetic, injected counts) and the draw
+# (what the sitting actually contains). The one test that reads the LIVE corpus is named as
+# such — it is the only thing that can catch the rule being right and inert.
+# =========================================================================== #
+def test_the_sufficiency_floor_is_the_derivers_own_MIN_POS():
+    """Not a second literal 15. This rule exists to feed `derive_t_good`'s gate, so a harness
+    constant that drifted from it would reserve labels for partitions that no longer need
+    them — or stop reserving for ones that do (`verification_practice.md` §1.8)."""
+    from derive_t_good import MIN_POS
+    assert sc.min_pos() == MIN_POS == 15
+
+
+def test_a_partition_below_the_floor_is_reserved_and_one_above_it_is_not():
+    plan = sc.plan_reservations({"poor": 7, "rich": 626}, 1000, floor=15)
+    assert plan == {"poor": 50}                     # 5% of the sitting
+    assert "rich" not in plan
+
+
+def test_the_rule_lapses_by_itself_when_a_partition_crosses_the_floor():
+    """No list to edit: the qualifying set is recomputed from the census at every cut, so a
+    partition that reaches MIN_POS simply stops being reserved."""
+    assert sc.plan_reservations({"p": 14}, 1000, floor=15) == {"p": 50}
+    assert sc.plan_reservations({"p": 15}, 1000, floor=15) == {}
+    assert sc.plan_reservations({"p": 99}, 1000, floor=15) == {}
+
+
+def test_multiple_qualifying_partitions_split_evenly_and_the_total_is_capped():
+    """Three at 5% is exactly the 15% cap; four must SHRINK each share rather than drop one
+    off the end, which would silently pick a favourite among equally starved families."""
+    three = sc.plan_reservations({c: 0 for c in "abc"}, 1000, floor=15)
+    assert three == {"a": 50, "b": 50, "c": 50}
+    assert sum(three.values()) == 150
+    four = sc.plan_reservations({c: 0 for c in "abcd"}, 1000, floor=15)
+    assert set(four) == set("abcd") and len(set(four.values())) == 1
+    assert sum(four.values()) <= int(sc.RESERVE_CAP_FRAC * 1000), four
+    assert four == {c: 37 for c in "abcd"}          # truncated, not rounded to 38 (=152)
+
+
+def test_a_sitting_too_small_to_reserve_a_row_records_a_ZERO_not_an_absence():
+    """"nobody qualified" and "the reservation rounded away" are different facts, and only the
+    second is a reason to look at the sitting size."""
+    assert sc.plan_reservations({"p": 0}, 10, floor=15) == {"p": 0}
+    assert sc.plan_reservations({"p": 99}, 10, floor=15) == {}
+
+
+def _many_cell_population(n_other_parts=8, tiers=(1, 2, 3), per_cell=40, classic=20):
+    """A realistic sitting population: several partitions x several rank tiers, plus one thin
+    single-cell partition. The cell COUNT is the load-bearing property — see the test below."""
+    rows, i = [], 0
+    for p in ("mandelbrot", "julia:mandelbrot", "multibrot3", "multibrot4", "multibrot5",
+              "julia:multibrot3", "julia:multibrot4", "julia:multibrot5")[:n_other_parts]:
+        for t in tiers:
+            for _ in range(per_cell):
+                rows.append(_row(cx=str(i), partition=p, rank_tier=t))
+                i += 1
+    for _ in range(classic):
+        rows.append(_row(cx=str(i), partition="phoenix:classic", rank_tier=2))
+        i += 1
+    return rows, {str(k): _unit(k, d=2048) for k in range(i)}
+
+
+def test_the_reservation_is_a_FLOOR_the_partition_would_not_have_won():
+    """The whole point, and the fixture is the real shape: `draw_balanced` round-robins over
+    (partition x tier) CELLS, so a partition holding one cell out of C gets ~1/C of the sitting.
+    At 25 cells that is 4%, under the 5% reservation — so the reservation binds and the
+    partition gains rows it would not have won."""
+    rows, e = _many_cell_population()
+    bare = sc.cut_sitting(rows, max_rows=100, embed=_embed_by_key(e), reservations={})
+    res = sc.cut_sitting(rows, max_rows=100, embed=_embed_by_key(e),
+                         positives={"mandelbrot": 626, "phoenix:classic": 7})
+    assert res["report"]["by_partition"]["phoenix:classic"] > \
+        bare["report"]["by_partition"]["phoenix:classic"], (
+            res["report"]["by_partition"], bare["report"]["by_partition"])
+    active = res["report"]["calibration_reservations"]["active"]
+    assert set(active) == {"phoenix:classic"}
+    assert active["phoenix:classic"]["granted"] == 5     # 5% of 100
+    assert active["phoenix:classic"]["shortfall"] == 0
+
+
+def test_a_reservation_a_partition_did_not_need_is_a_FLOOR_and_not_a_BONUS():
+    """Two statements, and the second is the scope of the first.
+
+    FLOOR, NOT BONUS: the general fill continues the cell round-robin from the reserved rows
+    (`draw_balanced(preseed=)`) rather than restarting at zero, so a partition the draw would
+    have served generously anyway ends at `max(natural, reserved)`. The naive two-pass form
+    gives it `natural + reserved` — measured here at 36 vs 33 of 100 before the preseed went in.
+
+    SCOPE: the balanced draw is already egalitarian ACROSS CELLS, so a single-cell partition's
+    unreserved share is ~1/C, which BEATS a 5% reservation whenever C < 1/RESERVE_FRAC = 20.
+    The reservation is a real floor for a wide sitting (10 partitions x 3-4 tiers is 30-40
+    cells) and inert for a narrow one. Asserting only "it binds" on a wide fixture would hide
+    that; asserting both is what makes the wide result mean the mechanism, not the fixture."""
+    rows, e = _many_cell_population(n_other_parts=2, tiers=(1,), per_cell=200, classic=50)
+    kw = dict(max_rows=100, embed=_embed_by_key(e))
+    bare = sc.cut_sitting(rows, reservations={}, **kw)
+    res = sc.cut_sitting(rows, positives={"phoenix:classic": 7}, **kw)
+    assert len(bare["report"]["cells"]) == 3 < int(1 / sc.RESERVE_FRAC)
+    assert res["report"]["by_partition"] == bare["report"]["by_partition"]
+    # ...and it is still RECORDED as active, so an inert reservation is legible, not absent.
+    assert res["report"]["calibration_reservations"]["active"]["phoenix:classic"]["granted"] == 5
+
+
+def test_an_UNFILLABLE_reservation_records_its_shortfall_and_never_fails_the_build():
+    """The supply bound. A partition with fewer surviving rows than its reservation is exactly
+    the run where refusing to cut a sitting helps nobody: the slot fills from elsewhere and the
+    shortfall is the only trace, so it is recorded rather than raised."""
+    e = {str(i): _unit(i, d=128) for i in range(103)}
+    rows = ([_row(cx=str(i), partition="mandelbrot") for i in range(100)]
+            + [_row(cx=str(i), partition="phoenix:classic") for i in range(100, 103)])
+    res = sc.cut_sitting(rows, max_rows=100, embed=_embed_by_key(e),
+                         positives={"mandelbrot": 626, "phoenix:classic": 7})
+    got = res["report"]["calibration_reservations"]["active"]["phoenix:classic"]
+    assert got == dict(reserved=5, granted=3, shortfall=2, available=3, capped_by_sitting=False)
+    assert res["report"]["n_sitting"] == 100          # silently filled from elsewhere
+    assert res["report"]["calibration_reservations"]["shortfall_total"] == 2
+
+
+def test_a_reservation_for_a_partition_with_NO_rows_grants_nothing_and_says_so():
+    e = {str(i): _unit(i, d=64) for i in range(30)}
+    rows = [_row(cx=str(i), partition="mandelbrot") for i in range(30)]
+    res = sc.cut_sitting(rows, max_rows=20, embed=_embed_by_key(e),
+                         positives={"mandelbrot": 626, "phoenix:classic": 7})
+    got = res["report"]["calibration_reservations"]["active"]["phoenix:classic"]
+    assert got["available"] == 0 and got["granted"] == 0 and got["shortfall"] == 1
+    assert res["report"]["n_sitting"] == 20
+
+
+def test_the_accounting_still_balances_with_a_reservation_in_play():
+    """The cut's audit identity is what makes every other number here readable, and a
+    reserved slice is a second path rows take into the sitting."""
+    e = {str(i): _unit(i, d=128) for i in range(60)}
+    rows = ([_row(cx=str(i), partition="mandelbrot") for i in range(50)]
+            + [_row(cx=str(i), partition="phoenix:classic") for i in range(50, 60)])
+    res = sc.cut_sitting(rows, max_rows=20, embed=_embed_by_key(e),
+                         positives={"mandelbrot": 626, "phoenix:classic": 7})
+    rep = res["report"]
+    removed = sum(len(v) for v in res["removed"].values())
+    assert rep["n_in"] == rep["n_sitting"] + removed + rep["n_over_cap"]
+    assert len({r["cx"] for r in res["sitting"]}) == rep["n_sitting"], "a row was drawn twice"
+
+
+def test_the_manifest_records_which_reservations_were_active_and_what_each_GOT():
+    e = {str(i): _unit(i, d=64) for i in range(30)}
+    rows = [_row(cx=str(i), partition="mandelbrot") for i in range(30)]
+    cr = sc.cut_sitting(rows, max_rows=20, embed=_embed_by_key(e),
+                        positives={"mandelbrot": 626, "phoenix:classic": 7}
+                        )["report"]["calibration_reservations"]
+    assert cr["min_pos"] == 15 and cr["frac"] == sc.RESERVE_FRAC
+    assert cr["cap_frac"] == sc.RESERVE_CAP_FRAC
+    assert cr["positives"] == {"mandelbrot": 626, "phoenix:classic": 7}
+    assert set(cr["active"]["phoenix:classic"]) == {
+        "reserved", "granted", "shortfall", "available", "capped_by_sitting"}
+    assert cr["granted_total"] == 0 and cr["shortfall_total"] == 1
+
+
+def test_the_rule_fires_on_the_LIVE_corpus_for_phoenix_classic_and_not_for_mandelbrot():
+    """OFF LIVE COUNTS, not a fixture. The plan arithmetic above passes whatever the corpus
+    holds; this is the one that catches the rule being correct and inert — and it is derived,
+    so it self-updates the day Matt labels classic past MIN_POS (at which point the assertion
+    below flips to the `lapses` test's territory, which is the intended end state)."""
+    pos = sc.positives_census()
+    assert pos["phoenix:classic"] < sc.min_pos() <= pos["mandelbrot"], pos
+    plan = sc.plan_reservations(pos, sc.MAX_ROWS)
+    assert plan == {"phoenix:classic": 50}, plan
+    # non-vacuity: the census is a real read, not an empty dict that qualifies nothing
+    from partitions import ALL_FAMS
+    assert set(pos) == set(ALL_FAMS) and sum(pos.values()) > 100
 
 
 # =========================================================================== #

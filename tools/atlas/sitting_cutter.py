@@ -48,11 +48,33 @@ record already carries; (b) needs a render and a CLIP pass per surviving row. So
 stages run first and the expensive one sees the smallest population. Reversing them would be
 correct and would cost a morph field for every row the other two were about to delete.
 
+THE CALIBRATION RESERVATION (Matt, 2026-08-04)
+----------------------------------------------
+A partition whose LABELLED POSITIVES (human score >= 3, amendment overlay applied) are below
+`derive_t_good.MIN_POS` cannot have a threshold derived for it at all: it runs UNCALIBRATED at
+the 0.50 baseline, and no amount of discovery fixes that, because the missing thing is human
+labels. Left to the balanced draw, such a partition gets whatever its cell count earns — which
+for a scarce partition is close to nothing, so it stays uncalibrated forever. So `cut_sitting`
+RESERVES a slice of each sitting for it (`plan_reservations`, `draw_reserved`).
+
+It is a GENERAL RULE, not a `phoenix:classic` special case, and it lapses per-partition by
+itself: the qualifying set is recomputed from the live corpus at every cut, so a partition that
+crosses MIN_POS stops being reserved without anyone editing a list. Today exactly one qualifies
+(`phoenix:classic`, 7 positives); mandelbrot at 626 gets nothing.
+
+Bounded on three sides, because a reservation is time taken from the rest of the sitting:
+`RESERVE_FRAC` per qualifying partition, `RESERVE_CAP_FRAC` across all of them together (split
+evenly once more than three qualify), and SUPPLY — a reservation is a claim on rows that
+survived the three stages, so an unfillable one records its shortfall and the balanced draw
+silently fills the slot from elsewhere. It never fails the build: a partition with no candidate
+rows this run is exactly the run where refusing to cut a sitting helps nobody.
+
   uv run python tools/atlas/sitting_cutter.py dry-run --run-dir data/discovery/<run>
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import sys
@@ -82,6 +104,76 @@ class BudgetExhausted(Exception):
 NEAR_DUP_COS = srt.NEAR_DUP_COS
 INTERIOR_RULE_ID = air.RULE_ID
 INTERIOR_THRESHOLD = air.THRESHOLD
+
+# --- the calibration reservation ------------------------------------------------------- #
+RESERVE_FRAC = 0.05          # per qualifying partition, as a fraction of the sitting (~50/1000)
+RESERVE_CAP_FRAC = 0.15      # ...and never more than this across ALL of them together
+POSITIVE_CLASSES = (3, 4)    # a "positive" is a human keeper — the deriver's own label>=3
+
+
+def min_pos() -> int:
+    """THE sufficiency floor, taken from the estimator that owns it rather than restated.
+
+    `derive_t_good` is the version-agnostic deriver and its `MIN_POS` is the number that
+    decides UNCALIBRATED, so a second literal 15 here would be a harness constant diverged
+    from production (`verification_practice.md` §1.8) — this rule exists precisely to feed
+    that gate, so the two must be the same 15 by construction.
+
+    Imported LAZILY and only when a plan is actually made: `derive_t_good` pulls `score_lib`,
+    which imports torch at module scope (~4 s), and this module is otherwise torch-free at
+    import (50 ms) — a module-level import would put torch in every test that touches a
+    stage function."""
+    from derive_t_good import MIN_POS                        # noqa: E402 (tools/scoring)
+    return int(MIN_POS)
+
+
+@functools.lru_cache(maxsize=8)
+def _positives_cached(parts: tuple, corpus_dir) -> tuple:
+    import pop_quota as pq                                   # noqa: E402 (pure, torch-free)
+    cen = pq.label_currency(list(parts), corpus_dir)
+    return tuple((p, sum(int(v) for k, v in (cen.counts.get(p) or {}).items()
+                         if int(k) in POSITIVE_CLASSES)) for p in parts)
+
+
+def positives_census(partitions=None, corpus_dir=None) -> dict:
+    """partition -> count of HUMAN positives (score >= 3) in the label corpus + library.
+
+    Counted through `pop_quota.label_currency`, which is THE census — same amendment overlay,
+    same phoenix split, same default-route rule — rather than a second corpus walk that could
+    disagree with the deficit about what a partition holds. It reads a different projection of
+    the same counts: the deficit weights 4s ten times a 3, this counts keepers, because
+    `derive_t_good` needs POSITIVES and does not weight them.
+
+    Memoized per (partitions, corpus_dir): the corpus does not change inside one cut, and a
+    cut calls this once per invocation of a function that is also unit-tested."""
+    from partitions import ALL_FAMS                          # noqa: E402 (tools/scoring)
+    parts = tuple(partitions if partitions is not None else ALL_FAMS)
+    return dict(_positives_cached(parts, corpus_dir))
+
+
+def plan_reservations(positives: dict, max_rows: int, *, floor: int | None = None,
+                      frac: float = RESERVE_FRAC,
+                      cap_frac: float = RESERVE_CAP_FRAC) -> dict:
+    """{partition: rows reserved} for every partition below the sufficiency floor.
+
+    `frac` of the sitting each, and if more than `cap_frac / frac` partitions qualify the TOTAL
+    is held at `cap_frac` and split evenly — so the cap binds by shrinking each share rather
+    than by dropping partitions off the end, which would silently pick a favourite among equally
+    starved families.
+
+    TRUNCATES rather than rounds (`int`), so the cap is a hard bound: four qualifying partitions
+    at 15%/4 = 3.75% of 1000 give 37 rows each (148 total), never 38 each (152, over the cap).
+
+    Returns an entry for every qualifying partition even when its size works out to ZERO — a
+    sitting too small to reserve a row is a fact about the sitting, and recording it is what
+    distinguishes "nobody qualified" from "the reservation rounded away"."""
+    floor = min_pos() if floor is None else int(floor)
+    qual = sorted(p for p, n in positives.items() if int(n) < floor)
+    if not qual:
+        return {}
+    per = min(float(frac), float(cap_frac) / len(qual))
+    n = int(per * int(max_rows) + 1e-9)
+    return {p: n for p in qual}
 
 
 # =========================================================================== #
@@ -264,29 +356,40 @@ STAGES = (stage_interior, stage_machine_1, stage_morph_dedup)
 # =========================================================================== #
 # the cut
 # =========================================================================== #
-def draw_balanced(rows, cell_of, n: int):
+def draw_balanced(rows, cell_of, n: int, preseed: dict | None = None):
     """`n` rows, round-robin over cells, best-first inside each cell — the caller's order is
     the within-cell rank. Same floor-then-remainder shape as the v1 batch draw, restated here
     only because the cells differ (partition x tier rather than fate x partition): a sitting
-    is one page and a fate-balanced page would spend the cap on rejects."""
+    is one page and a fate-balanced page would spend the cap on rejects.
+
+    `preseed` credits a cell with rows it was ALREADY given (the calibration reservation), so
+    the round-robin continues from that count instead of restarting at zero. That is what makes
+    a reservation a FLOOR rather than a bonus: without it a partition the balanced draw would
+    have served generously anyway ends up with its natural share PLUS the reservation, which is
+    an over-service nobody asked for. `max(natural, reserved)` is the intent; `natural +
+    reserved` is what the naive two-pass draw does, and the two differ by exactly the
+    reservation on every partition that did not need one."""
     cells = defaultdict(list)
     for r in rows:
         cells[cell_of(r)].append(r)
-    keys = sorted(cells, key=str)
+    seed = {k: 0 for k in cells}
+    for k, v in (preseed or {}).items():
+        seed[k] = seed.get(k, 0) + int(v)
+    keys = sorted(set(cells) | set(seed), key=str)
     take = {k: 0 for k in keys}
     while sum(take.values()) < n:
         cand = [k for k in keys if take[k] < len(cells[k])]
         if not cand:
             break
-        k = min(cand, key=lambda k: (take[k], -len(cells[k])))
+        k = min(cand, key=lambda k: (take[k] + seed[k], -len(cells[k])))
         take[k] += 1
     out = []
     for i in range(max(take.values(), default=0)):
         for k in keys:
             if i < take[k]:
                 out.append(cells[k][i])
-    rep = {str(k): dict(taken=take[k], available=len(cells[k]),
-                        drained=take[k] >= len(cells[k])) for k in keys}
+    rep = {str(k): dict(taken=take[k] + seed[k], available=len(cells[k]) + seed[k],
+                        reserved=seed[k], drained=take[k] >= len(cells[k])) for k in keys}
     return out, rep
 
 
@@ -294,14 +397,57 @@ def cell_of(r) -> tuple:
     return (r.get("partition"), int(r.get("rank_tier") or 0))
 
 
+def draw_reserved(rows, cell_of, n: int, reservations: dict):
+    """`draw_balanced`, with the calibration reservations honoured FIRST.
+
+    Each reserved partition's slice is itself drawn by `draw_balanced` over that partition's own
+    rows — so a reservation is spread across its tiers and taken best-first inside each, exactly
+    like the general draw — and what is left over fills the rest of the sitting. A reservation is
+    a FLOOR, not a cap: a reserved partition can still win more rows in the general draw.
+
+    Three ways a reservation is smaller than asked, and each is a separate number in the report
+    rather than one "granted" that means all of them: `available` (the partition has fewer
+    surviving rows than the reservation), `capped_by_sitting` (the sitting is smaller than the
+    reservations), and the plan's own cap. None of them raises — the slot fills from elsewhere
+    and the shortfall is recorded (`CLAUDE.md`: no silent caps).
+
+    Returns `(sitting, cells_report, reservation_report)`."""
+    if not reservations:
+        out, rep = draw_balanced(rows, cell_of, n)
+        return out, rep, {}
+    taken, reserved_rows, res_rep = set(), [], {}
+    preseed: dict = defaultdict(int)
+    for p in sorted(reservations):
+        want_full = int(reservations[p])
+        want = max(0, min(want_full, n - len(reserved_rows)))
+        pool = [r for r in rows if r.get("partition") == p]
+        got, _ = draw_balanced(pool, cell_of, want)
+        reserved_rows += got
+        taken |= {id(r) for r in got}
+        for r in got:
+            preseed[cell_of(r)] += 1
+        res_rep[p] = dict(reserved=want_full, granted=len(got),
+                          shortfall=want_full - len(got), available=len(pool),
+                          capped_by_sitting=want < want_full)
+    rest = [r for r in rows if id(r) not in taken]
+    fill, cells = draw_balanced(rest, cell_of, n - len(reserved_rows), dict(preseed))
+    return reserved_rows + fill, cells, res_rep
+
+
 def cut_sitting(rows, *, max_rows: int = MAX_ROWS, embed=None,
                 machine_1_discard=None, near_dup_cos: float = NEAR_DUP_COS,
-                progress=None) -> dict:
+                progress=None, positives=None, reservations=None) -> dict:
     """Run every stage, then cut to one sitting. Returns the sitting and its full accounting.
 
     The accounting closes: `n_in == n_sitting + sum(removed per stage) + n_over_cap`. A cut
     that can lose a row without a stage naming it is a cut nobody can audit, which is the
     same identity `steered_frontier._reconcile_batch` enforces per batch.
+
+    THE CALIBRATION RESERVATION IS ON BY DEFAULT and is planned from the LIVE corpus — the same
+    reason the three stages have no off switch. `positives` / `reservations` exist to inject a
+    census or a plan (tests, and a re-cut reproducing an earlier sitting); passing
+    `reservations={}` is the explicit way to cut without one, which is a decision that shows up
+    in the report as an empty plan rather than as an absent feature.
     """
     ctx = dict(embed=embed, machine_1_discard=machine_1_discard, near_dup_cos=near_dup_cos,
                progress=progress)
@@ -312,7 +458,15 @@ def cut_sitting(rows, *, max_rows: int = MAX_ROWS, embed=None,
         cur, removed, rep = fn(cur, ctx)
         stage_reports.append(rep)
         removed_by_stage[rep["stage"]] = removed
-    sitting, cells = draw_balanced(cur, cell_of, max_rows)
+    # PLANNED AFTER THE STAGES, DRAWN AGAINST WHAT SURVIVED THEM: a reservation sized against
+    # the raw queue would look filled while every one of its rows was about to be auto-labelled
+    # or deduped away.
+    floor_used = None
+    if reservations is None:
+        positives = positives_census() if positives is None else positives
+        floor_used = min_pos()
+        reservations = plan_reservations(positives, max_rows, floor=floor_used)
+    sitting, cells, res_rep = draw_reserved(cur, cell_of, max_rows, reservations)
     over_cap = len(cur) - len(sitting)
 
     total_removed = sum(len(v) for v in removed_by_stage.values())
@@ -328,6 +482,13 @@ def cut_sitting(rows, *, max_rows: int = MAX_ROWS, embed=None,
             n_in=n_in, n_sitting=len(sitting), n_over_cap=over_cap, max_rows=max_rows,
             stages=stage_reports,
             balances=True,
+            calibration_reservations=dict(
+                min_pos=floor_used,
+                positives=(dict(positives) if positives is not None else None),
+                frac=RESERVE_FRAC, cap_frac=RESERVE_CAP_FRAC,
+                active=res_rep,
+                granted_total=sum(v["granted"] for v in res_rep.values()),
+                shortfall_total=sum(v["shortfall"] for v in res_rep.values())),
             by_partition=dict(Counter(r.get("partition") for r in sitting)),
             by_tier=dict(Counter(str(r.get("rank_tier")) for r in sitting)),
             by_fate=dict(Counter(r.get("fate") for r in sitting)),
@@ -633,6 +794,10 @@ def stage_draw(args) -> int:
             run_dir=str(args.run_dir), max_rows=args.max_rows,
             n_in=cut["n_in"], n_sitting=cut["n_sitting"], n_over_cap=cut["n_over_cap"],
             stages=cut["stages"], cells=cut["cells"], balances=cut["balances"],
+            # WHICH RESERVATIONS WERE ACTIVE AND WHAT EACH ACTUALLY GOT. A reservation that
+            # went unfilled for lack of supply records its shortfall here; the sitting was
+            # filled from elsewhere, so the only trace it ever existed is this block.
+            calibration_reservations=cut["calibration_reservations"],
             cut_wall_s=round(cut_wall, 1), morph_cache=cache_rep,
             auto_labeled_never_presented=[
                 dict(cx=r["cx"], cy=r["cy"], fw=r["fw"], partition=r["partition"],
@@ -660,6 +825,9 @@ def stage_draw(args) -> int:
                             if k in ("looks_kept", "unembeddable_kept",
                                      "no_canonical_verdict_kept", "unmeasured_kept")}))
     print(f"  morph cache: {json.dumps(cache_rep)}")
+    cr = cut["calibration_reservations"]
+    print(f"  calibration reservations (< {cr['min_pos']} positives): "
+          + (json.dumps(cr["active"]) if cr["active"] else "NONE — every partition is calibratable"))
     print(f"  assign_split = {(split, biased, source)}")
     print(f"\nBAR READABILITY: {len(readable)}/{len(full)} served rows carry BOTH "
           f"view_fit_v1.1 and composite_v3")
