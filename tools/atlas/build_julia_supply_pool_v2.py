@@ -34,6 +34,20 @@ carry a canonical decode (the RANKED channel) and `rank_tier=1` rows carry only 
 render). They are never pooled into one ranking — two geometries, two scores — so they enter
 the merge as two priority bands with the ranked band first.
 
+POOL VERSIONS. `POOL_VERSION` names the output file; the builder is one, because the merge
+order, the channels and the single-rung decision are all unchanged across versions — only the
+floor moves. **v3 (LIVE)** is the same merge re-thinned at `CSPACING_FLOOR = 3.2e-2`. **v2**
+stays on disk untouched as the record of what the 1e-2 floor selected; it is not rebuilt and
+not deleted, because a pool file records a selection and the old selection is the thing the
+new one is compared against.
+
+Re-thinning is from the FULL merged candidate list every time, never from a previous pool
+file. Thinning v2's 539 survivors again at the coarser floor would keep only 210, but those
+539 are themselves the first-wins winners at 1e-2 — the candidates a coarser floor would have
+preferred were already dropped. Re-running the merge lets each cluster re-elect its
+representative under the new floor, which is the whole reason first-wins ordering is the
+policy.
+
   uv run python tools/atlas/build_julia_supply_pool_v2.py
   uv run python tools/atlas/build_julia_supply_pool_v2.py --dry-run
 """
@@ -54,7 +68,9 @@ for _p in (HERE, ROOT, ROOT / "tools", ROOT / "tools" / "sourcing"):
 import paths                                    # noqa: E402
 import supply_routing as sr                     # noqa: E402
 
-POOL_REL = "data/atlas/julia_supply_pool_v2.json"
+POOL_VERSION = 3                    # bump WITH the floor; the previous file stays on disk
+POOL_REL = f"data/atlas/julia_supply_pool_v{POOL_VERSION}.json"
+PREV_POOL_REL = f"data/atlas/julia_supply_pool_v{POOL_VERSION - 1}.json"
 V1_POOL = ROOT / "data" / "atlas" / "julia_seed_pool.json"
 Q4_STORE = (ROOT / "data" / "discovery" / "q4_long_harvest_20260803" /
             "q4_candidates.jsonl")
@@ -169,17 +185,39 @@ def build(*, n_nuclei: int | None = None, floor: float | None = None) -> dict:
             out[r["channel"]] = out.get(r["channel"], 0) + 1
         return out
 
+    # The floor has to hold over the RESULT, not just inside the loop that produced it. An
+    # O(n^2) closest-pair read on a few hundred rows is free, and it is the one check that
+    # cannot pass because the thinner and the verifier share an assumption.
+    closest, ca, cb = float("inf"), None, None
+    for i in range(len(kept)):
+        for j in range(i + 1, len(kept)):
+            d = math.hypot(kept[i]["c_re"] - kept[j]["c_re"],
+                           kept[i]["c_im"] - kept[j]["c_im"])
+            if d < closest:
+                closest, ca, cb = d, i, j
+    if kept and closest < floor:
+        raise AssertionError(
+            f"pool violates its own floor: rows {ca} and {cb} are {closest:.4g} apart, "
+            f"floor {floor:.4g}")
+
+    # What the floor still admits, at the floor. From the fixed-viewport re-measurement
+    # (`CSPACING_BASIS`), not re-derived here — a builder that re-derives its own basis is
+    # two measurements that can drift apart.
     return dict(
         pool=[dict(c_re=r["c_re"], c_im=r["c_im"], channel=r["channel"]) for r in kept],
         report=dict(
-            partition=PARTITION, floor=floor, rung=rung["rung"], rung_why=rung["why"],
+            partition=PARTITION, pool_version=POOL_VERSION,
+            floor=floor, rung=rung["rung"], rung_why=rung["why"],
             merge_order=list(CHANNEL_ORDER),
             proposed=tally(merged), kept=tally(kept), dropped=tally(dropped),
             n_proposed=len(merged), n_kept=len(kept), n_dropped=len(dropped),
             thinning_rate=(round(len(dropped) / len(merged), 4) if merged else None),
+            closest_pair=(None if not kept else round(closest, 8)),
+            expected_near_dup_at_floor=sr.CSPACING_BASIS.get("near_dup_rate_at_floor"),
             cspacing_basis=sr.CSPACING_BASIS,
             note="first-wins thinning ACROSS channels in measured-yield order; the ordering "
-                 "is the policy",
+                 "is the policy. Re-thinned from the full merged candidate list, never from "
+                 "a previous pool file.",
         ))
 
 

@@ -38,34 +38,52 @@ run). It is c-plane only by construction (a julia/phoenix viewport has no nucleu
 parameter-plane sense), and its share is governed by the quota like any other spend rather
 than by a fixed per-batch count.
 
-THE c-SPACING FLOOR (derived here, not inherited)
--------------------------------------------------
-`CSPACING_FLOOR` is the minimum |delta c| between two accepted julia parameters in the
-near-minibrot channel. It is DERIVED from the labelled ladder's own morph embeddings
-(290 rows / 103 atoms, `scratch/q4_readout/morph_emb_870.npz`, the library CLIP recipe at
-cos 0.974), and it corrects the atom-level framing the q4 readout stopped at:
+THE c-SPACING FLOOR — 3.2e-2, on a FIXED-VIEWPORT re-measurement
+----------------------------------------------------------------
+`CSPACING_FLOOR` is the minimum |delta c| between two accepted julia parameters. It is not a
+saturation point, and the 1e-2 it replaces was read as though it were.
 
-    |delta c| bucket      pairs   median cos   frac >= 0.974
-    [1e-5, 1e-4)             75       0.9824           0.813
-    [1e-4, 1e-3)            659       0.9708           0.417
-    [1e-3, 1e-2)           2196       0.9622           0.239
-    [1e-2, 1e-1)           1866       0.9267           0.024   <-- baseline reached
-    >= 1e-1               36964       0.8992           0.004
-    (different-atom pairs, any distance, as the reference: 0.023)
+The first derivation (labelled ladder, 290 rows / 103 atoms) paired images rendered at their
+OWN framings, so framing dissimilarity was scored as look dissimilarity, and it reported the
+near-dup rate falling to a different-atom baseline of 2.3% at 1e-2. Re-measured with both
+members of every pair at the SAME z-viewport, on the canonical morph_clip substrate, that
+knee does not exist — the rate decays smoothly across five decades and reaches the baseline
+nowhere below ~3e-1:
 
-The readout's finding was "same atom, different rung => same look" (median cos 0.9825, 74.1%
-at/above the cut). Restricting to DIFFERENT-atom pairs shows the saturation is a property of
-the c-plane distance and not of atom identity: different atoms at 1e-4..1e-3 are still 38%
-near-dup, sixteen times the different-atom baseline. So "one c per atom" would NOT have been
-enough — two neighbouring atoms are near-duplicates of each other, and the roster's atoms sit
-a median 9.1e-4 apart.
+    |delta c|         constructed pairs        v2 pool's own pairs
+                    n     med cos    >=.974     n      >=.974
+    1e-5 - 3.2e-5    507   0.9990     1.000      -          -    (pool is thinned at 1e-2,
+    1e-4 - 3.2e-4   1161   0.9984     0.977      -          -     so it HAS no sub-floor
+    1e-3 - 3.2e-3   1888   0.9902     0.673      -          -     pairs to contribute)
+    3.2e-3 - 1e-2   3528   0.9797     0.538      -          -
+    1e-2 - 3.2e-2   4231   0.9487     0.354    484       0.130
+    3.2e-2 - 1e-1   4175   0.9091     0.153   1828       0.045
+    1e-1 - 3.2e-1   3479   0.8430     0.029   7010       0.019
+    different-region reference, any distance: 26368 pairs, med 0.8454, >=.974 = 0.0036
 
-**Floor = 1e-2**: the coarsest bucket boundary at which the near-dup rate falls to the
-different-atom baseline (2.4% against 2.3%). One bucket finer it is 23.9%, ten times that.
-Stated as a bucket boundary rather than a fitted knee because the measurement is bucketed —
-quoting three significant figures off five bins would be precision the data does not carry.
+So a floor is a TOLERANCE against pool cost, not a point where the signal ends, and it has to
+be quoted at the floor rather than averaged over a bin the rate is falling through. At
+quarter-decade resolution the rate a floor actually admits — its closest surviving pairs —
+is, on the production-accepted population: 0.196 at 1e-2, **0.074 at 3.2e-2**, 0.037 at
+5.6e-2. **Matt's decision: 3.2e-2** — 2.6x fewer near-dup closest pairs than the old floor,
+at 210/539 of the committed v2 pool retained under naive re-thinning (the v3 build re-thins
+the full candidate set instead and lands above that).
 
-Compare the julia HOOK's spacing (0.20, or 0.10 after the campaign-2 resume): that is 10-20x
+Two reads that constrain how this generalizes, both in `julia_c_sourcing.md`:
+  * The floor is VIEWPORT-CONDITIONAL. At 1e-2 the same pairs read 0.354 near-dup at the wide
+    whole-julia framing and 0.130 at a mid-zoom. Wide is what the class is emitted at, so
+    wide is the read and it is the conservative one.
+  * Distance to dM moves the knee about half a decade: at 1e-2-3.2e-2 the near-dup rate is
+    0.294 for c near the boundary against 0.547 for c further out, consistent in direction in
+    every bin. Not adopted as a covariate-scaled rule — every production channel selects onto
+    the knife edge, which is the half the absolute floor is already set on.
+
+The atom-level correction the first derivation earned still stands and is why the floor is an
+absolute distance rather than a per-atom cap: the roster's atoms sit a median 9.1e-4 apart,
+and different atoms that close are near-duplicates of each other whatever their provenance
+says. "One c per atom" was never enough.
+
+Compare the julia HOOK's spacing (0.20, or 0.10 after the campaign-2 resume): that is 3-6x
 coarser and was set on a different population, so the two are not interchangeable and this
 one is not derived from it.
 
@@ -87,19 +105,39 @@ ROOT = Path(__file__).resolve().parents[2]
 # --------------------------------------------------------------------------- #
 NEAR_DUP_COS = 0.974          # the library/emission near-dup knee; not re-decided here
 
-CSPACING_FLOOR = 1e-2
+CSPACING_FLOOR = 3.2e-2
 CSPACING_BASIS = dict(
-    measured_on="data/label_corpus/batches/2026-08-03_q4_near_minibrot_v1 (290 rows, "
-                "103 atoms) x scratch/q4_readout/morph_emb_870.npz",
+    adopted="2026-08-03, Matt's decision. The measurement below sizes the choice; it does "
+            "not make it — there is no knee to read a floor off (see `rule`).",
+    supersedes=dict(
+        floor=1e-2,
+        why="its pairs were rendered at their OWN viewports, so framing dissimilarity was "
+            "scored as look dissimilarity and produced an apparent return-to-baseline at "
+            "1e-2. At a fixed viewport the same distance reads 0.354 near-dup on constructed "
+            "pairs and 0.130 on the pool's own, against a 0.0036 baseline.",
+    ),
+    measured_on="1421 c (14 regions x 63 satellites over 10 half-decade annuli 1e-5..3e-1, "
+                "+ the 539-c committed v2 pool) x 3 SHARED z-viewports = 4263 embeddings",
+    command="uv run python tools/studies/julia_c_stationarity.py all",
     recipe="library morph CLIP (robustz_tanh_k2_v1, 640x360ss2, "
            "vit_base_patch16_clip_224.openai) at cos >= 0.974",
-    rule="the coarsest |delta c| bucket boundary at which the near-dup rate reaches the "
-         "different-atom baseline",
-    near_dup_rate_at_or_above_floor=0.024,
-    near_dup_rate_one_bucket_below=0.239,
-    different_atom_baseline=0.023,
+    rule="a TOLERANCE against pool cost, not a saturation point: the near-dup rate decays "
+         "smoothly over five decades and reaches the different-region baseline nowhere below "
+         "~3e-1, so no bucket boundary can be read as a knee",
+    # Quarter-decade, canonical `wide` viewport, viable pairs, production-accepted population
+    # — the rate among the CLOSEST pairs a floor still admits, not a bin average.
+    near_dup_rate_at_floor=0.074,
+    near_dup_rate_at_old_floor=0.196,
+    different_region_baseline=0.0036,
     atom_nn_median_dc=9.05e-4,
-    note="one c per ATOM is NOT sufficient: different atoms at 1e-4..1e-3 are 38% near-dup",
+    viewport_conditional="0.354 (wide, fw 1.3) vs 0.130 (mid, fw 0.55) at 1e-2 on the same "
+                         "pairs; wide is the framing the class is emitted at, so wide is the "
+                         "read and it is the conservative one",
+    dM_distance_split="0.294 near dM vs 0.547 further out at 1e-2-3.2e-2, same direction in "
+                      "every bin; NOT adopted as a covariate rule — every channel selects "
+                      "onto the knife edge, which is the half this floor is set on",
+    note="one c per ATOM is NOT sufficient: the roster's atoms sit a median 9.1e-4 apart, "
+         "two decades inside the floor",
 )
 
 LADDER_RUNGS_MEASURED = (1.0, 4.0, 16.0)

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -63,16 +64,25 @@ def test_the_unscreened_shell_draw_is_retired_rather_than_absent():
 # =========================================================================== #
 # 2. the c-spacing floor
 # =========================================================================== #
-def test_the_floor_is_where_the_near_dup_rate_reaches_the_different_atom_baseline():
-    """The floor is a claim about a measurement, so the measurement rides beside it: at the
-    floor the near-dup rate is the different-atom baseline, one bucket finer it is ten times
-    that. A floor whose basis says neither of those is a number somebody picked."""
+def test_the_floor_is_a_tolerance_and_its_basis_does_not_claim_a_knee():
+    """The floor is a claim about a measurement, so the measurement rides beside it — but the
+    claim CHANGED, and this test changed with it rather than being re-baselined.
+
+    The old basis said "the near-dup rate reaches the different-atom baseline at 1e-2". At a
+    fixed z-viewport it does not: the rate decays smoothly for five decades and reaches the
+    baseline nowhere below ~3e-1. So the floor is a tolerance, adopted, and its basis has to
+    say what it still admits — not pretend to a saturation point. A basis that reports a rate
+    AT the floor within noise of the baseline would be the old error returning."""
     b = sr.CSPACING_BASIS
-    assert sr.CSPACING_FLOOR == 1e-2
-    assert b["near_dup_rate_at_or_above_floor"] == pytest.approx(b["different_atom_baseline"],
-                                                                 abs=0.005)
-    assert b["near_dup_rate_one_bucket_below"] > 8 * b["different_atom_baseline"]
+    assert sr.CSPACING_FLOOR == 3.2e-2
+    assert b["adopted"] and b["command"] and b["supersedes"]["floor"] == 1e-2
     assert b["measured_on"] and b["recipe"] and str(sr.NEAR_DUP_COS) in b["recipe"]
+    # The floor buys a real reduction over the one it replaces, and is nowhere near baseline.
+    assert b["near_dup_rate_at_floor"] < 0.5 * b["near_dup_rate_at_old_floor"]
+    assert b["near_dup_rate_at_floor"] > 5 * b["different_region_baseline"], (
+        "a rate at the floor that has reached baseline would mean the knee is back; the "
+        "fixed-viewport measurement says there isn't one")
+    assert "TOLERANCE" in b["rule"].upper() and "not a saturation point" in b["rule"]
 
 
 def test_one_c_per_atom_would_not_have_been_enough():
@@ -83,12 +93,19 @@ def test_one_c_per_atom_would_not_have_been_enough():
 
 
 def test_cspacing_ok_is_a_plain_c_plane_distance():
+    """Relational to the floor, not to a copy of its current value: this test was written
+    against 1e-2 with four hand-computed literals, and every one of them would have had to be
+    re-derived by hand when the floor moved to 3.2e-2. Offsets are expressed as fractions of
+    whatever `CSPACING_FLOOR` is, and the diagonal cases are what pin it to a EUCLIDEAN
+    distance rather than a per-axis one."""
+    f = sr.CSPACING_FLOOR
     acc = [("0.0", "0.0")]
-    assert sr.cspacing_ok(("0.02", "0.0"), acc) is True
-    assert sr.cspacing_ok(("0.005", "0.0"), acc) is False
-    assert sr.cspacing_ok(("0.007", "0.007"), acc) is False        # ~0.0099, just inside
-    assert sr.cspacing_ok(("0.008", "0.008"), acc) is True         # ~0.0113, just outside
-    assert sr.cspacing_ok(("0.0", "0.0"), []) is True              # nothing to clash with
+    assert sr.cspacing_ok((str(2 * f), "0.0"), acc) is True
+    assert sr.cspacing_ok((str(0.5 * f), "0.0"), acc) is False
+    d = f / math.sqrt(2.0)                                          # exactly ON the floor
+    assert sr.cspacing_ok((str(0.99 * d), str(0.99 * d)), acc) is False   # just inside
+    assert sr.cspacing_ok((str(1.01 * d), str(1.01 * d)), acc) is True    # just outside
+    assert sr.cspacing_ok(("0.0", "0.0"), []) is True               # nothing to clash with
 
 
 def test_thinning_is_first_wins_so_the_callers_order_is_the_policy():
@@ -188,7 +205,7 @@ def test_the_summary_is_json_able_and_carries_every_decision():
 # =========================================================================== #
 # 5. the v2 julia supply pool the routing produces
 # =========================================================================== #
-def test_the_v2_pool_honours_the_floor_it_was_built_with():
+def test_the_live_pool_honours_the_floor_it_was_built_with():
     """The pool is the routing's output, so the floor has to hold ON DISK, not only in the
     builder. Checked pairwise over the whole pool rather than trusting the build report."""
     import build_julia_supply_pool_v2 as b
@@ -201,6 +218,35 @@ def test_the_v2_pool_honours_the_floor_it_was_built_with():
     for r in pool:
         assert sr.cspacing_ok((r["c_re"], r["c_im"]), acc), r
         acc.append((r["c_re"], r["c_im"]))
+
+
+def test_the_previous_pool_survives_the_floor_raise_as_the_record_of_the_old_selection():
+    """A pool file records a SELECTION, and the old selection is what the new one is read
+    against — so raising the floor ships a new version rather than rewriting v2 in place.
+    Deliberately asserted the other way round from a durability canary: v2 must still be
+    there AND must still violate the current floor, because a v2 that passed today's floor
+    would mean it had been quietly rebuilt."""
+    import build_julia_supply_pool_v2 as b
+    prev = ROOT / b.PREV_POOL_REL
+    assert prev.exists(), f"{prev} was deleted; it is the record of the {1e-2} floor"
+    old = json.loads(prev.read_text(encoding="utf-8"))
+    assert len(old) > len(json.loads((ROOT / b.POOL_REL).read_text(encoding="utf-8")))
+    closest = min(math.hypot(old[i]["c_re"] - old[j]["c_re"], old[i]["c_im"] - old[j]["c_im"])
+                  for i in range(len(old)) for j in range(i + 1, len(old)))
+    assert closest < sr.CSPACING_FLOOR, "v2 appears to have been rebuilt at the new floor"
+
+
+def test_the_build_verifies_its_own_closest_pair_rather_than_trusting_the_thinner():
+    """The thinner and a verifier that shares its assumption prove nothing. The build does an
+    O(n^2) closest-pair read over its OUTPUT and reports the number."""
+    import build_julia_supply_pool_v2 as b
+    p = ROOT / b.POOL_REL
+    rep = json.loads(p.with_name(p.stem + "_report.json").read_text(encoding="utf-8"))
+    assert rep["closest_pair"] >= rep["floor"]
+    assert rep["floor"] == sr.CSPACING_FLOOR
+    # ...and it is CLOSE to the floor: a closest pair far above it would mean the floor is
+    # not the thing binding, and the pool size is being set by something else.
+    assert rep["closest_pair"] < 1.5 * rep["floor"], rep["closest_pair"]
 
 
 def test_every_pool_row_names_the_channel_that_earned_it():

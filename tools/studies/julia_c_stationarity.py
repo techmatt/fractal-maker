@@ -324,10 +324,11 @@ def stage_measure():
         return
 
     TMP.mkdir(parents=True, exist_ok=True)
-    # Warm the live maxiter policy on the MAIN thread. `location._active_ckpt()` registers
-    # the module in sys.modules BEFORE exec_module, so two worker threads reaching it first
-    # get a half-built module and one of them dies on a missing constant. Resolving it once
-    # here removes the race from this caller; the loader itself is untouched.
+    # Resolve the live maxiter policy once, on the MAIN thread, before the pool starts. Not
+    # load-bearing any more — `location._load_module_once` publishes only complete modules —
+    # but this is where the defect surfaced (three threads, one half-built `active_ckpt`,
+    # AttributeError on MAXITER_BASE), and doing the one-time work outside the fan-out is
+    # right regardless.
     loc_mod.current_maxiter_policy()
     model, tf = load_clip()
     t0 = time.time()

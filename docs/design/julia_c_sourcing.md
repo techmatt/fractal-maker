@@ -43,52 +43,97 @@ tools/atlas/build_julia_seed_pool.py]`
 no run record in this tree reproduces them, and no committed tool reports a knee. Only
 `POOL_TARGET = 750`, `SHELL_EPS = 0.02` and the ~40% viability rate are checkable here.]`
 
-## The `c`-spacing floor — measured, and it is not an atom-level rule
+## The `c`-spacing floor — `3.2e-2`, and there is no knee to read it off
 
-**Two julia `c` values closer than `|Δc| = 1e-2` are near-duplicate LOOKS, whatever search
-found them.** That is the minimum separation the near-minibrot supply channel draws at
-(`supply_routing.CSPACING_FLOOR`), and it is derived rather than inherited.
+**`supply_routing.CSPACING_FLOOR = 3.2e-2`** is the minimum separation between two accepted
+julia `c` values, applied **across channels** (the saturation is a property of c-plane
+distance, not of which search found the point). It is a **tolerance chosen against pool cost**,
+not a point where the looks stop being similar — the whole reason the previous `1e-2` needs
+this section rewritten rather than edited.
 
-`[measured 2026-08-03: data/label_corpus/batches/2026-08-03_q4_near_minibrot_v1 (290 labelled
-rows / 103 atoms) × scratch/q4_readout/morph_emb_870.npz, library morph CLIP at cos ≥ 0.974]`
+### Similarity vs \|Δc\|, at a FIXED z-viewport
 
-| \|Δc\| bucket | pairs | median cos | frac ≥ 0.974 |
-|---|---|---|---|
-| 1e-5 – 1e-4 | 75 | 0.9824 | 0.813 |
-| 1e-4 – 1e-3 | 659 | 0.9708 | 0.417 |
-| 1e-3 – 1e-2 | 2,196 | 0.9622 | 0.239 |
-| **1e-2 – 1e-1** | 1,866 | 0.9267 | **0.024** |
-| ≥ 1e-1 | 36,964 | 0.8992 | 0.004 |
-| *different-atom pairs, any distance (reference)* | 41,627 | 0.9036 | *0.023* |
+`[measured 2026-08-03 · `uv run python tools/studies/julia_c_stationarity.py all` (~25 min) ·
+1,421 `c` (14 regions × 63 satellites over 10 half-decade annuli 1e-5–3e-1, plus the 539-`c`
+committed v2 pool) × 3 **shared** z-viewports = 4,263 canonical morph_clip embeddings
+(robustz_tanh_k2_v1, 640×360 ss2, ViT-B/16 CLIP) at cos ≥ 0.974]`
 
-The floor is the coarsest bucket boundary at which the near-dup rate reaches the
-different-atom baseline (2.4% against 2.3%); one bucket finer it is ten times that. Stated as
-a bucket boundary, not a fitted knee, because the measurement is bucketed.
+Both members of every pair render at the **same** viewport, so a cosine difference is a
+difference in the Julia set and never in the framing. Pairs are screened to viable on both
+sides; 85.4% of drawn `c` pass.
 
-**This corrects the atom-level framing it came from.** The q4 sitting's readout found "same
-atom, different rung ⇒ same look" (median cos 0.9825, 74.1% at or above the cut) and stopped
-there, which reads as a rule about atom identity. Restricting to DIFFERENT-atom pairs shows
-the saturation is a property of the c-plane distance: different atoms at 1e-4–1e-3 are still
-38% near-dup, sixteen times baseline. So **"one `c` per atom" is not sufficient** — the
-roster's own atoms sit a median 9.1e-4 apart, two buckets inside the floor.
+| \|Δc\| | constructed pairs | median cos | **≥ 0.974** | v2-pool pairs | **≥ 0.974** |
+|---|---|---|---|---|---|
+| 1e-5 – 3.2e-5 | 507 | 0.9990 | 1.000 | — | — |
+| 1e-4 – 3.2e-4 | 1,161 | 0.9984 | 0.977 | — | — |
+| 3.2e-4 – 1e-3 | 1,509 | 0.9965 | 0.875 | — | — |
+| 1e-3 – 3.2e-3 | 1,888 | 0.9902 | 0.673 | — | — |
+| 3.2e-3 – 1e-2 | 3,528 | 0.9797 | 0.538 | — | — |
+| 1e-2 – 3.2e-2 | 4,231 | 0.9487 | 0.354 | 484 | 0.130 |
+| **3.2e-2 – 1e-1** | 4,175 | 0.9091 | **0.153** | 1,828 | **0.045** |
+| 1e-1 – 3.2e-1 | 3,479 | 0.8430 | 0.029 | 7,010 | 0.019 |
+| *different-region pairs, any distance (reference)* | 26,368 | 0.8454 | *0.0036* | | |
+
+The v2-pool column is the unmanufactured cross-check: every member is production-accepted, and
+because that pool is thinned at 1e-2 it has no sub-floor pairs to contribute. Where the two
+cohorts overlap they differ by ~2.7×, and the ∂M-distance split below is why — isotropic
+satellites drift off the boundary, the pool is selected onto it. **Quote the pool column.**
+
+**There is no knee.** Every bin below 3.2e-1 sits above the baseline and the decay is smooth
+and monotone across five decades. The rule that produced `1e-2` — "the coarsest bucket
+boundary at which the near-dup rate reaches the baseline" — cannot pick a floor on a curve
+like this, and only appeared to because its two members were rendered at their **own**
+framings, scoring framing dissimilarity as look dissimilarity.
+
+### Reading the floor at the floor
+
+A bin average is not the number a floor admits: the rate is falling through the bin, so what
+survives is the rate at its **bottom**. Quarter-decade, canonical `wide` viewport,
+production-accepted pairs:
+
+| \|Δc\| | 1e-2 – 1.8e-2 | 1.8e-2 – 3.2e-2 | **3.2e-2 – 5.6e-2** | 5.6e-2 – 1e-1 |
+|---|---|---|---|---|
+| near-dup | 0.196 | 0.094 | **0.074** | 0.037 |
+
+So the adopted floor admits closest pairs at **7.4% near-dup against 19.6% at the old floor** —
+2.6× fewer — and the pool pays for it: 539 → **209** `c` (`julia_supply_pool_v3.json`).
+
+### Two conditions on how this generalizes
+
+- **Viewport-conditional.** The same pairs at 1e-2 read 0.354 near-dup at the wide whole-Julia
+  framing (fw 1.3), 0.130 at a mid-zoom (fw 0.55), 0.329 off-centre, and 0.098 under "near-dup
+  at all three". The class is emitted wide (§Framing), so **wide is the read** — and it is the
+  conservative one. A pipeline that emitted mid-zooms could run a finer floor.
+- **∂M distance moves the knee ~½ decade.** Splitting `c` at the median exterior distance
+  estimate (1.6e-4), near-dup at 1e-2–3.2e-2 is **0.294 near the boundary vs 0.547 further
+  out**, consistent in direction in every bin. **Not adopted as a covariate-scaled rule**:
+  every production channel selects onto the knife edge, which is the half the absolute floor is
+  already set on. Atom size moves the same way but is confounded with region identity (3 vs 3
+  regions) and is not a rule.
+
+### What the atom-level framing got right
+
+The q4 sitting's readout found "same atom, different rung ⇒ same look" (median cos 0.9825,
+74.1% at or above the cut) and stopped there, which reads as a rule about atom identity. The
+distance framing is what survives: **"one `c` per atom" is not sufficient**, because the
+roster's own atoms sit a median 9.1e-4 apart — two decades inside the floor — and different
+atoms that close are near-duplicates of each other whatever their provenance says.
 
 Distinct from the julia **hook** spacing (0.20, or 0.10 after the campaign-2 resume), which is
-10–20× coarser and was set on a different population. The two are not interchangeable.
+3–6× coarser and was set on a different population. The two are not interchangeable.
 
-> **THE BASIS ABOVE IS SUPERSEDED; the value is not (yet).** `CSPACING_FLOOR` is still `1e-2`
-> and no sampler changed — but the table's central claim, "the near-dup rate reaches the
-> different-atom baseline at 1e-2", does not survive holding the **z-viewport fixed**. Each row
-> above pairs two images rendered at their OWN framings, so framing dissimilarity was scored as
-> look dissimilarity. Re-measured with both members of every pair at the same viewport
-> (`tools/studies/julia_c_stationarity.py`, 1,421 c × 3 shared viewports, 4,263 canonical
-> morph_clip embeddings), the near-dup fraction **decays smoothly with no knee and does not
-> reach baseline anywhere below ~3e-1**: 0.35 at 1e-2–3.2e-2 on constructed pairs, 0.13 on the
-> committed v2 pool's own pairs, against a 0.0036 different-region baseline. So 1e-2 is a
-> tolerance, not a saturation point, and the "reaches baseline" rule cannot pick a floor on a
-> smooth decay. `[measured 2026-08-03; curve, covariates and the pool-cost table in
-> scratch/julia_cstat/stationarity.json — rerun: `uv run python
-> tools/studies/julia_c_stationarity.py all` (~25 min). Adoption of a new value is a separate
-> pass; this note exists so the superseded basis is not re-quoted as if it still held.]`
+### Raising the floor does not mean re-thinning the old pool
+
+`build_julia_supply_pool_v2.py` re-thins the **full merged candidate list** (4,587) at the new
+floor and ships a new versioned file; the previous pool stays on disk as the record of the old
+selection. That is the right construction — but it is worth knowing what it buys, because the
+answer is *almost nothing in count*: **209 `c` from the full re-thin against 206 from naively
+re-thinning v2's own 539**, with an identical channel mix in all three high-yield channels and
+204 of the 209 shared. First-wins thinning is why: v2's survivors were already each cluster's
+best-priced member, so re-electing under a coarser floor mostly re-elects the same points.
+The gain from the floor raise is real and is elsewhere — expected `≥3` rate over the rows with
+a measured channel yield goes **0.314 → 0.403** as `seeded_loop`'s share falls 71% → 55%.
+`[measured 2026-08-03, data/atlas/julia_supply_pool_v3_report.json]`
 
 ### The 1×/4×/16× distance ladder buys ~1 look per atom, so v2 emits ONE rung
 

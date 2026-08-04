@@ -34,6 +34,8 @@ location type, and `family_params` never enter a `CandidateConfig`.
 """
 from __future__ import annotations
 
+import sys
+import threading
 from dataclasses import dataclass
 from typing import Optional
 
@@ -214,23 +216,64 @@ def field_source_token(source) -> str:
 LEGACY_MAXITER_POLICY = (500, 0.30, 200, 8000)   # (base, k, min, max) — v4..v8
 
 
+_LOAD_ONCE_LOCK = threading.RLock()   # RLock so re-entry reaches the check below, not a hang
+_LOADING: set = set()
+
+
+def _load_module_once(name: str, src):
+    """Load `src` under the canonical module `name`, exactly once, and PUBLISH IT ONLY WHEN
+    COMPLETE.
+
+    The obvious spelling — put the module in `sys.modules`, then exec it — is what the import
+    system itself does, and for a good reason: a CIRCULAR import has to be able to see a
+    partially-built module. Copying that spelling here was a real defect. Nothing imports
+    these modules circularly, so the early publish bought nothing and cost this: with three
+    worker threads reaching `current_maxiter_policy()` at once, the thread that lost the race
+    read the half-built module and died on `AttributeError: module 'active_ckpt' has no
+    attribute 'MAXITER_BASE'` — a name the very next line of that module's own import
+    statement would have bound. `[observed 2026-08-03, tools/studies/julia_c_stationarity.py
+    at 3 render threads]`
+
+    So the exec runs under a lock and the name is bound after it returns: a concurrent caller
+    sees either nothing (and waits) or a finished module, never a partial one. Re-entry from
+    the loading thread raises instead of recursing — there is no cycle here today, and a
+    future one must say so out loud rather than blow the stack.
+
+    Path-anchored on purpose: `spec_from_file_location` loads the file NEXT TO THIS ONE, not
+    whatever `sys.path` happens to resolve the bare name to."""
+    mod = sys.modules.get(name)
+    if mod is not None:
+        return mod
+    with _LOAD_ONCE_LOCK:
+        mod = sys.modules.get(name)          # another thread may have finished while we waited
+        if mod is not None:
+            return mod
+        if name in _LOADING:
+            raise ImportError(
+                f"circular import of {name!r} via location._load_module_once: it is already "
+                f"being executed on this thread. Break the cycle; do not publish a partial "
+                f"module to make it work.")
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(name, src)
+        mod = importlib.util.module_from_spec(spec)
+        _LOADING.add(name)
+        try:
+            spec.loader.exec_module(mod)
+        finally:
+            _LOADING.discard(name)
+        sys.modules[name] = mod              # published only now, fully built
+        return mod
+
+
 def _active_ckpt():
     """`tools/scoring/active_ckpt` — the production policy's single source of truth.
 
     Lazy + registered under the canonical module name, so a caller that later does a
     plain `import active_ckpt` (most of tools/ puts tools/scoring on sys.path) gets
     THIS module object rather than a second copy with its own constants."""
-    import sys
-    mod = sys.modules.get("active_ckpt")
-    if mod is None:
-        import importlib.util
-        from pathlib import Path
-        src = Path(__file__).resolve().parents[1] / "scoring" / "active_ckpt.py"
-        spec = importlib.util.spec_from_file_location("active_ckpt", src)
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules["active_ckpt"] = mod
-        spec.loader.exec_module(mod)
-    return mod
+    from pathlib import Path
+    return _load_module_once(
+        "active_ckpt", Path(__file__).resolve().parents[1] / "scoring" / "active_ckpt.py")
 
 
 def current_maxiter_policy() -> tuple:
