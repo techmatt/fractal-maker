@@ -248,13 +248,29 @@ def cost_to_mine(summary: dict) -> dict:
     if not q:
         return dict(verdict="ABSENT")
     c = q["cost"]
+    # `price_aggregate` and `price_samples` post-date the batch-aggregated sampler
+    # (2026-08-04) and are absent from every earlier summary, which is a fact about the RECORD
+    # rather than a missing measurement — so they read as None and are labelled, not skipped.
+    agg = c.get("price_aggregate")
     return dict(price=c["price"], price_raw=c["price_raw"], seed=c["seed"],
                 clamped=c["clamped"], clamp_factor=c["clamp_factor"],
                 units_mined=c["units_mined"], min_spent=c["min_spent"],
                 capped=c["capped"],
+                # THE READ THAT MADE THE v1 DEFECT VISIBLE, and the reason it is now beside
+                # the EMA instead of reconstructed by hand: min_spent/units is the estimand,
+                # `price_raw` is the estimate, and a large gap between them is the alarm.
+                price_aggregate=agg,
+                price_samples=c.get("price_samples"),
+                ema_vs_aggregate=(None if not agg else
+                                  {p: round(c["price_raw"][p] / v, 3)
+                                   for p, v in agg.items() if v}),
+                sampler=("batch-aggregated" if agg is not None
+                         else "per-decode (pre-2026-08-04; the inverted sampler)"),
                 note="price = active-minutes per unit of currency (a decoded 4 = 1.0, a "
-                     "decoded 3 = 0.1) mined as a DISTINCT ADMISSION. A partition with zero "
-                     "units mined still carries its seed price — that is not a measurement.")
+                     "decoded 3 = 0.1) mined as a DISTINCT ADMISSION, sampled ONCE PER BATCH "
+                     "from the window's own minutes/units aggregate. A partition with zero "
+                     "units mined still carries its seed price — that is not a measurement, "
+                     "and a partition with few sampled windows is EMA-lagged toward that seed.")
 
 
 def readout(run_dir: Path) -> dict:

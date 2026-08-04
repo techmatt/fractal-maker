@@ -291,9 +291,11 @@ def test_price_is_minutes_per_currency_unit_and_a_class2_is_not_a_credit():
     c = pq.CostToMine(["a"], dict(seed_price=3.0, price_ema=1.0, cap_minutes=1e9))
     c.charge("a", 10.0)
     c.credit("a", pq.CLASS_WEIGHT.get(2, 0.0))       # a decoded 2: zero units, no credit
+    c.end_window()
     assert c.price("a") == pytest.approx(3.0)
     assert c.min_since_credit["a"] == pytest.approx(10.0), "a non-credit must not reset the clock"
     c.credit("a", pq.CLASS_WEIGHT[4])                # 10 minutes for 1.0 unit
+    c.end_window()
     assert c.price("a") == pytest.approx(10.0)
 
 
@@ -304,6 +306,7 @@ def test_a_class3_costs_ten_times_a_class4_per_unit():
     c.credit("a", pq.CLASS_WEIGHT[4])
     c.charge("b", 10.0)
     c.credit("b", pq.CLASS_WEIGHT[3])
+    c.end_window()
     assert c.price("b") == pytest.approx(10.0 * c.price("a"))
 
 
@@ -312,8 +315,170 @@ def test_the_price_clamp_bounds_what_a_miscalibrated_head_can_buy():
                                   cap_minutes=1e9))
     c.charge("a", 0.001)
     c.credit("a", 1.0)                                # absurdly cheap raw price
+    c.end_window()
     assert c.raw["a"] < 0.75 and c.price("a") == pytest.approx(3.0 / 4.0)
     assert "a" in c.summary()["clamped"], "a clamped price must be visible, not silent"
+
+
+# --------------------------------------------------------------------------- #
+# 5b. batch-aggregated sampling — the fix, and the defect it replaced.
+#
+# `_v1_price` below is the SUPERSEDED sampler, kept as an executable reference rather than as
+# prose: the bracket the fix needs is "old was wrong AND new is right AND new does not
+# over-correct" (`verification_practice.md` §3), and the first half of that is unassertable
+# once the old code is deleted. It is eight lines and it is the exact arithmetic arm B ran.
+# --------------------------------------------------------------------------- #
+def _v1_price(stream, seed=3.0, ema=0.30):
+    """v1: one EMA sample per DECODE = (minutes since last credit) / (units of THAT decode).
+
+    `stream` is a list of batches, each `(minutes, [units, ...])`."""
+    raw, since = seed, 0.0
+    for minutes, decodes in stream:
+        # v1 charged the batch AFTER harvesting it, exactly as the driver does.
+        for u in decodes:
+            sample = since / u
+            if sample > 0:
+                raw = (1 - ema) * raw + ema * sample
+            since = 0.0
+        since += minutes
+    return raw
+
+
+def _v2_price(stream, seed=3.0, ema=0.30):
+    """The live sampler, driven through the same stream."""
+    c = pq.CostToMine(["p"], dict(seed_price=seed, price_ema=ema, cap_minutes=1e9,
+                                  price_clamp=1e9))
+    for minutes, decodes in stream:
+        for u in decodes:
+            c.credit("p", u)
+        c.charge("p", minutes)
+        c.end_window()
+    return c.raw["p"]
+
+
+def _truth(stream):
+    m = sum(minutes for minutes, _ in stream)
+    u = sum(sum(d) for _, d in stream)
+    return m / u
+
+
+# Two streams of IDENTICAL true cost (720 active minutes buying 60 units = 12.0 min/unit),
+# differing ONLY in whether the decodes arrive clustered in one batch or one per batch.
+CLUSTERED = ([(20.0, []), (20.0, []), (20.0, []), (20.0, []), (20.0, []),
+              (20.0, [1.0] * 10)] * 6)
+DRIP = [(12.0, [1.0])] * 60
+
+
+def test_v1_priced_two_identical_cost_streams_an_order_of_magnitude_apart():
+    """OLD BEHAVIOUR WAS WRONG — the bracket's first half, asserted rather than described.
+
+    v1 divides a batch's whole accumulated gap by the FIRST decode's units; the other nine
+    decodes in the burst find the counter already reset, sample 0.0, and are dropped by the
+    `sample > 0` guard. Their units never reach any denominator, so the sample overstates the
+    true rate by the burst's unit ratio — here 10x. The drip stream has one decode per batch,
+    no burst, and v1 gets it right.
+
+    So v1's price ordering across partitions carries their BURSTINESS, not their cost. Since
+    allocation share is deficit/price, that ordering is what routed arm B's intent."""
+    assert _truth(CLUSTERED) == pytest.approx(12.0)
+    assert _truth(DRIP) == pytest.approx(12.0)
+    v1_cl, v1_dr = _v1_price(CLUSTERED), _v1_price(DRIP)
+    assert v1_cl > 8.0 * 12.0, f"clustered read {v1_cl:.2f} against a truth of 12.0"
+    assert v1_dr == pytest.approx(12.0, rel=0.05), f"drip read {v1_dr:.2f}"
+    assert v1_cl > 8.0 * v1_dr, "the same cost, priced 8x apart, on clustering alone"
+
+
+def test_batch_aggregation_prices_both_streams_at_the_true_per_unit_cost():
+    """NEW BEHAVIOUR IS RIGHT, AND DOES NOT OVER-CORRECT — the bracket's other two halves.
+
+    Both streams land within 15% of 12.0 and within 15% of each other. The drip stream is the
+    over-correction check: v1 already priced it correctly, so a fix that moved it would be
+    trading one bias for another."""
+    got_cl, got_dr = _v2_price(CLUSTERED), _v2_price(DRIP)
+    for name, got in (("clustered", got_cl), ("drip", got_dr)):
+        assert 0.85 * 12.0 <= got <= 1.15 * 12.0, f"{name} read {got:.2f}, truth 12.0"
+    assert abs(got_cl - got_dr) / max(got_cl, got_dr) < 0.15
+    assert abs(got_cl - 12.0) < abs(_v1_price(CLUSTERED) - 12.0)
+
+
+def test_every_sample_the_window_emits_is_the_windows_own_aggregate_rate():
+    """The property underneath both tests above, stated exactly rather than through an EMA:
+    each emitted sample IS window-minutes / window-units. The EMA is then a smoother over
+    unbiased samples instead of over first-decode ratios."""
+    c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=0.3, cap_minutes=1e9,
+                                  price_clamp=1e9))
+    samples = []
+    for minutes, decodes in CLUSTERED:
+        for u in decodes:
+            c.credit("p", u)
+        c.charge("p", minutes)
+        samples.append(c.end_window().get("p"))
+    emitted = [s for s in samples if s is not None]
+    assert len(emitted) == 6, "one sample per batch that carried units, and no others"
+    assert emitted == pytest.approx([12.0] * 6)
+
+
+def test_a_repeatedly_charged_dry_partition_samples_its_whole_gap_at_the_next_credit():
+    """The sparse-partition case the seed-pinning bias hid. Twenty dry batches then one
+    class-3: the sample is all twenty batches' minutes against 0.1 units, not the last
+    batch's."""
+    c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=1.0, cap_minutes=1e9,
+                                  price_clamp=1e9))
+    for _ in range(20):
+        c.charge("p", 1.0)
+        c.end_window()                       # no units -> no sample, minutes carry
+    assert c.raw["p"] == pytest.approx(3.0), "a dry window must not emit a sample"
+    c.credit("p", pq.CLASS_WEIGHT[3])
+    c.charge("p", 1.0)
+    c.end_window()
+    assert c.raw["p"] == pytest.approx(21.0 / 0.1)
+
+
+def test_units_credited_with_no_charged_minutes_are_never_priced_at_zero():
+    """A window with units but no minutes must NOT flush: a zero sample prices a partition as
+    free, which is the one direction the allocator amplifies (share = deficit/price)."""
+    c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=1.0, cap_minutes=1e9,
+                                  price_clamp=1e9))
+    c.credit("p", 1.0)
+    assert c.end_window() == {}
+    assert c.raw["p"] == pytest.approx(3.0)
+    assert c.win_units["p"] == pytest.approx(1.0), "the units are held, not discarded"
+    c.charge("p", 4.0)                        # the minutes those units actually cost
+    assert c.end_window() == pytest.approx({"p": 4.0})
+    assert c.raw["p"] == pytest.approx(4.0)
+
+
+def test_the_window_survives_a_resume():
+    """`state_dict`/`load_state` carry the open window. A resume that dropped it would throw
+    away the dry minutes a sparse partition had accumulated — pricing it cheap exactly at the
+    moment it is most expensive."""
+    a = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=1.0, cap_minutes=1e9,
+                                  price_clamp=1e9))
+    for _ in range(5):
+        a.charge("p", 2.0)
+        a.end_window()
+    b = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=1.0, cap_minutes=1e9,
+                                  price_clamp=1e9))
+    b.load_state(json.loads(json.dumps(a.state_dict())))
+    assert b.win_min["p"] == pytest.approx(10.0)
+    b.credit("p", 1.0)
+    b.charge("p", 2.0)
+    b.end_window()
+    assert b.raw["p"] == pytest.approx(12.0)
+
+
+def test_the_quota_closes_the_price_window_once_per_charged_batch(tmp_path):
+    """The seam, not the arithmetic: `PopQuota.charge` IS the window boundary, so a driver
+    that charges cannot forget to price. Two batches, one credit each -> two samples."""
+    q = _quota(tmp_path, {"a": 0.0, "b": 10.0})
+    q.pick({"a": 5, "b": 5})
+    q.credit_decode("a", 4)
+    q.charge("a", 6.0)
+    assert q.cost.samples["a"] == 1 and q.cost.win_units["a"] == 0.0
+    q.credit_decode("a", 4)
+    q.charge("a", 6.0)
+    assert q.cost.samples["a"] == 2
+    assert q.cost.summary()["price_aggregate"]["a"] == pytest.approx(6.0)
 
 
 def test_a_dry_partition_caps_and_a_credit_reopens_it():

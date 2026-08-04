@@ -44,7 +44,7 @@ THE PRICE IS MEASURED COST-TO-MINE, AND IT IS CLAMPED
     price(partition) = active-minutes per unit of currency mined
 
 estimated from the run's own telemetry: a canonical decode of 4 credits 1.0 unit, a decode of
-3 credits 0.1, and the minutes spent since that partition's last credit are the cost. Seeded
+3 credits 0.1, and the minutes charged to that partition are the cost. Seeded
 from config, EMA-smoothed, and **clamped to a bounded band around the seed**. The clamp is
 not tidiness: the numerator of a price is the classifier's decode, so a head that over-calls
 4s in one family would make that family look cheap and buy it more service — winner's curse
@@ -332,10 +332,36 @@ class CostToMine:
 
     `charge` accounts a batch's active minutes to the partition it served. `credit` is called
     with the currency a canonical decode just produced (a decoded 4 -> 1.0, a decoded 3 ->
-    0.1); the minutes since that partition's last credit divided by the units is one price
-    sample, EMA'd in. A partition that burns `cap_minutes` with zero credit is CAPPED out of
+    0.1). A partition that burns `cap_minutes` with zero credit is CAPPED out of
     service until something re-opens it — an unbounded stall on a partition whose queue is
     full of dead ground would otherwise eat the whole run's quota for that partition.
+
+    THE SAMPLE IS BATCH-AGGREGATED, AND THAT IS A FIX, NOT A REFINEMENT
+    ------------------------------------------------------------------
+    v1 took one EMA sample PER DECODE: `minutes-since-last-credit / units of THAT decode`,
+    with the dry-time counter reset by every credit. Two biases compound, and they push in
+    opposite directions on different partitions, so the price table came out INVERTED on the
+    biggest spenders (`allocator_prereg_v1_mechanism_read_20260804.md` §4; the run's own
+    aggregate `min_spent/units` against the EMA it was quoting: multibrot4 **14.3 vs 4.69**,
+    multibrot5 11.4 vs 2.48, mandelbrot 1.80 vs 9.24, julia:mandelbrot 3.0 vs 13.54):
+
+      * within a burst of k decodes in one batch, the whole gap is divided by the FIRST
+        decode's units only — the other k-1 decodes reset the counter to zero, sample 0.0,
+        and are dropped by the `sample > 0` guard. Their units never appear in any
+        denominator, so a productive clustered partition reads k times too EXPENSIVE.
+      * the number of samples is the number of decode EVENTS, not the amount of work. A
+        sparse-but-costly partition gets a handful of EMA updates and stays pinned near its
+        seed price, reading too CHEAP.
+
+    Since allocation share is deficit/price, an inverted table sends intent to the wrong
+    partitions — which is the whole failure this class is upstream of.
+
+    So: minutes and units accumulate per partition into a WINDOW, and `end_window` (one call
+    per batch, from `PopQuota.charge`) emits at most ONE sample from the aggregate,
+    `window minutes / window units`. That is the estimand — total cost over total currency —
+    computed directly instead of approximated by a first-decode ratio. A window with no
+    units does not flush: its minutes carry forward, so a partition that goes dry for twenty
+    batches and then credits once samples the full twenty batches against that one credit.
 
     THE CLAMP. `price` never leaves `[seed/clamp, seed*clamp]`. The raw EMA is kept and
     reported so the clamp is visible rather than silent."""
@@ -351,6 +377,13 @@ class CostToMine:
         self.min_since_credit = {p: 0.0 for p in partitions}
         self.min_spent = {p: 0.0 for p in partitions}
         self.units = {p: 0.0 for p in partitions}
+        # The price WINDOW: minutes and units since this partition's last emitted sample.
+        # Separate from `min_since_credit`, which is the CAP's dry-time clock and is reset by
+        # every credit — the two counters answer different questions and sharing one is how
+        # v1's burst bias got in.
+        self.win_min = {p: 0.0 for p in partitions}
+        self.win_units = {p: 0.0 for p in partitions}
+        self.samples = {p: 0 for p in partitions}
         self.capped: set = set()
 
     def ensure(self, p: str):
@@ -360,6 +393,9 @@ class CostToMine:
             self.min_since_credit[p] = 0.0
             self.min_spent[p] = 0.0
             self.units[p] = 0.0
+            self.win_min[p] = 0.0
+            self.win_units[p] = 0.0
+            self.samples[p] = 0
 
     def price(self, p: str) -> float:
         self.ensure(p)
@@ -373,6 +409,7 @@ class CostToMine:
         self.ensure(p)
         self.min_spent[p] += minutes
         self.min_since_credit[p] += minutes
+        self.win_min[p] += minutes
         if p not in self.capped and self.min_since_credit[p] >= self.cap_minutes:
             self.capped.add(p)
             return True
@@ -380,16 +417,39 @@ class CostToMine:
 
     def credit(self, p: str, units: float):
         """`units` of currency just mined in `p`. Zero units is not a credit — it must not
-        reset the dry-time counter, or a partition producing only class-1s would never cap."""
+        reset the dry-time counter, or a partition producing only class-1s would never cap.
+
+        Accumulates into the price window; the EMA moves in `end_window`, never here. A
+        decode is an EVENT and the price is a RATE, so one decode is not one sample."""
         self.ensure(p)
         if units <= 0:
             return
         self.units[p] += units
-        sample = self.min_since_credit[p] / units
-        if sample > 0:
-            self.raw[p] = (1 - self.ema) * self.raw[p] + self.ema * sample
+        self.win_units[p] += units
         self.min_since_credit[p] = 0.0
         self.capped.discard(p)
+
+    def end_window(self) -> dict:
+        """Close the price window: one EMA sample per partition that has both minutes and
+        units in it. Called once per served batch (`PopQuota.charge`).
+
+        A partition with units but no charged minutes does NOT flush — a zero sample would
+        drag the EMA toward zero and price it as free. Its units stay in the window and are
+        spent against the minutes that follow, which is the aggregate the estimand asks for.
+        Returns {partition: sample} for the samples actually taken, so a caller can log what
+        moved rather than diff two price tables."""
+        taken = {}
+        for p in list(self.win_units):
+            u, m = self.win_units[p], self.win_min[p]
+            if u <= 0 or m <= 0:
+                continue
+            sample = m / u
+            self.raw[p] = (1 - self.ema) * self.raw[p] + self.ema * sample
+            self.samples[p] = self.samples.get(p, 0) + 1
+            self.win_units[p] = 0.0
+            self.win_min[p] = 0.0
+            taken[p] = sample
+        return taken
 
     def reopen_caps(self):
         for p in list(self.capped):
@@ -399,11 +459,14 @@ class CostToMine:
     def state_dict(self) -> dict:
         return dict(seed=self.seed, raw=self.raw, min_since_credit=self.min_since_credit,
                     min_spent=self.min_spent, units=self.units, capped=sorted(self.capped),
+                    win_min=self.win_min, win_units=self.win_units, samples=self.samples,
                     ema=self.ema, clamp=self.clamp, cap_minutes=self.cap_minutes)
 
     def load_state(self, d: dict):
-        for k in ("seed", "raw", "min_since_credit", "min_spent", "units"):
+        for k in ("seed", "raw", "min_since_credit", "min_spent", "units",
+                  "win_min", "win_units"):
             getattr(self, k).update({p: float(v) for p, v in (d.get(k) or {}).items()})
+        self.samples.update({p: int(v) for p, v in (d.get("samples") or {}).items()})
         self.capped = set(d.get("capped", []))
 
     def summary(self) -> dict:
@@ -414,6 +477,11 @@ class CostToMine:
                                    if abs(self.price(p) - self.raw[p]) > 1e-9),
                     units_mined={p: round(v, 3) for p, v in sorted(self.units.items())},
                     min_spent={p: round(v, 2) for p, v in sorted(self.min_spent.items())},
+                    # The aggregate the EMA is an estimate OF. Quoted beside it because the
+                    # v1 defect was invisible until the two were read together.
+                    price_aggregate={p: round(self.min_spent[p] / self.units[p], 3)
+                                     for p in sorted(self.units) if self.units.get(p, 0) > 0},
+                    price_samples={p: v for p, v in sorted(self.samples.items()) if v},
                     capped=sorted(self.capped), clamp_factor=self.clamp)
 
 
@@ -549,7 +617,13 @@ class PopQuota:
 
     # ---- accounting ----------------------------------------------------- #
     def charge(self, partition: str, minutes: float) -> bool:
-        """Account a served batch's active minutes, tagged with the bucket that bought it."""
+        """Account a served batch's active minutes, tagged with the bucket that bought it.
+
+        This is also the price WINDOW BOUNDARY, and it is here rather than in a separate
+        `end_batch` the driver must remember to call: `charge` is already the once-per-served-
+        batch call (it is what increments `pops`), so hanging the flush off it makes
+        "one price sample per batch" structural instead of a convention. A driver that
+        charges is a driver that prices."""
         if partition is None:
             return False
         st = self.state
@@ -562,7 +636,9 @@ class PopQuota:
             for p, v in self._last_eff.items():
                 self._eff_accum[p] = self._eff_accum.get(p, 0.0) + v * minutes
             self._eff_weight += minutes
-        return self.cost.charge(partition, minutes)
+        capped = self.cost.charge(partition, minutes)
+        self.cost.end_window()
+        return capped
 
     def credit_decode(self, partition: str, decoded_class):
         """One canonical decode landed in `partition`. Currency weight only — a decoded 1 or 2
