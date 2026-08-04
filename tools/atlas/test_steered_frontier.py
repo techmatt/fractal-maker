@@ -1045,3 +1045,23 @@ def test_a_HUNG_probe_costs_that_family_not_the_run(monkeypatch, capsys):
     assert all(t is not None and t > 0 for t in calls), calls
     out = capsys.readouterr().out
     assert "TIMED OUT" in out and "mandelbrot" in out
+
+
+def test_the_run_config_records_the_pools_MEASURED_spacing_not_null():
+    """The stamp exists because the floor was invisible in every prior run config — the path
+    was recorded and the path does not say which floor thinned it. A `null` measurement is
+    that same invisibility with an extra key, and that is exactly what shipped first: the
+    value was read lazily but `write_run_config` runs BEFORE `seed_julia_pool`, so it was
+    always null. Pinned as an ORDER guarantee, since that is what broke."""
+    import inspect
+    src = inspect.getsource(sf.SteeredFrontier.write_run_config)
+    assert "load_julia_supply_pool()" in src, (
+        "write_run_config must force the pool load, or pool_min_dc is null in every run")
+    assert src.index("load_julia_supply_pool()") < src.index("cfg = dict("), \
+        "the load must happen BEFORE the config dict is built"
+    # and the value really is populated once loaded
+    import types
+    stub = types.SimpleNamespace(julia_seed_pool_path=sf.JULIA_SUPPLY_POOL,
+                                 _julia_pool_cache=None)
+    sf.SteeredFrontier.load_julia_supply_pool(stub)
+    assert stub._julia_pool_min_dc is not None and stub._julia_pool_min_dc > 0

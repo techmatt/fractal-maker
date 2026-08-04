@@ -3050,6 +3050,22 @@ class SteeredFrontier:
 
     def write_run_config(self):
         """`run_config.json`: what this run is, and what it pre-registered, before batch 1."""
+        # Load+verify the julia pool HERE, before the config is built. The stamp below records
+        # the pool's own measured closest pair, and `seed_julia_pool` does not run until after
+        # this — so reading the measurement lazily wrote `pool_min_dc: null` into every run
+        # config, which is precisely the invisibility the stamp exists to end. Cached, so the
+        # pre-loop draw pays nothing; and it moves the floor REFUSAL ahead of batch 1 rather
+        # than into the middle of the first root draw.
+        if self.julia_seed_pool_path is not None:
+            try:
+                self.load_julia_supply_pool()
+            except SystemExit:
+                raise
+            except Exception as exc:                       # noqa: BLE001
+                # A malformed pool must not take the run config down with it — the refusal
+                # path above is the one that matters, and it re-raises.
+                print(f"[julia-seed-pool] could not measure pool for the run config: {exc}",
+                      flush=True)
         cfg = dict(
             run_ts=self.run_dir.name, started=time.strftime("%FT%T"),
             scorer_version=ps.SCORER_VERSION, ckpt=ACTIVE_CKPT,
