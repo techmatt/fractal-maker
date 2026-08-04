@@ -258,22 +258,30 @@ REGISTRY = [
      "cost a trash directory rather than a re-dump. Registered in "
      "artifacts.RELOCATED_PREFIXES and restored out-of-tree byte-identical (1.6 GB / 320 "
      "files, sha256 over the .bin set and the .json set both match)."),
-    ("data/q4_stage1/fields/<mb_id>.bin", "tools/studies/q4_stage1_labelset.py", DUR,
-     "NOT re-dumpable — current code produces a DIFFERENT field (see verdict)", Y,
-     "RESOLVED 2026-08-04, and the CONTRACT decided it, not judgement: re-dumping a field "
-     "from current code is not byte-reproducible. Every one of the 33 stored sidecars "
-     "records bailout_b = 1e6; today's beautiful default is 2^16, `--coloring "
-     "{'bailout_b': 1e6}` does not restore it, and the re-dump lands a CONSTANT +3.4712 "
-     "offset on every escaped sample (std 3.2e-6, NaN/interior mask identical, 0% of "
-     "samples equal). Verified on two files. So the set records a population current code "
-     "cannot re-create — the durable class. Moved scratch/ -> data/q4_stage1/fields "
-     "(33 .bin through LFS + 33 .json plain, 336 MB), .gitignore negated by directory, "
-     "LS.FIELDS now goes through paths.durable(), and q4_field_richness's second hardcoded "
-     "copy of the path was collapsed onto it. It is THE fit input "
-     "q4_multibrot_transfer._fit_model reads, gating build_minibrot_batch screen, "
-     "build_interior_band_batch sweep and interior_bakeoff. Open consequence, recorded "
-     "rather than assumed away: a field regenerated today is NOT a drop-in for that fit "
-     "unless the fit's features are offset-invariant, which nobody has shown."),
+    ("data/q4_stage1/fields/<mb_id>.bin", "tools/studies/q4_stage1_labelset.py", BULK,
+     "`q4_multibrot_transfer.py corpus-fields` — byte-identical, ~1.7 s/field, ~60 s for 33",
+     N,
+     "DELETED-BY-DECISION 2026-08-04 (Matt), and the RESOLVED-durable verdict it replaces "
+     "was WRONG — recorded here because the error is the reusable part. That verdict "
+     "re-dumped through the `beautiful` kernel (default bailout 2^16), got a constant "
+     "+3.4712 offset on every escaped sample, and read that as irreproducibility. But the "
+     "writer these fields actually come from is `--dump-field-source f64` "
+     "(q4_multibrot_transfer._dump_field), and it reproduces them BYTE-IDENTICALLY: sha256 "
+     "equal on 4/4 spot-checked files, identical NaN/interior mask, 100% of escaped samples "
+     "exactly equal, re-dump sidecar bailout_b = 1e6 like the stored ones. On the real "
+     "labeled windows the worst LF.featurize feature difference is 0.0 with zero _v2_drop "
+     "disagreements — and that was never in doubt mechanically, since featurize "
+     "percentile-stretches each crop by its own lo/hi, which cancels any constant offset "
+     "exactly. THE LESSON: a reproducibility test must re-run the writer the artifact came "
+     "from, not a plausible neighbour — this one compared against a kernel nothing in the "
+     "path uses and cost 336 MB of LFS. The selection is recoverable too: HT.mb_info() "
+     "derives all 33 ids from the tracked store data/q4_window_corpus/batches/ (33/33). So: "
+     "untracked (.gitattributes LFS rule and .gitignore negation both removed), removed from "
+     "disk, LS.FIELDS -> paths.bulk(). Local LFS objects deliberately NOT pruned. Every "
+     "reader now funnels through LS._require_field, which raises with the rebuild command; "
+     "a fourth hardcoded copy of the path in q4_richness_grid.py (missed by the original "
+     "collapse, and dangling since) was collapsed onto LS.FIELDS at the same time. Holding "
+     "copy of the deleted bytes: C:\\Code\\fractal-maker-holding\\q4_stage1_fields."),
     ("data/emission/campaign1/embs/*.npy", "tools/emission/campaign1_intake.py", BULK,
      "re-embed the intake's medoids — needs intake.json, which is gone", N,
      "Was scratch/emission/campaign1/embs and that is why campaign1 is DARK: the vectors "

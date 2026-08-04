@@ -121,13 +121,6 @@ ALLOWLIST = [
           "Wallpaper-batch images.jsonl and progress ledgers."),
     Entry("data/orbital/screen_pool.jsonl", EXCEPTION,
           "Orbital screen pool: the scored candidate population behind the mode gates."),
-    Entry("data/q4_stage1/fields/", EXCEPTION,
-          "q4 stage-1 label-set smooth fields: 33 x 10.65 MB f32 (336 MB, LFS). Not media "
-          "and not a weight — the FIT INPUT the deployed OOD mask "
-          "(q4_multibrot_transfer._fit_model) was measured on. Here because a re-dump from "
-          "current code is not byte-reproducible: the stored fields carry bailout_b 1e6, "
-          "today's default is 2^16, and the re-dump is a constant +3.4712 off every escaped "
-          "sample. Classified 2026-08-04 (tools/audit/durability_map.py)."),
 ]
 
 

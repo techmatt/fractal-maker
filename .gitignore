@@ -82,14 +82,14 @@ __pycache__/
 # (degree,band) atom selection + a train/eval split that later descent crops inherit.
 # Impossible to reproduce identically across future sourcing runs -> committed by path.
 !/data/minibrot_roster/
-# q4 stage-1 label-set fields (tools/studies/q4_stage1_labelset.py `fields`): the 33
-# smooth fields the deployed OOD mask's fit was measured on. Classified DURABLE on
-# 2026-08-04 by the contract test rather than by judgement — a re-dump from current code
-# is NOT byte-reproducible (the stored sidecars record bailout_b = 1e6; the current
-# beautiful default is 2^16, and the re-dump lands a constant +3.4712 off every escaped
-# sample, 0% of samples equal). The set therefore records a population current code
-# cannot re-create, which is the durable class. .bin goes through LFS (.gitattributes).
-!/data/q4_stage1/
+# (No negation for /data/q4_stage1/ — deliberately.) The q4 stage-1 label-set fields were
+# tracked as DURABLE on 2026-08-04 and DELETED BY DECISION the same day. The durability
+# verdict was wrong: it re-dumped through the `beautiful` kernel (default bailout 2^16) and
+# read the resulting +3.4712 offset as irreproducibility, but the writer those fields
+# actually come from is `--dump-field-source f64`, which reproduces them BYTE-IDENTICALLY
+# (sha256 equal on 4/4 spot-checked, ~1.7 s each). They are bulk-regenerable, so they are
+# gitignored like the rest of /data/*; `LS.FIELDS` goes through paths.bulk(). Rebuild with
+# `uv run python tools/studies/q4_multibrot_transfer.py corpus-fields` (~60 s for all 33).
 # Minibrot descent harness (tools/descent/, prompts/descent_harness_build.md +
 # prompts/minibrot_triage_wall.md): the durable human records — selection subset,
 # per-emit solution lineages, verified-bad verdicts, and the triage wall's

@@ -194,19 +194,6 @@ REGISTRY: list[Entry] = [
           "split assignment that exists only as a diff against another file is one nobody "
           "can read. The aug_cache JPGs are bulk() and out-of-tree. durable() + canaried. "
           "CANARY.", canary=True),
-    Entry("data/q4_stage1/fields/", KEEP, None, "tracked",
-          "DISPOSITION: KEEP — the q4 stage-1 label-set smooth fields (33 .bin x 10.2 MB "
-          "through LFS + 33 .json, 336 MB, 66 files so no traversal cost). They are the "
-          "FIT INPUT q4_multibrot_transfer._fit_model reads, and that fit is the deployed "
-          "OOD mask gating build_minibrot_batch screen, build_interior_band_batch sweep "
-          "and interior_bakeoff. They are here rather than in artifacts because they are "
-          "NOT regenerable: re-dumping from current code gives a different field. Every "
-          "stored sidecar records bailout_b = 1e6, today's beautiful default is 2^16, and "
-          "the re-dump lands a constant +3.4712 on every escaped sample with 0% of samples "
-          "equal (measured on two files, 2026-08-04; all 33 sidecars agree on 1e6). Same "
-          "shape as the data/orbital/ precedent: the expensive, unreproducible half of a "
-          "pipeline, tracked because there is no other copy. Reclassified out of scratch() "
-          "on 2026-08-04 after a wipe-and-trash-recovery; see tools/audit/durability_map.py."),
     Entry("data/library_embeddings/", KEEP, None, "mixed",
           "prospect-library CLIP embeddings (embeddings.npz, tracked): unregenerable "
           "except value-approximate under a verdict-sensitive threshold. CANARY.",

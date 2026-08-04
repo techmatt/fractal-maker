@@ -60,8 +60,11 @@ from tools.studies import q4_harvest_tight as HT  # noqa: E402
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 OUT = ROOT / "scratch" / "q4_multibrot_transfer"
 FIELDS = OUT / "fields"
-CORPUS_FIELDS = LS.FIELDS                      # data/q4_stage1/fields — DURABLE fit inputs
-                                               # (reclassified 2026-08-04; see LS.FIELDS)
+CORPUS_FIELDS = LS.FIELDS                      # data/q4_stage1/fields — BULK fit inputs.
+# One definition, in the module that dumps them. Tracked as durable and deleted by decision
+# on 2026-08-04: `stage_corpus_fields` below rebuilds all 33 byte-identically in ~60 s, which
+# is why they are bulk and not tracked. `_fit_model` reads them only on a features_cache
+# miss; on a miss with the fields absent, LS._require_field raises with the rebuild command.
 FINDINGS = ROOT / "docs" / "design" / "q4_multibrot_transfer.md"
 
 DEGREES = [2, 3, 4, 5]

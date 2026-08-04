@@ -31,7 +31,10 @@ from tools.studies import q4_stage1_labelset as LS   # noqa: E402
 
 # ONE definition of where the fields live, in the module that dumps them. This was a second
 # hardcoded `scratch/q4_stage1/fields` literal, which is how a storage-class change reaches
-# one reader and not the other; the fields became durable on 2026-08-04 (see LS.FIELDS).
+# one reader and not the other — and it is why the 2026-08-04 durable->bulk->deleted moves
+# all landed here for free. Read the fields through `LS.load_field_values`, never by opening
+# `FIELDS / f"{id}.bin"` directly: the loud "deleted, here is the rebuild command" error
+# lives in LS._require_field, and a direct open bypasses it. See LS.FIELDS.
 FIELDS = LS.FIELDS
 MINIS = ROOT / "scratch" / "q4_stage1" / "minibrots.json"
 OUT = ROOT / "scratch" / "fair_rerender"
@@ -40,9 +43,10 @@ SIGMAS = [1.0, 2.0, 4.0, 8.0]   # octave band-pass scales
 
 
 def load_field(stem):
-    meta = json.load(open(FIELDS / f"{stem}.json"))
+    b, j = LS._require_field(stem)          # loud "deleted, here is the rebuild" on absence
+    meta = json.load(open(j))
     w, h = meta["width"], meta["height"]
-    a = np.fromfile(FIELDS / f"{stem}.bin", dtype=np.float32).reshape(h, w)
+    a = np.fromfile(b, dtype=np.float32).reshape(h, w)
     return a, meta
 
 
@@ -72,8 +76,12 @@ def richness(a):
 def main():
     minis = {m["id"]: m for m in json.load(open(MINIS))}
     rows = []
-    for jf in sorted(FIELDS.glob("*.json")):
-        stem = jf.stem
+    stems = sorted(jf.stem for jf in FIELDS.glob("*.json"))
+    if not stems:
+        # A glob over a deleted directory is empty, and an empty loop writes a well-formed
+        # zero-row table and exits 0. Make the absence say so.
+        LS._require_field("mb00_p04")
+    for stem in stems:
         a, meta = load_field(stem)
         r = richness(a)
         m = minis.get(stem, {})

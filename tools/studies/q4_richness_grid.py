@@ -4,13 +4,20 @@ confound. Ranked by R_occ from richness.json. Not the target-style deliverable
 (that's the rendered 3-palette sheets); this is the fair consistent-color judge.
 """
 import json
+import sys
 import numpy as np
 from pathlib import Path
 from PIL import Image, ImageDraw
 import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parents[2]
-FIELDS = ROOT / "scratch" / "q4_stage1" / "fields"
+sys.path.insert(0, str(ROOT))
+from tools.studies import q4_stage1_labelset as LS   # noqa: E402
+
+# A FOURTH hardcoded `scratch/q4_stage1/fields` literal, missed when the other three were
+# collapsed onto LS.FIELDS on 2026-08-04 — so this module has been pointing at a directory
+# that stopped existing that day and would have failed with a bare ENOENT. Collapsed here.
+FIELDS = LS.FIELDS
 OUT = ROOT / "scratch" / "fair_rerender"
 TILE_W = 384
 COLS = 5
@@ -19,9 +26,10 @@ CMAP = plt.get_cmap("turbo")
 
 
 def color_tile(stem, w):
-    meta = json.load(open(FIELDS / f"{stem}.json"))
+    b, j = LS._require_field(stem)          # loud "deleted, here is the rebuild" on absence
+    meta = json.load(open(j))
     fw, fh = meta["width"], meta["height"]
-    a = np.fromfile(FIELDS / f"{stem}.bin", dtype=np.float32).reshape(fh, fw)
+    a = np.fromfile(b, dtype=np.float32).reshape(fh, fw)
     fin = np.isfinite(a)
     L = np.log(np.where(fin, a, 1.0))
     lo, hi = np.percentile(L[fin], [1, 99])

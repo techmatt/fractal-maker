@@ -1,1 +1,0 @@
-{"width":2176,"height":1224,"supersample":1,"field":"smooth","dtype":"f32","layout":"row_major","bailout_b":1000000,"location":{"kind":"mandelbrot","cx":"-0.74403005758152519527986382221770257","cy":"0.10792775929574326654636727197880118","fw":"0.002668415","maxiter":3861}}

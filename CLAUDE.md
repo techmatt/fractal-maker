@@ -202,6 +202,14 @@ pass `--model` explicitly or resolve through `ACTIVE_CKPT`
 
 ## Conventions
 
+> **No commit ≥20 MB without Matt's explicit prior confirmation.** The threshold is per
+> *commit*, on the **aggregate** of everything it adds — not the largest single blob — and
+> **LFS-tracked bytes count** (an LFS pointer is 130 bytes in the tree and 300 MB on the
+> remote; the rule is about the bytes, not the pointer). At the threshold, **stop and report
+> the sizes instead of committing** — do not split a large commit into smaller ones to stay
+> under it, which is the same bytes with the confirmation removed. Applies to every commit,
+> including ones a prompt explicitly asks for.
+
 > **Commit prompt work to `main`; branch only on an explicit request.** A production config
 > change sitting on an unmerged branch looks applied and isn't, and the failure is silent — the
 > τ_h floor raise was staged on `closeout-batch-tau-h` and had no effect until it landed.

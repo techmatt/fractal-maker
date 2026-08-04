@@ -53,22 +53,28 @@ from tools.studies.q4_neighborhood_sweep import compute_metrics, score_A  # verb
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 OUT = ROOT / "scratch" / "q4_stage1"
 
-# THE FIELDS ARE DURABLE, AND THE REST OF THIS TREE IS NOT. `OUT` holds this harness's
-# disposable stages (frames, refit, sweep intermediates); the dumped smooth fields are the
-# fit input `q4_multibrot_transfer._fit_model` reads, and that fit gates the deployed OOD
-# mask, `build_minibrot_batch` screen, `build_interior_band_batch` sweep and
-# `interior_bakeoff`. They were `scratch()` until 2026-08-04, were wiped once, and were
-# recovered from a trash directory rather than from their contract.
+# THE FIELDS ARE BULK-REGENERABLE, AND SO IS THE REST OF THIS TREE. `OUT` holds this
+# harness's disposable stages (frames, refit, sweep intermediates); the dumped smooth fields
+# are the fit input `q4_multibrot_transfer._fit_model` reads, and that fit gates the deployed
+# OOD mask, `build_minibrot_batch` screen, `build_interior_band_batch` sweep and
+# `interior_bakeoff`.
 #
-# The class was decided by the contract test, not by judgement: re-dumping one field from
-# CURRENT code is NOT byte-reproducible. Every stored sidecar records `bailout_b` 1e6; the
-# current `beautiful` default is 2^16 and `--coloring {"bailout_b": 1e6}` does not restore
-# it. The re-dump has an identical NaN/interior mask and a constant +3.4712 offset on every
-# escaped sample (std 3.2e-6 — f32 rounding), and 0% of samples compare equal. So the set
-# records a population current code cannot re-create: durable, `data/`, LFS for the `.bin`.
-# One consequence worth stating where the reader is: a field regenerated today is NOT a
-# drop-in for the fit until someone shows the fit's features are offset-invariant.
-FIELDS = _paths.durable("data/q4_stage1/fields")
+# History worth keeping, because the same mistake is easy to repeat. These were `scratch()`,
+# were wiped once, and were recovered from a trash directory. On 2026-08-04 that was read as
+# proof they were DURABLE and 336 MB went into git-LFS — on a contract test that re-dumped
+# through the **`beautiful` kernel** (default bailout 2^16) and read the resulting constant
+# +3.4712 offset as irreproducibility. That was the wrong writer. These fields are dumped by
+# `--dump-field-source f64` (`q4_multibrot_transfer._dump_field`), and THAT path reproduces
+# them byte-identically: sha256 equal on 4/4 spot-checked files, identical NaN/interior mask,
+# 100% of escaped samples exactly equal, worst `LF.featurize` feature difference 0.0 and zero
+# `_v2_drop` disagreements over the real labeled windows (measured 2026-08-04). The selection
+# is recoverable too: `HT.mb_info()` derives all 33 minibrot ids from the tracked window store
+# `data/q4_window_corpus/batches/`, and it covers the stored set exactly (33/33).
+#
+# So: regenerable in ~60 s, hence `bulk()` and not tracked. The tracked copy was deleted by
+# decision on 2026-08-04 (docs/design/retired.md). Rebuild with
+#     uv run python tools/studies/q4_multibrot_transfer.py corpus-fields
+FIELDS = _paths.bulk("data/q4_stage1/fields")
 
 # The label store — SEPARATE from the v7 location corpus (distribution-bound).
 BATCH_ID = "2026-07-23_q4_stage1_windows"
@@ -251,10 +257,44 @@ def stage_fields():
 # --------------------------------------------------------------------------- #
 # Stage 3 — sweep + prefilter                                                 #
 # --------------------------------------------------------------------------- #
+class FieldsDeleted(FileNotFoundError):
+    """The q4 stage-1 fields are absent — raised with the command that rebuilds them."""
+
+
+def _require_field(mb_id):
+    """THE chokepoint. Every reader of these fields — q4_stage1_refit.build_dataset (and so
+    q4_multibrot_transfer._fit_model and its five deployed callers), q4_harvest_tight,
+    q4_stage1_linear_fit, q4_stage1_filter_v2, q4_stage1_g_batch, q4_stage1_nms_check and
+    this module's own sweep — arrives here. So the explanation lives here once, and no
+    caller gets a bare ENOENT on a path it cannot account for."""
+    b, j = FIELDS / f"{mb_id}.bin", FIELDS / f"{mb_id}.json"
+    if b.exists() and j.exists():
+        return b, j
+    raise FieldsDeleted(
+        f"q4 stage-1 field {mb_id!r} is not on disk: {b}\n"
+        f"\n"
+        f"  WHAT HAPPENED. The 33 fields were tracked in git-LFS as DURABLE on 2026-08-04\n"
+        f"  and DELETED BY DECISION the same day (336 MB; docs/design/retired.md). They are\n"
+        f"  NOT lost data — the durability verdict was wrong. It re-dumped through the\n"
+        f"  `beautiful` kernel (default bailout 2^16) and read the constant +3.4712 offset\n"
+        f"  as irreproducibility, but these fields come from `--dump-field-source f64`,\n"
+        f"  which reproduces them BYTE-IDENTICALLY (sha256 equal on 4/4 spot-checked).\n"
+        f"\n"
+        f"  HOW TO FIX. Rebuild all 33 (~60 s; resumable, skips what is present):\n"
+        f"      uv run python tools/studies/q4_multibrot_transfer.py corpus-fields\n"
+        f"  The selection needs no input from you: HT.mb_info() derives it from the tracked\n"
+        f"  window store data/q4_window_corpus/batches/ (33/33 coverage, verified).\n"
+        f"\n"
+        f"  A holding copy of the deleted bytes was placed outside the repo at\n"
+        f"  C:\\Code\\fractal-maker-holding\\q4_stage1_fields (expected lifetime one to two\n"
+        f"  checkpoints — treat the rebuild above as the real recovery path, not that copy).")
+
+
 def load_field_values(mb_id):
-    meta = json.loads((FIELDS / f"{mb_id}.json").read_text())
+    b, j = _require_field(mb_id)
+    meta = json.loads(j.read_text())
     w, h = int(meta["width"]), int(meta["height"])
-    a = np.frombuffer((FIELDS / f"{mb_id}.bin").read_bytes(), dtype="<f4")
+    a = np.frombuffer(b.read_bytes(), dtype="<f4")
     return a.reshape(h, w).astype(np.float64), w, h
 
 
@@ -297,9 +337,10 @@ def stage_sweep():
     rows = []
     n_reject = {}
     for mb in mbs:
-        if not (FIELDS / f"{mb['id']}.bin").exists():
-            print(f"  WARN no field for {mb['id']} — run `fields` first", file=sys.stderr)
-            continue
+        # Was a WARN + `continue`. After the 2026-08-04 deletion that degrades into a sweep
+        # over zero minibrots that still prints a total and exits 0 — the failure this whole
+        # harness is least able to notice. Raise with the rebuild command instead.
+        _require_field(mb["id"])
         kept = sweep_minibrot(mb["id"])
         for c in kept:
             rej = is_obvious_reject(c["m"])

@@ -256,3 +256,39 @@ an item's evidence, the line points at it rather than restating it.
   a channel that measured zero read identically in a config.
   `[measured: data/label_corpus/batches/2026-08-03_q4_uniform_eval_v1, 2026-08-03]`
   `[code: tools/atlas/supply_routing.py::RETIRED_CHANNELS]`
+
+- **2026-08-04 — the DURABLE classification of the q4 stage-1 fields, and the 336 MB of
+  git-LFS it bought.** Tracked as durable that morning and **deleted by decision** the same
+  day (Matt), under usefulness-before-recoverability: a superseded screen's fit input is not
+  worth 336 MB of tracked bytes even if it were irreplaceable. What retires here is the
+  **classification**, not the fields — and the classification was **wrong on its own terms**,
+  which is the reusable part. The contract test re-dumped a field through the **`beautiful`
+  kernel** (default bailout 2^16), got a constant **+3.4712** offset on every escaped sample,
+  and read that as irreproducibility. But nothing in the path uses that writer: these fields
+  are dumped by **`--dump-field-source f64`** (`q4_multibrot_transfer._dump_field`), and that
+  path reproduces them **byte-identically** — sha256 equal on 4/4 spot-checked files, NaN and
+  interior mask identical, **100%** of escaped samples exactly equal, and the re-dump sidecar
+  carries the same `bailout_b` 1e6 the stored ones do. Downstream the question could not have
+  gone the other way either: `LF.featurize` percentile-stretches every crop by its own
+  `lo`/`hi`, so a constant offset cancels **exactly** — worst feature difference **0.0** over
+  the real labeled windows, zero `_v2_drop` disagreements. **The rule: a reproducibility test
+  must re-run the writer the artifact actually came from, not a plausible neighbour.** This
+  one measured a kernel no caller invokes and priced a regenerable set as unrecoverable.
+  **Correcting the record on recoverability, twice.** The prompt authorizing this deletion
+  called the set "partially unreconstructable" and its selection "already unrecoverable";
+  both are false. The bytes rebuild in **~60 s** (~1.7 s × 33) via
+  `q4_multibrot_transfer.py corpus-fields`, and the **selection** is derived by `HT.mb_info()`
+  from the tracked window store `data/q4_window_corpus/batches/` with **33/33** coverage. The
+  deletion is right for the reason Matt gave — the screen is superseded and the bytes are not
+  worth tracking — and it costs nothing recoverable, so it did not need the stronger claim.
+  `LS.FIELDS` is now `paths.bulk()`, every reader funnels through `LS._require_field` (which
+  raises naming the rebuild command), and a **fourth** hardcoded copy of the path in
+  `q4_richness_grid.py` — missed by the original three-reader collapse, and dangling since —
+  was collapsed onto it. Local LFS objects deliberately **not** pruned. Holding copy of the
+  deleted bytes at `C:\Code\fractal-maker-holding\q4_stage1_fields` (66 files, 351,581,091 B,
+  count + sha256 spot-checked), expected lifetime one to two checkpoints — the rebuild
+  command, not that copy, is the recovery path.
+  `[measured: 4/4 fields sha256-identical vs `--dump-field-source f64`; featurize/_v2_drop
+  parity over 8 windows of mb00_p04; 2026-08-04]`
+  `[code: tools/studies/q4_stage1_labelset.py::{FIELDS,_require_field}; .gitattributes;
+  .gitignore; tools/audit/{size_guard,durability_map}.py; tests/test_large_tracked_blobs.py]`
