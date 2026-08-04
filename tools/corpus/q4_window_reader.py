@@ -33,8 +33,26 @@ THREE-WAY labels:
                  rare exception tag is what lets accept/reject stay one-key fast paths.
 
 Labels: `label.klass` is authoritative when non-null; else the accept/reject/leak flow
-exports a `scores.json` sidecar keyed by window_id (string class) — `resolve_klass`
-joins the two, sidecar filling nulls only.
+exports a sidecar keyed by window_id (string class) — `resolve_klass` joins the two,
+sidecar filling nulls only.
+
+WHERE A SIDECAR LIVES, and why there are two places. The labeling UI writes
+`<batch_dir>/scores.json`; a labeling pass run later exports to `labels/<name>.json`
+instead (that directory carries `disk_audit`'s `^labels/` NEVER-delete protection, which
+the store tree does not). Reading only the first place is how 341 labels — every one of
+`q4_stage1_windows_p2.json` and `q4_g_aimed.json` — sat on disk resolving to None while
+`FOREIGN_LABEL_FILES` in `label_store.py` pointed here as their reader
+`[found 2026-08-04, label-corpus census]`. `SIDECAR_FILES` below registers the second
+place, so both are read; a q4-window label file that is NOT registered there fails
+`tools/corpus/test_label_reachability.py::test_q4_window_store_reachable`.
+
+PRECEDENCE IS LAST-WINS, because a later pass RE-JUDGES windows the earlier one already
+saw: p1 and p2 overlap on 88 window_ids and disagree on 49 of them. That is a revision,
+not a merge conflict, and `tools/studies/q4_stage1_refit.py` already fit on exactly this
+rule ("newest-label precedence"). It is lifted here so the canonical reader and the fit
+cannot drift — unlike `label_store`, which keeps revisions in a separate amendment stream
+because its originals are a frozen eval instrument. Nothing here is frozen: no eval slice,
+no manifest and no threshold reads this store, so a plain ordered overlay is enough.
 
 CLI:  uv run python -m tools.corpus.q4_window_reader stats
 """
@@ -45,12 +63,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 STORE_ROOT = ROOT / "data" / "q4_window_corpus" / "batches"
+LABELS_DIR = ROOT / "labels"
 
 # The registered q4-window batches (single source of truth). NEW batches append here.
 REGISTERED_BATCHES = [
     "2026-07-23_q4_stage1_windows",
     "2026-07-23_q4_g_aimed",
 ]
+
+# batch_id -> its `labels/*.json` exports, OLDEST FIRST (last wins; see the module doc).
+# The in-store `<batch_dir>/scores.json` is read before any of these, so a batch labeled
+# only through the UI needs no entry. A NEW labeling pass MUST append its export here.
+SIDECAR_FILES = {
+    "2026-07-23_q4_stage1_windows": (
+        "q4_stage1_windows.json",       # p1 — byte-equal to the in-store scores.json
+        "q4_stage1_windows_p2.json",    # p2 — re-judges 88 of p1's windows, flips 49
+    ),
+    "2026-07-23_q4_g_aimed": (
+        "q4_g_aimed.json",              # the G-aimed batch's only export
+    ),
+}
 
 CLASSES = ("accept", "reject", "filter_leak")
 # tolerated legacy int forms in a scores.json (the tools/viz convention): 3->accept,
@@ -73,16 +105,34 @@ def _norm_klass(v):
     return _INT_TO_CLASS.get(int(v))
 
 
+def _load_label_file(path):
+    """One export file as a raw {window_id: value} dict. Tolerates the `{"labels": {...}}`
+    wrapper the label UI sometimes emits (same two shapes `label_store.load_sidecar`
+    accepts), so the two stores cannot disagree on what an export file looks like."""
+    d = json.loads(Path(path).read_text(encoding="utf-8"))
+    return d["labels"] if isinstance(d.get("labels"), dict) else d
+
+
+def sidecar_sources(batch_id):
+    """The label files read for `batch_id`, in precedence order (last wins): the in-store
+    `<batch_dir>/scores.json` first, then each registered `labels/` export. Missing files
+    are dropped — the list is what EXISTS, so a caller can report provenance."""
+    srcs = [batch_dir(batch_id) / "scores.json"]
+    srcs += [LABELS_DIR / fn for fn in SIDECAR_FILES.get(batch_id, ())]
+    return [p for p in srcs if p.exists()]
+
+
 def load_scores_sidecar(batch_id):
-    """{window_id: class-string} from scores.json if present, else {}."""
-    p = batch_dir(batch_id) / "scores.json"
-    if not p.exists():
-        return {}
+    """{window_id: class-string} for a batch, merged over every source in
+    `sidecar_sources` with LAST WINS (a later pass re-judging a window overrides the
+    earlier verdict). Unrecognized/None values are dropped rather than overwriting a
+    good earlier label with nothing."""
     out = {}
-    for k, v in json.loads(p.read_text()).items():
-        c = _norm_klass(v)
-        if c is not None:
-            out[k] = c
+    for p in sidecar_sources(batch_id):
+        for k, v in _load_label_file(p).items():
+            c = _norm_klass(v)
+            if c is not None:
+                out[k] = c
     return out
 
 
@@ -160,6 +210,9 @@ def _stats():
         nleak, nlab, rate = prefilter_leak_rate(bid)
         print(f"{bid}: {n} windows  {mbs} minibrots")
         print(f"    accept={acc} reject={rej} filter_leak={leak} unlabeled={unl}")
+        for p in sidecar_sources(bid):
+            rel = p.relative_to(ROOT).as_posix()
+            print(f"    sidecar: {rel} ({len(_load_label_file(p))} keys)")
         print(f"    prefilter leak rate (diagnostic): {nleak}/{nlab} = {rate:.1%}")
         print(f"    per-band counts: {dict(sorted(bands.items(), key=lambda x:(x[0] is None,x[0])))}")
 

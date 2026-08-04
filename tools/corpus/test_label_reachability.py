@@ -133,19 +133,31 @@ def test_every_label_corpus_sidecar_is_fully_reachable():
     )
 
 
-def test_q4_window_store_reachable():
-    """Per-corpus guard for the OTHER store. Every file registered as a q4-window sidecar
-    (`label_store.FOREIGN_LABEL_FILES`) must reach the q4 WINDOW corpus through ITS canonical
-    reader: every key is a `window_id` present in a `q4_window_reader.REGISTERED_BATCHES`
-    batch. This is the mirror of the v7 guard — a registered foreign file whose keys match no
-    window (an orphaned export) is the same "labels present, reader reaches zero" failure, in
-    the window corpus. It also keeps the two-corpus split honest: a file gets to be skipped by
-    the v7 reader ONLY because it genuinely belongs here."""
+def _q4_foreign_files():
+    """The `labels/*.json` files `label_store` hands to the q4-window reader."""
+    return {fn: reader for fn, reader in ls.FOREIGN_LABEL_FILES.items()
+            if "q4_window_reader" in reader}
+
+
+def _q4_labels(fn):
+    """One q4-window export as {window_id: class}, nulls dropped."""
+    raw = json.loads((open(os.path.join(ls.LABELS_DIR, fn), encoding="utf-8")).read())
+    body = raw["labels"] if isinstance(raw.get("labels"), dict) else raw
+    return {k: v for k, v in body.items() if v is not None}
+
+
+def test_q4_window_store_keys_are_window_ids():
+    """Every key of a registered q4-window export is a `window_id` of a registered batch.
+
+    The weaker half of the window-store guard: it catches an ORPHANED export (keys that
+    match no window at all) and keeps the two-corpus split honest — a file gets skipped by
+    the v7 integer reader ONLY because it genuinely belongs here. It does NOT prove the
+    reader returns those labels; `test_q4_window_labels_resolve` is what does."""
     sys.path.insert(0, os.path.join(HERE))
     import q4_window_reader as q4  # noqa: E402
 
-    foreign = ls.FOREIGN_LABEL_FILES
-    assert foreign, "no FOREIGN_LABEL_FILES registered — the per-corpus split is vacuous"
+    foreign = _q4_foreign_files()
+    assert foreign, "no q4-window FOREIGN_LABEL_FILES registered — this guard is vacuous"
 
     window_ids = set()
     for bid in q4.REGISTERED_BATCHES:
@@ -157,20 +169,71 @@ def test_q4_window_store_reachable():
     assert window_ids, "no q4-window window_ids scanned — window reader/glob broke"
 
     unreachable = {}
-    for fn, reader in foreign.items():
-        if "q4_window_reader" not in reader:
-            continue                                        # only q4-window files checked here
-        raw = json.loads((open(os.path.join(ls.LABELS_DIR, fn), encoding="utf-8")).read())
-        body = raw["labels"] if isinstance(raw.get("labels"), dict) else raw
-        keys = [k for k, v in body.items() if v is not None]
+    for fn in foreign:
+        keys = list(_q4_labels(fn))
         reach = sum(1 for k in keys if k in window_ids)
         if reach != len(keys):
             unreachable[fn] = (reach, len(keys))
     assert not unreachable, (
-        "q4-window label file(s) UNREACHABLE through q4_window_reader — keys present on disk "
-        "that are not a window_id in any REGISTERED_BATCHES batch (orphaned export, or the "
-        "batch went unregistered in q4_window_reader.REGISTERED_BATCHES):\n  "
+        "q4-window label file(s) with keys that are not a window_id in any "
+        "REGISTERED_BATCHES batch (orphaned export, or the batch went unregistered in "
+        "q4_window_reader.REGISTERED_BATCHES):\n  "
         + "\n  ".join(f"{fn}: {r}/{n} keys reach a window" for fn, (r, n) in sorted(unreachable.items())))
+
+
+def test_q4_window_labels_resolve():
+    """Every label in a registered q4-window export RESOLVES through `resolve_klass`.
+
+    This is the real mirror of the v7 guard, and the version of it that would have caught
+    the bug it exists for. The key-validity check above passed for two years' worth of
+    exports that the reader could not actually read: `load_scores_sidecar` looked only at
+    `<batch_dir>/scores.json`, so `q4_stage1_windows_p2.json` (229) and `q4_g_aimed.json`
+    (112) resolved to None with every key perfectly valid `[found 2026-08-04]`. A file
+    reachable by KEY but not by VALUE is exactly the "labels present, reader reaches zero"
+    failure the v7 guard names, so it is asserted the same way — through the resolver, not
+    through the registry."""
+    sys.path.insert(0, os.path.join(HERE))
+    import q4_window_reader as q4  # noqa: E402
+
+    foreign = _q4_foreign_files()
+    assert foreign, "no q4-window FOREIGN_LABEL_FILES registered — this guard is vacuous"
+
+    resolved = {}
+    for bid in q4.REGISTERED_BATCHES:
+        for row, klass in q4.iter_windows(bid):
+            if klass is not None:
+                resolved[row["window_id"]] = klass
+
+    unreachable = {}
+    for fn in foreign:
+        keys = list(_q4_labels(fn))
+        reach = sum(1 for k in keys if k in resolved)
+        if reach != len(keys):
+            unreachable[fn] = (reach, len(keys))
+    assert not unreachable, (
+        "q4-window label(s) UNREACHABLE through q4_window_reader.resolve_klass — present on "
+        "disk, dropped to None by the reader. Register the export in "
+        "q4_window_reader.SIDECAR_FILES (batch -> files, oldest first):\n  "
+        + "\n  ".join(f"{fn}: {r}/{n} labels resolve" for fn, (r, n) in sorted(unreachable.items())))
+
+
+def test_q4_sidecar_registries_agree():
+    """`label_store.FOREIGN_LABEL_FILES` and `q4_window_reader.SIDECAR_FILES` name the same
+    files. The first says "this file belongs to the window reader"; the second is what that
+    reader actually opens. When only the first knew about a file, the redirect pointed at a
+    reader that then ignored it — a dead end that reads exactly like a registered file."""
+    sys.path.insert(0, os.path.join(HERE))
+    import q4_window_reader as q4  # noqa: E402
+
+    redirected = set(_q4_foreign_files())
+    opened = {fn for files in q4.SIDECAR_FILES.values() for fn in files}
+    assert redirected == opened, (
+        "the two q4-window registries disagree.\n"
+        f"  redirected here by label_store but never opened: {sorted(redirected - opened)}\n"
+        f"  opened by the reader but not redirected here:    {sorted(opened - redirected)}")
+
+    unknown = sorted(set(q4.SIDECAR_FILES) - set(q4.REGISTERED_BATCHES))
+    assert not unknown, f"SIDECAR_FILES names unregistered batch(es): {unknown}"
 
 
 def main():
