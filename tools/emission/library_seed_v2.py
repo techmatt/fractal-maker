@@ -55,6 +55,7 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "atlas", ROOT / "tools" / "cor
         sys.path.insert(0, str(_p))
 
 import paths                                            # noqa: E402
+import partitions as P                                  # noqa: E402  (THE partition registry)
 
 INTAKE_REL = "data/emission/library_seed_v2/intake.json"
 # BULK, and named under `data/` so it RESOLVES like bulk. It was `scratch/emission/...`:
@@ -119,11 +120,22 @@ def build(queue_path: Path = SOURCE_QUEUE, *, write: bool = True) -> dict:
                          f"block from (first: {missing[0]}). The seed must not be built from "
                          f"a partial join — a look with no coordinates cannot be re-embedded.")
 
+    # PARTITION IS RE-DERIVED FROM THE JOINED RENDER BLOCK, not taken from the queue's stamp.
+    # The queue was written before `phoenix:classic` existed (2026-08-04), so its `partition`
+    # column cannot express the split — and a stamp that predates a distinction reports the
+    # distinction as absent rather than as unknown. The render block CAN express it (it
+    # carries the parameter point), so the reader normalizes, exactly as the label census
+    # does. Today's seed is unaffected: all 26 phoenix looks in it are varied, verified
+    # 2026-08-04, so a rebuild reproduces the same nine partitions.
+    def part_of(r):
+        derived = P.partition_of_row(renders[r["image_id"]], r["partition"])
+        return derived if derived else r["partition"]
+
     per_part = Counter()
     medoid_id, entries = {}, {}
-    for r in sorted(admitted, key=lambda x: (x["partition"], -int(x["human"]),
+    for r in sorted(admitted, key=lambda x: (part_of(x), -int(x["human"]),
                                              x["image_id"])):
-        part = r["partition"]
+        part = part_of(r)
         tag = f"{part}#{per_part[part]}"
         per_part[part] += 1
         loc_id = r["image_id"]

@@ -96,6 +96,7 @@ import discovery_sinks as dsinks  # noqa: E402  (central sink-isolation: throwaw
 from score_lib import corn_decode  # noqa: E402  (canonical v5 CORN hard-class decode)
 import julia_ledger_schema as jls  # noqa: E402  (campaign/walk julia schema tag — tools/corpus on path)
 from active_ckpt import make_scorer as make_raw_scorer, ACTIVE_CKPT  # noqa: E402  (UNGUARDED raw — gather mode; ACTIVE_CKPT = single-source live checkpoint)
+import partitions as _P  # noqa: E402  (THE partition map + the pinned classic-phoenix point)
 
 # =========================================================================== #
 # Config (top-of-file constants — the experiment knobs)
@@ -127,9 +128,17 @@ JULIA_SAME_C_EPS = 1e-6  # same-Julia identity epsilon in the c (parameter) plan
 # phoenix rows predate these axes (the fixed Ushiki plane, z_{-1}=0), so ABSENT fields
 # resolve to the classic values below => old rows keep their identity byte-for-byte.
 # See docs/design/phoenix_seed_sampler_spec.md §3 and prompts/phoenix_phase_a.md.
-PHOENIX_C_DEFAULT = (0.5667, 0.0)     # classic Ushiki additive constant c
-PHOENIX_P_DEFAULT = (-0.5, 0.0)       # classic Ushiki z_{n-1} coefficient p
-PHOENIX_ZM1_DEFAULT = (0.0, 0.0)      # legacy pinned slice coordinate z_{-1}
+#
+# THE POINT ITSELF IS OWNED BY `partitions.PHOENIX_CLASSIC_POINT`, not by this module. Since
+# 2026-08-04 the same six numbers ALSO decide a partition (`phoenix:classic` vs `phoenix`),
+# so two literal copies would be a dup-identity rule and a partition rule that can disagree
+# about which points are classic — the exact failure mode the partition map itself was
+# consolidated to stop. Unpacked into the three pair-shaped constants the identity helpers
+# below already read.
+_CLASSIC = _P.PHOENIX_CLASSIC_POINT
+PHOENIX_C_DEFAULT = _CLASSIC[0:2]     # classic Ushiki additive constant c
+PHOENIX_P_DEFAULT = _CLASSIC[2:4]     # classic Ushiki z_{n-1} coefficient p
+PHOENIX_ZM1_DEFAULT = _CLASSIC[4:6]   # legacy pinned slice coordinate z_{-1}
 PHOENIX_SAME_EPS = JULIA_SAME_C_EPS   # same identity floor (round-trip-noise scale)
 
 
@@ -385,6 +394,14 @@ T_GOOD_UNCALIBRATED = frozenset({
     "multibrot4",         # v10: n=25 unbiased draws, 0 keepers
     "multibrot5",         # v10: n=29 unbiased draws, 0 keepers
     "phoenix",            # v7 had 0.45 (Phase-B grid); no unbiased eval rows in v8 or v10
+    # Split off `phoenix` on 2026-08-04 (partitions.CLASSIC_PHOENIX). Stamped UNCALIBRATED at
+    # the 0.50 baseline with NO derivation in this pass: the v7 0.45 it ran under was a cut on
+    # v7's p_good scale AND was derived on the pooled phoenix population, so it is retired
+    # twice over. It has 73 human labels of its own (49/17/6/1 over classes 1..4) and zero
+    # eval rows — the deriver's `MIN_POS = 15` is not met at 7 positives, which is why this is
+    # a registration and not a number. It is also NOT the never-looked case: a human has
+    # looked at all 73.
+    "phoenix:classic",
 })
 
 
@@ -1949,7 +1966,13 @@ def _gather_phoenix(args):
             frames = by_walk[wid]
             rew = harvest_walk_reward(scorer, wid, frames, WORKERS,
                                       scratch / f"reward_r{rnd:03d}", loc_of)
-            t_good = t_good_for("phoenix")   # phoenix -> baseline (not in the swept eval)
+            # This class descends the FIXED Ushiki plane and stamps `phoenix_ident_fields()`
+            # below, so every row it writes resolves to `phoenix:classic` — that is the
+            # partition whose threshold applies, not pooled `phoenix`. Both sit at the 0.50
+            # baseline today, so this is a naming fix with no numeric change; it stops being
+            # one the day either is derived. The ROW is untouched (`family: "phoenix"`): the
+            # partition is derived at the reader, never stamped by a writer.
+            t_good = t_good_for(_P.CLASSIC_PHOENIX)
             decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good, rew.get("p_ge4"))
             oid = f"ph_{run_ts}_{seq:06d}"; seq += 1
             verdict, gstats = outcome_guard_verdict(
@@ -2054,8 +2077,11 @@ def _run_phoenix(args):
         f"guard {guard.FIELD_SIDECAR_SUFFIX!r}")
     reframe.DUMP_GUARD_FIELD = True
     scorer = guard.make_guarded_scorer(SCORER_PATH)
-    t_good = t_good_for("phoenix")
-    print(f"scorer: GUARDED CORN ({SCORER_PATH}, {SCORER_VERSION})  t_good={t_good}")
+    # The fixed Ushiki plane -> `phoenix:classic`, not pooled `phoenix` (see `_gather`'s
+    # note). Same 0.50 baseline today; the label is what changes.
+    t_good = t_good_for(_P.CLASSIC_PHOENIX)
+    print(f"scorer: GUARDED CORN ({SCORER_PATH}, {SCORER_VERSION})  "
+          f"partition={_P.CLASSIC_PHOENIX} t_good={t_good} ({t_good_status(_P.CLASSIC_PHOENIX)})")
     print(f"run ledger (run-scoped): {OUTCOME_LEDGER}")
 
     ledgers = Ledgers()                        # OUTCOME_LEDGER is the fresh run-scoped file

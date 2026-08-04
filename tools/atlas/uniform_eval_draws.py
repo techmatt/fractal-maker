@@ -2,11 +2,14 @@
 r"""uniform_eval_draws.py — score-unconditioned draws for the partitions with NO eval rows.
 
 THE GAP THIS FILLS, named by production code rather than by me.
-`production_seeder.T_GOOD_UNCALIBRATED` lists five partitions whose `t_good` is the 0.50
-baseline rather than a derived number, and its comment separates two very different reasons:
+`production_seeder.T_GOOD_UNCALIBRATED` lists the partitions whose `t_good` is the 0.50
+baseline rather than a derived number, and its comment separates three different reasons:
 multibrot3/4/5 have 24/25/29 unbiased draws each under v10 and are uncalibrated because **not
 one of the 78 was a keeper**; julia:mandelbrot and phoenix are the **never-looked** case, with
-no unbiased eval rows in v8 or v10 at all. Phoenix is flagged there as "the one to watch" —
+no unbiased eval rows in v8 or v10 at all; `phoenix:classic` (registered 2026-08-04) is the
+third case — a human HAS looked at all 73 of its labels, they are simply below the
+estimator's sufficiency floor, and it is NOT DRAWN here (see `NOT_DRAWN`).
+Phoenix is flagged there as "the one to watch" —
 573 training locations, the only partition where class 4 outnumbers class 3, and running on a
 conservative default rather than on evidence. That is what this leg is for.
 
@@ -62,6 +65,44 @@ DRAW_SEED = 20260803
 
 # The prompt's priority order, and `T_GOOD_UNCALIBRATED`'s own reasons behind it.
 PRIORITY = ("phoenix", "multibrot3", "multibrot4", "multibrot5", "julia:mandelbrot")
+
+# Uncalibrated partitions this leg deliberately does NOT draw, each with the reason. Named
+# rather than omitted, and CHECKED against `T_GOOD_UNCALIBRATED` at import (below): a
+# partition that silently fell out of both PRIORITY and this map would be an uncalibrated
+# family nobody drew and nobody said they were not drawing.
+NOT_DRAWN = {
+    # Registered 2026-08-04. Its parameter space is ONE point, so there is no parameter-space
+    # rule to sample — the family's own closed form degenerates. An unbiased classic draw
+    # would have to be uniform over VIEWPORTS inside the fixed plane, which is a different
+    # instrument from every one above (those all sample a parameter space before any view
+    # exists) and is not built. Drawing it with a viewport rule and reporting it beside the
+    # parameter-space draws would pool two instruments into one slice.
+    "phoenix:classic": ("parameter space is a single point; an unbiased draw here needs a "
+                        "VIEWPORT instrument, which is a different instrument from the "
+                        "parameter-space rules this leg uses and is not built"),
+}
+
+
+def _check_uncalibrated_coverage():
+    """Every uncalibrated partition is either DRAWN or explicitly NOT_DRAWN with a reason.
+
+    Fail-closed at import, because the failure it guards is silent by construction: a new
+    uncalibrated partition that nobody adds here produces a leg that reports full coverage of
+    "the partitions with no eval rows" while one of them was never in the draw. Relational —
+    it reads the production set rather than a count, so adding a partition to either side
+    keeps it true without a re-baselined number."""
+    import production_seeder as _ps
+    missing = sorted(set(_ps.T_GOOD_UNCALIBRATED) - set(PRIORITY) - set(NOT_DRAWN))
+    if missing:
+        raise SystemExit(
+            f"uniform_eval_draws: uncalibrated partition(s) {missing} are in neither PRIORITY "
+            f"nor NOT_DRAWN. This leg exists to draw exactly the uncalibrated set — put each "
+            f"one in PRIORITY (with a parameter-space rule in `draw`) or in NOT_DRAWN with the "
+            f"reason it cannot be drawn.")
+    assert PRIORITY, "PRIORITY is empty — every assertion over it is vacuous"
+
+
+_check_uncalibrated_coverage()
 
 SHELL_EPS = 0.02        # `q4_decisive_pass.SHELL_EPS` — the near-∂M shell half-width
 SHELL_RING_N = 8        # ring samples per candidate for the non-constant-membership test
@@ -180,7 +221,7 @@ def draw(n_per: dict, seed: int = DRAW_SEED) -> tuple[list[dict], dict]:
 
 
 def allocate(n_total: int) -> dict:
-    """Split `n_total` across the five partitions in priority order.
+    """Split `n_total` across the DRAWN partitions in priority order.
 
     Phoenix gets the double share, and the reason is `T_GOOD_UNCALIBRATED`'s own: it is the
     never-looked partition where class 4 already outnumbers class 3, i.e. the one whose

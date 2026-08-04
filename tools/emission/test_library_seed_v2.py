@@ -41,8 +41,18 @@ def corpus(tmp_path, monkeypatch):
     import corpus_common as cc
     bd = tmp_path / "batches" / "B"
     bd.mkdir(parents=True)
-    rows = [dict(image_id=f"i{i}", render=dict(cx="0", cy="0", fw="1.0", maxiter=500,
-                                               fractal_type="julia", c_re="0.1", c_im="0.2"),
+    # The render block is what `build` re-derives the partition FROM (the queue's own
+    # `partition` column predates `phoenix:classic` and cannot express the split), so this
+    # fixture has to be internally consistent with the partitions the tests queue: `i2` and
+    # `i3` are the slots the phoenix cases use. A uniformly-julia corpus would make every
+    # test that queues a phoenix row silently assert on a julia one.
+    PHOENIX = dict(cx="0", cy="0", fw="1.0", maxiter=500, fractal_type="phoenix",
+                   c_re="-1.089", c_im="0.481", p_re="-0.222", p_im="0.172",
+                   zm1_re="-0.224", zm1_im="-0.347")
+    JULIA = dict(cx="0", cy="0", fw="1.0", maxiter=500, fractal_type="julia",
+                 c_re="0.1", c_im="0.2")
+    rows = [dict(image_id=f"i{i}",
+                 render=dict(PHOENIX if i in (2, 3) else JULIA),
                  label=dict(score=None))
             for i in range(6)]
     (bd / "images.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows),
@@ -101,6 +111,35 @@ def test_cluster_tags_are_partition_hash_index_which_is_what_the_loader_parses(t
     assert dsched.EMB_DIM == 768
 
 
+def test_the_partition_is_re_derived_from_the_render_block_not_the_queue_stamp(tmp_path,
+                                                                               monkeypatch):
+    """The queue was written before `phoenix:classic` existed, so its `partition` column
+    reports the split as ABSENT rather than as unknown. The render block can express it, so
+    the reader normalizes — same rule as the label census. Proved with a queue row stamped
+    `phoenix` whose render block is the pinned Ushiki point."""
+    import corpus_common as cc
+    bd = tmp_path / "batches" / "B"
+    bd.mkdir(parents=True)
+    # the legacy CLASSIC shape: a phoenix token, a viewport, not one parameter field
+    (bd / "images.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
+        dict(image_id="c0", render=dict(cx="0.37", cy="0.38", fw="0.011", maxiter=8000,
+                                        fractal_type="phoenix"), label=dict(score=None)),
+        dict(image_id="v0", render=dict(cx="0.36", cy="-0.41", fw="0.28", maxiter=1010,
+                                        fractal_type="phoenix", c_re="-1.089", c_im="0.481",
+                                        p_re="-0.222", p_im="0.172", zm1_re="-0.224",
+                                        zm1_im="-0.347"), label=dict(score=None)),
+    ]), encoding="utf-8")
+    monkeypatch.setattr(cc, "batch_dir", lambda b: str(tmp_path / "batches" / b))
+
+    q = _queue(tmp_path, [_row(image_id="c0", partition="phoenix"),
+                          _row(image_id="v0", partition="phoenix")])
+    snap = ls2.build(q, write=False)
+    assert snap["by_partition"] == {"phoenix:classic": 1, "phoenix": 1}
+    assert snap["entries"]["c0"]["partition"] == "phoenix:classic"
+    assert snap["entries"]["v0"]["partition"] == "phoenix"
+    assert sorted(snap["medoid_id"]) == ["phoenix#0", "phoenix:classic#0"]
+
+
 def test_a_queue_row_with_no_corpus_row_is_a_HARD_failure(tmp_path, corpus):
     """A look with no coordinates cannot be re-embedded, so a partial join must not become a
     smaller seed — that is the shape that makes a seed silently non-reproducible."""
@@ -117,7 +156,7 @@ def test_the_snapshot_plus_embeddings_are_what_require_library_seed_reads(tmp_pa
     not a mock of it: the seed's whole job is to make `require_library_seed` return looks."""
     import deficit_scheduler as dsched
     q = _queue(tmp_path, [_row(image_id="i0", partition="julia:mandelbrot"),
-                          _row(image_id="i1", partition="phoenix")])
+                          _row(image_id="i2", partition="phoenix")])
     snap = ls2.build(q, write=False)
     ip = tmp_path / "intake.json"
     ip.write_text(json.dumps(snap), encoding="utf-8")

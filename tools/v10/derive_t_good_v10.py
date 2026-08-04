@@ -110,6 +110,15 @@ UNCAL_REASON = {
     "multibrot5": "unbiased eval slice present (maneuver_uniform_v1) but 0 keeper positives",
     "julia:mandelbrot": "no unbiased eval slice",
     "phoenix": "no unbiased eval slice",
+    # Registered as its own partition 2026-08-04 (partitions.CLASSIC_PHOENIX). A THIRD
+    # uncalibrated state, distinct from both above: a human HAS looked at every one of its 73
+    # labels, so it is neither "never looked" nor "looked and found nothing" — it is below
+    # the estimator's own sufficiency floor. The eval slice carries no phoenix rows of either
+    # kind, and it cannot express the split anyway (no parameter axes in its schema), so a
+    # classic cut cannot be derived from it at any n.
+    "phoenix:classic": ("no unbiased eval slice; 73 human labels (7 at >=3) are below "
+                        f"MIN_POS={est.MIN_POS}, and the eval slice carries no parameter "
+                        "axes so it cannot separate classic from varied phoenix at all"),
 }
 
 

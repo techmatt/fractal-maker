@@ -50,6 +50,18 @@ def test_a_partition_absent_from_the_census_carries_the_full_deficit():
     assert d["new"] == 8.0
 
 
+# A VARIED phoenix render block. Spelled out rather than `dict(fractal_type="phoenix")`
+# because a phoenix row's PARTITION is decided by its parameter point since 2026-08-04, so a
+# param-free fixture is not a varied-phoenix row — it is the pinned classic point, and the
+# census would (correctly) route it to `phoenix:classic`.
+VARIED_PH = dict(cx="0.36", cy="-0.41", fw="0.28",
+                 c_re="-1.089", c_im="0.481", p_re="-0.222", p_im="0.172",
+                 zm1_re="-0.224", zm1_im="-0.347")
+# The legacy CLASSIC shape: a phoenix token, a viewport, and not one parameter field. This is
+# the on-disk form of all 84 classic rows in the corpus (73 of them labeled).
+CLASSIC_PH = dict(cx="0.374", cy="0.378", fw="0.0114")
+
+
 def test_label_currency_reads_the_amendment_overlay_and_reports_the_default_route(tmp_path,
                                                                                   monkeypatch):
     """PRESENCE-FROM-DISK, not an injected dict: the census must go through
@@ -61,11 +73,15 @@ def test_label_currency_reads_the_amendment_overlay_and_reports_the_default_rout
     b.mkdir(parents=True)
     (corpus / "batches" / "2026-08-03_t" / "images.jsonl").write_text("".join(
         json.dumps(r) + "\n" for r in [
-            dict(image_id="i1", render=dict(fractal_type="phoenix"), label=dict(score=4)),
-            dict(image_id="i2", render=dict(fractal_type="phoenix"), label=dict(score=3)),
-            dict(image_id="i3", render=dict(fractal_type="julia"), label=dict(score=4)),
+            dict(image_id="i1", render=dict(fractal_type="phoenix", **VARIED_PH),
+                 label=dict(score=4)),
+            dict(image_id="i2", render=dict(fractal_type="phoenix", **VARIED_PH),
+                 label=dict(score=3)),
+            dict(image_id="i3", render=dict(fractal_type="julia", cx="0", cy="0", fw="3.0"),
+                 label=dict(score=4)),
             dict(image_id="i4", render=dict(cx=0, cy=0), label=dict(score=4)),   # no type
-            dict(image_id="i5", render=dict(fractal_type="phoenix"), label=dict(score=1)),
+            dict(image_id="i5", render=dict(fractal_type="phoenix", **VARIED_PH),
+                 label=dict(score=1)),
         ]), encoding="utf-8")
     (b / "batch.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr("corpus_common.crops_dir", lambda bid: str(b / "crops"), raising=False)
@@ -77,6 +93,31 @@ def test_label_currency_reads_the_amendment_overlay_and_reports_the_default_rout
     assert cen.currency["mandelbrot"] == pytest.approx(1.0)   # the untyped row
     assert cen.defaulted_rows == 1
     assert cen.sources == {"label_corpus": 5, "library": 0}
+
+
+def test_the_census_splits_classic_phoenix_out_of_varied_phoenix(tmp_path, monkeypatch):
+    """The demand signal the whole tenth partition rests on. Two rows sharing one
+    `fractal_type` must land in two partitions on their parameter point alone, and the
+    currency must SPLIT rather than double-count — pooled, `phoenix` would read 2.0 here and
+    `phoenix:classic` would read 0, i.e. exactly the pre-split behaviour."""
+    corpus = tmp_path / "corpus"
+    b = corpus / "batches" / "2026-08-04_t"
+    b.mkdir(parents=True)
+    (b / "images.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
+        dict(image_id="v1", render=dict(fractal_type="phoenix", **VARIED_PH), label=dict(score=4)),
+        dict(image_id="c1", render=dict(fractal_type="phoenix", **CLASSIC_PH), label=dict(score=4)),
+        dict(image_id="c2", render=dict(fractal_type="phoenix", **CLASSIC_PH,
+                                        palette="RdBu"), label=dict(score=3)),
+    ]), encoding="utf-8")
+    (b / "batch.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("corpus_common.crops_dir", lambda bid: str(b / "crops"), raising=False)
+
+    cen = pq.label_currency(["phoenix", "phoenix:classic"], corpus_dir=str(corpus),
+                            library_globs=[])
+    assert cen.currency["phoenix"] == pytest.approx(1.0)
+    assert cen.currency["phoenix:classic"] == pytest.approx(1.1)
+    assert cen.counts["phoenix:classic"] == {4: 1, 3: 1}
+    assert cen.defaulted_rows == 0        # every row carried a token; none took the default
 
 
 def test_the_library_leg_is_derived_not_asserted(tmp_path, monkeypatch):

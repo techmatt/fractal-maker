@@ -112,7 +112,16 @@ def load_triples(eval_path: Path = EVAL, version: str = None) -> dict:
     `EVAL_VERSION`, so every existing call is byte-unchanged. It exists so a NEW eval slice
     can be recut through this exact derivation instead of a copy of it — the slice a
     re-render produces carries its own version's columns, and a copied deriver is how two
-    thresholds that are supposed to be comparable stop being comparable."""
+    thresholds that are supposed to be comparable stop being comparable.
+
+    THE PHOENIX SPLIT IS NOT RESOLVED HERE, and that is a limitation of the SLICE, not an
+    omission: an eval row carries `fractal_type` and no parameter axes at all, so it cannot
+    tell `phoenix:classic` from `phoenix` (`partitions.partition_of_row` refuses such a row
+    rather than guessing). The token map is therefore the honest resolver here and both halves
+    pool into `phoenix`. Costs nothing today — the v10 slice carries ZERO phoenix rows of
+    either kind — but a slice that ever carries phoenix must gain the axes before a keeper cut
+    on either half means anything.
+    """
     ver = version or EVAL_VERSION
     parts: dict = defaultdict(list)
     for r in eval_slice.load(ver, path=eval_path):

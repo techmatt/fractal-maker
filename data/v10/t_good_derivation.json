@@ -228,6 +228,13 @@
       "t_good": 0.5,
       "status": "UNCALIBRATED",
       "reason": "no unbiased eval slice"
+    },
+    "phoenix:classic": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "status": "UNCALIBRATED",
+      "reason": "no unbiased eval slice; 73 human labels (7 at >=3) are below MIN_POS=15, and the eval slice carries no parameter axes so it cannot separate classic from varied phoenix at all"
     }
   },
   "adopted": {

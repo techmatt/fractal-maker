@@ -78,6 +78,7 @@ import location as loc_mod              # noqa: E402
 import julia_ledger_schema as jls       # noqa: E402  (campaign/walk julia schema tag)
 from score_lib import corn_decode       # noqa: E402
 from active_ckpt import ACTIVE_CKPT, auto_maxiter  # noqa: E402
+import partitions as P                   # noqa: E402  (THE partition registry + phoenix split)
 import deficit_scheduler as dsched       # noqa: E402  (pure; torch-free scheduling logic)
 import pop_quota as pquota               # noqa: E402  (harvest v2 allocator; pure, torch-free)
 import supply_routing as srt             # noqa: E402  (harvest v2 channel table; pure data)
@@ -434,6 +435,11 @@ C_PLANE = ("mandelbrot", "multibrot3", "multibrot4", "multibrot5")
 # Family <-> partition helpers (mirror production_seeder.resolve_family grammar).
 # --------------------------------------------------------------------------- #
 def render_family_of(partition: str) -> str:
+    # A DERIVED partition renders exactly like its base — `phoenix:classic` is the same Rust
+    # family at a pinned parameter point, so it is normalized away here rather than given a
+    # second arm in every branch below (and in descend_flags / render_args_for / ident_c /
+    # loc_of, which all route through the same normalization).
+    partition = P.base_partition(partition)
     if partition == "mandelbrot" or partition in ("multibrot3", "multibrot4", "multibrot5"):
         return partition
     if partition == "phoenix":
@@ -465,8 +471,22 @@ def phoenix_family_params(c) -> dict:
     return {"p_re": v[2], "p_im": v[3], "zm1_re": v[4], "zm1_im": v[5]}
 
 
+def partition_for_phoenix_c(c) -> str:
+    """`phoenix:classic` or `phoenix` for a phoenix node's 6-vector.
+
+    DERIVED, never carried: a phoenix root's partition is a function of its parameter point,
+    so the seed pool, the ledger and the corpus cannot disagree about which half a point
+    belongs to. Reads the same registry the label census reads."""
+    v = _phoenix_cpz(c)
+    row = dict(zip(("c_re", "c_im", "p_re", "p_im", "zm1_re", "zm1_im"), v))
+    row["fractal_type"] = "phoenix"
+    row["cx"] = row["fw"] = "0"          # schema marker: this IS a render-shaped point
+    return P.partition_of_row(row)
+
+
 def descend_flags(partition: str, c) -> list:
     """guided-descend --expand kernel flags for a homogeneous group (mirrors the walk grammar)."""
+    partition = P.base_partition(partition)
     if partition == "mandelbrot":
         return []
     if partition in ("multibrot3", "multibrot4", "multibrot5"):
@@ -491,6 +511,7 @@ def render_args_for(partition: str, c) -> dict:
     Exists because a phoenix node's `c` is a 6-vector and those helpers unpack `c` as a
     PAIR — passing the 6-vector straight through would raise, and passing its first two
     entries would silently render the DEFAULT phoenix plane at the right coordinates."""
+    partition = P.base_partition(partition)
     if partition == "phoenix":
         v = _phoenix_cpz(c)
         return dict(family="phoenix", c=(v[0], v[1]),
@@ -506,12 +527,13 @@ def ident_c(partition: str, c):
     different `p` or `z_{-1}` to be the same point. `ps.near_dup` already accepts the 6-D
     phoenix identity (`row_phoenix_key` / `row_ident`), so the fix is to hand it the whole
     vector rather than to widen the coercion."""
-    if partition == "phoenix":
+    if P.base_partition(partition) == "phoenix":
         return tuple(float(v) for v in _phoenix_cpz(c))
     return ps.as_c(c)
 
 
 def loc_of(partition: str, c, cx, cy, fw):
+    partition = P.base_partition(partition)
     if partition == "phoenix":
         v = _phoenix_cpz(c)
         return ps.make_loc_of("phoenix", (v[0], v[1]),
@@ -1077,8 +1099,18 @@ class SteeredFrontier:
         # `phoenix_sampler` — injected as base-scale z-plane roots exactly as
         # `--julia-seed-pool` injects julia c's. Everything downstream (expand, cheap score,
         # tau_h, canonical confirm, decode, reframe, admit, ledger) is the shared path.
+        #
+        # THE PHOENIX SPLIT (2026-08-04). A pool entry's partition is a function of its
+        # parameter point (`partition_for_phoenix_c`), so a pool carrying the pinned Ushiki
+        # point produces `phoenix:classic` roots and one carrying swept points produces
+        # `phoenix` roots. The tracked set is DERIVED from the pool rather than declared:
+        # tracking a partition the pool cannot feed would hand a permanently dry partition a
+        # 5% quota floor, and not tracking one the pool DOES feed would leave its nodes
+        # keyed on a partition with no cloud, no tau_h and no quota row.
         if self.phoenix_seed_pool_path:
-            self.partitions.append("phoenix")
+            for part in self.phoenix_pool_partitions():
+                if part not in self.partitions:
+                    self.partitions.append(part)
 
         # --- minibrot maneuvers (v1.3). OFF => every path short-circuits on
         # `self.maneuvers is False` and the run is byte-identical to the pre-maneuver
@@ -1176,17 +1208,23 @@ class SteeredFrontier:
         # when the CHEAP score already clears the canonical bar". Fewer confirmations, never
         # wrong ones — and no phoenix material is lost from the deliverable, because the
         # recording floor still keeps everything from 0.25 up in the record-and-rank store.
-        derived = [p for p in self.partitions if p != "phoenix"]
+        #
+        # BOTH phoenix partitions are cut out of the derivation, for the same reason and
+        # separately: `classic_phoenix` is the v7-scored ledger named above, so it is exactly
+        # as underivable as `phoenix_grid` is, and pooling the two to manufacture one number
+        # would be a cut on a population that is now two partitions.
+        phoenix_parts = [p for p in self.partitions if P.base_partition(p) == "phoenix"]
+        derived = [p for p in self.partitions if p not in phoenix_parts]
         self.tau_h = derive_tau_h(derived)
         self.tau_h_uncalibrated = {}
-        if "phoenix" in self.partitions:
+        for part in phoenix_parts:
             v = getattr(args, "tau_h_phoenix", None)
-            v = ps.t_good_for("phoenix") if v is None else float(v)
-            self.tau_h["phoenix"] = v
-            self.tau_h_uncalibrated["phoenix"] = (
-                f"UNCALIBRATED: no v10 cheap-p_good population exists for phoenix "
+            v = ps.t_good_for(part) if v is None else float(v)
+            self.tau_h[part] = v
+            self.tau_h_uncalibrated[part] = (
+                f"UNCALIBRATED: no v10 cheap-p_good population exists for {part} "
                 f"(fidelity records absent; vendored base has no phoenix row; the phoenix "
-                f"ledgers are v7 and carry no cheap column). Serving t_good_for('phoenix')"
+                f"ledgers are v7 and carry no cheap column). Serving t_good_for({part!r})"
                 f"={v} as a conservative cheap cut.")
         # The RECORDING floor, derived from the harvest cut rather than configured beside it:
         # a second independent constant would drift off tau_h the first time tau_h moved.
@@ -1572,7 +1610,17 @@ class SteeredFrontier:
         the native seeder, and a julia twin or phoenix CANNOT be drawn into existence — those
         partitions are fed by the metered pools (`seed_julia_pool` / `seed_phoenix_pool`, per
         batch) and by the hook. A julia queue at zero is a hook/pool problem, and listing it
-        here would produce a refill request no draw can serve."""
+        here would produce a refill request no draw can serve.
+
+        `phoenix:classic` is the strongest instance and is deferred for a reason of its own,
+        recorded so it reads as a decision rather than an oversight: its plane is PINNED, so
+        the parameter space holds exactly one point and there is no second root to draw. New
+        classic supply comes from descending that one plane (`supply_routing.ROUTES`'s
+        `classic_plane_descent`, i.e. `production_seeder --run-phoenix`), which is a
+        different job from a root draw. A refill request here could never be served, and
+        `starved_families` returning it would spend the cooldown and the wall budget proving
+        that every ROOT_REFILL_COOLDOWN batches. The starvation is REPORTED instead — see
+        `deferred_partitions`."""
         q = self.queue_lens() if queue_lens is None else queue_lens
         out = []
         for fam in self.families:
@@ -1582,6 +1630,35 @@ class SteeredFrontier:
             if last is not None and (self.batch_i - last) < self.root_refill_cooldown:
                 continue
             out.append(fam)
+        return out
+
+    # Why a non-c-plane partition below its low-water gets no refill. Keyed by the partition's
+    # BASE so a julia twin and its parent share one entry, plus the derived partitions that
+    # need a reason of their own.
+    REFILL_DEFERRAL = {
+        "julia": "fed by --julia-hook / --julia-seed-pool, not by a root draw",
+        "phoenix": "fed by --phoenix-seed-pool (sampled parameter points), not by a root draw",
+        "phoenix:classic": ("the plane is PINNED: one parameter point, so no second root "
+                            "exists to draw. New supply is classic_plane_descent "
+                            "(production_seeder --run-phoenix), not a root draw"),
+    }
+
+    def deferred_partitions(self, queue_lens: dict | None = None) -> dict:
+        """Partitions below the low-water that `starved_families` deliberately will not
+        refill, each with the reason. A starved partition that is silently absent from both
+        the refill list and the run record is indistinguishable from a healthy one — which is
+        exactly how arm B ran 427 batches with eight empty queues and `root_refills=0`."""
+        q = self.queue_lens() if queue_lens is None else queue_lens
+        out = {}
+        for part in self.partitions:
+            if part in self.families or q.get(part, 0) >= self.partition_low_water:
+                continue
+            base = P.base_partition(part)
+            key = (part if part in self.REFILL_DEFERRAL else
+                   ("julia" if base.startswith("julia:") or base == "julia" else base))
+            out[part] = dict(queue=q.get(part, 0), low_water=self.partition_low_water,
+                             reason=self.REFILL_DEFERRAL.get(
+                                 key, "no root-draw channel for this partition"))
         return out
 
     def refill_affordable(self) -> bool:
@@ -1794,6 +1871,22 @@ class SteeredFrontier:
                   f"{self.pool_cursor['julia']}/{len(pool)} of the pool consumed", flush=True)
         return added
 
+    def phoenix_pool_partitions(self) -> list[str]:
+        """The phoenix partitions this run's seed pool can actually feed, in `ALL_FAMS` order.
+
+        Read from the pool ONCE at construction (the pool is a static file), and derived from
+        each entry's parameter point by the same function `seed_phoenix_pool` labels nodes
+        with — so the tracked set and the produced nodes cannot disagree. A missing or
+        unreadable pool is not silently an empty set: the caller already gated on the path
+        being set, so a read failure here is a config error and must raise."""
+        pool = json.loads(self.phoenix_seed_pool_path.read_text(encoding="utf-8"))
+        seen = set()
+        for e in pool:
+            seen.add(partition_for_phoenix_c(
+                (str(e["c_re"]), str(e["c_im"]), str(e["p_re"]), str(e["p_im"]),
+                 str(e.get("zm1_re", 0.0)), str(e.get("zm1_im", 0.0)))))
+        return [p for p in P.ALL_FAMS if p in seen]
+
     def seed_phoenix_pool(self) -> int:
         """Inject `phoenix_sampler` seeds as base-scale phoenix z-plane roots at fresh start.
 
@@ -1820,7 +1913,7 @@ class SteeredFrontier:
                   str(e.get("zm1_re", 0.0)), str(e.get("zm1_im", 0.0)))
             nid = self.new_node_id()
             self.frontier.append(dict(
-                node_id=nid, root_id=nid, partition="phoenix", c=list(c6),
+                node_id=nid, root_id=nid, partition=partition_for_phoenix_c(c6), c=list(c6),
                 cx=0.0, cy=0.0, fw=JULIA_ROOT_FW, depth=1,
                 priority=NEUTRAL_PRIOR + gumbel(self.rng, T_GUMBEL),
                 cheap_eord=None, cheap_pgood=None, branch="phoenix_root",
@@ -3915,6 +4008,10 @@ class SteeredFrontier:
             root_refill_cooldown=self.root_refill_cooldown,
             root_refill_share_cap=self.root_refill_share,
             final_queue_lens=self.queue_lens(),
+            # Starved partitions the refill deliberately did NOT serve, each with its reason.
+            # Reported beside `final_queue_lens` because the two together are the only way to
+            # tell a partition nobody could feed from one nobody noticed.
+            refill_deferred_partitions=self.deferred_partitions(),
             lambda_m=self.lambda_m, beta=self.beta, recency_k=self.recency_k,
             morph_mem=len(self.morph), morph_perm=self.morph.n_perm,
             morph_recency=self.morph.n_recency,

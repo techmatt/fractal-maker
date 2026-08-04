@@ -118,7 +118,9 @@ def render_pair(r, canon_dir: Path, vivid_dir: Path):
     cy = r.get("outcome_cy") if r.get("outcome_cy") is not None else r["cy"]
     fw = r.get("outcome_fw") if r.get("outcome_fw") is not None else r["fw"]
     c6 = None
-    if r["partition"] == "phoenix":
+    # `phoenix:classic` too — a derived partition needs the same (c, p, z_-1) recovery as its
+    # base, and skipping it would silently sheet the ENGINE'S DEFAULT plane instead.
+    if r["partition"] in ("phoenix", "phoenix:classic"):
         # The run's store recorded only `c` for a phoenix row; the rest of the point is
         # recovered from the committed seed pool by the batch builder's own joiner, which
         # RAISES rather than falling back to the engine's default plane.

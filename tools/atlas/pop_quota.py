@@ -162,10 +162,17 @@ def _partition_of_render(render: dict) -> str:
     `test_pop_quota.py::test_every_defaulted_row_is_mandelbrot_SHAPED` asserts the shape
     invariant over every token-less row in the corpus, labeled or not, so a future batch that
     defaults to mandelbrot without earning it goes red. The COUNT is deliberately not pinned —
-    it moves the day Matt labels the revisit batches, and that is not a regression."""
-    from partitions import partition_of                     # noqa: E402 (tools/scoring)
+    it moves the day Matt labels the revisit batches, and that is not a regression.
+
+    THE PHOENIX SPLIT (2026-08-04) IS RESOLVED HERE, and it is the reason this reads the whole
+    render block rather than the token: `phoenix:classic` and `phoenix` share one
+    `fractal_type` and are told apart only by the parameter point (`partitions.partition_of_row`).
+    A corpus render block always carries `cx`/`fw`, so it is always in a schema that can answer
+    — an axis-free legacy row resolves classic (which is what all 84 classic rows in the corpus
+    are), and a varied row resolves `phoenix`. Nothing on disk is re-keyed."""
+    from partitions import partition_of_row                 # noqa: E402 (tools/scoring)
     ft = render.get("fractal_type") or render.get("family")
-    return partition_of(ft, ft) if ft else "mandelbrot"
+    return partition_of_row(render, ft) if ft else "mandelbrot"
 
 
 def label_currency(partitions: list[str], corpus_dir: str | None = None,

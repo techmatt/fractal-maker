@@ -215,6 +215,12 @@ MACHINE_1_DISCARD = {
     "julia:multibrot4": False,
     "julia:multibrot5": False,
     "phoenix": True,              # measured: P(Matt=1 | decoded 1) 72.0%, P(>=3|dec1) 0/82
+    # NEVER auto-discard, and NOT by inheritance from `phoenix`. This table is measured
+    # per-partition and classic has no measurement of its own: the 72.0% / 0-of-82 above was
+    # read on the varied (Phase-B grid) population, and a trust number carries the population
+    # it was measured on. Fail-closed to KEEP until someone measures it. `phoenix:classic`
+    # (2026-08-04)
+    "phoenix:classic": False,
 }
 
 ROUTES = {
@@ -236,6 +242,16 @@ ROUTES = {
     "phoenix": dict(channels=("skeleton_spread",),
                     evidence="unscreened >=2 39.8% / >=3 6.1%, but 57 class-4s in corpus: "
                              "motif scarcity, not volume"),
+    # Classic phoenix has exactly ONE channel and it is not a parameter sweep: the plane is
+    # pinned, so supply is descents WITHIN it (`production_seeder --run-phoenix` / the
+    # `classic_phoenix` ledger path), which is why the whole population is 41 distinct looks.
+    # Rate is a HUMAN-label rate on the only classic population that exists (the 73 labeled
+    # 2026-07-05_gather_v6 rows, overlay applied) — a fixed-plane descent, NOT a draw, so it
+    # is a ceiling statement about the plane rather than a price on a sampler.
+    "phoenix:classic": dict(channels=("classic_plane_descent",),
+                            evidence=">=2 32.9% / >=3 9.6% / class-4 1.4% (n=73 human labels, "
+                                     "2026-07-05_gather_v6); 41 distinct looks TOTAL in the "
+                                     "classic_phoenix ledger — a bounded plane, not a family"),
     "julia:multibrot3": dict(channels=("julia_hook",), evidence="hook-fed only"),
     "julia:multibrot4": dict(channels=("julia_hook",), evidence="hook-fed only"),
     "julia:multibrot5": dict(channels=("julia_hook",), evidence="hook-fed only"),

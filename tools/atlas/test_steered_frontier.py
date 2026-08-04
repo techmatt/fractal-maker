@@ -290,7 +290,11 @@ def _refill_obj(frontier, families, *, drawn=None, low_water=32, cooldown=10,
     calls = [] if drawn is None else drawn
     obj.draw_roots = lambda only=None: (calls.append(list(only) if only else None), 7)[1]
     obj._draw_calls = calls
-    for m in ("queue_lens", "starved_families", "refill_affordable", "refill_starved"):
+    obj.partitions = list(dict.fromkeys(
+        list(families) + [n["partition"] for n in frontier]))
+    obj.REFILL_DEFERRAL = sf.SteeredFrontier.REFILL_DEFERRAL
+    for m in ("queue_lens", "starved_families", "refill_affordable", "refill_starved",
+              "deferred_partitions"):
         setattr(obj, m, types.MethodType(getattr(sf.SteeredFrontier, m), obj))
     return obj
 
@@ -344,6 +348,78 @@ def test_julia_twins_and_phoenix_are_never_asked_for_a_root_draw():
     obj.frontier += [{"node_id": 500, "partition": "julia:mandelbrot"}]
     assert obj.starved_families() == []          # julia:mandelbrot at 1 node is NOT requested
     assert obj.refill_starved() == 0
+
+
+def test_a_starved_partition_the_refill_will_not_serve_is_REPORTED_with_its_reason():
+    """The other half of the scope statement above. `starved_families` correctly omits every
+    non-c-plane partition, but an omitted starved partition and a healthy one read identically
+    in a run record — which is exactly how arm B reported `root_refills=0` with eight empty
+    queues. `phoenix:classic` is the sharpest case: its plane is PINNED, so there is no second
+    root to draw and the deferral is permanent, not transient."""
+    frontier = [{"node_id": i, "partition": "mandelbrot"} for i in range(100)]
+    frontier += [{"node_id": 500, "partition": "julia:mandelbrot"},
+                 {"node_id": 501, "partition": "phoenix"},
+                 {"node_id": 502, "partition": "phoenix:classic"}]
+    obj = _refill_obj(frontier, ["mandelbrot"])
+    assert obj.starved_families() == []                 # nothing is asked for a draw...
+    d = obj.deferred_partitions()                        # ...and all three are reported
+    assert set(d) == {"julia:mandelbrot", "phoenix", "phoenix:classic"}
+    assert d["phoenix:classic"]["queue"] == 1 and d["phoenix:classic"]["low_water"] == 32
+    assert "PINNED" in d["phoenix:classic"]["reason"]
+    assert "classic_plane_descent" in d["phoenix:classic"]["reason"]
+    # the base and the derived partition give DIFFERENT reasons — a shared one would be a
+    # single sentence that is wrong for one of them
+    assert d["phoenix"]["reason"] != d["phoenix:classic"]["reason"]
+    assert "julia-hook" in d["julia:mandelbrot"]["reason"]
+    # a HEALTHY partition is never reported (non-vacuity: the report can be empty)
+    assert "mandelbrot" not in d
+    assert _refill_obj([{"node_id": i, "partition": "phoenix:classic"} for i in range(40)],
+                       ["mandelbrot"]).deferred_partitions() == {}
+
+
+def test_a_phoenix_seed_pool_routes_each_point_to_its_own_partition():
+    """The split is DERIVED from the parameter point, at the reader, in the one place that
+    labels a phoenix node — so the tracked partition set and the nodes produced cannot
+    disagree. Pinned Ushiki point -> `phoenix:classic`; anything else -> `phoenix`."""
+    classic = ("0.5667", "0", "-0.5", "0", "0", "0")
+    varied = ("-1.089", "0.481", "-0.222", "0.172", "-0.224", "-0.347")
+    assert sf.partition_for_phoenix_c(classic) == "phoenix:classic"
+    assert sf.partition_for_phoenix_c(varied) == "phoenix"
+    # one ulp off the pinned p is NOT classic — exact equality, no tolerance
+    import math
+    near = ("0.5667", "0", repr(math.nextafter(-0.5, 0.0)), "0", "0", "0")
+    assert sf.partition_for_phoenix_c(near) == "phoenix"
+    # and both normalize back to the same render family / walk grammar
+    assert sf.render_family_of("phoenix:classic") == sf.render_family_of("phoenix") == "phoenix"
+    assert sf.descend_flags("phoenix:classic", classic) == sf.descend_flags("phoenix", classic)
+    assert sf.render_args_for("phoenix:classic", classic)["family"] == "phoenix"
+
+
+def test_the_tracked_phoenix_partitions_are_read_off_the_pool_not_declared(tmp_path):
+    """A partition the pool cannot feed would hold a permanent 5% quota floor it can never
+    spend; a partition the pool DOES feed but nobody tracks gets nodes with no cloud, no
+    tau_h and no quota row. So the set is derived from the pool, and it is the SAME function
+    that labels the nodes."""
+    import types
+    def pool_parts(entries):
+        p = tmp_path / f"pool_{len(entries)}_{entries[0]['p_re']}.json"
+        p.write_text(json.dumps(entries), encoding="utf-8")
+        obj = types.SimpleNamespace(phoenix_seed_pool_path=p)
+        obj.phoenix_pool_partitions = types.MethodType(
+            sf.SteeredFrontier.phoenix_pool_partitions, obj)
+        return obj.phoenix_pool_partitions()
+
+    C = dict(c_re="0.5667", c_im="0", p_re="-0.5", p_im="0", zm1_re="0", zm1_im="0")
+    V = dict(c_re="-1.089", c_im="0.481", p_re="-0.222", p_im="0.172",
+             zm1_re="-0.224", zm1_im="-0.347")
+    assert pool_parts([V]) == ["phoenix"]
+    assert pool_parts([C]) == ["phoenix:classic"]
+    # mixed pool -> both, in ALL_FAMS order (base before derived), never duplicated
+    assert pool_parts([C, V, dict(V, p_im="0.3")]) == ["phoenix", "phoenix:classic"]
+    # a pool entry with no zm1 axes defaults them to the legacy z_-1=0, exactly as the node
+    # builder does — so an old pool file keeps routing where it always did
+    assert pool_parts([{k: v for k, v in C.items() if not k.startswith("zm1")}]) \
+        == ["phoenix:classic"]
 
 
 def test_the_cooldown_stops_a_barren_family_being_redrawn_every_batch():

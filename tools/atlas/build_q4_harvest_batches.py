@@ -220,6 +220,13 @@ def render_family_of(partition: str) -> str:
     Pinned to `steered_frontier.render_family_of` by a test rather than importing it: that
     module pulls torch, and a batch builder that loads a classifier to translate a string
     would be paying seconds of import for a dictionary."""
+    # `phoenix:classic` is the pinned Ushiki plane of the SAME Rust family, so it renders as
+    # `phoenix` (mirrors `steered_frontier.render_family_of`, which normalizes derived
+    # partitions to their base before dispatching). Left unmapped it would fall through to
+    # the `return partition` below and fail at render time one crop at a time — the exact
+    # failure the julia:multibrot mapping bug above produced.
+    if partition == "phoenix:classic":
+        return "phoenix"
     if partition in ("mandelbrot", "multibrot3", "multibrot4", "multibrot5", "phoenix"):
         return partition
     if partition == "julia:mandelbrot":
