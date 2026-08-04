@@ -147,6 +147,30 @@ def test_a_zero_deficit_partition_still_gets_its_floor():
     assert "a" in a.floored and a.bucket("a") == "floor"
 
 
+def test_the_universal_floor_is_feasible_at_the_live_partition_count():
+    """The floor is a fraction of TOTAL time and every partition gets one, so `floor * n` is
+    its total claim — and `allocate` DEGRADES TO UNIFORM once that reaches 1.0. At the live
+    count the floor must still bind something, or every share becomes 1/n and the deficits
+    stop steering the run entirely.
+
+    Derived from `ALL_FAMS` rather than pinned to a number: this is the assertion that has to
+    fire when the eleventh, not the tenth, partition is registered. At 10 partitions the claim
+    is 10 x 5% = 50%, leaving half the budget deficit-driven; the ceiling is 20 partitions."""
+    from partitions import ALL_FAMS
+    n = len(ALL_FAMS)
+    assert pq.FLOOR_FRAC * n < 1.0, (
+        f"{n} partitions x {pq.FLOOR_FRAC} floor >= 100% of total time — `allocate` degrades "
+        f"to a uniform 1/n split and the deficit stops steering. Lower FLOOR_FRAC (Matt's "
+        f"call) or stop adding partitions.")
+    # ...and it is still a REAL floor at this count: a zero-deficit partition is floored, not
+    # given 1/n. (Non-vacuity — the assertion above passes trivially at small n.)
+    defs = {p: (0.0 if p == ALL_FAMS[0] else 100.0) for p in ALL_FAMS}
+    a = pq.allocate(defs, {p: 1.0 for p in ALL_FAMS}, ALL_FAMS)
+    assert a.floored == {ALL_FAMS[0]}
+    assert a.share[ALL_FAMS[0]] == pytest.approx(pq.FLOOR_FRAC)
+    assert sum(a.share.values()) == pytest.approx(1.0)
+
+
 def test_a_partition_above_the_floor_gets_NOTHING_EXTRA():
     """The other half of the addendum's sentence, and the one a naive
     "reserve n*floor, then split the rest proportionally" implementation gets wrong: it hands

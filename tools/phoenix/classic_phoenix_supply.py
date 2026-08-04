@@ -3,15 +3,23 @@ r"""classic_phoenix_supply.py — mint a CURRENT-decoded classic-phoenix supply 
 
 The Phase-B grid is VARIED phoenix (swept c/p/z_{-1}); classic phoenix is the original motif
 (fixed Ushiki plane, z_{-1}=0). The legacy phoenix ledgers hold classic q3 coordinates decoded
-under v6 — inadmissible now (scorer_version=="v6" fails is_current_decoded). This tool mints
-current rows AT THE SAME PLACES: it re-renders each legacy q3 coordinate at reframe/deploy
-fidelity carrying the classic Ushiki identity, re-scores under the guarded v7 CORN scorer, and
-re-decodes at the production phoenix t_good (t_good_for("phoenix")==0.45). Legacy v6 rows are
+under an OLDER HEAD — inadmissible now (`is_current_decoded` fails on any non-active stamp).
+This tool mints current rows AT THE SAME PLACES: it re-renders each legacy q3 coordinate at
+reframe/deploy fidelity carrying the classic Ushiki identity, re-scores under the guarded
+ACTIVE CORN scorer, and re-decodes at this partition's own production t_good. Legacy rows are
 untouched; this writes a fresh `classic_phoenix`-tagged ledger.
 
+THE HEAD IS NEVER PINNED HERE. Scorer, stamp and threshold all resolve from the live pins
+(`production_seeder.SCORER_PATH` / `SCORER_VERSION`, `t_good_for`), so re-running after a model
+flip re-mints rather than reproducing the previous head. `purge_stale` is what makes that true
+on a RESUME: the resume key is the decode-version predicate, not the coord id, so a flip does
+not read as "already done". First run 2026-07-21 under v7 at t_good 0.45; re-minted under v10
+on 2026-08-04 at the `phoenix:classic` partition's own t_good (registered 2026-08-04).
+
   Stage A  collect   — q3 (decoded_class==3) phoenix coords from the legacy ledgers, coord-dedup.
-  Stage B  rescore   — per-coord guarded v7 render+score+decode@0.45 (reframe fidelity, no search),
-                       morph-embed distinct tally + 1280-D feature for each q3. Per-coord resume.
+  Stage B  rescore   — per-coord guarded ACTIVE-head render+score+decode (reframe fidelity, no
+                       search), morph-embed distinct tally + 1280-D feature for each q3.
+                       Per-coord resume, keyed on the decode VERSION (see `purge_stale`).
   Stage C  topup     — if < MIN_DISTINCT distinct looks survive, a short fixed-classic descent leg
                        (guided-descend --phoenix at Ushiki; cap ~TOPUP_BUDGET_MIN active-min).
   Stage D  finalize  — write outcome_ledger.jsonl (+ feats + summary).
@@ -22,9 +30,9 @@ identity — distinctness is a MORPHOLOGY property (cos 0.974), not a parameter 
 
 Durable outputs under data/discovery/classic_phoenix/ (survive rm -r scratch/*):
   coords.jsonl           collected legacy q3 coords (source + orig id + viewport)
-  rescored.jsonl         per-coord v7 rescore result (q3 AND sub-threshold) — resume key
+  rescored.jsonl         per-coord rescore result (q3 AND sub-threshold) — resume state
   outcome_ledger.jsonl   admitted q3 classic_phoenix rows (intake-ready)
-  outcome_feats.npz      id -> 1280-D v7 feature for each admitted q3
+  outcome_feats.npz      id -> 1280-D active-head feature for each admitted q3
   distinct_looks.npz     run-global morph distinct-look tally (cos 0.974), resumable
   summary.json           counts + config
 
@@ -65,6 +73,8 @@ import reframe                            # noqa: E402
 from score_lib import corn_decode         # noqa: E402
 from step0_reanalysis import load_frames_by_walk  # noqa: E402
 from deficit_scheduler import DistinctLookTally    # noqa: E402
+import corpus_common as cc            # noqa: E402  THE current-decode predicate
+import partitions as _P               # noqa: E402  THE partition registry
 
 # --- classic Ushiki identity (Phase-A legacy defaults) --------------------------------------- #
 CLASSIC_SEED = psamp.Seed(
@@ -120,7 +130,7 @@ def collect_coords():
 
 
 # --------------------------------------------------------------------------- #
-# Stage B — single-coord guarded v7 rescore at reframe fidelity (NO reframe search).
+# Stage B — single-coord guarded ACTIVE-head rescore at reframe fidelity (no reframe search).
 # --------------------------------------------------------------------------- #
 def _score_coord(scorer, cx, cy, fw, tile: Path):
     """Render the classic-phoenix outcome frame at 640x360 ss2 with the co-located guard field,
@@ -138,12 +148,47 @@ def _score_coord(scorer, cx, cy, fw, tile: Path):
     return guard_pass, float(notbad) if guard_pass else 0.0, float(good) if guard_pass else 0.0
 
 
-def rescore(coords, scorer, embedder, tally, feats, rescored_path, feats_path, t, limit=None):
-    done = set()
-    if rescored_path.exists():
-        for line in rescored_path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                done.add(json.loads(line)["id"])
+def purge_stale(rescored_path, feats_path, looks_path) -> tuple[set, int]:
+    """Drop every non-CURRENT-decoded row from the resume state, and return the ids that
+    survive plus the count dropped.
+
+    THE RESUME PREDICATE IS THE DECODE-VERSION PREDICATE, not "have I seen this id".
+    `p_notbad`/`p_good`/`decoded_class` are a specific head's verdict, so a row carrying an
+    older `scorer_version` is not DONE under a new head — it is a row that must be scored
+    again. Resuming on id alone made a model flip a no-op: every coord looked finished and
+    the ledger kept serving the old head's admissions under the new head's name. Routed
+    through `corpus_common.is_current_decoded` so the stamp discriminator has one owner.
+
+    THE DERIVED SIDECARS GO WITH THEM. `rescored.jsonl`, `outcome_feats.npz` and
+    `distinct_looks.npz` are all derived from the same admission set, and the look tally is
+    ORDER-DEPENDENT (a near-dup test against whatever was admitted before it). Carrying a
+    tally built from the old head's admissions into the new head's run would report
+    distinctness against looks this run never admitted. So when anything is dropped the tally
+    is rebuilt from zero — the coords file is the version-free input and nothing else is lost.
+
+    Nothing here touches a human label; these are decode artifacts of a derived ledger."""
+    if not rescored_path.exists():
+        return set(), 0
+    rows = [json.loads(l) for l in rescored_path.read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+    keep = [r for r in rows if cc.is_current_decoded(r)]
+    dropped = len(rows) - len(keep)
+    if not dropped:
+        return {r["id"] for r in keep}, 0
+    log(f"[stale] {dropped}/{len(rows)} rescored rows carry a non-active scorer_version "
+        f"(active={cc.active_scorer_version()}); they die by the predicate and are re-scored. "
+        f"Stamps seen: {sorted({r.get('scorer_version') for r in rows})}")
+    rescored_path.write_text("".join(json.dumps(r) + "\n" for r in keep), encoding="utf-8")
+    # the two derived sidecars are rebuilt with the admissions, never carried across a head
+    for p in (feats_path, looks_path):
+        if Path(p).exists():
+            Path(p).unlink()
+    return {r["id"] for r in keep}, dropped
+
+
+def rescore(coords, scorer, embedder, tally, feats, rescored_path, feats_path, t,
+            limit=None, done=None):
+    done = set() if done is None else set(done)
     todo = [c for c in coords if c["id"] not in done]
     if limit:
         todo = todo[:limit]
@@ -260,32 +305,43 @@ def main(argv=None):
     ap.add_argument("--no-topup", action="store_true", help="skip the descent top-up leg")
     ap.add_argument("--topup-budget", type=float, default=TOPUP_BUDGET_MIN)
     ap.add_argument("--seed", type=int, default=71000, help="descent RNG base for the top-up")
+    ap.add_argument("--run-dir", default=None,
+                    help="redirect the durable sink (smoke / isolation). Default: "
+                         "data/discovery/classic_phoenix")
     args = ap.parse_args(argv)
 
-    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    run_dir = Path(args.run_dir).resolve() if args.run_dir else RUN_DIR
+    run_dir.mkdir(parents=True, exist_ok=True)
     SCRATCH.mkdir(parents=True, exist_ok=True)
-    t = ps.t_good_for("phoenix")
+    # `phoenix:classic` is the partition this ledger IS (registered 2026-08-04); the pooled
+    # `phoenix` threshold is the varied family's and would be the wrong bar to admit on.
+    t = ps.t_good_for(_P.CLASSIC_PHOENIX)
 
     coords, per_src = collect_coords()
-    (RUN_DIR / "coords.jsonl").write_text(
+    (run_dir / "coords.jsonl").write_text(
         "\n".join(json.dumps(c) for c in coords) + "\n", encoding="utf-8")
-    log(f"=== classic phoenix supply  (t_good={t}) ===")
+    log(f"=== classic phoenix supply  partition={_P.CLASSIC_PHOENIX} t_good={t} "
+        f"({ps.t_good_status(_P.CLASSIC_PHOENIX)}) scorer={ps.SCORER_VERSION} ===")
     log(f"[collect] legacy q3: {per_src} -> {len(coords)} unique coords")
 
     reframe.DUMP_GUARD_FIELD = True
     assert reframe.GUARD_FIELD_SUFFIX == guard.FIELD_SIDECAR_SUFFIX
     scorer = guard.make_guarded_scorer(ps.SCORER_PATH)
     embedder = pg.MorphEmbedder(SCRATCH)
-    rescored_path = RUN_DIR / "rescored.jsonl"
-    feats_path = RUN_DIR / "outcome_feats.npz"
-    looks_path = RUN_DIR / "distinct_looks.npz"
+    rescored_path = run_dir / "rescored.jsonl"
+    feats_path = run_dir / "outcome_feats.npz"
+    looks_path = run_dir / "distinct_looks.npz"
+    # Stale-decode purge BEFORE the tally/feats load, so neither is built from an old head's
+    # admissions (both files are deleted by the purge when anything is dropped).
+    done, n_stale = purge_stale(rescored_path, feats_path, looks_path)
     tally = DistinctLookTally(looks_path, threshold=NEAR_DUP)
     feats = {}
     if feats_path.exists():
         with np.load(feats_path, allow_pickle=False) as z:
             feats = {k: z[k].copy() for k in z.files}
 
-    rescore(coords, scorer, embedder, tally, feats, rescored_path, feats_path, t, limit=args.limit)
+    rescore(coords, scorer, embedder, tally, feats, rescored_path, feats_path, t,
+            limit=args.limit, done=done)
 
     n_distinct = tally.count("phoenix")
     topup_added = 0
@@ -297,22 +353,25 @@ def main(argv=None):
     # Stage D — finalize: ledger = q3 rows from rescored.jsonl
     rows = [json.loads(l) for l in rescored_path.read_text(encoding="utf-8").splitlines() if l.strip()]
     q3 = [r for r in rows if r.get("guard_pass") and (r.get("decoded_class") or 0) >= 3]
-    with open(RUN_DIR / "outcome_ledger.jsonl", "w", encoding="utf-8") as f:
+    with open(run_dir / "outcome_ledger.jsonl", "w", encoding="utf-8") as f:
         for r in q3:
             f.write(json.dumps(r) + "\n")
     n_distinct = sum(1 for r in q3 if r.get("distinct"))
     summary = {
-        "t_good": t, "scorer_version": ps.SCORER_VERSION, "near_dup_threshold": NEAR_DUP,
+        "t_good": t, "partition": _P.CLASSIC_PHOENIX,
+        "t_good_status": ps.t_good_status(_P.CLASSIC_PHOENIX),
+        "scorer_version": ps.SCORER_VERSION, "near_dup_threshold": NEAR_DUP,
+        "stale_rows_repredicated": n_stale,
         "legacy_sources": per_src, "coords_unique": len(coords),
         "rescored": len(rows), "admissions_q3": len(q3), "distinct_looks": n_distinct,
         "topup_added": topup_added, "min_distinct_target": MIN_DISTINCT,
         "classic_identity": {"c": ps.PHOENIX_C_DEFAULT, "p": ps.PHOENIX_P_DEFAULT,
                              "z_m1": ps.PHOENIX_ZM1_DEFAULT},
     }
-    (RUN_DIR / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     log(f"\n=== CLASSIC PHOENIX SUPPLY ===")
     log(f"  rescored {len(rows)} coords -> {len(q3)} q3 admissions, {n_distinct} distinct looks")
-    log(f"  topup added {topup_added} | durable -> {RUN_DIR}")
+    log(f"  topup added {topup_added} | durable -> {run_dir}")
     if n_distinct < MIN_DISTINCT and not args.limit:
         log(f"  WARNING: {n_distinct} < {MIN_DISTINCT} distinct target (top-up budget exhausted)")
     return 0
