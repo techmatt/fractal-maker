@@ -46,12 +46,29 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 import mpmath as mp
+from tools import paths as _paths            # storage-class declaration at the write site
 from tools.sourcing import deep_center_finder as dcf
 from tools.studies.q4_neighborhood_sweep import compute_metrics, score_A  # verbatim transfer
 
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 OUT = ROOT / "scratch" / "q4_stage1"
-FIELDS = OUT / "fields"
+
+# THE FIELDS ARE DURABLE, AND THE REST OF THIS TREE IS NOT. `OUT` holds this harness's
+# disposable stages (frames, refit, sweep intermediates); the dumped smooth fields are the
+# fit input `q4_multibrot_transfer._fit_model` reads, and that fit gates the deployed OOD
+# mask, `build_minibrot_batch` screen, `build_interior_band_batch` sweep and
+# `interior_bakeoff`. They were `scratch()` until 2026-08-04, were wiped once, and were
+# recovered from a trash directory rather than from their contract.
+#
+# The class was decided by the contract test, not by judgement: re-dumping one field from
+# CURRENT code is NOT byte-reproducible. Every stored sidecar records `bailout_b` 1e6; the
+# current `beautiful` default is 2^16 and `--coloring {"bailout_b": 1e6}` does not restore
+# it. The re-dump has an identical NaN/interior mask and a constant +3.4712 offset on every
+# escaped sample (std 3.2e-6 — f32 rounding), and 0% of samples compare equal. So the set
+# records a population current code cannot re-create: durable, `data/`, LFS for the `.bin`.
+# One consequence worth stating where the reader is: a field regenerated today is NOT a
+# drop-in for the fit until someone shows the fit's features are offset-invariant.
+FIELDS = _paths.durable("data/q4_stage1/fields")
 
 # The label store — SEPARATE from the v7 location corpus (distribution-bound).
 BATCH_ID = "2026-07-23_q4_stage1_windows"

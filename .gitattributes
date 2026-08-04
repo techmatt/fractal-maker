@@ -38,3 +38,9 @@ data/v9/eval_scores_v9.jsonl filter=lfs diff=lfs merge=lfs -text
 data/v10/plan.jsonl filter=lfs diff=lfs merge=lfs -text
 data/v10/cache_manifest.jsonl filter=lfs diff=lfs merge=lfs -text
 data/v10/eval_scores_v10.jsonl filter=lfs diff=lfs merge=lfs -text
+# q4 stage-1 label-set fields: 33 x 10.65 MB f32 smooth fields (2176x1224 ss1), the fit
+# input q4_multibrot_transfer._fit_model reads. Durable, not bulk: a re-dump from current
+# code is not byte-reproducible (bailout_b 1e6 vs today's 2^16), so this is the only copy
+# of the population the deployed OOD mask was fitted on. Negated by directory in
+# .gitignore, so a normal `git add` works.
+data/q4_stage1/fields/*.bin filter=lfs diff=lfs merge=lfs -text

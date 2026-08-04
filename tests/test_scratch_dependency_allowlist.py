@@ -114,15 +114,12 @@ ALLOWLIST = [
     Entry("scratch/present/run4_present/manifest.json", "present (src/, Rust)", INPUT,
           "build_rev4_batch's --manifest default.",
           "regenerable by re-running present over run4"),
-    Entry("scratch/q4_stage1/fields", "tools/studies/q4_stage1_labelset.py", INPUT,
-          "THE fit input for q4_multibrot_transfer._fit_model, which gates "
-          "build_minibrot_batch screen, build_interior_band_batch sweep and "
-          "interior_bakeoff. Wiped once and restored from trash on 2026-08-04; its CLASS is "
-          "an open decision (tools/audit/durability_map.py).",
-          "indefinite until reclassified — see the durability map's OPEN verdict"),
-    Entry("scratch/q4_stage1/fields/<mb_id>.bin", "tools/studies/q4_stage1_labelset.py", INPUT,
-          "the durability map's registry key for the same family.",
-          "indefinite until reclassified"),
+    # `scratch/q4_stage1/fields` and its `<mb_id>.bin` registry key were the two INPUT rows
+    # here until 2026-08-04. They are gone because the hazard is: the fields were classified
+    # DURABLE and now live at `data/q4_stage1/fields` (LFS), reached through
+    # `paths.durable()`. Deleted rather than re-pointed — this ledger names scratch paths
+    # only, and a durable path on it would be a line that cannot go stale in the direction
+    # the ledger exists to catch.
     Entry("scratch/steered_run2_manifest", "tools/atlas/steered_run2_manifest.py", INPUT,
           "keeper_calibrate's --manifest default: the blind manifest the keeper calibration "
           "in docs/design/ is derived against.",

@@ -258,14 +258,22 @@ REGISTRY = [
      "cost a trash directory rather than a re-dump. Registered in "
      "artifacts.RELOCATED_PREFIXES and restored out-of-tree byte-identical (1.6 GB / 320 "
      "files, sha256 over the .bin set and the .json set both match)."),
-    ("scratch/q4_stage1/fields/<mb_id>.bin", "tools/studies/q4_stage1_labelset.py", SCR,
-     "re-dump the 66 labelset fields (deterministic, expensive)", N,
-     "OPEN — a class decision for Matt, not resolved here. Restored to scratch/ on "
-     "2026-08-04 (66 files / 336 MB, from the same trash tree) because it BLOCKS both "
-     "restorations above: q4_multibrot_transfer._fit_model reads it, and that fit gates "
-     "build_minibrot_batch screen, build_interior_band_batch sweep and interior_bakeoff "
-     "audit/features. A scratch input that gates the deployed screen model's fit is the "
-     "same shape of mismatch as the two above; it is left in scratch() pending a decision."),
+    ("data/q4_stage1/fields/<mb_id>.bin", "tools/studies/q4_stage1_labelset.py", DUR,
+     "NOT re-dumpable — current code produces a DIFFERENT field (see verdict)", Y,
+     "RESOLVED 2026-08-04, and the CONTRACT decided it, not judgement: re-dumping a field "
+     "from current code is not byte-reproducible. Every one of the 33 stored sidecars "
+     "records bailout_b = 1e6; today's beautiful default is 2^16, `--coloring "
+     "{'bailout_b': 1e6}` does not restore it, and the re-dump lands a CONSTANT +3.4712 "
+     "offset on every escaped sample (std 3.2e-6, NaN/interior mask identical, 0% of "
+     "samples equal). Verified on two files. So the set records a population current code "
+     "cannot re-create — the durable class. Moved scratch/ -> data/q4_stage1/fields "
+     "(33 .bin through LFS + 33 .json plain, 336 MB), .gitignore negated by directory, "
+     "LS.FIELDS now goes through paths.durable(), and q4_field_richness's second hardcoded "
+     "copy of the path was collapsed onto it. It is THE fit input "
+     "q4_multibrot_transfer._fit_model reads, gating build_minibrot_batch screen, "
+     "build_interior_band_batch sweep and interior_bakeoff. Open consequence, recorded "
+     "rather than assumed away: a field regenerated today is NOT a drop-in for that fit "
+     "unless the fit's features are offset-invariant, which nobody has shown."),
     ("data/emission/campaign1/embs/*.npy", "tools/emission/campaign1_intake.py", BULK,
      "re-embed the intake's medoids — needs intake.json, which is gone", N,
      "Was scratch/emission/campaign1/embs and that is why campaign1 is DARK: the vectors "
@@ -321,7 +329,7 @@ PROBES = {
     "data/minibrot_roster/interior_band_v1/cand/<atom>.json":
         "data/minibrot_roster/interior_band_v1/cand",
     "data/minibrot_batch/fields/<atom>.bin": "data/minibrot_batch/fields",
-    "scratch/q4_stage1/fields/<mb_id>.bin": "scratch/q4_stage1/fields",
+    "data/q4_stage1/fields/<mb_id>.bin": "data/q4_stage1/fields",
 }
 
 

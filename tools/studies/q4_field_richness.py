@@ -26,7 +26,13 @@ from pathlib import Path
 from scipy.ndimage import gaussian_filter
 
 ROOT = Path(__file__).resolve().parents[2]
-FIELDS = ROOT / "scratch" / "q4_stage1" / "fields"
+sys.path.insert(0, str(ROOT))
+from tools.studies import q4_stage1_labelset as LS   # noqa: E402
+
+# ONE definition of where the fields live, in the module that dumps them. This was a second
+# hardcoded `scratch/q4_stage1/fields` literal, which is how a storage-class change reaches
+# one reader and not the other; the fields became durable on 2026-08-04 (see LS.FIELDS).
+FIELDS = LS.FIELDS
 MINIS = ROOT / "scratch" / "q4_stage1" / "minibrots.json"
 OUT = ROOT / "scratch" / "fair_rerender"
 TAU = 0.01                      # fixed, NOT fit

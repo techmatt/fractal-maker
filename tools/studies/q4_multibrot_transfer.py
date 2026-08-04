@@ -60,7 +60,8 @@ from tools.studies import q4_harvest_tight as HT  # noqa: E402
 EXE = ROOT / "target" / "release" / "fractal-generator.exe"
 OUT = ROOT / "scratch" / "q4_multibrot_transfer"
 FIELDS = OUT / "fields"
-CORPUS_FIELDS = LS.FIELDS                      # scratch/q4_stage1/fields (fit inputs)
+CORPUS_FIELDS = LS.FIELDS                      # data/q4_stage1/fields — DURABLE fit inputs
+                                               # (reclassified 2026-08-04; see LS.FIELDS)
 FINDINGS = ROOT / "docs" / "design" / "q4_multibrot_transfer.md"
 
 DEGREES = [2, 3, 4, 5]
