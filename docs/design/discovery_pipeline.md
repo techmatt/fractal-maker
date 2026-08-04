@@ -118,11 +118,21 @@ evidence about the allocator.
 Three things changed with it, each a decision rather than a port:
 
 - **Currency.** Deficits are denominated in **human labels** — `count(label==4) + 0.1 ×
-  count(label==3)`, through the amendment overlay + library — against a **uniform** target
-  (level every partition to the richest holding, so the richest lands at exactly zero
-  deficit). §3's distinct-look denomination measured variety; this measures the thing the
-  corpus is short of. No machine score touches the deficit: a q3/q4 count measures the
-  classifier, not the family, until a human looks.
+  count(label==3)`, through the amendment overlay + library. §3's distinct-look denomination
+  measured variety; this measures the thing the corpus is short of. No machine score touches
+  the deficit: a q3/q4 count measures the classifier, not the family, until a human looks.
+- **Target: RATIO-WEIGHTED** (Matt, 2026-08-04; was uniform until then). The intended release
+  mix is one table — `tools/scoring/release_mix.RATIO`, keyed off `ALL_FAMS` with an
+  import-time completeness assertion in both directions — and `target_p ∝ ratio_p`, anchored so
+  the maximum-ratio partitions keep the level the uniform rule used (the richest holding). The
+  uniform rule said a pinned single-parameter-point plane and the mandelbrot c-plane are owed
+  the same number of labels; at 3 : 1 : 0.2 they are not. Consequences of the flip, measured on
+  the 2026-08-04 census: `mandelbrot` and `julia:mandelbrot` (ratio 3) keep their deficits
+  exactly; every ratio-1 partition's target falls to a third of the anchor, and
+  `phoenix:classic` to a fifteenth — which drops its share from **13.45% to the 5% floor**, and
+  leaves `phoenix` at its target with zero deficit for the first time. **Emission does not read
+  this table yet** — `tools/emission/cells.py`'s `weight_overrides` / `target_share` still carry
+  their own numbers, and stage 2 wires to it at the next checkpoint.
 - **Price.** Measured **active-minutes per currency unit mined**, credited only on a DISTINCT
   ADMISSION (a q3_dup adds nothing to the corpus the deficit counts against, and pricing dups
   as production would make the churniest partition look cheapest). The classifier does reach

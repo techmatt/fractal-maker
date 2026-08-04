@@ -37,16 +37,59 @@ def test_currency_weights_are_the_stated_ones():
     assert pq.CLASS_WEIGHT.get(2, 0.0) == 0.0 and pq.CLASS_WEIGHT.get(1, 0.0) == 0.0
 
 
-def test_uniform_target_levels_to_the_richest_and_the_richest_has_zero_deficit():
+def test_at_equal_ratios_the_target_levels_to_the_richest_and_the_richest_has_zero_deficit():
+    """The ratio-weighted rule REDUCES to the uniform one it replaced when every ratio is
+    equal — kept as the base case, so a change to the weighting that also broke the levelling
+    is two failures rather than one."""
     cur = {"a": 10.0, "b": 4.0, "c": 0.0}
-    d = pq.deficits_from_currency(cur, ["a", "b", "c"])
+    d = pq.deficits_from_currency(cur, ["a", "b", "c"], {p: 1.0 for p in cur})
     assert d == {"a": 0.0, "b": 6.0, "c": 10.0}
 
 
-def test_a_partition_absent_from_the_census_carries_the_full_deficit():
+def test_the_target_is_the_anchor_scaled_by_the_ratio_and_the_anchor_is_the_richest_holding():
+    """Matt, 2026-08-04. The maximum-ratio partitions keep the target the uniform rule gave
+    them (so their deficits do not move at all) and everything below falls proportionally."""
+    cur = {"big": 100.0, "small": 5.0, "mid": 20.0}
+    ratios = {"big": 3.0, "small": 0.2, "mid": 1.0}
+    tgt, anchor = pq.currency_targets(cur, list(cur), ratios)
+    assert anchor == 100.0
+    assert tgt["big"] == pytest.approx(100.0)                  # ratio 3 == max -> the anchor
+    assert tgt["mid"] == pytest.approx(100.0 / 3.0)
+    assert tgt["small"] == pytest.approx(100.0 / 15.0)         # 0.2/3
+    d = pq.deficits_from_currency(cur, list(cur), ratios)
+    assert d["big"] == 0.0
+    assert d["small"] == pytest.approx(100.0 / 15.0 - 5.0)
+    # ...and a partition ABOVE its (low) target has no deficit, which uniform could not express:
+    assert pq.deficits_from_currency({"big": 100.0, "small": 90.0}, ["big", "small"],
+                                     {"big": 3.0, "small": 0.2})["small"] == 0.0
+
+
+def test_a_ratio_change_moves_the_target_vector_with_no_stale_cache(monkeypatch):
+    """The table is read at CALL time, not baked at import: `PopQuota` re-allocates every pop,
+    and a cached table would keep a running frontier on the mix it was launched with."""
+    import release_mix as rm
+    from partitions import ALL_FAMS
+    cur = {p: 0.0 for p in ALL_FAMS}
+    cur[ALL_FAMS[0]] = 100.0
+    before = pq.deficits_from_currency(cur, ALL_FAMS)
+    monkeypatch.setitem(rm.RATIO, "phoenix:classic", 3.0)
+    after = pq.deficits_from_currency(cur, ALL_FAMS)
+    assert after["phoenix:classic"] > before["phoenix:classic"]
+    assert after["phoenix:classic"] == pytest.approx(100.0)
+
+
+def test_a_partition_with_no_declared_ratio_RAISES_rather_than_defaulting():
+    """The `partitions._registered` failure one layer down: a defaulted ratio would give an
+    unregistered partition a plausible target nobody decided, and every downstream read of its
+    quiet quota would be a read of the default."""
+    with pytest.raises(KeyError, match="release_mix"):
+        pq.deficits_from_currency({"mandelbrot": 1.0}, ["mandelbrot", "not_a_partition"])
+
+
+def test_a_partition_absent_from_the_census_carries_the_full_target_as_its_deficit():
     """Not-yet-mined and mined-nothing are the same demand, and a KeyError here would be the
     silent kind — the partition would simply never be allocated."""
-    d = pq.deficits_from_currency({"a": 8.0}, ["a", "new"])
+    d = pq.deficits_from_currency({"a": 8.0}, ["a", "new"], {"a": 1.0, "new": 1.0})
     assert d["new"] == 8.0
 
 
@@ -557,11 +600,19 @@ def test_a_dry_partition_caps_and_a_credit_reopens_it():
 # =========================================================================== #
 # 6. the object: accounting, buckets, resume
 # =========================================================================== #
-def _quota(tmp_path, currency, floor=0.05):
+def _quota(tmp_path, currency, floor=0.05, ratios=None):
+    """A quota over SYNTHETIC partitions, at EQUAL ratios unless a test says otherwise.
+
+    Equal ratios reproduce the pre-2026-08-04 uniform target exactly, so every test below is
+    still about the thing it was written for (buckets, resume, the price window) and not about
+    the mix policy. The real table is exercised where it belongs — §1's target tests and
+    `tools/scoring/test_release_mix.py` — over the real partition names; a synthetic partition
+    has no ratio and `currency_targets` refuses to invent one, which is the point."""
     cen = pq.CurrencyCensus(counts={}, currency=currency, defaulted_rows=0,
                             sources={}, partitions=list(currency))
     return pq.PopQuota(list(currency), tmp_path, floor=floor, census=cen,
-                       prices_config=dict(cap_minutes=1e9))
+                       prices_config=dict(cap_minutes=1e9),
+                       ratios=ratios or {p: 1.0 for p in currency})
 
 
 def test_charge_tags_the_bucket_that_bought_the_time(tmp_path):

@@ -27,11 +27,18 @@ THE CURRENCY IS MATT'S, AND IT IS HUMAN LABELS
     currency(partition) = count(label == 4) + 0.1 * count(label == 3)
 
 counted through the amendment overlay (`label_store.resolve_score`, so a revision counts as
-the revised value and the original stays byte-identical) plus the library. The target is
-UNIFORM: every partition should hold the same currency, so the target level is the RICHEST
-partition's holding and a partition's deficit is what it would take to reach it. That makes
-the richest partition's deficit exactly zero — which is not a degenerate case here but the
-one the addendum's floor is written for.
+the revised value and the original stays byte-identical) plus the library.
+
+THE TARGET IS RATIO-WEIGHTED (Matt, 2026-08-04). It was UNIFORM until then — every partition
+levelled to the RICHEST partition's holding — which said that a pinned single-parameter-point
+plane with 16 distinct looks and the mandelbrot c-plane are owed the same number of labels.
+They are not: the intended release mix is one table (`release_mix.RATIO`) and the demand side
+reads it, so `target_p ∝ ratio_p` with the maximum-ratio partitions anchored at the level the
+uniform rule used. The richest maximum-ratio partition still lands at exactly zero deficit —
+which is not a degenerate case here but the one the addendum's floor is written for — and a
+low-ratio partition's demand is now bounded by what it is meant to be worth rather than by
+what the biggest family holds. Nothing else moves: the deficit definition, the price weighting
+and the universal 5% floor are unchanged; only the target vector.
 
 NO MACHINE SCORE ENTERS THE DEFICIT. This is the same hard boundary
 `deficit_scheduler.py` states and it survives verbatim: a q3/q4 COUNT from the classifier
@@ -228,18 +235,58 @@ def label_currency(partitions: list[str], corpus_dir: str | None = None,
                           partitions=list(partitions))
 
 
-def deficits_from_currency(currency: dict, partitions: list[str]) -> dict:
-    """Shortfall against a UNIFORM target.
+TARGET_RULE = ("ratio-weighted (release_mix.RATIO): target_p = anchor * ratio_p / max(ratio), "
+               "anchor = the richest partition's holding")
 
-    Uniform means every partition should hold the same currency, so the target LEVEL is the
-    richest partition's holding and a deficit is the distance up to it. Two properties this
-    buys over "target = the mean": every deficit is >= 0 without a clamp (a clamp would make
-    the allocation depend on how many partitions happen to be above the mean), and the
-    richest partition lands at exactly zero — which is the case the universal floor exists to
-    serve, so the two rules meet cleanly instead of fighting."""
+
+def currency_targets(currency: dict, partitions: list[str],
+                     ratios: dict | None = None) -> tuple[dict, float]:
+    """`(target per partition, the anchor level)` under the ratio table.
+
+    THE ANCHOR IS THE RICHEST HOLDING, unchanged from the uniform rule, and that is what makes
+    this a re-weighting rather than a rescaling: the maximum-ratio partitions keep exactly the
+    target they had, so mandelbrot's deficit (0) and julia:mandelbrot's (27.0) do not move at
+    all, and everything below ratio 3 falls proportionally. `phoenix:classic` at 0.2/3 lands at
+    a fifteenth of the anchor.
+
+    `ratios` is read at CALL TIME (default: the whole `release_mix` table) so a change to the
+    policy moves the next allocation — `PopQuota` re-allocates every pop, and a table cached at
+    import would keep a running frontier on the mix it was launched with.
+
+    A partition with no declared ratio RAISES. It is the `partitions._registered` failure one
+    layer down: a defaulted ratio would give it a plausible target nobody decided, and every
+    downstream read ("that partition had little demand") would be about the default."""
     have = {p: float(currency.get(p, 0.0)) for p in partitions}
     level = max(have.values()) if have else 0.0
-    return {p: max(0.0, level - v) for p, v in have.items()}
+    if ratios is None:
+        from release_mix import ratios as _table              # noqa: E402 (tools/scoring)
+        ratios = _table()
+    missing = [p for p in partitions if p not in ratios]
+    if missing:
+        raise KeyError(
+            f"no release-mix ratio for {missing} — register them in release_mix.RATIO (and in "
+            f"partitions.ALL_FAMS). The target vector must not default: a defaulted ratio "
+            f"reads downstream as a measured demand.")
+    rmax = max(float(ratios[p]) for p in partitions) if partitions else 0.0
+    if rmax <= 0:
+        return {p: 0.0 for p in partitions}, level
+    return {p: level * float(ratios[p]) / rmax for p in partitions}, level
+
+
+def deficits_from_currency(currency: dict, partitions: list[str],
+                           ratios: dict | None = None) -> dict:
+    """Shortfall against the RATIO-WEIGHTED target (`currency_targets`).
+
+    Two properties this keeps from the uniform rule it replaces: every deficit is >= 0 without
+    a clamp (a clamp would make the allocation depend on how many partitions happen to be above
+    the target), and the partition that sets the anchor lands at exactly zero — which is the
+    case the universal floor exists to serve, so the two rules meet cleanly instead of
+    fighting. What it adds is that a partition can now be AT its target while holding far less
+    than the richest one, which is the whole point: `phoenix:classic` is 0.2 of a release, not
+    a tenth of it."""
+    have = {p: float(currency.get(p, 0.0)) for p in partitions}
+    target, _level = currency_targets(currency, partitions, ratios)
+    return {p: max(0.0, target[p] - have.get(p, 0.0)) for p in partitions}
 
 
 # ========================================================================== #
@@ -566,13 +613,24 @@ class PopQuota:
     def __init__(self, partitions: list[str], run_dir: Path, *,
                  floor: float = FLOOR_FRAC, prices_config: dict | None = None,
                  census: CurrencyCensus | None = None,
-                 julia_route_gain: float = JULIA_ROUTE_GAIN):
+                 julia_route_gain: float = JULIA_ROUTE_GAIN,
+                 ratios: dict | None = None):
         self.partitions = list(partitions)
         self.run_dir = Path(run_dir)
         self.floor = float(floor)
         self.julia_route_gain = float(julia_route_gain)
         self.census = census if census is not None else label_currency(self.partitions)
-        self.deficit = deficits_from_currency(self.census.currency, self.partitions)
+        # The target vector is resolved HERE, from the live table, and kept beside the deficit
+        # it produced — the deficit alone cannot say whether a partition is quiet because it is
+        # near its target or because its target is small.
+        self.target, self.anchor = currency_targets(self.census.currency, self.partitions,
+                                                    ratios)
+        if ratios is None:
+            import release_mix                                # noqa: E402 (tools/scoring)
+            ratios = release_mix.ratios(self.partitions)
+        self.ratios = {p: float(ratios[p]) for p in self.partitions}
+        self.deficit = {p: max(0.0, self.target[p] - float(self.census.currency.get(p, 0.0)))
+                        for p in self.partitions}
         self.cost = CostToMine(self.partitions, prices_config)
         self.state = QuotaState(
             realized_min={p: 0.0 for p in self.partitions},
@@ -762,7 +820,10 @@ class PopQuota:
         alloc = self.allocation()
         return dict(currency=self.census.summary(),
                     deficit={p: round(self.deficit.get(p, 0.0), 3) for p in self.partitions},
-                    target_rule="uniform: level every partition to the richest holding",
+                    target={p: round(self.target.get(p, 0.0), 3) for p in self.partitions},
+                    ratio={p: self.ratios.get(p) for p in self.partitions},
+                    anchor=round(self.anchor, 3),
+                    target_rule=TARGET_RULE,
                     allocation=alloc.summary(), cost=self.cost.summary(),
                     mix=self.mix_report(), floor_vs_deficit=self.floor_vs_deficit(),
                     realized_min={p: round(v, 2) for p, v in self.state.realized_min.items()},
@@ -780,11 +841,16 @@ def main():
     ap.add_argument("--floor", type=float, default=FLOOR_FRAC)
     ap.add_argument("--partitions", default=",".join(ALL_FAMS))
     args = ap.parse_args()
+    from release_mix import ratios as ratio_table              # noqa: E402
     parts = [p for p in args.partitions.split(",") if p]
     cen = label_currency(parts)
-    defc = deficits_from_currency(cen.currency, parts)
+    rt = ratio_table(parts)
+    tgt, anchor = currency_targets(cen.currency, parts, rt)
+    defc = deficits_from_currency(cen.currency, parts, rt)
     alloc = allocate(defc, {p: SEED_PRICE for p in parts}, parts, args.floor)
-    print(json.dumps(dict(currency=cen.summary(), deficits={p: round(defc[p], 2) for p in parts},
+    print(json.dumps(dict(currency=cen.summary(), target_rule=TARGET_RULE, anchor=round(anchor, 3),
+                          ratio=rt, target={p: round(tgt[p], 2) for p in parts},
+                          deficits={p: round(defc[p], 2) for p in parts},
                           allocation_at_seed_prices=alloc.summary()), indent=2))
 
 

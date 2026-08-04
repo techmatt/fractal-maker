@@ -491,8 +491,12 @@ def _quota_obj(tmp_path, frontier, currency):
     import pop_quota as pq
     cen = pq.CurrencyCensus(counts={}, currency=currency, defaulted_rows=0, sources={},
                             partitions=list(currency))
+    # EQUAL ratios: these are synthetic partition names with no release-mix entry, and this
+    # block is about the DRIVER SEAM, not the mix policy. Equal ratios reproduce the
+    # pre-2026-08-04 uniform target exactly, so what these tests assert is unchanged.
     q = pq.PopQuota(list(currency), tmp_path, census=cen,
-                    prices_config=dict(cap_minutes=1e9))
+                    prices_config=dict(cap_minutes=1e9),
+                    ratios={p: 1.0 for p in currency})
     obj = types.SimpleNamespace(
         B=2, maneuvers=False, man_quota=0, quota=q, batch_i=1,
         expansions_per_root={}, node_embs={}, totals={"cap_hits": 0},

@@ -3374,7 +3374,13 @@ class SteeredFrontier:
                 floor=q.floor, julia_route_gain=q.julia_route_gain,
                 currency="count(label==4) + 0.1*count(label==3), through the amendment "
                          "overlay + library",
-                target_rule="uniform: level every partition to the richest holding",
+                # The rule string is `pop_quota`'s own constant, not a second copy: this stamp
+                # and the module's `summary()` described the target in two independent literals
+                # until 2026-08-04, which is how a run_config can announce a target rule the
+                # allocator stopped using.
+                target_rule=pquota.TARGET_RULE,
+                ratio=q.ratios, target={p: round(v, 3) for p, v in q.target.items()},
+                anchor=round(q.anchor, 3),
                 census=q.census.summary(), deficit={p: round(v, 3)
                                                     for p, v in q.deficit.items()},
                 intended=q.allocation().summary(),

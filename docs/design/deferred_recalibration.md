@@ -87,7 +87,8 @@ That also closes the mix half of the open item above: this sitting is **69.3%
 parameter-plane** (487 julia + 206 phoenix), the first appended labels that are not
 native-plane, and its currency lands where the deficits are — `julia:mandelbrot` +23.2,
 phoenix +15.1, `julia:multibrot5` +14.5 of +67.8 total, with **+0.0 to `mandelbrot`**, the
-partition that sets the uniform target level. Every other partition's deficit narrowed and the
+partition that sets the target anchor (the uniform level then; the max-ratio anchor since
+2026-08-04 — mandelbrot sets both). Every other partition's deficit narrowed and the
 target did not move.
 
 ## Ranker growth (`pref_loc_v1`)
