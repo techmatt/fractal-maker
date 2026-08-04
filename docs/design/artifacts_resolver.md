@@ -101,9 +101,12 @@ is a statement about the ignore rules and not about whether someone once ran `gi
 
 Two mechanisms coexist, and the second is the one that scales.
 
-**Literals — `RELOCATED_PREFIXES`.** For families at a fixed, versioned path: today
-`data/v8/aug_cache` and `data/v9/aug_cache`. Matched as a whole path component (exact, or
-followed by `/`), so a sibling like `data/v9/aug_cache_notes` does **not** match.
+**Literals — `RELOCATED_PREFIXES`.** For families at ONE fixed path, not a shape that grows a
+member per run: today `data/v8/aug_cache`, `data/v9/aug_cache`, `data/atlas/tau_h_rederive`
+and `data/morph_embed_cache`. Matched as a whole path component (exact, or followed by `/`),
+so a sibling like `data/v9/aug_cache_notes` does **not** match. Read the tuple, not this
+sentence — the list here goes stale between edits and did (`tau_h_rederive` was registered
+without it).
 `[code: tools/corpus/artifacts.py::RELOCATED_PREFIXES, is_relocated]`
 
 **Classes — a predicate over the path.** Four families are matched by *shape* rather than

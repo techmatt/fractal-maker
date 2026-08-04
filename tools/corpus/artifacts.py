@@ -82,6 +82,14 @@ RELOCATED_PREFIXES = (
     # bulk(). Registered here rather than left in-tree because `!/data/atlas/` re-includes
     # this subtree: in-tree it would be COMMITTED, not merely present.
     "data/atlas/tau_h_rederive",
+    # The persistent morph-dedup embed store (tools/wallpaper/morph_embed_cache.py): one
+    # append-only file holding one CLIP vector per (location x morph recipe x embedder). A
+    # LITERAL rather than a class for the same reason as tau_h_rederive — it is one fixed
+    # path, not a family that grows a member per run. Expensive (0.93 s/row: a render, a
+    # robust-z transfer and a forward pass) but fully deterministic from committed code plus
+    # the locations, i.e. textbook bulk(). Registered BEFORE the first write, per
+    # storage_classes.md rule 5.
+    "data/morph_embed_cache",
 )
 
 

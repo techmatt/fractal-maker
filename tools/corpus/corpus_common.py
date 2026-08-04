@@ -432,6 +432,25 @@ def default_creationflags() -> int:
     return BELOW_NORMAL_PRIORITY_CLASS if sys.platform == "win32" else 0
 
 
+def set_below_normal_priority() -> bool:
+    """Drop THIS process to BELOW_NORMAL, so every child it spawns inherits the class.
+
+    The companion to `default_creationflags()` for the case that flag cannot reach: a long
+    Python driver whose engine launches go through a helper that takes no `creationflags`
+    (`library_annotate.ensure_field` is the live one). Setting the parent's class covers every
+    such child at once, because a Windows child inherits its parent's priority class.
+    Returns True iff the class was actually changed (False off win32, or on failure — a
+    priority hint that cannot be applied must not take a job down with it)."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        h = ctypes.windll.kernel32.GetCurrentProcess()
+        return bool(ctypes.windll.kernel32.SetPriorityClass(h, BELOW_NORMAL_PRIORITY_CLASS))
+    except Exception:                                        # noqa: BLE001
+        return False
+
+
 def default_engine_env(env: dict | None = None, threads: int | None = None) -> dict:
     """Environment for a SINGLE engine launch: `env` (default `os.environ`) plus
     `RAYON_NUM_THREADS`.
