@@ -311,13 +311,28 @@ def test_the_screen_columns_ride_on_EXISTING_provenance_keys():
     assert sc.SCREEN_PROV["composite"] == "composite"
 
 
-def test_render_writes_through_a_tmp_and_renames():
+def test_render_writes_through_a_partial_and_renames():
     """A kill mid-render must not leave a truncated jpg — which reads as rendered forever, and
     is the one failure an idempotent skip-if-exists resume cannot recover from."""
     import inspect
     src = inspect.getsource(sc._render_one)
-    assert ".jpg.tmp" in src and "os.replace" in src
+    assert ".part.jpg" in src and "os.replace" in src
     assert "if out.exists():" in src and "continue" in src, "resume must skip finished crops"
+
+
+def test_the_render_partial_still_ends_in_an_extension_THE_ENGINE_CAN_WRITE():
+    """The engine picks the image format off the output EXTENSION. `<id>.jpg.tmp` is not slow
+    or lossy, it is `The file extension ."tmp" was not recognized as an image format` on every
+    single render — a 100% failure rate that reads as a broken renderer, and it cost 50 renders
+    to find. Asserted on the built name, not on the source text, so any future partial scheme
+    has to satisfy it too."""
+    from pathlib import Path as P
+    out = P("x/vs0000_deadbeef.jpg")
+    tmp = out.with_name(f"{out.stem}.part.jpg")
+    assert tmp.suffix == ".jpg", tmp
+    assert tmp != out and tmp.parent == out.parent
+    # ...and a partial can never be mistaken for the finished crop by an exact-name reader
+    assert tmp.name != out.name
 
 
 def test_the_dedup_embeds_the_FRAME_THE_CROP_RENDERS():

@@ -652,8 +652,16 @@ def stage_draw(args) -> int:
 
 
 def _render_one(job):
-    """Both crops for one row. Atomic per file: render to a `.tmp` beside the target and
-    rename, so a kill mid-render can never leave a TRUNCATED jpg that reads as done forever."""
+    """Both crops for one row. Atomic per file: render to a partial beside the target and
+    rename, so a kill mid-render can never leave a TRUNCATED jpg that reads as done forever.
+
+    THE PARTIAL MUST STILL END IN `.jpg`. The engine infers the image format from the output
+    extension, so the obvious `<id>.jpg.tmp` is not a slower path or a warning — it is a hard
+    `failed to write ...: The file extension ."tmp" was not recognized as an image format`,
+    i.e. a 100% failure rate that looks exactly like a broken renderer. It cost 50 renders to
+    find. `<id>.part.jpg` is the same atomicity with an extension the engine can write, and it
+    cannot be mistaken for a finished crop because every reader (`needs`, the completeness
+    count, the sheet's route walk) addresses crops by exact `<image_id>.jpg`."""
     import corpus_common as cc
     import build_q4_harvest_batches as bq
     import build_minibrot_batch as BMB
@@ -663,7 +671,7 @@ def _render_one(job):
                           (vivid / f"{iid}.jpg", BMB.VIVID_PALETTE, BMB.VIVID_SOURCE)):
         if out.exists():
             continue
-        tmp = out.with_suffix(".jpg.tmp")
+        tmp = out.with_name(f"{out.stem}.part.jpg")
         try:
             cc.render_corpus_crop(dict(render, palette=pal), str(tmp), palette_source=src,
                                   timeout=timeout, threads=bq.RENDER_THREADS)
