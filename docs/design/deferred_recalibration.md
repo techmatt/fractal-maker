@@ -7,7 +7,7 @@ it, and where to start.
 | item | state |
 |---|---|
 | location-head retrain | **DONE — no longer parked.** v8 shipped, v9 was staged and skipped, v10 is live (record below). |
-| ranker growth (`pref_loc_v1`) | parked |
+| ranker growth (`pref_loc_v1`) | parked — and the **rebuild is BLOCKED**: no head exists on this checkout and the labels' location join was wiped (record below) |
 | location blind reads | parked |
 | mining-head calibration | parked |
 
@@ -107,6 +107,63 @@ target did not move.
     selection, scheduling, or any discovery decision. Role detail in `aesthetic_scoring.md`.
   - Its feature extractor is pinned to a **frozen v7** (`ranker/scorer.PENULTIMATE_CKPT`), not
     to `ACTIVE_CKPT`. Head flips do not move it, and the v10 flip did not.
+
+### Ranker rebuild — BLOCKED (2026-08-05)
+
+Matt ordered a rebuild + recertification of `pref_loc_v1` on 2026-08-05, after the emission
+smoke found that `data/ranker/pref_loc_v1/model.npz` **has never existed on this checkout** and
+every emission run has therefore been unranked. The rebuild did not run. It is blocked on inputs,
+not on a failed bar, and **no weight was fit and none was committed**.
+
+**The pre-registered bar, recorded here before any training** so a later fit cannot be tuned
+toward it. The rebuilt head certifies **iff**, under the SAME 3-batch LOBO protocol on the SAME
+batches (`tools/ranker/train_eval_v1.py`: run2 + dive + campaign1, folds = each read held out
+once, winner = max mean-LOBO Spearman, tie-break mean AUC):
+
+1. pooled percentile-normalized Spearman is **positive**, and
+2. its 95% bootstrap CI **excludes the canonical `p_good` baseline** measured on the same folds
+   — not merely excludes 0, which is what `train_eval_v1.main` actually tests today, and
+3. the per-family LOBO Spearman is **positive in every family**.
+
+Criteria 2 and 3 are STRICTER than the code: `train_eval_v1` certifies on (beats canon_pgood on
+mean-LOBO Spearman) ∧ (CI excludes 0), and pref_loc_v1's own per-family table had a family
+reading negative on n=7 at the v0 stage. Anything rebuilt has to clear the stricter form.
+
+**Why it is blocked.** The 379 labels survive; the join that says WHICH LOCATION each label
+belongs to does not.
+
+| input | state |
+|---|---|
+| `labels/{steered_run2,steered_v1_2_dive,campaign1}_blind*_scores.json` | present — 60 + 21 + 298 = **379**, keyed by blind tile (`blind_037.jpg`) |
+| `scratch/{steered_run2_manifest,dive_manifest,campaign1_blind}/manifest_key.json` | **GONE** — tile → location id. Lived in `scratch/`, never tracked, wiped |
+| `data/ranker/**` (v0/v1 `features.npz`, `model.npz`, `metrics.json`, `campaign1/features.npz`) | **GONE** — gitignored, zero commits in history |
+| `data/discovery/steered_run2/morph_admissions.npz` | **GONE** |
+| ledgers, `outcome_feats.npz`, `data/classifier/v7/model_best.pt` (the pinned extractor) | present |
+
+Neither wiped manifest is re-derivable. `steered_run2_manifest.py` needs the missing
+`morph_admissions.npz` (its stratified pick is round-robin over morph clusters), and
+`campaign1_manifest.py` scores every admission with `LocationRanker()` before sampling — i.e.
+reproducing campaign1's 298-tile key requires the very head being rebuilt. Searched and empty:
+git history for `data/ranker*` and `*manifest_key.json`, `docs/`, `data/atlas/`, the artifacts
+root (`C:\Code\fractal-maker-artifacts`), the holding and trash trees.
+
+**The certification record is gone too.** No file in this checkout carries pref_loc_v1's numbers.
+`metrics.json` was the record and was never tracked; what survives is the `scorer.py` header
+("3-batch LOBO meanSp +0.436, certified") and the criteria in `train_eval_v1.py`. Treat any
+quoted pooled Spearman / CI for pref_loc_v1 as unverifiable against this tree.
+
+**What unparks it.** A fresh blind read that writes its manifest key to `data/` — not `scratch/` —
+is the only route, and it re-bases the protocol rather than continuing it: the batches would be
+new, so the bar above is re-registered against them, not inherited. The cheap half is to make the
+next read durable by construction; the expensive half is that 379 labels have to be re-collected
+to get back to where the LOBO protocol stood.
+
+**Scope, unchanged and restated:** the ranker orders within admitted/eligible only — keeper
+ranking, emission-intake ordering, dive-result sorting. Never frontier priority, dive-start,
+scheduling, or any discovery decision (`scorer.py` HARD SCOPE). The emission colorize order was
+changed on 2026-08-05 to a seeded partition round-robin with the ranker ordering only WITHIN a
+partition, so the ranker branch going live later cannot move budget between partitions — it can
+only reorder inside one.
 
 ## Location blind reads
 

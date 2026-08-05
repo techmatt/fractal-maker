@@ -1,10 +1,21 @@
 #!/usr/bin/env python
 """Location preference ranker — scorer entry point.
 
-Deployed head: **pref_loc_v1** (v7+colored:logi, refit on run2+dive+campaign1 = 379 labels,
-3-batch LOBO meanSp +0.436, certified). v1 has the
-same feature blocks (v7+colored) and affine shape as v0, so every consumer is unchanged by the
-flip. pref_loc_v0/model.npz remains on disk for rollback.
+**NO HEAD IS DEPLOYED ON THIS CHECKOUT (2026-08-05).** `data/ranker/` does not exist and has
+never been tracked (`git log --all --full-history -- data/ranker*` is empty), so every consumer
+below has been running unranked: emission's colorize queue, `--intake-floor`, keeper ranking and
+`campaign1_manifest.py` all fall back or fail. The rebuild is BLOCKED, not merely undone — the
+three blind reads' `manifest_key.json` join files lived in `scratch/` and were wiped, so the 379
+labels in `labels/{steered_run2,steered_v1_2_dive,campaign1}_blind_*scores.json` can no longer be
+attached to locations. Full record + the pre-registered certification bar any rebuild must clear:
+`docs/design/deferred_recalibration.md` § "Ranker rebuild — BLOCKED (2026-08-05)". Do not restore
+a weight without re-running that bar.
+
+What the head WAS, as the surviving record of it (these numbers describe an object that is not
+on disk; quoting them as the state of a deployed ranker is the failure this block exists to
+stop): **pref_loc_v1**, v7+colored:logi, refit on run2+dive+campaign1 = 379 labels, 3-batch LOBO
+meanSp +0.436. Same feature blocks and affine shape as v0, so a consumer needs no change if one
+is ever rebuilt.
 
 Loads the deployed linear head (`data/ranker/pref_loc_v1/model.npz`) and maps a joined frozen
 feature record -> a scalar rank score (higher == more likely human-good). The head is a plain
@@ -96,6 +107,21 @@ class RankerScorer:
 
     @classmethod
     def load(cls, path: Path | str = DEFAULT_MODEL):
+        # Legitimate absence is a HARD failure that NAMES the missing artifact
+        # (verification_practice.md §2). `np.load` raises `FileNotFoundError(2, 'No such file
+        # or directory')` whose repr omits the filename, which is how "the deployed head does
+        # not exist" reached the emission log as an unattributed errno for every run — the
+        # driver had to reconstruct the path itself to say which file. Raised as
+        # FileNotFoundError (not SystemExit) on purpose: the consumers that degrade to
+        # unranked catch `Exception`, and SystemExit would turn a documented fallback into a
+        # crash.
+        if not Path(path).exists():
+            raise FileNotFoundError(
+                2, f"location-ranker head missing: {path}. No ranker is deployed on this "
+                   f"checkout and the rebuild is blocked — see the header of this module and "
+                   f"docs/design/deferred_recalibration.md § 'Ranker rebuild — BLOCKED'. "
+                   f"Consumers must degrade to an unranked order, not to a silent one.",
+                str(path))
         z = np.load(path, allow_pickle=True)
         return cls(z["mean"], z["scale"], z["W"], z["b"], z["sets"], z["head"],
                    z["reg"], bool(z["use_prior"]))

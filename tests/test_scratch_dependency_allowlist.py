@@ -40,6 +40,19 @@ of scratch":
   module that owns it — and the durability map (`tools/audit/durability_map.py`) is what
   covers it.
 
+  SECOND UNCOVERED SHAPE, and this one has cost something (2026-08-05). The scan matches a
+  single `str` Constant, so the SEGMENTED join `ROOT / "scratch" / "campaign1_blind" /
+  "manifest_key.json"` is invisible — no constant in it begins with `scratch/`. A probe over
+  the tracked tree found ~214 segmented occurrences, the large majority a module's own family
+  (which the ownership rule would drop anyway); the one that mattered was
+  `tools/ranker/train_eval_v1.py`'s `C1_KEY`, the only READER of campaign-1's blind join.
+  Because only the WRITER (`campaign1_manifest.py`, whose literal is a single string) was
+  visible, the row was filed OUTPUT/wipeable, and the wipe took the join for 298 of the
+  ranker's 379 labels. Extending the scanner to flatten `ast.BinOp` `/` chains is the fix;
+  it is not done here because it lands a few hundred new hits that each need classifying,
+  which is its own pass. Until then, a reader written in the segmented form is NOT protected
+  by this file.
+
 Light lane: `git ls-files` + `ast`. No numpy/torch/GPU.
 
   uv run pytest tests/test_scratch_dependency_allowlist.py
@@ -148,8 +161,16 @@ ALLOWLIST = [
     # These are on the list because the literal is hardcoded rather than routed through
     # paths.scratch() — the form that cannot be found by a refactor. They are NOT wipe
     # hazards, and saying so is the point of the `kind` column.
-    Entry("scratch/campaign1_blind", "tools/atlas/campaign1_manifest.py", OUTPUT,
-          "--out-dir default.", "wipeable"),
+    # NOT an OUTPUT, which is what this line said until 2026-08-05 and what it cost: the
+    # directory holds `manifest_key.json`, the tile->location join for campaign1's 298 blind
+    # labels, and `tools/ranker/train_eval_v1.py` READS it (as `ROOT / "scratch" /
+    # "campaign1_blind" / ...`, the segmented form the scanner below cannot see — so the
+    # consumer never showed up here and the row was classified from the writer alone).
+    Entry("scratch/campaign1_blind", "tools/atlas/campaign1_manifest.py", INPUT,
+          "campaign1_manifest's --out-dir default AND train_eval_v1's C1_KEY: the join "
+          "without which the campaign-1 half of the ranker's 379 labels is unattributable.",
+          "DEAD — already wiped; the labels survive and the join does not, which is why the "
+          "pref_loc_v1 rebuild is blocked (docs/design/deferred_recalibration.md)"),
     Entry("scratch/coarse_gate", "tools/queries/validate_coarse_score.py", OUTPUT,
           "the validator's own scratch dir.", "wipeable"),
     Entry("scratch/deep_centers", "tools/sourcing/emit_deep_pool.py", OUTPUT,

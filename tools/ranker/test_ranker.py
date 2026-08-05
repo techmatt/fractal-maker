@@ -144,3 +144,51 @@ def test_penultimate_scorer_refuses_to_fall_back_when_the_pin_is_missing(monkeyp
     monkeypatch.setattr(rk, "PENULTIMATE_CKPT", tmp_path / "absent.pt")
     with pytest.raises(SystemExit, match="PINNED"):
         rk.penultimate_scorer()
+
+
+# =========================================================================== #
+# The deployed artifact: absent, and loudly so.
+#
+# `data/ranker/` has never existed on this checkout (never tracked; `git log --all
+# --full-history -- data/ranker*` is empty), so the head every consumer names is missing and
+# the rebuild is blocked on wiped join keys — `docs/design/deferred_recalibration.md`
+# § "Ranker rebuild — BLOCKED (2026-08-05)". These do not assert the absence (that would go
+# green the day it is fixed and red for the wrong reason); they pin the two things that must
+# hold either way.
+# =========================================================================== #
+def test_a_deployed_weight_must_carry_its_certification_record():
+    """Both-or-neither. A `model.npz` with no `metrics.json` beside it is a head nobody can
+    say was certified — and pref_loc_v1 was quoted at meanSp +0.436 for weeks while NEITHER
+    file was on disk. The bar is pre-registered in the design doc; the metrics file is the
+    evidence it was cleared. Restoring a weight without one must go red here."""
+    from tools.ranker.scorer import DEFAULT_MODEL
+    d = DEFAULT_MODEL.parent
+    assert DEFAULT_MODEL.exists() == (d / "metrics.json").exists(), (
+        f"{d}: model.npz and metrics.json must appear and disappear together — a weight "
+        f"without its certification record is exactly what the 2026-08-05 rebuild decision "
+        f"forbids (docs/design/deferred_recalibration.md).")
+
+
+def test_loading_a_missing_head_names_the_file_it_could_not_find(tmp_path):
+    """INJECTION, because the real path is currently absent for a different reason: the
+    raised error must NAME the artifact. `np.load`'s bare `FileNotFoundError(2, 'No such file
+    or directory')` reprs without its filename, which is how "no ranker is deployed" reached
+    the emission log as an unattributed errno on every run."""
+    missing = tmp_path / "pref_loc_vX" / "model.npz"
+    with pytest.raises(FileNotFoundError) as ei:
+        RankerScorer.load(missing)
+    assert ei.value.filename == str(missing)
+    assert "model.npz" in str(ei.value) and "BLOCKED" in str(ei.value)
+
+
+def test_a_present_head_still_loads(tmp_path):
+    """The other half of the pair: the guard above must not be the only path through `load`.
+    A synthetic .npz round-trips, so the absence branch cannot pass by making load unusable."""
+    import numpy as _np
+    p = tmp_path / "model.npz"
+    _np.savez(p, mean=_np.zeros(3), scale=_np.ones(3), W=_np.array([1.0, 0.0, -1.0]),
+              b=_np.float64(0.5), sets=_np.array(["v7"]), head=_np.array("logi"),
+              use_prior=_np.array(False), reg=_np.float64(0.1))
+    s = RankerScorer.load(p)
+    assert s.sets == ["v7"] and s.head == "logi"
+    assert s.score_matrix({"v7": _np.array([[1.0, 2.0, 3.0]])})[0] == pytest.approx(-1.5)

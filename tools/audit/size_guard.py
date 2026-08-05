@@ -264,11 +264,14 @@ REGISTRY: list[Entry] = [
           "and `enrich --pool` reads data/guided_descend/run5/pool.jsonl (src/enrich.rs). "
           "The next run repopulates it in-tree.", forward=True),
     Entry("data/ranker/", RELOCATE, ARTIFACTS, "ignored",
-          "frozen-feature location-ranker fits + feature caches; regenerable — logistic "
-          "on committed frozen features. FORWARD: empty today, but tools/ranker/"
-          "train_eval{,_v1}.py write pref_loc_v0/v1 {model,metrics,features}.npz there and "
-          "tools/atlas/campaign1_manifest.py persists data/ranker/campaign1/features.npz; "
-          "the deployed pref_loc_v1 head is read from this path by tools/ranker/scorer.py.",
+          "frozen-feature location-ranker fits + feature caches. NOT regenerable, and this "
+          "line said it was: the frozen features are NOT committed (this path is ignored and "
+          "has zero commits in history) and the blind reads' tile->location manifest keys "
+          "lived in scratch/ and were wiped, so the 379 surviving labels cannot be re-joined "
+          "(docs/design/deferred_recalibration.md, 'Ranker rebuild — BLOCKED'). FORWARD: "
+          "empty today AND no head is deployed, but tools/ranker/train_eval{,_v1}.py write "
+          "pref_loc_v0/v1 {model,metrics,features}.npz there and tools/atlas/"
+          "campaign1_manifest.py persists data/ranker/campaign1/features.npz.",
           forward=True),
     # NOTE — the four `data/v4/`..`data/v7/` build-cache lines that used to sit here are
     # DELETED, not left stale. Those caches are gone and will never exist again (the
