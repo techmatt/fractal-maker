@@ -944,8 +944,12 @@ class EmissionDiversity:
             # cover-all stops the instant pick_location wraps to a 2nd pass: it returns
             # fewest-attempts-first, so an already-attempted row means every location has one.
             if self.cover_all and self.pool.attempts_per_location().get(row["id"], 0) >= 1:
+                # `n_rel` was a bare name that has never existed in this scope: the one
+                # branch that reads it is `--cover-all`'s stop, so the flag documented as
+                # "explicit one-pass semantics" raised NameError the moment it did its job.
                 print(f"[colorize] --cover-all: every location colorized once — stopping "
-                      f"before a 2nd pass (release-eligible={n_rel})", flush=True)
+                      f"before a 2nd pass (release-eligible={acct['release_eligible']})",
+                      flush=True)
                 break
             rec = self.colorize(dt, cm, ranker, heads, row, tracker=tracker)
             if rec is None:

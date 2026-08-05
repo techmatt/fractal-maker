@@ -383,7 +383,13 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         "release_split": getattr(eng, "release_split", {}),
         "palette_ranker": selected[0]["_rec"]["ranker"] if selected else None,
     }
-    (out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    summary_path = out / "summary.json"
+    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    # `scratch/'summary.json'` — a bare name that never existed in this scope. Every artifact
+    # is already on disk by the time this line runs, so the run's outputs were fine and the
+    # driver died on the last statement of its last function: a NameError in an f-string is
+    # invisible until the branch executes, and this branch only executes on a run that got
+    # all the way to a report.
     print(f"[report] {report_path}\n[report] {rel_png}\n[report] {pool_png}\n"
-          f"[report] {scratch/'summary.json'}", flush=True)
+          f"[report] {summary_path}", flush=True)
     return summary
