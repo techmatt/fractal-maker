@@ -80,7 +80,29 @@
       "M1 (every survivor joins the cloud)": 943
     },
     "expectation": "0.25 is a strictly smaller radius than 1.5 x min, so realized admission/tier-2 volume will EXCEED this bracket. The first production run's own telemetry is the read; do not project from here.",
-    "downstream": "every newly-surviving row moves tier 1 -> tier 2 (the tier ranked and sitting draws take best-first) and costs one 640x360 ss2 canonical confirmation render."
+    "downstream": "every newly-surviving row moves tier 1 -> tier 2 (the tier ranked and sitting draws take best-first) and costs one 640x360 ss2 canonical confirmation render.",
+    "measured_after_adoption": {
+      "date": "2026-08-04",
+      "command": "uv run python tools/atlas/precanon_volume_at_adopted_k.py",
+      "what": "the same replay, same fixed candidate stream, re-run at the ADOPTED K=0.25 instead of the run's 1.5. The run's-K rows reproduce the published bracket (2151/1184/943) exactly, which is the harness check.",
+      "survivors_of_2531_dups_at_K0.25": {
+        "M0": 2488,
+        "M2": 1964,
+        "M1": 1745
+      },
+      "as_fraction": {
+        "M0": "98.3%",
+        "M2": "77.6%",
+        "M1": "68.9%"
+      },
+      "canonical_640x360_ss2_renders": {
+        "M0": 2724,
+        "M2": 2200,
+        "M1": 1980,
+        "the run actually made": 236
+      },
+      "reading": "8.4-11.5x this run's canonical render bill, and the precanon skip stops being a saving: it removed 91.5% of checks at the retired rule and removes 1.6-28% at the adopted one. That is the price of the 8-keepers-per-merge the calibration bought, and it lands on render throughput, not on quality. Still a fixed-stream counterfactual (a real run sources a different stream) \u2014 first-run telemetry remains the read."
+    }
   },
   "deferred": {
     "note": "rejection pressure, if it is wanted, belongs at the VISUAL layers \u2014 not at the coordinate gate. The coordinate gate's job is 'same place', and the calibration says it should be answering that conservatively.",
