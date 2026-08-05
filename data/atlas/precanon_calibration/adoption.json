@@ -1,0 +1,98 @@
+{
+  "schema": "precanon_dedup_adoption/1",
+  "date": "2026-08-04",
+  "decision": {
+    "DEDUP_SCALE": "min",
+    "DEDUP_K": 0.25,
+    "rule": "near-dup iff plane distance < 0.25 * min(fw_a, fw_b)",
+    "supersedes": {
+      "DEDUP_SCALE": "max",
+      "DEDUP_K": 1.5,
+      "rule": "near-dup iff plane distance < 1.5 * max(fw_a, fw_b)",
+      "note": "K=1.5 was inherited from the max-scale rule, where it means different geometry; nobody had chosen it for the min scale."
+    },
+    "decided_by": "Matt",
+    "decided_against": "data/atlas/precanon_calibration/verdicts.json",
+    "scope": "the precanon/admission coordinate gate \u2014 production_seeder.DEDUP_K / DEDUP_SCALE, i.e. every default-resolving is_distinct/near_dup/build_cloud call in production_seeder.py and steered_frontier.py. The identity clauses (JULIA_SAME_C_EPS, the phoenix 6-vector) are untouched: a scale/K move can only change the verdict on a pair that already passed identity.",
+    "single_K": "no ratio term \u2014 the per-fw-ratio-band zones overlap, so one K is consistent with all three bands; the per-band spread is driven by the 5 high-d/min SAME outliers, not by the ratio."
+  },
+  "basis": {
+    "population": "135 pairs hand-judged by Matt from run harvest_v2_proving_20260803 (120 dup stratum + 15 nearest-miss anchors); same 14 / distinct 108 / unsure 13; 0 revealed at verdict. Sampled by rank-quantile strata of d/min(fw) inside a 6.0 cap, seed 20260804.",
+    "sweep_on_d_over_min": {
+      "units": "SAME merged (kept work) / DISTINCT falsely merged, over the 135 judged",
+      "K=0.25": "8/0",
+      "K=0.5": "8/13",
+      "K=1.0": "9/26",
+      "K=1.5 (inherited)": "9/35",
+      "K=2.0": "10/47",
+      "reading": "1.5 buys ONE extra correct merge over 0.25 at the price of 35 false ones."
+    },
+    "boundary": {
+      "d/min < 0.25": "8/8 SAME, unanimous",
+      "d/min 0.25-0.6": "15/16 DISTINCT",
+      "d/min > 0.6": "DISTINCT/UNSURE but for 5 scattered SAME (1.51, 3.05, 3.91, 4.41, 4.55) \u2014 residual interleave, not a shoulder",
+      "cross_band_shared_zone": [
+        0.376,
+        0.577
+      ],
+      "per_band_last_SAME_first_DISTINCT": {
+        "le2": [
+          0.577,
+          0.265
+        ],
+        "2-10x": [
+          4.554,
+          0.376
+        ],
+        "gt10x": [
+          3.912,
+          0.255
+        ]
+      }
+    },
+    "headline": "the dup stratum IS what the current max-scale rule already merged: 98 DISTINCT / 9 UNSURE / 13 SAME \u2014 production collapses ~8 pairs Matt would keep per 1 it merges correctly (a rate on the judged sample of the run's 2531 dup pairs, not a count over the run).",
+    "caveats": {
+      "n_same": "14 SAME is what caps every CI in the derivation; AUC(-d/min) 0.758 [0.580, 0.918], and morph-cos (0.847) is NOT distinguishable from it at this n (paired dAUC -0.089 [-0.266, +0.085], p=0.33).",
+      "judgment_noise": "the 5 high-d/min SAME verdicts (incl. the SAME anchor c082_2618e56b at d/min 4.41) were NOT re-examined against their crops; the anchor attention check did not cleanly pass \u2014 10/15 DISTINCT, 4 UNSURE (two of them at d/min 775 and 4238, pairs no rule would merge), 1 SAME. The boundary read does not depend on any of them (all sit far above 0.6).",
+      "sampling": "d/min was the stratification axis, so it is uniformized over the domain and morph-cos is not; only 24 of 135 pairs landed inside d/min < 0.6. This calibrates the standing metric; it does not re-derive which metric to use."
+    },
+    "derivation": {
+      "tool": "tools/atlas/precanon_boundary_derive.py",
+      "readout": "scratch/precanon_calibration/{boundary.json,derive.log} (rebuildable)",
+      "replay": "tools/atlas/precanon_minfw_replay.py (the min-scale direction, on the run's whole 2767-check population)",
+      "fate_sheet": "tools/atlas/build_precanon_fate_sheet.py (the direction: in 28/28 top-tier pairs the displacer is the WIDER frame, median 17.3x)"
+    }
+  },
+  "escape_valve": {
+    "condition": "steady-state telemetry shows tier-2 flooding with near-boundary material",
+    "allowed_range": [
+      0.25,
+      0.376
+    ],
+    "rule": "K may move inside [0.25, 0.376] as a PRICED decision against these verdict rates (each step up buys ~0 extra correct merges and starts costing false ones \u2014 the first DISTINCT sits at 0.255 and the shared zone opens at 0.376). NEVER above 0.376 without a new calibration.",
+    "err": "strict \u2014 when in doubt keep the pair, because a false merge deletes exactly the deep-zoom output guided descent exists to produce."
+  },
+  "volume_caveat": {
+    "bracket_measured_at": "K=1.5 x min(fw) \u2014 NOT at the adopted 0.25",
+    "survivors_of_2531_dups": {
+      "M0 (no survivor joins the cloud)": 2151,
+      "M2 (observed admit-rate interpolation)": 1184,
+      "M1 (every survivor joins the cloud)": 943
+    },
+    "expectation": "0.25 is a strictly smaller radius than 1.5 x min, so realized admission/tier-2 volume will EXCEED this bracket. The first production run's own telemetry is the read; do not project from here.",
+    "downstream": "every newly-surviving row moves tier 1 -> tier 2 (the tier ranked and sitting draws take best-first) and costs one 640x360 ss2 canonical confirmation render."
+  },
+  "deferred": {
+    "note": "rejection pressure, if it is wanted, belongs at the VISUAL layers \u2014 not at the coordinate gate. The coordinate gate's job is 'same place', and the calibration says it should be answering that conservatively.",
+    "layers": [
+      "morph near-dup cut 0.974 (tools/emission/descriptor.py::NEAR_DUP_THRESHOLD, mirrored at tools/atlas/deficit_scheduler.py::NEAR_DUP_THRESHOLD) \u2014 human-checked and UNREFUTED by the derivation: it sits inside Matt's own interleave zone [0.934, 0.986] at ~its 77th percentile, calling SAME 7/14 of his SAME and 7/108 of his DISTINCT. Not obviously mis-set, and not resolvable from a zone this wide.",
+      "the emission-side 2-axis viewport rule (tools/wallpaper/emission_selector.py::_same_viewport: d < K*min(fw) AND max(fw) <= ZOOM_RATIO*min(fw)) \u2014 separate code, its own K, unmoved by this."
+    ]
+  },
+  "code": {
+    "constants": "tools/atlas/production_seeder.py::{DEDUP_K,DEDUP_SCALE}",
+    "retired_constants_kept_named": "tools/atlas/production_seeder.py::{RETIRED_DEDUP_K,RETIRED_DEDUP_SCALE} \u2014 read by the diagnostics that interrogate records made under the old rule, so their output does not silently re-scale.",
+    "pin_test": "tools/atlas/test_production_seeder.py::test_production_dedup_rule_is_the_calibrated_min_quarter",
+    "retirement_entry": "docs/design/retired.md (2026-08-04)"
+  }
+}
