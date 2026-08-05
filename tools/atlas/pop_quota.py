@@ -171,6 +171,35 @@ def _partition_of_render(render: dict) -> str:
     defaults to mandelbrot without earning it goes red. The COUNT is deliberately not pinned —
     it moves the day Matt labels the revisit batches, and that is not a regression.
 
+    RE-VERIFIED FROM THE WRITER SIDE 2026-08-05, because the three reasons above are all
+    READER-side and two of them are weaker than they look: for a pre-extension row the
+    schema could not express `c_re`/`c_im` at all, so their absence states nothing; and the
+    mandelbrot box does not exclude a julia z-viewport (those centre near the origin) or a
+    multibrot c-plane (`WalkFamily::flat_box_default` -> `root_field::degree_bbox`, an
+    origin-centred square of half-width 2^(1/(d-1))*1.2 = ±1.70/1.51/1.43 for d=3/4/5).
+    What the WRITERS say, over all 5,591 token-less render blocks in the corpus:
+      * `flat_generate` (1,043 rows): its writer is `src/generate.rs`, which contains no
+        family, degree, julia or phoenix axis of any kind — mandelbrot by construction, not
+        by default.
+      * guided-descend (3,557 rows): the walker stamps `root_src` = "julia"/"phoenix" in
+        its dynamical modes and "8k"/"flat" on the c-plane. Every token-less row carries
+        "8k", "flat" or null; not one carries a dynamical stamp. So the dynamical planes
+        are excluded by a POSITIVE writer record, not by an absent field.
+      * post-extension batches (541 rows, `anchor_class4_v1` + `revisit_class3_c1..c4`,
+        unlabeled today): their schema CAN express a family and their batches are
+        explicitly mixed-family, so absence there IS the writer's statement. All 9
+        `anchor_class4_v1` rows are `anchor_mandelbrot_*` by image_id, alongside siblings
+        of the same family that DO carry the token — the token is simply optional for the
+        default family.
+      * `mining_v3guided_v1` (450 rows, 9.1% of the 4,935): its writer and its source pool
+        lived in `C:/Code/fractal-generator`, which no longer exists. Nothing writer-side
+        survives for these; they rest on the reader-side reasons alone.
+    THE ONE GAP THE WRITERS LEAVE IS DEGREE: neither writer records `--family`, so no row
+    is writer-attested as d=2 rather than d=3/4/5. That is closed geometrically instead —
+    ~44/49/52% of the d=3/4/5 root boxes lie outside the mandelbrot rectangle, and 0 of
+    5,591 centres do (max |c| = 1.7762). VERDICT: genuinely mandelbrot, not
+    family-ambiguous. The price does not move.
+
     THE PHOENIX SPLIT (2026-08-04) IS RESOLVED HERE, and it is the reason this reads the whole
     render block rather than the token: `phoenix:classic` and `phoenix` share one
     `fractal_type` and are told apart only by the parameter point (`partitions.partition_of_row`).

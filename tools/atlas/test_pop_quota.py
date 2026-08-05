@@ -802,6 +802,40 @@ def test_every_defaulted_row_is_mandelbrot_SHAPED():
         f"(re in [-2.05, 0.75], |im| <= 1.25): {bad_box[:5]}")
 
 
+def test_no_defaulted_row_carries_a_DYNAMICAL_writer_stamp():
+    """The WRITER-side half of the invariant (added 2026-08-05).
+
+    The shape test above is reader-side and cannot exclude a julia z-plane row: those
+    viewports centre near the origin, so they sit inside the mandelbrot box, and for a
+    PRE-extension row the schema had no `c_re`/`c_im` field for them to be missing from.
+    The walker's own stamp does exclude them — `guided_descend.rs` sets `root_src` to
+    "julia"/"phoenix" in its dynamical modes and "8k"/"flat" on the c-plane — so that is
+    what is asserted. `None` is allowed (writers that stamp no root at all: flat_generate,
+    mining_v3guided, the post-extension anchor/revisit batches), because a null is the
+    absence of a claim, not a dynamical one."""
+    C_PLANE = {"8k", "flat", "injected", None}
+    bad, n = [], 0
+    for bd in sorted((ROOT / "data" / "label_corpus" / "batches").iterdir()):
+        f = bd / "images.jsonl"
+        if not f.exists():
+            continue
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            rend = row.get("render") or {}
+            if rend.get("fractal_type") or rend.get("family"):
+                continue
+            n += 1
+            rs = (row.get("provenance") or {}).get("root_src")
+            if rs not in C_PLANE:
+                bad.append((bd.name, row.get("image_id"), rs))
+    assert n > 4000, f"only {n} token-less rows found — is the corpus reachable?"
+    assert not bad, (
+        "token-less render blocks stamped with a DYNAMICAL root by the walker would "
+        f"default to mandelbrot but are julia/phoenix z-plane rows: {bad[:5]}")
+
+
 def test_the_labeled_defaulted_population_still_carries_mandelbrots_currency():
     """The number the price rests on, re-derived rather than quoted. Asserted as a SHARE with
     room to move — labeling adds rows — because pinning 159.2 would make every labeling
