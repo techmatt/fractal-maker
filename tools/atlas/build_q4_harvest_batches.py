@@ -300,7 +300,22 @@ def _render_block(r: dict) -> dict:
     if fam == "phoenix":
         # The phoenix identity is the whole (c, p, z_-1) point; a render block carrying only
         # `c` would rebuild a DIFFERENT phoenix at the same coordinates.
+        #
+        # AND SO WOULD ONE CARRYING ONLY (p, z_-1). A q4 CHECK writes its phoenix `c` into
+        # `julia_c_re`, but an OUTCOME LEDGER row writes it as `phoenix_c_re` and leaves
+        # `julia_c_re` null — so a ledger-sourced phoenix row arrived here with `c_re = None`,
+        # `render_one_flags` omitted `--c`, and the engine rendered its DEFAULT phoenix plane
+        # at the right coordinates: a real-looking image of a different fractal. Same silent
+        # failure `phoenix_params` refuses for `p`, through the other parameter.
+        if render["c_re"] is None and r.get("phoenix_c_re") is not None:
+            render["c_re"], render["c_im"] = r["phoenix_c_re"], r["phoenix_c_im"]
         render.update(phoenix_params(r, _PHOENIX_POOL_CACHE))
+        if render["c_re"] is None or render["c_im"] is None:
+            raise SystemExit(
+                f"phoenix row at ({r.get('cx')}, {r.get('cy')}) has no `c` in any of "
+                f"c_re / julia_c_re / phoenix_c_re. Refusing to render it: without `c` the "
+                f"engine renders the DEFAULT phoenix plane, i.e. a different fractal at the "
+                f"right coordinates.")
     return render
 
 
