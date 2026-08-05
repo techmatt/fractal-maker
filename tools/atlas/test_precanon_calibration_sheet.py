@@ -349,3 +349,23 @@ def test_both_sides_of_a_phoenix_pair_render_the_same_plane():
     for k in ("c_re", "c_im", "p_re", "p_im", "zm1_re", "zm1_im"):
         assert float(ra[k]) == pytest.approx(float(rb_[k])), f"{k} differs across the pair"
     assert (ra["fractal_type"], rb_["fractal_type"]) == ("phoenix", "phoenix")
+
+
+def test_number_keys_judge_and_skip_to_the_next_unjudged_pair():
+    """1/2/3 are the fast pass down the sort: set the verdict, then jump past anything already
+    answered. s/d/u keep the in-order step so re-judging a row does not teleport out of the
+    region being examined. Asserted on the page template because the binding is the feature."""
+    page = S.PAGE.replace(" ", "")
+    for key, verdict in (("1", "same"), ("2", "distinct"), ("3", "unsure")):
+        assert f"k==='{key}'){{setV('{verdict}',true)" in page
+    for key, verdict in (("s", "same"), ("d", "distinct"), ("u", "unsure")):
+        assert f"k==='{key}'){{setV('{verdict}')" in page
+    assert "functionsetV(v,skip)" in page
+    assert "if(skip)nextUn();" in page
+
+
+def test_number_keys_are_visible_on_the_controls():
+    """A keybinding nobody can see is a keybinding nobody uses."""
+    vis = _visible(S.pair_section(_synthetic_pair(), 1.5))
+    for label, key in (("SAME", "1"), ("DISTINCT", "2"), ("UNSURE", "3")):
+        assert f'{label} <span class="kc">{key}</span>' in vis

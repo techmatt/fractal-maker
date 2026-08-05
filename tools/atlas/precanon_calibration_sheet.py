@@ -463,9 +463,11 @@ def pair_section(p: dict, dedup_k: float) -> str:
             f'<div class="imgs">{_card(p, lf)}{_card(p, rt)}</div>'
             f'<div class="ctl">'
             f'<span class="idx"></span>'
-            f'<button class="vb same" data-v="same">SAME</button>'
-            f'<button class="vb distinct" data-v="distinct">DISTINCT</button>'
-            f'<button class="vb unsure" data-v="unsure">UNSURE</button>'
+            f'<button class="vb same" data-v="same">SAME <span class="kc">1</span></button>'
+            f'<button class="vb distinct" data-v="distinct">DISTINCT '
+            f'<span class="kc">2</span></button>'
+            f'<button class="vb unsure" data-v="unsure">UNSURE '
+            f'<span class="kc">3</span></button>'
             f'<span class="rv geom">stratum <b>{escape(p["stratum"])}</b> · '
             f'bin {p["bin"] if p["bin"] is not None else "&mdash;"} · '
             f'd {_num(g["dist"], 4)} · <b>d/min(fw) {_num(g["d_over_min"], 4)}</b> · '
@@ -501,7 +503,9 @@ exported with it, so a revealed verdict stays usable and stays flagged.</p>
 centre, black interior &mdash; so any difference you see is geometry. Left/right is a seeded
 coin flip. This sheet is a dedup-identity instrument &mdash; it is not the label corpus and
 nothing here becomes a label.</p>
-<div class="keys"><b>keys</b> <kbd>s</kbd> same · <kbd>d</kbd> distinct · <kbd>u</kbd> unsure ·
+<div class="keys"><b>keys</b> <kbd>1</kbd> same · <kbd>2</kbd> distinct · <kbd>3</kbd> unsure
+<span class="dim">&mdash; judge and jump to the next unjudged pair</span> &nbsp;·&nbsp;
+<kbd>s</kbd>/<kbd>d</kbd>/<kbd>u</kbd> same as above but step to the next pair in order ·
 <kbd>&uarr;</kbd>/<kbd>&darr;</kbd> move · <kbd>n</kbd> next unjudged · <kbd>r</kbd> reveal</div>
 </header>
 <div id="bar">
@@ -628,6 +632,8 @@ figcaption{padding:8px 10px;font-size:12px;border-top:1px solid var(--line)}
 .ctl{display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap}
 .idx{color:var(--dim);font:11px ui-monospace,Consolas,monospace;min-width:74px}
 .vb{padding:6px 18px;letter-spacing:.04em;font-size:12.5px}
+.kc{opacity:.5;font-size:11px;margin-left:5px}
+.vb.on .kc{opacity:.75}
 .vb.same.on{background:var(--same);border-color:var(--same);color:#fff}
 .vb.distinct.on{background:var(--dist);border-color:var(--dist);color:#06180c}
 .vb.unsure.on{background:var(--uns);border-color:var(--uns);color:#1a1206}
@@ -664,11 +670,15 @@ function counts(){
     n.same+' same / '+n.distinct+' distinct / '+n.unsure+' unsure'+
     (rv?(' &nbsp; · '+rv+' set while revealed'):'');
 }
-function setV(v){
+// `skip`: 1/2/3 jump to the next UNJUDGED pair (the fast pass down the sort, which never
+// re-offers a pair already answered); s/d/u and the buttons step to the next pair in order
+// (the revisit path, so re-judging one row does not teleport you out of the region).
+function setV(v,skip){
   const pid=ORDER[cur];
   V[pid]={verdict:v,revealed:revealed,ts_ms:Date.now()};
   save(); paint(cur); counts();
-  if(cur<ORDER.length-1)go(cur+1);
+  if(skip)nextUn();
+  else if(cur<ORDER.length-1)go(cur+1);
 }
 function go(i){const o=cur;cur=Math.max(0,Math.min(ORDER.length-1,i));paint(o);paint(cur);
   els[cur].scrollIntoView({block:'center',behavior:'smooth'});}
@@ -685,7 +695,10 @@ document.getElementById('btn-next').onclick=nextUn;
 window.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT')return;
   const k=e.key.toLowerCase();
-  if(k==='s'){setV('same');e.preventDefault();}
+  if(k==='1'){setV('same',true);e.preventDefault();}
+  else if(k==='2'){setV('distinct',true);e.preventDefault();}
+  else if(k==='3'){setV('unsure',true);e.preventDefault();}
+  else if(k==='s'){setV('same');e.preventDefault();}
   else if(k==='d'){setV('distinct');e.preventDefault();}
   else if(k==='u'){setV('unsure');e.preventDefault();}
   else if(k==='n'){nextUn();e.preventDefault();}
