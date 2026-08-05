@@ -49,6 +49,78 @@ def test_is_distinct_against_cloud():
 
 
 # --------------------------------------------------------------------------- #
+# radius-scaling mode (staged variant, no call site). DIFFERENTIAL: the two modes are
+# pinned against each other rather than against frozen literals, so the invariant that
+# matters — they can only differ on ASYMMETRIC pairs — is the thing asserted.
+# --------------------------------------------------------------------------- #
+def test_dedup_scale_default_is_production_max():
+    """The staged variant must be inert until something asks for it."""
+    assert ps.DEDUP_SCALE == "max"
+    assert ps.dedup_radius(1.5, 1e-3, 2.0) == 1.5 * 2.0
+    assert ps.dedup_radius(1.5, 1e-3, 2.0, scale="min") == 1.5 * 1e-3
+
+
+def test_dedup_scale_rejects_an_unknown_mode():
+    """Fail-closed: a typo'd mode raises rather than silently taking a branch."""
+    import pytest
+    with pytest.raises(ValueError, match="max.*min"):
+        ps.dedup_radius(1.5, 1.0, 1.0, scale="maximum")
+
+
+def test_symmetric_scale_pairs_decide_identically_under_both_modes():
+    """fw_a == fw_b => min == max, so EVERY clause of the predicate agrees. Swept across
+    scales, distances and both identity kinds so this cannot pass on one lucky pair; the
+    non-vacuity assertion is that the sweep contains both verdicts."""
+    jc = (0.3, -0.1)
+    ph = (0.3, -0.1, 0.5, 0.2, 0.0, 0.0)
+    verdicts = set()
+    for fw in (2.0, 1.0, 1e-3, 1e-9):
+        for frac in (0.0, 0.5, 0.999, 1.0, 1.4999, 1.5, 2.0, 7.0):
+            d = frac * fw
+            for a_c, b_c in ((None, None), (jc, jc), (ph, ph)):
+                mx = ps.near_dup(d, 0.0, fw, 0.0, 0.0, fw, k=1.5, a_c=a_c, b_c=b_c, scale="max")
+                mn = ps.near_dup(d, 0.0, fw, 0.0, 0.0, fw, k=1.5, a_c=a_c, b_c=b_c, scale="min")
+                assert mx is mn, f"symmetric pair disagreed at fw={fw} d={d} ident={a_c}"
+                verdicts.add(mx)
+    assert verdicts == {True, False}       # the sweep actually straddles the cut
+
+
+def test_min_scale_is_strictly_weaker_than_max_on_asymmetric_pairs():
+    """min(fw) can only ever REMOVE collisions (radius shrinks), never add one — and on the
+    run's own shape (a deep zoom inside a wide outcome) it does remove them."""
+    cloud = [{"id": "wide", "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 2.0}]
+    # a deep zoom 0.5 from a wide outcome's centre: inside 1.5*2.0, outside 1.5*1e-3.
+    assert ps.is_distinct(0.5, 0.0, 1e-3, cloud, k=1.5, scale="max") == (False, "wide")
+    assert ps.is_distinct(0.5, 0.0, 1e-3, cloud, k=1.5, scale="min") == (True, None)
+    # implication direction, swept: min fires => max fires. Never the reverse.
+    for a_fw, b_fw in ((2.0, 1e-3), (1e-3, 2.0), (1.0, 0.4), (0.4, 1.0)):
+        for d in (0.0, 1e-4, 0.3, 0.6, 1.2, 1.6, 3.1):
+            if ps.near_dup(d, 0.0, a_fw, 0.0, 0.0, b_fw, k=1.5, scale="min"):
+                assert ps.near_dup(d, 0.0, a_fw, 0.0, 0.0, b_fw, k=1.5, scale="max")
+
+
+def test_mode_never_overrides_the_identity_clauses():
+    """A mode flip may only change the verdict on a pair that already passed identity —
+    distinct-c julias and keyed-vs-c-plane stay non-collidable under both."""
+    for scale in ("max", "min"):
+        assert ps.near_dup(0.0, 0.0, 3.0, 0.0, 0.0, 3.0, k=1.5,
+                           a_c=(0.3, -0.1), b_c=(-0.7, 0.2), scale=scale) is False
+        assert ps.near_dup(0.0, 0.0, 3.0, 0.0, 0.0, 3.0, k=1.5,
+                           a_c=(0.3, -0.1), b_c=None, scale=scale) is False
+
+
+def test_build_cloud_forwards_the_scale():
+    """The cloud builder dedups with the same rule it is handed — a replay that rebuilds a
+    prior cloud under "min" must not silently collapse it under "max"."""
+    rows = [{"id": "wide", "family": "mandelbrot", "decoded_class": 3,
+             "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 2.0},
+            {"id": "deep", "family": "mandelbrot", "decoded_class": 3,
+             "outcome_cx": 0.5, "outcome_cy": 0.0, "outcome_fw": 1e-3}]
+    assert [r["id"] for r in ps.build_cloud(rows, "mandelbrot")] == ["wide"]
+    assert [r["id"] for r in ps.build_cloud(rows, "mandelbrot", scale="min")] == ["wide", "deep"]
+
+
+# --------------------------------------------------------------------------- #
 # seed-c-aware dup key (the julia over-kill fix). A julia row's dup identity keys on
 # BOTH its z-viewport AND its seed c; see docs/design/morphology_dedup.md §5.
 # --------------------------------------------------------------------------- #

@@ -108,6 +108,17 @@ Q3_DENSITY_CAP = 5       # reject a seed if >= this many distinct q3 outcomes li
 MAX_SEED_REDRAWS = 200   # consecutive rejections before declaring global saturation and stopping.
 DEDUP_K = 1.5            # cloud hygiene: near-dup iff plane dist < DEDUP_K * max(A.fw, B.fw)
                          # (one point per distinct q3 place; NOT a cell-saturation cap).
+DEDUP_SCALE = "max"      # WHICH frame sets the dedup radius. "max" is production and the default
+                         # everywhere; "min" is a STAGED VARIANT with no call site — nothing in
+                         # the pipeline selects it, and flipping this constant is not how it gets
+                         # adopted (every entry point below takes `scale=` explicitly instead).
+                         # The two differ only on ASYMMETRIC pairs: under "max" the wider frame
+                         # claims a disc that swallows deep zooms inside it, which is the output
+                         # guided descent exists to produce; under "min" the radius is the finer
+                         # frame's and a deep zoom inside a wide outcome survives. Symmetric pairs
+                         # (equal fw) decide identically under both — pinned in
+                         # test_production_seeder.py. See docs/design/morphology_dedup.md §5 and
+                         # the phoenix/julia z-plane dedup, which is already min-scaled.
 JULIA_SAME_C_EPS = 1e-6  # same-Julia identity epsilon in the c (parameter) plane. A julia row's
                          # dup identity ALSO keys on its seed c: two julia views collide only when
                          # BOTH their z-viewports are near-dup AND their seed c is within this eps.
@@ -549,8 +560,20 @@ def row_seed_c(row):
     return (float(cr), float(row["julia_c_im"]))
 
 
+def dedup_radius(k, a_fw, b_fw, scale=DEDUP_SCALE) -> float:
+    """The dedup disc radius for a pair of frames. `scale` picks WHICH frame sets it:
+    "max" (production) or "min" (the staged variant). Sole arithmetic difference between
+    the two modes — every other clause of `near_dup` is shared."""
+    a_fw, b_fw = float(a_fw), float(b_fw)
+    if scale == "max":
+        return k * max(a_fw, b_fw)
+    if scale == "min":
+        return k * min(a_fw, b_fw)
+    raise ValueError(f"dedup scale must be 'max' or 'min', got {scale!r}")
+
+
 def near_dup(a_cx, a_cy, a_fw, b_cx, b_cy, b_fw, k=DEDUP_K,
-             a_c=None, b_c=None, c_eps=JULIA_SAME_C_EPS) -> bool:
+             a_c=None, b_c=None, c_eps=JULIA_SAME_C_EPS, scale=DEDUP_SCALE) -> bool:
     """fw-relative viewport dedup, seed-c AWARE. A near-dup of B iff the two z-viewports are
     near (plane distance < k * max(A.fw, B.fw)) AND they belong to the same Julia set.
 
@@ -563,7 +586,11 @@ def near_dup(a_cx, a_cy, a_fw, b_cx, b_cy, b_fw, k=DEDUP_K,
     None); differently-keyed families (2-D vs 6-D, which never co-occur in one partition)
     never collide. c-plane pairs (both None) fall straight through to the original z-only
     test — byte-identical to the pre-fix behaviour.
-    max(fw) => two outcomes at ~same center but different zoom are the SAME place."""
+    max(fw) => two outcomes at ~same center but different zoom are the SAME place.
+
+    `scale` (DEDUP_SCALE, default "max") selects which frame sets the radius; see
+    `dedup_radius`. The identity clauses above are untouched by it, so a mode flip can only
+    ever change the verdict on a pair that already passed them."""
     if a_c is not None or b_c is not None:
         if a_c is None or b_c is None:
             return False                                   # keyed vs c-plane: never a dup
@@ -575,18 +602,19 @@ def near_dup(a_cx, a_cy, a_fw, b_cx, b_cy, b_fw, k=DEDUP_K,
     # rows serialize outcome_cx/cy as strings) — coerce like the fw's below, so a mixed prior
     # cloud can't crash the plane-distance. Byte-identical for numeric inputs.
     d = float(np.hypot(float(a_cx) - float(b_cx), float(a_cy) - float(b_cy)))
-    return d < k * max(float(a_fw), float(b_fw))
+    return d < dedup_radius(k, a_fw, b_fw, scale)
 
 
-def is_distinct(cx, cy, fw, cloud, k=DEDUP_K, c=None):
+def is_distinct(cx, cy, fw, cloud, k=DEDUP_K, c=None, scale=DEDUP_SCALE):
     """Distinctness vs the q3 outcome cloud. Returns (distinct: bool, dup_of: id|None).
     `cloud` = iterable of dicts with outcome_cx/outcome_cy/outcome_fw/id (+ the family's
     identity fields: julia_c_re/im, or phoenix_c/p/zm1_*). `c` is the CANDIDATE's identity
     vector (the julia seed c 2-vector, the phoenix (c,p,z_{-1}) 6-vector, or None for
-    c-plane); each cloud row's own identity is read via `row_ident` (see near_dup's gate)."""
+    c-plane); each cloud row's own identity is read via `row_ident` (see near_dup's gate).
+    `scale` is forwarded to `near_dup` (DEDUP_SCALE default = production "max")."""
     for h in cloud:
         if near_dup(cx, cy, fw, h["outcome_cx"], h["outcome_cy"], h["outcome_fw"], k,
-                    a_c=c, b_c=row_ident(h)):
+                    a_c=c, b_c=row_ident(h), scale=scale):
             return False, h["id"]
     return True, None
 
@@ -693,7 +721,7 @@ def is_q3plus(row: dict) -> bool:
     return (row.get("decoded_class") or 0) >= 3
 
 
-def build_cloud(rows: list[dict], family: str) -> list[dict]:
+def build_cloud(rows: list[dict], family: str, scale=DEDUP_SCALE) -> list[dict]:
     """One position per distinct q3+ place *within the active `family` partition*:
     row family == `family` && guard_pass && decoded_class >= 3, deduped by 1.5*max(fw).
     Order-stable: the earliest distinct row wins a dedup cluster, matching the live-harvest
@@ -704,7 +732,10 @@ def build_cloud(rows: list[dict], family: str) -> list[dict]:
     Rows missing `family` default to "mandelbrot" (all pre-grammar rows are Mandelbrot),
     so the existing Mandelbrot cloud survives with no reset. Rows predating the
     decoded_class field (no historical backfill — see the module note) lack decoded_class
-    and are simply excluded."""
+    and are simply excluded.
+
+    `scale` is forwarded to `is_distinct` so a replay can rebuild a prior cloud under the
+    same radius rule it is testing; production callers pass nothing and get "max"."""
     cloud: list[dict] = []
     for r in rows:
         if r.get("family", "mandelbrot") != family:
@@ -714,7 +745,7 @@ def build_cloud(rows: list[dict], family: str) -> list[dict]:
             # outcomes are distinct PLACES (the over-kill fix — z-only dedup collapsed them
             # into one cloud point). Julia keys on seed c; phoenix on (c,p,z_{-1}).
             distinct, _ = is_distinct(r["outcome_cx"], r["outcome_cy"], r["outcome_fw"],
-                                      cloud, DEDUP_K, c=row_ident(r))
+                                      cloud, DEDUP_K, c=row_ident(r), scale=scale)
             if distinct:
                 cloud.append(r)
     return cloud
