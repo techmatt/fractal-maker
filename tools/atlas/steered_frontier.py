@@ -421,6 +421,45 @@ PARTITION_LOW_WATER = None   # a partition below this many frontier nodes is STA
 ROOT_REFILL_COOLDOWN = 10    # batches a family must wait between targeted refills
 ROOT_REFILL_SHARE = 0.25     # in-loop root-draw seconds may not exceed this share of loop wall
 
+# --- the pop-quota cost-to-mine SEED table (`--quota-prices`), and why it has a DEFAULT.
+#
+# `--quota-prices` used to default to None and the loader used to be `if path and
+# path.exists()`, so BOTH ways of getting no table — not passing the flag, and passing a path
+# that is not there — landed on the same silent flat 3.0. A flat seed asserts every partition
+# costs the same, which the first steady-state run measured to be wrong by 32x, and it does so
+# invisibly: nothing in the run record distinguishes "seeded flat on purpose" from "the file
+# moved". So the default is the artifact, and its ABSENCE IS FATAL (`load_quota_prices`).
+#
+# The REGULARIZED table and not the measured one: the measured prices come from one 60-minute
+# all-warm-up run, and Matt's 2026-08-05 decision is that allocation is biased toward them
+# without being governed by them (`regularize_quota_prices.py`, alpha=0.7). The measured table
+# stays on disk as the evidence and is what the regularized one is re-derived from.
+QUOTA_PRICES_DEFAULT_REL = "data/atlas/quota_prices_regularized_v1.json"
+QUOTA_PRICES_DEFAULT = ROOT / QUOTA_PRICES_DEFAULT_REL
+
+
+def load_quota_prices(path=None) -> dict:
+    """The `--quota-prices` config for `pop_quota.CostToMine`, or RAISE naming the file.
+
+    Absence-INTOLERANT, in both directions and deliberately (`verification_practice.md` §2 —
+    an absence-tolerant load un-guards exactly when its subject goes missing). A missing
+    artifact silently becomes `CostToMine`'s flat `SEED_PRICE`, and a flat seed is not a
+    degraded version of a priced one: it is a different allocation policy, asserting a 1x
+    spread over prices measured at 32x, and it leaves no trace in the run record. `None`
+    resolves to the default artifact rather than to the flat seed for the same reason."""
+    p = Path(path) if path else QUOTA_PRICES_DEFAULT
+    if not p.exists():
+        raise SystemExit(
+            f"--quota-prices table missing: {p}\n"
+            f"The pop quota will NOT fall back to the flat seed price "
+            f"({pquota.SEED_PRICE} min/unit for every partition) — that is a different "
+            f"allocation policy, not a degraded one, and it would run unrecorded.\n"
+            f"Rebuild it:\n"
+            f"    uv run python tools/atlas/regularize_quota_prices.py --write\n"
+            f"(which reads the measured table `data/atlas/quota_prices_v1.json`; regenerate "
+            f"THAT from a finished run with tools/atlas/derive_quota_prices.py)")
+    return json.loads(p.read_text(encoding="utf-8"))
+
 # Steered production walk config (mirror of production_seeder; keeps the gates identical).
 EXPAND_FLAGS = [
     "--node-width", str(ps.NODE_WIDTH), "--sigma-band", ps.SIGMA_BAND,
@@ -1416,10 +1455,11 @@ class SteeredFrontier:
             if self.scheduler is not None:
                 raise SystemExit("--pop-quota and --scheduler both name the pop; pick one "
                                  "(--pop-quota is the harvest-v2 allocator)")
-            pcfg = {}
-            pp = getattr(args, "quota_prices", None)
-            if pp and Path(pp).exists():
-                pcfg = json.loads(Path(pp).read_text(encoding="utf-8"))
+            # Loud on absence, and `None` means THE DEFAULT ARTIFACT, never the flat seed —
+            # see `load_quota_prices`.
+            pcfg = load_quota_prices(getattr(args, "quota_prices", None))
+            self.quota_prices_path = str(
+                Path(getattr(args, "quota_prices", None) or QUOTA_PRICES_DEFAULT))
             self.quota = pquota.PopQuota(
                 self.partitions, self.run_dir,
                 floor=float(getattr(args, "quota_floor", pquota.FLOOR_FRAC)),
@@ -3489,6 +3529,10 @@ class SteeredFrontier:
                                                     for p, v in q.deficit.items()},
                 intended=q.allocation().summary(),
                 seed_prices=q.cost.summary()["seed"],
+                # WHICH table the seed came from. The prices alone cannot say whether they
+                # were measured, regularized or flat, and those are three different
+                # allocation policies that read identically as nine floats.
+                seed_price_table=self.quota_prices_path,
                 price="measured active-minutes per currency unit mined, EMA %.2f, clamped to "
                       "[seed/%.0f, seed*%.0f]" % (q.cost.ema, q.cost.clamp, q.cost.clamp),
                 floor_rationale=(
@@ -4595,7 +4639,10 @@ def main():
                          "allocated above it gets nothing extra.")
     ap.add_argument("--quota-prices", type=str, default=None,
                     help="seed cost-to-mine prices + EMA/clamp/cap config for --pop-quota "
-                         "(JSON; keys: prices, seed_price, price_ema, price_clamp, cap_minutes)")
+                         "(JSON; keys: prices, seed_price, price_ema, price_clamp, "
+                         f"cap_minutes). DEFAULT: {QUOTA_PRICES_DEFAULT_REL} (the "
+                         "median-shrunk seed). A MISSING table is fatal — the flat seed "
+                         "price is never a silent fallback.")
     # --- dive mode ---
     ap.add_argument("--dive", action="store_true",
                     help="single-track descent off a completed run's admissions (uses dive_state.json)")

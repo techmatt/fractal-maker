@@ -198,6 +198,27 @@ effective-intent mass on EMPTY queues was **0.000** (arm B: 0.457), so unlike ar
 is **tracking error, not starvation** — the pop was choosing badly among partitions it could
 all serve, which is the failure a seeded price table addresses and a supply fix does not.
 
+**The seed that production actually runs is the REGULARIZED one, not the measured one**
+(Matt, 2026-08-05). The measured prices come from a single 60-minute run in which every
+partition was warming up at once, so the levels are likely deflated and there is no reason to
+think they are deflated evenly — and allocation share is `deficit / price`, so seeding the raw
+table would hand the first pops a 32× spread asserted on one warm-up hour, the mirror of the
+flat 3.0 asserting 1× on nothing. `tools/atlas/regularize_quota_prices.py` shrinks each
+measured price geometrically toward the measured **median** (0.139 min/unit), `seed_p =
+exp(α·ln p + (1−α)·ln median)` at **α = 0.7**, writing `data/atlas/quota_prices_regularized_v1
+.json`; the measured table is read-only evidence and is never rewritten. Shrinkage rather than
+a magnitude band for the reason the band was rejected above: a clamp reports the bound and
+discards the measurement, where shrinkage keeps the order and α of every log-distance, so the
+table's spread lands at `S^α` — **32.2× → 11.4×** (`multibrot5` 2.51 → 1.05, `julia:multibrot3`
+0.078 → 0.093). It applies to the **seed only**: `CostToMine` reads `prices` once into
+`self.seed`, and the in-run batch-aggregated EMA still moves off it within a few windows.
+That artifact is now the **default** for `--quota-prices`, and its absence is **fatal** —
+`load_quota_prices` refuses to fall back to the flat seed, because a flat seed is a different
+allocation policy rather than a degraded one and it left no trace in any run record. The run
+config stamps `pop_quota.seed_price_table` so the three policies (measured / regularized /
+flat) are distinguishable afterwards, which as nine bare floats they are not.
+`[code: tools/atlas/test_regularize_quota_prices.py]`
+
 **The julia twins are open.** Twin-queue non-empty fractions jm3/jm4/jm5 = **44.7 / 67.1 /
 39.5%**, against arm B's 8.1 / 2.7 / 2.4% — the hook-spacing reconciliation (0.20 → the 0.032
 pool floor) did what its commit claimed.
