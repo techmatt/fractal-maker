@@ -1283,3 +1283,136 @@ def test_the_run_config_records_the_pools_MEASURED_spacing_not_null():
                                  _julia_pool_cache=None)
     sf.SteeredFrontier.load_julia_supply_pool(stub)
     assert stub._julia_pool_min_dc is not None and stub._julia_pool_min_dc > 0
+
+
+# =========================================================================== #
+# the dive leg: a plan that stays readable at whatever length the budget allows
+#
+# Every one of these is an INJECTION test: build a plan, truncate it where a budget would,
+# and assert on what survives. The 2026-08-05 dive stopped at 7 of 28 and its first four
+# entries were controls; the scheduler-OFF shape is worse still (20 top, then 8 control), so
+# the population these run against is the real failure, not a hypothetical one.
+# =========================================================================== #
+def _plan(n_top, n_ctrl, parts=None):
+    """A synthetic plan in the shape `_build_dive_plan` produces: top block, then control."""
+    parts = parts or (lambda i: "mandelbrot")
+    return ([dict(dive_id=f"dive_{i:03d}", start_group="top", partition=parts(i))
+             for i in range(n_top)]
+            + [dict(dive_id=f"dive_{n_top+i:03d}", start_group="control",
+                    partition=parts(n_top + i)) for i in range(n_ctrl)])
+
+
+@pytest.mark.parametrize("cut", [2, 3, 4, 5, 7, 10, 14, 20, 27, 28])
+def test_a_truncated_dive_plan_keeps_BOTH_ARMS_at_every_cut_point(cut):
+    """THE property. A budget cut anywhere (past the first entry, where two arms cannot both
+    fit) leaves a usable top-vs-control contrast."""
+    out = sf.interleave_dive_arms(_plan(20, 8))
+    got = collections.Counter(e["start_group"] for e in out[:cut])
+    assert got["top"] > 0 and got["control"] > 0, f"cut {cut} lost an arm: {got}"
+
+
+def test_the_UNFIXED_block_order_loses_an_arm_at_the_length_the_run_actually_reached():
+    """The control this test needs to be worth anything: the same truncation on the block
+    plan. 20 top then 8 control, cut at the 7 the real dive reached, is zero controls."""
+    got = collections.Counter(e["start_group"] for e in _plan(20, 8)[:7])
+    assert got["control"] == 0 and got["top"] == 7
+
+
+@pytest.mark.parametrize("n_top,n_ctrl", [(20, 8), (8, 20), (3, 3), (28, 1), (1, 28), (2, 5)])
+def test_every_arm_stays_within_1_of_its_proportional_share_in_EVERY_prefix(n_top, n_ctrl):
+    """The apportionment bound itself, asserted on the built order rather than trusted — the
+    same +/-1-in-every-prefix statement the label sheet's stratified deal makes."""
+    out = sf.interleave_dive_arms(_plan(n_top, n_ctrl))
+    n = {"top": n_top, "control": n_ctrl}
+    N = n_top + n_ctrl
+    seen = collections.Counter()
+    for L, e in enumerate(out, start=1):
+        seen[e["start_group"]] += 1
+        for arm, cnt in n.items():
+            assert abs(seen[arm] - L * cnt / N) <= 1.0, (arm, L, dict(seen))
+
+
+def test_interleaving_permutes_and_never_drops_or_duplicates_an_entry():
+    plan = _plan(20, 8)
+    out = sf.interleave_dive_arms(plan)
+    assert len(out) == len(plan)
+    assert sorted(e["dive_id"] for e in out) == sorted(e["dive_id"] for e in plan)
+
+
+def test_the_order_WITHIN_an_arm_is_preserved_so_the_deficit_sort_still_holds():
+    """Item 8's deficit ordering is applied before this and must survive it: interleaving
+    chooses WHICH arm supplies the next entry, never which entry inside that arm."""
+    plan = _plan(20, 8, parts=lambda i: f"p{i}")
+    out = sf.interleave_dive_arms(plan)
+    for arm in ("top", "control"):
+        before = [e["dive_id"] for e in plan if e["start_group"] == arm]
+        after = [e["dive_id"] for e in out if e["start_group"] == arm]
+        assert before == after
+
+
+def test_a_single_arm_plan_is_returned_UNCHANGED():
+    """--n-control 0 is a legitimate plan with nothing to interleave; it must not be
+    reordered, and it must not raise."""
+    plan = _plan(5, 0)
+    assert sf.interleave_dive_arms(plan) == plan
+    assert sf.interleave_dive_arms([]) == []
+
+
+def test_the_plan_builder_ACTUALLY_calls_the_interleave_unconditionally():
+    """Not behind `if self.scheduler`: the scheduler-OFF plan is the WORSE of the two shapes
+    (a pure top-then-control block), so a fix that only ran under the scheduler would leave
+    the failing case failing."""
+    import inspect
+    src = inspect.getsource(sf.SteeredFrontier._build_dive_plan)
+    assert "return interleave_dive_arms(plan)" in src
+    body = src[src.index("if self.scheduler is not None"):]
+    assert body.count("interleave_dive_arms") == 1
+    assert body.index("interleave_dive_arms") > body.index("plan.sort("), \
+        "the arm interleave must run AFTER the deficit sort, not instead of it"
+
+
+def test_dive_mode_writes_its_run_config_BEFORE_the_first_dive():
+    """Pre-registration parity with the crawl path. `run_dive` wrote no run_config.json at
+    all, so a dive's tau_h, checkpoint, interior gate and plan shape lived only in the
+    append-as-you-go `dive_state.json` and a hand-written launch.txt."""
+    import inspect
+    src = inspect.getsource(sf.SteeredFrontier.run_dive)
+    assert "self.write_run_config()" in src
+    assert src.index("self.write_run_config()") < src.index("while done_idx < len(plan)"), \
+        "the config must be written before the first dive runs, not after"
+    # ...and only on the FRESH branch: a resume must not overwrite what was pre-registered.
+    fresh = src[src.index("else:"):src.index("while done_idx < len(plan)")]
+    assert "self.write_run_config()" in fresh
+
+
+def test_the_run_config_records_the_dive_block_and_the_wall_budget_limitation():
+    import inspect
+    src = inspect.getsource(sf.SteeredFrontier.write_run_config)
+    assert 'cfg["dive"]' in src and "if self.dive:" in src
+    assert "wall_budget" in src[src.index('cfg["dive"]'):], \
+        "the dive config must record that --wall-budget does not reach this path"
+
+
+@pytest.mark.parametrize("wb", [0.1, 15.0, 69.0])
+def test_wall_budget_with_dive_is_REFUSED_not_silently_ignored(wb):
+    """A flag that does nothing is worse than an absent feature: the reason anyone passes
+    --wall-budget is to bound a run they are not watching."""
+    with pytest.raises(SystemExit) as e:
+        sf.check_wall_budget_supported(True, wb)
+    assert "NO EFFECT" in str(e.value) and "--budget" in str(e.value)
+
+
+@pytest.mark.parametrize("dive,wb", [(False, 69.0), (False, 0.0), (True, 0.0), (True, None)])
+def test_the_wall_budget_guard_lets_a_CRAWL_run_and_a_ZERO_flag_through(dive, wb):
+    """The other half. A gate that refuses everything passes the test above and is useless:
+    the crawl path is where the flag works, and the 2026-08-05 dive's own invocation (dive,
+    no flag) must still be legal."""
+    sf.check_wall_budget_supported(dive, wb)
+
+
+def test_the_guard_is_ON_THE_CONSTRUCTION_PATH_not_only_in_main():
+    """Every entry point builds a `SteeredFrontier`; a check that lived only in `main` would
+    be bypassed by anything that constructs one directly."""
+    import inspect
+    assert "check_wall_budget_supported(self.dive" in \
+        inspect.getsource(sf.SteeredFrontier.__init__)

@@ -785,6 +785,71 @@ def novelty_penalty(cos_max: float, lambda_m: float, lo: float, hi: float) -> fl
     return lambda_m * min(max(frac, 0.0), 1.0)
 
 
+def check_wall_budget_supported(dive: bool, wall_budget_min) -> None:
+    """`--wall-budget` DOES NOT REACH DIVE MODE, and this refuses rather than no-ops.
+
+    `run_dive` has its own loop and checks only the active budget and the STOP sentinel —
+    `wall_elapsed_s`, `over_wall_budget` and the batch-boundary check all live on the crawl
+    path. So `--wall-budget --dive` is a flag that silently does nothing, and the 2026-08-05
+    dive's launch record had to carry a hand-written note saying so; a launch record is not a
+    place a guarantee can live.
+
+    REFUSED rather than warned, because the reason anyone passes it is to bound a run they are
+    not watching, and a warning scrolled past in a background log bounds nothing (`CLAUDE.md`,
+    "a backstop longer than the job's budget is not a backstop"). The feature is deliberately
+    NOT implemented here — this records the limitation at the flag."""
+    if dive and float(wall_budget_min or 0.0) > 0.0:
+        raise SystemExit(
+            "--wall-budget has NO EFFECT in --dive mode: run_dive() checks only the active "
+            "budget (--budget) and the STOP sentinel, so the cap would silently never fire. "
+            "Drop the flag and bound the dive with --budget, or stop it with "
+            "`touch <run_dir>/STOP`.")
+
+
+def interleave_dive_arms(plan: list) -> list:
+    """Re-sequence a dive plan so EVERY PREFIX carries both arms in proportion.
+
+    A dive plan is two arms — `top` (the source admissions with the highest canonical p_good)
+    and `control` (drawn from the same admissions regardless of score) — and the ONLY thing it
+    measures is the contrast between them. Every dive plan so far ordered the arms in blocks:
+    built top-then-control, and then (scheduler ON) sorted by partition deficit, which is an
+    arm-blind key that happened to concentrate one arm at the front. The 2026-08-05 dive stopped
+    at 7 of 28 on its active budget, and its first FOUR entries were controls; a plan built
+    without the scheduler stops even worse, because 20 top followed by 8 control truncated at 7
+    yields zero controls. A truncating budget is the normal case, not the exception — the run
+    that produced this plan hit it — so the plan has to be readable at whatever length it
+    reaches, not only at N.
+
+    GREEDY LARGEST-DEFICIT (Webster/Sainte-Laguë) over the ARM axis, which is the same
+    apportionment-sequencing rule the label sheet uses over (source x family): at position L the
+    next entry comes from the arm furthest below its proportional share L*n_a/N, so each arm is
+    within 1 of its share in EVERY prefix. WITHIN an arm the incoming order is preserved
+    untouched, so the deficit sort above still does exactly what item 8 asked of it — deficit
+    families first, within each arm.
+
+    Unconditional, and that is the point: the scheduler-OFF plan is the worse of the two and had
+    no re-ordering at all. Ties break toward the LARGER arm and then by name, so the sequence is
+    a pure function of the plan."""
+    arms: dict = {}
+    for e in plan:
+        arms.setdefault(e["start_group"], []).append(e)
+    keys = sorted(arms)
+    n = {k: len(arms[k]) for k in keys}
+    N = sum(n.values())
+    if len(keys) < 2 or N == 0:
+        return list(plan)
+    taken = {k: 0 for k in keys}
+    cursor = {k: 0 for k in keys}
+    out = []
+    for L in range(1, N + 1):
+        k = max((k for k in keys if cursor[k] < n[k]),
+                key=lambda k: (L * n[k] / N - taken[k], n[k], k))
+        out.append(arms[k][cursor[k]])
+        cursor[k] += 1
+        taken[k] += 1
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Run-scoped morph memory — CLIP embeddings (library recipe) of the looks a candidate's
 # novelty is measured against. cos_max vs this set is the novelty signal. Embeddings are
@@ -1181,6 +1246,18 @@ class SteeredFrontier:
                                                  fields=self.man_fields,
                                                  fit_model=fit_model)
         # Wall-clock cap (0 = off). Distinct from --budget: see the check in run().
+        #
+        # AND IT DOES NOT REACH DIVE MODE. `run_dive` has its own loop and checks only the
+        # active budget and the STOP sentinel — `wall_elapsed_s`, `over_wall_budget` and the
+        # batch-boundary check all live on the crawl path. So `--wall-budget --dive` is a flag
+        # that silently does nothing, which is worse than an absent feature: the 2026-08-05
+        # dive's launch record had to carry a hand-written note saying the flag is a no-op,
+        # and a launch record is not a place a guarantee can live. REFUSED rather than warned,
+        # because the reason anyone passes it is to bound a run they are not watching, and a
+        # warning scrolled past in a background log bounds nothing (`CLAUDE.md`, "a backstop
+        # longer than the job's budget is not a backstop"). The feature is deliberately NOT
+        # added here — this records the limitation at the flag rather than implementing it.
+        check_wall_budget_supported(self.dive, getattr(args, "wall_budget", 0.0))
         self.wall_budget_s = float(getattr(args, "wall_budget", 0.0) or 0.0) * 60.0
         self.wall_s_base = 0.0             # wall seconds spent by PREVIOUS sessions
         self._session_t0 = None
@@ -3299,7 +3376,10 @@ class SteeredFrontier:
         # config, which is precisely the invisibility the stamp exists to end. Cached, so the
         # pre-loop draw pays nothing; and it moves the floor REFUSAL ahead of batch 1 rather
         # than into the middle of the first root draw.
-        if self.julia_seed_pool_path is not None:
+        # ...but NOT on the dive path. A dive spawns no roots and never injects the pool, so
+        # loading it there buys a stamp of something the run does not use and adds a refusal
+        # (the floor check raises) to a run the pool cannot affect.
+        if self.julia_seed_pool_path is not None and not self.dive:
             try:
                 self.load_julia_supply_pool()
             except SystemExit:
@@ -3311,6 +3391,7 @@ class SteeredFrontier:
                       flush=True)
         cfg = dict(
             run_ts=self.run_dir.name, started=time.strftime("%FT%T"),
+            mode="dive" if self.dive else "steered",
             scorer_version=ps.SCORER_VERSION, ckpt=ACTIVE_CKPT,
             families=self.families, partitions=self.partitions,
             family_weights=self.family_weights,
@@ -3342,8 +3423,9 @@ class SteeredFrontier:
                 on=self.trig_on, k=[str(k) for k in self.trig_ks],
                 max_per_batch=self.trig_max_per_batch, nbh_m=self.trig_nbh_m,
                 nbh_probes=self.trig_nbh_probes, period_max=self.trig_period_max),
-            julia_seed_pool=(str(self.julia_seed_pool_path)
-                             if self.julia_seed_pool_path else None),
+            julia_seed_pool=(None if self.dive else
+                             (str(self.julia_seed_pool_path)
+                              if self.julia_seed_pool_path else None)),
             # The c-spacing this run's julia supply ACTUALLY carries — derived from the pool
             # file, not restated from the constant it is checked against. The floor was
             # invisible in every prior run config (only the path was stamped, and the path
@@ -3352,8 +3434,10 @@ class SteeredFrontier:
             julia_seed_pool_cspacing=dict(
                 floor=srt.CSPACING_FLOOR,
                 pool_min_dc=getattr(self, "_julia_pool_min_dc", None),
-                verified_at_load=self.julia_seed_pool_path is not None,
-                explicit=self.julia_pool_explicit),
+                verified_at_load=(self.julia_seed_pool_path is not None and not self.dive),
+                explicit=self.julia_pool_explicit,
+                **({"n_a": "dive mode spawns no roots and injects no pool"}
+                   if self.dive else {})),
             phoenix_seed_pool=(str(self.phoenix_seed_pool_path)
                                if self.phoenix_seed_pool_path else None),
             prereg=self.PREREG,
@@ -3362,6 +3446,27 @@ class SteeredFrontier:
             # diffs against the labels is the same table the code routes on.
             supply_routing=srt.summary(),
         )
+        if self.dive:
+            # PRE-REGISTRATION PARITY WITH THE CRAWL PATH. `run_dive` used to write no
+            # run_config.json at all, so a dive's tau_h, scorer version, checkpoint, interior
+            # gate and the shape of its own plan existed only in `dive_state.json` (an
+            # append-as-you-go checkpoint) and in a hand-written launch.txt. What a run
+            # PRE-REGISTERED and what it later checkpointed are two different records, and only
+            # the first is evidence about the decision.
+            cfg["dive"] = dict(
+                dive_source=str(self.dive_source),
+                target_depth=self.dive_target_depth, min_fw=self.dive_min_fw,
+                n_top=int(self.args.n_top), n_control=int(self.args.n_control),
+                child_rule="cheap p_good argmax with a Gumbel tie-break at T=%g" % DIVE_NOISE_T,
+                source_rule=("top-N source admissions by canonical p_good + M controls drawn "
+                             "at random from the REST of the same admissions"),
+                order_rule=("deficit sort (scheduler ON) WITHIN each arm, then "
+                            "apportionment-sequenced across arms so every prefix carries both "
+                            "to +/-1 — see interleave_dive_arms"),
+                wall_budget="NOT SUPPORTED in dive mode; --wall-budget is refused, --budget "
+                            "and the STOP sentinel are the only bounds",
+                budget_min=self.budget_s / 60.0,
+            )
         if self.quota is not None:
             # THE ALLOCATION IS ANNOUNCED AT DECISION TIME, NEVER DISCOVERED IN A READOUT
             # (`measurement_practice.md`). The intended mix, the currency it was computed
@@ -3608,7 +3713,7 @@ class SteeredFrontier:
         if self.scheduler is not None:
             dfs = self.scheduler.deficits()
             plan.sort(key=lambda e: -dfs.get(e["partition"], 0.0))
-        return plan
+        return interleave_dive_arms(plan)
 
     def one_dive(self, e) -> dict:
         """Descend a single track from plan entry `e`. Returns the dive record."""
@@ -3691,7 +3796,11 @@ class SteeredFrontier:
             print(f"[dive-fresh] {len(plan)} dives ({len(plan)-ng} top + {ng} control) off "
                   f"{self.dive_source.name}; target_depth={self.dive_target_depth} "
                   f"min_fw={self.dive_min_fw:g}", flush=True)
+            print(f"[dive-order] arms apportionment-sequenced: "
+                  f"{[e['start_group'][0] for e in plan]}", flush=True)
             print(f"[tau_h] {self.tau_h}", flush=True)
+            # BEFORE dive 1, exactly as the crawl writes it before batch 1.
+            self.write_run_config()
             self.save_dive_state(plan, done_idx)
 
         while done_idx < len(plan):
@@ -4336,7 +4445,9 @@ def main():
                          "replenishment-heavy run outruns its active budget in real time "
                          "without limit. Accumulates across resumes. Checked at the same "
                          "batch boundary, under the same never-start-a-unit-that-cannot-"
-                         "finish rule.")
+                         "finish rule. CRAWL MODE ONLY: run_dive() has its own loop and "
+                         "checks only --budget and the STOP sentinel, so passing this with "
+                         "--dive is REFUSED rather than silently ignored.")
     ap.add_argument("--batch", type=int, default=0, help="nodes per batch (0 = default 32)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--lambda-m", type=float, default=LAMBDA_M_DEFAULT,
