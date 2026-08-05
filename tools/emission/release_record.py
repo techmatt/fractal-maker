@@ -43,10 +43,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT / "tools") not in sys.path:
-    sys.path.insert(0, str(ROOT / "tools"))
+for _p in (ROOT, ROOT / "tools"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 import paths  # noqa: E402   the durability-class declaration
+from tools.emission import emission_sinks as esinks  # noqa: E402  central sink-isolation
 
 RECORD_DIR_REL = "data/emission/release_records"
 SCHEMA_VERSION = 1
@@ -55,14 +57,29 @@ STAGE_GATE = "gate"
 STAGE_RELEASE = "release"
 
 
+def _sink(name: str) -> Path:
+    """Resolve a record file through the sink binding (`emission_sinks`).
+
+    Production (nothing bound): `paths.durable()`, which raises if git would discard it —
+    unchanged, and still the only path this file writes by default. An EPHEMERAL binding (a
+    smoke run) resolves the same filename under the bound scratch root and skips `durable()`,
+    because a deliberately-disposable record is scratch class and `durable()` would correctly
+    refuse it. The class is declared by the binding, at the run's entry point, once."""
+    if esinks.is_production():
+        return paths.durable(f"{RECORD_DIR_REL}/{name}", mkparents=True)
+    p = esinks.record_root(ROOT) / esinks.RELEASE_RECORDS / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def record_path(site: str) -> Path:
     """The per-decision log. `durable()` raises if git would discard it."""
-    return paths.durable(f"{RECORD_DIR_REL}/{site}.jsonl", mkparents=True)
+    return _sink(f"{site}.jsonl")
 
 
 def runs_path(site: str) -> Path:
     """The per-run population log — the denominator half of the record."""
-    return paths.durable(f"{RECORD_DIR_REL}/{site}__runs.jsonl", mkparents=True)
+    return _sink(f"{site}__runs.jsonl")
 
 
 def _key(run_id: str, stage: str, join_key: str) -> str:
@@ -157,7 +174,7 @@ def write_run(site: str, row: dict) -> tuple[Path, int, int]:
 def read_decisions(site: str, run_id: str | None = None) -> list:
     """Every recorded decision, optionally for one run. Read side for a later calibration
     pass; the record is useless if nothing can get at it without re-parsing by hand."""
-    path = paths.durable(f"{RECORD_DIR_REL}/{site}.jsonl")
+    path = _sink(f"{site}.jsonl")
     if not Path(path).exists():
         return []
     rows = [json.loads(l) for l in Path(path).read_text(encoding="utf-8").splitlines() if l.strip()]

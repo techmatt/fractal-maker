@@ -29,6 +29,19 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 GATE_LOG_DIR = ROOT / "data" / "emission" / "mining_gate_reports"
 
+from tools.emission import emission_sinks as esinks  # noqa: E402  central sink-isolation
+
+
+def gate_log_dir() -> Path:
+    """WHERE this log lands, resolved through the sink binding rather than read off the
+    module constant. Production (nothing bound) is `GATE_LOG_DIR` verbatim — the constant
+    stays, and stays monkeypatchable, because tests and `durability_map` both name it. A
+    smoke run binds an ephemeral root (`emission_sinks.use`) and this follows it, so a
+    throwaway run cannot append rows to the accumulating production record."""
+    if esinks.is_production():
+        return GATE_LOG_DIR
+    return esinks.record_root(ROOT) / esinks.MINING_GATE_REPORTS
+
 # The gate version stamped into every durable row. IMPORTED from the pin (torch-free), never
 # restated: this file used to carry its own `"mining_v1"` literal beside `mining_gate.py`'s,
 # so a pin flip to v2 would have moved the checkpoint and left this log claiming v1 forever.
@@ -95,8 +108,9 @@ def write_gate_report(site, rows):
     `pool_counts` is the same pairing accrued at the POOL site — `{n_with_pool_site,
     n_would_cut_pool, n_would_cut_pool_pooled, n_would_cut_pool_selected}` — and is all zeros
     for a site that logs no pool floor (`deploy_tail` has no pool stage)."""
-    GATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    path = GATE_LOG_DIR / f"{site}.jsonl"
+    log_dir = gate_log_dir()
+    log_dir.mkdir(parents=True, exist_ok=True)
+    path = log_dir / f"{site}.jsonl"
     merged: dict = {}
     if path.exists():
         for line in path.read_text(encoding="utf-8").splitlines():

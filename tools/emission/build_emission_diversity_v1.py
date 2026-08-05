@@ -54,6 +54,7 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "min
         sys.path.insert(0, str(p))
 
 import release_mix as RM                          # noqa: E402  THE release-mix ratio table
+from tools.emission import emission_sinks as ESINKS  # noqa: E402  central sink-isolation
 from tools.emission import floors as F           # noqa: E402  THE stage-2 cut owner
 from tools.emission import descriptor as D       # noqa: E402
 from tools.emission import cells as C            # noqa: E402
@@ -398,6 +399,26 @@ class EmissionDiversity:
         self.deficit_lambda = float(getattr(args, "deficit_lambda", 1.5))
         self.deficit_green_boost = float(getattr(args, "deficit_green_boost", 1.6))
         self.seed = int(args.seed)
+        # SINK ISOLATION, decided and asserted here — before intake, before the first write.
+        # Everything under `--out` is scratch by construction; the two record stores are not
+        # (`data/emission/{release_records,mining_gate_reports}`) and they UPSERT-AND-
+        # ACCUMULATE, so a throwaway run adds rows a later calibration pass cannot tell from a
+        # real release's. `--ephemeral` redirects both under scratch/; `--record-root` names
+        # the root explicitly. See tools/emission/emission_sinks.py.
+        self.ephemeral = bool(getattr(args, "ephemeral", False))
+        self.record_root = ESINKS.resolve_record_root(
+            ROOT, smoke=self.ephemeral, explicit=getattr(args, "record_root", None),
+            run_id=self.out.name)
+        if self.ephemeral or getattr(args, "record_root", None):
+            ESINKS.use(self.record_root)
+            sinks = ESINKS.assert_isolated(ROOT, self.record_root, self.RECORD_SITE)
+            print(f"[sinks] EPHEMERAL — record sinks isolated under "
+                  f"{self.record_root}; nothing writes data/emission/. "
+                  + " ".join(p.name for p in sinks), flush=True)
+        else:
+            ESINKS.use(None)
+            print(f"[sinks] PRODUCTION — records accumulate under "
+                  f"{ESINKS.default_record_root(ROOT)}", flush=True)
         for d in (self.out, self.renders):
             d.mkdir(parents=True, exist_ok=True)
         self.rng = np.random.default_rng(self.seed)
@@ -1142,6 +1163,15 @@ def main():
                     help="deficit-pick: weight of z(deficit-gain) vs z(v3-gvo) (higher = more spread)")
     ap.add_argument("--deficit-green-boost", type=float, default=1.6,
                     help="deficit-pick: standing over-weight on the green hue bins in the target")
+    ap.add_argument("--ephemeral", action="store_true",
+                    help="THROWAWAY run: redirect the two durable record stores "
+                         "(release_records, mining_gate_reports) under scratch/ so nothing "
+                         "reaches data/emission/. The sinks are asserted before the first "
+                         "write. Use for every smoke — those stores accumulate by run id, so "
+                         "a smoke ADDS rows rather than overwriting them.")
+    ap.add_argument("--record-root", default=None,
+                    help="explicit record-store root (wins over --ephemeral). A path outside "
+                         "data/ is written as scratch; the production default is data/emission.")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--resume", action="store_true", help="continue (pool log is durable)")
     ap.add_argument("--select-only", action="store_true", help="skip colorize; select from pool")
@@ -1150,6 +1180,12 @@ def main():
     args = ap.parse_args()
 
     from tools.emission import report as R
+    # Priority, the half `creationflags` cannot reach: intake's field renders go through
+    # `library_annotate.ensure_field`, which takes no creationflags. On win32 a child inherits
+    # its parent's priority class, so lowering this driver once covers every launch site.
+    # THE one definition (corpus_common) — never re-derived; a copy silently no-ops.
+    import corpus_common as cc
+    print(f"[priority] {cc.set_below_normal_priority()}", flush=True)
     eng = EmissionDiversity(args)
     eng.intake()
     if not args.select_only:

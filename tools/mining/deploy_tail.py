@@ -197,9 +197,18 @@ def _locflags(loc):
 
 def _run(cmd, retries=1):
     """render-one shell-out with one retry (renders occasionally fail transiently
-    under resource contention; the recipe is deterministic so a retry recovers)."""
+    under resource contention; the recipe is deterministic so a retry recovers).
+
+    Launch defaults come from `corpus_common` (`DEFAULT_ENGINE_THREADS` at BELOW_NORMAL, the
+    committed pairing for ONE `fractal-generator.exe`), never restated here — this launcher
+    used to inherit whatever priority its parent happened to have, so an interactive session
+    driving a long emission run competed with the desktop for no reason. One engine at a time
+    is what this path does, so the per-process 7 is the right number."""
+    import corpus_common as _cc                # noqa: PLC0415  (tools/corpus already on path)
     for attempt in range(retries + 1):
-        r = subprocess.run(cmd, cwd=str(REPO), capture_output=True, text=True)
+        r = subprocess.run(cmd, cwd=str(REPO), capture_output=True, text=True,
+                           env=_cc.default_engine_env(),
+                           creationflags=_cc.default_creationflags())
         if r.returncode == 0:
             return
         if attempt == retries:
