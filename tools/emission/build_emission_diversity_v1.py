@@ -338,8 +338,9 @@ class EmissionDiversity:
         self.ranker_tiles = self.out / "ranker_tiles"
         self.intake_path = self.out / "intake.json"
         # The released library this run's intake is deduplicated AGAINST (its per-type medoids
-        # seed the clustering). Defaults to the union snapshot; `--library ""` opts out — the
-        # first-ever intake, which legitimately has no library behind it.
+        # seed the clustering). None -> `descriptor.DEFAULT_LIBRARY_DIR`. There is NO opt-out:
+        # `--library ""` used to advertise one and never had it (the `or DEFAULT_LIBRARY_DIR`
+        # below put the default straight back), and the seed load is fail-closed now.
         self.library_dir = (Path(args.library).resolve()
                             if getattr(args, "library", None) else None)
         self.colorize_log = self.out / "colorize_log.jsonl"
@@ -473,7 +474,7 @@ class EmissionDiversity:
             # deduplicated against the atlas and not only against itself. Without it every
             # intake adds an un-deduped seam and the cluster count (and every deficit computed
             # over those cells) drifts upward by one seam's worth of near-duplicates.
-            lib, prior, note = D.load_library_seed(self.library_dir or D.DEFAULT_LIBRARY_DIR)
+            lib, prior, note = D.load_library_seed(self.library_dir)
             print(f"[intake] {note}", flush=True)
             tags = D.assign_morph_clusters(rows, embs, library=lib)
             D.verify_library_unmoved(prior, tags)   # nothing already in the library moves
@@ -1049,10 +1050,11 @@ def main():
                     help="one or more run-scoped ledgers; admitted rows are unioned (dedup by id)")
     ap.add_argument("--out", default="scratch/emission_v1")
     ap.add_argument("--library", default=str(D.DEFAULT_LIBRARY_DIR),
-                    help="library intake snapshot dir (intake.json + morph_embs.npz) whose "
-                         "per-type medoids SEED this intake's clustering, so the batch is "
-                         "deduplicated against the atlas and not only against itself. Pass "
-                         "an empty string for the first-ever intake (no library behind it).")
+                    help="library seed snapshot dir (intake.json + either morph_embs.npz or "
+                         "the registry's per-look emb dir) whose per-type medoids SEED this "
+                         "intake's clustering, so the batch is deduplicated against the "
+                         "library and not only against itself. FAIL-CLOSED: an absent or "
+                         "empty seed aborts the run (there is no unseeded mode).")
     ap.add_argument("--report", default=None,
                     help="report .md path (default scratch/emission_v1_report.md)")
     ap.add_argument("--release-n", type=int, default=12)

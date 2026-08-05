@@ -72,7 +72,14 @@ NEAR_DUP_THRESHOLD = 0.974
 # class 4; `== 3` would let the intake reject precisely the best locations the discovery
 # pipeline exists to find, and it would do so silently — a class-4 row looks like any other
 # non-admitted row downstream.
-FLOOR_ADMIT_SOURCES = frozenset({"q4_harvest"})
+#
+# `human_q3plus` is the relit library seed (`library_seed_v2`), and it is the STRONGEST case
+# the floor rule has: its admission condition is a HUMAN label of 3 or 4, taken before any
+# decode was consulted. Gating those rows on `decoded_class>=3` would let the head veto
+# locations Matt has already scored good — the same wrong thing the q4 floor exists to
+# prevent, with a better selection signal. The floor still applies (reject clear junk), so
+# these rows pass the same badness bar as any other source.
+FLOOR_ADMIT_SOURCES = frozenset({"q4_harvest", "human_q3plus"})
 FLOOR_PNOTBAD = 0.5   # badness floor: p_notbad = sigma(l0) = P(class>=2); reject clear badness
 
 
@@ -165,22 +172,92 @@ def location_of(row: dict) -> loc_mod.Location:
 
 
 # --------------------------------------------------------------------------- #
-# Admitted-location loader (current-decode ENFORCED).
+# Re-score sibling records (READER-RESOLVED; the original ledger is never rewritten).
 # --------------------------------------------------------------------------- #
-def load_admitted(ledger_path: Path, require_current: bool = False) -> list:
-    """Yield admitted rows from a run-scoped ledger: current-decode ∧ <quality> ∧
-    guard_pass ∧ distinct, where <quality> is source-aware (`admit_quality`): the q3 gate
-    `decoded_class>=3` for a normal discovery source, or the v7 badness floor
-    `p_notbad>=FLOOR_PNOTBAD` for a FLOOR_ADMIT_SOURCES row (e.g. `q4_harvest`). With
-    `require_current=True` a stale-decoded row RAISES (`cc.StaleDecodeError`) instead of
-    being skipped — the strict verdict-trust form used to prove old-ledger rows are
-    rejected."""
+# A ledger's decode block belongs to ONE head. When the pin moves, every row in it goes
+# stale and `is_current_decoded` rejects it — correctly, and that is how the whole stage-2
+# intake fell to 16 rows at the v10 flip. The fix is a re-score, and the re-score CANNOT be
+# an in-place edit: a discovery ledger is the run's own record of what it found and what the
+# head of the day said about it, and overwriting that erases the only evidence of the
+# previous head's operating point. So a re-score is a SIBLING record, keyed by the ledger
+# stem AND the head version:
+#
+#     data/discovery/campaign1/breadth/outcome_ledger.jsonl
+#     data/discovery/campaign1/breadth/outcome_ledger.rescored_v10.jsonl
+#
+# and the READER overlays it (`resolve_rows`). Two properties earn the version in the name.
+# (a) It cannot collide with the two existing `rescored.jsonl` files, which are RESUME STATE
+# for their own producers (`classic_phoenix_supply`, `q4_harvest_ledger`) and not overlays.
+# (b) It is fail-correct across the NEXT flip: v11 looks for `rescored_v11.jsonl`, does not
+# find it, falls through to the original rows, and `is_current_decoded` rejects them — the
+# intake goes empty and loud rather than quietly serving v10 verdicts under v11's name.
+RESCORE_SUFFIX_FMT = ".rescored_{version}.jsonl"
+
+
+def rescore_path(ledger_path, version: str | None = None) -> Path:
+    """The sibling re-score record for `ledger_path` under `version` (default: the ACTIVE
+    head). Pure path arithmetic — says nothing about whether the file exists."""
+    p = Path(ledger_path)
+    v = version or cc.active_scorer_version()
+    return p.with_name(p.stem + RESCORE_SUFFIX_FMT.format(version=v))
+
+
+def load_rescored(ledger_path, version: str | None = None) -> dict:
+    """`{id: re-scored row}` for `ledger_path`, or {} when no record exists for `version`.
+
+    Absence is NOT an error here: a ledger with no re-score simply keeps its own rows, which
+    the current-decode predicate then judges. The loud failure lives one level up, where a
+    caller that needs a seeded/current population says so."""
+    rp = rescore_path(ledger_path, version)
+    if not rp.exists():
+        return {}
+    out = {}
+    for line in rp.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            row = json.loads(line)
+            out[row["id"]] = row
+    return out
+
+
+def resolve_rows(ledger_path, version: str | None = None) -> list:
+    """The ledger's rows in ledger order, each overlaid with its current-version re-score.
+
+    The overlay is a whole-row merge (`{**original, **rescored}`), not a decode-field splice:
+    the re-score record carries complete rows, so a reader of the sibling alone sees the same
+    thing the overlay produces. The ORIGINAL file is only ever read. A re-score row whose id
+    is not in the ledger is ignored — the ledger defines the population."""
+    over = load_rescored(ledger_path, version)
     rows = []
     for line in Path(ledger_path).read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
             continue
         row = json.loads(line)
+        hit = over.get(row["id"])
+        rows.append({**row, **hit} if hit else row)
+    return rows
+
+
+# --------------------------------------------------------------------------- #
+# Admitted-location loader (current-decode ENFORCED).
+# --------------------------------------------------------------------------- #
+def load_admitted(ledger_path: Path, require_current: bool = False) -> list:
+    """Yield admitted rows from a run-scoped ledger: current-decode ∧ <quality> ∧
+    guard_pass ∧ distinct, where <quality> is source-aware (`admit_quality`): the q3 gate
+    `decoded_class>=3` for a normal discovery source, or the badness floor
+    `p_notbad>=FLOOR_PNOTBAD` for a FLOOR_ADMIT_SOURCES row (`q4_harvest`, `human_q3plus`).
+    NOTE the floor's VALUE is still the one chosen in the v7 era and has not been re-read
+    against the v10 head's `p_notbad` scale — see FLOOR_PNOTBAD above. With
+    `require_current=True` a stale-decoded row RAISES (`cc.StaleDecodeError`) instead of
+    being skipped — the strict verdict-trust form used to prove old-ledger rows are
+    rejected.
+
+    Rows come through `resolve_rows`, so a ledger carrying a sibling re-score record for the
+    ACTIVE head is admitted on the re-scored decode. Without one the original rows are read
+    verbatim and the current-decode predicate judges them as it always has."""
+    rows = []
+    for row in resolve_rows(ledger_path):
         if require_current:
             cc.require_current(row)       # raises on stale decode
         elif not cc.is_current_decoded(row):
@@ -239,9 +316,21 @@ def _save_embs(embs: dict, path: Path):
 
 
 def load_embs(path: Path) -> dict:
-    if not Path(path).exists():
+    """`{location_id: embedding}` from EITHER seed layout.
+
+    Two producers write morph embeddings and they disagree on the container. The emission
+    driver and `stage_first_release` write ONE npz (`_save_embs` format: `ids` + `emb`); the
+    discovery-side seed (`library_seed_v2`, and `deficit_scheduler`'s campaign-1 loader)
+    writes one `<location_id>.npy` PER LOOK under a bulk directory. That difference is the
+    whole reason stage 1 and stage 2 could not read each other's seed — so the reader learns
+    both layouts rather than a converted copy being minted, which would be a second artifact
+    to keep in step with the first. A directory reads per-look; a file reads npz."""
+    p = Path(path)
+    if p.is_dir():
+        return {f.stem: np.load(f).astype(np.float32).reshape(-1) for f in sorted(p.glob("*.npy"))}
+    if not p.exists():
         return {}
-    z = np.load(path, allow_pickle=True)
+    z = np.load(p, allow_pickle=True)
     return {str(i): e.astype(np.float32) for i, e in zip(z["ids"], z["emb"])}
 
 
@@ -367,34 +456,89 @@ class LibraryRowMoved(RuntimeError):
     morph_cluster column), so it is refused rather than reported."""
 
 
-# The released library the forward fix seeds against: the emission-driver intake snapshot
-# `stage_first_release.py` assembles by unioning the two committed intake passes (campaign1
-# offset past library_intake_2, 1387 locations / 1268 clusters). Same two file names the
-# driver's own fresh intake writes, so any driver `--out` dir is a valid `--library` too.
-DEFAULT_LIBRARY_DIR = ROOT / "scratch" / "first_release"
+# The released library the forward fix seeds against. This used to be
+# `scratch/first_release` — the union snapshot `stage_first_release.py` assembles from the
+# two committed intake passes (1387 locations / 1268 clusters). That directory is GONE and
+# cannot come back: `scratch/` is the one class whose contract guarantees deletion, and both
+# intake passes' own snapshots went with it. Pointing the DEFAULT at a disposable path is the
+# same mistake campaign1's embeddings died of, so the default is now the durable relit seed
+# (`data/emission/library_seed_v2`, 168 human->=3 looks over 9 partitions), which is the same
+# artifact the discovery side's `deficit_scheduler.SEED_SOURCES` resolves — one seed, both
+# stages. Any driver `--out` dir is still a valid `--library` (it writes the same two names).
+DEFAULT_LIBRARY_DIR = ROOT / "data" / "emission" / "library_seed_v2"
 LIBRARY_INTAKE_NAME = "intake.json"
 LIBRARY_EMBS_NAME = "morph_embs.npz"
 
 
-def load_library_seed(library_dir) -> tuple:
-    """`(medoids, prior_assignments, note)` for a library snapshot dir.
+class LibrarySeedUnavailable(RuntimeError):
+    """The library seed could not be loaded, so this intake would deduplicate against ITSELF
+    ONLY while every downstream reader (cell reachability, per-cell deficits, the release
+    record's `morph_cluster` column) assumes library-wide.
 
-    Returns empty maps and an explaining note when the snapshot is absent — the caller MUST
-    surface that note. Silence is the failure mode this whole change exists to remove: the
-    discovery side's `deficit_scheduler.load_library_seed_embeddings` returns {} on a missing
-    artifact and its caller no-ops quietly, so once `scratch/emission/` was wiped its
-    library-wide deficit seeding degraded to run-local scarcity with nothing said."""
+    This RAISES rather than warning. It used to print a note and continue, which is the exact
+    shape that let campaign-1's seeding degrade silently: a printed line in a backgrounded
+    run's log is not a decision anybody makes, and the run's numbers are on record as
+    library-wide by the time anyone reads it."""
+
+
+def _seed_registry():
+    """`deficit_scheduler`, imported lazily and BARE (the spelling every other tools/ module
+    uses), so stage 2 resolves seed paths through the same registry and the same
+    scratch-class refusal the discovery side already owns — not a second copy of either."""
+    for p in (ROOT / "tools" / "atlas",):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+    import deficit_scheduler                      # noqa: PLC0415
+    return deficit_scheduler
+
+
+def library_emb_source(library_dir) -> Path:
+    """Where a library dir's morph embeddings actually live.
+
+    Sibling `morph_embs.npz` when the snapshot is a driver/`stage_first_release` one; else
+    the per-look bulk dir the SEED REGISTRY declares for that snapshot (the relit seed's 168
+    `<loc_id>.npy` resolve out of tree through `paths.bulk`); else `<dir>/embs` for a
+    hand-assembled pair. `load_embs` reads either layout, so no converted copy is minted."""
     d = Path(library_dir)
-    ip, ep = d / LIBRARY_INTAKE_NAME, d / LIBRARY_EMBS_NAME
+    npz = d / LIBRARY_EMBS_NAME
+    if npz.exists():
+        return npz
+    ip = (d / LIBRARY_INTAKE_NAME).resolve()
+    for _name, sip, sed in _seed_registry().SEED_SOURCES:
+        if Path(sip).resolve() == ip:
+            return Path(sed)
+    return d / "embs"
+
+
+def load_library_seed(library_dir=None) -> tuple:
+    """`(medoids, prior_assignments, note)` for a library snapshot dir. FAIL-CLOSED.
+
+    Raises `LibrarySeedUnavailable` when the snapshot is absent, unreadable, or holds no
+    usable medoid — there is no "seed if you can" mode on the intake path. Both halves of the
+    resolved pair are class-checked through `deficit_scheduler._refuse_scratch_class`, so a
+    seed that a `rm -r scratch/*` could empty is refused while the mistake is still cheap."""
+    d = Path(library_dir) if library_dir else DEFAULT_LIBRARY_DIR
+    dsched = _seed_registry()
+    ip = dsched._refuse_scratch_class("intake (library)", Path(d) / LIBRARY_INTAKE_NAME)
+    ep = dsched._refuse_scratch_class("embeddings (library)", library_emb_source(d))
     med = library_medoids(ip, ep)
     if not med:
-        missing = [p.name for p in (ip, ep) if not p.exists()]
-        why = f"missing {', '.join(missing)}" if missing else "snapshot holds no clusters"
-        return {}, {}, (f"LIBRARY SEED ABSENT ({d}: {why}) — this batch is deduplicated "
-                        f"against ITSELF ONLY and adds an un-deduped intake seam.")
+        missing = [str(p) for p in (ip, ep) if not p.exists()]
+        why = ("missing " + ", ".join(missing) if missing else
+               "the snapshot exists but yielded no usable medoid embedding "
+               "(embedding dir empty, or no cluster_tags id has a vector)")
+        raise LibrarySeedUnavailable(
+            f"library seed UNAVAILABLE at {d}: {why}.\n"
+            f"    intake     : {ip}\n"
+            f"    embeddings : {ep}\n"
+            f"An unseeded intake deduplicates against ITSELF ONLY and adds an un-deduped "
+            f"seam that every per-cell deficit downstream is then denominated in. Rebuild "
+            f"the seed (`uv run python tools/emission/library_seed_v2.py build` then "
+            f"`embed`) or pass a --library whose snapshot exists.")
     prior = library_assignments(ip)
     n = sum(len(v) for v in med.values())
-    return med, prior, (f"library seed: {n} medoids over {len(med)} types from {d}")
+    return med, prior, (f"library seed: {n} medoids over {len(med)} types from {d} "
+                        f"(embeddings: {ep})")
 
 
 def verify_library_unmoved(prior: dict, tags: dict) -> None:

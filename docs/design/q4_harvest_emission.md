@@ -33,9 +33,19 @@ So for a **floor source**, v7 serves only as a **badness floor**: admit iff
 `load_admitted` now factors the quality predicate through `admit_quality(row)`, which is
 **source-aware**:
 
-- `source_tag_of(row) in FLOOR_ADMIT_SOURCES` (currently `{"q4_harvest"}`) → floor:
-  `p_notbad >= FLOOR_PNOTBAD` (`0.5`).
-- otherwise → the q3 gate: `decoded_class == 3`.
+- `source_tag_of(row) in FLOOR_ADMIT_SOURCES` → floor: `p_notbad >= FLOOR_PNOTBAD` (`0.5`).
+- otherwise → the q3 gate: `decoded_class >= 3`. (`>=`, not `==`: since v8 the head is K=4
+  and a row can decode to class 4, which `== 3` would have rejected — silently, and precisely
+  the best material.)
+
+**Two sources take the floor**, and the second is the stronger case for the rule.
+`q4_harvest`'s selection signal is the q4 goodness field; `human_q3plus` (the relit library
+seed, `tools/emission/library_seed_v2.py`) is a HUMAN label of 3 or 4 taken with no decode
+consulted at all. Gating either on the head's own q3 verdict lets the head veto material it
+never judged — with `human_q3plus` it would be vetoing Matt's own verdicts. The floor still
+applies to both: floor-admit is not no-admit, it rejects clear junk and defers the quality
+pick to the human. Pinned by `tools/emission/test_intake_fail_closed.py`, which derives the
+tag from `library_seed_v2.MIX_SOURCE` rather than restating it.
 
 > **The `current-decode` conjunct is a firewall, not bookkeeping.** `is_current_decoded`
 > (`scorer_version == active_ckpt.ACTIVE_VERSION`) is what makes a stale ledger *unreachable*

@@ -193,3 +193,27 @@ uv run python tools/atlas/tau_h_rederive.py --score-only               # every r
 Read the resulting artifact's `harvest_detail` / `walk_detail` per partition, not the summary
 line: the summary prints the harvest arm's `source`, so a partition whose WALK arm fell back
 to the pooled estimate still reads `[own]`.
+
+**Every discovery ledger goes stale at the flip, and nothing tells you.** `is_current_decoded`
+compares a row's `scorer_version` to `ACTIVE_VERSION`, so the instant the pin moves every
+ledger row written under the old head becomes unreachable — correctly, because its decode is
+that head's verdict. But the rejection is silent and happens per-row inside `load_admitted`,
+so the visible symptom is a downstream population that quietly shrinks. The v10 flip took the
+emission stage-2 intake from ~1.4k admissible locations to **16** (2026-08-04), and it read as
+"the intake found almost nothing", not as "the ledgers are stale".
+
+The recovery is a **re-score**, and it is a sibling record, never an in-place edit — a ledger
+is its run's record of what it found *and* what the head of the day said about it:
+
+```bash
+uv run python tools/emission/ledger_rescore.py status    # per-ledger rows / current / admitted
+uv run python tools/emission/ledger_rescore.py           # writes <stem>.rescored_<version>.jsonl
+```
+
+`descriptor.resolve_rows` overlays the sibling at read time. The **version is in the filename**
+and that is load-bearing: after the *next* flip the reader looks for `rescored_v11.jsonl`, does
+not find it, falls through to the original rows, and the current-decode predicate rejects them.
+The intake goes empty and loud rather than serving v10 verdicts under v11's name. Add a ledger
+re-score to the flip checklist alongside the coupled-artifact walk above — the cost is ~1 row/s
+(render at the deploy presentation + guarded score), so the 1,633-row intake population is ~25
+minutes, not a reason to defer it.

@@ -265,13 +265,98 @@ def test_zero_change_holds_through_the_on_disk_snapshot_loader():
     D.verify_library_unmoved(prior, second)
 
 
-def test_an_absent_snapshot_is_reported_not_silently_empty():
-    """A missing library must produce a LOUD note, because a silently-empty seed is
-    indistinguishable from a working one and re-opens the seam."""
-    lib, prior, note = D.load_library_seed(ROOT / "scratch" / "_no_such_library_dir")
-    assert lib == {} and prior == {}
-    assert note.startswith("LIBRARY SEED ABSENT")
-    assert "deduplicated against ITSELF ONLY" in note
+def test_an_absent_snapshot_RAISES_rather_than_returning_an_empty_seed():
+    """A missing library must ABORT. It used to return `({}, {}, "LIBRARY SEED ABSENT...")`
+    and let the caller print the note and continue — a warning in a backgrounded run's log
+    that nobody acts on, while the run's cluster counts go on record as library-wide.
+
+    The path is deliberately OUTSIDE `scratch/`: a scratch path now raises
+    `SeedPathClassError` first, which would make this test pass for the wrong reason."""
+    with pytest.raises(D.LibrarySeedUnavailable) as ei:
+        D.load_library_seed(ROOT / "data" / "emission" / "_no_such_library_dir")
+    assert "deduplicates against ITSELF ONLY" in str(ei.value)
+    assert "library_seed_v2.py" in str(ei.value)      # names the rebuild command
+
+
+def test_a_present_but_EMPTY_snapshot_raises_too():
+    """The other absence: the snapshot exists and yields no usable medoid (no embedding on
+    disk for any tagged id). `library_medoids` returns {} for both cases, so the guard must
+    not key on `intake.json` existing."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / D.LIBRARY_INTAKE_NAME).write_text(
+            json.dumps({"cluster_tags": {"a": "mandelbrot#0"}}), encoding="utf-8")
+        D._save_embs({}, d / D.LIBRARY_EMBS_NAME)     # present, but holds nothing
+        with pytest.raises(D.LibrarySeedUnavailable) as ei:
+            D.load_library_seed(d)
+    assert "no usable medoid" in str(ei.value)
+
+
+def test_a_scratch_class_library_is_refused_by_the_discovery_side_check():
+    """`DEFAULT_LIBRARY_DIR` used to be `scratch/first_release`, and that directory is gone
+    because `scratch/` guarantees deletion. The refusal is REUSED from the discovery seed
+    resolver (`deficit_scheduler._refuse_scratch_class`), not restated here, so the two
+    stages cannot drift on what counts as a disposable path."""
+    dsched = D._seed_registry()
+    with pytest.raises(dsched.SeedPathClassError):
+        D.load_library_seed(ROOT / "scratch" / "first_release")
+
+
+def test_the_default_library_is_durable_and_is_the_seed_the_scheduler_resolves():
+    """One seed, both stages. Stage 1 (`deficit_scheduler.SEED_SOURCES`) and stage 2
+    (`DEFAULT_LIBRARY_DIR`) must name the SAME snapshot — they read two different formats
+    off it, which is exactly why they were able to diverge."""
+    dsched = D._seed_registry()
+    registered = {Path(ip).resolve() for _n, ip, _e in dsched.SEED_SOURCES}
+    assert (D.DEFAULT_LIBRARY_DIR / D.LIBRARY_INTAKE_NAME).resolve() in registered
+    assert "scratch" not in D.DEFAULT_LIBRARY_DIR.parts
+
+
+def test_the_per_look_npy_layout_loads_from_disk_not_only_the_npz():
+    """PRESENCE-FROM-DISK for the layout the fix added. `library_seed_v2` writes one
+    `<loc_id>.npy` per look; the driver writes one `morph_embs.npz`. Reading only the npz is
+    what made stage 1 and stage 2 unable to share a seed. Both must produce the SAME medoids
+    from the same vectors — asserted relationally, not against a frozen literal."""
+    import tempfile
+    embs = {"a": _base(31), "b": _base(32), "c": _near(_base(31), 0.99, seed=33)}
+    tags = {"a": "mandelbrot#0", "b": "mandelbrot#1", "c": "multibrot3#0"}
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / D.LIBRARY_INTAKE_NAME).write_text(json.dumps({"cluster_tags": tags}),
+                                               encoding="utf-8")
+        D._save_embs(embs, d / D.LIBRARY_EMBS_NAME)
+        from_npz = D.library_medoids(d / D.LIBRARY_INTAKE_NAME, d / D.LIBRARY_EMBS_NAME)
+
+        per_look = d / "embs"
+        per_look.mkdir()
+        for k, v in embs.items():
+            np.save(per_look / f"{k}.npy", v)
+        from_dir = D.library_medoids(d / D.LIBRARY_INTAKE_NAME, per_look)
+
+    assert set(from_npz) == set(from_dir) == {"mandelbrot", "multibrot3"}
+    for fam in from_npz:
+        assert [k for k, _e in from_npz[fam]] == [k for k, _e in from_dir[fam]]
+        for (_ka, ea), (_kb, eb) in zip(from_npz[fam], from_dir[fam]):
+            assert float(np.dot(ea, eb)) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_the_live_seed_on_disk_loads_through_the_stage_2_reader():
+    """The loader, against the REAL artifact — the half an injected fixture cannot cover.
+    Relational, not a frozen 168: every tagged look with a vector on disk must become a
+    medoid, and the seed must be non-empty (a derived set can pass by evaluating empty)."""
+    ip = D.DEFAULT_LIBRARY_DIR / D.LIBRARY_INTAKE_NAME
+    ep = D.library_emb_source(D.DEFAULT_LIBRARY_DIR)
+    if not ip.exists() or not Path(ep).exists():
+        pytest.skip(f"library seed not built here ({ip} / {ep})")
+    lib, prior, note = D.load_library_seed()
+    tags = json.loads(ip.read_text(encoding="utf-8"))["cluster_tags"]
+    have = D.load_embs(Path(ep))
+    expected = len({t for i, t in tags.items() if i in have})
+    n = sum(len(v) for v in lib.values())
+    assert n == expected > 0
+    assert set(prior) == set(tags)
+    assert str(ep) in note                    # the note says which layout it read
 
 
 # --------------------------------------------------------------------------- #

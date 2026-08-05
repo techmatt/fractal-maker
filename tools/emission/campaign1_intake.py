@@ -329,9 +329,9 @@ def cluster(union_rows, embs, library_dir=None):
     against itself. Returns (tags, medoid_id), where medoid_id[cluster_tag] is the founding
     member's location id (first-in-order) for the clusters THIS batch founds.
 
-    An absent library snapshot is logged loudly and the pass falls back to self-only dedup —
-    correct for the first-ever intake, an un-deduped seam for any later one."""
-    lib, prior, note = D.load_library_seed(library_dir or D.DEFAULT_LIBRARY_DIR)
+    An absent library snapshot ABORTS (`descriptor.LibrarySeedUnavailable`): a self-only
+    dedup is an un-deduped seam, and it used to be taken silently."""
+    lib, prior, note = D.load_library_seed(library_dir)
     log(f"[cluster] {note}")
     tags = D.assign_morph_clusters(union_rows, embs, library=lib)   # id -> "<family>#<k>"
     D.verify_library_unmoved(prior, tags)      # nothing already in the library moves

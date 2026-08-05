@@ -51,7 +51,7 @@ def load_snapshot(library_dir: Path):
     membership record, and re-deriving families from the ledgers would let a ledger edit
     silently change what "the library" means here."""
     ip = library_dir / D.LIBRARY_INTAKE_NAME
-    ep = library_dir / D.LIBRARY_EMBS_NAME
+    ep = D.library_emb_source(library_dir)     # npz or the registry's per-look dir
     if not ip.exists() or not ep.exists():
         missing = [p.name for p in (ip, ep) if not p.exists()]
         raise SystemExit(
