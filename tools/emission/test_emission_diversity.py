@@ -649,3 +649,179 @@ def test_a_legacy_pool_row_still_counts_as_would_cut(tmp_path, monkeypatch):
     assert pool_c["n_with_pool_site"] == 2
     assert pool_c["n_would_cut_pool"] == 2          # 1 legacy (derived) + 1 fresh (stored)
     assert pool_c["n_would_cut_pool_selected"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# pick_location — within-round order.
+#
+# Fewest-attempts-first only preserves coverage when the budget covers the whole union;
+# under any smaller budget the run never leaves round 0 and the WITHIN-round order IS the
+# selection. It used to be `id`, so the 200-attempt smoke colorized `ids[0:200]` — campaign1
+# only, four source ledgers at exactly zero. These pin the replacement: seeded round-robin
+# across the partitions present, ranker-ordered inside a partition when the ranker artifact
+# resolved and seeded-shuffled when it did not.
+#
+# The ids below are deliberately `<partition>_<k>`, so alphabetical order == one partition at
+# a time: the old behaviour is exactly the failure these must not allow.
+# --------------------------------------------------------------------------- #
+class _FakePool:
+    """`attempts_per_location` is all `pick_location` reads of the pool."""
+
+    def __init__(self):
+        self.counts: dict = {}
+
+    def attempts_per_location(self) -> dict:
+        return dict(self.counts)
+
+    def record(self, rid) -> None:
+        self.counts[rid] = self.counts.get(rid, 0) + 1
+
+
+def _driver(sizes: dict, ranker=None, seed=7):
+    """A bare EmissionDiversity carrying only what pick_location touches (no sinks, no heads,
+    no intake) — `object.__new__` deliberately, so this stays torch-free and render-free."""
+    from tools.emission.build_emission_diversity_v1 import EmissionDiversity
+    d = object.__new__(EmissionDiversity)
+    d.rows, d.partition_of = [], {}
+    for p in sorted(sizes):
+        for k in range(sizes[p]):
+            rid = f"{p}_{k:04d}"
+            d.rows.append({"id": rid})
+            d.partition_of[rid] = p
+    d.ranker_score = dict(ranker or {})
+    d.seed = seed
+    d.pool = _FakePool()
+    d._round_idx = None
+    d._round_queue = None
+    return d
+
+
+def _run(d, budget: int, exhausted=None) -> list:
+    exhausted = set() if exhausted is None else exhausted
+    picked = []
+    for _ in range(budget):
+        row = d.pick_location(exhausted)
+        if row is None:
+            break
+        d.pool.record(row["id"])
+        picked.append(row["id"])
+    return picked
+
+
+def _counts_by_partition(d, picked) -> dict:
+    out = {p: 0 for p in set(d.partition_of.values())}
+    for i in picked:
+        out[d.partition_of[i]] += 1
+    return out
+
+
+SIZES = {"aaa": 100, "bbb": 60, "ccc": 30, "ddd": 8, "eee": 3}      # 201 locations
+
+
+def test_a_budget_smaller_than_the_union_still_reaches_every_partition():
+    """THE regression. Budget 40 of 201: every partition with admitted rows gets a share, and
+    the share is max-min fair — a partition may only trail another by more than one attempt if
+    it has been exhausted. Stated as the fairness property rather than as an expected vector,
+    so it does not re-derive the allocation through the code under test."""
+    d = _driver(SIZES)
+    picked = _run(d, 40)
+    assert len(picked) == 40 and len(set(picked)) == 40
+    got = _counts_by_partition(d, picked)
+    assert all(v >= 1 for v in got.values()), got
+    for p, a in got.items():
+        for q, b in got.items():
+            if a < b - 1:
+                assert a == SIZES[p], (
+                    f"{p} got {a} and {q} got {b} while {p} still had "
+                    f"{SIZES[p] - a} unattempted rows")
+    # and it is NOT the old alphabetical prefix
+    assert picked != sorted(d.partition_of)[:40]
+    assert got["aaa"] < SIZES["aaa"]
+
+
+def test_the_old_alphabetical_prefix_would_have_starved_four_of_the_five():
+    """The contrast that makes the assertion above non-vacuous: the order this replaced puts
+    all 40 attempts in one partition. If this ever stops being true the fixture got easy."""
+    old = sorted(f"{p}_{k:04d}" for p in SIZES for k in range(SIZES[p]))[:40]
+    assert {i.split("_")[0] for i in old} == {"aaa"}
+
+
+def test_partitions_are_derived_from_the_rows_not_a_literal():
+    """A partition name that appears nowhere in the codebase gets its round-robin share. The
+    ten base partitions are already a moving set (classic-phoenix splits off `family`), and a
+    hardcoded roster would send a new one to the tail — where a bounded budget never arrives."""
+    sizes = {"mandelbrot": 50, "a_brand_new_partition_v9": 20}
+    d = _driver(sizes)
+    got = _counts_by_partition(d, _run(d, 20))
+    assert got["a_brand_new_partition_v9"] == 10 and got["mandelbrot"] == 10
+
+
+def test_within_a_partition_the_ranker_orders_when_it_resolves():
+    """Order, don't filter: inside each partition the picks come out ranker-descending, so a
+    budget that runs out mid-partition already spent on its best rows."""
+    sizes = {"aaa": 12, "bbb": 12}
+    # score DESCENDING in reverse-alphabetical id order, so ranker order != id order
+    ranker = {f"{p}_{k:04d}": float(k) for p in sizes for k in range(12)}
+    d = _driver(sizes, ranker=ranker)
+    picked = _run(d, 24)
+    for p in sizes:
+        seq = [ranker[i] for i in picked if d.partition_of[i] == p]
+        assert seq == sorted(seq, reverse=True), (p, seq)
+    assert len(set(picked)) == 24
+
+
+def test_without_a_ranker_the_within_partition_order_is_a_seeded_shuffle():
+    """The absent-artifact branch must be UNBIASED, not alphabetical — the ranker has never
+    resolved on this checkout, so this is the branch production actually runs."""
+    d = _driver(SIZES, seed=7)
+    picked = _run(d, 60)
+    for p in SIZES:
+        seq = [i for i in picked if d.partition_of[i] == p]
+        if len(seq) >= 4:
+            assert seq != sorted(seq), f"{p} came out in id order — that is the old behaviour"
+    same = _run(_driver(SIZES, seed=7), 60)
+    other = _run(_driver(SIZES, seed=8), 60)
+    assert picked == same, "same seed must reproduce the order (batch reproducibility)"
+    assert picked != other, "a different seed must give a different order"
+
+
+def test_coverage_still_comes_before_any_second_colorize():
+    """The property the round-robin must not cost: no location gets a 2nd attempt while any
+    location has none. `--cover-all`'s stop condition reads exactly this."""
+    sizes = {"aaa": 7, "bbb": 5, "ccc": 3}
+    d = _driver(sizes)
+    picked = _run(d, 15)
+    assert sorted(picked) == sorted(d.partition_of)
+    picked += _run(d, 5)
+    assert all(v == 1 for v in d.pool.counts.values() if v) or len(picked) == 20
+    assert max(d.pool.counts.values()) == 2 and min(d.pool.counts.values()) == 1
+
+
+def test_a_rebuilt_queue_mid_round_still_serves_every_partition():
+    """A `--resume` (or a location going `exhausted`) drops the in-memory queue mid-round; the
+    order is rebuilt from the DURABLE pool counts. Coverage must survive that, and it must be
+    deterministic — the same interruption twice gives the same run."""
+    def interrupted():
+        d = _driver(SIZES)
+        out = _run(d, 17)
+        d._round_idx, d._round_queue = None, None       # the resume
+        return d, out + _run(d, 23)
+    d, picked = interrupted()
+    _d2, again = interrupted()
+    assert picked == again
+    assert len(set(picked)) == 40
+    assert all(v >= 1 for v in _counts_by_partition(d, picked).values())
+
+
+def test_exhausted_locations_are_skipped_without_stalling_the_round():
+    """A location whose cells are all capped comes back as `exhausted`; the round must step
+    over it rather than re-offering it or ending early."""
+    sizes = {"aaa": 6, "bbb": 6}
+    d = _driver(sizes)
+    dead = {f"aaa_{k:04d}" for k in range(4)}
+    picked = _run(d, 8, exhausted=dead)
+    assert not (set(picked) & dead)
+    assert len(set(picked)) == 8, "round 0 must cover every LIVE location exactly once"
+    assert _counts_by_partition(d, picked) == {"aaa": 2, "bbb": 6}
+    d.pick_location(dead)                       # the round advances rather than ending
+    assert d.pick_location(dead)["id"] not in dead

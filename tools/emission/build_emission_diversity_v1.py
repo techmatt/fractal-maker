@@ -426,6 +426,11 @@ class EmissionDiversity:
         self.ranker_score: dict = {}     # location_id -> pref_loc_v0 rank score
         self.ranker_pct: dict = {}       # location_id -> percentile within the intake set
         self.ranker_mode = "unavailable"
+        # within-round colorize order (pick_location): the round currently being served and
+        # the id queue for it. Derived from the DURABLE pool counts, so a resume rebuilds
+        # rather than restores.
+        self._round_idx = None
+        self._round_queue = None
 
     # ---- intake ---------------------------------------------------------- #
     @staticmethod
@@ -589,18 +594,75 @@ class EmissionDiversity:
               f"| resumed attempts={self.pool.n_attempts()} gated={len(self.pool.gated())}", flush=True)
 
     # ---- location pick (coverage round-robin, ranker-ordered within a round) --------- #
+    def _round_order(self, rows, round_idx: int) -> list:
+        """The order ONE round is served in: seeded round-robin ACROSS partitions, and inside
+        a partition ranker-descending when the ranker artifact resolved, seeded shuffle when it
+        did not. Returns a list of location ids.
+
+        The partition set is DERIVED from `rows` (`self.partition_of`), never a literal — the
+        ten base partitions are already a moving set (`descriptor.cell_partition` splits
+        classic-phoenix off `family`), and a hardcoded list would silently drop a new one to
+        the tail. Pure and deterministic in (seed, round_idx, the round's membership), so a
+        `--resume` that rebuilds the queue mid-round rebuilds the same one."""
+        by_part: dict = {}
+        for r in rows:
+            by_part.setdefault(self.partition_of[r["id"]], []).append(r["id"])
+        parts = sorted(by_part)
+        rng = np.random.default_rng([self.seed, int(round_idx)])
+        ranked = bool(self.ranker_score)
+        for p in parts:
+            ids = sorted(by_part[p])                 # canonical base order: the shuffle and the
+            if ranked:                               # rank sort must not inherit ledger order
+                ids.sort(key=lambda i: (-self.ranker_score.get(i, float("-inf")), i))
+            else:
+                rng.shuffle(ids)
+            by_part[p] = ids
+        rng.shuffle(parts)                           # no partition is systematically first
+        out = []
+        for k in range(max(len(v) for v in by_part.values())):
+            for p in parts:
+                if k < len(by_part[p]):
+                    out.append(by_part[p][k])
+        return out
+
     def pick_location(self, exhausted: set):
-        """Fewest-attempts-first preserves coverage (every location gets a colorize before
-        any gets a second — diversity SUPPLY is untouched); within an equal-attempts round,
-        the pref_loc_v0 ranker feeds higher-quality locations FIRST, so when the colorize
-        budget runs out mid-round the good locations already spent it (order, don't filter)."""
+        """Next location to colorize: fewest-attempts-first ACROSS rounds, seeded partition
+        round-robin WITHIN a round.
+
+        Fewest-attempts-first is what keeps diversity supply intact — every location gets a
+        colorize before any gets a second. But it only preserves COVERAGE when the budget
+        covers the whole union: under any smaller budget the run never leaves round 0, so the
+        within-round order IS the selection, and coverage is whatever that order happens to
+        give. It used to be `id`, which made a bounded run colorize an alphabetical prefix —
+        the 200-attempt smoke took `ids[0:200]`, campaign1 only, and four of the seven source
+        ledgers got exactly zero. So the within-round order is a round-robin across the
+        partitions present in the round: a budget smaller than the union now spends
+        proportionately across every partition that has admitted rows instead of exhausting the
+        alphabetically-first one.
+
+        Inside a partition the pref_loc ranker orders (higher-quality first, so a budget that
+        runs out mid-partition has already spent on the good ones — order, don't filter); with
+        no ranker artifact it is a seeded shuffle, which is unbiased rather than alphabetical.
+        `--intake-floor` is the only place the ranker may FILTER, and only when asked."""
         counts = self.pool.attempts_per_location()
-        cand = [r for r in self.rows if r["id"] not in exhausted]
+        cand = {r["id"]: r for r in self.rows if r["id"] not in exhausted}
         if not cand:
             return None
-        cand.sort(key=lambda r: (counts.get(r["id"], 0),
-                                 -self.ranker_score.get(r["id"], float("-inf")), r["id"]))
-        return cand[0]
+        while True:
+            lo = min(counts.get(i, 0) for i in cand)
+            if self._round_idx != lo:
+                self._round_idx, self._round_queue = lo, None
+            if self._round_queue is None:
+                self._round_queue = self._round_order(
+                    [r for i, r in cand.items() if counts.get(i, 0) == lo], lo)
+            while self._round_queue:
+                row = cand.get(self._round_queue.pop(0))
+                if row is not None and counts.get(row["id"], 0) == lo:
+                    return row
+            if any(counts.get(i, 0) == lo for i in cand):
+                self._round_queue = None      # queue went stale (resume / exhaustion): rebuild
+                continue
+            self._round_idx = None            # round complete: `lo` advances on the next pass
 
     # ---- one colorize ---------------------------------------------------- #
     def floor_for(self, style: str) -> float:
