@@ -58,6 +58,7 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "atlas", ROOT / "tools" / "cor
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import harvest_log_registry as hreg                          # noqa: E402
 import location as loc_mod                                   # noqa: E402
 import paths                                                 # noqa: E402
 from active_ckpt import (                                    # noqa: E402
@@ -73,13 +74,12 @@ except Exception:
 CAN_W, CAN_H, CAN_SS = 640, 360, 2      # steered_frontier harvest confirmation render
 CHEAP_W, CHEAP_H, CHEAP_SS = 384, 216, 1  # guided-descend --expand cheap node presentation
 
-# Harvest logs that reconcile to their summaries at TODAY's t_good era
-# (tau_h_retained_readout.RUNS), plus the campaign-2-matched julia parent probe, which is
-# the only meaningful supply of julia:mandelbrot checks.
-HARVEST_RUNS = [
-    "campaign1/breadth", "campaign1/dive", "campaign2/breadth", "campaign2/dive",
-    "julia_parent_probe/breadth",
-]
+# Harvest logs are DISCOVERED, not listed — `harvest_log_registry`. The five-entry hand
+# list this replaced went stale silently: nine runs written after it was typed were never
+# looked at, and a hand list reports that as "settled". The registry pins those five (their
+# absence is a hard failure, since they are the population the adopted base was derived on)
+# and discovers everything else that writes a log under a registered store.
+#
 # Untruncated cross-check population: walk OUTCOME frames. The walk picks a uniform-random
 # gate survivor per rung and never scores, so this ledger is not selected on any tau.
 WALK_LEDGER = ROOT / "data/discovery/fresh_runs/prospect_run1/outcome_ledger.jsonl"
@@ -99,36 +99,47 @@ WORKERS = 4            # concurrent render-one PROCESSES (project cap)
 # --------------------------------------------------------------------------- #
 # rows in, from the two populations
 # --------------------------------------------------------------------------- #
-def _harvest_rows():
-    """Every harvest check across the current-era runs, tagged with its source run."""
+def _harvest_rows(runs=None):
+    """Every harvest check across the DISCOVERED runs, tagged with its source run.
+
+    `runs` is a `harvest_log_registry.HarvestRun` list; the default resolves the registry,
+    which raises if a pinned run's log has gone missing rather than deriving over a
+    quietly smaller population."""
     out = []
-    for run in HARVEST_RUNS:
-        p = ROOT / "data/discovery" / run / "harvest_log.jsonl"
-        if not p.exists():
-            print(f"  WARN missing harvest log: {p}")
-            continue
-        n, no_geom = 0, 0
-        for line in open(p, encoding="utf-8"):
+    for run in (hreg.require_harvest_runs() if runs is None else runs):
+        n, no_geom, off_partition = 0, 0, 0
+        for line in open(run.log, encoding="utf-8"):
             line = line.strip()
             if not line:
                 continue
             r = json.loads(line)
             # Geometry was added to the harvest row late (the "every reject fate is
             # renderable from the log alone" fix). Older rows carry no cx/cy/fw and are
-            # simply not re-scoreable — counted, never guessed at.
+            # simply not re-scoreable — counted, never guessed at. This is ALSO what keeps
+            # campaign1 out of the harvest arm by construction: all 37,853 of its checks
+            # predate the field, so it discovers, reports 0, and contributes nothing.
             if r.get("cx") is None or r.get("fw") is None:
                 no_geom += 1
                 continue
+            # Same partition exclusion the walk arm applies ("phoenix is not a frontier
+            # partition"), and it has to be here too now that discovery reaches runs that
+            # actually harvest phoenix: `derive` never cuts phoenix, so an unfiltered row
+            # would be rendered and scored for nothing and would still land in the pooled
+            # cross-family figure the artifact reports.
+            if r["partition"] == "phoenix":
+                off_partition += 1
+                continue
             out.append(dict(
-                pop="harvest", run=run, partition=r["partition"], depth=int(r["depth"]),
+                pop="harvest", run=run.name, partition=r["partition"], depth=int(r["depth"]),
                 cx=r["cx"], cy=r["cy"], fw=r["fw"],
                 c=(None if r.get("julia_c_re") is None
                    else (str(r["julia_c_re"]), str(r["julia_c_im"]))),
-                key=f"h_{run.replace('/', '_')}_{r['node_id']}_{r['batch']}",
+                key=f"h_{run.name.replace('/', '_')}_{r['node_id']}_{r['batch']}",
             ))
             n += 1
-        print(f"  {run}: {n} re-scoreable checks"
-              + (f"  ({no_geom} pre-geometry rows skipped)" if no_geom else ""))
+        print(f"  {'PIN ' if run.pinned else '    '}{run.name}: {n} re-scoreable checks"
+              + (f"  ({no_geom} pre-geometry rows skipped)" if no_geom else "")
+              + (f"  ({off_partition} phoenix rows skipped)" if off_partition else ""))
     return out
 
 
@@ -356,9 +367,19 @@ def main():
     rows_jsonl = args.work / "rows.jsonl"
     tiles = args.work / "tiles"
 
+    # Resolved even under --score-only: the artifact stamps WHICH population the registry
+    # offers, and a --score-only rerun that quietly omitted that would be a derivation
+    # record that cannot say what it was over.
+    harvest_runs = hreg.require_harvest_runs()
+    n_pin = sum(1 for r in harvest_runs if r.pinned)
+    print(f"[registry] {len(harvest_runs)} harvest run(s): {n_pin} pinned, "
+          f"{len(harvest_runs) - n_pin} discovered "
+          f"({', '.join(r.name for r in harvest_runs if not r.pinned) or 'none'})",
+          flush=True)
+
     if not args.score_only:
         print(f"[pop] harvest logs ({ACTIVE_VERSION} re-score):")
-        pool = _harvest_rows()
+        pool = _harvest_rows(harvest_runs)
         print("[pop] untruncated cross-check:")
         pool += _walk_rows()
         picked = sample(pool, args.per_partition, args.seed)
@@ -406,7 +427,9 @@ def main():
         model=ACTIVE_VERSION, ckpt=ACTIVE_CKPT, keep=args.keep, seed=args.seed,
         combine=args.combine, per_partition=args.per_partition,
         n_rows_harvest=len(h_rows), n_rows_walk=len(w_rows),
-        harvest_runs=HARVEST_RUNS, walk_ledger=str(WALK_LEDGER),
+        harvest_runs=[r.name for r in harvest_runs],
+        harvest_registry=hreg.registry_record(harvest_runs),
+        walk_ledger=str(WALK_LEDGER),
         t_good={p: ps.t_good_for(p) for p in partitions},
         t_good_status={p: ps.t_good_status(p) for p in partitions},
         tau_h_base=final, harvest_estimate=h_val, walk_estimate=w_val,

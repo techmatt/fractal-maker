@@ -197,20 +197,12 @@ class SeedPathClassError(RuntimeError):
 def _refuse_scratch_class(kind: str, p) -> Path:
     """Return `p`, or raise `SeedPathClassError` if it names a disposable-class directory.
 
-    Matched on PATH COMPONENTS below the two resolver roots, not on substring: an
-    ARTIFACTS_ROOT that merely happens to contain the letters "scratch" is not the
-    disposable class, and `data/discovery/<run>/scratchpad` is a different directory from
-    `scratch/`. Anything outside both roots is checked component-wise in full — an absolute
-    path we cannot relate to a root is exactly the case where we know least."""
+    The RULE (which components count, and how they are matched below the two resolver
+    roots) is `paths.disposable_component` — one owner, because the harvest-log registry
+    now has to refuse the same class for its own reasons. What stays here is the part that
+    is about SEEDS: the exception type and the message."""
     path = Path(p)
-    rel_parts = path.parts
-    for root in (ROOT, _artifacts.artifacts_root()):
-        try:
-            rel_parts = path.resolve().relative_to(Path(root).resolve()).parts
-            break
-        except (ValueError, OSError):
-            continue
-    hit = next((c for c in rel_parts if c.lower() in ("scratch", "scratchpad")), None)
+    hit = _paths.disposable_component(path, (ROOT, _artifacts.artifacts_root()))
     if hit is None:
         return path
     raise SeedPathClassError(

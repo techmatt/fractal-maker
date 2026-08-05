@@ -195,6 +195,19 @@ today's `t_good`, so this is a no-op that *proves* the era matches). Campaign 2 
 (`julia_hooks.jsonl`: 0.2 for batches ≤1204, 0.1 for ≥1260), which shifts the julia
 candidate population; the two segments are never pooled.
 
+**Which logs feed a re-derivation is DISCOVERED, not listed** (`tools/atlas/
+harvest_log_registry.py`, 2026-08-05). `tau_h_rederive` used a five-entry hand list; a run
+enters now by writing its log under a registered store, which
+`discovery_sinks.resolve_discovery_dir` guarantees for every non-throwaway run (a
+`--smoke` run is redirected to `scratch/` and refused by class). The five are *pinned* —
+their absence is a hard failure, since they are the population `tau_h_base_v10.json` was
+derived on — and everything else is found. Discovery on 2026-08-05: **18 run dirs, 5
+pinned + 13 discovered**; after the two row-level exclusions (pre-geometry rows, which is
+what keeps all of campaign1 out *by construction*, and phoenix, which no arm cuts) the
+harvest pool is **56,461 rows against the adopted derivation's 29,011**. So the next
+re-derivation is over a different population and will not reproduce the adopted arms —
+see `arms_used` / `harvest_registry` in the artifact before comparing versions.
+
 **Curve** (`scratch/tau_h/curve.json`; both axes, per partition, per run/segment). A canonical
 render happens iff `cheap ≥ τ` **and** the check is not a pre-canonical coord-dup
 (campaign 2's `precanon_dup` filter already skips ~82% of checks before rendering; campaign

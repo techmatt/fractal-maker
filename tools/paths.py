@@ -46,6 +46,37 @@ class DurabilityError(RuntimeError):
     data. Raised at the write site, naming the path and its class."""
 
 
+# The two trees whose contract GUARANTEES deletion (CLAUDE.md, "Neither scratch tree is a
+# dependency tier"). Named here, once, because more than one resolver now has to refuse a
+# path for being in this class and a second copy of the pair is a second policy.
+DISPOSABLE_COMPONENTS = ("scratch", "scratchpad")
+
+
+def disposable_component(p, roots) -> str | None:
+    """The disposable-tree path component `p` lies under, or None.
+
+    THE predicate behind every "this path is the wrong storage class" refusal; the callers
+    own their own exception type and message (a seed and a harvest log want to say very
+    different things about why it matters), but they must not own the rule.
+
+    Matched on PATH COMPONENTS below the given `roots`, not on substring: a root that
+    merely happens to contain the letters "scratch" is not the disposable class, and
+    `data/discovery/<run>/scratchpad` is a different directory from `scratch/`. A path that
+    relates to none of the roots is checked component-wise in full — an absolute path we
+    cannot place is exactly the case where we know least. `roots` is passed in rather than
+    read from `REPO_ROOT` so the ARTIFACTS_ROOT half stays late-bound (and monkeypatchable)
+    at the call site."""
+    path = Path(p)
+    rel_parts = path.parts
+    for root in roots:
+        try:
+            rel_parts = path.resolve().relative_to(Path(root).resolve()).parts
+            break
+        except (ValueError, OSError):
+            continue
+    return next((c for c in rel_parts if c.lower() in DISPOSABLE_COMPONENTS), None)
+
+
 def _rel(rel) -> str:
     """Normalize to a forward-slash repo-relative string (reject absolute escapes)."""
     s = str(rel).replace("\\", "/").lstrip("/")
