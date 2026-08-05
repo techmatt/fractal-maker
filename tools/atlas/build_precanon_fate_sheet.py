@@ -72,8 +72,14 @@ RENDERS = OUT / "renders"
 PLAN = OUT / "pairs.json"
 SHEET = OUT / "precanon_fate_sheet.html"
 
-# renders are served from the repo tree, so the page's src is this path relative to the root
-RENDERS_URL = "scratch/precanon_fate/renders"
+# ROOT-ABSOLUTE (leading "/"), because a browser resolves a relative src against the PAGE's
+# directory, not the server root: the page lives at /scratch/precanon_fate/, so a bare
+# "scratch/precanon_fate/renders/x.jpg" was requested as
+# "/scratch/precanon_fate/scratch/precanon_fate/renders/x.jpg" and every tile 404'd. The
+# leading slash survives `serve.py`'s relocated-crop resolver, which lstrips "/" before
+# matching. A link check must resolve each src against the PAGE URL (urljoin) — fetching
+# root + src is a different URL from the one the browser asks for, and passes on this page.
+RENDERS_URL = "/scratch/precanon_fate/renders"
 
 TOP_CLASS = 4
 RENDER_WORKERS, RENDER_THREADS = 3, 4          # 3 processes x 4 threads on a 12-core box
@@ -269,7 +275,7 @@ def stage_render(args) -> int:
 def _crop_urls(batch_image_id: str) -> tuple[str, str]:
     """The sitting batch's own crop pair. Relocated out of the tree, but `tools/viz/serve.py`
     resolves this exact in-tree URL shape through `artifacts.resolve`."""
-    base = f"data/label_corpus/batches/{sc.SITTING_BATCH}"
+    base = f"/data/label_corpus/batches/{sc.SITTING_BATCH}"
     return (f"{base}/crops/{batch_image_id}.jpg", f"{base}/vivid/{batch_image_id}.jpg")
 
 

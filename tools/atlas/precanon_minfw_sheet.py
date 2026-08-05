@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -57,7 +58,12 @@ OUT = Path(paths.scratch("precanon_minfw"))
 RENDERS = OUT / "renders"
 PLAN = OUT / "sheet_pairs.json"
 SHEET = OUT / "precanon_minfw_sheet.html"
-RENDERS_URL = "scratch/precanon_minfw/renders"
+# PAGE-RELATIVE, not root-relative. The renders sit beside the page, and a browser resolves a
+# relative src against the PAGE's directory — a root-relative "scratch/.../renders/x.jpg" here
+# would be requested as ".../precanon_minfw/scratch/precanon_minfw/renders/x.jpg" and 404. A
+# link check that fetches the src from the server root instead of resolving it against the page
+# URL passes on a URL the browser never requests; `verify` below resolves with `urljoin`.
+RENDERS_URL = "renders"
 
 N_NEW, N_REJ = 10, 5
 RENDER_WORKERS, RENDER_THREADS = 3, 4          # 3 processes x 4 threads on a 12-core box
@@ -320,6 +326,42 @@ and nothing here has a label. The displacer's machine decode is shown and is not
     return 0
 
 
+def stage_verify(args) -> int:
+    """Load every `src` THE WAY A BROWSER WOULD — resolved against the page URL with
+    `urljoin`, not fetched from the server root. Fetching `root + src` is a different URL
+    from the one the browser requests, and it passes on a page whose images are all 404:
+    that is exactly how this sheet shipped with 60 broken tiles. Also compares the served
+    bytes to disk, so a stale or half-written jpg is a failure rather than a grey box."""
+    import hashlib
+    import urllib.request
+    from urllib.parse import urljoin, urlsplit
+
+    page = args.url or f"http://127.0.0.1:{args.port}/{SHEET.relative_to(ROOT).as_posix()}"
+    html = urllib.request.urlopen(page, timeout=args.timeout).read().decode("utf-8")
+    srcs = sorted(set(re.findall(r'src="([^"]+)"', html)))
+    if not srcs:
+        print("!! no <img src> in the page at all")     # a link check that passes on zero
+        return 1                                        # links is not a link check
+    ok, bad, mism = 0, [], []
+    for s in srcs:
+        url = urljoin(page, s)
+        try:
+            b = urllib.request.urlopen(url, timeout=args.timeout).read()
+        except Exception as e:                                          # noqa: BLE001
+            bad.append((s, urlsplit(url).path, str(e)[:80]))
+            continue
+        ok += 1
+        disk = RENDERS / Path(s).name
+        if disk.exists() and hashlib.sha1(b).hexdigest() != hashlib.sha1(
+                disk.read_bytes()).hexdigest():
+            mism.append(s)
+    print(f"{page}\n  {ok}/{len(srcs)} images load as the browser resolves them; "
+          f"{len(bad)} failed, {len(mism)} byte-mismatched")
+    for s, path, e in bad[:5]:
+        print(f"  !! src={s}\n     -> {path}\n     {e}")
+    return 1 if (bad or mism) else 0
+
+
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -392,6 +434,11 @@ def main() -> int:
     r.add_argument("--render-timeout", type=float, default=900.0)
     r.set_defaults(fn=stage_render)
     sub.add_parser("sheet").set_defaults(fn=stage_sheet)
+    v = sub.add_parser("verify")
+    v.add_argument("--port", type=int, default=8020)
+    v.add_argument("--url", default=None)
+    v.add_argument("--timeout", type=float, default=20.0)
+    v.set_defaults(fn=stage_verify)
     a = ap.parse_args()
     cc.set_below_normal_priority()
     return a.fn(a)
