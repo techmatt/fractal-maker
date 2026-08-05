@@ -14,7 +14,7 @@ alongside the colorize or after it. Produces the §Readout items report.py does 
      a gated wallpaper.
   3. Per-niche percentile health at scale — the within-cell percentile DISTRIBUTION (is the
      singleton-percentile degeneracy from the smoke gone at library scale? — reported, not assumed).
-  4. Strange inventory above the 0.50 mining release floor.
+  4. Strange inventory above the mining release floor (tools/emission/floors.py).
   5. Realized hue/chroma histograms accumulated over the pool (+ a PNG).
   6. Reject autopsy — a fate-stratified contact sheet (gated / floor-rejected / errored) at
      deploy fidelity from the pool renders.
@@ -40,6 +40,7 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "sco
         sys.path.insert(0, str(p))
 
 import release_mix as RM                          # noqa: E402  THE release-mix ratio table
+from tools.emission import floors as F           # noqa: E402  THE stage-2 cut owner
 from tools.emission import cells as C            # noqa: E402
 from tools.emission import selection as SEL      # noqa: E402
 from tools.emission import descriptor as D       # noqa: E402
@@ -51,7 +52,11 @@ except Exception:
 
 OUT = ROOT / "scratch" / "first_release"
 REPORT = ROOT / "scratch" / "first_release_readout.md"
-WP_RELEASE_FLOOR, MN_RELEASE_FLOOR = 0.90, 0.50
+# The release floors this readout annotates the pool against: IMPORTED from the one owner,
+# never re-typed. This readout used to carry `= 0.90, 0.50` of its own, so it kept annotating
+# against whatever the pair happened to be on the day it was written while the driver moved.
+WP_RELEASE_FLOOR = F.WALLPAPER_RELEASE.value
+MN_RELEASE_FLOOR = F.MINING_RELEASE.value
 STYLES = ["smooth", "tia", "stripe", "smooth_mean_angle", "smooth_angle_min",
           "composite_c7_smooth_trap_circle", "composite_c13_smooth_stripe",
           "composite_c17_smooth_curvature"]
@@ -76,7 +81,14 @@ def load_pool() -> list:
 
 
 def release_floor(style: str) -> float:
-    return WP_RELEASE_FLOOR if style == "smooth" else MN_RELEASE_FLOOR
+    return F.for_style(style, "release").value
+
+
+def clears_release(row) -> bool:
+    """`row` clears its head's release floor — through the owner's `gate`, so the stamp check
+    runs here too. A readout that annotates "release-eligible" against a floor whose head has
+    moved is stating a fact about a scale that no longer exists."""
+    return F.for_style(row["render_style"], "release").gate(row.get("p_ge3") or 0.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -258,7 +270,7 @@ def main():
     recon_ok = (n_att == n_pass + n_floor + n_err)
 
     # release-eligible subset + a reconstructed release (matches the driver's greedy select)
-    rel_elig = [r for r in gated if (r.get("p_ge3") or 0) >= release_floor(r["render_style"])]
+    rel_elig = [r for r in gated if clears_release(r)]
     entries = [{"id": r["id"], "type": r["type"], "cluster": r["morph_cluster"],
                 "flavor": r["palette_flavor"], "style": r["render_style"],
                 "score": r["p_ge3"], "emb": None, "_rec": r} for r in rel_elig]
@@ -281,7 +293,7 @@ def main():
 
     # strange inventory above the mining release floor
     strange = [r for r in gated if r["render_style"] != "smooth"]
-    strange_rel = [r for r in strange if (r.get("p_ge3") or 0) >= MN_RELEASE_FLOOR]
+    strange_rel = [r for r in strange if clears_release(r)]
 
     hue, chroma, nh = hue_chroma_png(gated, OUT / "hue_chroma.png")
     fate = fate_sheet(rows, OUT / "reject_autopsy_sheet.png")

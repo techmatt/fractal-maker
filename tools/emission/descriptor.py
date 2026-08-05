@@ -60,28 +60,41 @@ NEAR_DUP_THRESHOLD = 0.974
 #
 # The default emission source is a DISCOVERY ledger whose locations were found BY the active
 # scorer (the guided-descend reward is its q3 verdict), so `decoded_class>=3` is both the
-# selection signal and the admission gate — self-consistent. A FLOOR source is
-# different: its locations were selected by a quality signal ORTHOGONAL to the scorer (e.g. the
-# q4 goodness field, which is blind to the scorer and to the window labels). Gating those on
-# the scorer's own q3 verdict would let it silently veto locations it never chose — the
-# exact wrong thing. So a floor source is admitted on a BADNESS FLOOR (reject clear
-# junk, `p_notbad >= FLOOR_PNOTBAD`) and the human does the quality pick downstream.
-# Guard + distinct + current-decode still apply to EVERY source. See
-# docs/design/q4_harvest_emission.md.
+# selection signal and the admission gate — self-consistent. A FLOOR-ADMIT source is
+# different: its locations were selected by a quality signal ORTHOGONAL to the scorer — a
+# HUMAN label (`human_q3plus`), or the q4 goodness field (`q4_harvest`), both blind to the
+# scorer and to the window labels. Gating those on the scorer's own verdict would let it
+# silently veto locations it never chose. Guard + distinct + current-decode still apply to
+# EVERY source. See docs/design/q4_harvest_emission.md.
 #
 # The q3 gate is `>= 3`, NOT `== 3`. Since v8 the head is K=4 and a ledger row can decode to
 # class 4; `== 3` would let the intake reject precisely the best locations the discovery
 # pipeline exists to find, and it would do so silently — a class-4 row looks like any other
 # non-admitted row downstream.
 #
-# `human_q3plus` is the relit library seed (`library_seed_v2`), and it is the STRONGEST case
-# the floor rule has: its admission condition is a HUMAN label of 3 or 4, taken before any
-# decode was consulted. Gating those rows on `decoded_class>=3` would let the head veto
-# locations Matt has already scored good — the same wrong thing the q4 floor exists to
-# prevent, with a better selection signal. The floor still applies (reject clear junk), so
-# these rows pass the same badness bar as any other source.
+# THE BADNESS FLOOR IS GONE (2026-08-04). A floor-admit source used to still face a machine
+# BADNESS floor — `p_notbad >= FLOOR_PNOTBAD` (0.5) — on the reading that "reject clear junk"
+# was a weaker claim than "judge quality" and so was safe to keep. It is not a weaker claim,
+# it is the same claim at a lower threshold, and it is made by the same head the source was
+# chosen independently of. Two things made keeping it indefensible:
+#
+#   * It vetoed the authority. `human_q3plus` rows carry a human 3 or 4. A machine
+#     `p_notbad < 0.5` on such a row is a disagreement between the head and Matt, and the
+#     floor resolved it for the head — silently, at intake, on material selected precisely
+#     because the head had never judged it.
+#   * The number never survived its own head. 0.5 was chosen on the v7 `p_notbad` scale and
+#     was still being applied under v10. Measured on the q4_harvest ledger's 108
+#     guard-passing rows: the v7-era floor admitted 75; the same 0.5 against the v10 rescore
+#     admitted 57. The cut moved by 18 rows without a decision being made about it — which is
+#     exactly what an unstamped floor does, and why every cut that remains lives in
+#     `tools/emission/floors.py` carrying the head version it was set against.
+#
+# So a floor-admit row is admitted on guard ∧ distinct ∧ current-decode alone; the human does
+# the quality pick downstream off the release sheet, which is what the rule always said.
+# `FLOOR_PNOTBAD` was DELETED rather than set to 0.0 — a zero floor is still a floor, still
+# reads as a policy somebody chose, and would still be re-tuned by the next person who found
+# it. There is no machine badness cut on a floor-admit source.
 FLOOR_ADMIT_SOURCES = frozenset({"q4_harvest", "human_q3plus"})
-FLOOR_PNOTBAD = 0.5   # badness floor: p_notbad = sigma(l0) = P(class>=2); reject clear badness
 
 
 def source_tag_of(row: dict) -> str | None:
@@ -91,11 +104,12 @@ def source_tag_of(row: dict) -> str | None:
 
 
 def admit_quality(row: dict) -> bool:
-    """Source-aware quality predicate. A FLOOR_ADMIT_SOURCES row admits on the badness
-    floor (`p_notbad >= FLOOR_PNOTBAD`); every other source on the q3+ gate
-    (`decoded_class >= 3`). Guard/distinct/current are checked by the caller."""
+    """Source-aware quality predicate. A FLOOR_ADMIT_SOURCES row BYPASSES the machine quality
+    verdict entirely (its selection signal is orthogonal to the head — see above); every other
+    source admits on the q3+ gate (`decoded_class >= 3`). Guard/distinct/current are checked
+    by the caller, for every source alike."""
     if source_tag_of(row) in FLOOR_ADMIT_SOURCES:
-        return (row.get("p_notbad") or 0.0) >= FLOOR_PNOTBAD
+        return True
     return (row.get("decoded_class") or 0) >= 3
 
 # auto_maxiter policy — IMPORTED from the owning module, never re-transcribed. This used to
@@ -287,10 +301,9 @@ def resolve_rows(ledger_path, version: str | None = None) -> list:
 def load_admitted(ledger_path: Path, require_current: bool = False) -> list:
     """Yield admitted rows from a run-scoped ledger: current-decode ∧ <quality> ∧
     guard_pass ∧ distinct, where <quality> is source-aware (`admit_quality`): the q3 gate
-    `decoded_class>=3` for a normal discovery source, or the badness floor
-    `p_notbad>=FLOOR_PNOTBAD` for a FLOOR_ADMIT_SOURCES row (`q4_harvest`, `human_q3plus`).
-    NOTE the floor's VALUE is still the one chosen in the v7 era and has not been re-read
-    against the v10 head's `p_notbad` scale — see FLOOR_PNOTBAD above. With
+    `decoded_class>=3` for a normal discovery source, and NO machine quality cut at all for a
+    FLOOR_ADMIT_SOURCES row (`q4_harvest`, `human_q3plus`) — see the block above
+    `admit_quality` for why the v7-era badness floor was deleted rather than re-derived. With
     `require_current=True` a stale-decoded row RAISES (`cc.StaleDecodeError`) instead of
     being skipped — the strict verdict-trust form used to prove old-ledger rows are
     rejected.
@@ -306,7 +319,7 @@ def load_admitted(ledger_path: Path, require_current: bool = False) -> list:
             continue
         if not row.get("guard_pass") or not row.get("distinct"):
             continue
-        if not admit_quality(row):        # source-aware: q3 gate OR v7 floor
+        if not admit_quality(row):        # source-aware: q3 gate, or bypass for floor-admit
             continue
         rows.append(row)
     return rows

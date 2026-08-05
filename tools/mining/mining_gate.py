@@ -64,13 +64,18 @@ import timm  # noqa: E402
 from classifier.data import Transform  # noqa: E402
 
 # --------------------------------------------------------------------------- #
-# The pin (§1) + threshold (§2). Flip ACTIVE_MINING_CKPT to move the gate.
+# The pin (§1) + threshold (§2). Flip ACTIVE_MINING_CKPT in `mining_pins` to move the gate.
+#
+# The pin block lives in the TORCH-FREE `tools/mining/mining_pins.py` and is RE-EXPORTED
+# here under the names every caller already uses. The split exists so "which mining head is
+# live?" can be asked without importing torch — the stage-2 floor owner
+# (`tools/emission/floors.py`) stamp-checks every cut against it from pure-readout paths.
+# `MINING_GATE_VERSION` is now DERIVED from the pin path; it used to be a literal here AND
+# in `gate_report.py`, which stamps it into a durable log.
 # --------------------------------------------------------------------------- #
-MINING_GATE_VERSION = "mining_v1"
-ACTIVE_MINING_CKPT = "data/render_mode_head/v1/model_best.pt"   # staged seed-0 (LIVE)
-MINING_V1_ROLLBACK = None       # first version -> no prior gate to fall back to
-MINING_GATE_THRESHOLD = 0.50    # marginal p_ge3 boundary; conservative / high-precision
-LOCK_PATH = "data/render_mode_head/v1/mining_gate_lock.json"   # frozen curve + parity
+from tools.mining.mining_pins import (  # noqa: E402,F401
+    ACTIVE_MINING_CKPT, LOCK_PATH, MINING_GATE_THRESHOLD, MINING_GATE_VERSION,
+    MINING_V1_ROLLBACK, HEAD_VERSION)
 
 
 @dataclass(frozen=True)

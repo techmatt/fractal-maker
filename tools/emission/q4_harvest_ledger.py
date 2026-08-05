@@ -12,10 +12,15 @@ writes a source-tagged (`mix_source="q4_harvest"`) intake-ready ledger. It is th
 analogue of `tools/phoenix/classic_phoenix_supply.py`; it reuses that path's exact
 primitives (reframe guard-field render, `guard.make_guarded_scorer`, `score_lib.corn_decode`).
 
-v7 is a FLOOR here, not the gate. `decoded_class` is COMPUTED and stored (for the readout),
-but admission is deferred to the emission driver's source-aware `descriptor.load_admitted`,
-which admits a `q4_harvest` row on the v7 badness floor (`p_notbad>=0.5`) ∧ guard_pass ∧
-distinct — see docs/design/q4_harvest_emission.md.
+The head does not gate here. `decoded_class` and `p_notbad` are COMPUTED and stored (for the
+readout, and as a diagnostic of where the head and the goodness field disagree), but admission
+is deferred to the emission driver's source-aware `descriptor.load_admitted`, which admits a
+`q4_harvest` row on guard_pass ∧ distinct ∧ current-decode with NO machine quality cut — see
+docs/design/q4_harvest_emission.md. This module NEVER cut on `p_notbad` either: the
+`outcome_ledger.jsonl` it writes holds every guard-passing row. The `n_floor_admitted` /
+`floor_pnotbad` keys in `stats.json` are that diagnostic, kept under their original names
+because the committed record already carries them; the v7-era badness floor they are named
+after was deleted from the intake on 2026-08-04.
 
 `distinct` is set True for every guard-passing row: the harvest already elliptical-NMS-deduped
 the framings, and the REAL morphology dedup ("incremental medoid within type") is the emission
@@ -160,9 +165,12 @@ def rescore(cands, scorer, t, rescored_path: Path, limit=None):
 def finalize(rescored_path: Path, man: dict, t: float):
     rows = [json.loads(l) for l in rescored_path.read_text(encoding="utf-8").splitlines() if l.strip()]
     guard_pass = [r for r in rows if r.get("guard_pass")]
+    # DIAGNOSTIC, never a cut (see the module docstring): the fraction of guard-passing
+    # framings the head calls not-clearly-bad, i.e. where the head and the q4 goodness field
+    # agree. Keyed `floor_*` in stats.json because the committed record already is.
     floor_admit = [r for r in guard_pass if (r.get("p_notbad") or 0.0) >= 0.5]
     with open(RUN_DIR / "outcome_ledger.jsonl", "w", encoding="utf-8") as f:
-        for r in guard_pass:                       # intake-ready; floor applied at intake
+        for r in guard_pass:                       # intake-ready; no quality cut, here or at intake
             f.write(json.dumps(r) + "\n")
     guard_fail_reasons = Counter(r.get("guard_fail") for r in rows if not r.get("guard_pass"))
     decoded_hist = Counter(r.get("decoded_class") for r in guard_pass)
@@ -218,9 +226,10 @@ def main(argv=None):
         f"(render-fail {stats['n_render_failed']})")
     log(f"  guard: pass {stats['n_guard_pass']} / fail {stats['n_guard_fail']} "
         f"{stats['guard_fail_reasons']}")
-    log(f"  v7 FLOOR (p_notbad>=0.5): admitted {stats['n_floor_admitted']} "
-        f"/ below-floor {stats['n_below_floor']}  over {stats['minibrots_covered']} minibrots")
-    log(f"  (for reference — v7 q3 would keep only {stats['n_decoded_class_3']}: "
+    log(f"  DIAGNOSTIC (p_notbad>=0.5, NOT a cut — intake admits every guard-passing row): "
+        f"{stats['n_floor_admitted']} above / {stats['n_below_floor']} below, "
+        f"over {stats['minibrots_covered']} minibrots")
+    log(f"  (for reference — the q3 gate would keep only {stats['n_decoded_class_3']}: "
         f"decoded_class hist {stats['decoded_class_hist_among_guardpass']})")
     log(f"  durable → {RUN_DIR}")
     return 0

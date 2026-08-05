@@ -366,3 +366,30 @@ an item's evidence, the line points at it rather than restating it.
   `[code: tools/emission/descriptor.py::{ledger_namespace,load_union_admitted};
   tools/emission/test_intake_union.py; tools/emission/stage_first_release.py — kept, marked
   SUPERSEDED, deliberately not deleted]`
+
+- **2026-08-04 — the machine BADNESS floor on floor-admit sources (`descriptor.FLOOR_PNOTBAD`,
+  `p_notbad >= 0.5`).** A floor-admit source (`q4_harvest`, `human_q3plus`) is one whose
+  selection signal is ORTHOGONAL to the quality head — the q4 goodness field, or a human 3/4
+  label taken with no decode consulted — so it bypasses the head's q3 gate. It did not bypass
+  the head's *badness* verdict, on the reading that "reject clear junk" was a weaker claim
+  than "judge quality". It is not weaker; it is the same claim at a lower threshold, made by
+  the same head, and on a `human_q3plus` row it resolved a head-vs-Matt disagreement in the
+  head's favour, silently, at intake.
+  **Deleted, not zeroed.** A `0.0` floor is still a floor: it reads as a policy somebody chose
+  and gets re-tuned by whoever finds it next. `admit_quality` now returns True for a
+  floor-admit row outright; `guard_pass ∧ distinct ∧ current-decode` still apply to every
+  source alike, which is the difference between bypassing the quality verdict and bypassing
+  the intake.
+  **Basis (the second reason, and the general one).** `0.5` was set on the **v7** `p_notbad`
+  scale and was still being read under **v10**. On the `q4_harvest` ledger's 108 guard-passing
+  rows: the v7-era floor admitted **75**; the same `0.5` against the v10 rescore admitted
+  **57**. An 18-row move in what the intake accepts, with no decision taken about it. That is
+  the standing hazard of an unstamped cut, and it is why every stage-2 cut that REMAINS now
+  lives in `tools/emission/floors.py` carrying the head version it was set against and
+  refusing to gate when the live pin disagrees.
+  **What it moved:** `q4_harvest` 57 → **108** admitted; the seven-ledger stage-2 union
+  700 → **751**. The other six ledgers admit on the q3 gate and did not move.
+  `[decision: prompts/emission_floors_prompt.md §B, Matt, 2026-08-04]`
+  `[code: tools/emission/descriptor.py::admit_quality; tools/emission/floors.py;
+  tools/emission/test_intake_fail_closed.py; tools/emission/test_intake_union.py;
+  docs/design/q4_harvest_emission.md]`

@@ -15,6 +15,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from tools.emission import descriptor as D
+from tools.emission import floors as F           # THE stage-2 cut owner
 
 ROOT = Path(__file__).resolve().parents[2]
 REPORT_PATH = ROOT / "scratch" / "emission_v1_report.md"
@@ -149,8 +150,10 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
     n_err = sum(1 for r in allrows if r.get("error"))
     wp_gated = [r for r in gated if r.get("head") == "wallpaper"]
     mn_gated = [r for r in gated if r.get("head") == "mining"]
-    wp_also = sum(1 for r in wp_gated if (r["p_ge3"] or 0) >= 0.90)
-    mn_also = sum(1 for r in mn_gated if (r["p_ge3"] or 0) >= 0.50)
+    # "gated rows that ALSO clear their head's release floor" — through the one owner, not
+    # two bare literals that happened to agree with the driver on the day this was written.
+    wp_also = sum(1 for r in wp_gated if F.WALLPAPER_RELEASE.gate(r["p_ge3"] or 0))
+    mn_also = sum(1 for r in mn_gated if F.MINING_RELEASE.gate(r["p_ge3"] or 0))
     also_090 = wp_also
 
     # colorizer choice — flavor + style distribution vs uniform-random baseline
@@ -173,12 +176,39 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
              f"(order, not filter — diversity supply untouched). Pool floors (permissive): "
              f"wallpaper **{eng.floor}** / mining **{eng.mining_floor}**. **Release floors** "
              f"(per head, distinct): wallpaper **{eng.release_floor}** / mining "
-             f"**{eng.mining_release_floor}**. Release N=**{eng.release_n}** · target "
-             f"**{eng.target_gated}** release-eligible (post-floor surplus).\n")
+             f"**{eng.mining_release_floor}** (report-only). Release N=**{eng.release_n}** · "
+             f"target **{eng.target_gated}** POST-FLOOR rows.\n")
+    L.append(f"Every cut above is owned by `tools/emission/floors.py` and stamped with the head "
+             f"version it was set against — {F.summary()}. A run whose live head pin disagrees "
+             f"with a stamp refuses to gate rather than gating on the wrong scale.\n")
+
+    acct = eng.target_accounting() if hasattr(eng, "target_accounting") else {}
+    if acct:
+        L.append("### What `--target-gated` counted\n")
+        L.append(f"**{acct['post_floor']}** post-floor rows against a target of "
+                 f"**{acct['target_gated']}** — smooth **{acct['post_floor_smooth']}** "
+                 f"(≥ {eng.release_floor}) + strange **{acct['post_floor_strange']}** "
+                 f"(≥ {eng.mining_release_floor}). A further **{acct['ungated_strange']}** "
+                 f"strange rows are release-ELIGIBLE but below the mining release floor: the "
+                 f"mining gate is report-only, so they may still be selected, and they never "
+                 f"count toward the target. Draw pool = **{acct['release_eligible']}**.\n")
+        L.append(f"**What the default 3×N surplus now means for a mixed `--strange-frac` run.** "
+                 f"The target is a POOLED count across both heads, not a per-head one, while "
+                 f"selection is two disjoint per-head passes with fixed slot budgets "
+                 f"(strange_slots = round(N·strange_frac)). So 3N post-floor rows does NOT "
+                 f"imply 3×(strange slots) post-floor strange — a run can hit the target on "
+                 f"smooth alone and still short-fill the strange half, and vice versa. The "
+                 f"surplus guarantees quantity of release-GRADE material, not its render-mode "
+                 f"mix; the realized split below is where the mix is actually read. Before this "
+                 f"change the target counted every scored strange row, so the report-only "
+                 f"mining gate could satisfy a 'post-floor' target with rows no floor had "
+                 f"vouched for.\n")
 
     L.append("## Intake — morph clusters among admitted locations\n")
     L.append(f"- **{len(eng.rows)}** admitted locations "
-             f"(current-decode ∧ decoded_class==3 ∧ guard_pass ∧ distinct)")
+             f"(current-decode ∧ guard_pass ∧ distinct ∧ source-aware quality: "
+             f"`decoded_class>=3` for a discovery source, NO machine quality cut for a "
+             f"floor-admit source — {sorted(D.FLOOR_ADMIT_SOURCES)})")
     L.append(f"- **{total_clusters}** morph clusters (within-type, cos>{D.NEAR_DUP_THRESHOLD}) "
              f"across **{len(n_clusters_by_type)}** fractal types:")
     for t in sorted(n_clusters_by_type):
@@ -346,6 +376,10 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         "pool_floor": eng.floor, "mining_pool_floor": eng.mining_floor,
         "release_floor": eng.release_floor, "mining_release_floor": eng.mining_release_floor,
         "loc_ranker": eng.ranker_mode, "ranker_reach": reach, "short_fill": short,
+        "target_accounting": acct,
+        "floors": {f.name: {"value": f.value, "head": f.head, "stamp": f.stamp,
+                            "acts": f.acts} for f in F.ALL_FLOORS},
+        "floor_overrides": getattr(eng, "floor_overrides", {}),
         "release_split": getattr(eng, "release_split", {}),
         "palette_ranker": selected[0]["_rec"]["ranker"] if selected else None,
     }

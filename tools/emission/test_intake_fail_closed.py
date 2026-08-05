@@ -13,6 +13,11 @@ Two failures these pin, both found by the 2026-08-04 stage-2 survey:
      Matt scored 3 or 4 with no decode consulted — would have been gated on
      `decoded_class>=3`, i.e. the head vetoing material it never judged. That is the exact
      inversion the floor rule exists to prevent.
+  3. (2026-08-04, §B) The fix for 2 left the head a SECOND veto on the same rows — the
+     `p_notbad >= FLOOR_PNOTBAD` badness floor, a v7-era number still being applied on the
+     v10 scale. That floor is deleted; a floor-admit row now takes no machine quality cut at
+     all, and the tests below pin both halves (bypassed for the tagged source, NOT bypassed
+     for anything else).
 
   uv run pytest tools/emission/test_intake_fail_closed.py -q
 """
@@ -217,23 +222,49 @@ def test_a_seed_row_admits_on_the_floor_with_a_class_1_decode():
     assert D.admit_quality(_seed_row(decoded_class=None)) is True
 
 
-def test_a_seed_row_below_the_badness_floor_is_still_rejected():
-    """Floor-admit is not no-admit. Clear junk still goes."""
-    assert D.admit_quality(_seed_row(p_notbad=D.FLOOR_PNOTBAD - 0.01)) is False
-    assert D.admit_quality(_seed_row(p_notbad=D.FLOOR_PNOTBAD)) is True     # >=, not >
+def test_a_seed_row_the_head_calls_bad_is_admitted_anyway():
+    """The §B bypass. A `human_q3plus` row carries a HUMAN 3 or 4; a machine `p_notbad` of 0
+    on such a row is the head disagreeing with Matt, and the head does not get to resolve
+    that at intake. The v7-era badness floor that used to cut here was DELETED (2026-08-04),
+    not lowered — so there is no threshold left to drift.
+
+    Injection: this is red under the old `p_notbad >= FLOOR_PNOTBAD` branch for every value
+    below the floor, which is what it is here to catch coming back."""
+    for nb in (0.0, 0.01, 0.49, 0.4999):
+        assert D.admit_quality(_seed_row(p_notbad=nb)) is True, nb
+    assert D.admit_quality(_seed_row(p_notbad=None)) is True
+    # ...and the constant itself is gone, so a re-add cannot be silent.
+    assert not hasattr(D, "FLOOR_PNOTBAD"), (
+        "descriptor.FLOOR_PNOTBAD is back. A floor-admit source's selection signal is "
+        "orthogonal to the head; re-applying the head's badness verdict to it is the veto "
+        "the floor-admit rule exists to prevent. If a machine cut is genuinely wanted here, "
+        "it belongs in tools/emission/floors.py with a head stamp and a derivation.")
 
 
 def test_the_source_tag_is_what_switches_the_rule_not_the_row_shape():
     """Same row, same numbers, different `mix_source` -> the q3 gate applies and it is cut.
-    Without this the floor test passes for any row with p_notbad>=0.5."""
+    Without this the bypass test passes for any row at all — which is exactly the failure
+    mode a bypass introduces, so this is the non-vacuity half of §B."""
     assert D.admit_quality(_seed_row(mix_source="steered_frontier")) is False
+    assert D.admit_quality(_seed_row(mix_source=None)) is False
+    assert D.admit_quality(_seed_row(mix_source="steered_frontier", decoded_class=3)) is True
 
 
 def test_load_admitted_admits_the_seed_row_end_to_end(tmp_path):
     """Through the real loader, not just the predicate — the guard/distinct/current checks
-    are the caller's, and a floor source must clear them like anything else."""
+    are the caller's, and a floor-admit source must clear THOSE like anything else even
+    though no machine quality cut applies to it.
+
+    `s1` carries `p_notbad=0.1` and is admitted (it used to be the row the badness floor cut);
+    `s2` fails the guard and `s3` is not distinct, and both are still rejected — which is what
+    keeps "bypasses the quality cut" from meaning "bypasses everything"."""
     led = tmp_path / "seed_ledger.jsonl"
-    led.write_text(json.dumps(_seed_row()) + "\n" +
-                   json.dumps(_seed_row(id="s1", p_notbad=0.1)) + "\n", encoding="utf-8")
+    led.write_text("\n".join(json.dumps(r) for r in (
+        _seed_row(),
+        _seed_row(id="s1", p_notbad=0.1),
+        _seed_row(id="s2", guard_pass=False),
+        _seed_row(id="s3", distinct=False),
+        _seed_row(id="s4", scorer_version="v6"),
+    )) + "\n", encoding="utf-8")
     got = [r["id"] for r in D.load_admitted(led)]
-    assert got == ["s0"]
+    assert got == ["s0", "s1"]

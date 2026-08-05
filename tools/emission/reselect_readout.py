@@ -9,7 +9,7 @@ morph_embs.npz, summary.json) plus the rendered release/ dir. Pure, no GPU, no r
   2. Morph-diversity check — pairwise morph-CLIP cos among the 50 released, as a DISTRIBUTION
      (histogram + quantiles + the nearest-pair), so we can see whether the continuous-cos
      coverage fix actually spread the spirals. A PNG accompanies it.
-  3. Strange-candidates sheet — the strange pool above the 0.50 mining release floor, ranked
+  3. Strange-candidates sheet — the strange pool above the mining release floor, ranked
      by mining score, at deploy fidelity (the existing 1280×720 pool JPGs) — the realizable
      strange supply eyeballable in one place.
 
@@ -26,9 +26,16 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.emission import floors as F           # noqa: E402  THE stage-2 cut owner
+
 OUT = ROOT / "scratch" / "first_release"
 REPORT = ROOT / "scratch" / "first_release_reselect_readout.md"
-WP_RELEASE_FLOOR, MN_RELEASE_FLOOR = 0.90, 0.50
+# IMPORTED from the one owner (this file used to re-type `= 0.90, 0.50`).
+WP_RELEASE_FLOOR = F.WALLPAPER_RELEASE.value
+MN_RELEASE_FLOOR = F.MINING_RELEASE.value
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -186,7 +193,8 @@ def main():
     # 3. strange supply (all pool tiles ≥ mining floor)
     strange_rel = sorted(
         [r for r in by_id.values()
-         if r["render_style"] != "smooth" and r.get("passed") and (r.get("p_ge3") or 0) >= MN_RELEASE_FLOOR],
+         if r["render_style"] != "smooth" and r.get("passed")
+         and F.MINING_RELEASE.gate(r.get("p_ge3") or 0)],
         key=lambda r: -(r.get("p_ge3") or 0))
     strange_sheet(strange_rel, released_set, OUT / "strange_candidates_sheet.png")
 

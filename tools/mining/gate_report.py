@@ -21,25 +21,47 @@ reproducible.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 GATE_LOG_DIR = ROOT / "data" / "emission" / "mining_gate_reports"
 
-MINING_GATE_VERSION = "mining_v1"
+# The gate version stamped into every durable row. IMPORTED from the pin (torch-free), never
+# restated: this file used to carry its own `"mining_v1"` literal beside `mining_gate.py`'s,
+# so a pin flip to v2 would have moved the checkpoint and left this log claiming v1 forever.
+from tools.mining.mining_pins import MINING_GATE_VERSION  # noqa: E402
 
 
 def gate_report_row(*, site, key, location, style, palette, p_ge3, release_threshold,
-                    selected, selection_stage, pool_floor=None):
-    """One report-only gate verdict paired with the actual selection outcome.
+                    selected, selection_stage, pool_floor=None, pooled=None):
+    """One gate verdict paired with the actual outcome, at BOTH cut sites.
 
     `p_ge3`      mining head marginal P(label>=3) (None on a render error).
+
+    RELEASE site (report-only):
     `would_pass`/`would_cut` — the counterfactual verdict against the production RELEASE
                  threshold the gate WOULD have used (0.50); the gate did NOT act on it.
-    `selected`   what actually happened (shipped / kept). The join target a calibration
-                 pass reads precision off (`would_cut` ∧ `selected` = a gate false-cut the
-                 selection overrode). `pool_floor` (build site) records the softer
-                 pool-admission counterfactual (0.25) too; it never acts either.
+    `selected`   what actually happened (shipped / kept). The join target a calibration pass
+                 reads precision off: `would_cut` ∧ `selected` = a gate false-cut the
+                 selection overrode.
+
+    POOL site (a HARD cut — capacity ordering, not curation):
+    `pool_floor` / `would_pass_pool` / `would_cut_pool` — the same counterfactual against
+                 the softer pool-admission floor (0.25), and
+    `pooled`     what actually happened AT THAT SITE (did the row enter the gated pool).
+
+    The pool pairing is deliberately recorded even though the pool floor still ACTS, which
+    makes `would_cut_pool == not pooled` by construction today. Two things make it worth the
+    two fields anyway. It is not degenerate against the release outcome — the release draw
+    bypasses the pool floor, so `would_cut_pool` ∧ `selected` is a real false-cut count at
+    the pool operating point, accruing for free on every run. And the pairing is what makes
+    the row readable if the pool floor ever moves or goes report-only: a row that records
+    only "0.25 would have cut this" and never records what happened cannot be joined later.
+    A `pooled=None` (site did not report an outcome) is preserved as null rather than coerced
+    to False, so "not pooled" and "nobody said" stay distinguishable.
     """
     would_pass = p_ge3 is not None and float(p_ge3) >= float(release_threshold)
     row = {
@@ -57,14 +79,22 @@ def gate_report_row(*, site, key, location, style, palette, p_ge3, release_thres
         "selection_stage": selection_stage,
     }
     if pool_floor is not None:
+        wp_pool = (p_ge3 is not None and float(p_ge3) >= float(pool_floor))
         row["pool_floor"] = float(pool_floor)
-        row["would_pass_pool"] = (p_ge3 is not None and float(p_ge3) >= float(pool_floor))
+        row["would_pass_pool"] = wp_pool
+        row["would_cut_pool"] = not wp_pool
+        row["pooled"] = None if pooled is None else bool(pooled)
     return row
 
 
 def write_gate_report(site, rows):
     """Upsert `rows` (keyed by 'key') into data/emission/mining_gate_reports/<site>.jsonl,
-    rewritten sorted by key. Returns (path, n_total, n_would_cut, n_would_cut_selected)."""
+    rewritten sorted by key.
+
+    Returns `(path, n_total, n_would_cut, n_would_cut_selected, pool_counts)`, where
+    `pool_counts` is the same pairing accrued at the POOL site — `{n_with_pool_site,
+    n_would_cut_pool, n_would_cut_pool_pooled, n_would_cut_pool_selected}` — and is all zeros
+    for a site that logs no pool floor (`deploy_tail` has no pool stage)."""
     GATE_LOG_DIR.mkdir(parents=True, exist_ok=True)
     path = GATE_LOG_DIR / f"{site}.jsonl"
     merged: dict = {}
@@ -80,4 +110,20 @@ def write_gate_report(site, rows):
     path.write_text("".join(json.dumps(r) + "\n" for r in ordered), encoding="utf-8")
     would_cut = [r for r in ordered if r.get("would_cut")]
     wc_selected = [r for r in would_cut if r.get("selected")]
-    return path, len(ordered), len(would_cut), len(wc_selected)
+    pool_rows = [r for r in ordered if r.get("pool_floor") is not None]
+    # `would_cut_pool` is DERIVED at read time when absent: rows accrued before the pool
+    # pairing landed carry `would_pass_pool` but not its complement, and a file is a MIX of
+    # both formats after any partial re-run (the upsert preserves untouched keys). Trusting
+    # the stored field alone would silently count every legacy row as "not would-cut".
+    def _wc_pool(r):
+        if "would_cut_pool" in r:
+            return bool(r["would_cut_pool"])
+        return not r.get("would_pass_pool", True)
+    wc_pool = [r for r in pool_rows if _wc_pool(r)]
+    pool_counts = {
+        "n_with_pool_site": len(pool_rows),
+        "n_would_cut_pool": len(wc_pool),
+        "n_would_cut_pool_pooled": sum(1 for r in wc_pool if r.get("pooled")),
+        "n_would_cut_pool_selected": sum(1 for r in wc_pool if r.get("selected")),
+    }
+    return path, len(ordered), len(would_cut), len(wc_selected), pool_counts

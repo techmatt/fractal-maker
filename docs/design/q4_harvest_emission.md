@@ -28,24 +28,54 @@ So for a **floor source**, v7 serves only as a **badness floor**: admit iff
 `p_notbad >= 0.5` (= `P(class >= 2) >= 0.5`, i.e. "not clearly bad") ∧ `guard_pass` ∧
 `distinct` ∧ current-decode. The human does the actual quality pick off the release sheet.
 
+### The badness floor is gone too (2026-08-04)
+
+The paragraph above is what the rule was between the q4 wiring and 2026-08-04. The floor is
+now **deleted**: a floor-admit source takes **no machine quality cut at all**. The half-step
+did not survive its own argument.
+
+- **It kept the veto it was written to remove.** "Reject clear junk" is not a weaker claim
+  than "judge quality"; it is the same claim at a lower threshold, made by the same head the
+  source was selected independently of. On a `human_q3plus` row — a location Matt scored 3 or
+  4 — a machine `p_notbad < 0.5` is the head disagreeing with Matt, and the floor resolved it
+  for the head, silently, at intake.
+- **The number never survived its own head.** `0.5` was chosen on the **v7** `p_notbad`
+  scale and was still being applied under **v10**. Measured on the `q4_harvest` ledger's 108
+  guard-passing rows (`data/emission/q4_harvest/`, v10 rescore sibling): the v7-era floor
+  admitted **75**; the same `0.5` against v10 admitted **57**. An 18-row move in what the
+  intake accepts, with no decision taken about it.
+
+`FLOOR_PNOTBAD` was **deleted rather than set to 0.0** — a zero floor is still a floor, still
+reads as a policy somebody chose, and gets re-tuned by the next person who finds it. Every
+cut that remains in stage 2 lives in **`tools/emission/floors.py`** carrying the head and the
+head *version* it was set against, and refuses to gate when the live pin disagrees.
+
 ### Where the branch lives (`descriptor.py`)
 
-`load_admitted` now factors the quality predicate through `admit_quality(row)`, which is
+`load_admitted` factors the quality predicate through `admit_quality(row)`, which is
 **source-aware**:
 
-- `source_tag_of(row) in FLOOR_ADMIT_SOURCES` → floor: `p_notbad >= FLOOR_PNOTBAD` (`0.5`).
+- `source_tag_of(row) in FLOOR_ADMIT_SOURCES` → **admitted** (no machine quality cut).
 - otherwise → the q3 gate: `decoded_class >= 3`. (`>=`, not `==`: since v8 the head is K=4
   and a row can decode to class 4, which `== 3` would have rejected — silently, and precisely
   the best material.)
 
-**Two sources take the floor**, and the second is the stronger case for the rule.
+`guard_pass`, `distinct` and current-decode still apply to **every** source alike — the
+bypass is of the *quality verdict*, not of the intake. That distinction is what
+`test_intake_fail_closed.test_load_admitted_admits_the_seed_row_end_to_end` pins (a
+guard-failing and a non-distinct floor-admit row are both still rejected).
+
+**Two sources take the bypass**, and the second is the stronger case for the rule.
 `q4_harvest`'s selection signal is the q4 goodness field; `human_q3plus` (the relit library
 seed, `tools/emission/library_seed_v2.py`) is a HUMAN label of 3 or 4 taken with no decode
-consulted at all. Gating either on the head's own q3 verdict lets the head veto material it
-never judged — with `human_q3plus` it would be vetoing Matt's own verdicts. The floor still
-applies to both: floor-admit is not no-admit, it rejects clear junk and defers the quality
-pick to the human. Pinned by `tools/emission/test_intake_fail_closed.py`, which derives the
-tag from `library_seed_v2.MIX_SOURCE` rather than restating it.
+consulted at all. Gating either on the head's own verdict lets the head veto material it
+never judged — with `human_q3plus` it would be vetoing Matt's own verdicts. Pinned by
+`tools/emission/test_intake_fail_closed.py`, which derives the tag from
+`library_seed_v2.MIX_SOURCE` rather than restating it.
+
+**What it moved.** `q4_harvest` 57 → **108** admitted (of 108 guard-passing rows); the
+seven-ledger stage-2 union 700 → **751** (`tools/emission/test_intake_union.py`). The other
+six ledgers admit on the q3 gate and did not move, so the whole delta is attributable.
 
 > **The `current-decode` conjunct is a firewall, not bookkeeping.** `is_current_decoded`
 > (`scorer_version == active_ckpt.ACTIVE_VERSION`) is what makes a stale ledger *unreachable*

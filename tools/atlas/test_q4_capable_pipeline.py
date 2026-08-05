@@ -137,8 +137,11 @@ def test_emission_intake_admits_a_class_4_row():
     assert desc.admit_quality({"decoded_class": 3})
     assert not desc.admit_quality({"decoded_class": 2})
     assert not desc.admit_quality({"decoded_class": None})
-    # a FLOOR source is still gated on the badness floor, untouched by the q3+ widening
+    # a FLOOR-ADMIT source takes NO machine quality cut at all (the v7-era badness floor was
+    # deleted 2026-08-04) — neither the q3 gate nor a p_notbad bar can veto it.
     assert desc.admit_quality({"_source_tag": "q4_harvest", "p_notbad": 0.6,
                                "decoded_class": 1})
-    assert not desc.admit_quality({"_source_tag": "q4_harvest", "p_notbad": 0.4,
-                                   "decoded_class": 4})
+    assert desc.admit_quality({"_source_tag": "q4_harvest", "p_notbad": 0.4,
+                               "decoded_class": 4})
+    assert desc.admit_quality({"_source_tag": "q4_harvest", "p_notbad": 0.0,
+                               "decoded_class": 1})

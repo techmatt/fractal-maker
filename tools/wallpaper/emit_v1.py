@@ -62,16 +62,13 @@ _spec.loader.exec_module(es)
 
 # ---- config surface (tunable in place, no code changes) -------------------- #
 POOL_DEFAULT = REPO / "data/wallpaper_corpus/batches/2026-07-05_wallpaper_humanq3_v1"
-HEAD_CKPT = REPO / "data/wallpaper_head/v3/model_best.pt"   # rollback: revert to v2/model_best.pt
-# Marginal p_ge3 > threshold (good-only). QUALITY-FLOOR / volume-policy dial, overridable
-# via --gate. Retuned 0.5 -> 0.90 for head v3 (see prompts/prompt_gate_retune_v3.md):
-# v3 gained a real precision GRADIENT the flat-on-v2 head lacked (eval precision of passers
-# 0.58@0.5 -> 0.68@0.90 -> 0.78@0.99). On the current dramatic beam the gate is NOT a volume
-# dial — the emission SELECTOR saturates first (winners flat ~21/52-loc-batch across
-# thr in [0.5,0.90], all winners already p_ge3>0.94), so 0.90 buys a higher-quality floor
-# feeding the selector at ZERO volume cost and holds the line on weaker/future pools. Raise
-# toward 0.95+ only to trade ~1 winner for a bit more precision; lower for more volume.
-GATE_THRESHOLD = 0.90
+# The head pin + gate threshold live in the TORCH-FREE `wallpaper_pins`, so a reader that
+# only needs "which head is live, at what gate?" (the stage-2 floor owner's stamp check,
+# every pure readout) does not import torch to ask. RE-EXPORTED under this module's own
+# names because callers reach them as `emit_v1.HEAD_CKPT` / `emit_v1.GATE_THRESHOLD`; the
+# rationale for the 0.90 retune moved with the constant.
+from tools.wallpaper.wallpaper_pins import (  # noqa: E402,F401
+    HEAD_CKPT, GATE_THRESHOLD, HEAD_VERSION)
 PALETTE_CAP_FRAC = 0.05          # selector palette cap = max(2, ceil(frac * N_reachable_cells))
 GRID = es.ColorGrid()            # 3x3 a/b x 2 L = 18 color cells; family x cell = behavior space
 

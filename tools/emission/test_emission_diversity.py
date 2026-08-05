@@ -508,3 +508,144 @@ def test_deficit_rebuild_from_pool_log(tmp_path):
             m.record_fill(cell)
     assert m.attempt_counts[cells[0]] == 2 and m.fill_counts[cells[0]] == 1
     assert m.attempt_counts[cells[1]] == 1 and m.fill_counts[cells[1]] == 1
+
+
+# --------------------------------------------------------------------------- #
+# --target-gated: the POST-FLOOR surplus contract (emission_floors_prompt.md D).
+# --------------------------------------------------------------------------- #
+def _target_pool(tmp_path, **over):
+    """A pool holding one post-floor smooth, one post-floor strange, and three UNGATED
+    strange rows — the shape that made `--target-gated` count rows no floor had vouched for."""
+    eng = B.EmissionDiversity(_args(tmp_path, **over))
+    eng.embs = {}
+    recs = [
+        _gate_rec("em_0", "l0", "smooth", 0.95, ("mandelbrot", "m#0", "k16:1", "smooth")),
+        _gate_rec("em_1", "l1", "tia",    0.70, ("mandelbrot", "m#1", "k16:1", "tia")),
+        _gate_rec("em_2", "l2", "tia",    0.30, ("mandelbrot", "m#2", "k16:2", "tia")),
+        _gate_rec("em_3", "l3", "tia",    0.26, ("mandelbrot", "m#3", "k16:3", "tia")),
+        _gate_rec("em_4", "l4", "stripe", 0.40, ("mandelbrot", "m#4", "k16:4", "stripe")),
+    ]
+    for r in recs:
+        eng.pool.append(r)
+    return eng
+
+
+def test_ungated_strange_never_counts_toward_target_gated(tmp_path):
+    """INJECTION for D. All five rows are release-ELIGIBLE (the mining release floor is
+    report-only), but only two are POST-FLOOR. `--target-gated` must see 2, not 5.
+
+    Red before the fix: the break condition read `len(release_eligible())`, so a target of 5
+    was satisfied by three rows sitting at 0.26-0.40 on the mining scale — the exact "3x
+    post-floor surplus" claim the flag exists to make, made about rows no floor had passed."""
+    eng = _target_pool(tmp_path)
+    assert len(eng.release_eligible()) == 5                  # report-only admits all scored
+    acct = eng.target_accounting()
+    assert acct["post_floor"] == 2
+    assert acct["post_floor_smooth"] == 1 and acct["post_floor_strange"] == 1
+    assert acct["ungated_strange"] == 3
+    assert acct["release_eligible"] == 5
+    assert {r["id"] for r in eng.post_floor()} == {"em_0", "em_1"}
+
+
+def test_a_target_of_three_is_not_met_by_ungated_strange(tmp_path):
+    """THE break condition (`target_met`, which `run_colorize` reads verbatim): with 2
+    post-floor rows and 3 ungated ones, a target of 3 is NOT met and a target of 2 IS.
+
+    Red before the fix on both halves — the old condition counted all 5 release-eligible
+    rows, so a target of 3 (and of 5) read as met."""
+    assert _target_pool(tmp_path, target_gated=3).target_met() is False
+    assert _target_pool(tmp_path / "b", target_gated=5).target_met() is False
+    assert _target_pool(tmp_path / "c", target_gated=2).target_met() is True
+
+
+def test_the_default_target_is_three_times_release_n(tmp_path):
+    """The default is unchanged; only what it COUNTS moved."""
+    eng = B.EmissionDiversity(_args(tmp_path, release_n=12, target_gated=0))
+    assert eng.target_gated == 36
+
+
+def test_post_floor_uses_the_owner_floors_per_head(tmp_path):
+    """Non-vacuity: the split is by HEAD, not a single global floor. A strange row at 0.70
+    is post-floor (mining 0.50); a smooth row at 0.70 is not (wallpaper 0.90)."""
+    eng = B.EmissionDiversity(_args(tmp_path))
+    eng.embs = {}
+    for r in (_gate_rec("em_a", "la", "smooth", 0.70, ("mandelbrot", "a#0", "k16:1", "smooth")),
+              _gate_rec("em_b", "lb", "tia",    0.70, ("mandelbrot", "b#0", "k16:1", "tia"))):
+        eng.pool.append(r)
+    assert {r["id"] for r in eng.post_floor()} == {"em_b"}
+
+
+# --------------------------------------------------------------------------- #
+# gate_report: the POOL-site pairing (emission_floors_prompt.md C).
+# --------------------------------------------------------------------------- #
+def test_gate_report_pairs_the_pool_site_like_the_release_site(tmp_path, monkeypatch):
+    from tools.mining import gate_report as GR
+    monkeypatch.setattr(GR, "GATE_LOG_DIR", tmp_path / "gr")
+    rows = [
+        GR.gate_report_row(site="s", key="k_below", location={}, style="tia", palette="p",
+                           p_ge3=0.10, release_threshold=0.50, pool_floor=0.25,
+                           pooled=False, selected=True, selection_stage="release"),
+        GR.gate_report_row(site="s", key="k_mid", location={}, style="tia", palette="p",
+                           p_ge3=0.40, release_threshold=0.50, pool_floor=0.25,
+                           pooled=True, selected=False, selection_stage="release"),
+    ]
+    below, mid = rows
+    # release site — unchanged
+    assert below["would_cut"] and mid["would_cut"]
+    # pool site — the new pairing, both fields present and joinable
+    assert below["would_cut_pool"] is True and below["pooled"] is False
+    assert mid["would_cut_pool"] is False and mid["pooled"] is True
+    path, n_tot, n_cut, n_cut_sel, pool_c = GR.write_gate_report("s", rows)
+    assert (n_tot, n_cut, n_cut_sel) == (2, 2, 1)
+    assert pool_c == {"n_with_pool_site": 2, "n_would_cut_pool": 1,
+                      "n_would_cut_pool_pooled": 0, "n_would_cut_pool_selected": 1}
+    assert path.exists()
+
+
+def test_a_site_with_no_pool_stage_logs_no_pool_pairing(tmp_path, monkeypatch):
+    """`deploy_tail` has no pool stage. Its rows must not grow a `pooled` field claiming an
+    outcome nobody reported, and its pool counts must read zero rather than zero-of-zero
+    dressed as a measurement."""
+    from tools.mining import gate_report as GR
+    monkeypatch.setattr(GR, "GATE_LOG_DIR", tmp_path / "gr2")
+    row = GR.gate_report_row(site="deploy_tail", key="k", location={}, style="tia",
+                             palette="p", p_ge3=0.10, release_threshold=0.50,
+                             selected=False, selection_stage="keeper")
+    assert "pooled" not in row and "would_cut_pool" not in row
+    _p, _t, _c, _cs, pool_c = GR.write_gate_report("deploy_tail", [row])
+    assert pool_c["n_with_pool_site"] == 0
+
+
+def test_an_unreported_pool_outcome_stays_null_not_false(tmp_path):
+    """`pooled=None` means "nobody said", which is not the same claim as "not pooled" — a
+    calibration pass that cannot tell them apart counts silence as a negative."""
+    from tools.mining import gate_report as GR
+    row = GR.gate_report_row(site="s", key="k", location={}, style="tia", palette="p",
+                             p_ge3=0.10, release_threshold=0.50, pool_floor=0.25,
+                             selected=False, selection_stage="release")
+    assert row["pooled"] is None and row["would_cut_pool"] is True
+
+
+def test_a_legacy_pool_row_still_counts_as_would_cut(tmp_path, monkeypatch):
+    """A gate-report file is a MIX of formats after any partial re-run: the upsert preserves
+    keys it did not touch, so rows accrued before the pool pairing landed carry
+    `would_pass_pool` and no `would_cut_pool`. `write_gate_report` derives the complement at
+    read time; trusting the stored field would count every legacy row as "not would-cut" and
+    quietly shrink the denominator a calibration pass reads."""
+    import json as _json
+    from tools.mining import gate_report as GR
+    d = tmp_path / "gr3"
+    d.mkdir()
+    monkeypatch.setattr(GR, "GATE_LOG_DIR", d)
+    legacy = {"site": "s", "key": "old", "location": {}, "style": "tia", "palette": "p",
+              "gate_version": "mining_v1", "p_ge3": 0.10, "release_threshold": 0.5,
+              "would_pass": False, "would_cut": True, "selected": True,
+              "selection_stage": "release", "pool_floor": 0.25, "would_pass_pool": False}
+    (d / "s.jsonl").write_text(_json.dumps(legacy) + "\n", encoding="utf-8")
+    fresh = GR.gate_report_row(site="s", key="new", location={}, style="tia", palette="p",
+                               p_ge3=0.05, release_threshold=0.50, pool_floor=0.25,
+                               pooled=False, selected=False, selection_stage="release")
+    _p, _t, _c, _cs, pool_c = GR.write_gate_report("s", [fresh])
+    assert pool_c["n_with_pool_site"] == 2
+    assert pool_c["n_would_cut_pool"] == 2          # 1 legacy (derived) + 1 fresh (stored)
+    assert pool_c["n_would_cut_pool_selected"] == 1

@@ -27,12 +27,18 @@ for p in (ROOT, ROOT / "tools" / "corpus", ROOT / "tools" / "scoring"):
 
 from tools.emission import descriptor as D          # noqa: E402
 from tools.emission import ledger_rescore as LR     # noqa: E402
+import corpus_common as cc                          # noqa: E402
 
 # The live census, 2026-08-04, head v10 (`uv run python tools/emission/ledger_rescore.py
-# status`). 700 admitted rows over the seven intake ledgers, 0 cross-ledger same-location
-# overlaps, 11 bare-id collisions that the namespacing keeps apart. The PRE-fix union was 689 —
-# it dropped exactly those 11 distinct locations before aborting on them.
-UNION_ADMITTED = 700
+# status`). 751 admitted rows over the seven intake ledgers, 0 cross-ledger same-location
+# overlaps, 11 bare-id collisions that the namespacing keeps apart. The PRE-namespacing union
+# was 689 — it dropped exactly those 11 distinct locations before aborting on them.
+#
+# 700 -> 751 on 2026-08-04 when the v7-era badness floor was deleted from the floor-admit path
+# (emission_floors_prompt.md §B): `q4_harvest` went 57 -> 108 of its 108 guard-passing rows.
+# The +51 is entirely that one ledger; the other six admit on the q3 gate and did not move.
+UNION_ADMITTED = 751
+Q4_HARVEST_ADMITTED = 108        # the floor-admit ledger, whole (guard ∧ distinct ∧ current)
 ID_COLLISIONS = 11
 LOCATION_OVERLAPS = 0
 
@@ -54,6 +60,27 @@ def test_the_union_is_reachable_and_matches_the_per_ledger_census(union):
     assert diag["n_union"] == per_ledger - diag["n_location_overlaps"]
     assert diag["n_union"] == len(rows) == UNION_ADMITTED
     assert diag["n_location_overlaps"] == LOCATION_OVERLAPS
+
+
+def test_the_floor_admit_ledger_admits_whole(union):
+    """§B, in the one number it moved: `q4_harvest` is a floor-admit source, so its admitted
+    count IS its guard∧distinct∧current-decode count — no machine quality cut remains to
+    subtract. It was 57/108 under the v7-era badness floor read on the v10 scale (and 75/108
+    when that floor was set, under v7): a cut that moved by 18 rows with nobody deciding it,
+    which is what an unstamped floor does."""
+    rows, diag = union
+    q4 = [p for p in LEDGERS if "q4_harvest" in p.as_posix()]
+    assert len(q4) == 1, q4
+    resolved = D.resolve_rows(q4[0])
+    eligible = [r for r in resolved
+                if r.get("guard_pass") and r.get("distinct") and cc.is_current_decoded(r)]
+    assert len(D.load_admitted(q4[0])) == len(eligible) == Q4_HARVEST_ADMITTED
+    assert sum(1 for r in rows if r["_source_ledger"].endswith(
+        "q4_harvest/outcome_ledger.jsonl")) == Q4_HARVEST_ADMITTED
+    # ...and it is the ONLY floor-admit ledger in the union, so the +51 is attributable.
+    floor_admit = {lbl for lbl, r in ((r["_source_ledger"], r) for r in rows)
+                   if D.source_tag_of(r) in D.FLOOR_ADMIT_SOURCES}
+    assert floor_admit == {"data/emission/q4_harvest/outcome_ledger.jsonl"}
 
 
 def test_the_run_scoped_collisions_are_still_counted(union):

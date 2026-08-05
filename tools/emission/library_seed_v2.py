@@ -15,12 +15,14 @@ looks, already clustered at the same cos 0.974 knee the tally uses). Those are t
 seed material in the tree — a human verdict, not a decode — and they are exactly the looks the
 deficit is supposed to know the library already holds.
 
-THE FLOOR-ADMIT PRECEDENT (`q4_harvest_emission.md`). A `q4_harvest` row is admitted on a
-FLOOR (`p_notbad >= 0.5`) rather than on the q3 decode gate, because its selection signal is
-orthogonal to the head's and gating on the head would let the head veto material it never
-judged. The same shape applies here with a stronger floor: the admission condition is a HUMAN
-label of 3 or 4. No decode is consulted, and `mix_source="human_q3plus"` tags every row so the
-provenance is recoverable — the same source-tag mechanism `FLOOR_ADMIT_SOURCES` uses.
+THE FLOOR-ADMIT PRECEDENT (`q4_harvest_emission.md`). A `q4_harvest` row is admitted WITHOUT
+the q3 decode gate, because its selection signal is orthogonal to the head's and gating on the
+head would let the head veto material it never judged. The same shape applies here with a
+stronger warrant: the admission condition is a HUMAN label of 3 or 4. No decode is consulted,
+and `mix_source="human_q3plus"` tags every row so the provenance is recoverable — the same
+source-tag mechanism `FLOOR_ADMIT_SOURCES` uses. (The machine BADNESS floor that used to apply
+on top of that — `p_notbad >= 0.5` — was deleted on 2026-08-04: it was the same veto at a
+lower threshold, and it was a v7-era number still being read on the v10 scale.)
 
 ONE ROW PER LOOK. The queue already carries `first_of_look` from the sitting's own
 leader-radius clustering at cos 0.974. Re-clustering here would be a second opinion on a

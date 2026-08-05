@@ -44,13 +44,21 @@ try:
 except Exception:
     pass
 
+from tools.emission import floors as F           # noqa: E402  THE stage-2 cut owner
+
 LEDGER_DIR = ROOT / "data" / "emission" / "q4_harvest"
-STRICT_WP, STRICT_MN = 0.90, 0.50   # production release floors (strict; here only annotated)
+# Production release floors (strict; here only ANNOTATED, never acted on). IMPORTED from the
+# one owner — this file used to carry `STRICT_WP, STRICT_MN = 0.90, 0.50`, a third copy of a
+# pair the driver and two other readouts each also declared.
+STRICT_WP = F.WALLPAPER_RELEASE.value
+STRICT_MN = F.MINING_RELEASE.value
+POOL_WP = F.WALLPAPER_POOL.value
+POOL_MN = F.MINING_POOL.value
 STRANGE_STYLE_WEIGHT = 0.5
 
 
 def _wallpaper_style(style: str) -> bool:
-    return style == "smooth"
+    return F.head_for_style(style) == F.WALLPAPER_HEAD
 
 
 def _diversity_select(out_dir: Path, gated: list, n: int) -> list:
@@ -89,8 +97,7 @@ def _diversity_select(out_dir: Path, gated: list, n: int) -> list:
 
 
 def _clears_strict(r) -> bool:
-    p = r.get("p_ge3") or 0.0
-    return p >= (STRICT_WP if _wallpaper_style(r["render_style"]) else STRICT_MN)
+    return F.for_style(r["render_style"], "release").gate(r.get("p_ge3") or 0.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -344,10 +351,13 @@ def _markdown(counts, selected, inventory, floor_rejected, rescored, ledger, bot
     L = []
     w = L.append
     w("# q4_harvest emission — release candidates + autopsy (both heads)\n")
-    w("The q4 tight harvest (goodness field, orthogonal to v7) flowed through emission as a "
-      "**floor** source: admitted on `p_notbad>=0.5` ∧ guard_pass ∧ distinct — NOT on v7's "
-      "`decoded_class==3` (see docs/design/q4_harvest_emission.md). Both head scores are shown "
-      "for every tile; the mining head is uncalibrated on strange renders — judge by eye.\n")
+    w("The q4 tight harvest (goodness field, orthogonal to the quality head) flowed through "
+      "emission as a **floor-admit** source: admitted on `guard_pass` ∧ `distinct` ∧ "
+      "current-decode, with NO machine quality cut at all — not the q3 gate, and since "
+      "2026-08-04 not a badness floor either. The head never judged these framings, so it does "
+      "not get to veto them; the human does the quality pick off this sheet. See "
+      "docs/design/q4_harvest_emission.md. Both head scores are shown for every tile; the "
+      "mining head is uncalibrated on strange renders — judge by eye.\n")
 
     w("## Per-stage counts\n")
     w("| stage | count |")
@@ -356,15 +366,16 @@ def _markdown(counts, selected, inventory, floor_rejected, rescored, ledger, bot
     w(f"| rendered (v7 decode) | {counts['rendered']} |")
     w(f"| guard-passed | {counts['guard_passed']} |")
     w(f"| guard-failed | {counts['guard_failed']} ({counts.get('guard_fail_reasons')}) |")
-    w(f"| **floor-admitted** (p_notbad≥0.5) | **{counts['floor_admitted']}** |")
-    w(f"| below floor | {counts['below_floor']} |")
-    w(f"| — for reference, v7 q3 (decoded_class==3) would keep | {counts['for_reference_decoded_class_3']} |")
-    w(f"| intake admitted | {counts['intake_admitted']} |")
+    w(f"| — of which p_notbad≥0.5 at the producer's head (v7-era DIAGNOSTIC, no longer a cut) "
+      f"| {counts['floor_admitted']} |")
+    w(f"| — of which p_notbad<0.5 (same diagnostic; these are admitted now) | {counts['below_floor']} |")
+    w(f"| — for reference, the q3 gate (decoded_class>=3) would keep | {counts['for_reference_decoded_class_3']} |")
+    w(f"| **intake admitted** (guard ∧ distinct ∧ current-decode; no quality cut) | **{counts['intake_admitted']}** |")
     w(f"| **distinct morph clusters** (incremental medoid, cos 0.974) | **{counts['distinct_clusters']}** |")
     w(f"| colorized attempts | {counts['colorized_attempts']} |")
-    w(f"| **gated pool** (pool floors: wp 0.75 / mn 0.25) | **{counts['gated_pool']}** |")
+    w(f"| **gated pool** (pool floors: wp {POOL_WP} / mn {POOL_MN}) | **{counts['gated_pool']}** |")
     w(f"| **release-candidate view** (gated pool, diversity-selected) | **{counts['release_candidates']}** |")
-    w(f"| — of which clear the STRICT production floors (wp 0.90 / mn 0.50) | {counts['strict_release_eligible']} |")
+    w(f"| — of which clear the STRICT production floors (wp {STRICT_WP} / mn {STRICT_MN}) | {counts['strict_release_eligible']} |")
     w("")
     w("**The release-candidate view is the whole gated q4 pool, diversity-selected** (heads never "
       "compared in one greedy step — smooth via the wallpaper head, strange via the mining head, "
@@ -372,7 +383,7 @@ def _markdown(counts, selected, inventory, floor_rejected, rescored, ledger, bot
       "renders, so the view is NOT truncated to the strict-floor subset — Matt judges by eye. "
       f"For reference, the driver's strict-floor pass shipped only "
       f"{counts.get('driver_strict_release_split', {}).get('smooth_selected', 0) + counts.get('driver_strict_release_split', {}).get('strange_selected', 0)} "
-      f"(smooth ≥0.90 + strange ≥0.50).\n")
+      f"(smooth ≥{STRICT_WP} + strange ≥{STRICT_MN}).\n")
 
     w("## Release candidates — both head scores\n")
     w("The gated q4 pool, diversity-selected. `wp`/`mn` = wallpaper-head / mining-head marginal "
@@ -395,7 +406,7 @@ def _markdown(counts, selected, inventory, floor_rejected, rescored, ledger, bot
 
     w("## Reject / pool autopsy\n")
     w(f"- **{len(floor_rejected)}** colorized wallpapers fell below the permissive pool floor "
-      f"(wallpaper 0.75 / mining 0.25) — the reject autopsy in `q4_autopsy_sheet.png` (both "
+      f"(wallpaper {POOL_WP} / mining {POOL_MN}) — the reject autopsy in `q4_autopsy_sheet.png` (both "
       f"heads, best-head-first), showing what the deficit colorize produced that didn't gate.")
     w(f"- **{len(inventory)}** gated-but-not-selected wallpapers banked as inventory "
       f"(0 here — release-n exceeded the gated count, so every gated wallpaper is in the view).")
@@ -403,17 +414,21 @@ def _markdown(counts, selected, inventory, floor_rejected, rescored, ledger, bot
     below = [r for r in rescored if r.get("guard_pass") and (r.get("p_notbad") or 0) < 0.5]
     w(f"- **{len(guard_fail)}** candidates rejected at the guard "
       f"({dict(Counter(r.get('guard_fail') for r in guard_fail))}).")
-    w(f"- **{len(below)}** candidates below the v7 floor (p_notbad<0.5) — the only q4 framings "
-      f"v7 calls clearly bad.")
+    w(f"- **{len(below)}** candidates the producer's head scored `p_notbad<0.5`. These used to "
+      f"be CUT at intake by the v7-era badness floor; they are ADMITTED now — the floor was "
+      f"deleted on 2026-08-04 (`descriptor.admit_quality`), so this is a diagnostic of "
+      f"head/goodness-field disagreement, not a reject count.")
     w("")
-    # per-minibrot floor-admit yield (surfacing whether the floor rejects a big fraction)
-    by_mb = defaultdict(lambda: [0, 0])   # minibrot -> [rendered, floor_admit]
+    # per-minibrot p_notbad>=0.5 rate — the same v7-era diagnostic, per minibrot. It no longer
+    # measures a yield (nothing is cut on it); it measures where the head and the q4 goodness
+    # field disagree, which is the interesting half of what the floor used to hide.
+    by_mb = defaultdict(lambda: [0, 0])   # minibrot -> [rendered, p_notbad>=0.5]
     for r in rescored:
         by_mb[r.get("q4_minibrot_id")][0] += 1
         if r.get("guard_pass") and (r.get("p_notbad") or 0) >= 0.5:
             by_mb[r.get("q4_minibrot_id")][1] += 1
-    w("### floor yield per minibrot\n")
-    w("| minibrot | rendered | floor-admitted |")
+    w("### p_notbad≥0.5 rate per minibrot (diagnostic; NOT a cut)\n")
+    w("| minibrot | rendered | p_notbad≥0.5 |")
     w("|---|--:|--:|")
     for mb, (nr, na) in sorted(by_mb.items(), key=lambda kv: -kv[1][1]):
         w(f"| {mb} | {nr} | {na} |")

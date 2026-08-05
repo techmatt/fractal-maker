@@ -568,7 +568,8 @@ def main():
         style=c["mode"], palette=c["palette"], p_ge3=c["p_ge3"],
         release_threshold=scorer.threshold, selected=(c["cid"] in keeper_cids),
         selection_stage="keeper") for c in cands]
-    gpath, n_tot, n_cut, n_cut_sel = GR.write_gate_report("deploy_tail", gr_rows)
+    # deploy_tail has no pool stage, so it logs no pool floor and `pool_c` is all zeros.
+    gpath, n_tot, n_cut, n_cut_sel, _pool_c = GR.write_gate_report("deploy_tail", gr_rows)
     print(f"[gate-report-only] strange mining gate REPORT-ONLY (not acting): {n_tot} candidate(s) "
           f"logged, {n_cut} would-cut ({n_cut_sel} kept anyway) → {gpath.relative_to(REPO)}")
 
