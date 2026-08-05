@@ -244,8 +244,14 @@ def build(run_dir: Path, record_root: Path, out_html: Path) -> dict:
     selected_rows = [by_id[i] for i in selected_ids]
 
     # --- readouts ------------------------------------------------------- #
-    target_shares = {p: s for p, s in RM.shares(
-        sorted({r["type"] for r in pool_rows})).items()}
+    # The target is solved over the partitions the INTAKE observed, not over the ones the
+    # colorize happened to reach. Reading it over the reached set would renormalize a
+    # partition's demand away precisely because the run never served it — turning "phoenix got
+    # no attempts" into "phoenix was not asked for", which is the failure `unrealized_shares`
+    # exists to prevent one layer up.
+    intake_parts = sorted((runs[-1]["counts"].get("intake_by_partition") if runs else None)
+                          or {r["type"] for r in pool_rows})
+    target_shares = RM.shares(intake_parts)
     readout = {
         "run_dir": str(run_dir.relative_to(ROOT)),
         "record_root": str(record_root),

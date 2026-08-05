@@ -118,7 +118,13 @@ def test_unbinding_restores_the_production_paths():
     """The binding is not a one-way door: with nothing bound, both writers resolve the durable
     store through `paths.durable()` exactly as before."""
     S.use(None)
-    assert RR.record_path(SITE) == (ROOT / RR.RECORD_DIR_REL / f"{SITE}.jsonl")
+    # `paths.durable` directly, NOT `RR.record_path` — that one mkparents, so asserting
+    # through it would create an empty production directory as a side effect of a test that
+    # exists to prove tests do not touch the production store.
+    import paths                                   # noqa: PLC0415
+    assert paths.durable(f"{RR.RECORD_DIR_REL}/{SITE}.jsonl") == \
+        (ROOT / RR.RECORD_DIR_REL / f"{SITE}.jsonl")
+    assert S.is_production()
     assert GR.gate_log_dir() == GR.GATE_LOG_DIR
     assert S.resolves_under_data(ROOT, S.default_record_root(ROOT), SITE)
 
@@ -126,15 +132,20 @@ def test_unbinding_restores_the_production_paths():
 def test_the_ephemeral_run_never_touches_the_production_file(tmp_path):
     """End-to-end of the property, on the real production path: a bound run writes its rows,
     and the production file's bytes are untouched (including when it does not exist)."""
-    prod = RR.record_path(SITE) if S.is_production() else None
-    before = prod.read_bytes() if prod and prod.exists() else None
+    # `paths.durable` without mkparents: `RR.record_path` creates the parent, and a test that
+    # exists to prove nothing touches the production store must not create its directory.
+    import paths                                   # noqa: PLC0415
+    prod = paths.durable(f"{RR.RECORD_DIR_REL}/{SITE}.jsonl")
+    before = prod.read_bytes() if prod.exists() else None
     S.use(tmp_path / "rec")
     RR.write_decisions(SITE, [RR.decision_row(
         run_id="ephemeral_run", stage=RR.STAGE_RELEASE, join_key="k", location_id="L",
         location={}, partition="phoenix", morph_cluster="m#1", decision="selected", score=0.95)])
     S.use(None)
-    after = prod.read_bytes() if prod and prod.exists() else None
+    after = prod.read_bytes() if prod.exists() else None
     assert after == before
+    assert not prod.parent.exists() or before is not None, \
+        "the production record DIRECTORY was created by a run that declared itself ephemeral"
 
 
 if __name__ == "__main__":
