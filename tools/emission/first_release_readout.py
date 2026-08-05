@@ -2,11 +2,11 @@
 r"""first_release_readout.py — the prompt-specific readout for the first real release,
 complementing the driver's own report.py.
 
-Reads ONLY the durable artifacts (scratch/first_release/{pool_log.jsonl, intake.json} +
-data/emission/target_measure.json) — pure, no GPU, safe to run alongside the colorize or
-after it. Produces the §Readout items report.py does not:
+Reads ONLY the durable artifacts (scratch/first_release/{pool_log.jsonl, intake.json}) and
+derives the target from the canonical release-mix ratio table — pure, no GPU, safe to run
+alongside the colorize or after it. Produces the §Readout items report.py does not:
 
-  1. Realized shares vs the target measure — per-partition (type) + palette-flavor + style
+  1. Realized shares vs the target measure — per-partition + palette-flavor + style
      marginals for the GATED pool and the RELEASE set, next to the measure's cell-normalized
      target (what the DeficitModel actually drives) — "where the release lands vs the order book".
   2. Cell reachability over the real library — best_in_cell from actual pool occupancy: which
@@ -35,10 +35,11 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus"):
+for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "scoring"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+import release_mix as RM                          # noqa: E402  THE release-mix ratio table
 from tools.emission import cells as C            # noqa: E402
 from tools.emission import selection as SEL      # noqa: E402
 from tools.emission import descriptor as D       # noqa: E402
@@ -50,7 +51,6 @@ except Exception:
 
 OUT = ROOT / "scratch" / "first_release"
 REPORT = ROOT / "scratch" / "first_release_readout.md"
-MEASURE = ROOT / "data" / "emission" / "target_measure.json"
 WP_RELEASE_FLOOR, MN_RELEASE_FLOOR = 0.90, 0.50
 STYLES = ["smooth", "tia", "stripe", "smooth_mean_angle", "smooth_angle_min",
           "composite_c7_smooth_trap_circle", "composite_c13_smooth_stripe",
@@ -82,28 +82,21 @@ def release_floor(style: str) -> float:
 # --------------------------------------------------------------------------- #
 # Target measure — cell-normalized marginals (what the DeficitModel drives).
 # --------------------------------------------------------------------------- #
-def target_marginals(cluster_tags: dict, by_id_family: dict, flavors, styles,
-                     source_tags: dict | None = None):
-    """The measure's target fraction per cell, aggregated to type / flavor / style marginals.
-    Uses the full feasible support (no attempt-cap eviction) — the nominal order book.
+def target_marginals(cluster_tags: dict, by_id_partition: dict, flavors, styles):
+    """The measure's target fraction per cell, aggregated to partition / flavor / style
+    marginals. Uses the full feasible support (no attempt-cap eviction) — the nominal order
+    book.
 
-    `source_tags` (location_id -> durable ledger tag, from the snapshot) resolves any
-    source-tag measure override to concrete clusters so the readout reflects the SAME weighting
-    the emission drove. Absent it, a source-tag override shows unresolved (no-op) and we say so
-    loudly rather than silently under-report the up-weighted region."""
-    cfg = json.loads(MEASURE.read_text(encoding="utf-8")) if MEASURE.exists() else {}
-    tm = C.TargetMeasure.from_config(cfg)
-    if source_tags:
-        tm.resolve_source_tags(source_tags, cluster_tags)
-    elif any("source_tag" in ov.get("match", {}) for ov in tm.weight_overrides):
-        print("[readout] NOTE: snapshot carries no source_tags — source-tag overrides shown "
-              "UNRESOLVED (no-op). Re-run stage_first_release to persist tags for faithful "
-              "target marginals.", flush=True)
-    observed = sorted({(by_id_family[i], cluster_tags[i]) for i in cluster_tags})
+    Derived the SAME way the emission drove it: `release_mix.shares` over the partitions this
+    snapshot observes, re-solved against the snapshot's own feasible cells. It used to read
+    `data/emission/target_measure.json`, and did so with an `if MEASURE.exists() else {}` that
+    turned an absent measure into a silently UNIFORM target — a readout reporting a release
+    against weights nobody set. That file is gone; the ratio table raises on an unregistered
+    partition instead."""
+    observed = sorted({(by_id_partition[i], cluster_tags[i]) for i in cluster_tags})
     feasible = C.build_feasible_cells(observed, flavors, styles)
-    # Solve any target_share override the SAME way the emission drove it (post source-tag resolve),
-    # so the target column reflects the absolute-share measure, not the unsolved no-op weighting.
-    tm.solve_target_shares(feasible)
+    tm = C.TargetMeasure.from_partition_shares(
+        RM.shares(sorted({p for (p, _c) in observed})), feasible)
     w = np.array([tm.weight(c) for c in feasible], dtype=np.float64)
     tot = w.sum()
     tfrac = w / tot if tot > 0 else w
@@ -253,7 +246,9 @@ def main():
     intake = json.loads((OUT / "intake.json").read_text(encoding="utf-8"))
     tags = intake["cluster_tags"]
     # id -> family from the tag prefix (tag = "<family>#<k>")
-    by_id_family = {i: t.rsplit("#", 1)[0] for i, t in tags.items()}
+    # the tag IS partition-keyed (`descriptor.assign_morph_clusters`), so the cell axis
+    # comes straight off it — no second resolution that could disagree with the snapshot.
+    by_id_partition = {i: t.rsplit("#", 1)[0] for i, t in tags.items()}
     flavors = sorted({r["palette_flavor"] for r in rows}) or ["k16:1"]
 
     n_att = len(rows)
@@ -270,7 +265,7 @@ def main():
     selected, _log = SEL.greedy_select(entries, args.release_n)
     rel_rows = [e["_rec"] for e in selected]
 
-    tgt = target_marginals(tags, by_id_family, flavors, STYLES, intake.get("source_tags"))
+    tgt = target_marginals(tags, by_id_partition, flavors, STYLES)
     real_g = realized_marginals(gated)
     real_r = realized_marginals(rel_rows)
 
@@ -280,7 +275,7 @@ def main():
     n_singleton = sum(1 for _, s in niche.items() if s == 1)
 
     # cell reachability
-    tc_pairs = {(by_id_family[i], t) for i, t in tags.items()}          # feasible (type,cluster)
+    tc_pairs = {(by_id_partition[i], t) for i, t in tags.items()}   # feasible (partition,cluster)
     tc_filled = {(r["type"], r["morph_cluster"]) for r in gated}
     joint_filled = len(niche)
 

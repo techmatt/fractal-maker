@@ -359,11 +359,14 @@ def occupancy(union_rows, tags):
     by_id = {r["id"]: r for r in union_rows}
     # cluster sizes
     cluster_size = Counter(tags.values())
-    # per-family distinct clusters + row counts
-    fam_rows = Counter(r["family"] for r in union_rows)
+    # per-PARTITION distinct clusters + row counts. Keyed by `descriptor.cell_partition`,
+    # not `row["family"]`, so the occupancy table and the cluster tags agree on what a
+    # partition is — a classic-phoenix row is counted under `phoenix:classic`, which is the
+    # cell its tag names.
+    fam_rows = Counter(D.cell_partition(r) for r in union_rows)
     fam_clusters = defaultdict(set)
     for rid, t in tags.items():
-        fam_clusters[by_id[rid]["family"]].add(t)
+        fam_clusters[D.cell_partition(by_id[rid])].add(t)
     # source-tag breakdown
     src_rows = Counter(r["_source_tag"] for r in union_rows)
     src_clusters = defaultdict(set)
@@ -395,7 +398,7 @@ def medoid_sheet(union_rows, tags, medoid_id, occ):
     sheet_dir.mkdir(parents=True, exist_ok=True)
     fam_clusters = defaultdict(list)
     for t, mid in medoid_id.items():
-        fam_clusters[by_id[mid]["family"]].append(t)
+        fam_clusters[D.cell_partition(by_id[mid])].append(t)
     THUMB_W, THUMB_H, PAD, LABEL_H, COLS = 256, 144, 6, 16, 6
     paths = []
     for fam in sorted(fam_clusters):

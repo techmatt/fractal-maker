@@ -170,6 +170,10 @@ class _Engine:
                      {"id": "L2", "family": "phoenix"}]
         self.by_id = {r["id"]: dict(r, outcome_cx="0.1", outcome_cy="0.2", outcome_fw="0.3",
                                     julia_c_re="-0.4", julia_c_im="0.6") for r in self.rows}
+        # the driver's cell axis (`descriptor.cell_partition`), which the funnel counts by.
+        # L2 is an axis-free phoenix row, i.e. the pinned Ushiki point -> `phoenix:classic`.
+        self.partition_of = {"L0": "julia:mandelbrot", "L1": "julia:mandelbrot",
+                             "L2": "phoenix:classic"}
         self.pool = _StubPool([
             dict(id="e0", location_id="L0", type="julia:mandelbrot", morph_cluster="j#0",
                  render_style="smooth", palette="viridis", p_ge3=0.95, passed=True,
@@ -244,7 +248,9 @@ def test_driver_end_to_end_records_gate_and_release(store, monkeypatch):
             if l.strip()]
     c = runs[0]["counts"]
     assert c["intake_admitted"] == 3
-    assert c["intake_by_partition"] == {"julia:mandelbrot": 2, "phoenix": 1}
+    # the funnel is keyed by the CELL PARTITION, so the classic-phoenix row is counted under
+    # `phoenix:classic` and not folded into `phoenix` — the split it is owed a share for.
+    assert c["intake_by_partition"] == {"julia:mandelbrot": 2, "phoenix:classic": 1}
     assert (c["colorized"], c["gate_admitted"], c["release_eligible"], c["released"]) == (3, 1, 1, 1)
     assert c["gate_admitted_by_partition"] == {"julia:mandelbrot": 1}
 

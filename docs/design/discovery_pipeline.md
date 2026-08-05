@@ -53,8 +53,9 @@ emission intake's own coord+CLIP dedup collapses them downstream at library asse
 ## 3. Deficit scheduler — budget in distinct-looks, priced per look
 
 The family-level deficit scheduler allocates cross-partition discovery budget
-denominated in **distinct looks against a target measure** (an order book), replacing a
-single global `p_good` queue whose un-calibrated cross-family comparison drove the mix.
+denominated in **distinct looks against the release-mix ratio table** (an order book —
+`release_mix.shares` over the run's tracked partitions), replacing a single global `p_good`
+queue whose un-calibrated cross-family comparison drove the mix.
 
 - Each partition's **price = active-minutes per distinct look** (online EMA, seeded
   neutral).
@@ -130,9 +131,12 @@ Three things changed with it, each a decision rather than a port:
   the 2026-08-04 census: `mandelbrot` and `julia:mandelbrot` (ratio 3) keep their deficits
   exactly; every ratio-1 partition's target falls to a third of the anchor, and
   `phoenix:classic` to a fifteenth — which drops its share from **13.45% to the 5% floor**, and
-  leaves `phoenix` at its target with zero deficit for the first time. **Emission does not read
-  this table yet** — `tools/emission/cells.py`'s `weight_overrides` / `target_share` still carry
-  their own numbers, and stage 2 wires to it at the next checkpoint.
+  leaves `phoenix` at its target with zero deficit for the first time. **Emission reads the same
+  table since 2026-08-04**: `cells.TargetMeasure.from_partition_shares` re-solves the shares
+  against the live feasible cells (`weight_p = share_p / n_cells_p`), and the deficit
+  scheduler's order book (`deficit_scheduler.target_shares`) takes them directly rather than
+  projecting a measure file down. The hand-placed `data/emission/target_measure.json` and its
+  `weight_overrides` / `target_share` machinery are retired (`retired.md`).
 - **Price.** Measured **active-minutes per currency unit mined**, credited only on a DISTINCT
   ADMISSION (a q3_dup adds nothing to the corpus the deficit counts against, and pricing dups
   as production would make the churniest partition look cheapest). The classifier does reach

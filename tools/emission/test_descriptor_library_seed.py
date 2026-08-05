@@ -57,8 +57,20 @@ def _near(base, cos: float, seed: int):
     return _unit(cos * base + np.sqrt(max(0.0, 1.0 - cos * cos)) * perp)
 
 
-def _row(i, family="mandelbrot"):
-    return {"id": i, "family": family}
+def _row(i, family="mandelbrot", **extra):
+    """A ledger row. The outcome viewport is present because `partitions.partition_of_row`
+    reads the phoenix parameter point through an on-disk SCHEMA marker: a phoenix row with no
+    viewport and no parameter axes is in neither schema, so its point is UNKNOWN and the
+    resolver refuses rather than guessing classic."""
+    return {"id": i, "family": family, "outcome_cx": -0.5, "outcome_cy": 0.1,
+            "outcome_fw": 0.03, **extra}
+
+
+# A VARIED phoenix row: parameter axes present and off the pinned Ushiki point. An axis-free
+# phoenix row resolves to `phoenix:classic` (absent IS the classic point, the whole legacy
+# population), so a fixture that means "varied phoenix" has to say so.
+VARIED_PHOENIX = {"phoenix_c_re": -1.34, "phoenix_c_im": 1.05, "phoenix_p_re": -0.68,
+                  "phoenix_p_im": 0.44, "phoenix_zm1_re": 0.56, "phoenix_zm1_im": 0.13}
 
 
 # the library: 3 mandelbrot clusters + 1 multibrot3 cluster, keyed with an OFFSET and a
@@ -138,9 +150,37 @@ def test_novel_rows_that_duplicate_EACH_OTHER_still_collapse():
 
 def test_a_type_absent_from_the_library_starts_at_zero():
     lib = _library()
-    tags = D.assign_morph_clusters([_row("p", family="phoenix")], {"p": _base(700)},
-                                   library=lib)
+    tags = D.assign_morph_clusters([_row("p", family="phoenix", **VARIED_PHOENIX)],
+                                   {"p": _base(700)}, library=lib)
     assert tags["p"] == "phoenix#0"
+
+
+def test_classic_phoenix_gets_its_own_cell_but_clusters_with_varied_phoenix():
+    """The cell-axis re-key, both halves at once. A classic-phoenix row that near-duplicates
+    a varied-phoenix look shares its CLUSTER INDEX (geometry is unchanged — clustering runs
+    within the base partition) but lands in a `phoenix:classic` CELL, so the phoenix cell no
+    longer absorbs it and the measure can weight the two differently."""
+    b = _base(900)
+    rows = [_row("v", family="phoenix", **VARIED_PHOENIX),
+            _row("c", family="phoenix")]                     # axis-free -> classic
+    tags = D.assign_morph_clusters(rows, {"v": b, "c": _near(b, 0.99, seed=901)})
+    assert tags["v"] == "phoenix#0"
+    assert tags["c"] == "phoenix:classic#0"                  # same cluster index, other cell
+    # ...and a classic row that is morphologically NOVEL founds the next index in the shared
+    # (base-partition) key space, never a parallel one starting at 0.
+    tags2 = D.assign_morph_clusters(rows + [_row("c2", family="phoenix")],
+                                    {"v": b, "c": _near(b, 0.99, seed=901), "c2": _base(902)})
+    assert tags2["c2"] == "phoenix:classic#1"
+
+
+def test_a_phoenix_row_in_neither_parameter_schema_is_refused_not_guessed():
+    """`cell_partition` inherits the resolver's fail-closed rule: a row that cannot express a
+    parameter point has an UNKNOWN one, and a cell axis that guesses would annex varied
+    phoenix into a partition holding one parameter value."""
+    with pytest.raises(ValueError, match="neither on-disk parameter schema"):
+        D.cell_partition({"id": "p", "family": "phoenix"})
+    with pytest.raises(ValueError, match="not a registered partition"):
+        D.cell_partition({"id": "q", "family": "not_a_family"})
 
 
 # --------------------------------------------------------------------------- #
@@ -371,3 +411,112 @@ def test_unseeded_clustering_is_bit_identical_to_the_pre_fix_behaviour():
     tags = D.assign_morph_clusters(rows, embs)
     assert tags == {"r0": "mandelbrot#0", "r1": "mandelbrot#1", "r2": "mandelbrot#2",
                     "r3": "mandelbrot#3", "r4": "mandelbrot#4", "r5": "mandelbrot#2"}
+
+
+# --------------------------------------------------------------------------- #
+# the seed is RE-KEYED at the read, never rewritten
+# --------------------------------------------------------------------------- #
+# The relit seed tags looks family-keyed, so a classic-phoenix look is filed under `phoenix`
+# and `phoenix:classic` can never be seeded — and `verify_library_unmoved` RAISING on a pass
+# that re-keys it is correct behaviour, not an obstacle to code around. So the re-key happens
+# at the READ, off the snapshot's own per-look render block, and the frozen artifact is
+# untouched.
+def _snapshot(tmp_path, tags: dict, entries: dict | None = None, embs: dict | None = None):
+    d = tmp_path / "lib"
+    d.mkdir(parents=True, exist_ok=True)
+    meta = {"cluster_tags": tags}
+    if entries is not None:
+        meta["entries"] = entries
+    (d / D.LIBRARY_INTAKE_NAME).write_text(json.dumps(meta), encoding="utf-8")
+    if embs is not None:
+        D._save_embs(embs, d / D.LIBRARY_EMBS_NAME)
+    return d
+
+
+CLASSIC_RENDER = {"fractal_type": "phoenix", "cx": "0.37", "cy": "0.38", "fw": "0.011"}
+VARIED_RENDER = dict(CLASSIC_RENDER, c_re="-1.34", c_im="1.05", p_re="-0.68", p_im="0.44",
+                     zm1_re="0.56", zm1_im="0.13")
+
+
+def test_a_family_keyed_seed_tag_is_rekeyed_to_partition_cell_identity(tmp_path):
+    tags = {"v": "phoenix#0", "c": "phoenix#1", "m": "mandelbrot#4"}
+    entries = {"v": {"render": VARIED_RENDER}, "c": {"render": CLASSIC_RENDER}}
+    d = _snapshot(tmp_path, tags, entries)
+    got = D.library_assignments(d / D.LIBRARY_INTAKE_NAME)
+    assert got == {"v": "phoenix#0", "c": "phoenix:classic#1", "m": "mandelbrot#4"}
+    # the stored artifact is untouched
+    assert json.loads((d / D.LIBRARY_INTAKE_NAME).read_text(encoding="utf-8"))["cluster_tags"] \
+        == tags
+
+
+def test_the_rekey_round_trips_through_the_base_partition(tmp_path):
+    """Determinism + recoverability: `base_partition(new) + '#' + k` IS the stored tag, so the
+    cluster INDEX space (which is per base partition) is provably untouched by the re-key."""
+    from partitions import base_partition
+    tags = {"v": "phoenix#0", "c": "phoenix#1", "m": "mandelbrot#4", "j": "julia:mandelbrot#2"}
+    entries = {"v": {"render": VARIED_RENDER}, "c": {"render": CLASSIC_RENDER}}
+    got = D.library_assignments(_snapshot(tmp_path, tags, entries) / D.LIBRARY_INTAKE_NAME)
+    for loc_id, new in got.items():
+        part, _, k = new.rpartition("#")
+        assert f"{base_partition(part)}#{k}" == tags[loc_id]
+    assert D.library_assignments(_snapshot(tmp_path, tags, entries)
+                                 / D.LIBRARY_INTAKE_NAME) == got     # deterministic
+
+
+def test_a_rekey_that_would_leave_its_base_partition_is_refused(tmp_path):
+    """A re-key is not a re-cluster. If the per-look record ever disagreed about the base
+    family, that would move committed library state, so it raises."""
+    tags = {"x": "mandelbrot#0"}
+    entries = {"x": {"render": {"fractal_type": "julia_multibrot4"}}}
+    with pytest.raises(D.SeedRekeyError):
+        D.library_assignments(_snapshot(tmp_path, tags, entries) / D.LIBRARY_INTAKE_NAME)
+
+
+def test_a_snapshot_without_entries_passes_through(tmp_path):
+    """The driver's own `intake.json` has no per-look records because its tags are already
+    partition-keyed by `assign_morph_clusters`."""
+    tags = {"a": "phoenix:classic#0", "b": "phoenix#1"}
+    assert D.library_assignments(_snapshot(tmp_path, tags) / D.LIBRARY_INTAKE_NAME) == tags
+
+
+def test_medoids_group_by_base_partition_so_one_cluster_has_one_founder(tmp_path):
+    """`phoenix#3` and `phoenix:classic#3` are ONE cluster (the index space is per base
+    partition), so the seed must offer one medoid for it, not two."""
+    b = _base(1500)
+    embs = {"v": b, "c": _near(b, 0.99, seed=1501), "m": _base(1502)}
+    tags = {"v": "phoenix#3", "c": "phoenix#3", "m": "mandelbrot#0"}
+    entries = {"v": {"render": VARIED_RENDER}, "c": {"render": CLASSIC_RENDER}}
+    d = _snapshot(tmp_path, tags, entries, embs)
+    lib = D.library_medoids(d / D.LIBRARY_INTAKE_NAME, d / D.LIBRARY_EMBS_NAME)
+    assert sorted(lib) == ["mandelbrot", "phoenix"]        # grouped by BASE partition
+    assert [k for k, _e in lib["phoenix"]] == [3]          # one founder for cluster 3
+    # ...and a classic row near that medoid joins cluster 3 and reports the CLASSIC cell.
+    tags2 = D.assign_morph_clusters([_row("new", family="phoenix")],
+                                    {"new": _near(b, 0.99, seed=1503)}, library=lib)
+    assert tags2["new"] == "phoenix:classic#3"
+
+
+def test_the_live_seed_rekeys_deterministically(tmp_path):
+    """The real artifact: today all 26 of its phoenix looks are VARIED, so the re-key is the
+    identity — stated as a measurement, not assumed, and it is the assertion that would flip
+    the moment a classic look enters the seed."""
+    ip = D.DEFAULT_LIBRARY_DIR / D.LIBRARY_INTAKE_NAME
+    if not ip.exists():
+        pytest.skip(f"library seed not built here ({ip})")
+    meta = json.loads(ip.read_text(encoding="utf-8"))
+    got = D.seed_cluster_tags(meta)
+    assert set(got) == set(meta["cluster_tags"])
+    assert got == D.seed_cluster_tags(meta)                 # deterministic
+    moved = {i: (meta["cluster_tags"][i], t) for i, t in got.items()
+             if t != meta["cluster_tags"][i]}
+    assert not moved, f"a live seed look re-keyed: {list(moved.items())[:3]}"
+
+
+def test_render_family_of_resolves_a_derived_partition():
+    """`phoenix:classic` used to raise here, which would have made the partition unrenderable
+    the moment it became addressable on the cell axis."""
+    assert D.render_family_of("phoenix:classic") == "phoenix"
+    assert D.render_family_of("phoenix") == "phoenix"
+    assert D.render_family_of("julia:multibrot4") == "julia_multibrot4"
+    with pytest.raises(ValueError):
+        D.render_family_of("not_a_partition")

@@ -2,226 +2,149 @@
 
 A wallpaper's full descriptor is a point in the product space
 
-    cell = (fractal_type, morph_cluster, palette_flavor, render_style)
+    cell = (partition, morph_cluster, palette_flavor, render_style)
 
 The first two are FIXED by a location's intake; the last two are chosen at colorize
 time. This module maintains, for the *gated pool*, the joint count over these cells,
-a hand-editable target measure, and the resulting per-cell deficit that drives the
+the target measure, and the resulting per-cell deficit that drives the
 conditional-deficit colorizer.
 
 Joint counts (not per-axis marginals) are the whole point: a marginal view ("plenty
 of warm palettes, plenty of spirals") cannot see the hole "warm spirals plentiful,
 cold spirals absent" that the joint count exposes directly.
 
-The `TargetMeasure` is uniform over feasible cells by default, with optional
-per-region weight overrides keyed on any subset of the axes (e.g. "cells whose
-palette_flavor is in {k16:5, k16:6}: weight 2.0"). A cell that repeatedly fails to
-fill (attempt cap reached with zero fills) leaves the support and is logged.
+THE TARGET IS DERIVED, NOT HAND-PLACED. `TargetMeasure` is built by
+`from_partition_shares` from the canonical release-mix ratio table
+(`tools/scoring/release_mix.py`) re-solved against THIS intake's feasible cells:
 
-An override may also key on a durable `source_tag` (the ledger-carried intake source,
-e.g. `classic_phoenix`) INSTEAD of an unstable `morph_cluster` id. `source_tag` is not a
-cell axis, so a consumer that has the intake's (location -> source_tag, location -> cluster)
-maps calls `resolve_source_tags` once to rewrite each such override into the concrete
-`morph_cluster` set those tagged locations currently occupy — re-derived every intake, so
-config never references cluster ids that a re-cluster silently invalidates. A consumer that
-does NOT resolve (the discovery-side per-type projection) sees the `source_tag` key as a
-non-cell axis that never matches, so the override is a no-op there — exactly as a
-cluster-id override on clusters that projection never observes was.
+    weight(cell) = share[partition(cell)] / n_feasible_cells[partition(cell)]
 
-Everything here is pure Python + stdlib so the deficit logic is unit-testable without
-loading a model or rendering a frame.
+so each partition's cells carry exactly its intended share of the measure, whatever its
+morph-cluster count happens to be this intake. That division is the whole content of the
+old `target_share` solver, done once for every partition instead of by hand for one of
+them. It is also what makes the measure DENOMINATOR-INVARIANT: a partition that gains
+clusters does not gain release share, it spreads the same share over more cells.
+
+It used to be a hand-edited `data/emission/target_measure.json` carrying nine literal
+multipliers plus a `target_share` override for classic phoenix, and a fourth consumer
+(`library_intake_2`) carried its own second copy of the classic share. Those numbers said
+the same KIND of thing as the ratio table and disagreed with it (mandelbrot 9.0% vs 22.7%),
+which is what two policies about the same partitions always become. See
+`docs/design/retired.md`.
+
+A cell that repeatedly fails to fill (attempt cap reached with zero fills) leaves the
+support and is logged.
+
+Everything here is pure Python + stdlib — the shares come in as a plain dict, so the
+deficit logic is unit-testable without loading a model or rendering a frame, and this
+module keeps no opinion about which partitions exist.
 """
 from __future__ import annotations
 
-import copy
 import math
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Iterable
 
-# A cell is a 4-tuple of strings. Axis order is fixed and load-bearing (the target
-# measure overrides and the report both address axes by this name order).
+# A cell is a 4-tuple of strings. Axis order is fixed and load-bearing (the report and the
+# per-axis marginals both address axes by this name order). The first axis is the PARTITION
+# (`partitions.partition_of_row`) — it is still spelled `fractal_type` in reports and pool
+# rows because that is what every persisted record calls it.
 AXES = ("fractal_type", "morph_cluster", "palette_flavor", "render_style")
-Cell = tuple  # (type, cluster, flavor, style)
+Cell = tuple  # (partition, cluster, flavor, style)
 
 
 # --------------------------------------------------------------------------- #
 # Target measure — hand-editable config.
 # --------------------------------------------------------------------------- #
 DEFAULT_ATTEMPT_CAP = 6
+DEFAULT_SOFTMAX_TEMP = 0.35
+
+
+class UnknownPartitionCell(KeyError):
+    """A feasible cell names a partition the derived share table has no entry for.
+
+    Refused rather than defaulted to zero: a zero-weight partition is never chosen by the
+    colorizer, its cells report a target of nothing, and the readout says "that partition had
+    no demand" instead of "that partition has no policy" — the same failure
+    `release_mix.check_complete` exists to prevent, one layer down."""
 
 
 @dataclass
 class TargetMeasure:
-    """Hand-editable target measure over feasible cells.
+    """Target measure over feasible cells, DERIVED from per-partition release shares.
 
-    config schema (JSON):
-      {
-        "mode": "uniform",                     # only uniform base supported in v1
-        "attempt_cap": 6,                       # per-cell colorize attempts before eviction
-        "softmax_temp": 0.35,                   # colorizer choice temperature (range-normalized)
-        "weight_overrides": [                   # optional per-region multipliers
-          {"match": {"palette_flavor": ["k16:5", "k16:6"]}, "weight": 2.0},
-          {"match": {"fractal_type": ["mandelbrot"]},        "weight": 1.5},
-          {"match": {"source_tag": ["classic_phoenix"]},     "weight": 1.9}
-        ]
-      }
+    `weights_by_partition[p]` is the weight of ONE cell of partition `p`, so a partition's
+    total measure over the feasible support is exactly its intended share. Built by
+    `from_partition_shares`; there is no config file and no hand-placed override — the policy
+    lives in `tools/scoring/release_mix.RATIO` and nowhere else.
 
-    A cell's base target weight = 1.0 × ∏ (override.weight for every override whose
-    `match` the cell satisfies). An override matches a cell iff, for every axis it
-    names, the cell's value on that axis is in the override's listed values.
-
-    `source_tag` is a durable, non-cell key (see `resolve_source_tags`): a consumer with the
-    intake maps resolves it to concrete morph clusters before scoring; an unresolved consumer
-    treats it as a never-matching axis (the override is a no-op there).
-    """
-    mode: str = "uniform"
+    `attempt_cap` / `softmax_temp` are mechanism, not policy (per-cell colorize attempts before
+    eviction; the colorizer's range-normalized choice temperature), so they are plain defaults
+    here rather than the last two fields of a deleted config file."""
+    weights_by_partition: dict = field(default_factory=dict)
     attempt_cap: int = DEFAULT_ATTEMPT_CAP
-    softmax_temp: float = 0.35
-    weight_overrides: list = field(default_factory=list)
+    softmax_temp: float = DEFAULT_SOFTMAX_TEMP
+    shares: dict = field(default_factory=dict)          # partition -> intended share (report)
+    n_cells_by_partition: dict = field(default_factory=dict)   # partition -> feasible cells
 
     @staticmethod
-    def from_config(cfg: dict | None) -> "TargetMeasure":
-        cfg = cfg or {}
+    def from_partition_shares(shares: dict, feasible_cells: Iterable[Cell],
+                              attempt_cap: int = DEFAULT_ATTEMPT_CAP,
+                              softmax_temp: float = DEFAULT_SOFTMAX_TEMP) -> "TargetMeasure":
+        """Re-solve `shares` (partition -> intended fraction of the release) against the LIVE
+        feasible cells: `weight_p = share_p / n_cells_p`.
+
+        The division is load-bearing and is the one thing a substituted multiplier gets wrong.
+        A partition's measure over its own cells is `n_cells_p × weight_p = share_p`, i.e. its
+        realized target share is its intended share whatever its morph-cluster count — where a
+        raw multiplier would scale each partition's share BY that count, so the family with the
+        most clusters swamps the order book regardless of the policy.
+
+        A partition present in `feasible_cells` with no share raises (`UnknownPartitionCell`).
+        A share for a partition with no feasible cell is dropped and reported in
+        `unrealized_shares` — it cannot be served this intake — and the remaining shares are
+        renormalized so the measure still sums to 1."""
+        feasible = list(feasible_cells)
+        n_cells = Counter(c[0] for c in feasible)
+        missing = sorted(p for p in n_cells if p not in shares)
+        if missing:
+            raise UnknownPartitionCell(
+                f"feasible cells name partition(s) {missing} with no release-mix share. "
+                f"Register them in release_mix.RATIO (and partitions.ALL_FAMS) before an "
+                f"intake can allocate against them.")
+        live = {p: float(shares[p]) for p in n_cells}
+        tot = sum(live.values())
+        if tot <= 0.0:
+            raise ValueError(f"release shares over the live partitions {sorted(live)} sum to "
+                             f"{tot}; no measure can be derived from them")
+        live = {p: v / tot for p, v in live.items()}
         return TargetMeasure(
-            mode=cfg.get("mode", "uniform"),
-            attempt_cap=int(cfg.get("attempt_cap", DEFAULT_ATTEMPT_CAP)),
-            softmax_temp=float(cfg.get("softmax_temp", 0.35)),
-            # deep-copy: resolve_source_tags mutates override match dicts in place, which must
-            # never reach back into the caller's cfg or a sibling TargetMeasure built from it.
-            weight_overrides=copy.deepcopy(list(cfg.get("weight_overrides", []))),
-        )
+            weights_by_partition={p: live[p] / n_cells[p] for p in n_cells},
+            attempt_cap=int(attempt_cap), softmax_temp=float(softmax_temp),
+            shares=live, n_cells_by_partition=dict(n_cells))
 
-    def _axis_index(self, axis: str) -> int | None:
-        """Cell-axis position, or None for a non-cell axis (e.g. an UNRESOLVED `source_tag`)."""
-        return AXES.index(axis) if axis in AXES else None
-
-    def _matches(self, match: dict, cell: Cell) -> bool:
-        """True iff, for every axis `match` names, the cell's value is in that axis's set. A
-        non-cell axis (an unresolved `source_tag`) can never match a bare cell → False (no-op)."""
-        for axis, vals in match.items():
-            idx = self._axis_index(axis)
-            if idx is None or cell[idx] not in vals:
-                return False
-        return True
+    def unrealized_shares(self, shares: dict) -> dict:
+        """`{partition: share}` for partitions the caller asked for that this intake cannot
+        serve (no feasible cell). Reported, never silently absorbed: a partition with demand
+        and no supply is a supply fact, and a renormalized measure alone cannot say it."""
+        return {p: float(v) for p, v in shares.items() if p not in self.weights_by_partition}
 
     def weight(self, cell: Cell) -> float:
-        w = 1.0
-        for ov in self.weight_overrides:
-            # an unsolved target_share override (no numeric `weight`) is a no-op here — it needs
-            # solve_target_shares (which needs the feasible set) to become a concrete multiplier;
-            # until then `.get("weight", 1.0)` folds it to 1.0. On the discovery-side projection
-            # (which never solves) a source-tag target_share stays a no-op, exactly as intended.
-            if self._matches(ov.get("match", {}), cell):
-                w *= float(ov.get("weight", 1.0))
-        return w
+        try:
+            return self.weights_by_partition[cell[0]]
+        except KeyError:
+            raise UnknownPartitionCell(
+                f"cell {cell!r} names partition {cell[0]!r}, which is not in this measure's "
+                f"derived share table {sorted(self.weights_by_partition)}. The measure is "
+                f"solved against a specific feasible set — re-derive it, do not extend it."
+            ) from None
 
-    def resolve_source_tags(self, loc_source_tags: dict, loc_clusters: dict) -> list:
-        """Rewrite every `source_tag` override into a concrete `morph_cluster` override, using
-        THIS intake's live maps `location_id -> source_tag` and `location_id -> morph_cluster`.
-
-        A source-tag override names a location set DURABLY (by the tag its ledger row carries),
-        then re-derives which morph clusters those locations occupy at intake time — so the
-        config never references cluster ids, which are unstable across re-clustering. Mutates
-        `weight_overrides` in place: a match's `source_tag` entry becomes a `morph_cluster`
-        entry (intersected with an existing `morph_cluster` entry if the override names both).
-        Idempotent — a second call finds no `source_tag` keys. Returns per-resolved-override
-        diagnostics (`source_tags`, `n_locations`, `resolved_clusters`, `impure_clusters`)."""
-        members: dict = {}
-        for i, c in loc_clusters.items():
-            members.setdefault(c, []).append(i)
-        diags = []
-        for ov in self.weight_overrides:
-            match = ov.get("match", {})
-            if "source_tag" not in match:
-                continue
-            tags = set(match.pop("source_tag"))
-            tagged = {i for i, t in loc_source_tags.items() if t in tags}
-            clusters = {loc_clusters[i] for i in tagged if i in loc_clusters}
-            if "morph_cluster" in match:
-                clusters &= set(match["morph_cluster"])
-            resolved_locs = {i for i in tagged if loc_clusters.get(i) in clusters}
-            # purity: a resolved cluster that ALSO holds an untagged location means the override
-            # up-weights that non-source-tag member too (the caller's equivalence gate forbids it).
-            impure = sorted(c for c in clusters
-                            if any(i not in tagged for i in members.get(c, [])))
-            match["morph_cluster"] = sorted(clusters)
-            diags.append({
-                "source_tags": sorted(tags),
-                "n_locations": len(resolved_locs),
-                "resolved_clusters": sorted(clusters),
-                "impure_clusters": impure,
-            })
-        return diags
-
-    def _base_weight(self, cell: Cell, skip_ov: dict) -> float:
-        """Cell weight from every override EXCEPT `skip_ov` that already carries a numeric
-        `weight` — i.e. all fixed-weight overrides plus any target-share override solved earlier
-        in the same pass. Unsolved target-share overrides (no `weight` key) are excluded, so a
-        share is always sized against the fixed-weight measure it stacks on."""
-        w = 1.0
-        for ov in self.weight_overrides:
-            if ov is skip_ov or "weight" not in ov:
-                continue
-            if self._matches(ov.get("match", {}), cell):
-                w *= float(ov["weight"])
-        return w
-
-    def solve_target_shares(self, feasible_cells: Iterable[Cell]) -> list:
-        """Convert each `target_share` override into a solved `weight` multiplier so its matched
-        cell set holds EXACTLY that share of the total measure over `feasible_cells`.
-
-        Solved AFTER all fixed-weight overrides: a cell's BASE weight (used to size the share) is
-        the product of every override that already carries a numeric `weight` — the fixed-weight
-        overrides plus any target-share override solved earlier in this pass (`_base_weight`). The
-        share is therefore ABSOLUTE and DECOUPLED from any type-budget knob that also multiplies
-        the matched set: moving that knob scales the base symmetrically, and the re-solved
-        multiplier restores the exact share. It is likewise DENOMINATOR-INVARIANT — enlarging the
-        intake grows the non-matched mass, and the multiplier grows to compensate.
-
-        With base masses A = Σ_{c∈M} base(c) over the matched cells M and B = Σ_{c∉M} base(c) over
-        the rest, the multiplier λ making λA/(λA+B) = s is λ = sB / (A(1−s)). Mutates each solved
-        override in place (`target_share` → `weight`) so `weight()` and every downstream consumer
-        see a plain weight override; idempotent (a second call finds no `target_share` keys).
-
-        Must run AFTER `resolve_source_tags`. A source-tag target_share whose tag never resolved
-        (the discovery-side projection, which does not resolve) matches no feasible cell (A=0) and
-        is LEFT UNTOUCHED — a no-op, exactly as the pre-solve state. Returns per-override
-        diagnostics (`target_share`, `matched_cells`, `solved_multiplier`, `realized_share`)."""
-        feasible = list(feasible_cells)
-        diags = []
-        for ov in self.weight_overrides:
-            if "target_share" not in ov:
-                continue
-            s = float(ov["target_share"])
-            if not (0.0 < s < 1.0):
-                raise ValueError(f"target_share must be in (0,1), got {s}")
-            match = ov.get("match", {})
-            A = B = 0.0
-            nM = 0
-            for c in feasible:
-                base = self._base_weight(c, skip_ov=ov)
-                if self._matches(match, c):
-                    A += base
-                    nM += 1
-                else:
-                    B += base
-            if A <= 0.0:
-                # matched set empty over feasible cells (e.g. an unresolved source_tag): leave the
-                # override a no-op — its `target_share` stays and `weight()` folds it to 1.0.
-                diags.append({"target_share": s, "matched_cells": 0, "solved_multiplier": None,
-                              "realized_share": 0.0, "unsolved_reason": "empty matched set"})
-                continue
-            if B <= 0.0:
-                raise ValueError(
-                    f"target_share {s}: matched set is the ENTIRE measure (B=0); no multiplier "
-                    f"can make it less than 100%")
-            lam = s * B / (A * (1.0 - s))
-            del ov["target_share"]
-            ov["weight"] = lam
-            diags.append({"target_share": s, "matched_cells": nM, "solved_multiplier": lam,
-                          "realized_share": (lam * A) / (lam * A + B)})
-        return diags
+    def partition_shares(self) -> dict:
+        """The realized per-partition target share of this measure: `n_cells_p × weight_p`.
+        THE number both consumers are asserted to agree on."""
+        return {p: self.n_cells_by_partition[p] * w
+                for p, w in self.weights_by_partition.items()}
 
 
 # --------------------------------------------------------------------------- #
@@ -230,12 +153,12 @@ class TargetMeasure:
 def build_feasible_cells(observed_type_cluster: Iterable[tuple],
                          flavors: Iterable[str],
                          styles: Iterable[str]) -> list:
-    """Feasible cells = (observed (type, cluster) pairs) × all flavors × all styles.
+    """Feasible cells = (observed (partition, cluster) pairs) × all flavors × all styles.
 
     A morph cluster that no location realizes cannot be produced, so only OBSERVED
-    (type, cluster) pairs anchor the grid; palette flavor and render style are free
+    (partition, cluster) pairs anchor the grid; palette flavor and render style are free
     choices at colorize time, so every one of them is feasible for every observed
-    (type, cluster)."""
+    (partition, cluster)."""
     flavors = list(flavors)
     styles = list(styles)
     cells = []

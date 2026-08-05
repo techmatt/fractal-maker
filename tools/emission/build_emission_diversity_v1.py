@@ -7,9 +7,10 @@ current). The flow:
 
   1. INTAKE   — admitted locations (current-decode ∧ q3 ∧ guard ∧ distinct), each given a
                 canonical morph-CLIP embedding and a within-type morph-cluster id.
-  2. DEFICIT  — joint counts over (type × morph_cluster × palette_flavor × render_style)
-                for the gated pool; a hand-editable target measure yields a per-cell
-                deficit (cells.py).
+  2. DEFICIT  — joint counts over (partition × morph_cluster × palette_flavor × render_style)
+                for the gated pool; the target measure is DERIVED at intake from the canonical
+                release-mix ratio table (tools/scoring/release_mix.py) re-solved against the
+                live feasible cells, and yields a per-cell deficit (cells.py).
   3. COLORIZE — for each location (type + cluster fixed), pick the (palette flavor, render
                 style) that maximizes the joint deficit (softmax tie-break), pick the best
                 palette in that flavor (pref ranker), render the wallpaper, and score it
@@ -42,10 +43,11 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "mining",
-          ROOT / "tools" / "wallpaper"):
+          ROOT / "tools" / "wallpaper", ROOT / "tools" / "scoring"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+import release_mix as RM                          # noqa: E402  THE release-mix ratio table
 from tools.emission import descriptor as D       # noqa: E402
 from tools.emission import cells as C            # noqa: E402
 from tools.emission import selection as SEL       # noqa: E402
@@ -82,7 +84,6 @@ DEFAULT_MINING_FLOOR = 0.25   # mining-head POOL floor. REPORT-ONLY: no longer c
 # v1 finding (a 0.26 mining tile shipped because the permissive pool floor was the only bar).
 DEFAULT_RELEASE_FLOOR = 0.90          # smooth → wallpaper head production gate
 DEFAULT_MINING_RELEASE_FLOOR = 0.50   # strange → mining head production gate
-DEFAULT_TARGET_MEASURE = ROOT / "data" / "emission" / "target_measure.json"
 DEFAULT_STRANGE_FRAC = 0.5    # target strange share of the release (render-mode split)
 # Within the strange (mining-head) pass, floor the coverage kernel for same-render-style
 # pairs at this value so greedy spreads across the promoted modes before doubling up on one.
@@ -389,44 +390,19 @@ class EmissionDiversity:
         row that no source-tag override can name)."""
         return row.get("mix_source") or row.get("_source_tag")
 
-    @staticmethod
-    def _loc_key(r) -> tuple:
-        """The location identity of a ledger row (what the id is supposed to name)."""
-        return (str(r.get("outcome_cx")), str(r.get("outcome_cy")), str(r.get("outcome_fw")),
-                str(r.get("julia_c_re")), str(r.get("julia_c_im")))
-
     def _load_all_admitted(self) -> list:
-        """Admitted rows across every ledger, each tagged with its source; dedup by id.
+        """Admitted rows across every ledger — `descriptor.load_union_admitted`, which is THE
+        union reader (the census in `ledger_rescore` takes the same one, so "what stage 2
+        would intake" and "what stage 2 intakes" cannot drift).
 
-        A duplicate id whose row resolves to the SAME location is a legitimate cross-ledger
-        overlap and is dropped (first-ledger wins). A duplicate id whose row resolves to a
-        DIFFERENT location is a run-scoped-id COLLISION — `st_<fam>_<arm>_<seq>` ids are
-        reused across independent campaigns for distinct wallpapers, so a silent dedup would
-        drop a genuinely distinct location. That case RAISES: disambiguate the colliding
-        ledgers with an id prefix (see `stage_first_release.py`'s `c1__` scheme) before
-        unioning them."""
-        seen: dict = {}
-        rows = []
-        for lg in self.ledgers:
-            try:
-                label = str(lg.relative_to(ROOT))
-            except ValueError:
-                label = str(lg)                  # ledger outside the repo (e.g. a test tmp dir)
-            for r in D.load_admitted(lg):
-                rid = r["id"]
-                loc = self._loc_key(r)
-                if rid in seen:
-                    if seen[rid][0] != loc:
-                        raise SystemExit(
-                            f"[intake] run-scoped id COLLISION: id {rid!r} names different "
-                            f"locations across ledgers ({seen[rid][1]} @ {seen[rid][0]} vs "
-                            f"{label} @ {loc}). A union-by-id would silently drop a distinct "
-                            f"wallpaper — prefix the colliding ledger's ids (cf. "
-                            f"stage_first_release.py c1__) before unioning.")
-                    continue
-                seen[rid] = (loc, label)
-                r["_source_ledger"] = label
-                rows.append(r)
+        Row identity is namespaced by ledger there, so the 11 run-scoped id collisions across
+        campaign1/campaign2 no longer alias distinct locations and no longer abort the run;
+        deduplication is by LOCATION identity across ledgers. See `descriptor.loc_key`."""
+        rows, diag = D.load_union_admitted(self.ledgers)
+        self.intake_diag = diag
+        print(f"[intake] union over {len(self.ledgers)} ledger(s): {diag['n_union']} admitted "
+              f"({diag['n_location_overlaps']} cross-ledger same-location overlaps dropped; "
+              f"{diag['n_id_collisions']} run-scoped id collisions namespaced apart)", flush=True)
         return rows
 
     def intake(self):
@@ -489,6 +465,10 @@ class EmissionDiversity:
                   f"across {len(set(r['family'] for r in rows))} types", flush=True)
         self.rows = rows
         self.by_id = {r["id"]: r for r in rows}
+        # The cell axis's first coordinate. `row["family"]` is the ledger's partition for the
+        # nine base partitions and WRONG for exactly one — a classic-phoenix row says
+        # `phoenix` — so it goes through the row resolver, which splits on the parameter point.
+        self.partition_of = {r["id"]: D.cell_partition(r) for r in rows}
         self.embs = embs
         self.fields = fields
         self.cluster_tags = tags
@@ -531,41 +511,17 @@ class EmissionDiversity:
         self.flavors = sorted(f for f, names in cell_to_names.items()
                               if any(p in lib.colormaps for p in names))
         self.styles = render_styles(dt)
-        observed = sorted({(self.by_id[i]["family"], self.cluster_tags[i]) for i in self.by_id})
-        cfg = {}
-        if Path(self.args.target_measure).exists():
-            cfg = json.loads(Path(self.args.target_measure).read_text(encoding="utf-8"))
-        self.target = C.TargetMeasure.from_config(cfg)
-        # Resolve any durable source-tag override (e.g. classic_phoenix) into the concrete
-        # morph clusters those tagged locations occupy in THIS intake — config names the
-        # location set by its ledger source tag, never by unstable cluster ids.
-        loc_src = {i: self._source_tag_of(self.by_id[i]) for i in self.by_id}
-        for d in self.target.resolve_source_tags(loc_src, self.cluster_tags):
-            if d["n_locations"] == 0:
-                raise SystemExit(
-                    f"[axes] source_tag override {d['source_tags']} resolved to ZERO "
-                    f"locations — the measure references a source tag absent from this intake")
-            if d["impure_clusters"]:
-                print(f"[axes] WARNING source_tag {d['source_tags']}: "
-                      f"{len(d['impure_clusters'])} resolved cluster(s) also hold untagged "
-                      f"locations (override up-weights those too): {d['impure_clusters'][:5]}",
-                      flush=True)
-            print(f"[axes] source_tag {d['source_tags']} → {d['n_locations']} locations, "
-                  f"{len(d['resolved_clusters'])} morph clusters", flush=True)
+        observed = sorted({(self.partition_of[i], self.cluster_tags[i]) for i in self.by_id})
         feasible = C.build_feasible_cells(observed, self.flavors, self.styles)
-        # Solve any target_share override into an absolute multiplier over the feasible support —
-        # AFTER source-tag resolution (so a source-tag share keys on concrete clusters) and AFTER
-        # all fixed-weight overrides (the share is decoupled from the type-budget knobs it stacks
-        # on). Denominator-invariant: the multiplier is re-solved every intake against the live
-        # feasible mass, so a growing library never dilutes the share (a fixed weight would).
-        for d in self.target.solve_target_shares(feasible):
-            if d["solved_multiplier"] is None:
-                raise SystemExit(
-                    f"[axes] target_share {d['target_share']} matched ZERO feasible cells — the "
-                    f"share references a region absent from this intake (unresolved source tag?)")
-            print(f"[axes] target_share {d['target_share']:.4f} → ×{d['solved_multiplier']:.4f} "
-                  f"over {d['matched_cells']} cells (realized share "
-                  f"{d['realized_share']:.4%} of the measure)", flush=True)
+        # THE target: the canonical release-mix ratio table, re-solved against THIS intake's
+        # feasible cells (weight_p = share_p / n_cells_p). There is no measure file and no
+        # hand-placed override — `release_mix.RATIO` is the single source, and the same derived
+        # shares are what `deficit_scheduler` puts in its order book.
+        self.release_shares = RM.shares(sorted({p for (p, _c) in observed}))
+        self.target = C.TargetMeasure.from_partition_shares(self.release_shares, feasible)
+        print(f"[axes] target from release_mix: "
+              + ", ".join(f"{p} {s:.2%}" for p, s in sorted(self.target.shares.items())),
+              flush=True)
         self.model = C.DeficitModel(feasible, self.target)
         # rebuild deficit counts from the DURABLE pool log (resume safety).
         for r in self.pool.rows:
@@ -708,7 +664,8 @@ class EmissionDiversity:
             return out
         intake_parts: dict = {}
         for r in self.rows:
-            intake_parts[r.get("family")] = intake_parts.get(r.get("family"), 0) + 1
+            part = self.partition_of[r["id"]]
+            intake_parts[part] = intake_parts.get(part, 0) + 1
         return {
             "intake_admitted": len(self.rows),
             "intake_by_partition": intake_parts,
@@ -768,7 +725,7 @@ class EmissionDiversity:
 
     def colorize(self, dt, cm, ranker, heads, row, tracker=None) -> dict | None:
         loc_id = row["id"]
-        ftype = row["family"]
+        ftype = self.partition_of[loc_id]
         cluster = self.cluster_tags[loc_id]
         choice = C.choose_option(self.model, ftype, cluster, self.flavors, self.styles, self.rng)
         if choice is None:
@@ -1087,7 +1044,6 @@ def main():
                     help=f"release supersample (default wallpaper canon {REL_SS})")
     ap.add_argument("--release-filt", default=None,
                     help=f"release downsample filter (default {REL_FILT})")
-    ap.add_argument("--target-measure", default=str(DEFAULT_TARGET_MEASURE))
     ap.add_argument("--max-attempts", type=int, default=240, help="hard-kill backstop")
     ap.add_argument("--time-budget-min", type=float, default=45.0, help="hard-kill backstop")
     ap.add_argument("--palette-pick", choices=["pref", "deficit"], default="pref",

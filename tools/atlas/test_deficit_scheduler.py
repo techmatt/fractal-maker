@@ -18,11 +18,12 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-for p in (ROOT, ROOT / "tools" / "atlas"):
+for p in (ROOT, ROOT / "tools" / "atlas", ROOT / "tools" / "scoring"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
 import deficit_scheduler as D                    # noqa: E402
+import release_mix as RM                         # noqa: E402
 from tools.emission import cells as C            # noqa: E402
 
 
@@ -40,98 +41,64 @@ def _emb(seed, dim=D.EMB_DIM):
 
 
 # --------------------------------------------------------------------------- #
-# 1. Order book: deficit computed from a measure file.
+# 1. Order book: the release-mix ratio table, normalized over the tracked partitions.
+#
+# It used to be `data/emission/target_measure.json` projected down to per-partition marginals
+# by `project_type_marginals`, whose whole job was to DIVIDE OUT the morph-cluster count so a
+# partition's share came from its multiplier and not from its occupancy. That division now
+# happens once on the emission side (`weight_p = share_p / n_cells_p`), so the order book reads
+# the partition shares directly and the projection is gone. The cluster-count-independence
+# property it protected is asserted below — structurally, and against the emission consumer.
 # --------------------------------------------------------------------------- #
-def test_projection_uniform_is_flat():
-    tm = C.TargetMeasure.from_config({"mode": "uniform"})
-    obs = [(p, f"{p}#0") for p in PARTS]
-    mg = D.project_type_marginals(tm, obs, PARTS)
-    assert abs(sum(mg.values()) - 1.0) < 1e-9
-    for v in mg.values():
-        assert abs(v - 0.25) < 1e-9
+def test_order_book_is_the_release_mix_shares():
+    fr = D.target_shares(PARTS)
+    assert abs(sum(fr.values()) - 1.0) < 1e-12
+    assert fr == pytest.approx(RM.shares(PARTS))
+    # the policy, read off the ratio table: the two degree-2 planes carry the release equally
+    # and each is 3x a supporting family.
+    assert fr["mandelbrot"] == pytest.approx(fr["julia:mandelbrot"])
+    assert fr["mandelbrot"] / fr["multibrot5"] == pytest.approx(3.0)
 
 
-def test_projection_type_override_skews():
-    tm = C.TargetMeasure.from_config(
-        {"weight_overrides": [{"match": {"fractal_type": ["multibrot5"]}, "weight": 4.0}]})
-    obs = [(p, f"{p}#0") for p in PARTS]
-    mg = D.project_type_marginals(tm, obs, PARTS)
-    assert abs(sum(mg.values()) - 1.0) < 1e-9
-    assert mg["multibrot5"] > mg["mandelbrot"]
-    # 4 / (4+1+1+1) for the boosted type; 1/7 each for the rest.
-    assert abs(mg["multibrot5"] - 4.0 / 7.0) < 1e-9
-    assert abs(mg["mandelbrot"] - 1.0 / 7.0) < 1e-9
+def test_order_book_renormalizes_over_the_tracked_partitions_only():
+    """A run that tracks two families allocates the whole batch between them, in the table's
+    ratio — the shares are relative, so a partition this run does not track cannot silently
+    take a slice of it."""
+    fr = D.target_shares(["mandelbrot", "multibrot5"])
+    assert set(fr) == {"mandelbrot", "multibrot5"}
+    assert abs(sum(fr.values()) - 1.0) < 1e-12
+    assert fr["mandelbrot"] == pytest.approx(0.75)
 
 
-def test_projection_ignores_unresolved_source_tag_override():
-    # The discovery-side projection does NOT resolve source-tag overrides (it has no intake
-    # loc->tag map), so a source_tag override must be a NO-OP here — never crash, never skew
-    # per-type marginals. This is the gate that the classic-phoenix source-tag rewrite leaves
-    # the deficit scheduler's per-type marginals unaffected.
-    obs = [(p, f"{p}#0") for p in PARTS]
-    base = D.project_type_marginals(C.TargetMeasure.from_config({"mode": "uniform"}), obs, PARTS)
-    tm = C.TargetMeasure.from_config({"weight_overrides": [
-        {"match": {"source_tag": ["classic_phoenix"]}, "weight": 1.9}]})
-    got = D.project_type_marginals(tm, obs, PARTS)      # must not raise
-    for p in PARTS:
-        assert abs(got[p] - base[p]) < 1e-12
+def test_order_book_is_independent_of_cluster_count(tmp_path):
+    """The campaign-2 preflight property, now structural: the order book never sees a cluster.
 
-
-def test_projection_flavor_style_cancel():
-    # an override on a FREE axis (palette_flavor) multiplies the same cell subset for every
-    # type, so it must NOT change the per-type marginal (cancels under normalization).
-    tm = C.TargetMeasure.from_config(
-        {"weight_overrides": [{"match": {"palette_flavor": ["k16:5"]}, "weight": 9.0}]})
-    obs = [(p, f"{p}#0") for p in PARTS]
-    mg_dummy = D.project_type_marginals(tm, obs, PARTS)
-    mg_real = D.project_type_marginals(tm, obs, PARTS,
-                                       flavors=["k16:5", "k16:6"], styles=["smooth", "tia"])
-    for p in PARTS:
-        assert abs(mg_dummy[p] - 0.25) < 1e-9
-        assert abs(mg_real[p] - 0.25) < 1e-9
-
-
-def test_projection_independent_of_cluster_count(tmp_path):
-    # Campaign-2 preflight fix: a type's marginal is set by its MULTIPLIER, INDEPENDENT of how
-    # many observed morph clusters it has (occupancy belongs on the deficit's pool side, not the
-    # target side). Uniform base with 3 mandelbrot clusters vs 1 multibrot5 cluster => still 50/50.
-    tm = C.TargetMeasure.from_config({"mode": "uniform"})
-    obs = [("mandelbrot", "mandelbrot#0"), ("mandelbrot", "mandelbrot#1"),
-           ("mandelbrot", "mandelbrot#2"), ("multibrot5", "multibrot5#0")]
-    parts = ["mandelbrot", "multibrot5"]
-    mg = D.project_type_marginals(tm, obs, parts)
-    assert abs(mg["mandelbrot"] - 0.5) < 1e-9
-    assert abs(mg["multibrot5"] - 0.5) < 1e-9
-
-
-def test_projection_multiplier_beats_cluster_count(tmp_path):
-    # The exact campaign-2 inversion the fix targets: a high-multiplier type with FEW clusters
-    # must out-weight a low-multiplier type with MANY clusters. julia:mandelbrot (2.5x, 4 obs
-    # clusters) must exceed mandelbrot (1.2x, 102 obs clusters) — the reverse of the buggy
-    # count-weighted projection, which crushed julia:mandelbrot to <2%.
-    tm = C.TargetMeasure.from_config({"weight_overrides": [
-        {"match": {"fractal_type": ["julia:mandelbrot"]}, "weight": 2.5},
-        {"match": {"fractal_type": ["mandelbrot"]}, "weight": 1.2}]})
+    Kept as a test rather than deleted with the projection, because it is the property that
+    inverted the whole julia-heavy order when it broke — 102 mandelbrot clusters swamping
+    julia:mandelbrot's 4 regardless of the policy. The assertion is now that the emission
+    consumer, which DOES see clusters, resolves the same shares anyway."""
     obs = ([("mandelbrot", f"mandelbrot#{i}") for i in range(102)]
-           + [("julia:mandelbrot", f"julia:mandelbrot#{i}") for i in range(4)])
+           + [("julia:mandelbrot", "julia:mandelbrot#0")])
     parts = ["mandelbrot", "julia:mandelbrot"]
-    mg = D.project_type_marginals(tm, obs, parts)
-    assert mg["julia:mandelbrot"] > mg["mandelbrot"]
-    # share ∝ multiplier: 2.5/(2.5+1.2) vs 1.2/(2.5+1.2), regardless of the 102-vs-4 counts.
-    assert abs(mg["julia:mandelbrot"] - 2.5 / 3.7) < 1e-9
-    assert abs(mg["mandelbrot"] - 1.2 / 3.7) < 1e-9
+    feasible = C.build_feasible_cells(obs, ["k16:1", "k16:5"], ["smooth", "tia"])
+    tm = C.TargetMeasure.from_partition_shares(D.target_shares(parts), feasible)
+    assert tm.partition_shares() == pytest.approx(D.target_shares(parts))
+    assert tm.partition_shares()["julia:mandelbrot"] == pytest.approx(0.5)
 
 
-def test_deficit_from_measure_file(tmp_path):
-    # write a skewed measure file, build a scheduler, check deficits with an empty tally
-    # equal the projected target (look_frac all zero).
-    mfile = tmp_path / "measure.json"
-    mfile.write_text(json.dumps(
-        {"weight_overrides": [{"match": {"fractal_type": ["multibrot5"]}, "weight": 3.0}]}))
-    sch = D.DeficitScheduler(PARTS, tmp_path, target_path=mfile, prices_path=tmp_path / "none.json")
+def test_an_unregistered_partition_has_no_order_book_entry():
+    """A partition with no declared ratio raises instead of getting a plausible share nobody
+    decided — the `release_mix.check_complete` failure, one layer down."""
+    with pytest.raises(KeyError):
+        D.target_shares(["mandelbrot", "not_a_partition"])
+
+
+def test_deficit_with_an_empty_tally_is_the_order_book(tmp_path):
+    sch = D.DeficitScheduler(PARTS, tmp_path, prices_path=tmp_path / "none.json")
     defs = sch.deficits()
-    assert abs(defs["multibrot5"] - sch.target_frac["multibrot5"]) < 1e-12
-    assert defs["multibrot5"] > defs["mandelbrot"]
+    for p in PARTS:
+        assert abs(defs[p] - sch.target_frac[p]) < 1e-12
+    assert defs["mandelbrot"] > defs["multibrot5"]
 
 
 # --------------------------------------------------------------------------- #
@@ -242,7 +209,7 @@ def test_choose_partition_none_when_all_capped():
 # --------------------------------------------------------------------------- #
 def test_julia_routing_folds_into_cplane(tmp_path):
     sch = D.DeficitScheduler(["multibrot5", "julia:multibrot5"], tmp_path,
-                             target_path=tmp_path / "none.json", prices_path=tmp_path / "none.json")
+                             prices_path=tmp_path / "none.json")
     # force a large julia deficit, zero c-plane deficit.
     sch.target_frac = {"multibrot5": 0.0, "julia:multibrot5": 1.0}
     # julia queue empty, c-plane has nodes -> julia demand routes onto the c-plane parent.
@@ -255,7 +222,7 @@ def test_julia_routing_folds_into_cplane(tmp_path):
 
 def test_julia_routing_no_double_count_when_twin_servable(tmp_path):
     sch = D.DeficitScheduler(["multibrot5", "julia:multibrot5"], tmp_path,
-                             target_path=tmp_path / "none.json", prices_path=tmp_path / "none.json")
+                             prices_path=tmp_path / "none.json")
     sch.target_frac = {"multibrot5": 0.0, "julia:multibrot5": 1.0}
     # julia queue NON-empty -> it competes on its own, no fold onto the parent.
     queue_lens = {"multibrot5": 5, "julia:multibrot5": 3}
@@ -268,7 +235,7 @@ def test_julia_routing_no_double_count_when_twin_servable(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_root_allocation_sums_and_favors_deficit(tmp_path):
     sch = D.DeficitScheduler(["mandelbrot", "multibrot5"], tmp_path,
-                             target_path=tmp_path / "none.json", prices_path=tmp_path / "none.json")
+                             prices_path=tmp_path / "none.json")
     sch.target_frac = {"mandelbrot": 0.9, "multibrot5": 0.1}
     rng = np.random.default_rng(0)
     tot = np.zeros(2)
@@ -289,8 +256,7 @@ def test_seed_from_library_and_resume_safety(tmp_path):
     embs = {"mandelbrot": np.stack([_emb(10), _emb(11), _emb(12)]),      # 3 distinct looks
             "julia:mandelbrot": np.stack([_emb(20)]),                    # 1 distinct look
             "multibrot5": np.stack([_emb(30)])}                          # untracked -> ignored
-    sch = D.DeficitScheduler(parts, tmp_path,
-                             target_path=tmp_path / "none.json", prices_path=tmp_path / "none.json")
+    sch = D.DeficitScheduler(parts, tmp_path, prices_path=tmp_path / "none.json")
     seeded = sch.seed_from_library(embs)
     assert seeded == {"mandelbrot": 3, "julia:mandelbrot": 1}
     assert sch.tally.counts() == {"mandelbrot": 3, "julia:mandelbrot": 1}
@@ -300,15 +266,13 @@ def test_seed_from_library_and_resume_safety(tmp_path):
     # re-seeding is a no-op (tally non-empty) — never double-counts on resume.
     assert sch.seed_from_library(embs) == {}
     # a genuinely fresh scheduler over the SAME dir reloads the seed from npz and still no-ops.
-    sch2 = D.DeficitScheduler(parts, tmp_path,
-                              target_path=tmp_path / "none.json", prices_path=tmp_path / "none.json")
+    sch2 = D.DeficitScheduler(parts, tmp_path, prices_path=tmp_path / "none.json")
     assert sch2.tally.total() == 4
     assert sch2.seed_from_library(embs) == {}
 
 
 def test_scheduler_state_roundtrip(tmp_path):
-    sch = D.DeficitScheduler(PARTS, tmp_path,
-                             target_path=tmp_path / "none.json", prices_path=tmp_path / "none.json")
+    sch = D.DeficitScheduler(PARTS, tmp_path, prices_path=tmp_path / "none.json")
     sch.on_admission("mandelbrot", _emb(1))
     sch.on_admission("mandelbrot", _emb(2))
     sch.charge("multibrot5", 5.0)
@@ -316,8 +280,7 @@ def test_scheduler_state_roundtrip(tmp_path):
     st = sch.state_dict()
     sch.save()
 
-    sch2 = D.DeficitScheduler(PARTS, tmp_path,
-                              target_path=tmp_path / "none.json", prices_path=tmp_path / "none.json")
+    sch2 = D.DeficitScheduler(PARTS, tmp_path, prices_path=tmp_path / "none.json")
     sch2.load_state(st, reopen_caps=True)
     assert sch2.tally.counts() == {"mandelbrot": 2}          # reloaded from npz
     assert abs(sch2.prices.price["multibrot5"] - sch.prices.price["multibrot5"]) < 1e-9
@@ -353,7 +316,6 @@ def _write_library(tmp_path, per_partition: dict, *, seed0: int = 100):
 
 def _sched(tmp_path, parts):
     return D.DeficitScheduler(parts, tmp_path / "run",
-                              target_path=tmp_path / "none.json",
                               prices_path=tmp_path / "none.json")
 
 

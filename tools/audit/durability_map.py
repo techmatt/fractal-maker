@@ -197,8 +197,13 @@ REGISTRY = [
      "OK — and this is the OTHER artifact that surfaced: the julia seed pool used to live "
      "at scratch/q4_decisive/julia_seed_pool.json and now has a committed producer writing "
      "it durably. Fixed already; listed so the map is complete."),
-    ("data/emission/target_measure.json, data/test_{renders,palettes}.json", "hand-edited", DUR,
+    ("data/test_{renders,palettes}.json", "hand-edited", DUR,
      "hand-authored config, not derived", N, "OK. Negated, committed."),
+    ("data/emission/target_measure.json", "hand-edited", "DELETED",
+     "the emission target is DERIVED from tools/scoring/release_mix.py at intake "
+     "(cells.TargetMeasure.from_partition_shares); the file's nine hand-placed multipliers "
+     "were a second policy about the same partitions", N,
+     "GONE 2026-08-04. Not an artifact any more — no reader, no rebuild command."),
     ("data/library/library_records.jsonl, data/library_embeddings/embeddings.npz",
      "tools/wallpaper/library_records_build.py, tools/curation/colored_clip.py", DUR,
      "re-embed the library (deterministic given the records)", Y,

@@ -8,8 +8,7 @@ selection; NO wallpapers. Same machinery and rules as campaign1_intake — in fa
 campaign1_intake's primitives verbatim (reconcile + loud-exit, the control-envelope julia
 anchor, the kill-safe morph-CLIP embed, the incremental-medoid cluster, occupancy, medoid
 sheets) by redirecting that module's ledger/output config. The only new code here is the
-four-ledger config, the classic-phoenix cluster-space analysis, and the measure-loader
-verification + proposed override stanza.
+four-ledger config and the classic-phoenix cluster-space analysis.
 
 Four ledgers (source tags):
   c2_breadth      — campaign-2 breadth
@@ -54,7 +53,7 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "wal
 import paths                                        # noqa: E402   durability-class declaration
 from tools.emission import descriptor as D          # noqa: E402
 from tools.emission import campaign1_intake as c1i   # noqa: E402  (reused primitives)
-from tools.emission import cells as C                # noqa: E402  (TargetMeasure — override verify)
+import release_mix as RM                            # noqa: E402  the release-mix ratio table
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -77,8 +76,6 @@ LEDGERS = [
 # count is loaded for a full-library cross-reference (not re-clustered here). Read from the
 # durable campaign1 snapshot, the same path its writer now lands.
 C1_INTAKE_JSON = c1i.INTAKE_JSON
-TARGET_MEASURE = ROOT / "data" / "emission" / "target_measure.json"
-CLASSIC_RELEASE_SHARE = 0.02   # the hand-placed classic-phoenix release-share target
 
 
 # --------------------------------------------------------------------------- #
@@ -185,7 +182,7 @@ def julia_anchor(union_rows, n_sample: int):
 
 
 # --------------------------------------------------------------------------- #
-# Classic-phoenix cluster-space analysis — the address for the measure override.
+# Classic-phoenix cluster-space analysis — where classic lands in morph space.
 # --------------------------------------------------------------------------- #
 def phoenix_cluster_space(union_rows, tags):
     """Where classic phoenix lands relative to the varied (grid) phoenix motif. Both share
@@ -217,46 +214,10 @@ def phoenix_cluster_space(union_rows, tags):
     }
 
 
-def measure_override(classic_clusters, occ):
-    """Verify the measure loader accepts a `morph_cluster` set in weight_overrides, and build
-    the exact stanza a human would add for a ~CLASSIC_RELEASE_SHARE classic-phoenix share.
-    Does NOT edit the measure — report only."""
-    # verification: a TargetMeasure with a morph_cluster-set override must match a cell on that
-    # axis (index 1) and multiply its weight. Probe with a synthetic cell.
-    probe_ok = True
-    verify_err = None
-    try:
-        tm = C.TargetMeasure.from_config(
-            {"weight_overrides": [{"match": {"morph_cluster": list(classic_clusters)}, "weight": 5.0}]})
-        cl = classic_clusters[0] if classic_clusters else "phoenix#0"
-        hit = ("phoenix", cl, "k16:0", "smooth")        # (fractal_type, morph_cluster, flavor, style)
-        miss = ("phoenix", "phoenix#999999", "k16:0", "smooth")
-        probe_ok = (abs(tm.weight(hit) - 5.0) < 1e-9) and (abs(tm.weight(miss) - 1.0) < 1e-9)
-    except Exception as e:
-        probe_ok = False
-        verify_err = f"{type(e).__name__}: {e}"
-
-    # weight to target ~CLASSIC_RELEASE_SHARE of the release measure. Under the uniform base each
-    # feasible (type,cluster) cell has equal base weight; a multiplier W on the K classic clusters
-    # makes their share ~ W*K / (W*K + (N-K)) where N = total observed (type,cluster) pairs. Solve
-    # for W given the target share s:  W = s(N-K) / ((1-s)K).
-    n_pairs = int(occ["n_clusters"])           # total observed (type, cluster) pairs in this intake
-    k = len(classic_clusters)
-    s = CLASSIC_RELEASE_SHARE
-    if k and k < n_pairs and 0 < s < 1:
-        w = round(s * (n_pairs - k) / ((1.0 - s) * k), 3)
-    else:
-        w = None
-    stanza = {"match": {"morph_cluster": list(classic_clusters)}, "weight": w}
-    return {"loader_accepts_morph_cluster": bool(probe_ok), "verify_err": verify_err,
-            "n_pairs": n_pairs, "k_classic_clusters": k, "target_share": s,
-            "proposed_weight": w, "stanza": stanza}
-
-
 # --------------------------------------------------------------------------- #
 # Readout.
 # --------------------------------------------------------------------------- #
-def write_report(recon, anchor, occ, sheet_paths, phx, measure, c1_distinct):
+def write_report(recon, anchor, occ, sheet_paths, phx, c1_distinct):
     L, w = [], None
     out = []
     def w(s=""):
@@ -366,25 +327,18 @@ def write_report(recon, anchor, occ, sheet_paths, phx, measure, c1_distinct):
           f"{'  [MIXED]' if t in phx['mixed'] else ''}")
     w("```\n")
 
-    w("## 5. Proposed classic-phoenix measure override (report-only — human applies)\n")
-    ok = measure["loader_accepts_morph_cluster"]
-    w(f"**Measure loader accepts `morph_cluster` sets in `weight_overrides`: "
-      f"{'YES' if ok else 'NO'}.** Verified against `cells.TargetMeasure.weight` (a synthetic cell "
-      "on the classic cluster ids gets the override multiplier; a non-member cell gets 1.0)"
-      + ("." if ok else f" — FAILED: {measure['verify_err']}. Fix cells.TargetMeasure before applying.")
-      + "\n")
-    w(f"For a **~{measure['target_share']:.0%} classic-phoenix release share**: with "
-      f"K={measure['k_classic_clusters']} classic clusters out of N={measure['n_pairs']} observed "
-      f"(type,cluster) pairs, the uniform-base multiplier is "
-      f"**W={measure['proposed_weight']}** (W = s(N−K)/((1−s)K)). The exact stanza to add to "
-      f"`{TARGET_MEASURE.relative_to(ROOT)}` `weight_overrides` (do NOT let this tool edit the "
-      "measure — left to the human):\n")
-    w("```json")
-    w(json.dumps(measure["stanza"], indent=2))
-    w("```")
-    w("This up-weights only the classic-phoenix cluster cells; N grows as more (type,cluster) "
-      "pairs enter the library, so re-tune W against the live feasible-cell census at emission "
-      "time.\n")
+    w("## 5. Classic-phoenix release share\n")
+    w(f"Classic phoenix is its own partition (`partitions.CLASSIC_PHOENIX`), and its share of "
+      f"the release is declared ONCE, as a ratio, in `tools/scoring/release_mix.py` "
+      f"(`phoenix:classic` = {RM.ratio_of('phoenix:classic')} against `phoenix` = "
+      f"{RM.ratio_of('phoenix')}). The emission measure derives per-cell weights from that "
+      f"table against the live feasible cells at intake "
+      f"(`cells.TargetMeasure.from_partition_shares`), so there is nothing to hand-place here "
+      f"and no second copy of the share to keep in step — this section used to propose a "
+      f"`weight_overrides` stanza and carried its own `CLASSIC_RELEASE_SHARE = 0.02` literal. "
+      f"Over the ratio table's full registry classic is "
+      f"**{RM.shares()['phoenix:classic']:.2%}** of the release; the realized share of any one "
+      f"intake is over the partitions THAT intake observes.\n")
 
     w("## 6. Medoid contact sheets\n")
     w("Grayscale morph medoids (founding member of each cluster), one sheet per family:\n")
@@ -429,7 +383,6 @@ def main():
     tags, medoid_id = c1i.cluster(union_rows, embs)
     occ = c1i.occupancy(union_rows, tags)
     phx = phoenix_cluster_space(union_rows, tags)
-    measure = measure_override(phx["classic_clusters"], occ)
 
     c1_distinct = None
     if C1_INTAKE_JSON.exists():
@@ -438,11 +391,11 @@ def main():
     paths.durable(INTAKE_REL, mkparents=True).write_text(json.dumps({
         "cluster_tags": tags, "medoid_id": medoid_id,
         "occupancy": {k: v for k, v in occ.items() if k != "cluster_size"},
-        "phoenix_cluster_space": phx, "measure_override": measure,
+        "phoenix_cluster_space": phx,
     }, indent=1), encoding="utf-8")
 
     sheet_paths = c1i.medoid_sheet(union_rows, tags, medoid_id, occ)
-    write_report(recon, anchor, occ, sheet_paths, phx, measure, c1_distinct)
+    write_report(recon, anchor, occ, sheet_paths, phx, c1_distinct)
     c1i.log("[done] library intake 2 complete.")
 
 

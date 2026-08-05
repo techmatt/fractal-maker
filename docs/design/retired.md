@@ -321,3 +321,48 @@ an item's evidence, the line points at it rather than restating it.
   `[code: data/discovery/allocator_prereg_v1.json amendment 1;
   tools/atlas/compare_allocator_runs.py::voided_windows (the void binds the reader);
   tools/atlas/steered_frontier.py `--scheduler` — unchanged, deliberately]`
+
+- **2026-08-04 — the hand-placed emission target measure (`data/emission/target_measure.json`)
+  and the config machinery that read it.** The emission per-cell target now DERIVES from the
+  canonical release-mix ratio table (`tools/scoring/release_mix.RATIO`) at intake time:
+  `weight_p = share_p / n_feasible_cells_p`, re-solved against the live feasible cells
+  (`cells.TargetMeasure.from_partition_shares`). The discovery order book
+  (`deficit_scheduler.target_shares`) reads the same derived shares, so the two stages cannot
+  hold two policies about the same partitions again.
+  **Deleted with the file, not kept as dead code:** `TargetMeasure.{from_config,
+  resolve_source_tags,solve_target_shares,weight_overrides}` and
+  `deficit_scheduler.{load_target,project_type_marginals}`. They existed only to read that
+  file's nine literal multipliers, its `source_tag` indirection and its one `target_share`
+  override; nothing else called them. `library_intake_2`'s own `CLASSIC_RELEASE_SHARE = 0.02`
+  went with them (a second copy of the same policy) and its `--target-measure` /
+  `--scheduler-target` flags are gone.
+  **Basis.** The file and the ratio table disagreed about the same partitions — mandelbrot
+  9.0% vs 22.7% intended, multibrot4 1.9% vs 7.6%, julia:multibrot4 18.9% vs 7.6% (basis: the
+  9 `weight_overrides` projected per-type vs `release_mix.shares()`, 2026-08-04). The two
+  properties the machinery bought are kept and are now structural for EVERY partition rather
+  than solved for one: absolute share (a partition's cells hold exactly its share) and
+  denominator-invariance (growing a partition's morph-cluster count spreads the same share
+  over more cells instead of enlarging it).
+  **The file was deleted rather than made a derived, regenerable artifact** because what would
+  have been left in it after the weights moved out is `attempt_cap` and `softmax_temp` — two
+  mechanism knobs that are already code defaults. Absence fails loud by there being no reader:
+  `first_release_readout` had an `if MEASURE.exists() else {}` that turned an absent measure
+  into a silently UNIFORM target, and `tools/scoring/test_release_mix_one_source.py` scans the
+  tree for any reader coming back.
+  `[decision: prompts/emission_releasemix_prompt.md §B, Matt, 2026-08-04]`
+  `[code: tools/emission/cells.py::TargetMeasure.from_partition_shares;
+  tools/atlas/deficit_scheduler.py::target_shares;
+  tools/scoring/test_release_mix_one_source.py]`
+
+- **2026-08-04 — the `c1__` prefixed-ledger-COPY scheme for run-scoped id collisions.**
+  Campaign1 and campaign2 mint `st_<fam>_<arm>_<seq>` per campaign and reuse 11 of them for
+  different locations across the seven intake ledgers, which aborted the emission union.
+  `stage_first_release.py` handled it by writing id-prefixed COPIES of the campaign1 ledgers —
+  to `scratch/`, where they were deleted, taking the only reachable union with them.
+  Replaced by namespacing row identity BY LEDGER at the reader
+  (`descriptor.load_union_admitted`): no ledger row is rewritten, no copy is minted, and
+  deduplication moves onto location identity (`descriptor.loc_key`, unchanged), which is the
+  axis that can actually carry it. The union went from unreachable to **700** admitted rows.
+  `[code: tools/emission/descriptor.py::{ledger_namespace,load_union_admitted};
+  tools/emission/test_intake_union.py; tools/emission/stage_first_release.py — kept, marked
+  SUPERSEDED, deliberately not deleted]`

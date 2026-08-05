@@ -15,8 +15,10 @@ it, and where to start.
 
 All three are gated on the **release review**, which has exactly two outcomes:
 
-- **Distribution off** → dictate reweights to the target measure (applied by a prompt; the
-  measure is not hand-edited). This is the trigger — the items below come online as needed.
+- **Distribution off** → dictate new ratios in `tools/scoring/release_mix.RATIO`, the one
+  place the intended mix is expressed; the emission measure is derived from it at intake and
+  is not hand-edited (`retired.md`, 2026-08-04). This is the trigger — the items below come
+  online as needed.
 - **Distribution fine** → the cluster stays parked.
 
 **Interpretation guard:** a skewed release is a reweight signal only if the skew is in the

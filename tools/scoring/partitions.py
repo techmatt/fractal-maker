@@ -193,6 +193,26 @@ def is_classic_phoenix(row) -> bool:
     return phoenix_point(row) == PHOENIX_CLASSIC_POINT
 
 
+def partition_of_token(token, default=None):
+    """Partition for a family token that may ALREADY be a partition key.
+
+    Two on-disk spellings name the same thing and one resolver has to read both. A corpus
+    render block carries the Rust `fractal_type` (`julia_multibrot4`); a DISCOVERY LEDGER's
+    `family` field carries the PARTITION (`julia:multibrot4`) — the ledgers have been written
+    that way since the julia planes were namespaced, which is why `production_seeder.t_good_for`
+    takes `row["family"]` straight. Passing a ledger `family` through `FT2FAM` alone answers
+    `default` for every julia row, so the emission cell axis silently loses them.
+
+    A token already in `ALL_FAMS` passes through (including a DERIVED one — a writer that
+    stamped `phoenix:classic` is telling us the answer). Anything else is `default`, exactly as
+    `partition_of`. TOKEN-ONLY: the phoenix split needs the whole row (`partition_of_row`)."""
+    if token in FT2FAM:
+        return FT2FAM[token]
+    if token in ALL_FAMS:
+        return token
+    return default
+
+
 def partition_of(fractal_type: str, default=None):
     """Partition key for a row's `fractal_type`.
 
@@ -214,11 +234,14 @@ def partition_of_row(row, default=None):
     carrying a family token (`fractal_type` or `family`) plus, for phoenix, its parameter
     axes in either on-disk schema. `default` behaves exactly as in `partition_of`.
 
+    The token is read through `partition_of_token`, so a ledger row whose `family` is already
+    a partition key resolves to itself instead of falling to `default`.
+
     The only thing this adds over `partition_of` is the phoenix split, and it adds it at the
     READER: nothing on disk is re-keyed, and a writer that never heard of `phoenix:classic`
     still produces rows that resolve correctly."""
     ft = row.get("fractal_type") or row.get("family")
-    part = FT2FAM.get(ft, default)
+    part = partition_of_token(ft, default)
     if part == "phoenix" and is_classic_phoenix(row):
         return _registered(CLASSIC_PHOENIX)
     return part

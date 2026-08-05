@@ -1312,7 +1312,6 @@ class SteeredFrontier:
         if getattr(args, "scheduler", False):
             self.scheduler = dsched.DeficitScheduler(
                 self.partitions, self.run_dir,
-                target_path=getattr(args, "scheduler_target", None),
                 prices_path=getattr(args, "scheduler_prices", None))
             # Seed the distinct-look baseline from the campaign-1 library (per-partition medoid
             # embeddings) so deficits measure LIBRARY-WIDE scarcity, not run-local scarcity.
@@ -4465,9 +4464,6 @@ def main():
                     help="ENABLE the family-level deficit scheduler: cross-partition allocation "
                          "by price-weighted DISTINCT-LOOK deficit vs the target measure, instead "
                          "of a single global p_good queue. DEFAULT OFF (byte-identical).")
-    ap.add_argument("--scheduler-target", type=str, default=None,
-                    help="target measure to project into the per-partition order book "
-                         "(default data/emission/target_measure.json)")
     ap.add_argument("--scheduler-prices", type=str, default=None,
                     help="seed price / cap / routing config (default data/atlas/scheduler_prices.json)")
     ap.add_argument("--allow-unseeded", action="store_true",

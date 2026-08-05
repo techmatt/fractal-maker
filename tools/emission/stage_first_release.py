@@ -33,6 +33,14 @@ Outputs (scratch/first_release/):
   stage_report.json                            reconcile + validation + stale-rejection proof
 
   uv run python tools/emission/stage_first_release.py
+
+SUPERSEDED 2026-08-04 — READ THIS BEFORE RUNNING IT. The `c1__` prefixed-ledger-COPY scheme
+below is not how the collision is handled any more. Row identity is namespaced BY LEDGER at
+the reader (`descriptor.load_union_admitted`), so the driver unions the seven ledgers directly
+and no copy of a ledger is ever written. The copy scheme is what put load-bearing ledgers under
+`scratch/`, where they were deleted; do not resurrect it. This module also cannot run today:
+both intake snapshots it unions (`data/emission/{campaign1,library_intake_2}/intake.json`) went
+with the same wipe. It is kept as the record of how the 1387-location snapshot was assembled.
 """
 from __future__ import annotations
 
@@ -77,8 +85,11 @@ I2_LEDGERS = [
     ("classic_phoenix", ROOT / "data" / "discovery" / "classic_phoenix" / "outcome_ledger.jsonl"),
 ]
 C1_PREFIX = "c1__"
-# The 41 classic-phoenix clusters the measure up-weights; MUST survive verbatim.
-MEASURE_PHOENIX = [f"phoenix#{k}" for k in range(196, 237)]
+# The 41 classic-phoenix clusters, which MUST survive the union verbatim. They used to be
+# named here because the target measure up-weighted them by cluster id; the measure is gone
+# and classic phoenix is a PARTITION now (`partitions.CLASSIC_PHOENIX`) whose share comes from
+# `release_mix.RATIO`, so this list is a snapshot-integrity check and nothing else.
+CLASSIC_PHOENIX_CLUSTERS = [f"phoenix#{k}" for k in range(196, 237)]
 
 
 def _admitted_rows(ledgers) -> dict:
@@ -179,7 +190,7 @@ def main():
     # library_intake_2's classic clusters survived the union (the equivalence gate that the
     # classic-tagged set == this cluster set is checked at emission).
     have_phx = set(merged_tags.values())
-    missing_phx = [t for t in MEASURE_PHOENIX if t not in have_phx]
+    missing_phx = [t for t in CLASSIC_PHOENIX_CLUSTERS if t not in have_phx]
     assert not missing_phx, f"classic-phoenix clusters missing from snapshot: {missing_phx[:5]}"
     # embedding dim consistent.
     dims = {e.shape[0] for e in embs.values()}

@@ -124,7 +124,7 @@ def diff(library_dir: Path) -> dict:
                 crosses_source_boundary=bool(srcs_a - srcs_b or srcs_b - srcs_a)))
 
     per_type = {}
-    for t in sorted({r["family"] for r in rows}):
+    for t in sorted({D.cell_partition(r) for r in rows}):
         per_type[t] = dict(
             committed=len({v for k, v in committed.items() if k in embs and v.startswith(t + "#")}),
             one_pass=len({v for k, v in onepass.items() if v.startswith(t + "#")}))

@@ -29,85 +29,11 @@ import corpus_common as cc                     # noqa: E402
 # --------------------------------------------------------------------------- #
 # cells.py — target measure, feasible cells, deficit, attempt cap, colorizer choice.
 # --------------------------------------------------------------------------- #
-def test_target_measure_overrides():
-    tm = C.TargetMeasure.from_config({
-        "attempt_cap": 3,
-        "weight_overrides": [
-            {"match": {"palette_flavor": ["k16:5"]}, "weight": 2.0},
-            {"match": {"fractal_type": ["mandelbrot"], "render_style": ["tia"]}, "weight": 3.0},
-        ],
-    })
-    # cell = (type, cluster, flavor, style)
-    assert tm.weight(("mandelbrot", "m#0", "k16:5", "smooth")) == 2.0
-    assert tm.weight(("mandelbrot", "m#0", "k16:1", "tia")) == 3.0
-    assert tm.weight(("mandelbrot", "m#0", "k16:5", "tia")) == 6.0   # both overrides
-    assert tm.weight(("multibrot3", "x#0", "k16:1", "smooth")) == 1.0
-
-
-def test_source_tag_override_resolves_to_clusters():
-    # source_tag names a location set durably; resolve rewrites it to the morph clusters those
-    # locations currently occupy, and up-weights exactly those cells.
-    tm = C.TargetMeasure.from_config({
-        "weight_overrides": [
-            {"match": {"fractal_type": ["phoenix"]}, "weight": 0.21},
-            {"match": {"source_tag": ["classic_phoenix"]}, "weight": 1.9},
-        ],
-    })
-    # 2 classic locations (in one cluster) + 1 varied location (another cluster).
-    loc_src = {"a": "classic_phoenix", "b": "classic_phoenix", "c": "phoenix_grid"}
-    loc_cl = {"a": "phoenix#7", "b": "phoenix#7", "c": "phoenix#3"}
-    diag = tm.resolve_source_tags(loc_src, loc_cl)
-    assert len(diag) == 1
-    assert diag[0]["n_locations"] == 2 and diag[0]["resolved_clusters"] == ["phoenix#7"]
-    assert diag[0]["impure_clusters"] == []                      # cluster #7 is all-classic
-    # no source_tag key survives (rewritten to morph_cluster); idempotent second call.
-    assert all("source_tag" not in ov.get("match", {}) for ov in tm.weight_overrides)
-    assert tm.resolve_source_tags(loc_src, loc_cl) == []
-    # classic cell carries BOTH the type budget knob and the split knob; varied only the budget.
-    assert tm.weight(("phoenix", "phoenix#7", "k16:1", "smooth")) == pytest.approx(0.21 * 1.9)
-    assert tm.weight(("phoenix", "phoenix#3", "k16:1", "smooth")) == pytest.approx(0.21)
-
-
-def test_source_tag_override_survives_cluster_id_permutation():
-    # The whole point of keying on source_tag: a re-cluster that RENAMES cluster ids must not
-    # change which locations the override up-weights. Resolve against a permuted loc->cluster
-    # map and confirm the SAME locations (by source tag) still get the multiplier.
-    cfg = {"weight_overrides": [{"match": {"source_tag": ["classic_phoenix"]}, "weight": 1.9}]}
-    loc_src = {"a": "classic_phoenix", "b": "classic_phoenix", "c": "phoenix_grid"}
-    base_cl = {"a": "phoenix#196", "b": "phoenix#197", "c": "phoenix#3"}
-    perm_cl = {"a": "phoenix#42", "b": "phoenix#99", "c": "phoenix#201"}   # ids permuted
-    w_base = C.TargetMeasure.from_config(cfg)
-    w_base.resolve_source_tags(loc_src, base_cl)
-    w_perm = C.TargetMeasure.from_config(cfg)
-    w_perm.resolve_source_tags(loc_src, perm_cl)
-    # tagged locations keep the multiplier under BOTH clusterings; the untagged one never gets it.
-    assert w_base.weight(("phoenix", "phoenix#196", "k", "smooth")) == pytest.approx(1.9)
-    assert w_base.weight(("phoenix", "phoenix#197", "k", "smooth")) == pytest.approx(1.9)
-    assert w_base.weight(("phoenix", "phoenix#3", "k", "smooth")) == pytest.approx(1.0)
-    assert w_perm.weight(("phoenix", "phoenix#42", "k", "smooth")) == pytest.approx(1.9)
-    assert w_perm.weight(("phoenix", "phoenix#99", "k", "smooth")) == pytest.approx(1.9)
-    assert w_perm.weight(("phoenix", "phoenix#201", "k", "smooth")) == pytest.approx(1.0)
-    # config carries NO cluster id — the override text is identical across both intakes.
-    assert cfg["weight_overrides"][0]["match"] == {"source_tag": ["classic_phoenix"]}
-
-
-def test_source_tag_unresolved_is_noop_not_crash():
-    # A consumer that never resolves (the discovery-side projection) must see a source_tag
-    # override as a never-matching no-op, NOT an axis-index crash.
-    tm = C.TargetMeasure.from_config(
-        {"weight_overrides": [{"match": {"source_tag": ["classic_phoenix"]}, "weight": 1.9}]})
-    assert tm.weight(("phoenix", "phoenix#196", "k16:1", "smooth")) == pytest.approx(1.0)
-
-
-def test_source_tag_impure_cluster_flagged():
-    # A resolved cluster that also holds an untagged location is reported impure (the override
-    # would up-weight that member too) — the caller's equivalence gate is what forbids it.
-    tm = C.TargetMeasure.from_config(
-        {"weight_overrides": [{"match": {"source_tag": ["classic_phoenix"]}, "weight": 1.9}]})
-    loc_src = {"a": "classic_phoenix", "b": "phoenix_grid"}
-    loc_cl = {"a": "phoenix#7", "b": "phoenix#7"}                # mixed cluster
-    diag = tm.resolve_source_tags(loc_src, loc_cl)
-    assert diag[0]["impure_clusters"] == ["phoenix#7"] and diag[0]["n_locations"] == 1
+def _measure(cells, **kw):
+    """A `TargetMeasure` over `cells` from EQUAL per-partition release shares — the
+    test-local stand-in for the deleted `from_config({"mode": "uniform"})`."""
+    parts = sorted({c[0] for c in cells})
+    return C.TargetMeasure.from_partition_shares({p: 1.0 for p in parts}, cells, **kw)
 
 
 def _share_of(tm, feasible, match_pred):
@@ -117,106 +43,77 @@ def _share_of(tm, feasible, match_pred):
     return sum(v for c, v in w.items() if match_pred(c)) / tot
 
 
-def test_target_share_solves_to_exact_share():
-    # A source-tag share stacked on a phoenix budget knob solves to EXACTLY the requested share.
-    cfg = {"weight_overrides": [
-        {"match": {"fractal_type": ["phoenix"]}, "weight": 0.21},
-        {"match": {"source_tag": ["classic_phoenix"]}, "target_share": 0.02},
-    ]}
-    tm = C.TargetMeasure.from_config(cfg)
-    # 2 classic phoenix clusters + 3 varied phoenix + 4 other-type clusters.
-    loc_src = {f"cl{i}": "classic_phoenix" for i in range(2)}
-    loc_src.update({f"vg{i}": "phoenix_grid" for i in range(3)})
-    loc_src.update({f"mb{i}": "steered" for i in range(4)})
-    loc_cl = {**{f"cl{i}": f"phoenix#{100+i}" for i in range(2)},
-              **{f"vg{i}": f"phoenix#{i}" for i in range(3)},
-              **{f"mb{i}": f"mandelbrot#{i}" for i in range(4)}}
-    tm.resolve_source_tags(loc_src, loc_cl)
-    obs = sorted({(("phoenix" if c.startswith("phoenix") else "mandelbrot"), c)
-                  for c in loc_cl.values()})
+def test_measure_gives_each_partition_exactly_its_release_share():
+    """The contract: a partition's cells hold its intended share of the measure, and the
+    per-cell weight is that share divided by ITS OWN feasible-cell count."""
+    obs = [("mandelbrot", f"mandelbrot#{i}") for i in range(5)] + [("phoenix", "phoenix#0")]
     feasible = C.build_feasible_cells(obs, ["k16:1", "k16:2"], ["smooth", "tia"])
-    classic_cl = {"phoenix#100", "phoenix#101"}
-    diag = tm.solve_target_shares(feasible)
-    assert len(diag) == 1 and diag[0]["matched_cells"] == len(classic_cl) * 2 * 2
-    assert diag[0]["realized_share"] == pytest.approx(0.02)
-    # measured directly through weight() over the feasible support
-    assert _share_of(tm, feasible, lambda c: c[1] in classic_cl) == pytest.approx(0.02)
-    # target_share key is consumed (rewritten to a plain weight); idempotent re-solve is a no-op.
-    ov = next(o for o in tm.weight_overrides if o["match"].get("morph_cluster"))
-    assert "target_share" not in ov and "weight" in ov
-    assert tm.solve_target_shares(feasible) == []
+    tm = C.TargetMeasure.from_partition_shares({"mandelbrot": 3.0, "phoenix": 1.0}, feasible)
+    assert tm.partition_shares() == pytest.approx({"mandelbrot": 0.75, "phoenix": 0.25})
+    assert _share_of(tm, feasible, lambda c: c[0] == "mandelbrot") == pytest.approx(0.75)
+    # 20 mandelbrot cells vs 4 phoenix cells: the per-cell weights differ by exactly that ratio
+    assert tm.weight(("mandelbrot", "mandelbrot#0", "k16:1", "smooth")) == pytest.approx(0.75 / 20)
+    assert tm.weight(("phoenix", "phoenix#0", "k16:1", "smooth")) == pytest.approx(0.25 / 4)
 
 
-def test_target_share_denominator_invariant():
-    # Enlarging the intake with fake NON-classic locations must NOT move the classic share.
-    cfg = {"weight_overrides": [
-        {"match": {"fractal_type": ["phoenix"]}, "weight": 0.21},
-        {"match": {"source_tag": ["classic_phoenix"]}, "target_share": 0.02},
-    ]}
-    classic_cl = {"phoenix#100", "phoenix#101"}
-
-    def build(n_extra):
-        tm = C.TargetMeasure.from_config(cfg)
-        loc_src = {"cl0": "classic_phoenix", "cl1": "classic_phoenix", "vg0": "phoenix_grid"}
-        loc_cl = {"cl0": "phoenix#100", "cl1": "phoenix#101", "vg0": "phoenix#0"}
-        for i in range(n_extra):                       # synthetic non-classic bulk
-            loc_src[f"x{i}"] = "steered"
-            loc_cl[f"x{i}"] = f"mandelbrot#{i}"
-        tm.resolve_source_tags(loc_src, loc_cl)
-        obs = sorted({(("phoenix" if c.startswith("phoenix") else "mandelbrot"), c)
-                      for c in loc_cl.values()})
+def test_measure_is_denominator_invariant_in_morph_clusters():
+    """The property the deleted `target_share` solver existed to give ONE partition, now
+    structural for every partition: growing a partition's cluster count does not grow its
+    share of the release, it spreads the same share over more cells. This is the campaign-2
+    inversion (102 mandelbrot clusters swamping julia:mandelbrot's 4) made impossible."""
+    def share(n_mandel):
+        obs = ([("mandelbrot", f"mandelbrot#{i}") for i in range(n_mandel)]
+               + [("phoenix:classic", "phoenix:classic#0")])
         feasible = C.build_feasible_cells(obs, ["k16:1"], ["smooth"])
-        tm.solve_target_shares(feasible)
-        return _share_of(tm, feasible, lambda c: c[1] in classic_cl)
-
-    small, large = build(3), build(300)
-    assert small == pytest.approx(0.02) and large == pytest.approx(0.02)
-
-
-def test_target_share_decoupled_from_budget_knob():
-    # Moving the phoenix BUDGET multiplier re-solves classic back to EXACTLY its share, and the
-    # solved multiplier changes with the budget (proof the share is absolute, not stacked-fixed).
-    def build(budget):
-        cfg = {"weight_overrides": [
-            {"match": {"fractal_type": ["phoenix"]}, "weight": budget},
-            {"match": {"source_tag": ["classic_phoenix"]}, "target_share": 0.02},
-        ]}
-        tm = C.TargetMeasure.from_config(cfg)
-        loc_src = {"cl0": "classic_phoenix", "vg0": "phoenix_grid", "mb0": "steered"}
-        loc_cl = {"cl0": "phoenix#100", "vg0": "phoenix#0", "mb0": "mandelbrot#0"}
-        tm.resolve_source_tags(loc_src, loc_cl)
-        obs = sorted({(("phoenix" if c.startswith("phoenix") else "mandelbrot"), c)
-                      for c in loc_cl.values()})
-        feasible = C.build_feasible_cells(obs, ["k16:1"], ["smooth"])
-        diag = tm.solve_target_shares(feasible)
-        share = _share_of(tm, feasible, lambda c: c[1] == "phoenix#100")
-        return share, diag[0]["solved_multiplier"]
-
-    s1, m1 = build(0.21)
-    s2, m2 = build(1.5)
-    assert s1 == pytest.approx(0.02) and s2 == pytest.approx(0.02)   # share unchanged
-    assert m1 != pytest.approx(m2)                                   # multiplier adapted
+        tm = C.TargetMeasure.from_partition_shares(
+            {"mandelbrot": 3.0, "phoenix:classic": 0.2}, feasible)
+        return _share_of(tm, feasible, lambda c: c[0] == "phoenix:classic")
+    assert share(3) == pytest.approx(0.2 / 3.2)
+    assert share(300) == pytest.approx(0.2 / 3.2)
 
 
-def test_target_share_unresolved_is_noop():
-    # The discovery-side projection never resolves source_tags; an unsolved source-tag
-    # target_share must match no feasible cell (A=0) and stay a no-op, never a crash or a bogus λ.
-    tm = C.TargetMeasure.from_config(
-        {"weight_overrides": [{"match": {"source_tag": ["classic_phoenix"]}, "target_share": 0.02}]})
-    feasible = C.build_feasible_cells([("phoenix", "phoenix#100")], ["k16:1"], ["smooth"])
-    diag = tm.solve_target_shares(feasible)                          # no resolve first
-    assert diag[0]["solved_multiplier"] is None and diag[0]["matched_cells"] == 0
-    assert tm.weight(("phoenix", "phoenix#100", "k16:1", "smooth")) == pytest.approx(1.0)
+def test_classic_phoenix_is_addressable_as_its_own_partition():
+    """Injection proof for the cell-axis re-key: `phoenix:classic` cells carry the classic
+    ratio and the `phoenix` cells alongside them carry phoenix's — a measure that could not
+    tell them apart gave both the same weight, which is the state this replaces."""
+    obs = [("phoenix", "phoenix#0"), ("phoenix:classic", "phoenix:classic#0")]
+    feasible = C.build_feasible_cells(obs, ["k16:1"], ["smooth"])
+    tm = C.TargetMeasure.from_partition_shares({"phoenix": 1.0, "phoenix:classic": 0.2}, feasible)
+    w_varied = tm.weight(("phoenix", "phoenix#0", "k16:1", "smooth"))
+    w_classic = tm.weight(("phoenix:classic", "phoenix:classic#0", "k16:1", "smooth"))
+    assert w_varied / w_classic == pytest.approx(5.0)
+
+
+def test_a_cell_whose_partition_has_no_share_is_refused():
+    """No zero default: an unregistered partition would be permanently starved AND read as
+    "no demand" rather than as a missing policy decision."""
+    feasible = C.build_feasible_cells([("mandelbrot", "m#0"), ("nope", "nope#0")],
+                                      ["k16:1"], ["smooth"])
+    with pytest.raises(C.UnknownPartitionCell):
+        C.TargetMeasure.from_partition_shares({"mandelbrot": 1.0}, feasible)
+    tm = C.TargetMeasure.from_partition_shares({"mandelbrot": 1.0},
+                                               [("mandelbrot", "m#0", "k16:1", "smooth")])
+    with pytest.raises(C.UnknownPartitionCell):
+        tm.weight(("nope", "nope#0", "k16:1", "smooth"))
+
+
+def test_a_share_with_no_feasible_cell_is_reported_not_absorbed():
+    """A partition with demand and no supply this intake is a supply fact; a renormalized
+    measure alone cannot say it."""
+    feasible = C.build_feasible_cells([("mandelbrot", "m#0")], ["k16:1"], ["smooth"])
+    shares = {"mandelbrot": 3.0, "phoenix:classic": 0.2}
+    tm = C.TargetMeasure.from_partition_shares(shares, feasible)
+    assert tm.partition_shares() == pytest.approx({"mandelbrot": 1.0})
+    assert tm.unrealized_shares(shares) == pytest.approx({"phoenix:classic": 0.2})
 
 
 def test_feasible_cells_and_deficit_sign():
-    tm = C.TargetMeasure.from_config({})
     observed = [("mandelbrot", "m#0"), ("multibrot3", "x#0")]
     flavors = ["k16:1", "k16:2"]
     styles = ["smooth", "tia"]
     cells = C.build_feasible_cells(observed, flavors, styles)
     assert len(cells) == 2 * 2 * 2
-    m = C.DeficitModel(cells, tm)
+    m = C.DeficitModel(cells, _measure(cells))
     # empty pool: every cell deficit == its target fraction (all equal, uniform)
     d0 = m.deficit(cells[0])
     assert d0 == pytest.approx(1.0 / len(cells))
@@ -226,9 +123,8 @@ def test_feasible_cells_and_deficit_sign():
 
 
 def test_attempt_cap_evicts_cell():
-    tm = C.TargetMeasure.from_config({"attempt_cap": 3})
     cells = C.build_feasible_cells([("mandelbrot", "m#0")], ["k16:1"], ["smooth", "tia"])
-    m = C.DeficitModel(cells, tm)
+    m = C.DeficitModel(cells, _measure(cells, attempt_cap=3))
     target = ("mandelbrot", "m#0", "k16:1", "smooth")
     assert m.record_attempt(target) is False   # 1
     assert m.record_attempt(target) is False   # 2
@@ -252,9 +148,8 @@ def test_range_normalized_softmax_prefers_max():
 
 
 def test_choose_option_avoids_filled():
-    tm = C.TargetMeasure.from_config({"softmax_temp": 0.05})
     cells = C.build_feasible_cells([("mandelbrot", "m#0")], ["k16:1", "k16:2"], ["smooth"])
-    m = C.DeficitModel(cells, tm)
+    m = C.DeficitModel(cells, _measure(cells, softmax_temp=0.05))
     # fill (k16:1, smooth) heavily so the deficit strongly favors (k16:2, smooth)
     for _ in range(5):
         m.record_fill(("mandelbrot", "m#0", "k16:1", "smooth"))
@@ -363,12 +258,17 @@ def test_location_of_partition_mapping():
 # --------------------------------------------------------------------------- #
 # ACCEPTANCE — current-decode rejects an old-ledger v6 row.
 # --------------------------------------------------------------------------- #
-def _row(id, ver=None, dc=3, guard=True, distinct=True):
+def _row(id, ver=None, dc=3, guard=True, distinct=True, cx=None):
     """A ledger row. `ver=None` means the CURRENT scorer version, resolved from the single
     source of truth (tools/scoring/active_ckpt) rather than hardcoded — these tests are about
     stale-decode semantics, so pinning the live version in them just breaks the suite at every
     flip for no signal."""
-    return {"id": id, "family": "mandelbrot", "outcome_cx": -0.5, "outcome_cy": 0.1,
+    # Distinct ids get distinct COORDINATES by default: the cross-ledger union dedups by
+    # location identity, so a fixture that gives every row the same viewport is a fixture in
+    # which every row is the same location.
+    if cx is None:
+        cx = -0.5 - sum(ord(ch) for ch in str(id)) * 1e-6
+    return {"id": id, "family": "mandelbrot", "outcome_cx": cx, "outcome_cy": 0.1,
             "outcome_fw": 0.03, "decoded_class": dc, "guard_pass": guard,
             "distinct": distinct,
             "scorer_version": cc.active_scorer_version() if ver is None else ver}
@@ -468,7 +368,7 @@ def _args(tmp_path, **over):
         ledger=["x.jsonl"], out=str(tmp_path / "scratch"), report=None, release_n=5,
         target_gated=0, floor=B.DEFAULT_FLOOR, mining_floor=B.DEFAULT_MINING_FLOOR,
         release_floor=B.DEFAULT_RELEASE_FLOOR, mining_release_floor=B.DEFAULT_MINING_RELEASE_FLOOR,
-        intake_floor=None, target_measure=str(B.DEFAULT_TARGET_MEASURE),
+        intake_floor=None,
         strange_frac=B.DEFAULT_STRANGE_FRAC,
         max_attempts=240, time_budget_min=45.0, seed=0)
     for k, v in over.items():
@@ -518,24 +418,34 @@ def test_release_floor_per_head_boundary(tmp_path):
     assert {r["id"] for r in eng.release_eligible()} == {"em_0"}
 
 
-def test_multi_ledger_intake_dedup_and_source_tag(tmp_path):
+def test_multi_ledger_intake_dedups_by_location_and_namespaces_ids(tmp_path):
+    """A row appearing at the SAME location in two ledgers is one location: dropped,
+    first-ledger wins. Surviving ids are namespaced by ledger and carry their source."""
     l1 = tmp_path / "a.jsonl"
     l2 = tmp_path / "b.jsonl"
     l1.write_text(json.dumps(_row("shared")) + "\n"
                   + json.dumps(_row("only_a")) + "\n", encoding="utf-8")
-    l2.write_text(json.dumps(_row("shared")) + "\n"      # dup id across ledgers
+    l2.write_text(json.dumps(_row("shared")) + "\n"      # same id AND same location
                   + json.dumps(_row("only_b")) + "\n", encoding="utf-8")
     eng = B.EmissionDiversity(_args(tmp_path, ledger=[str(l1), str(l2)]))
     rows = eng._load_all_admitted()
-    ids = [r["id"] for r in rows]
-    assert ids == ["shared", "only_a", "only_b"]            # dedup, first-ledger wins
-    src = {r["id"]: r["_source_ledger"] for r in rows}
+    assert [r["_ledger_row_id"] for r in rows] == ["shared", "only_a", "only_b"]
+    ns1, ns2 = D.ledger_namespace(l1), D.ledger_namespace(l2)
+    assert ns1 != ns2
+    assert [r["id"] for r in rows] == [D.namespaced_id(ns1, "shared"),
+                                       D.namespaced_id(ns1, "only_a"),
+                                       D.namespaced_id(ns2, "only_b")]
+    src = {r["_ledger_row_id"]: r["_source_ledger"] for r in rows}
     assert src["shared"].endswith("a.jsonl") and src["only_b"].endswith("b.jsonl")
 
 
-def test_intake_raises_on_run_scoped_id_collision(tmp_path):
-    """Same id, DIFFERENT location across ledgers = run-scoped-id collision: RAISE, don't
-    silently drop a distinct wallpaper (union-by-id would). Same id + same location dedups."""
+def test_run_scoped_id_collision_no_longer_aliases_two_locations(tmp_path):
+    """THE un-abort. The same run-scoped id naming DIFFERENT locations in two ledgers used to
+    raise (and before that would have silently dropped a distinct wallpaper). Namespacing by
+    ledger keeps both, and the collision is still counted so the fix stays visible.
+
+    Injection proof of the aliasing it prevents: with the namespace forced to a constant, the
+    two locations collapse to one row and the union under-counts."""
     def _at(id, cx):
         r = _row(id)
         r["outcome_cx"] = cx
@@ -544,19 +454,45 @@ def test_intake_raises_on_run_scoped_id_collision(tmp_path):
     l2 = tmp_path / "b.jsonl"
     l1.write_text(json.dumps(_at("st_x", -0.5)) + "\n", encoding="utf-8")
     l2.write_text(json.dumps(_at("st_x", 0.9)) + "\n", encoding="utf-8")   # SAME id, other coord
+    rows, diag = D.load_union_admitted([l1, l2])
+    assert diag["n_union"] == 2 and diag["n_id_collisions"] == 1
+    assert len({r["id"] for r in rows}) == 2
+    assert {r["outcome_cx"] for r in rows} == {-0.5, 0.9}     # both locations survive
     eng = B.EmissionDiversity(_args(tmp_path, ledger=[str(l1), str(l2)]))
-    with pytest.raises(SystemExit, match="COLLISION"):
-        eng._load_all_admitted()
-    # same id + identical location is NOT a collision (legitimate cross-ledger overlap)
+    assert len(eng._load_all_admitted()) == 2
+
+    # same id + IDENTICAL location is one location, deduped (0 today, kept dedupable)
     l2.write_text(json.dumps(_at("st_x", -0.5)) + "\n", encoding="utf-8")
-    eng2 = B.EmissionDiversity(_args(tmp_path, ledger=[str(l1), str(l2)]))
-    assert [r["id"] for r in eng2._load_all_admitted()] == ["st_x"]
+    rows2, diag2 = D.load_union_admitted([l1, l2])
+    assert diag2["n_union"] == 1 and diag2["n_location_overlaps"] == 1
+    assert rows2[0]["_ledger_row_id"] == "st_x"
+
+
+def test_a_constant_namespace_would_alias_the_collision(tmp_path, monkeypatch):
+    """The injection the test above rests on: namespacing is what separates them, not luck."""
+    def _at(id, cx):
+        return _row(id, cx=cx)
+    l1, l2 = tmp_path / "a.jsonl", tmp_path / "b.jsonl"
+    l1.write_text(json.dumps(_at("st_x", -0.5)) + "\n", encoding="utf-8")
+    l2.write_text(json.dumps(_at("st_x", 0.9)) + "\n", encoding="utf-8")
+    monkeypatch.setattr(D, "ledger_namespace", lambda _p: "same")
+    with pytest.raises(D.LedgerNamespaceCollision):
+        D.load_union_admitted([l1, l2])
+
+
+def test_two_ledgers_in_one_directory_get_distinct_namespaces(tmp_path):
+    """`outcome_ledger.jsonl` beside `outcome_ledger_v7_t45.jsonl` is a real shape in the
+    tree; a parent-directory-only namespace would collide on it."""
+    d = tmp_path / "run"
+    d.mkdir()
+    assert D.ledger_namespace(d / "outcome_ledger.jsonl") \
+        != D.ledger_namespace(d / "outcome_ledger_v7_t45.jsonl")
 
 
 def test_deficit_rebuild_from_pool_log(tmp_path):
     """The build_axes resume path: replaying the pool log reproduces fill+attempt counts."""
     cells = C.build_feasible_cells([("mandelbrot", "m#0")], ["k16:1"], ["smooth", "tia"])
-    tm = C.TargetMeasure.from_config({"attempt_cap": 99})
+    tm = _measure(cells, attempt_cap=99)
     p = Pool(tmp_path)
     recs = [_prec(p.next_id(), "loc0", True, cells[0]),
             _prec(p.next_id(), "loc0", False, cells[0]),

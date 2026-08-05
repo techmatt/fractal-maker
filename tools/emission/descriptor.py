@@ -47,6 +47,7 @@ for p in (ROOT, ROOT / "tools" / "corpus", ROOT / "tools" / "scoring"):
         sys.path.insert(0, str(p))
 
 import corpus_common as cc            # noqa: E402  is_current_decoded / require_current
+from partitions import base_partition, partition_of_row  # noqa: E402  THE partition resolver
 from tools.corpus import location as loc_mod  # noqa: E402
 from tools.corpus import julia_ledger_schema as jls  # noqa: E402  asserted julia (viewport,c) resolve
 
@@ -124,6 +125,11 @@ _PHOENIX_ZM1_DEFAULT = (0.0, 0.0)
 
 
 def render_family_of(partition: str) -> str:
+    """Partition -> Rust render family. A DERIVED partition has no render family of its own,
+    so it goes through `partitions.base_partition` first: `phoenix:classic` is the same Rust
+    `phoenix` backend at a pinned parameter point, and raising on it would make the whole
+    partition unrenderable the moment it became addressable on the cell axis."""
+    partition = base_partition(partition)
     if partition == "mandelbrot" or partition in ("multibrot3", "multibrot4", "multibrot5"):
         return partition
     if partition == "phoenix":
@@ -133,6 +139,42 @@ def render_family_of(partition: str) -> str:
     if partition.startswith("julia:multibrot"):
         return "julia_" + partition.split(":", 1)[1]
     raise ValueError(f"unknown partition {partition!r}")
+
+
+# --------------------------------------------------------------------------- #
+# Cell identity vs clustering geometry — the two things `row["family"]` used to be.
+#
+# The emission cell's first axis is NAMED `fractal_type` and has always actually held
+# `row["family"]`, i.e. the ledger's partition key. That was exact for the nine base
+# partitions and wrong for exactly one: a classic-phoenix row carries `family == "phoenix"`,
+# so `phoenix:classic` could not be addressed, weighted or seeded — the phoenix cell absorbed
+# it. The fix is a READER-side re-key through `partitions.partition_of_row`; nothing on disk
+# changes.
+#
+# But cell identity and clustering geometry are different questions, and only the first one
+# moves. Clustering stays WITHIN the BASE partition, so a classic row is still compared
+# against (and may still join) its varied-phoenix morphological neighbours exactly as today;
+# what changes is which CELL the resulting cluster index names. So one cluster index k can
+# surface as two cells, `phoenix#k` and `phoenix:classic#k`, which is the point: they are
+# different supply with different release shares living in the same morphology.
+# --------------------------------------------------------------------------- #
+def cell_partition(row: dict) -> str:
+    """The partition that keys a row's CELL identity (`phoenix:classic` included). Raises on
+    a row whose family token is not a registered partition — a cell axis that can invent a
+    key is a cell axis nothing downstream has a target, floor or census row for."""
+    part = partition_of_row(row)
+    if part is None:
+        raise ValueError(
+            f"row {row.get('id')!r} has family token "
+            f"{(row.get('fractal_type') or row.get('family'))!r}, which is not a registered "
+            f"partition (partitions.ALL_FAMS) — refusing to key a cell on it.")
+    return part
+
+
+def cluster_group(row: dict) -> str:
+    """The morphology CLUSTERING group: the base partition. Identical to the old
+    `row["family"]` grouping for every row, including classic phoenix."""
+    return base_partition(cell_partition(row))
 
 
 def _phoenix_family_params(row: dict) -> dict:
@@ -271,6 +313,130 @@ def load_admitted(ledger_path: Path, require_current: bool = False) -> list:
 
 
 # --------------------------------------------------------------------------- #
+# THE cross-ledger union (id namespaced per ledger, locations deduped by identity).
+# --------------------------------------------------------------------------- #
+# A ledger's `id` is RUN-SCOPED. `st_<fam>_<arm>_<seq>` is minted per campaign, so campaign1
+# and campaign2 both hold `st_m_breadth_000039` naming DIFFERENT locations — 11 such pairs
+# across the seven intake ledgers. A union keyed on the bare id therefore had to choose
+# between silently dropping a distinct wallpaper and aborting, and it correctly aborted; the
+# whole stage-2 intake has been unreachable since.
+#
+# The fix is at the READER and it is the standing normalize-at-the-reader pattern: row
+# identity is NAMESPACED BY LEDGER at union time, so two run-scoped ids can never alias. No
+# ledger row is rewritten and no prefixed COPY of a ledger is minted (the `c1__` scheme did
+# that, wrote the copies to `scratch/`, and lost them).
+#
+# Deduplication does not disappear, it moves onto the axis that can actually carry it: a row
+# is dropped iff its LOCATION IDENTITY (`loc_key`, unchanged) was already admitted by an
+# earlier ledger. That is the genuine cross-ledger overlap case — 0 of it today, and it stays
+# dedupable in principle rather than being traded away for the collision fix.
+def loc_key(row: dict) -> tuple:
+    """The location identity of a ledger row — what its id is SUPPOSED to name.
+    THE one copy (`build_emission_diversity_v1` and `ledger_rescore` both import it; two
+    unions that disagree about what "the same location" means are two different populations)."""
+    return (str(row.get("outcome_cx")), str(row.get("outcome_cy")), str(row.get("outcome_fw")),
+            str(row.get("julia_c_re")), str(row.get("julia_c_im")))
+
+
+def ledger_namespace(ledger_path) -> str:
+    """The id namespace for one ledger: its repo-relative path, slugified, `.jsonl` and the
+    leading `data/` dropped. `data/discovery/campaign1/breadth/outcome_ledger.jsonl` ->
+    `discovery_campaign1_breadth_outcome_ledger`.
+
+    The whole path including the STEM, even though six of the seven ledgers are named
+    `outcome_ledger` and the stem looks like noise there. Two ledgers in one directory is an
+    ordinary thing (`outcome_ledger.jsonl` beside `outcome_ledger_v7_t45.jsonl` already exists
+    in the tree), and a namespace that collides is a namespace that does not namespace. The
+    ids are long; they are machine keys, and STABILITY is what they have to be — a namespace
+    derived from the companion ledgers in the union would change a location's identity
+    depending on what it was unioned with.
+
+    Out-of-tree (a fixture) falls back to the parent directory name plus the stem."""
+    p = Path(ledger_path).resolve()
+    try:
+        rel = p.relative_to(ROOT)
+        parts = list(rel.parent.parts) + [rel.stem]
+    except ValueError:
+        parts = [p.parent.name, p.stem]
+    if parts and parts[0] == "data":
+        parts = parts[1:]
+    slug = "_".join(x for x in parts if x)
+    return slug or "ledger"
+
+
+NS_SEP = "__"      # the `stage_first_release` `c1__` spelling, kept so the shape is familiar
+
+
+def namespaced_id(namespace: str, row_id: str) -> str:
+    return f"{namespace}{NS_SEP}{row_id}"
+
+
+class LedgerNamespaceCollision(RuntimeError):
+    """Two ledgers in one union slugged to the same id namespace, so namespacing would not
+    actually separate their run-scoped ids. Refused rather than reported: this is the exact
+    failure the namespacing exists to prevent, one level up."""
+
+
+def load_union_admitted(ledger_paths, keep_row_id: bool = True) -> tuple:
+    """`(rows, diag)` — the admitted union over `ledger_paths`, in ledger order.
+
+    Each returned row is the ledger row with its `id` replaced by the ledger-namespaced id
+    (the original kept under `_ledger_row_id`) plus `_source_ledger` / `_ledger_ns`. The
+    ORIGINAL FILES ARE ONLY EVER READ.
+
+    `diag` carries what a census wants to print: `n_union`, `per_ledger` admitted counts,
+    `n_location_overlaps` (rows dropped because an earlier ledger already admitted the same
+    `loc_key`) with a sample, and `n_id_collisions` — the number of bare ids that would have
+    aliased two DIFFERENT locations under the old id-keyed union, reported so the fix stays
+    visible instead of the count silently changing."""
+    namespaces: dict = {}
+    for lp in ledger_paths:
+        ns = ledger_namespace(lp)
+        if ns in namespaces and Path(namespaces[ns]).resolve() != Path(lp).resolve():
+            raise LedgerNamespaceCollision(
+                f"ledgers {namespaces[ns]} and {lp} both slug to id namespace {ns!r}; "
+                f"namespacing would not separate their run-scoped ids.")
+        namespaces[ns] = lp
+
+    seen_loc: dict = {}          # loc_key -> (namespaced id, ledger label)
+    bare_ids: dict = {}          # bare row id -> loc_key (collision census only)
+    rows, overlaps, collisions = [], [], []
+    per_ledger: dict = {}
+    for lp in ledger_paths:
+        lp = Path(lp)
+        ns = ledger_namespace(lp)
+        try:
+            label = str(lp.resolve().relative_to(ROOT).as_posix())
+        except ValueError:
+            label = str(lp)
+        n = 0
+        for row in load_admitted(lp):
+            rid, key = row["id"], loc_key(row)
+            prev = bare_ids.get(rid)
+            if prev is not None and prev != key:
+                collisions.append(f"{rid} ({label})")
+            bare_ids.setdefault(rid, key)
+            if key in seen_loc:
+                overlaps.append(f"{seen_loc[key][0]} vs {label}/{rid}")
+                continue
+            out = dict(row)
+            out["id"] = namespaced_id(ns, rid)
+            if keep_row_id:
+                out["_ledger_row_id"] = rid
+            out["_source_ledger"] = label
+            out["_ledger_ns"] = ns
+            seen_loc[key] = (out["id"], label)
+            rows.append(out)
+            n += 1
+        per_ledger[label] = n
+    return rows, {
+        "n_union": len(rows), "per_ledger": per_ledger,
+        "n_location_overlaps": len(overlaps), "overlap_sample": overlaps[:5],
+        "n_id_collisions": len(collisions), "collision_sample": collisions[:5],
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Canonical morph embedding (library recipe).
 # --------------------------------------------------------------------------- #
 def embed_locations(rows: list, field_cache: Path, embs_path: Path) -> dict:
@@ -383,28 +549,36 @@ def cluster_incremental(items: list, threshold: float = NEAR_DUP_THRESHOLD,
 def assign_morph_clusters(rows: list, embs: dict,
                           threshold: float = NEAR_DUP_THRESHOLD,
                           library: dict | None = None) -> dict:
-    """location_id → morph cluster tag `<type>#<k>`, clustering WITHIN each fractal type
-    (the within-family dedup convention). Ledger order is the stable incremental order.
+    """location_id → morph cluster tag `<partition>#<k>`. Ledger order is the stable
+    incremental order.
 
-    `library` is the existing library's per-type medoids, `{fractal_type: [(k, emb), ...]}`
-    as returned by `library_medoids`. When given, each type's clustering is SEEDED with those
-    medoids, so a new row that near-duplicates a library look joins the library's cluster
-    `<type>#<k>` instead of founding a parallel one across the intake seam. When None (the
-    pre-fix behaviour) the batch is deduplicated only against itself.
+    Clustering runs WITHIN the BASE partition (`cluster_group`) — the within-family dedup
+    convention, unchanged, so a classic-phoenix row is still compared against the varied
+    phoenix medoids and its clustering geometry is exactly what it was. The TAG it comes out
+    with is keyed by the row's own partition (`cell_partition`), so `phoenix:classic` is
+    addressable on the cell axis and the `phoenix` cell no longer absorbs it.
+
+    `library` is the existing library's medoids grouped the same way, `{base_partition:
+    [(k, emb), ...]}` as returned by `library_medoids`. When given, each group's clustering is
+    SEEDED with those medoids, so a new row that near-duplicates a library look joins the
+    library's cluster index instead of founding a parallel one across the intake seam. When
+    None (the pre-fix behaviour) the batch is deduplicated only against itself.
 
     Nothing already in the library moves: seeded clusters keep their key, seeded medoids are
     frozen, and only ids in `rows` appear in the returned map. `verify_library_unmoved` is the
     mechanical re-check the callers run."""
     lib = library or {}
-    by_type: dict = {}
+    by_group: dict = {}
+    part_of: dict = {}
     for row in rows:
-        by_type.setdefault(row["family"], []).append(row["id"])
+        by_group.setdefault(cluster_group(row), []).append(row["id"])
+        part_of[row["id"]] = cell_partition(row)
     tags = {}
-    for ftype, ids in by_type.items():
+    for group, ids in by_group.items():
         items = [(i, embs[i]) for i in ids if i in embs]
-        assign = cluster_incremental(items, threshold, seed_medoids=lib.get(ftype))
+        assign = cluster_incremental(items, threshold, seed_medoids=lib.get(group))
         for i, k in assign.items():
-            tags[i] = f"{ftype}#{k}"
+            tags[i] = f"{part_of[i]}#{k}"
     return tags
 
 
@@ -418,36 +592,84 @@ def assign_morph_clusters(rows: list, embs: dict,
 # shapes. The medoid of a cluster is its FOUNDING member — the first id, in snapshot order,
 # carrying that tag — which is the same definition `campaign1_intake.cluster` and
 # `deficit_scheduler.load_library_seed_embeddings` recover.
+class SeedRekeyError(RuntimeError):
+    """A library snapshot's cluster tag could not be re-keyed to partition cell identity
+    without leaving its own base partition — i.e. the re-key would be a RE-CLUSTER."""
+
+
+def seed_cluster_tags(meta: dict) -> dict:
+    """`{location_id: "<partition>#<k>"}` for a library snapshot, re-keyed AT THE READ.
+
+    A frozen seed artifact is never rewritten. The relit seed (`library_seed_v2`) tags looks
+    family-keyed — `phoenix#k` for a classic-phoenix look too — which is precisely the state
+    that makes `phoenix:classic` unseedable, and `verify_library_unmoved` raising on a pass
+    that re-keys it is CORRECT behaviour, not an obstacle to route around. So the snapshot's
+    own per-look record (`entries[<id>]["render"]`, the render block the look was made from)
+    resolves the partition here, at read time.
+
+    The re-key is deterministic and round-trips: `base_partition(new) == base_partition(old)`
+    is asserted for every look, so the stored tag is recoverable from the re-keyed one and the
+    cluster INDEX space (which is per base partition, the clustering group) is untouched.
+    Anything else would be a re-cluster of committed library state and raises.
+
+    A snapshot with no `entries` (the emission driver's own `intake.json`) passes through: its
+    tags are already partition-keyed by `assign_morph_clusters`."""
+    tags = meta.get("cluster_tags") or {}
+    entries = meta.get("entries") or {}
+    out = {}
+    for loc_id, tag in tags.items():
+        stored, _, k = tag.rpartition("#")
+        render = (entries.get(loc_id) or {}).get("render")
+        part = stored
+        if render is not None:
+            resolved = partition_of_row(render)
+            if resolved is not None:
+                part = resolved
+        if base_partition(part) != base_partition(stored):
+            raise SeedRekeyError(
+                f"library look {loc_id!r} tagged {tag!r} re-keys to partition {part!r}, whose "
+                f"base partition {base_partition(part)!r} differs from the stored tag's "
+                f"{base_partition(stored)!r}. That is a re-cluster of committed library state, "
+                f"not a re-key — refusing.")
+        out[loc_id] = f"{part}#{k}"
+    return out
+
+
 def library_medoids(intake_path, embs_path) -> dict:
-    """`{fractal_type: [(k, medoid_emb), ...]}`, one medoid per existing library cluster,
+    """`{base_partition: [(k, medoid_emb), ...]}`, one medoid per existing library cluster,
     ordered by cluster key. Returns {} if either artifact is absent — the caller decides
     whether that is fatal (it MUST be loud: a silently-empty seed is exactly the un-deduped
-    seam this seeding exists to close)."""
+    seam this seeding exists to close).
+
+    Grouped by BASE partition because that is the clustering group (`cluster_group`): the
+    cluster index space is shared by a base partition and everything derived off it, so
+    `phoenix#3` and `phoenix:classic#3` are ONE cluster with one founding medoid, not two."""
     ip, ep = Path(intake_path), Path(embs_path)
     if not ip.exists() or not ep.exists():
         return {}
-    meta = json.loads(ip.read_text(encoding="utf-8"))
-    tags = meta.get("cluster_tags") or {}
+    tags = seed_cluster_tags(json.loads(ip.read_text(encoding="utf-8")))
     embs = load_embs(ep)
-    founder: dict = {}                      # tag → founding location id (snapshot order)
+    founder: dict = {}                      # (group, k) → founding location id (snapshot order)
     for loc_id, tag in tags.items():
-        if tag not in founder and loc_id in embs:
-            founder[tag] = loc_id
-    by_type: dict = {}
-    for tag, loc_id in founder.items():
-        ftype, _, k = tag.rpartition("#")
+        part, _, k = tag.rpartition("#")
+        gk = (base_partition(part), int(k))
+        if gk not in founder and loc_id in embs:
+            founder[gk] = loc_id
+    by_group: dict = {}
+    for (group, k), loc_id in founder.items():
         e = np.asarray(embs[loc_id], np.float32).reshape(-1)
-        by_type.setdefault(ftype, []).append((int(k), e / (np.linalg.norm(e) + 1e-9)))
-    return {f: sorted(v, key=lambda kv: kv[0]) for f, v in by_type.items()}
+        by_group.setdefault(group, []).append((k, e / (np.linalg.norm(e) + 1e-9)))
+    return {f: sorted(v, key=lambda kv: kv[0]) for f, v in by_group.items()}
 
 
 def library_assignments(intake_path) -> dict:
-    """`{location_id: "<type>#<k>"}` — the library's own cluster assignment, for the
-    never-moved guard. {} if the snapshot is absent."""
+    """`{location_id: "<partition>#<k>"}` — the library's own cluster assignment (re-keyed at
+    the read, see `seed_cluster_tags`), for the never-moved guard. {} if the snapshot is
+    absent."""
     ip = Path(intake_path)
     if not ip.exists():
         return {}
-    return dict((json.loads(ip.read_text(encoding="utf-8")).get("cluster_tags") or {}))
+    return seed_cluster_tags(json.loads(ip.read_text(encoding="utf-8")))
 
 
 class LibraryRowMoved(RuntimeError):

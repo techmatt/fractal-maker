@@ -11,22 +11,29 @@ a discovery run's deficit currency (labels) and, later, emission's per-cell weig
 and the only thing those two agree on is the RELATIVE intent. Each consumer anchors the
 ratios to its own scale; the table never carries one.
 
-WHO READS IT TODAY (exactly one consumer)
------------------------------------------
+WHO READS IT (three consumers, three scales, one policy)
+--------------------------------------------------------
 `pop_quota.deficits_from_currency` — the per-partition currency TARGET is `ratio_p` scaled so
 the maximum-ratio partitions sit at the anchor the uniform rule used (the richest holding), and
 the deficit is the shortfall against that target. That replaces the uniform target: every
 partition used to be levelled to the richest holding regardless of how much of the release it
 was ever meant to be.
 
-WHO DOES NOT READ IT YET, AND WHY THAT IS DELIBERATE
----------------------------------------------------
-**EMISSION IS OUT OF SCOPE as of 2026-08-04 and this is the note that says so rather than
-leaving it to read as an oversight.** `tools/emission/cells.py`'s `weight_overrides` /
-`target_share` are UNTOUCHED and still carry their own hand-set numbers. This table is the
-intended future source for the emission measure; stage 2 of emission is reworked at the next
-checkpoint and wires to it then. Until that lands, the emission mix and the discovery mix are
-two policies that happen to be about the same partitions — do not "fix" one to match the other.
+`deficit_scheduler.target_shares` — the discovery order book, denominated in distinct looks:
+`shares()` over the run's tracked partitions, straight through.
+
+`cells.TargetMeasure.from_partition_shares` — the emission target measure, denominated in
+joint (partition × cluster × flavour × style) cells: `weight_p = share_p / n_feasible_cells_p`,
+re-solved against the live intake. The division is what makes a partition's realized share its
+INTENDED share whatever its morph-cluster count; a substituted multiplier would scale each
+partition's share by that count instead.
+
+Emission was deliberately out of scope on the day this table landed, and read a hand-edited
+`data/emission/target_measure.json` carrying nine literal multipliers that disagreed with these
+ratios (mandelbrot 9.0% vs 22.7%). That file, and the config machinery under it, were retired
+on 2026-08-04 — see `docs/design/retired.md`. There is no second target source, and
+`tools/scoring/test_release_mix_one_source.py` asserts both that no reader of one comes back
+and that the two consumers resolve identical partition shares from one input.
 
 COMPLETENESS IS A RED BUILD, IN BOTH DIRECTIONS
 -----------------------------------------------

@@ -268,36 +268,21 @@ def census() -> dict:
                 total_admitted=tot_adm)
 
 
-def _loc_key(r) -> tuple:
-    """The location identity of a ledger row — what its id is supposed to name. Mirrors
-    `build_emission_diversity_v1._loc_key`; the collision below is only meaningful against
-    the same key the driver uses."""
-    return (str(r.get("outcome_cx")), str(r.get("outcome_cy")), str(r.get("outcome_fw")),
-            str(r.get("julia_c_re")), str(r.get("julia_c_im")))
-
-
 def intake_union() -> dict:
-    """What stage 2 would ACTUALLY intake: the id-dedup union over the seven ledgers.
+    """What stage 2 ACTUALLY intakes: `descriptor.load_union_admitted` over the seven ledgers.
 
-    Not the sum of the per-ledger counts. `build_emission_diversity_v1._load_all_admitted`
-    dedups by id and RAISES on a run-scoped id COLLISION — campaign1 and campaign2 reuse
-    `st_<fam>_<arm>_<seq>` ids for DIFFERENT locations, which `stage_first_release` handles
-    by writing `c1__`-prefixed ledger copies. So a bare seven-ledger union is not a number
-    the driver can reach; it is reported here WITH the collisions named, because "the intake
-    admits N" is false if the driver aborts before it gets to N."""
-    seen: dict = {}
-    collisions, overlaps = [], []
-    for tag, rel in LEDGERS:
-        for r in D.load_admitted(ledger_path(rel)):
-            rid, key = r["id"], _loc_key(r)
-            if rid in seen:
-                (collisions if seen[rid][0] != key else overlaps).append(
-                    f"{rid} ({seen[rid][1]} vs {tag})")
-                continue
-            seen[rid] = (key, tag)
-    return dict(n_union=len(seen), n_collisions=len(collisions),
-                n_benign_overlaps=len(overlaps), collision_sample=collisions[:5],
-                driver_reachable=not collisions)
+    THE union reader, not a mirror of it — the driver calls the same function, so "what the
+    census says stage 2 would intake" and "what stage 2 intakes" cannot be two numbers.
+
+    Row identity is namespaced by ledger there, so the run-scoped id collisions between
+    campaign1 and campaign2 (`st_<fam>_<arm>_<seq>` reused for DIFFERENT locations) no longer
+    alias and no longer abort the driver; they are still COUNTED here, because the count is
+    what says the namespacing is doing work. Deduplication is by LOCATION identity."""
+    _rows, diag = D.load_union_admitted([ledger_path(rel) for _t, rel in LEDGERS])
+    return dict(n_union=diag["n_union"], n_collisions=diag["n_id_collisions"],
+                n_benign_overlaps=diag["n_location_overlaps"],
+                collision_sample=diag["collision_sample"],
+                overlap_sample=diag["overlap_sample"], driver_reachable=True)
 
 
 def print_census(c: dict):
@@ -309,12 +294,12 @@ def print_census(c: dict):
             f"  {p['decoded_class_hist']}")
     log(f"  {'TOTAL':18s} {c['total_rows']:5d} {c['total_current']:8d} {c['total_admitted']:9d}")
     u = intake_union()
-    log(f"  id-dedup union stage 2 would intake: {u['n_union']} "
-        f"({u['n_benign_overlaps']} benign cross-ledger overlaps)")
-    if not u["driver_reachable"]:
-        log(f"  !! {u['n_collisions']} run-scoped id COLLISIONS — the driver ABORTS on these; "
-            f"id-prefix the campaign1 ledgers (stage_first_release `c1__`) to reach the union. "
-            f"e.g. {u['collision_sample'][:3]}")
+    log(f"  union stage 2 intakes: {u['n_union']} "
+        f"({u['n_benign_overlaps']} cross-ledger same-location overlaps dropped)")
+    if u["n_collisions"]:
+        log(f"  {u['n_collisions']} run-scoped id collision(s), namespaced apart by ledger and "
+            f"admitted as the distinct locations they are (a bare id-keyed union would have "
+            f"dropped them). e.g. {u['collision_sample'][:3]}")
 
 
 # ---------------------------------------------------------------------------- #

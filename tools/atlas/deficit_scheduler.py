@@ -28,38 +28,40 @@ MECHANICS (spec: prompts/deficit_scheduler.md).
  4. Prices = active-minutes per distinct look, per partition. Seeded from a config file,
     updated online (EMA). A partition that burns `cap_minutes` of active time with zero new
     distinct looks is capped (demand redistributed); caps re-open on resume/config.
- 5. Target = `data/emission/target_measure.json` projected to per-type (== per-partition)
-    marginals over feasible cells. The order book; no separate discovery-side target file.
+ 5. Target = the canonical release-mix ratio table (`tools/scoring/release_mix.py`)
+    normalized over this run's tracked partitions. The order book; no separate
+    discovery-side target file, and no separate emission one either.
  6. Julia twins are BOUGHT, not popped: julia:X demand routes into (a) the root family mix
     and (b) willingness to spend c-plane X expansions on its behalf (see JULIA ROUTING).
  7. Root draws are deficit-aware under the same (twin-inclusive) rule.
 
-fractal_type == the emission cell's first axis == the ledger `family` == our `partition`
-(mandelbrot / multibrot{3,4,5} / julia:{...}); the projection reuses `emission.cells`
-verbatim so the deficit definition is one shared, unit-tested code path with the colorizer.
+The emission cell's first axis == the ledger `family` == our `partition`
+(mandelbrot / multibrot{3,4,5} / julia:{...} / phoenix / phoenix:classic). Both stages take
+their per-partition shares from the SAME derived source (`release_mix.shares`), so the
+discovery order book and the emission measure cannot drift into two policies about the same
+partitions — which is what they had been (mandelbrot 9.0% here vs 22.7% intended).
 """
 from __future__ import annotations
 
 import json
 import sys
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (ROOT,):
+for _p in (ROOT, ROOT / "tools" / "scoring"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from tools.emission import cells as C  # noqa: E402  (pure; no torch)
+import release_mix as RM               # noqa: E402  THE per-partition release-mix ratio table
 from tools import paths as _paths      # noqa: E402  (storage-class declaration at the seam)
 from tools.corpus import artifacts as _artifacts   # noqa: E402  (ARTIFACTS_ROOT, for the class check)
 
 # ------------------------------------------------------------------------- #
 # Defaults / paths.
 # ------------------------------------------------------------------------- #
-DEFAULT_TARGET_PATH = ROOT / "data" / "emission" / "target_measure.json"
 DEFAULT_PRICES_PATH = ROOT / "data" / "atlas" / "scheduler_prices.json"
 INTAKE_ARTIFACT = ROOT / "data" / "emission" / "campaign1" / "intake.json"   # durable snapshot
 # bulk (regenerable), resolved through the ARTIFACTS_ROOT resolver. It was
@@ -98,12 +100,16 @@ def julia_partition(cplane: str) -> str:
 
 
 # ------------------------------------------------------------------------- #
-# 5. Order book: target_measure.json projected to per-partition marginals.
+# 5. Order book: the release-mix ratio table, normalized over the tracked partitions.
 # ------------------------------------------------------------------------- #
-def load_target(path: Path | str | None) -> C.TargetMeasure:
-    path = Path(path) if path else DEFAULT_TARGET_PATH
-    cfg = json.loads(Path(path).read_text(encoding="utf-8")) if Path(path).exists() else {}
-    return C.TargetMeasure.from_config(cfg)
+def target_shares(partitions: list[str]) -> dict:
+    """`{partition: intended share}` — the order book. THE derived source, shared with the
+    emission measure (`cells.TargetMeasure.from_partition_shares` re-solves the same numbers
+    against emission's feasible cells; `test_release_mix_one_source.py` asserts the two agree).
+
+    A partition with no registered ratio raises rather than defaulting to a plausible-looking
+    share nobody decided (`release_mix.ratio_of`)."""
+    return RM.shares(list(partitions))
 
 
 def load_observed_type_cluster(partitions: list[str]) -> list[tuple]:
@@ -128,42 +134,12 @@ def load_observed_type_cluster(partitions: list[str]) -> list[tuple]:
     return [(p, f"{p}#0") for p in partitions]
 
 
-def project_type_marginals(target: C.TargetMeasure, observed_type_cluster: list[tuple],
-                           partitions: list[str],
-                           flavors: list[str] | None = None,
-                           styles: list[str] | None = None) -> dict:
-    """Project the joint target measure down to per-TYPE marginals over feasible cells,
-    normalized over `partitions`.
-
-    marginal(type) ∝ MEAN cell weight over that type's feasible cells (then normalized).
-
-    Per-TYPE normalization by design (campaign-2 preflight fix): a type's target share is set
-    by its own multiplier, INDEPENDENT of how many morph clusters it currently occupies. The
-    naive `Σ weight(cell)` sum scales a type's marginal with its cluster COUNT, which is
-    backwards for a discovery ORDER BOOK — current cluster count is *occupancy* and belongs on
-    the deficit's pool side, not the target side (e.g. mandelbrot's 102 observed clusters would
-    otherwise swamp julia:mandelbrot's 4 regardless of the 2.5× vs 1.2× multipliers, inverting
-    the intended julia-heavy order). Dividing the sum by the type's cell count removes the count
-    entirely: for a pure type-level override the mean equals the multiplier exactly; a
-    cluster-level override is honoured as an average over that type's clusters.
-
-    palette_flavor / render_style are FREE choices available to every (type, cluster), so an
-    override on them multiplies the same cell FRACTION for every type and cancels under both the
-    mean and the final normalization; we therefore project over a single sentinel flavor/style
-    unless real lists are supplied."""
-    flavors = list(flavors) if flavors else ["_"]
-    styles = list(styles) if styles else ["_"]
-    feasible = C.build_feasible_cells(observed_type_cluster, flavors, styles)
-    wsum = Counter()
-    wcnt = Counter()
-    for cell in feasible:
-        wsum[cell[0]] += target.weight(cell)     # cell[0] == fractal_type == partition
-        wcnt[cell[0]] += 1
-    weights = {p: (wsum[p] / wcnt[p] if wcnt.get(p) else 0.0) for p in partitions}
-    tot = sum(weights.values())
-    if tot <= 0:                                  # degenerate: fall back to uniform
-        return {p: 1.0 / len(partitions) for p in partitions}
-    return {p: w / tot for p, w in weights.items()}
+# The order book is a per-PARTITION share and is read as one. It used to be the joint emission
+# measure projected down — `marginal(type) ∝ MEAN cell weight over that type's cells`, the mean
+# (not the sum) precisely so a type's share did not scale with its morph-cluster COUNT, which is
+# occupancy and belongs on the deficit's pool side. That division is now done once, on the
+# emission side, by `TargetMeasure.from_partition_shares` (weight_p = share_p / n_cells_p), so
+# there is nothing left here to project: a ratio table is already a partition-level share.
 
 
 # ------------------------------------------------------------------------- #
@@ -306,9 +282,16 @@ def load_library_seed_embeddings(intake_path: Path | None = None,
         return {}
     intake = json.loads(ip.read_text(encoding="utf-8"))
     medoid_id = intake.get("medoid_id", {})          # cluster_tag "<family>#<k>" -> location id
+    # The snapshot's tags are FAMILY-keyed, so a classic-phoenix look is filed under `phoenix`
+    # and `phoenix:classic` seeds empty — a partition that looks starved to every deficit that
+    # reads this tally. Re-keyed at the READ by the same resolver the emission cell axis uses
+    # (the frozen artifact is not rewritten); imported lazily so this module stays importable
+    # without the corpus stack.
+    from tools.emission.descriptor import seed_cluster_tags   # noqa: PLC0415
+    rekeyed = seed_cluster_tags(intake)               # location id -> "<partition>#<k>"
     by_part: dict[str, list] = defaultdict(list)
     for tag, loc_id in medoid_id.items():
-        part = tag.rsplit("#", 1)[0]                  # partition == family
+        part = (rekeyed.get(loc_id) or tag).rsplit("#", 1)[0]
         p = ed / f"{loc_id}.npy"
         if not p.exists():
             continue
@@ -524,7 +507,6 @@ def choose_partition(deficits: dict, prices: dict, capped: set, servable: set,
 # ------------------------------------------------------------------------- #
 class DeficitScheduler:
     def __init__(self, partitions: list[str], run_dir: Path,
-                 target_path: Path | str | None = None,
                  prices_path: Path | str | None = None,
                  explore_floor: float = EXPLORE_FLOOR,
                  julia_route_gain: float = JULIA_ROUTE_GAIN):
@@ -533,10 +515,11 @@ class DeficitScheduler:
         self.explore_floor = float(explore_floor)
         self.julia_route_gain = float(julia_route_gain)
 
-        # order book (per-partition target fraction).
-        self.target = load_target(target_path)
+        # order book (per-partition target fraction) — the release-mix ratio table. No
+        # `target_path`: an order book that can be pointed at a file is an order book that can
+        # disagree with the one emission serves, which is exactly what it did.
         self.observed = load_observed_type_cluster(self.partitions)
-        self.target_frac = project_type_marginals(self.target, self.observed, self.partitions)
+        self.target_frac = target_shares(self.partitions)
 
         # price config (+ scheduling knobs the config may override).
         pcfg = {}
