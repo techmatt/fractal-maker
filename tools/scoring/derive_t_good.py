@@ -87,6 +87,67 @@ OBJECTIVE = {
 DEFAULT_BETA = 2.0
 
 
+# =========================================================================== #
+# reading a derivation back — the status stamp, from the artifact this module WRITES
+# =========================================================================== #
+# `build_table` stamps every partition "DERIVED" or "UNCALIBRATED" precisely because the two
+# 0.50s are indistinguishable as bare numbers. A consumer that needs that distinction must
+# read the STAMP, and the reader belongs beside the writer: the block layout
+# (`derived`/`uncalibrated`, each row carrying `status`) is this module's schema, and a reader
+# that lived elsewhere would be a second, driftable copy of it.
+#
+# `production_seeder.t_good_status` answers the same question from the ADOPTED table — the
+# mirror, not the artifact. Both exist and `test_t_good_adoption` holds them equal; take THIS
+# one when the artifact is the authority you mean.
+ADOPTED_REL = "data/{version}/t_good_derivation.json"
+_STATUS_BLOCKS = ("derived", "uncalibrated")
+
+
+def adopted_path(version: str | None = None) -> Path:
+    """Path to the adopted derivation artifact for `version` (default: the LIVE pin)."""
+    if version is None:
+        from production_pins import ACTIVE_VERSION
+        version = ACTIVE_VERSION
+    return ROOT / ADOPTED_REL.format(version=version)
+
+
+def adopted_statuses(version: str | None = None) -> dict:
+    """`{partition: "DERIVED" | "UNCALIBRATED"}` read off the adopted derivation artifact.
+
+    Strict in three ways, each because the lenient reading is silent:
+      * a MISSING artifact raises naming the file — a consumer that fell back to "assume
+        uncalibrated" would answer for a version nobody derived (`verification_practice.md`
+        §2: an absence-tolerant guard un-guards exactly when its subject is removed);
+      * a partition in NEITHER block raises rather than defaulting — `build_table` walks
+        `ALL_FAMS` and stamps every one, so an absence means the artifact predates a
+        registration, not that the partition is uninteresting;
+      * a partition in BOTH blocks raises — the two are meant to be a partition of ALL_FAMS.
+    Returns a fresh dict; nothing here caches, so a re-derived artifact is picked up.
+    """
+    p = adopted_path(version)
+    if not p.exists():
+        raise FileNotFoundError(
+            f"{p} missing — no adopted t_good derivation for this version. t_good is "
+            f"scale-bound (classifier_retrain_protocol.md §4): re-derive before reading a "
+            f"status, do not fall back to another version's artifact.")
+    import json
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    out = {}
+    for blk in _STATUS_BLOCKS:
+        for fam, ent in (doc.get(blk) or {}).items():
+            if fam in out:
+                raise ValueError(f"{p}: partition {fam!r} is stamped in both "
+                                 f"{_STATUS_BLOCKS} — the blocks must partition ALL_FAMS")
+            out[fam] = ent["status"]
+    missing = [f for f in ALL_FAMS if f not in out]
+    if missing:
+        raise ValueError(
+            f"{p}: partitions {missing} carry no status stamp. `build_table` stamps every "
+            f"partition in partitions.ALL_FAMS, so this artifact predates their registration "
+            f"— re-derive it rather than reading around the gap.")
+    return out
+
+
 def beta_name(beta: float) -> str:
     return f"F{beta:g}"
 

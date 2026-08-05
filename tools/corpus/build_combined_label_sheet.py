@@ -36,6 +36,14 @@ no-`images.jsonl` refusal, the routed merge — is a property of the CODE. A she
 of instance constants (which batches, which seed, which id prefix) in `SPECS`, so a second
 sitting inherits the guards instead of growing a second copy of them that can drift.
 
+A SHEET MAY SERVE A SUBSET (`SheetSpec.row_filter`), AND SUBSETTING IS A PRESENTATION ACT LIKE
+EVERY OTHER ONE HERE. The excluded rows are not deleted, not unregistered and not re-rendered
+— they stay exactly where they are in their own batch, labelable by a later sheet. What the
+filter changes is which rows this sitting DEALS: the ±1 apportionment, the route map and the
+crop tree are all built over the selected subset, and every count check re-derives that subset
+from the sources rather than trusting a number in `batch.json`. A `None` filter is the whole
+union, which is what the first three sheets are.
+
   uv run python tools/corpus/build_combined_label_sheet.py verify        # sources, pre-build
   uv run python tools/corpus/build_combined_label_sheet.py build [--apply]
   uv run python tools/corpus/build_combined_label_sheet.py check         # the built bytes
@@ -45,6 +53,7 @@ sitting inherits the guards instead of growing a second copy of them that can dr
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import os
@@ -57,7 +66,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-for _p in (str(HERE), str(ROOT), str(ROOT / "tools"), str(ROOT / "tools" / "viz")):
+for _p in (str(HERE), str(ROOT), str(ROOT / "tools"), str(ROOT / "tools" / "viz"),
+           str(ROOT / "tools" / "scoring"), str(ROOT / "tools" / "mining")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -66,6 +76,7 @@ import corpus_common as cc            # noqa: E402
 import label_store as ls              # noqa: E402
 import merge_scores as ms             # noqa: E402
 import paths                          # noqa: E402
+from partitions import partition_of_row   # noqa: E402  (THE fractal_type -> partition map)
 from tools.v7 import build_manifest as bm   # noqa: E402  (assign_split — the authority)
 
 STAMP = "2026-08-03"
@@ -112,6 +123,17 @@ class SheetSpec:
     purpose: str
     max_run_source: int
     max_run_family: int
+    # SUBSET SHEETS. `row_filter(batch_id, row) -> bool` picks which source rows this sitting
+    # deals; `None` is the whole union. `filter_rule` is the prose recorded in batch.json —
+    # required whenever a filter is set, because a served subset whose rule is not written down
+    # is indistinguishable from a build that silently dropped rows.
+    row_filter: object = None
+    filter_rule: str = ""
+
+    def __post_init__(self):
+        if bool(self.row_filter) != bool(self.filter_rule):
+            raise ValueError(f"{self.name}: row_filter and filter_rule must be set together "
+                             f"(a subset with no stated rule reads as a lossy build)")
 
 
 Q4_COMBINED = SheetSpec(
@@ -191,7 +213,107 @@ STEADY_STATE_SITTING = SheetSpec(
     max_run_family=3,
 )
 
-SPECS = {s.name: s for s in (Q4_COMBINED, V2_SITTING, STEADY_STATE_SITTING)}
+
+# =========================================================================== #
+# row filters — the SUBSET rules a spec may carry
+# =========================================================================== #
+@functools.lru_cache(maxsize=1)
+def _t_good_statuses() -> dict:
+    """`{partition: DERIVED|UNCALIBRATED}` off the ADOPTED derivation artifact for the LIVE
+    pin, via the module that WRITES that artifact (`derive_t_good.adopted_statuses`).
+
+    Imported lazily, the same way `_loc()` is: `derive_t_good` pulls numpy and, through
+    `score_lib`, torch — and a sheet with no filter must stay buildable without them. Cached
+    for the process because a build reads it once per row over hundreds of rows; a CLI run is
+    the unit of freshness here, and re-deriving t_good mid-run is not a thing that happens.
+    """
+    import derive_t_good
+    return derive_t_good.adopted_statuses()
+
+
+def t_good_status_of(row) -> str:
+    """The stamped t_good status of a corpus row's PARTITION. Resolved from the render block
+    (`partition_of_row` — version-invariant, and the only thing that knows the phoenix split),
+    never from `provenance.family`, which is version-tagged and may be null."""
+    part = partition_of_row(row["render"])
+    if part is None:
+        raise KeyError(f"row {row.get('image_id')!r}: fractal_type "
+                       f"{row['render'].get('fractal_type')!r} resolves to no registered "
+                       f"partition — register it in partitions.ALL_FAMS before serving it")
+    return _t_good_statuses()[part]
+
+
+def uncalibrated_t_good_in(*batches):
+    """A `row_filter` that keeps, IN THE NAMED BATCHES ONLY, rows whose partition's t_good is
+    stamped UNCALIBRATED; every other batch of the sheet is served whole.
+
+    The scoping is explicit rather than global because that is the actual editorial rule: a
+    leg cut to answer "where is t_good still un-derived" is subset; a leg that exists to be
+    labeled end to end is not. Reading the predicate off the artifact — rather than off a
+    partition list written here — is what makes it follow a re-derivation instead of silently
+    describing whatever was true the day it was typed.
+    """
+    scoped = frozenset(batches)
+
+    def _keep(batch: str, row) -> bool:
+        if batch not in scoped:
+            return True
+        return t_good_status_of(row) == "UNCALIBRATED"
+
+    # What the predicate READ, resolved at build time and frozen into batch.json — a rule
+    # naming "the adopted artifact" is not reproducible six months on unless the record says
+    # which file that was ("derive state in code; freeze it in records", CLAUDE.md).
+    def _provenance():
+        import derive_t_good
+        p = derive_t_good.adopted_path()
+        return {"t_good_artifact": p.relative_to(ROOT).as_posix(),
+                "scoped_batches": sorted(scoped),
+                "statuses": dict(sorted(_t_good_statuses().items()))}
+
+    _keep.provenance = _provenance
+    return _keep
+
+
+# --- the UNCALIBRATED re-serve of the steady-state sitting (2026-08-05) ------------------- #
+# The same two registered batches, the same already-rendered rows, dealt again over a SUBSET:
+# the dive leg whole, and only the ranked-leg partitions whose t_good the v10 derivation never
+# derived. Nothing is deleted or unregistered — the ~258 excluded ranked rows sit in
+# `2026-08-05_steady_state_ranked_v1` exactly as before, and a later sheet can serve them.
+STEADY_STATE_UNCAL = SheetSpec(
+    name="steady_state_uncal",
+    sheet_id="2026-08-05_steady_state_uncal_sheet_v1",
+    sources=STEADY_STATE_SITTING_SOURCES,
+    # A DIFFERENT seed and salt from the full sitting on purpose. Same salt + same prefix would
+    # mint the same opaque id for a row served by both sheets, and `route.json` is keyed on
+    # that id — two sittings would share label state through localStorage and through any
+    # export file that named the wrong sheet.
+    seed=0x57ED08C1,
+    salt="steady-state-uncal-2026-08-05",
+    id_prefix="su",
+    purpose=("The 2026-08-05 steady-state sitting RE-SERVED over a subset: the dive leg whole "
+             "plus the ranked-leg rows whose partition's t_good is stamped UNCALIBRATED in the "
+             "adopted derivation. Same rows, same two registered batches, no re-render and no "
+             "new registration. This directory is NOT a batch: no images.jsonl, no labels, no "
+             "registration; the single export routes back through route.json "
+             "(merge_scores.py --route). The excluded ranked rows remain registered and "
+             "labelable by a later sheet."),
+    row_filter=uncalibrated_t_good_in("2026-08-05_steady_state_ranked_v1"),
+    filter_rule=("dive leg served whole; ranked leg restricted to partitions whose t_good "
+                 "status is UNCALIBRATED in data/<ACTIVE_VERSION>/t_good_derivation.json "
+                 "(derive_t_good.adopted_statuses), resolved per row by "
+                 "partitions.partition_of_row"),
+    # MEASURED on THIS subset, then one step up — the same rule as every spec above; see
+    # `stage_check`'s note. The mix is 396/94 (80.8% / 19.2%), less lopsided than the full
+    # sitting's 87.4 / 12.6, so the by-construction minority gap is smaller and the cap comes
+    # down with it: 16 -> 11. Measured over a 6-seed sweep (the spec seed, the full sitting's
+    # seed, and four arbitrary ones): same-source run 10 EVERY time — seed-invariant, because
+    # the shuffle permutes rows within a cell and not the cell sequence — and same-family run 2
+    # every time. The load-bearing balance invariant is still the +/-1 prefix bound.
+    max_run_source=11,
+    max_run_family=3,
+)
+
+SPECS = {s.name: s for s in (Q4_COMBINED, V2_SITTING, STEADY_STATE_SITTING, STEADY_STATE_UNCAL)}
 
 
 # =========================================================================== #
@@ -213,15 +335,39 @@ def family_of(row) -> str:
     return (row.get("provenance") or {}).get("family") or row["render"]["fractal_type"]
 
 
-def load_sources(spec: SheetSpec = Q4_COMBINED):
-    """[(batch_id, row)] over every source batch, in registered order."""
+def load_sources(spec: SheetSpec = Q4_COMBINED, filtered: bool = True):
+    """[(batch_id, row)] over every source batch, in registered order.
+
+    `filtered=True` (the default, and what every stage uses) applies `spec.row_filter`, so the
+    SELECTED subset is derived from the source files on every call — build, check and
+    merge-dryrun each re-derive it rather than reading a count out of `batch.json`.
+    `filtered=False` is the whole union, which is what the excluded rows are measured against.
+    """
     out = []
     for b in spec.sources:
         p = os.path.join(cc.batch_dir(b), "images.jsonl")
         if not os.path.exists(p):
             raise SystemExit(f"source batch missing images.jsonl: {p}")
-        out += [(b, r) for r in cc.read_jsonl(p)]
+        rows = cc.read_jsonl(p)
+        if filtered and spec.row_filter is not None:
+            rows = [r for r in rows if spec.row_filter(b, r)]
+        out += [(b, r) for r in rows]
+    if filtered and spec.row_filter is not None and not out:
+        raise SystemExit(f"{spec.name}: row_filter selected 0 rows — refusing to build an "
+                         f"empty sitting (a filter that matches nothing looks like a clean "
+                         f"build, which is exactly the failure)")
     return out
+
+
+def selection_counts(spec: SheetSpec):
+    """`{batch: (selected, total)}` — the subset, re-derived from the source files. The
+    relational form of "the sheet serves the right rows": every count check compares the built
+    bytes against THIS, never against a literal."""
+    all_pairs = load_sources(spec, filtered=False)
+    sel = load_sources(spec, filtered=True)
+    return {b: (sum(1 for bb, _ in sel if bb == b),
+                sum(1 for bb, _ in all_pairs if bb == b))
+            for b in spec.sources}
 
 
 def opaque_id(slot: int, batch: str, image_id: str, spec: SheetSpec = Q4_COMBINED) -> str:
@@ -294,6 +440,18 @@ def stage_verify(args) -> int:
     emit(f"=== {spec.name} label sheet — SOURCE verification ({STAMP}) ===")
     pairs = load_sources(spec)
     emit(f"union: {len(pairs)} rows over {len(spec.sources)} batches")
+
+    # --- 0. the subset, if this sheet is one -----------------------------------
+    if spec.row_filter is not None:
+        emit("\n[selection]")
+        emit(f"       rule: {spec.filter_rule}")
+        for b, (sel, tot) in selection_counts(spec).items():
+            emit(f"       {b}: {sel}/{tot} selected  ({tot - sel} excluded, still registered)")
+        by_part = Counter(partition_of_row(r["render"]) for _, r in pairs)
+        emit(f"       partitions served: "
+             f"{ {k: n for k, n in sorted(by_part.items())} }")
+        check("every selected row's partition is stamped in the adopted t_good artifact",
+              all(t_good_status_of(r) in ("DERIVED", "UNCALIBRATED") for _, r in pairs))
 
     # --- 1. registration: assign_split vs label_store, per batch ---------------
     emit("\n[registration]")
@@ -445,10 +603,26 @@ def stage_build(args) -> int:
         "vivid_companion": "blue_orange",
         "calibration_aids": "NONE — no exemplars, no reference strip, no score shown",
     }
+    if spec.row_filter is not None:
+        sel = selection_counts(spec)
+        prov = getattr(spec.row_filter, "provenance", None)
+        bj["selection"] = {
+            "rule": spec.filter_rule,
+            "read": prov() if prov else None,
+            "by_source": {b: {"selected": s, "total": t, "excluded": t - s}
+                          for b, (s, t) in sel.items()},
+            "partitions": dict(sorted(Counter(partition_of_row(r["render"])
+                                              for _, _, r in order).items())),
+            "excluded_rows": ("NOT deleted and NOT unregistered — they remain in their own "
+                              "batch with a null label and can be served by a later sheet"),
+        }
 
     if not args.apply:
         head = [f"{b[-20:]}|{f}" for (b, f), _, _ in order[:12]]
         print(f"DRY RUN — would write {len(sheet_rows)} rows to {sd}")
+        if "selection" in bj:
+            print(f"  SUBSET: {bj['selection']['by_source']}")
+            print(f"  partitions: {bj['selection']['partitions']}")
         print(f"  cells: {len(cells)}; by source: {bj['counts']['by_source']}")
         print(f"  first 12 cells in order: {head}")
         print("  pass --apply to write the sheet, the route map and the crop tree")
@@ -512,13 +686,43 @@ def stage_check(args) -> int:
     rows = cc.read_jsonl(str(sd / SHEET_MANIFEST))
     route = ms.load_route(str(sd / ROUTE_FILE))
     bj = json.loads((sd / "batch.json").read_text(encoding="utf-8"))
+    # The whole store (for the id -> row lookup) and, separately, the SELECTED subset
+    # re-derived from those same files. Every count below is relational against `sel`, so a
+    # filter that changed, or a build that dropped rows, both go red — a frozen 490 would not.
     src = {b: cc.read_jsonl(os.path.join(cc.batch_dir(b), "images.jsonl"))
            for b in spec.sources}
     src_by_id = {b: {r["image_id"]: r for r in rs} for b, rs in src.items()}
+    sel_pairs = load_sources(spec)
+    sel_ids = defaultdict(set)
+    for b, r in sel_pairs:
+        sel_ids[b].add(r["image_id"])
 
-    check("every source row is served exactly once",
-          len(rows) == sum(len(v) for v in src.values()),
-          f"{len(rows)} served vs {sum(len(v) for v in src.values())} in the sources")
+    check("every SELECTED source row is served exactly once",
+          len(rows) == len(sel_pairs),
+          f"{len(rows)} served vs {len(sel_pairs)} selected of "
+          f"{sum(len(v) for v in src.values())} in the sources")
+    if spec.row_filter is not None:
+        emit("\n[selection]")
+        emit(f"       rule: {spec.filter_rule}")
+        for b, (s, t) in selection_counts(spec).items():
+            emit(f"       {b}: {s}/{t} selected, {t - s} excluded")
+        check("batch.json records the subset rule and the same per-source counts",
+              (bj.get("selection") or {}).get("rule") == spec.filter_rule
+              and {b: v["selected"] for b, v in
+                   (bj.get("selection") or {}).get("by_source", {}).items()}
+              == {b: s for b, (s, _) in selection_counts(spec).items()},
+              str(bj.get("selection", {}).get("by_source")))
+        # The excluded rows are the point of "nothing deleted": they must still be there, in
+        # their own batch, unlabeled.
+        excl = [(b, r) for b, r in load_sources(spec, filtered=False)
+                if r["image_id"] not in sel_ids[b]]
+        check("every EXCLUDED row is still present in its source batch with a null label",
+              all(r["label"]["score"] is None for _, r in excl),
+              f"{len(excl)} excluded")
+        served_parts = {partition_of_row(src_by_id[route[r['image_id']][0]]
+                                         [route[r['image_id']][1]]["render"])
+                        for r in rows}
+        emit(f"       partitions served: {sorted(served_parts)}")
     check("this directory is NOT a batch (no images.jsonl)",
           not (sd / "images.jsonl").exists())
     check("batch.json names the served manifest and the route map",
@@ -565,8 +769,10 @@ def stage_check(args) -> int:
     check("route covers every served row exactly once",
           set(route) == {r["image_id"] for r in rows} and len(route) == len(rows))
     per_src = Counter(b for b, _ in route.values())
-    check("every source row appears exactly once",
-          all(per_src[b] == len(src[b]) for b in spec.sources), str(dict(per_src)))
+    check("every selected source row appears exactly once",
+          all(per_src[b] == len(sel_ids[b]) for b in spec.sources), str(dict(per_src)))
+    check("no route target is outside the selection",
+          all(i in sel_ids[b] for b, i in route.values()))
     mismatch = [r["image_id"] for r in rows
                 if src_by_id[route[r["image_id"]][0]][route[r["image_id"]][1]]["render"]
                 != r["render"]]
@@ -700,11 +906,15 @@ def stage_merge_dryrun(args) -> int:
         stats = {b: ms.merge_batch(b, str(sandbox), per_batch[b], labeler="dryrun",
                                    labeled_at=STAMP, max_score=4, apply=True)
                  for b in spec.sources}
+        sel = selection_counts(spec)
         for b in spec.sources:
-            n_src = len(cc.read_jsonl(os.path.join(cc.batch_dir(b), "images.jsonl")))
+            n_sel, n_src = sel[b]
             st = stats[b]
-            check(f"{b}: all {n_src} rows filled",
-                  st["filled"] == n_src and st["labeled"] == n_src,
+            # A SUBSET sheet fills only its selection; the rest of the batch stays null and
+            # labelable. `labeled` counts every non-null row in the batch after the merge, so
+            # on a full sheet the two coincide and on a subset they must not be confused.
+            check(f"{b}: all {n_sel} selected rows filled (of {n_src} in the batch)",
+                  st["filled"] == n_sel and st["labeled"] == n_sel,
                   f"filled={st['filled']} labeled={st['labeled']}/{st['n_rows']}")
             check(f"{b}: no conflict, no unknown id, nothing out of range",
                   not st["conflicts"] and not st["unknown"] and not st["out_of_range"])

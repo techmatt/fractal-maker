@@ -29,59 +29,77 @@ import build_combined_label_sheet as B  # noqa: E402
 import corpus_common as cc  # noqa: E402
 import merge_scores as ms  # noqa: E402
 
-SD = B.sheet_dir()
-built = pytest.mark.skipif(not (SD / B.SHEET_MANIFEST).exists(),
-                           reason="combined sheet not built in this checkout")
+# EVERY built sheet, not just the first one. The tripwires below were written against
+# `q4_combined` and stayed pinned to it while three more sittings were built from the same
+# code — so a blindness regression in a NEW sheet would have been invisible to the suite until
+# somebody re-ran `check` by hand. They are properties of the CODE, so they are parametrized
+# over `SPECS` and each one skips only if ITS sheet is unbuilt in this checkout.
+ALL_SPECS = sorted(B.SPECS)
+
+
+def _spec_or_skip(name):
+    spec = B.SPECS[name]
+    if not (B.sheet_dir(spec) / B.SHEET_MANIFEST).exists():
+        pytest.skip(f"{name} sheet not built in this checkout")
+    return spec, B.sheet_dir(spec)
 
 
 # --------------------------------------------------------------------------- #
-# tripwires over the built sheet
+# tripwires over the built sheets
 # --------------------------------------------------------------------------- #
-@built
-def test_sheet_dir_is_not_a_batch():
+@pytest.mark.parametrize("name", ALL_SPECS)
+def test_sheet_dir_is_not_a_batch(name):
     """The consequence, not the proxy: every consumer discovers batches by globbing
     `*/images.jsonl`, so the sheet must not appear in that glob."""
     import glob
+    spec, sd = _spec_or_skip(name)
     found = glob.glob(os.path.join(cc.BATCHES_DIR, "*", "images.jsonl"))
-    assert not (SD / "images.jsonl").exists()
-    assert str(SD / "images.jsonl") not in found
-    assert B.SHEET_ID not in {os.path.basename(os.path.dirname(p)) for p in found}
+    assert not (sd / "images.jsonl").exists()
+    assert str(sd / "images.jsonl") not in found
+    assert spec.sheet_id not in {os.path.basename(os.path.dirname(p)) for p in found}
 
 
-@built
-def test_served_manifest_carries_no_leak_key_and_no_source_identity():
-    text = (SD / B.SHEET_MANIFEST).read_text(encoding="utf-8")
+@pytest.mark.parametrize("name", ALL_SPECS)
+def test_served_manifest_carries_no_leak_key_and_no_source_identity(name):
+    spec, sd = _spec_or_skip(name)
+    text = (sd / B.SHEET_MANIFEST).read_text(encoding="utf-8")
     for k in B.SHEET_LEAK_KEYS:
-        assert f'"{k}"' not in text, f"leak key {k} reached the served manifest"
-    for b in B.SOURCES:
-        assert b not in text, f"source batch id {b} reached the served manifest"
+        assert f'"{k}"' not in text, f"{name}: leak key {k} reached the served manifest"
+    for b in spec.sources:
+        assert b not in text, f"{name}: source batch id {b} reached the served manifest"
 
 
-@built
-def test_served_rows_are_id_render_label_only():
-    rows = cc.read_jsonl(str(SD / B.SHEET_MANIFEST))
+@pytest.mark.parametrize("name", ALL_SPECS)
+def test_served_rows_are_id_render_label_only(name):
+    _spec, sd = _spec_or_skip(name)
+    rows = cc.read_jsonl(str(sd / B.SHEET_MANIFEST))
     assert rows and all(set(r) == {"image_id", "render", "label"} for r in rows)
     assert all(r["label"]["score"] is None for r in rows)
     assert all(set(cc.RENDER_KEYS) <= set(r["render"]) for r in rows)
 
 
-@built
-def test_route_is_a_bijection_onto_the_source_rows():
-    rows = cc.read_jsonl(str(SD / B.SHEET_MANIFEST))
-    route = ms.load_route(str(SD / B.ROUTE_FILE))
+@pytest.mark.parametrize("name", ALL_SPECS)
+def test_route_is_a_bijection_onto_the_selected_source_rows(name):
+    """Onto the SELECTION, which for an unfiltered sheet is the whole batch. Asserting the
+    whole batch unconditionally would have made a subset sheet unrepresentable — and the
+    interesting failure (a subset sheet that quietly served rows outside its own filter)
+    is exactly what this catches."""
+    spec, sd = _spec_or_skip(name)
+    rows = cc.read_jsonl(str(sd / B.SHEET_MANIFEST))
+    route = ms.load_route(str(sd / B.ROUTE_FILE))
     assert set(route) == {r["image_id"] for r in rows}
     targets = list(route.values())
     assert len(set(targets)) == len(targets), "two opaque ids point at one source row"
-    for b in B.SOURCES:
-        src = {r["image_id"] for r in
-               cc.read_jsonl(os.path.join(cc.batch_dir(b), "images.jsonl"))}
-        assert {i for bb, i in targets if bb == b} == src
+    sel = B.load_sources(spec)
+    for b in spec.sources:
+        assert {i for bb, i in targets if bb == b} == {r["image_id"] for bb, r in sel if bb == b}
 
 
-@built
-def test_batch_json_pins_the_file_order():
+@pytest.mark.parametrize("name", ALL_SPECS)
+def test_batch_json_pins_the_file_order(name):
     """The sheet's file order IS the designed stratification; the page must not reshuffle it."""
-    bj = json.loads((SD / "batch.json").read_text(encoding="utf-8"))
+    _spec, sd = _spec_or_skip(name)
+    bj = json.loads((sd / "batch.json").read_text(encoding="utf-8"))
     assert bj["presentation_order"] == "file"
     assert bj["served_manifest"] == B.SHEET_MANIFEST and bj["route_map"] == B.ROUTE_FILE
     assert bj.get("presentation_only") is True
@@ -238,3 +256,101 @@ def test_a_sheet_id_is_never_also_a_source_batch_id():
     ids = {s.sheet_id for s in B.SPECS.values()}
     srcs = {b for s in B.SPECS.values() for b in s.sources}
     assert not (ids & srcs)
+
+
+# --------------------------------------------------------------------------- #
+# SUBSET sheets — the filter, and what it must not disturb
+# --------------------------------------------------------------------------- #
+def test_a_filter_without_a_stated_rule_is_refused():
+    """A served subset whose rule is not written into batch.json is indistinguishable from a
+    build that silently lost rows, so the two fields are set together or not at all."""
+    base = dict(name="t", sheet_id="t", sources=("b",), seed=1, salt="s", id_prefix="tt",
+                purpose="p", max_run_source=1, max_run_family=1)
+    for bad in ({"row_filter": (lambda b, r: True)}, {"filter_rule": "stated but not applied"}):
+        with pytest.raises(ValueError):
+            B.SheetSpec(**base, **bad)
+    B.SheetSpec(**base)                                        # neither: the whole union
+    B.SheetSpec(**base, row_filter=(lambda b, r: True), filter_rule="both")
+
+
+def test_the_status_reader_and_the_adopted_table_agree():
+    """Two independent authorities for the same fact: the DERIVATION artifact's per-partition
+    `status` stamp, and `production_seeder`'s adopted mirror of it. The filter reads the first;
+    the discovery path runs on the second. Equal, or the sitting is cut against a table the
+    engine does not use."""
+    import sys as _s
+    _s.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "scoring")))
+    _s.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "mining")))
+    _s.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "atlas")))
+    import derive_t_good as est
+    import production_seeder as ps
+    from partitions import ALL_FAMS
+    stamped = est.adopted_statuses()
+    assert set(stamped) == set(ALL_FAMS)
+    assert stamped == {f: ps.t_good_status(f) for f in ALL_FAMS}
+
+
+def test_the_filtered_sitting_is_exactly_uncalibrated_ranked_plus_the_whole_dive():
+    """Re-derived from the artifact, never from a literal count: flip a partition's stamp and
+    this moves with it. A frozen 396 would pass while serving the wrong population."""
+    spec = B.SPECS["steady_state_uncal"]
+    ranked, dive = spec.sources
+    sel = B.load_sources(spec)
+    full = B.load_sources(spec, filtered=False)
+
+    from partitions import partition_of_row
+    want = {(b, r["image_id"]) for b, r in full
+            if b != ranked or B.t_good_status_of(r) == "UNCALIBRATED"}
+    assert {(b, r["image_id"]) for b, r in sel} == want
+    assert {b for b, _ in sel if b == dive} == {dive}
+    assert sum(1 for b, _ in sel if b == dive) == sum(1 for b, _ in full if b == dive), \
+        "the dive leg is served WHOLE — it is not scoped by the filter"
+    # and nothing DERIVED survives from the scoped leg.
+    assert not [r for b, r in sel
+                if b == ranked and B.t_good_status_of(r) != "UNCALIBRATED"]
+    served = {partition_of_row(r["render"]) for b, r in sel if b == ranked}
+    assert served and all(B._t_good_statuses()[p] == "UNCALIBRATED" for p in served)
+
+
+def test_the_excluded_rows_stay_registered_labelable_and_unlabeled():
+    """"Nothing deleted, nothing unregistered" as a property of the store, not a claim in a
+    report: the rows the filter dropped are still in their batch, still null, and still
+    reachable by a later sheet."""
+    spec = B.SPECS["steady_state_uncal"]
+    sel = {(b, r["image_id"]) for b, r in B.load_sources(spec)}
+    full = B.load_sources(spec, filtered=False)
+    excluded = [(b, r) for b, r in full if (b, r["image_id"]) not in sel]
+    assert excluded, "this spec is supposed to exclude rows"
+    for b, r in excluded:
+        assert r["label"]["score"] is None
+    from tools.v7 import build_manifest as bm
+    for b in {b for b, _ in excluded}:
+        assert bm.assign_split({"batch": b, "ft": "mandelbrot"})[2] != "unregistered"
+
+
+def test_an_unscoped_batch_is_served_whole_by_the_scoped_filter():
+    """The scoping is the editorial rule and it is easy to invert by accident. A row from a
+    batch the filter does not name passes even when its partition is DERIVED."""
+    keep = B.uncalibrated_t_good_in("scoped")
+    derived_row = {"image_id": "x", "render": {"fractal_type": "mandelbrot"}}   # DERIVED in v10
+    assert keep("unscoped", derived_row) is True
+    assert keep("scoped", derived_row) is False
+
+
+def test_an_empty_selection_is_refused_rather_than_built():
+    """A filter that matches nothing produces a clean-looking build of an empty sitting —
+    the failure this refuses is the one that reads as a success."""
+    spec = B.SPECS["steady_state_uncal"]
+    never = B.SheetSpec(name="never", sheet_id="never", sources=spec.sources, seed=1,
+                        salt="never", id_prefix="nv", purpose="p", max_run_source=1,
+                        max_run_family=1, row_filter=(lambda b, r: False),
+                        filter_rule="matches nothing")
+    with pytest.raises(SystemExit):
+        B.load_sources(never)
+
+
+def test_a_row_whose_partition_is_unregistered_raises_rather_than_being_dropped():
+    """An unrecognised family must not fall silently to "not uncalibrated" — that would drop
+    a whole new family out of a sitting and read as the filter working."""
+    with pytest.raises(KeyError):
+        B.t_good_status_of({"image_id": "x", "render": {"fractal_type": "nonesuch"}})

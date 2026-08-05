@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-05_steady_state_uncal_sheet_v1",
+  "presentation_only": true,
+  "purpose": "The 2026-08-05 steady-state sitting RE-SERVED over a subset: the dive leg whole plus the ranked-leg rows whose partition's t_good is stamped UNCALIBRATED in the adopted derivation. Same rows, same two registered batches, no re-render and no new registration. This directory is NOT a batch: no images.jsonl, no labels, no registration; the single export routes back through route.json (merge_scores.py --route). The excluded ranked rows remain registered and labelable by a later sheet.",
+  "source_batches": [
+    "2026-08-05_steady_state_ranked_v1",
+    "2026-08-05_steady_state_dive_v1"
+  ],
+  "served_manifest": "sheet.jsonl",
+  "route_map": "route.json",
+  "presentation_seed": 1475152065,
+  "presentation_order": "file",
+  "order_rule": "seeded shuffle over the union, then stratified round-robin over every (source_batch x family) cell to +/-1 of proportional share in every prefix",
+  "id_salt": "steady-state-uncal-2026-08-05",
+  "id_rule": "su<slot>_<blake2b(salt|batch|image_id)>; slot assigned POST-shuffle",
+  "counts": {
+    "total": 490,
+    "by_source": {
+      "2026-08-05_steady_state_ranked_v1": 396,
+      "2026-08-05_steady_state_dive_v1": 94
+    },
+    "cells": {
+      "2026-08-05_steady_state_dive_v1|julia:multibrot4": 47,
+      "2026-08-05_steady_state_dive_v1|mandelbrot": 8,
+      "2026-08-05_steady_state_dive_v1|multibrot3": 39,
+      "2026-08-05_steady_state_ranked_v1|julia:mandelbrot": 137,
+      "2026-08-05_steady_state_ranked_v1|multibrot3": 156,
+      "2026-08-05_steady_state_ranked_v1|multibrot4": 58,
+      "2026-08-05_steady_state_ranked_v1|multibrot5": 11,
+      "2026-08-05_steady_state_ranked_v1|phoenix": 34
+    }
+  },
+  "vivid_companion": "blue_orange",
+  "calibration_aids": "NONE \u2014 no exemplars, no reference strip, no score shown",
+  "selection": {
+    "rule": "dive leg served whole; ranked leg restricted to partitions whose t_good status is UNCALIBRATED in data/<ACTIVE_VERSION>/t_good_derivation.json (derive_t_good.adopted_statuses), resolved per row by partitions.partition_of_row",
+    "read": {
+      "t_good_artifact": "data/v10/t_good_derivation.json",
+      "scoped_batches": [
+        "2026-08-05_steady_state_ranked_v1"
+      ],
+      "statuses": {
+        "julia:mandelbrot": "UNCALIBRATED",
+        "julia:multibrot3": "DERIVED",
+        "julia:multibrot4": "DERIVED",
+        "julia:multibrot5": "DERIVED",
+        "mandelbrot": "DERIVED",
+        "multibrot3": "UNCALIBRATED",
+        "multibrot4": "UNCALIBRATED",
+        "multibrot5": "UNCALIBRATED",
+        "phoenix": "UNCALIBRATED",
+        "phoenix:classic": "UNCALIBRATED"
+      }
+    },
+    "by_source": {
+      "2026-08-05_steady_state_ranked_v1": {
+        "selected": 396,
+        "total": 654,
+        "excluded": 258
+      },
+      "2026-08-05_steady_state_dive_v1": {
+        "selected": 94,
+        "total": 94,
+        "excluded": 0
+      }
+    },
+    "partitions": {
+      "julia:mandelbrot": 137,
+      "julia:multibrot4": 47,
+      "mandelbrot": 8,
+      "multibrot3": 195,
+      "multibrot4": 58,
+      "multibrot5": 11,
+      "phoenix": 34
+    },
+    "excluded_rows": "NOT deleted and NOT unregistered \u2014 they remain in their own batch with a null label and can be served by a later sheet"
+  }
+}
