@@ -169,6 +169,46 @@ asks for roots is `julia_c_sourcing.md`'s "run to the knee, then refill" by cons
 where a pool dumped at t=0 is run straight into its tail. `--seed-pool-rate 0` restores
 wholesale injection and is byte-identical to every run before 2026-08-03.
 
+### 3.3 The price was never seeded from a measurement — and the supply loop, first read
+
+`[measured: data/discovery/steady_state_v1_20260805, 60.0 active min / 76 batches, 2026-08-05]`
+`[cmd: uv run python tools/atlas/harvest_v2_readout.py --run-dir <run>]`
+The first steady-state run after the v10 flip and the ratio-target / precanon-K adoptions.
+Three things it settles, and one it deliberately does not.
+
+**The stored cost-to-mine table was a flat 3.0.** `--quota-prices` had no default and no file
+had ever been written for it, so `CostToMine` seeded every partition at `SEED_PRICE` and the
+first pops allocated on deficit alone — while `harvest_v2_readout.cost_to_mine` reported "the
+prices this run measured, for the next one" into nothing. (`data/atlas/scheduler_prices.json`
+is not that table: it is §3's, denominated per DISTINCT LOOK.) Regenerated as
+`data/atlas/quota_prices_v1.json` by `tools/atlas/derive_quota_prices.py`, pooling
+`sum(min_spent)/sum(units_mined)` — the aggregate the in-run EMA estimates, not the EMA. All
+nine partitions cleared the evidence floor (`units >= CLASS_WEIGHT[4]`); **every one measured
+cheaper than the flat seed**, from `julia:multibrot3` 0.078 to `multibrot5` 2.51 min/unit —
+a 32× spread the seed asserted was 1×. There is deliberately **no magnitude bound** on a
+derived seed: an early `[seed/4, seed*4]` band would have reported 0.75 for the four
+partitions measured at 0.078–0.139 off 62–148 units, i.e. thrown away the finding. The guard
+is on the denominator instead. `[code: tools/atlas/test_derive_quota_prices.py]`
+
+**That flatness is visible in the run's own miss.** The allocation is recomputed every pop
+from live prices, so a flat seed guarantees the intent moves as prices are learned:
+`multibrot4` 0.190 → 0.050 and `julia:multibrot3` 0.136 → 0.225 inside 76 batches, purely on
+price. L1 mix gap 0.203 vs launch intent, 0.133 vs effective. Crucially the mean
+effective-intent mass on EMPTY queues was **0.000** (arm B: 0.457), so unlike arm B this miss
+is **tracking error, not starvation** — the pop was choosing badly among partitions it could
+all serve, which is the failure a seeded price table addresses and a supply fix does not.
+
+**The julia twins are open.** Twin-queue non-empty fractions jm3/jm4/jm5 = **44.7 / 67.1 /
+39.5%**, against arm B's 8.1 / 2.7 / 2.4% — the hook-spacing reconciliation (0.20 → the 0.032
+pool floor) did what its commit claimed.
+
+**What this run does NOT test: the starvation the per-partition refill exists to fix.** The
+refill fired **once**, at b0, on all four c-plane families (118 roots, 42 s), with 0 deferrals
+and `root_draw_share` **0.0114** against its 0.25 cap; `wall_over_active` 1.02, pre-loop draw
+8.39 min. So both bounds are armed and neither came near binding — but arm B's collapse
+appeared at **b381**, and this run stopped at b76. The mechanism is exercised; it is not
+evidence about the regime it was written for. `[code: tools/atlas/steered_frontier.py::refill_starved]`
+
 ## 4. τ_h on record — the real per-partition curve
 
 `τ_h` is the **per-partition cheap-`p_good` harvest cut**: cheap score ≥ `τ_h` → one

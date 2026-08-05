@@ -1,0 +1,88 @@
+{
+  "_schema": "pop_quota_cost_to_mine/1",
+  "_doc": "pop-quota cost-to-mine SEED prices: active-minutes per unit of Matt's currency (a decoded 4 = 1.0, a decoded 3 = 0.1) mined as a DISTINCT ADMISSION. Consumed by `steered_frontier.py --quota-prices`; the online EMA moves from here within a few windows, so this only orders the early batches. Regenerate with tools/atlas/derive_quota_prices.py \u2014 never hand-edit a row.",
+  "prices": {
+    "julia:mandelbrot": 0.11,
+    "julia:multibrot3": 0.078,
+    "julia:multibrot4": 0.139,
+    "julia:multibrot5": 0.111,
+    "mandelbrot": 1.229,
+    "multibrot3": 0.438,
+    "multibrot4": 0.638,
+    "multibrot5": 2.51,
+    "phoenix": 0.1
+  },
+  "seed_price": 3.0,
+  "price_ema": 0.3,
+  "price_clamp": 4.0,
+  "cap_minutes": 25.0,
+  "_provenance": {
+    "estimand": "sum(min_spent) / sum(units_mined), pooled across the source runs",
+    "source_runs": [
+      {
+        "name": "steady_state_v1_20260805",
+        "path": "data\\discovery\\steady_state_v1_20260805"
+      }
+    ],
+    "minutes": {
+      "julia:mandelbrot": 8.12,
+      "julia:multibrot3": 11.63,
+      "julia:multibrot4": 8.64,
+      "julia:multibrot5": 2.37,
+      "mandelbrot": 2.58,
+      "multibrot3": 15.27,
+      "multibrot4": 7.14,
+      "multibrot5": 2.51,
+      "phoenix": 1.71
+    },
+    "units": {
+      "julia:mandelbrot": 73.6,
+      "julia:multibrot3": 148.2,
+      "julia:multibrot4": 62.1,
+      "julia:multibrot5": 21.4,
+      "mandelbrot": 2.1,
+      "multibrot3": 34.9,
+      "multibrot4": 11.2,
+      "multibrot5": 1.0,
+      "phoenix": 17.1
+    },
+    "samples": {
+      "julia:mandelbrot": 8,
+      "julia:multibrot3": 17,
+      "julia:multibrot4": 8,
+      "julia:multibrot5": 3,
+      "mandelbrot": 1,
+      "multibrot3": 11,
+      "multibrot4": 4,
+      "multibrot5": 1,
+      "phoenix": 3
+    },
+    "price_raw": {
+      "julia:mandelbrot": 0.11,
+      "julia:multibrot3": 0.078,
+      "julia:multibrot4": 0.139,
+      "julia:multibrot5": 0.111,
+      "mandelbrot": 1.229,
+      "multibrot3": 0.438,
+      "multibrot4": 0.638,
+      "multibrot5": 2.51,
+      "phoenix": 0.1
+    },
+    "measured": [
+      "julia:mandelbrot",
+      "julia:multibrot3",
+      "julia:multibrot4",
+      "julia:multibrot5",
+      "mandelbrot",
+      "multibrot3",
+      "multibrot4",
+      "multibrot5",
+      "phoenix"
+    ],
+    "defaulted": [],
+    "defaulted_note": "fewer than MIN_UNITS=1.0 currency units mined in the source runs; the row carries SEED_PRICE and states nothing about the partition",
+    "thin": [],
+    "min_units": 1.0,
+    "min_units_note": "one full class-4's worth of currency (pop_quota.CLASS_WEIGHT[4]) is the evidence floor to be PRICED. There is deliberately no magnitude bound: the first steady-state run measured four partitions at 0.078-0.139 min/unit off 62-148 units, and a [seed/4, seed*4] band would have reported 0.75 for all of them"
+  }
+}

@@ -102,6 +102,31 @@
         "the run actually made": 236
       },
       "reading": "8.4-11.5x this run's canonical render bill, and the precanon skip stops being a saving: it removed 91.5% of checks at the retired rule and removes 1.6-28% at the adopted one. That is the price of the 8-keepers-per-merge the calibration bought, and it lands on render throughput, not on quality. Still a fixed-stream counterfactual (a real run sources a different stream) \u2014 first-run telemetry remains the read."
+    },
+    "first_production_telemetry": {
+      "date": "2026-08-05",
+      "run": "data/discovery/steady_state_v1_20260805",
+      "command": "uv run python tools/atlas/harvest_log_reconcile.py --run-dir data/discovery/steady_state_v1_20260805",
+      "what": "THE READ THIS RECORD ASKED FOR ('the first production run's own telemetry is the read; do not project from here'). 60.0 active min, 76 batches, pop-quota + maneuvers, harvest log deduped by node_id and reconciled against the run's own checkpointed totals (1110 == 1110, 180 == 180, 557 == 557; 0 duplicates).",
+      "precanon_skip_rate": 0.1622,
+      "checks": 1110,
+      "precanon_dup": 180,
+      "tier2_confirmation_renders": 930,
+      "per_partition_skip_rate": {
+        "julia:mandelbrot": 0.311,
+        "phoenix": 0.225,
+        "julia:multibrot4": 0.153,
+        "julia:multibrot3": 0.152,
+        "multibrot3": 0.064,
+        "multibrot4": 0.05,
+        "julia:multibrot5": 0.02,
+        "mandelbrot": 0.0,
+        "multibrot5": 0.0
+      },
+      "against_the_bracket": "16.2% sits inside the 1.6-28% the fixed-stream counterfactual predicted, at the high end. The retired K=1.5 x max rule measured 85.6% on arm B (popquota_v2_20260804, same reconcile, 5933/6928), so the skip really did collapse by 5.3x as a rate.",
+      "the_bill": "930 canonical 640x360 ss2 confirmations in 60 active minutes = 15.5/min. Arm B made 995 in 143 active minutes = 7.0/min, so tier-2 volume per active minute is 2.2x, not the 8.4-11.5x the fixed-stream replay projected -- the replay held the candidate stream fixed and a real run sources a different one, exactly as the caveat said. Render throughput absorbed it: wall_over_active 1.02.",
+      "watch_condition": "NOT MET. The escape valve fires on 'tier-2 flooding with near-boundary material'; 16.2% is inside the predicted band and the run finished on its active cap with wall/active 1.02. K stays at 0.25 -- no priced move inside [0.25, 0.376] is called for by this run.",
+      "scope": "ONE 60-minute run under --pop-quota --freshness-prior with maneuvers on. A 60-minute run is all warm-up; this is a MECHANISM read on the skip rate and the render bill, and says nothing about yield or quality."
     }
   },
   "deferred": {
