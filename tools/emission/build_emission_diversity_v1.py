@@ -539,8 +539,17 @@ class EmissionDiversity:
             print(f"[intake] ranker scored {len(self.ranker_score)} locations "
                   f"({self.ranker_mode})", flush=True)
         except Exception as e:                               # noqa: BLE001
-            print(f"[intake] ranker unavailable ({e!r}); colorize queue stays "
-                  f"coverage-order (unranked)", flush=True)
+            # Name the artifact, not just the exception class. `FileNotFoundError(2, 'No such
+            # file or directory')` reprs WITHOUT its filename, so this line reported a missing
+            # file and refused to say which one — and the answer (`data/ranker/` has never
+            # existed on this checkout) is the difference between "a cache is cold" and "the
+            # deployed head is gone and every run since has been unranked".
+            from tools.ranker.scorer import DEFAULT_MODEL     # noqa: PLC0415
+            missing = getattr(e, "filename", None) or (
+                str(DEFAULT_MODEL) if not Path(DEFAULT_MODEL).exists() else "?")
+            print(f"[intake] ranker unavailable ({type(e).__name__}: {e}; missing "
+                  f"{missing}); colorize queue stays coverage-order (unranked) and "
+                  f"--intake-floor would be a silent no-op", flush=True)
             self.ranker_score, self.ranker_pct, self.ranker_mode = {}, {}, "unavailable"
         if self.intake_floor is not None and self.ranker_pct:
             keep = [r for r in self.rows if self.ranker_pct.get(r["id"], 1.0) >= self.intake_floor]

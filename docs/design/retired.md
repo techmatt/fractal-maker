@@ -413,3 +413,22 @@ an item's evidence, the line points at it rather than restating it.
   tools/atlas/test_production_seeder.py::{test_production_dedup_rule_is_the_calibrated_min_quarter,
   test_production_dedup_verdicts_move_under_either_revert,
   test_admission_call_sites_resolve_the_live_rule}; docs/design/morphology_dedup.md §6]`
+
+- **2026-08-04 — `1.5 x max(fw)` as the EMISSION-side c-plane fractal identity.** The entry
+  above retired the rule at the precanon gate; it stayed live one layer down, in
+  `emission_selector.same_fractal`'s c-plane branch, as a private `DEDUP_K = 1.5`. Its safety
+  argument was that such pairs were already deduped upstream — which the adoption falsified in
+  the same commit that made it, since the seeder now KEEPS the deep-zoom-inside-a-wide-outcome
+  pair. What retires here is the emission layer's **copy**, not a separately-calibrated
+  constant: the branch now CALLS `production_seeder.near_dup` under the owner's live
+  `(DEDUP_K, DEDUP_SCALE)`, read at call time, so the next recalibration cannot leave it
+  behind. Nothing was recalibrated by this entry; the same 135 verdicts are the whole basis.
+  **NOT retired:** the emission-side *z-plane viewport* rule (`d < K*min(fw)` AND
+  `max(fw) <= ZOOM_RATIO*min(fw)`), which is a different rule on a different population and has
+  never been calibrated. It keeps K = 1.5 and is renamed `VIEWPORT_K` so the coordinate gate's
+  name has one owner.
+  `[decision: prompts/emission_smoke_prompt.md §A, 2026-08-04]`
+  `[code: tools/wallpaper/emission_selector.py::{same_place_c_plane,VIEWPORT_K};
+  tools/atlas/test_production_seeder.py::{test_no_module_declares_a_coordinate_gate_constant_of_its_own,
+  test_the_emission_selector_c_plane_branch_resolves_the_owners_pair};
+  tools/wallpaper/test_emission_selector.py; docs/design/morphology_dedup.md §6]`
