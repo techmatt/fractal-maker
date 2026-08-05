@@ -8,6 +8,7 @@ leave alone. A filter that removes everything passes the first test and fails th
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -451,23 +452,160 @@ def test_the_sitting_batch_id_is_the_same_string_in_all_three_places():
     assert bcs.V2_SITTING.sources == (sc.SITTING_BATCH,)
 
 
-def test_the_sitting_batch_is_registered_explicitly_train_side_and_biased():
+@pytest.mark.parametrize("name", sorted(sc.SITTINGS))
+def test_every_sitting_is_served_by_a_sheet_over_exactly_its_own_legs(name):
+    """The generalization of the pin above to N legs. The cutter writes the legs and the sheet
+    serves them; if the two disagree about the set, the sitting silently serves a subset — the
+    rows of the missing leg exist, are registered, are rendered, and are never shown."""
+    sys.path.insert(0, str(ROOT / "tools" / "corpus"))
+    import build_combined_label_sheet as bcs
+    spec = sc.SITTINGS[name]
+    sheet = next((s for s in bcs.SPECS.values() if set(s.sources) == set(spec.batches)), None)
+    assert sheet is not None, (
+        f"sitting {name!r} has legs {spec.batches} and no SheetSpec serves exactly that set; "
+        f"sheets: { {s.name: s.sources for s in bcs.SPECS.values()} }")
+
+
+@pytest.mark.parametrize("batch", sorted({b for s in sc.SITTINGS.values() for b in s.batches}))
+def test_every_sitting_leg_is_registered_explicitly_train_side_and_biased(batch):
     from tools.v7 import build_manifest as bm
-    split, biased, source = bm.assign_split({"batch": sc.SITTING_BATCH, "ft": "mandelbrot"})
+    split, biased, source = bm.assign_split({"batch": batch, "ft": "mandelbrot"})
     assert source != "unregistered", "the fail-closed default is not a registration"
     assert (split, biased) == ("train", True)
-    assert not bm.registration_contradictions(
-        [{"batch": sc.SITTING_BATCH, "biased": biased}])
+    assert not bm.registration_contradictions([{"batch": batch, "biased": biased}])
 
 
-def test_draw_refuses_an_unregistered_batch(monkeypatch):
+def test_every_leg_of_a_sitting_carries_its_OWN_source_name():
+    """Two legs registered under one source name would make the sitting's own contrast
+    unrecoverable from the corpus: `batches_with_source` is how a later read finds a leg."""
+    import batch_registry as br
+    for spec in sc.SITTINGS.values():
+        srcs = [br.lookup(b, "mandelbrot").source for b in spec.batches]
+        assert len(set(srcs)) == len(srcs), f"{spec.name}: legs share a source {srcs}"
+
+
+def test_draw_refuses_an_unregistered_leg():
     """The fail-closed default is SAFE (train/biased) but it is not a decision, and a sitting
-    built under it records that nobody classified it. So `draw` aborts rather than proceeds."""
-    import types
-    monkeypatch.setattr(sc, "SITTING_BATCH", "2099-01-01_never_registered")
+    built under it records that nobody classified it. So `draw` aborts rather than proceeds —
+    and it aborts on EVERY leg before writing any of them, so an unregistered second leg
+    cannot be discovered after the first one is already on disk."""
+    bad = sc.SittingSpec(
+        name="unregistered", gen_version="x", seed=1, id_prefix="xx", crop_ss=2,
+        legs=(sc.SittingLeg(batch_id=sc.SITTING_BATCH, run_dir="data/discovery/none",
+                            selection_role="a", purpose="a"),
+              sc.SittingLeg(batch_id="2099-01-01_never_registered",
+                            run_dir="data/discovery/none", selection_role="b", purpose="b")))
     with pytest.raises(SystemExit) as e:
-        sc.stage_draw(types.SimpleNamespace(run_dir="/nonexistent", max_rows=10))
+        sc.check_registrations(bad)
     assert "NOT registered" in str(e.value)
+    assert "2099-01-01_never_registered" in str(e.value)
+
+
+# =========================================================================== #
+# the union queue: one cut over N legs
+# =========================================================================== #
+def test_the_union_queue_dedups_ACROSS_legs_and_says_how_many():
+    """A dive descends from the crawl's admissions, so the two stores CAN record the same
+    place. First occurrence wins in LEG ORDER and the count is reported — a union that
+    absorbed the collision would serve one place twice under two registrations, which is the
+    one thing `stage_verify`'s no-repeat check exists to catch."""
+    import build_q4_harvest_batches as bq
+    a = _row(cx="1"), _row(cx="2")
+    b = _row(cx="2"), _row(cx="3")          # cx=2 is the collision
+    seen, rows, dropped = set(), [], {}
+    for tag, leg in (("A", a), ("B", b)):
+        for r in leg:
+            k = bq.queue_identity(r)
+            if k in seen:
+                dropped[tag] = dropped.get(tag, 0) + 1
+                continue
+            seen.add(k)
+            rows.append(dict(r, _leg=tag))
+    assert [r["cx"] for r in rows] == ["1", "2", "3"]
+    assert dropped == {"B": 1}, "the SECOND leg loses the collision, and it is counted"
+
+
+def test_the_union_queue_and_the_single_run_queue_sort_on_the_SAME_key():
+    """The sitting's queue and the v1 batch draw must never disagree about what the queue IS,
+    so both call `build_q4_harvest_batches.queue_sort_key`. Asserted on the source rather than
+    on an example: a second literal here would agree on this fixture and diverge later."""
+    import inspect
+    import build_q4_harvest_batches as bq
+    src = inspect.getsource(sc.load_union_queue)
+    assert "sort(key=bq.queue_sort_key)" in src and "bq.queue_identity(r)" in src
+    # the sort key's own shape (descending tier, descending score) restated nowhere here
+    assert "-int(" not in src and "-float(" not in src, "the sort key must not be restated"
+    assert inspect.getsource(bq.build_queue).count("queue_sort_key") == 1
+
+
+def test_queue_rank_is_assigned_over_the_UNION_not_per_leg():
+    """A per-leg rank would let a small leg's 3rd-best beat a big leg's best inside a cell,
+    because the draw reads `queue_rank` as the within-cell order."""
+    import inspect
+    src = inspect.getsource(sc.load_union_queue)
+    body = src[src.index('"""', src.index('"""') + 3):]     # past the docstring
+    i_sort, i_rank = body.index("rows.sort("), body.index('r["queue_rank"]')
+    assert i_sort < i_rank, "queue_rank must be stamped AFTER the union is sorted"
+
+
+# =========================================================================== #
+# the dive arm: an ORDER argument, checked rather than trusted
+# =========================================================================== #
+def _jsonl(p, recs):
+    p.write_text("\n".join(json.dumps(r) for r in recs) + "\n", encoding="utf-8")
+    return p
+
+
+def _arm_case(tmp_path, rows, log):
+    return sc.recover_dive_arms(_jsonl(tmp_path / "q4_candidates.jsonl", rows),
+                                _jsonl(tmp_path / "dive_log.jsonl", log))
+
+
+def test_the_dive_arm_is_recovered_by_root_id_ORDER_and_partition_checked(tmp_path):
+    m, why = _arm_case(
+        tmp_path,
+        [_row(cx="a", root_id=7, partition="mandelbrot"),
+         _row(cx="b", root_id=7, partition="mandelbrot"),
+         _row(cx="c", root_id=9, partition="multibrot3")],
+        [dict(dive_id="d0", start_group="control", partition="mandelbrot"),
+         dict(dive_id="d1", start_group="top", partition="multibrot3")])
+    assert m == {7: "dive:control", 9: "dive:top"}
+    assert "partition-checked" in why
+
+
+def test_a_dive_arm_join_that_does_not_BALANCE_yields_no_arm_and_says_why(tmp_path):
+    """One more root_id than dives: the order argument does not hold, so the arm goes NULL.
+    A wrong arm would invert the very contrast the leg exists to measure, and unlike a null it
+    would never be noticed."""
+    m, why = _arm_case(
+        tmp_path,
+        [_row(cx="a", root_id=7, partition="mandelbrot"),
+         _row(cx="c", root_id=9, partition="mandelbrot")],
+        [dict(dive_id="d0", start_group="top", partition="mandelbrot")])
+    assert m == {} and "2 distinct root_id vs 1 dive_log records" in why
+
+
+def test_a_dive_arm_join_whose_PARTITIONS_disagree_yields_no_arm(tmp_path):
+    """The counts can match while the order is still wrong. The partition cross-check is what
+    makes this a checked join rather than a coincidence of two equal lengths — and it is what
+    caught the arm being recovered from tier-SORTED rows instead of append order."""
+    m, why = _arm_case(
+        tmp_path,
+        [_row(cx="a", root_id=7, partition="mandelbrot"),
+         _row(cx="c", root_id=9, partition="multibrot3")],
+        [dict(dive_id="d0", start_group="top", partition="multibrot3"),
+         dict(dive_id="d1", start_group="control", partition="mandelbrot")])
+    assert m == {} and "spans partitions" in why
+
+
+def test_the_arm_join_reads_the_APPEND_ORDERED_store_not_a_sorted_queue():
+    """The order argument is about append order, and `build_queue` returns the same rows
+    tier-sorted. A signature that can be handed the wrong order will be, so this one takes the
+    store path and reads it itself."""
+    import inspect
+    assert "store" in inspect.signature(sc.recover_dive_arms).parameters
+    src = inspect.getsource(sc.load_union_queue)
+    assert 'recover_dive_arms(run_dir / "q4_candidates.jsonl"' in src
 
 
 @pytest.mark.parametrize("prov,ok", [

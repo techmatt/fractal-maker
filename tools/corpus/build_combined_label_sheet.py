@@ -156,7 +156,42 @@ V2_SITTING = SheetSpec(
     max_run_family=3,
 )
 
-SPECS = {s.name: s for s in (Q4_COMBINED, V2_SITTING)}
+# --- the steady-state telemetry run's sitting (2026-08-05) ------------------------------- #
+# TWO source batches — the crawl leg's ranked residue and the same run's dive — cut as ONE
+# sitting (`sitting_cutter.STEADY_STATE_SITTING`) and served as ONE page, so the (source x
+# family) cell grid is real here and the same-source run cap binds for the first time since
+# q4_combined.
+STEADY_STATE_SITTING_SOURCES = ("2026-08-05_steady_state_ranked_v1",
+                                "2026-08-05_steady_state_dive_v1")
+STEADY_STATE_SITTING = SheetSpec(
+    name="steady_state",
+    sheet_id="2026-08-05_steady_state_sitting_sheet_v1",
+    sources=STEADY_STATE_SITTING_SOURCES,
+    seed=0x57ED0805,
+    salt="steady-state-sitting-2026-08-05",
+    id_prefix="ss",
+    purpose=("The 2026-08-05 steady-state run's ONE labelling sitting: its crawl-leg "
+             "record-and-rank residue and its own dive leg, cut once against a single "
+             "1000-row cap and served blind. This directory is NOT a batch: no images.jsonl, "
+             "no labels, no registration. The rows live in the two registered batches named "
+             "in source_batches; the single export routes back through route.json "
+             "(merge_scores.py --route)."),
+    # One step above the MEASURED spread for THIS sheet, same rule as q4's 4/5 — see
+    # `stage_check`'s note. MEASURED: same-source run 15, same-family run 2, and the source
+    # figure is seed-INVARIANT across a 6-seed sweep (the shuffle permutes rows within a cell,
+    # not the cell sequence).
+    #
+    # 16 is not a slack 4. The two sources are 654/94 — 87.4% / 12.6% — so a deal that holds
+    # every cell within +/-1 of its share puts the minority source ~8 rows apart on average and
+    # 15 apart at its widest BY CONSTRUCTION. The cap is the "no stretch is single-X" statement
+    # scaled to the mix it is made about; setting it at q4's 4 would fail a correct deal, which
+    # is `verification_practice.md` §4's getting-trained-out failure. The load-bearing balance
+    # invariant is the +/-1 prefix bound, which passes at 0.791.
+    max_run_source=16,
+    max_run_family=3,
+)
+
+SPECS = {s.name: s for s in (Q4_COMBINED, V2_SITTING, STEADY_STATE_SITTING)}
 
 
 # =========================================================================== #

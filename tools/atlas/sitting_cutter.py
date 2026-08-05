@@ -69,7 +69,15 @@ survived the three stages, so an unfillable one records its shortfall and the ba
 silently fills the slot from elsewhere. It never fails the build: a partition with no candidate
 rows this run is exactly the run where refusing to cut a sitting helps nobody.
 
+A SITTING MAY SPAN SEVERAL LEGS (2026-08-05). It is one cut, one cap and one page — not one
+batch. `SittingSpec` names N `SittingLeg`s, each its own registered batch; the cut runs ONCE
+over their union and the drawn rows are split back to their own batches. See the block above
+`SITTINGS` for why a leg is a registration.
+
   uv run python tools/atlas/sitting_cutter.py dry-run --run-dir data/discovery/<run>
+  uv run python tools/atlas/sitting_cutter.py dry-run --sitting steady_state
+  uv run python tools/atlas/sitting_cutter.py draw    --sitting steady_state
+  uv run python tools/atlas/sitting_cutter.py render  --sitting steady_state
 """
 from __future__ import annotations
 
@@ -79,6 +87,7 @@ import json
 import os
 import sys
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -592,7 +601,7 @@ def _ledger_row(r) -> dict:
 
 
 # =========================================================================== #
-# serving a sitting: ONE registered batch, then ONE blind sheet over it
+# serving a sitting: ONE registered batch PER LEG, then ONE blind sheet over them
 #
 # The two layers are not redundant and the split is the corpus contract, not tidiness.
 # The BATCH is what the corpus owns: `assign_split`-registered, full provenance, an
@@ -603,6 +612,20 @@ def _ledger_row(r) -> dict:
 # and are already guarded — `build_combined_label_sheet` holds the sheet rules and
 # `test_combined_label_sheet.py` the tripwires over them — so the sitting declares an instance
 # in that module's `SPECS` and runs it, rather than growing a second copy that can drift.
+#
+# ONE SITTING MAY SPAN SEVERAL LEGS, AND A LEG IS A REGISTRATION (2026-08-05)
+# --------------------------------------------------------------------------
+# A sitting is ONE cut, ONE cap and ONE page. It is not one *batch*: the registry classifies
+# a GENERATION METHOD, and a run's crawl residue and that run's own dive are two of those —
+# different selection stories, different bias arguments, and the dive's whole readable
+# property (top-vs-control) disappears if its rows are pooled into a batch whose registration
+# describes something else. So a `SittingSpec` names N `SittingLeg`s; the CUT runs once over
+# their union (the cap is denominated in the page a human sits through, not in a leg), and the
+# drawn rows are then split back to their own registered batches. The sheet unions them again
+# for presentation and sequences (source_batch x family) to +/-1.
+#
+# Everything above this line is the CODE — the three stages, the reservation, the accounting.
+# A spec is instance constants only, exactly as `build_combined_label_sheet.SheetSpec` is.
 # =========================================================================== #
 SITTING_BATCH = "2026-08-03_v2_sitting_v1"      # pinned to the registrations by a test
 GEN_VERSION = "v2_sitting_v1"
@@ -665,16 +688,203 @@ def is_bar_readable(prov: dict) -> bool:
             and prov.get("composite") is not None)
 
 
+# --------------------------------------------------------------------------------------- #
+# the instance: which legs, which seed, which id prefix. Everything else is code.
+# --------------------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class SittingLeg:
+    """One registered batch inside a sitting, and the run whose record it is cut from.
+
+    `run_dir` is repo-relative so a spec is portable across the artifacts resolver.
+    `dive_log` names a dive leg's own log: its q4 rows do NOT carry the arm (`mix_source` is
+    null on every one), and the arm is the whole readable property of a dive, so it is
+    recovered by a CHECKED join (`recover_dive_arms`) rather than left absent."""
+    batch_id: str
+    run_dir: str
+    selection_role: str
+    purpose: str
+    dive_log: str | None = None
+
+
+@dataclass(frozen=True)
+class SittingSpec:
+    name: str
+    gen_version: str
+    seed: int
+    id_prefix: str
+    crop_ss: int
+    legs: tuple
+    max_rows: int = MAX_ROWS
+
+    @property
+    def batches(self) -> tuple:
+        return tuple(l.batch_id for l in self.legs)
+
+    def leg(self, batch_id: str) -> SittingLeg:
+        return next(l for l in self.legs if l.batch_id == batch_id)
+
+
+V2_SITTING = SittingSpec(
+    name="v2_sitting",
+    gen_version=GEN_VERSION,
+    seed=PRESENTATION_SEED,
+    id_prefix="vs",
+    crop_ss=SITTING_CROP_SS,
+    legs=(SittingLeg(
+        batch_id=SITTING_BATCH,
+        run_dir="data/discovery/harvest_v2_proving_20260803",
+        selection_role="v2_sitting",
+        purpose=("The harvest-v2 proving run's ONE labelling sitting. TRAIN-side and BIASED "
+                 "more than once: the cheap CORN ordinal decided which candidates earned a "
+                 "canonical confirmation, the rank is built from those scores, and part of "
+                 "the supply was itself selected on view_screen.composite_v3. No rate "
+                 "measured on this batch is a base rate.")),),
+)
+
+# --- the steady-state telemetry run's sitting (2026-08-05), TWO legs ---------------------- #
+# The crawl leg's ranked record-and-rank residue and that same run's dive, cut ONCE against a
+# single 1000-row cap and served as one page. Two registrations because they are two
+# generation methods (see `batch_registry`), one cut because a sitting is one human's time.
+STEADY_STATE_SITTING = SittingSpec(
+    name="steady_state",
+    gen_version="steady_state_sitting_v1",
+    seed=0x57ED_0805,
+    id_prefix="ss",
+    crop_ss=SITTING_CROP_SS,          # the same recorded ss2 deviation; see SITTING_CROP_SS
+    legs=(
+        SittingLeg(
+            batch_id="2026-08-05_steady_state_ranked_v1",
+            run_dir="data/discovery/steady_state_v1_20260805",
+            selection_role="steady_state_ranked",
+            purpose=("The 2026-08-05 steady-state telemetry run's CRAWL leg: its whole "
+                     "record-and-rank residue, tier-sorted. TRAIN-side and BIASED more than "
+                     "once — the cheap v10 ordinal decided which candidates earned a "
+                     "canonical confirmation, the rank is built from those scores, and part "
+                     "of the supply was selected on view_screen.composite_v3 "
+                     "(--maneuver-view-prior). No rate measured on it is a base rate.")),
+        SittingLeg(
+            batch_id="2026-08-05_steady_state_dive_v1",
+            run_dir="data/discovery/steady_state_v1_20260805_dive",
+            selection_role="steady_state_dive",
+            dive_log="dive_log.jsonl",
+            purpose=("The same run's DIVE leg: single-track descent off the crawl's own "
+                     "admissions, 7 of 28 planned dives inside a 15-minute active budget. "
+                     "TRAIN-side and BIASED at the source and at every rung; the control arm "
+                     "is unbiased only WITHIN the admitted set, which is itself screened, so "
+                     "it is not an instrument either. `provenance.mix_source` carries the arm "
+                     "(`dive:top` / `dive:control`) — the contrast the leg exists to read.")),
+    ),
+)
+
+SITTINGS = {s.name: s for s in (V2_SITTING, STEADY_STATE_SITTING)}
+
+
+def _spec(args) -> SittingSpec:
+    """The sitting this invocation is about. Named, never positional."""
+    return SITTINGS[getattr(args, "sitting", None) or V2_SITTING.name]
+
+
+def recover_dive_arms(store: Path, dive_log: Path) -> tuple[dict, str]:
+    """{root_id: 'dive:top'|'dive:control'} for a dive leg, or ({}, why) if the join cannot be
+    VERIFIED.
+
+    A dive's q4 rows carry no arm: `_q4_record` stamps `mix_source`/`dive_id` on the OUTCOME
+    ledger row, and a q4 candidate row is written on a different path, so all 276 rows here
+    have `mix_source = null`. What they do carry is `root_id`, and `one_dive` mints exactly one
+    fresh root node id per dive and appends exactly one `dive_log.jsonl` record per dive, both
+    in execution order. So the i-th distinct root_id in APPEND order is the i-th dive.
+
+    IT READS THE STORE ITSELF rather than taking rows, and that is the whole safety of it: the
+    argument is about APPEND order, and `build_queue` returns the same rows tier-SORTED. Handed
+    the sorted rows this returned no mapping at all (the partition check caught it), which is
+    the failure working — but a signature that can be handed the wrong order is a signature
+    that will be.
+
+    AN ORDER ARGUMENT IS NOT A JOIN KEY, so it is CHECKED rather than trusted: the counts must
+    match exactly, and every row under a root_id must carry the partition its dive_log record
+    names. A mismatch returns no mapping and the reason — the arm goes null, which is
+    recoverable, where a wrong arm would silently invert the contrast the leg exists to
+    measure."""
+    def _rd(p):
+        return [json.loads(l) for l in
+                Path(p).read_text(encoding="utf-8").splitlines() if l.strip()]
+    rows, log = _rd(store), _rd(dive_log)
+    seen: list = []
+    for r in rows:
+        rid = r.get("root_id")
+        if rid is not None and rid not in seen:
+            seen.append(rid)
+    if len(seen) != len(log):
+        return {}, (f"{len(seen)} distinct root_id vs {len(log)} dive_log records — "
+                    f"the order argument does not hold, arm left null")
+    by_root = defaultdict(set)
+    for r in rows:
+        by_root[r.get("root_id")].add(r.get("partition"))
+    for rid, rec in zip(seen, log):
+        if by_root[rid] != {rec["partition"]}:
+            return {}, (f"root_id {rid} spans partitions {sorted(by_root[rid])} but its dive "
+                        f"records {rec['partition']!r} — arm left null")
+    return ({rid: f"dive:{rec['start_group']}" for rid, rec in zip(seen, log)},
+            f"{len(log)} dives joined on root_id order, partition-checked")
+
+
+def load_union_queue(spec: SittingSpec) -> tuple[list[dict], dict]:
+    """The sitting's queue: every leg's record-and-rank store, unioned and tier-sorted ONCE.
+
+    The per-leg load, the row identity and the sort are the v1 batch builder's own
+    (`build_q4_harvest_batches`), imported rather than re-derived, so the sitting and the batch
+    draw can never disagree about what the queue IS.
+
+    CROSS-LEG DEDUP IS NOT A FORMALITY HERE: a dive descends from the crawl's admissions, so
+    the two stores can record the same place. First occurrence wins in LEG ORDER (the crawl is
+    declared first, so a place both legs saw is attributed to the one that found it), and the
+    count is reported rather than absorbed.
+
+    `queue_rank` is assigned over the UNION, because that is the order the draw reads
+    best-first inside a cell — a per-leg rank would make a dive row's 3rd-best beat a crawl
+    row's best."""
+    import build_q4_harvest_batches as bq
+    rows, seen, dropped, per_leg = [], set(), Counter(), Counter()
+    arms = {}
+    for leg in spec.legs:
+        run_dir = ROOT / leg.run_dir
+        leg_rows, _rep = bq.build_queue(run_dir)
+        if leg.dive_log:
+            m, why = recover_dive_arms(run_dir / "q4_candidates.jsonl",
+                                       run_dir / leg.dive_log)
+            arms[leg.batch_id] = why
+            for r in leg_rows:
+                if r.get("mix_source") is None and r.get("root_id") in m:
+                    r["mix_source"] = m[r["root_id"]]
+        for r in leg_rows:
+            key = bq.queue_identity(r)
+            if key in seen:
+                dropped[leg.batch_id] += 1
+                continue
+            seen.add(key)
+            r["_leg"] = leg.batch_id
+            rows.append(r)
+            per_leg[leg.batch_id] += 1
+    rows.sort(key=bq.queue_sort_key)
+    for i, r in enumerate(rows, 1):
+        r["queue_rank"] = i
+    rep = dict(n=len(rows), by_leg=dict(per_leg),
+               cross_leg_duplicates_dropped=dict(dropped),
+               dive_arm_join=arms,
+               by_tier=dict(Counter(str(r.get("rank_tier")) for r in rows)),
+               by_fate=dict(Counter(r.get("fate") for r in rows)),
+               by_partition=dict(Counter(r.get("partition") for r in rows)))
+    return rows, rep
+
+
 def load_queue(run_dir: Path) -> list[dict]:
-    """The run's record-and-rank store, tier-sorted, first-occurrence-wins on identity —
-    imported from the v1 batch builder rather than re-derived, so the sitting and the batch
-    draw can never disagree about what the queue IS."""
+    """One run's record-and-rank store, tier-sorted, first-occurrence-wins on identity."""
     import build_q4_harvest_batches as bq
     rows, _rep = bq.build_queue(Path(run_dir))
     return rows
 
 
-def _provenance(r: dict, cc, batch_id: str) -> dict:
+def _provenance(r: dict, cc, spec: SittingSpec, leg: SittingLeg) -> dict:
     """One served row's full selection trail. The classifier never sees any of it."""
     fields = {k: r.get(k) for k in (
         "fate", "rank_tier", "rank_score", "queue_rank", "cheap_eord", "cheap_pgood",
@@ -687,14 +897,37 @@ def _provenance(r: dict, cc, batch_id: str) -> dict:
             v = man.get(man_key)
             if v is not None:
                 fields[prov_key] = v
-    return cc.provenance_block(GEN_VERSION, batch_id,
+    return cc.provenance_block(spec.gen_version, leg.batch_id,
                                family=r.get("partition"),
-                               selection_role="v2_sitting",
+                               selection_role=leg.selection_role,
                                stratum=str(cell_of(r)), **fields)
 
 
+def check_registrations(spec: SittingSpec) -> dict:
+    """EVERY leg registered EXPLICITLY, before anything is built.
+
+    The fail-closed default is safe (train/biased) but it is not a decision: a leg built under
+    it records that nobody classified its generation method, and the sitting would land it
+    train-side silently. Checked for all legs up front rather than per leg as it is written,
+    so an unregistered second leg cannot be discovered after the first one is on disk."""
+    from tools.v7 import build_manifest as bm
+    out = {}
+    for leg in spec.legs:
+        split, biased, source = bm.assign_split({"batch": leg.batch_id, "ft": "mandelbrot"})
+        if source == "unregistered":
+            raise SystemExit(
+                f"{leg.batch_id} is NOT registered in tools/scoring/batch_registry. "
+                f"Register it BEFORE building — the fail-closed default lands it train-side "
+                f"silently, which records 'nobody thought about this batch'.")
+        contra = bm.registration_contradictions([{"batch": leg.batch_id, "biased": biased}])
+        if contra:
+            raise SystemExit(f"registration contradiction for {leg.batch_id}: {contra}")
+        out[leg.batch_id] = [split, biased, source]
+    return out
+
+
 def stage_draw(args) -> int:
-    """Cut the run's queue into ONE sitting and write it as the registered batch.
+    """Cut the sitting's union queue ONCE and write each leg as its own registered batch.
 
     Nothing is rendered here and no sheet is built: the cut has to be readable — and its
     bar-readability slice reported — BEFORE hours of rendering are committed to it."""
@@ -704,24 +937,21 @@ def stage_draw(args) -> int:
     import build_q4_harvest_batches as bq
     import build_minibrot_batch as BMB
     import numpy as np
-    from tools.v7 import build_manifest as bm
     from tools.wallpaper import morph_embed_cache as mec
 
+    spec = _spec(args)
     cc.set_below_normal_priority()
-    split, biased, source = bm.assign_split({"batch": SITTING_BATCH, "ft": "mandelbrot"})
-    if source == "unregistered":
-        raise SystemExit(
-            f"{SITTING_BATCH} is NOT registered in tools/v7/build_manifest.assign_split. "
-            f"Register it BEFORE building — the fail-closed default lands it train-side "
-            f"silently, which records 'nobody thought about this batch'.")
-    contra = bm.registration_contradictions([{"batch": SITTING_BATCH, "biased": biased}])
-    if contra:
-        raise SystemExit(f"registration contradiction for {SITTING_BATCH}: {contra}")
+    reg = check_registrations(spec)
+    max_rows = getattr(args, "max_rows", None) or spec.max_rows
 
-    rows = load_queue(args.run_dir)
+    rows, qrep = load_union_queue(spec)
+    print(f"queue: {qrep['n']} rows over {len(spec.legs)} leg(s) {json.dumps(qrep['by_leg'])}"
+          f"; cross-leg dups dropped {json.dumps(qrep['cross_leg_duplicates_dropped'])}")
+    for b, why in qrep["dive_arm_join"].items():
+        print(f"  dive arm ({b}): {why}")
     cache = mec.MorphEmbedCache().open()
     t0 = time.time()
-    res = cut_sitting(rows, max_rows=args.max_rows,
+    res = cut_sitting(rows, max_rows=max_rows,
                       embed=make_embedder(Path(paths.scratch("sitting_cutter", "fields")),
                                           None, cache),
                       progress=lambda d: print(json.dumps(d), flush=True))
@@ -730,92 +960,104 @@ def stage_draw(args) -> int:
     cache.close()
 
     sitting = res["sitting"]
-    # Opaque ids assigned POST-shuffle over the drawn set; the hash makes an id a stable
-    # function of the row, so a rebuild reproduces it.
+    # Opaque ids assigned POST-shuffle over the drawn set — over the WHOLE sitting, not per
+    # leg, so an id encodes nothing about which leg a row came from; the hash makes an id a
+    # stable function of the row, so a rebuild reproduces it.
     order = list(range(len(sitting)))
-    np.random.default_rng(PRESENTATION_SEED ^ BMB._stable_seed(SITTING_BATCH)).shuffle(order)
+    np.random.default_rng(spec.seed ^ BMB._stable_seed(spec.name)).shuffle(order)
     for slot, oi in enumerate(order):
         h = BMB._stable_seed(json.dumps([sitting[oi].get("cx"), sitting[oi].get("cy"),
                                          sitting[oi].get("fw"), sitting[oi].get("julia_c_re"),
                                          sitting[oi].get("phoenix_c_re")], default=str))
-        sitting[oi]["image_id"] = f"vs{slot:04d}_{h:08x}"
+        sitting[oi]["image_id"] = f"{spec.id_prefix}{slot:04d}_{h:08x}"
     sitting.sort(key=lambda r: r["image_id"])
 
     bq._PHOENIX_POOL_CACHE.update(bq._phoenix_points())
     names = BMB._palette_names()
-    full = []
+    by_leg: dict = defaultdict(list)
     for r in sitting:
+        leg = spec.leg(r.get("_leg") or spec.legs[0].batch_id)
         r["_palette"] = names[BMB._stable_seed(r["image_id"]) % len(names)]
         render = bq._render_block(r)
-        render["ss"] = SITTING_CROP_SS      # the recorded deviation; see SITTING_CROP_SS
-        full.append(cc.make_row(r["image_id"], render,
-                                _provenance(r, cc, SITTING_BATCH), cc.label_block()))
-
-    readable = [r for r in full if is_bar_readable(r["provenance"])]
-    bdir = Path(cc.batch_dir(SITTING_BATCH))
-    bdir.mkdir(parents=True, exist_ok=True)
+        render["ss"] = spec.crop_ss         # the recorded deviation; see SITTING_CROP_SS
+        by_leg[leg.batch_id].append(
+            cc.make_row(r["image_id"], render, _provenance(r, cc, spec, leg),
+                        cc.label_block()))
 
     cut = res["report"]
-    bj = dict(
-        schema_version=1, batch_id=SITTING_BATCH, generator_version=GEN_VERSION,
-        created=None, labeler=None,
-        presentation_seed=PRESENTATION_SEED,
-        vivid_companion=BMB.VIVID_PALETTE,
-        served_manifest=None,
-        served_via=("a PRESENTATION SHEET, not this directory: "
-                    "build_combined_label_sheet.py --spec v2_sitting. This batch holds the "
-                    "rows and the provenance; the sheet holds the blind order the labeler "
-                    "sees, and the export routes back here."),
-        queued_for_labeling=False,
-        purpose=("The harvest-v2 proving run's ONE labelling sitting. TRAIN-side and BIASED "
-                 "more than once: the cheap CORN ordinal decided which candidates earned a "
-                 "canonical confirmation, the rank is built from those scores, and part of "
-                 "the supply was itself selected on view_screen.composite_v3. No rate "
-                 "measured on this batch is a base rate."),
-        counts=dict(total=len(full),
-                    by_partition=cut["by_partition"], by_tier=cut["by_tier"],
-                    bar_readable=len(readable)),
-        registration=dict(assign_split=[split, biased, source],
-                          registered_explicitly=(source != "unregistered"),
-                          NOTE="registered in tools/v7/build_manifest BEFORE the cut"),
-        render_defaults=dict(width=bq.CROP_W, height=bq.CROP_H, ss=SITTING_CROP_SS,
-                             ss_deviates_from_corpus_default=dict(
-                                 corpus_default=bq.CROP_SS, this_batch=SITTING_CROP_SS,
-                                 why="Matt's call 2026-08-03 — ~4x fewer samples over "
-                                     "~1000 rows x 2 crops; see sitting_cutter."
-                                     "SITTING_CROP_SS for what it costs"),
-                             filter=bq.CROP_FILTER, interior_mode=bq.INTERIOR_MODE,
-                             composition=bq.COMPOSITION,
-                             palette_roster="data/palettes/score3_colormaps.json",
-                             vivid_companion=BMB.VIVID_PALETTE,
-                             maxiter="deep_center_finder._maxiter_for_fw(fw)"),
-        render_recipe=cc.render_recipe_stamp(bq.PALETTE_SOURCE),
-        sitting_cut=dict(
-            run_dir=str(args.run_dir), max_rows=args.max_rows,
-            n_in=cut["n_in"], n_sitting=cut["n_sitting"], n_over_cap=cut["n_over_cap"],
-            stages=cut["stages"], cells=cut["cells"], balances=cut["balances"],
-            # WHICH RESERVATIONS WERE ACTIVE AND WHAT EACH ACTUALLY GOT. A reservation that
-            # went unfilled for lack of supply records its shortfall here; the sitting was
-            # filled from elsewhere, so the only trace it ever existed is this block.
-            calibration_reservations=cut["calibration_reservations"],
-            cut_wall_s=round(cut_wall, 1), morph_cache=cache_rep,
-            auto_labeled_never_presented=[
-                dict(cx=r["cx"], cy=r["cy"], fw=r["fw"], partition=r["partition"],
-                     **r["auto_label"]) for r in res["auto_labeled"]],
-        ),
-        bar_readability=dict(
-            n=len(readable), of=len(full),
-            definition=("served rows carrying BOTH view_fit_v1.1 (provenance.fit_score / "
-                        "fit_model) and composite_v3 (provenance.composite) — the slice the "
-                        "pre-registered +0.1181 delta-AP margin reads on"),
-            by_partition=dict(Counter(r["provenance"]["family"] for r in readable))),
-        calibration_aids="NONE — no exemplars, no reference strip, no score shown",
+    # The cut is ONE event over the union, so every leg's batch.json carries the SAME cut
+    # record. A leg-local slice of it would read as "this is what the cut did to me", which is
+    # false — the cap, the dedup and the reservation are all denominated in the whole page.
+    sitting_cut = dict(
+        sitting=spec.name, legs=list(spec.batches),
+        run_dirs={l.batch_id: l.run_dir for l in spec.legs},
+        max_rows=max_rows, queue=qrep,
+        n_in=cut["n_in"], n_sitting=cut["n_sitting"], n_over_cap=cut["n_over_cap"],
+        stages=cut["stages"], cells=cut["cells"], balances=cut["balances"],
+        # WHICH RESERVATIONS WERE ACTIVE AND WHAT EACH ACTUALLY GOT. A reservation that
+        # went unfilled for lack of supply records its shortfall here; the sitting was
+        # filled from elsewhere, so the only trace it ever existed is this block.
+        calibration_reservations=cut["calibration_reservations"],
+        cut_wall_s=round(cut_wall, 1), morph_cache=cache_rep,
+        by_leg={b: len(v) for b, v in sorted(by_leg.items())},
+        auto_labeled_never_presented=[
+            dict(cx=r["cx"], cy=r["cy"], fw=r["fw"], partition=r["partition"],
+                 leg=r.get("_leg"), **r["auto_label"]) for r in res["auto_labeled"]],
     )
-    cc.write_jsonl(full, str(bdir / "images.jsonl"))
-    (bdir / "batch.json").write_text(json.dumps(bj, indent=2, default=str) + "\n",
-                                     encoding="utf-8")
-    if not (bdir / "scores.json").exists():
-        (bdir / "scores.json").write_text("{}", encoding="utf-8")
+
+    written = []
+    for leg in spec.legs:
+        full = by_leg.get(leg.batch_id, [])
+        readable = [r for r in full if is_bar_readable(r["provenance"])]
+        bdir = Path(cc.batch_dir(leg.batch_id))
+        bdir.mkdir(parents=True, exist_ok=True)
+        bj = dict(
+            schema_version=1, batch_id=leg.batch_id, generator_version=spec.gen_version,
+            created=None, labeler=None,
+            presentation_seed=spec.seed,
+            vivid_companion=BMB.VIVID_PALETTE,
+            served_manifest=None,
+            served_via=(f"a PRESENTATION SHEET, not this directory: "
+                        f"build_combined_label_sheet.py --spec {spec.name}. This batch holds "
+                        f"the rows and the provenance; the sheet holds the blind order the "
+                        f"labeler sees, and the single export routes back here."),
+            queued_for_labeling=False,
+            purpose=leg.purpose,
+            counts=dict(total=len(full),
+                        by_partition=dict(Counter(r["provenance"]["family"] for r in full)),
+                        by_tier=dict(Counter(str(r["provenance"].get("rank_tier"))
+                                             for r in full)),
+                        bar_readable=len(readable)),
+            registration=dict(assign_split=reg[leg.batch_id],
+                              registered_explicitly=True,
+                              NOTE="registered in tools/scoring/batch_registry BEFORE the cut"),
+            render_defaults=dict(width=bq.CROP_W, height=bq.CROP_H, ss=spec.crop_ss,
+                                 ss_deviates_from_corpus_default=dict(
+                                     corpus_default=bq.CROP_SS, this_batch=spec.crop_ss,
+                                     why="Matt's call 2026-08-03 — ~4x fewer samples over "
+                                         "~1000 rows x 2 crops; see sitting_cutter."
+                                         "SITTING_CROP_SS for what it costs"),
+                                 filter=bq.CROP_FILTER, interior_mode=bq.INTERIOR_MODE,
+                                 composition=bq.COMPOSITION,
+                                 palette_roster="data/palettes/score3_colormaps.json",
+                                 vivid_companion=BMB.VIVID_PALETTE,
+                                 maxiter="deep_center_finder._maxiter_for_fw(fw)"),
+            render_recipe=cc.render_recipe_stamp(bq.PALETTE_SOURCE),
+            sitting_cut=sitting_cut,
+            bar_readability=dict(
+                n=len(readable), of=len(full),
+                definition=("served rows carrying BOTH view_fit_v1.1 (provenance.fit_score / "
+                            "fit_model) and composite_v3 (provenance.composite) — the slice "
+                            "the pre-registered +0.1181 delta-AP margin reads on"),
+                by_partition=dict(Counter(r["provenance"]["family"] for r in readable))),
+            calibration_aids="NONE — no exemplars, no reference strip, no score shown",
+        )
+        cc.write_jsonl(full, str(bdir / "images.jsonl"))
+        (bdir / "batch.json").write_text(json.dumps(bj, indent=2, default=str) + "\n",
+                                         encoding="utf-8")
+        if not (bdir / "scores.json").exists():
+            (bdir / "scores.json").write_text("{}", encoding="utf-8")
+        written.append((leg.batch_id, len(full), len(readable), bdir))
 
     print(f"\ncut: {cut['n_in']} in -> {cut['n_sitting']} sitting "
           f"(+{cut['n_over_cap']} over cap); wall {cut_wall/60:.1f} min")
@@ -827,12 +1069,13 @@ def stage_draw(args) -> int:
     print(f"  morph cache: {json.dumps(cache_rep)}")
     cr = cut["calibration_reservations"]
     print(f"  calibration reservations (< {cr['min_pos']} positives): "
-          + (json.dumps(cr["active"]) if cr["active"] else "NONE — every partition is calibratable"))
-    print(f"  assign_split = {(split, biased, source)}")
-    print(f"\nBAR READABILITY: {len(readable)}/{len(full)} served rows carry BOTH "
-          f"view_fit_v1.1 and composite_v3")
-    print(f"  by partition: {json.dumps(bj['bar_readability']['by_partition'])}")
-    print(f"\n-> {bdir}   (NOTHING RENDERED — run `render` next)")
+          + (json.dumps(cr["active"]) if cr["active"]
+             else "NONE — every partition is calibratable"))
+    print(f"  by partition: {json.dumps(cut['by_partition'])}")
+    print(f"  by tier:      {json.dumps(cut['by_tier'])}")
+    for b, n, nr, bdir in written:
+        print(f"  {b:38s} n={n:4d}  bar-readable={nr:4d}  assign_split={reg[b]}  -> {bdir}")
+    print("\n(NOTHING RENDERED — run `render` next)")
     return 0
 
 
@@ -871,37 +1114,48 @@ def _render_one(job):
 
 
 def stage_render(args) -> int:
-    """Render both crops for every row. IDEMPOTENT — an existing crop is skipped, so a kill
-    and a relaunch resume exactly where the last one stopped, and the per-unit checkpoint is
-    the crop file itself (there is no separate progress file to fall out of sync with disk)."""
+    """Render both crops for every row of every leg. IDEMPOTENT — an existing crop is skipped,
+    so a kill and a relaunch resume exactly where the last one stopped, and the per-unit
+    checkpoint is the crop file itself (there is no separate progress file to fall out of sync
+    with disk).
+
+    The legs render in ONE pass with ONE deadline, because a sitting is not servable until
+    every one of its legs is: a per-leg time bound would finish leg 1 and leave the page
+    unbuildable, which reads as progress and is not."""
     import time
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import corpus_common as cc
     import build_q4_harvest_batches as bq
 
+    spec = _spec(args)
     cc.set_below_normal_priority()
-    bdir = Path(cc.batch_dir(SITTING_BATCH))
-    if not (bdir / "images.jsonl").exists():
-        raise SystemExit(f"{bdir/'images.jsonl'} missing — run `draw` first.")
-    rows = cc.read_jsonl(str(bdir / "images.jsonl"))
-    crops, vivid = Path(cc.crops_dir(SITTING_BATCH)), Path(cc.vivid_dir(SITTING_BATCH))
-    crops.mkdir(parents=True, exist_ok=True)
-    vivid.mkdir(parents=True, exist_ok=True)
+    jobs, per_leg = [], {}
+    for leg in spec.legs:
+        bdir = Path(cc.batch_dir(leg.batch_id))
+        if not (bdir / "images.jsonl").exists():
+            raise SystemExit(f"{bdir/'images.jsonl'} missing — run `draw` first.")
+        rows = cc.read_jsonl(str(bdir / "images.jsonl"))
+        crops = Path(cc.crops_dir(leg.batch_id))
+        vivid = Path(cc.vivid_dir(leg.batch_id))
+        crops.mkdir(parents=True, exist_ok=True)
+        vivid.mkdir(parents=True, exist_ok=True)
+        per_leg[leg.batch_id] = (rows, crops, vivid)
+        jobs += [(r, crops, vivid) for r in rows]
 
-    def needs(r):
+    def needs(r, crops, vivid):
         return not (crops / f"{r['image_id']}.jpg").exists() or \
             not (vivid / f"{r['image_id']}.jpg").exists()
 
-    todo = [r for r in rows if needs(r)]
+    todo = [j for j in jobs if needs(*j)]
     deadline = (time.time() + args.max_minutes * 60.0) if args.max_minutes else None
-    print(f"render {SITTING_BATCH}: {len(rows)} rows, {len(todo)} need crops "
-          f"= up to {2*len(todo)} renders, {args.workers}x{bq.RENDER_THREADS} threads",
-          flush=True)
+    print(f"render {spec.name}: {len(jobs)} rows over {len(spec.legs)} leg(s), "
+          f"{len(todo)} need crops = up to {2*len(todo)} renders, "
+          f"{args.workers}x{bq.RENDER_THREADS} threads", flush=True)
     t0, done, fails, stopped = time.time(), 0, [], False
     t_win, n_win = t0, 0
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         futs = {ex.submit(_render_one, (r, crops, vivid, args.render_timeout)): r
-                for r in todo}
+                for r, crops, vivid in todo}
         for fut in as_completed(futs):
             try:
                 fut.result()
@@ -929,18 +1183,22 @@ def stage_render(args) -> int:
     if fails:
         # The WHOLE failure list, never a head slice: a truncated error log describes the
         # fastest-returning failure class, not the population (`CLAUDE.md`, "Four rules").
-        p = Path(__import__("paths").scratch("sitting_v2", "render_failures.json"))
+        p = Path(__import__("paths").scratch(f"sitting_{spec.name}", "render_failures.json"))
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(dict(n=len(fails),
                                      by_class=dict(Counter(f["err"].split(":")[0]
                                                            for f in fails)),
                                      failures=fails), indent=2), encoding="utf-8")
         print(f"  !! {len(fails)} render failures -> {p}")
-    miss = sum(1 for r in rows if needs(r))
-    print(f"render: {done} rows this pass" + ("  [STOPPED at the time bound]" if stopped else ""))
-    print(f"  {len(rows)-miss}/{len(rows)} complete"
-          + ("  COMPLETE" if miss == 0 else f"  INCOMPLETE — {miss} rows still need crops"))
-    return 0 if miss == 0 else 1
+    print(f"render: {done} rows this pass"
+          + ("  [STOPPED at the time bound]" if stopped else ""))
+    total_miss = 0
+    for b, (rows, crops, vivid) in per_leg.items():
+        miss = sum(1 for r in rows if needs(r, crops, vivid))
+        total_miss += miss
+        print(f"  {b:38s} {len(rows)-miss:4d}/{len(rows):4d}"
+              + ("  COMPLETE" if miss == 0 else f"  INCOMPLETE — {miss} still need crops"))
+    return 0 if total_miss == 0 else 1
 
 
 def main():
@@ -948,7 +1206,10 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("dry-run", help="report what a sitting WOULD contain; serve nothing")
-    d.add_argument("--run-dir", required=True)
+    d.add_argument("--run-dir", default=None,
+                   help="a SINGLE run's record store. Omit and pass --sitting to dry-run the "
+                        "declared spec's whole union.")
+    d.add_argument("--sitting", choices=sorted(SITTINGS), default=None)
     d.add_argument("--max-rows", type=int, default=MAX_ROWS)
     d.add_argument("--embed-limit", type=int, default=None,
                    help="bound the morph pass (dry-run only). The unembedded remainder is "
@@ -957,12 +1218,13 @@ def main():
                    help="bypass the persistent morph-embed store (a COLD timing arm)")
     d.add_argument("--out", default=None)
 
-    w = sub.add_parser("draw", help="cut the sitting and write the registered batch")
-    w.add_argument("--run-dir", required=True)
-    w.add_argument("--max-rows", type=int, default=MAX_ROWS)
+    w = sub.add_parser("draw", help="cut the sitting and write each leg's registered batch")
+    w.add_argument("--sitting", choices=sorted(SITTINGS), default=V2_SITTING.name)
+    w.add_argument("--max-rows", type=int, default=None)
     w.set_defaults(fn=stage_draw)
 
     r = sub.add_parser("render", help="render both crops per row; resumable, idempotent")
+    r.add_argument("--sitting", choices=sorted(SITTINGS), default=V2_SITTING.name)
     r.add_argument("--workers", type=int, default=4)
     r.add_argument("--render-timeout", type=float, default=600.0)
     r.add_argument("--max-minutes", type=float, default=0.0)
@@ -982,7 +1244,13 @@ def main():
     # A cold morph pass is ~an hour of engine renders launched through a helper that takes no
     # creationflags; the child inherits this class, which is the only lever that reaches them.
     cc.set_below_normal_priority()
-    rows = load_queue(a.run_dir)
+    if not a.run_dir and not a.sitting:
+        raise SystemExit("dry-run needs --run-dir (one run) or --sitting (a declared union)")
+    if a.run_dir:
+        rows, qrep = load_queue(a.run_dir), dict(source="--run-dir", run_dir=str(a.run_dir))
+    else:
+        rows, qrep = load_union_queue(SITTINGS[a.sitting])
+        qrep["source"] = f"--sitting {a.sitting}"
     scratch = Path(paths.scratch("sitting_cutter", "fields"))
     cache = None if a.no_cache else mec.MorphEmbedCache().open()
     t0 = time.time()
@@ -991,7 +1259,8 @@ def main():
                       progress=lambda d: print(json.dumps(d), flush=True))
     elapsed = time.time() - t0
     rep = res["report"]
-    rep["run_dir"] = str(a.run_dir)
+    rep["queue"] = qrep
+    rep["by_leg"] = dict(Counter(r.get("_leg") for r in res["sitting"]))
     rep["SERVED"] = False
     rep["wall_s"] = round(elapsed, 2)
     rep["morph_cache"] = cache.report() if cache else "DISABLED (--no-cache)"

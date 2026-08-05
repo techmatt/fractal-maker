@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-05_steady_state_sitting_sheet_v1",
+  "presentation_only": true,
+  "purpose": "The 2026-08-05 steady-state run's ONE labelling sitting: its crawl-leg record-and-rank residue and its own dive leg, cut once against a single 1000-row cap and served blind. This directory is NOT a batch: no images.jsonl, no labels, no registration. The rows live in the two registered batches named in source_batches; the single export routes back through route.json (merge_scores.py --route).",
+  "source_batches": [
+    "2026-08-05_steady_state_ranked_v1",
+    "2026-08-05_steady_state_dive_v1"
+  ],
+  "served_manifest": "sheet.jsonl",
+  "route_map": "route.json",
+  "presentation_seed": 1475151877,
+  "presentation_order": "file",
+  "order_rule": "seeded shuffle over the union, then stratified round-robin over every (source_batch x family) cell to +/-1 of proportional share in every prefix",
+  "id_salt": "steady-state-sitting-2026-08-05",
+  "id_rule": "ss<slot>_<blake2b(salt|batch|image_id)>; slot assigned POST-shuffle",
+  "counts": {
+    "total": 748,
+    "by_source": {
+      "2026-08-05_steady_state_ranked_v1": 654,
+      "2026-08-05_steady_state_dive_v1": 94
+    },
+    "cells": {
+      "2026-08-05_steady_state_dive_v1|julia:multibrot4": 47,
+      "2026-08-05_steady_state_dive_v1|mandelbrot": 8,
+      "2026-08-05_steady_state_dive_v1|multibrot3": 39,
+      "2026-08-05_steady_state_ranked_v1|julia:mandelbrot": 137,
+      "2026-08-05_steady_state_ranked_v1|julia:multibrot3": 83,
+      "2026-08-05_steady_state_ranked_v1|julia:multibrot4": 136,
+      "2026-08-05_steady_state_ranked_v1|julia:multibrot5": 23,
+      "2026-08-05_steady_state_ranked_v1|mandelbrot": 16,
+      "2026-08-05_steady_state_ranked_v1|multibrot3": 156,
+      "2026-08-05_steady_state_ranked_v1|multibrot4": 58,
+      "2026-08-05_steady_state_ranked_v1|multibrot5": 11,
+      "2026-08-05_steady_state_ranked_v1|phoenix": 34
+    }
+  },
+  "vivid_companion": "blue_orange",
+  "calibration_aids": "NONE \u2014 no exemplars, no reference strip, no score shown"
+}

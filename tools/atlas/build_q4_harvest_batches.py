@@ -97,6 +97,29 @@ def _jl(p):
 # =========================================================================== #
 # queue — the tiered rank over the run's record-and-rank store
 # =========================================================================== #
+def queue_identity(r: dict) -> tuple:
+    """A recorded candidate's row identity — what first-occurrence-wins dedups on.
+
+    Named rather than inlined because a MULTI-RUN queue (`sitting_cutter.load_union_queue`,
+    which unions a crawl leg with its own dive) has to dedup with exactly this key: a dive
+    descends from the crawl's admissions, so the two stores can record the same place, and a
+    union that used a second literal here would thin on a different identity than the single-run
+    queue does."""
+    return (r["partition"], r["cx"], r["cy"], r["fw"],
+            r.get("julia_c_re"), r.get("julia_c_im"))
+
+
+def queue_sort_key(r: dict) -> tuple:
+    """THE tiered rank order. Tier is a BLOCK (never pooled — two geometries are not one
+    ordering); within a tier it is the score; ties break on the geometry so the queue is a pure
+    function of the population and a re-run reproduces it byte for byte.
+
+    Shared with the union queue for the same reason `queue_identity` is."""
+    return (-int(r.get("rank_tier") or 0),
+            -float(r.get("rank_score") if r.get("rank_score") is not None else -1e9),
+            str(r["cx"]), str(r["cy"]))
+
+
 def build_queue(run_dir: Path) -> tuple[list[dict], dict]:
     """Every recorded candidate, tier-sorted. Highest tier first, then by score in tier.
 
@@ -104,18 +127,12 @@ def build_queue(run_dir: Path) -> tuple[list[dict], dict]:
     first occurrence wins on the row identity, exactly as the maneuver loader does."""
     rows, seen = [], set()
     for r in _jl(Path(run_dir) / "q4_candidates.jsonl"):
-        key = (r["partition"], r["cx"], r["cy"], r["fw"],
-               r.get("julia_c_re"), r.get("julia_c_im"))
+        key = queue_identity(r)
         if key in seen:
             continue
         seen.add(key)
         rows.append(r)
-    # Ties break on the geometry so the queue is a pure function of the population and a
-    # re-run reproduces it byte for byte.
-    rows.sort(key=lambda r: (-int(r.get("rank_tier") or 0),
-                             -float(r.get("rank_score") if r.get("rank_score")
-                                    is not None else -1e9),
-                             str(r["cx"]), str(r["cy"])))
+    rows.sort(key=queue_sort_key)
     for i, r in enumerate(rows, 1):
         r["queue_rank"] = i
     rep = dict(n=len(rows),

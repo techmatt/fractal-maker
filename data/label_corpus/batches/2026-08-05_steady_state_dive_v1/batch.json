@@ -1,0 +1,361 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-05_steady_state_dive_v1",
+  "generator_version": "steady_state_sitting_v1",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 1475151877,
+  "vivid_companion": "blue_orange",
+  "served_manifest": null,
+  "served_via": "a PRESENTATION SHEET, not this directory: build_combined_label_sheet.py --spec steady_state. This batch holds the rows and the provenance; the sheet holds the blind order the labeler sees, and the single export routes back here.",
+  "queued_for_labeling": false,
+  "purpose": "The same run's DIVE leg: single-track descent off the crawl's own admissions, 7 of 28 planned dives inside a 15-minute active budget. TRAIN-side and BIASED at the source and at every rung; the control arm is unbiased only WITHIN the admitted set, which is itself screened, so it is not an instrument either. `provenance.mix_source` carries the arm (`dive:top` / `dive:control`) \u2014 the contrast the leg exists to read.",
+  "counts": {
+    "total": 94,
+    "by_partition": {
+      "multibrot3": 39,
+      "mandelbrot": 8,
+      "julia:multibrot4": 47
+    },
+    "by_tier": {
+      "2": 80,
+      "1": 14
+    },
+    "bar_readable": 0
+  },
+  "registration": {
+    "assign_split": [
+      "train",
+      true,
+      "steady_state_dive"
+    ],
+    "registered_explicitly": true,
+    "NOTE": "registered in tools/scoring/batch_registry BEFORE the cut"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "ss_deviates_from_corpus_default": {
+      "corpus_default": 4,
+      "this_batch": 2,
+      "why": "Matt's call 2026-08-03 \u2014 ~4x fewer samples over ~1000 rows x 2 crops; see sitting_cutter.SITTING_CROP_SS for what it costs"
+    },
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "blue_orange",
+    "maxiter": "deep_center_finder._maxiter_for_fw(fw)"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sitting_cut": {
+    "sitting": "steady_state",
+    "legs": [
+      "2026-08-05_steady_state_ranked_v1",
+      "2026-08-05_steady_state_dive_v1"
+    ],
+    "run_dirs": {
+      "2026-08-05_steady_state_ranked_v1": "data/discovery/steady_state_v1_20260805",
+      "2026-08-05_steady_state_dive_v1": "data/discovery/steady_state_v1_20260805_dive"
+    },
+    "max_rows": 1000,
+    "queue": {
+      "n": 1843,
+      "by_leg": {
+        "2026-08-05_steady_state_ranked_v1": 1569,
+        "2026-08-05_steady_state_dive_v1": 274
+      },
+      "cross_leg_duplicates_dropped": {},
+      "dive_arm_join": {
+        "2026-08-05_steady_state_dive_v1": "7 dives joined on root_id order, partition-checked"
+      },
+      "by_tier": {
+        "2": 1133,
+        "1": 710
+      },
+      "by_fate": {
+        "admitted": 698,
+        "q3_dup": 271,
+        "reframe_not_q3": 3,
+        "canon_not_q3": 161,
+        "precanon_dup": 208,
+        "below_tau_h": 499,
+        "interior_gt_30": 3
+      },
+      "by_partition": {
+        "julia:mandelbrot": 256,
+        "julia:multibrot3": 560,
+        "multibrot3": 317,
+        "phoenix": 53,
+        "julia:multibrot5": 58,
+        "julia:multibrot4": 461,
+        "multibrot4": 75,
+        "mandelbrot": 50,
+        "multibrot5": 13
+      }
+    },
+    "n_in": 1843,
+    "n_sitting": 748,
+    "n_over_cap": 0,
+    "stages": [
+      {
+        "stage": "interior_gt30",
+        "removed": 3,
+        "unmeasured_kept": 0,
+        "rule_id": "interior_gt30_v1",
+        "threshold": 0.3,
+        "comparison": "strict >",
+        "disposition": "auto-labelled class 1, NEVER presented"
+      },
+      {
+        "stage": "machine_1_discard",
+        "removed": 3,
+        "no_canonical_verdict_kept": {
+          "julia:mandelbrot": 126,
+          "phoenix": 23,
+          "julia:multibrot3": 253,
+          "julia:multibrot4": 85,
+          "multibrot3": 152,
+          "multibrot4": 54,
+          "multibrot5": 6,
+          "julia:multibrot5": 8
+        },
+        "table": {
+          "julia:mandelbrot": false,
+          "julia:multibrot3": false,
+          "julia:multibrot4": false,
+          "julia:multibrot5": false,
+          "mandelbrot": false,
+          "multibrot3": true,
+          "multibrot4": true,
+          "multibrot5": true,
+          "phoenix": true,
+          "phoenix:classic": false
+        },
+        "by_partition": {
+          "multibrot3": 2,
+          "phoenix": 1
+        },
+        "disposition": "discarded from the SITTING; the discovery record keeps them"
+      },
+      {
+        "stage": "morph_dedup",
+        "removed": 1089,
+        "unembeddable_kept": 0,
+        "threshold": 0.974,
+        "budget_not_reached": 0,
+        "embedded": 1837,
+        "unembeddable_reasons": {},
+        "recipe": "library morph CLIP (640x360 ss2 -> robustz_tanh_k2_v1 -> vit_base_patch16_clip_224.openai)",
+        "looks_kept": 748,
+        "disposition": "PRESENTATION only \u2014 the discovery record keeps every candidate"
+      }
+    ],
+    "cells": {
+      "('julia:mandelbrot', 1)": {
+        "taken": 57,
+        "available": 57,
+        "reserved": 0,
+        "drained": true
+      },
+      "('julia:mandelbrot', 2)": {
+        "taken": 80,
+        "available": 80,
+        "reserved": 0,
+        "drained": true
+      },
+      "('julia:multibrot3', 1)": {
+        "taken": 22,
+        "available": 22,
+        "reserved": 0,
+        "drained": true
+      },
+      "('julia:multibrot3', 2)": {
+        "taken": 61,
+        "available": 61,
+        "reserved": 0,
+        "drained": true
+      },
+      "('julia:multibrot4', 1)": {
+        "taken": 21,
+        "available": 21,
+        "reserved": 0,
+        "drained": true
+      },
+      "('julia:multibrot4', 2)": {
+        "taken": 162,
+        "available": 162,
+        "reserved": 0,
+        "drained": true
+      },
+      "('julia:multibrot5', 1)": {
+        "taken": 4,
+        "available": 4,
+        "reserved": 0,
+        "drained": true
+      },
+      "('julia:multibrot5', 2)": {
+        "taken": 19,
+        "available": 19,
+        "reserved": 0,
+        "drained": true
+      },
+      "('mandelbrot', 2)": {
+        "taken": 24,
+        "available": 24,
+        "reserved": 0,
+        "drained": true
+      },
+      "('multibrot3', 1)": {
+        "taken": 97,
+        "available": 97,
+        "reserved": 0,
+        "drained": true
+      },
+      "('multibrot3', 2)": {
+        "taken": 98,
+        "available": 98,
+        "reserved": 0,
+        "drained": true
+      },
+      "('multibrot4', 1)": {
+        "taken": 40,
+        "available": 40,
+        "reserved": 0,
+        "drained": true
+      },
+      "('multibrot4', 2)": {
+        "taken": 18,
+        "available": 18,
+        "reserved": 0,
+        "drained": true
+      },
+      "('multibrot5', 1)": {
+        "taken": 6,
+        "available": 6,
+        "reserved": 0,
+        "drained": true
+      },
+      "('multibrot5', 2)": {
+        "taken": 5,
+        "available": 5,
+        "reserved": 0,
+        "drained": true
+      },
+      "('phoenix', 1)": {
+        "taken": 11,
+        "available": 11,
+        "reserved": 0,
+        "drained": true
+      },
+      "('phoenix', 2)": {
+        "taken": 23,
+        "available": 23,
+        "reserved": 0,
+        "drained": true
+      }
+    },
+    "balances": true,
+    "calibration_reservations": {
+      "min_pos": 15,
+      "positives": {
+        "mandelbrot": 626,
+        "julia:mandelbrot": 572,
+        "multibrot3": 93,
+        "multibrot4": 78,
+        "multibrot5": 163,
+        "julia:multibrot3": 78,
+        "julia:multibrot4": 75,
+        "julia:multibrot5": 145,
+        "phoenix": 220,
+        "phoenix:classic": 7
+      },
+      "frac": 0.05,
+      "cap_frac": 0.15,
+      "active": {
+        "phoenix:classic": {
+          "reserved": 50,
+          "granted": 0,
+          "shortfall": 50,
+          "available": 0,
+          "capped_by_sitting": false
+        }
+      },
+      "granted_total": 0,
+      "shortfall_total": 50
+    },
+    "cut_wall_s": 832.6,
+    "morph_cache": {
+      "path": "C:\\Code\\fractal-maker-artifacts\\data\\morph_embed_cache\\morph_clip_v1.mec",
+      "created": false,
+      "records_at_open": 3576,
+      "records_now": 5413,
+      "hits": 0,
+      "misses": 1837,
+      "appends": 1837,
+      "bytes_dropped": 0,
+      "truncated_at": null,
+      "size_bytes": 18481806
+    },
+    "by_leg": {
+      "2026-08-05_steady_state_dive_v1": 94,
+      "2026-08-05_steady_state_ranked_v1": 654
+    },
+    "auto_labeled_never_presented": [
+      {
+        "cx": 0.37096549038386595,
+        "cy": 0.6530222695376556,
+        "fw": 2.7189723532469235e-05,
+        "partition": "multibrot3",
+        "leg": "2026-08-05_steady_state_ranked_v1",
+        "score": 1,
+        "labeler": "rule:interior_gt30_v1",
+        "rule_id": "interior_gt30_v1",
+        "measure": "int_frac",
+        "value": 0.3003713348765432,
+        "threshold": 0.3,
+        "comparison": "strict >"
+      },
+      {
+        "cx": -0.24981663511907062,
+        "cy": 0.455520467036396,
+        "fw": 3.2450762693702117e-06,
+        "partition": "multibrot4",
+        "leg": "2026-08-05_steady_state_ranked_v1",
+        "score": 1,
+        "labeler": "rule:interior_gt30_v1",
+        "rule_id": "interior_gt30_v1",
+        "measure": "int_frac",
+        "value": 0.3002025462962963,
+        "threshold": 0.3,
+        "comparison": "strict >"
+      },
+      {
+        "cx": 0.554575497131752,
+        "cy": 0.04029445831209233,
+        "fw": 0.015297416686314161,
+        "partition": "multibrot4",
+        "leg": "2026-08-05_steady_state_ranked_v1",
+        "score": 1,
+        "labeler": "rule:interior_gt30_v1",
+        "rule_id": "interior_gt30_v1",
+        "measure": "int_frac",
+        "value": 0.30049189814814814,
+        "threshold": 0.3,
+        "comparison": "strict >"
+      }
+    ]
+  },
+  "bar_readability": {
+    "n": 0,
+    "of": 94,
+    "definition": "served rows carrying BOTH view_fit_v1.1 (provenance.fit_score / fit_model) and composite_v3 (provenance.composite) \u2014 the slice the pre-registered +0.1181 delta-AP margin reads on",
+    "by_partition": {}
+  },
+  "calibration_aids": "NONE \u2014 no exemplars, no reference strip, no score shown"
+}
