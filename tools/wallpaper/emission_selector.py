@@ -41,11 +41,15 @@ color-cell coverage becomes honest instead of counting the same geometry N times
 from __future__ import annotations
 
 import math
+import sys
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Iterable, Optional, Sequence
 
 import numpy as np
+
+_ROOT = Path(__file__).resolve().parents[2]
 
 # --------------------------------------------------------------------------- #
 # color: sRGB8 -> CIELAB (D65)                                                 #
@@ -151,20 +155,18 @@ class ColorGrid:
 # sees the julia z-plane viewport or the phoenix z-plane. So the emission-side identity
 # re-derives it per family:
 #
-#   c-plane (mandelbrot / multibrot{3,4,5}): what WAS the seeder rule verbatim — same
-#     place iff plane dist(cx,cy) < K*max(fw).
-#     *** STALE PREMISE, 2026-08-04 — READ BEFORE TRUSTING THIS BRANCH. *** Its safety
-#     argument was "the pool's c-plane candidates are ALREADY this-rule-deduped upstream
-#     (they are q3-cloud members), so a big-fw frame can never swallow a genuinely-
-#     distinct deep one HERE: it was never admitted to the cloud in the first place."
-#     The seeder rule moved to 0.25 * min(fw) (data/atlas/precanon_calibration/
-#     adoption.json), on 135 hand verdicts saying that the deep-zoom-inside-a-wide-
-#     outcome pair is NOT the same place. Those pairs now reach emission, where this
-#     branch is the last thing standing and would merge them on the retired rule's
-#     geometry. Nothing here has been re-calibrated and this line is deliberately
-#     unmoved — the adoption defers visual-layer rejection pressure as a separate
-#     decision — but the "already deduped upstream" justification no longer holds, and
-#     the first run under the new seeder rule is when this starts to bite.
+#   c-plane (mandelbrot / multibrot{3,4,5}): the seeder rule, CALLED rather than copied —
+#     `production_seeder.near_dup` with its own default (k, scale), which is the calibrated
+#     live pair (0.25 * min(fw) since 2026-08-04, data/atlas/precanon_calibration/
+#     adoption.json). This branch used to restate the rule as `dist < K*max(fw)` with a
+#     local K, on the safety argument that "the pool's c-plane candidates are ALREADY
+#     this-rule-deduped upstream (they are q3-cloud members), so a big-fw frame can never
+#     swallow a genuinely-distinct deep one HERE." The adoption falsified that premise: the
+#     seeder now KEEPS the deep-zoom-inside-a-wide-outcome pair (135 hand verdicts say it is
+#     not the same place), so those pairs reach emission and this branch was the last thing
+#     standing that would still merge them on the retired rule's geometry. Aligned 2026-08-04
+#     by reading the constants instead of mirroring them, so the next recalibration moves
+#     both layers together and cannot leave this one behind again.
 #
 #   julia* (julia, julia_multibrot{3,4,5}) AND phoenix: z-plane viewports that the
 #     seeder NEVER deduped, so their fw spans ~3 decades within one plane and a flat
@@ -186,15 +188,29 @@ class ColorGrid:
 #   viewports (see the validation report) — which the same prompt forbids ("do NOT
 #   collapse genuinely-distinct locations"). So julia gets the same scale-aware
 #   viewport rule as phoenix; the c-plane rule is unchanged and matches the seeder.
-DEDUP_K = 1.5                # the emission-side viewport K. It NO LONGER mirrors
-                            # production_seeder.DEDUP_K: that pair was recalibrated to
-                            # 0.25 x min(fw) on 2026-08-04 against 135 hand verdicts about
-                            # the c-PLANE coordinate gate (adoption.json), and this rule is
-                            # a different one on a different population (z-plane viewports,
-                            # already min-scaled here, plus the ZOOM_RATIO clause). Moving
-                            # it needs its own calibration, not a copy of that one.
+VIEWPORT_K = 1.5            # the emission-side Z-PLANE viewport K, and ONLY that. It is not
+                            # production_seeder.DEDUP_K and never was a copy of it: that pair
+                            # was calibrated on the c-PLANE coordinate gate against 135 hand
+                            # verdicts (adoption.json), while this is a different rule on a
+                            # different population (z-plane viewports, already min-scaled here,
+                            # plus the ZOOM_RATIO clause). Moving it needs its own calibration,
+                            # not a copy of that one — which is why it is named for what it
+                            # governs rather than `DEDUP_K`, a name the c-plane owner holds.
 ZOOM_RATIO = 4.0            # z-plane (julia/phoenix): frames farther apart than this in zoom are distinct places
 _C_TOL = 1e-9               # julia seed-c match tolerance (siblings share the exact seed; distinct c differ by >>tol)
+
+
+def _seeder():
+    """`production_seeder`, imported lazily and BARE (the spelling every other tools/ module
+    uses), so the c-plane branch READS the calibrated coordinate gate from its owner instead
+    of restating it. Lazy because the seeder pulls the scorer stack (~4 s + torch) and this
+    module is otherwise numpy-only; the import is cached by `sys.modules` after the first
+    same-fractal comparison on a c-plane pair."""
+    for p in (_ROOT / "tools" / "atlas",):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+    import production_seeder                        # noqa: PLC0415
+    return production_seeder
 
 
 def _is_julia(family: str) -> bool:
@@ -221,12 +237,30 @@ def _same_viewport(a: "Candidate", b: "Candidate", k: float) -> bool:
     return _plane_dist(a, b) < k * lo and hi <= ZOOM_RATIO * lo
 
 
-def same_fractal(a: "Candidate", b: "Candidate", k: float = DEDUP_K) -> bool:
+def same_place_c_plane(a: "Candidate", b: "Candidate") -> bool:
+    """THE c-plane coordinate gate, read from its owner — `production_seeder.near_dup` under
+    the owner's `(DEDUP_K, DEDUP_SCALE)`, i.e. whatever pair is calibrated and live today.
+    Never parameterized here: a `k=` on this branch is how the emission layer drifted off the
+    seeder in the first place, and the adoption record names one escape valve, in the owner.
+
+    The pair is read AT CALL TIME rather than ridden in on `near_dup`'s default arguments,
+    which Python binds once at def time — so this resolves the owner's live values and a test
+    can prove it does by moving them."""
+    ps = _seeder()
+    return bool(ps.near_dup(a.cx, a.cy, a.fw, b.cx, b.cy, b.fw,
+                            ps.DEDUP_K, scale=ps.DEDUP_SCALE))
+
+
+def same_fractal(a: "Candidate", b: "Candidate", k: float = VIEWPORT_K) -> bool:
     """Do `a` and `b` render the SAME fractal (up to recolor / sibling-descent jitter)?
 
     Per-family identity (see the block comment above). Falls back to exact
     location-id equality when either candidate carries no viewport geometry, so
     geometry-free callers keep the historical <=1/location behavior exactly.
+
+    `k` is the Z-PLANE VIEWPORT K and governs the julia/phoenix branch only. The c-plane
+    branch takes no K from here — it resolves the live calibrated pair from the seeder — so a
+    caller cannot re-open the coordinate gate by passing one.
     """
     if a.family != b.family:
         return False
@@ -236,8 +270,7 @@ def same_fractal(a: "Candidate", b: "Candidate", k: float = DEDUP_K) -> bool:
         return _c_match(a, b) and _same_viewport(a, b, k)
     if a.family == "phoenix":
         return _same_viewport(a, b, k)
-    # c-plane: the seeder rule verbatim (pool candidates already max(fw)-deduped upstream).
-    return _plane_dist(a, b) < k * max(a.fw, b.fw)
+    return same_place_c_plane(a, b)
 
 
 # --------------------------------------------------------------------------- #

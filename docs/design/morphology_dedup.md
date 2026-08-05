@@ -95,8 +95,15 @@ Three things that survive the decision:
   **visual** layers (the 0.974 morph cut, the emission-side viewport rule), which see the
   picture; the coordinate gate only ever answers "same place".
 
-**A consequence for the emission layer, not yet acted on:** the c-plane branch of
-`emission_selector.same_fractal` still merges at `1.5 × max(fw)`, and its stated safety
-argument was that such pairs were *already* merged upstream. They no longer are. The line
-is deliberately unmoved (that layer needs its own calibration), and the premise is flagged
-in place.
+**The emission layer reads this gate, it does not restate it (2026-08-04).** The c-plane
+branch of `emission_selector.same_fractal` used to merge at its own `1.5 × max(fw)`, on the
+safety argument that such pairs were *already* merged upstream — which the adoption
+falsified. It now calls `production_seeder.near_dup` under the owner's live
+`(DEDUP_K, DEDUP_SCALE)`, read at call time, so a recalibration moves both layers together.
+Guarded by `test_production_seeder.py`: the call-site scan covers `emission_selector.py`,
+and no module outside the owner may declare a `DEDUP_K`/`DEDUP_SCALE` literal.
+
+The emission-side **z-plane viewport** rule is untouched and is a different rule on a
+different population: `emission_selector.VIEWPORT_K = 1.5` (renamed from `DEDUP_K`, which is
+the coordinate gate's name) plus the `ZOOM_RATIO = 4.0` clause. It has never been calibrated
+and still wants its own verdicts.

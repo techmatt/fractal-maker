@@ -97,8 +97,19 @@ def test_production_dedup_verdicts_move_under_either_revert():
     assert ps.is_distinct(0.5 * ps.DEDUP_K, 0.0, 1.0, same) == (False, "same")
 
 
+# Every module that resolves the LIVE c-plane coordinate gate. `emission_selector` joined on
+# 2026-08-04: its c-plane branch used to restate the rule with a local K (the retired
+# 1.5*max(fw)) on the premise that such pairs were already deduped upstream, which the
+# adoption falsified — so it is now a call site like the other two and is scanned like one.
+ADMISSION_SITES = (
+    ("production_seeder.py", HERE / "production_seeder.py"),
+    ("steered_frontier.py", HERE / "steered_frontier.py"),
+    ("emission_selector.py", ROOT / "tools" / "wallpaper" / "emission_selector.py"),
+)
+
+
 def test_admission_call_sites_resolve_the_live_rule():
-    """A source scan over the two admission modules: no `is_distinct`/`near_dup`/`build_cloud`
+    """A source scan over the admission modules: no `is_distinct`/`near_dup`/`build_cloud`
     call there may pass an explicit `scale=` or a literal `k`, because such a call is exactly
     how production silently keeps running the retired rule after this pin goes green. The
     record-replaying diagnostics (fate sheet, calibration sheet, minfw replay/sheet,
@@ -107,8 +118,8 @@ def test_admission_call_sites_resolve_the_live_rule():
     Derived + proved non-empty: the scan asserts it actually found call sites."""
     import re
     calls = 0
-    for name in ("production_seeder.py", "steered_frontier.py"):
-        src = (HERE / name).read_text(encoding="utf-8")
+    for name, path in ADMISSION_SITES:
+        src = path.read_text(encoding="utf-8")
         for m in re.finditer(r"(?<![\w.])(?:ps\.)?(is_distinct|near_dup|build_cloud)\(", src):
             # take the call's argument text up to the matching close paren.
             i, depth = m.end(), 1
@@ -125,6 +136,94 @@ def test_admission_call_sites_resolve_the_live_rule():
             assert not re.search(r"\bk\s*=\s*[\d.]", args), \
                 f"{name}: {m.group(1)} pins a literal k: {args[:120]!r}"
     assert calls >= 8, f"scan found only {calls} admission call sites — it has gone vacuous"
+
+
+# The one-source scan's other half. The call-site scan above proves nobody PINS the rule at a
+# call; this proves nobody re-declares it as a constant of their own — the shape
+# `emission_selector.DEDUP_K = 1.5` had for months while reading as "the emission-side K".
+#
+# The owner declares the live pair AND the retired pair (kept named for the record-replaying
+# diagnostics). This file quotes the forbidden shapes. Nothing else may type these numbers:
+# an alias (`DEDUP_K = ps.DEDUP_K`, as `tools/phoenix/phoenix_grid.py` has) is fine — the ban
+# is on re-typing the value, not on naming it.
+DEDUP_CONST_OWN = {
+    "tools/atlas/production_seeder.py",
+    "tools/atlas/test_production_seeder.py",
+}
+# `*DEDUP_K*` / `*DEDUP_SCALE*` at module level, assigned a bare numeric or string literal.
+# Deliberately NOT `DEDUP_FRAC` (`library_dedup`, `build_fresh_discovery`, `build_bootstrap`):
+# a differently-named constant is a different rule, and folding it in here would make this
+# scan a claim about a population it was never calibrated on.
+DEDUP_LITERAL = __import__("re").compile(
+    r"^(?!\s)(?P<name>[A-Z0-9_]*DEDUP_(?:K|SCALE)[A-Z0-9_]*)\s*"
+    r"(?::[^=\n]*)?=\s*(?P<value>[-+0-9.]|['\"])", __import__("re").M)
+
+
+def _tracked_python():
+    import subprocess
+    import pytest
+    out = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT, capture_output=True, text=True)
+    if out.returncode != 0:
+        pytest.skip("git unavailable — cannot enumerate tracked files")
+    return [p.replace("\\", "/") for p in out.stdout.splitlines() if p.strip()]
+
+
+def test_no_module_declares_a_coordinate_gate_constant_of_its_own():
+    offenders = []
+    for rel in _tracked_python():
+        if rel in DEDUP_CONST_OWN:
+            continue
+        text = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        for m in DEDUP_LITERAL.finditer(text):
+            offenders.append(f"{rel}:{text[:m.start()].count(chr(10)) + 1} {m.group('name')}")
+    assert not offenders, (
+        f"{len(offenders)} module-level coordinate-gate literal(s) outside "
+        f"tools/atlas/production_seeder.py: {offenders}. Read the pair from the owner — a "
+        f"re-typed K carries none of the 135 hand verdicts it was calibrated against, and a "
+        f"copy is how the emission layer kept merging on the retired rule for a day after "
+        f"the adoption.")
+
+
+def test_the_coordinate_gate_scan_would_catch_a_copy():
+    """Non-vacuity, both directions: the historical duplicate shapes fire, and the
+    import-from-owner shapes that are correct do not."""
+    for planted in ("DEDUP_K = 1.5                # the emission-side viewport K",
+                    "DEDUP_SCALE = 'max'",
+                    'DEDUP_SCALE = "min"',
+                    "EMISSION_DEDUP_K: float = 0.25",
+                    "RETIRED_DEDUP_K = 1.5"):
+        assert DEDUP_LITERAL.search(planted), planted
+    for ok in ("DEDUP_K = ps.DEDUP_K         # cloud viewport dedup",
+               "REPLAY_K = ps.RETIRED_DEDUP_K",
+               "VIEWPORT_K = 1.5            # the emission-side Z-PLANE viewport K",
+               "DEDUP_FRAC = 0.5",
+               "    k = 1.5   # a local, not a module-level policy",
+               "# DEDUP_K = 1.5 used to live here"):
+        assert not DEDUP_LITERAL.search(ok), ok
+
+
+def test_the_emission_selector_c_plane_branch_resolves_the_owners_pair():
+    """The consumer half, by value at the boundary: the emission selector's c-plane identity
+    is `near_dup` under the owner's live pair, so the two layers cannot disagree about what
+    'same place' means. Asserted on the asymmetric pair the adoption is about."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "emission_selector", ROOT / "tools" / "wallpaper" / "emission_selector.py")
+    es = importlib.util.module_from_spec(spec)
+    sys.modules["emission_selector"] = es
+    spec.loader.exec_module(es)
+
+    def cand(cx, cy, fw):
+        return es.Candidate(location_id="", palette_id="p", family="mandelbrot", fitness=1.0,
+                            color_cell=0, cx=cx, cy=cy, fw=fw)
+    for (cx, cy, fw), other in (((0.4, 0.0, 1e-3), (0.0, 0.0, 2.0)),      # deep inside wide
+                                ((1e-6, 0.0, 1e-3), (0.0, 0.0, 2.0)),     # genuine revisit
+                                ((0.5, 0.0, 1.0), (0.0, 0.0, 1.0))):      # symmetric, K-only
+        assert es.same_fractal(cand(cx, cy, fw), cand(*other)) is ps.near_dup(
+            cx, cy, fw, *other, ps.DEDUP_K, scale=ps.DEDUP_SCALE)
+    # and the emission-side VIEWPORT K is a separate rule that this alignment did not move.
+    assert es.VIEWPORT_K == 1.5 and es.ZOOM_RATIO == 4.0
+    assert not hasattr(es, "DEDUP_K"), "the c-plane K is the seeder's; emission holds no copy"
 
 
 def test_dedup_scale_rejects_an_unknown_mode():
