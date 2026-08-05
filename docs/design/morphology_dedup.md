@@ -67,3 +67,36 @@ distinct images. Two burned cases, pointing opposite directions:
   parameter key would over-merge distinct zoom levels. The `(c,p)`-absent key is only
   safe **while `(c,p)` stays constant**; any sampler that varies phoenix `(c,p)` must
   put it back in the key.
+
+## 6. The coordinate radius is `0.25 × min(fw)` — calibrated by eye, not inherited
+
+The precanon / q3-cloud gate merges two same-identity locations iff their plane distance
+is under `DEDUP_K × scale(fw_a, fw_b)`. Both constants were **chosen together against 135
+pairs Matt judged SAME/DISTINCT by eye** (2026-08-04): `DEDUP_SCALE = "min"`,
+`DEDUP_K = 0.25`. Full record — sweep, boundary, caveats, and the named escape valve
+(K may move inside `[0.25, 0.376]` as a priced decision, **never above** without a new
+calibration) — is `data/atlas/precanon_calibration/adoption.json`, beside the verdicts.
+
+Three things that survive the decision:
+
+- **The scale is the load-bearing half.** Under `max(fw)` the *wider* frame sets the disc
+  — and the wider frame is the displacer in 28/28 top-tier pairs (median 17.3×) — so the
+  rule deletes deep zooms sitting inside wide outcomes: exactly the output guided descent
+  exists to produce. Under `min(fw)` the radius is the finer frame's and that pair
+  survives. **Symmetric pairs (equal `fw`) decide identically under both**, so the scale
+  can only ever move an asymmetric verdict.
+- **K does not transfer across scales.** `1.5` was carried over from the max rule, where
+  it means different geometry; on the min scale it merged **~8 pairs Matt keeps per 1 it
+  merged correctly** (0.25 → 8 SAME merged / 0 false; 1.5 → 9 / 35, same 135 verdicts).
+  Move one constant and the other stops being calibrated.
+- **Err strict, and put rejection pressure elsewhere.** The judged boundary is sharp and
+  low (`d/min < 0.25` was unanimously SAME; `0.25–0.6` was 15/16 DISTINCT), and a false
+  merge is unrecoverable while a surplus keep is only cost. Volume control belongs at the
+  **visual** layers (the 0.974 morph cut, the emission-side viewport rule), which see the
+  picture; the coordinate gate only ever answers "same place".
+
+**A consequence for the emission layer, not yet acted on:** the c-plane branch of
+`emission_selector.same_fractal` still merges at `1.5 × max(fw)`, and its stated safety
+argument was that such pairs were *already* merged upstream. They no longer are. The line
+is deliberately unmoved (that layer needs its own calibration), and the premise is flagged
+in place.

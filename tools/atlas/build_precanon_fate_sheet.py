@@ -4,7 +4,7 @@ r"""build_precanon_fate_sheet.py — the 28 discarded class-4s beside the rows t
 AN INSPECTION SHEET, NOT A LABELLING SHEET. Every tile is captioned with its coordinates, its
 fate and the arithmetic of the cut that fired; nothing here is blind and nothing here writes a
 label. It exists to answer ONE question with Matt's eye: does the pre-canonical dedup
-(`production_seeder.is_distinct`, `DEDUP_K = 1.5 x max(fw)`) over-fire on the top tier — i.e.
+(`production_seeder.is_distinct`, `1.5 x max(fw)`) over-fire on the top tier — i.e.
 is the row that displaced a human-labelled 4 actually the same picture?
 
 THE POPULATION IS THE SITTING'S OWN TOP TIER. `labels/v2_sitting_sheet_v1.json` has 35 class-4
@@ -59,7 +59,11 @@ import paths                                   # noqa: E402
 import corpus_common as cc                     # noqa: E402
 import build_minibrot_batch as BMB             # noqa: E402
 import build_q4_harvest_batches as bq          # noqa: E402  (_render_block — the render authority)
-import production_seeder as ps                 # noqa: E402  (DEDUP_K / near_dup — the cut itself)
+import production_seeder as ps                 # noqa: E402  (near_dup — the cut itself; the K
+#                                                and scale are ps.RETIRED_* : this sheet is a RECORD
+#                                                of the rule that fired on these fates, 1.5 x max(fw),
+#                                                which was retired 2026-08-04. Reading the live
+#                                                constants would re-scale a frozen record's captions.)
 import sitting_cutter as sc                    # noqa: E402  (SITTING_BATCH / SITTING_CROP_SS)
 import label_store as ls                       # noqa: E402
 
@@ -190,7 +194,8 @@ def build_join() -> dict:
 
 def cut_arithmetic(it: dict, d: dict, rend: dict) -> dict:
     """The fired cut, restated from the candidate and the displacer: plane distance, the
-    `DEDUP_K x max(fw)` radius it was compared against, and — where the family keys on one —
+    `1.5 x max(fw)` radius it was compared against (`ps.RETIRED_*` — the rule in force when
+    these fates were recorded), and — where the family keys on one —
     the parameter-identity clause that had to pass first."""
     dist = math.hypot(it["cx"] - float(d["outcome_cx"]), it["cy"] - float(d["outcome_cy"]))
     fmax = max(it["fw"], float(d["outcome_fw"]))
@@ -201,8 +206,9 @@ def cut_arithmetic(it: dict, d: dict, rend: dict) -> dict:
         ident_d = math.dist(a_c, b_c)
     fired = ps.near_dup(it["cx"], it["cy"], it["fw"],
                         d["outcome_cx"], d["outcome_cy"], d["outcome_fw"],
-                        ps.DEDUP_K, a_c=a_c, b_c=b_c)
-    return dict(dist=dist, fw_max=fmax, radius=ps.DEDUP_K * fmax, k=ps.DEDUP_K,
+                        ps.RETIRED_DEDUP_K, a_c=a_c, b_c=b_c,
+                        scale=ps.RETIRED_DEDUP_SCALE)
+    return dict(dist=dist, fw_max=fmax, radius=ps.RETIRED_DEDUP_K * fmax, k=ps.RETIRED_DEDUP_K,
                 dist_in_fwmax=dist / fmax if fmax else None,
                 fw_ratio=float(d["outcome_fw"]) / it["fw"] if it["fw"] else None,
                 ident_dist=ident_d, ident_eps=ps.JULIA_SAME_C_EPS,
@@ -310,7 +316,7 @@ def stage_sheet(args) -> int:
 <p class="q"><b>The question:</b> does the pre-canonical dedup over-fire on the top tier? Each
 row below pairs a location Matt scored <b>4</b> — and which was thrown away before it was ever
 decoded — with the ledger row that displaced it. If the pair is the same picture the cut is
-doing its job; if it is not, <code>DEDUP_K</code> is deleting the best material in the run.</p>
+doing its job; if it is not, the cut is deleting the best material in the run.</p>
 <p class="pop"><b>Population:</b> the {plan['n_fours']} class-4 labels in
 <code>labels/v2_sitting_sheet_v1.json</code> ({plan['n_labels']} labelled rows), joined 1:1 to the
 <code>harvest_v2_proving_20260803</code> queue on the candidate (cx, cy, fw). Fates:
@@ -319,8 +325,10 @@ below_tau_h {fat.get('below_tau_h', 0)} · admitted {fat.get('admitted', 0)}. Th
 {fat.get('precanon_dup', 0)} are this sheet, collapsing to <b>{len(disp)} distinct displacers</b>;
 the {fat.get('canon_not_q3', 0)} + {fat.get('below_tau_h', 0)} are in the appendix.</p>
 <p class="rule"><b>The cut:</b> <code>production_seeder.is_distinct</code> — a candidate is a dup of a
-q3-cloud row iff plane distance &lt; <code>DEDUP_K &times; max(fw_a, fw_b)</code> with
-<code>DEDUP_K = {ps.DEDUP_K}</code>, and, for julia/phoenix, only if the two parameter identities
+q3-cloud row iff plane distance &lt; <code>K &times; max(fw_a, fw_b)</code> with
+<code>K = {ps.RETIRED_DEDUP_K}</code> (the rule in force for this run; RETIRED 2026-08-04 in
+favour of {ps.DEDUP_K} &times; min(fw) — see data/atlas/precanon_calibration/adoption.json),
+and, for julia/phoenix, only if the two parameter identities
 are within <code>{ps.JULIA_SAME_C_EPS:g}</code> first (julia: the seed <i>c</i>; phoenix: the whole
 <i>(c, p, z<sub>-1</sub>)</i> point). Note <b>max</b>, not min: the wider of the two frames sets the
 radius, so a wide outcome claims a disc that swallows much deeper candidates.</p>
@@ -355,7 +363,7 @@ sitting, so the only judgement on them is the machine decode shown, which is not
         f'The radius is therefore set by the displacer in every case, and the discarded 4 sits '
         f'<i>inside</i> a frame it is a deep zoom of.</li>'
         f'<li>Distances are not tight: median <b>{med(dfm):.3g} &times; max(fw)</b> against a '
-        f'{ps.DEDUP_K} cut, and only {sum(1 for x in dfm if x < 0.1)} of {len(cuts)} are inside '
+        f'{ps.RETIRED_DEDUP_K} cut, and only {sum(1 for x in dfm if x < 0.1)} of {len(cuts)} are inside '
         f'0.1.</li>'
         f'<li>Had the radius been scaled by <code>min(fw)</code> rather than '
         f'<code>max(fw)</code>, <b>{min_fw_survive} of {len(cuts)}</b> would have survived. '
@@ -382,7 +390,7 @@ sitting, so the only judgement on them is the machine decode shown, which is not
     parts.append(
         "<section class=summary><h2>The 28, as arithmetic</h2>"
         "<p>“d / max(fw)” is the distance in units of the radius scale; the cut fires below "
-        f"<b>{ps.DEDUP_K}</b>. “fw ratio” is displacer_fw / discarded_fw — above 1 the displacer is the "
+        f"<b>{ps.RETIRED_DEDUP_K}</b>. “fw ratio” is displacer_fw / discarded_fw — above 1 the displacer is the "
         "<i>wider</i> frame and therefore the one setting the radius.</p>"
         "<table><thead><tr><th>displacer</th><th>discarded</th><th>partition</th><th>d</th>"
         f"<th>d / max(fw)</th><th>fw ratio</th><th>fw discarded</th><th>fw displacer</th>"

@@ -286,12 +286,19 @@ def test_render_block_pins_this_sheets_fidelity():
     assert rb["palette"] == "viridis"
 
 
-def test_module_does_not_move_the_production_dedup_constants():
-    """This prompt builds an instrument; it flips nothing."""
+def test_module_replays_the_retired_rule_and_never_writes_a_constant():
+    """This module is a RECORD REPLAY: the 135 verdicts were taken on pairs the retired
+    `1.5 x max(fw)` rule collapsed and kept apart, so its anchor invariant and its plan meta
+    must keep reading `RETIRED_DEDUP_*`. Reading the live pair (recalibrated to 0.25 x min on
+    2026-08-04 — by these very verdicts) would restratify the sample and stamp a rule the run
+    never ran into a rebuilt plan's meta. And it still assigns nothing."""
     import production_seeder as ps
-    assert (ps.DEDUP_K, ps.DEDUP_SCALE) == (1.5, "max")
+    assert (ps.RETIRED_DEDUP_K, ps.RETIRED_DEDUP_SCALE) == (1.5, "max")
     src = Path(S.__file__).read_text(encoding="utf-8")
-    assert not re.search(r"ps\.DEDUP_(K|SCALE)\s*=", src)
+    assert not re.search(r"ps\.(RETIRED_)?DEDUP_(K|SCALE)\s*=", src)
+    # the replay reads the retired pair and NEVER the live one.
+    assert "ps.RETIRED_DEDUP_K" in src and "ps.RETIRED_DEDUP_SCALE" in src
+    assert not re.search(r"ps\.DEDUP_(K|SCALE)\b", src)
 
 
 # --------------------------------------------------------------------------- #

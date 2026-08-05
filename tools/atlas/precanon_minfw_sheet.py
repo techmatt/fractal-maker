@@ -103,8 +103,8 @@ def pair_of(r: dict, ledger: dict, tag: str) -> dict:
                             "phoenix_zm1_re", "phoenix_zm1_im") if d.get(k) is not None} or None),
         cut=dict(dist=dist, fw_min=min(a, b), fw_max=max(a, b),
                  d_over_min=dist / min(a, b), d_over_max=dist / max(a, b),
-                 fw_ratio=b / a, k=ps.DEDUP_K,
-                 r_max=ps.DEDUP_K * max(a, b), r_min=ps.DEDUP_K * min(a, b)),
+                 fw_ratio=b / a, k=R.REPLAY_K,
+                 r_max=R.REPLAY_K * max(a, b), r_min=R.REPLAY_K * min(a, b)),
         palette=BMB._palette_names()[BMB._stable_seed(pid) % len(BMB._palette_names())])
 
 
@@ -240,9 +240,10 @@ is deleting places.</p>
 so most rows here carry no human judgement of any kind and only the displacer carries a machine
 decode. Partitions drawn: {escape(json.dumps(plan['by_partition']))}.</p>
 <p class="rule"><b>The cut:</b> a candidate is a dup of a q3-cloud row iff plane distance &lt;
-<code>DEDUP_K &times; scale(fw_a, fw_b)</code>, <code>DEDUP_K = {ps.DEDUP_K}</code>, with the
-julia/phoenix parameter-identity clause passing first. Production uses <b>max</b>; the staged
-variant uses <b>min</b>. Every caption gives d against BOTH radii, so the row's fate under each
+<code>K &times; scale(fw_a, fw_b)</code>, <code>K = {R.REPLAY_K}</code> (the run's own K — the
+replay this sheet illustrates holds K fixed and moves only the scale), with the julia/phoenix
+parameter-identity clause passing first. Production ran <b>max</b> here; the variant is
+<b>min</b> — which, at a recalibrated K of {ps.DEDUP_K}, was adopted 2026-08-04. Every caption gives d against BOTH radii, so the row's fate under each
 rule is readable without trusting the badge.</p>
 <p class="note"><b>Reading the tiles.</b> Top image = the pair's shared canonical palette, bottom =
 the fixed <code>blue_orange</code> vivid companion. <b>Both sides of a pair are rendered in the
@@ -271,8 +272,8 @@ and nothing here has a label. The displacer's machine decode is shown and is not
             f"<td>{p['disp']['decoded_class']}</td></tr>")
     parts.append(
         "<section class=summary><h2>The sample, as arithmetic</h2>"
-        f"<p>The <code>min</code> cut fires below <b>{ps.DEDUP_K}</b> in the “d / min(fw)” column; "
-        f"the <code>max</code> cut fires below {ps.DEDUP_K} in “d / max(fw)”. Every row here is "
+        f"<p>The <code>min</code> cut fires below <b>{R.REPLAY_K}</b> in the “d / min(fw)” column; "
+        f"the <code>max</code> cut fires below {R.REPLAY_K} in “d / max(fw)”. Every row here is "
         "below the max cut — that is why it died.</p>"
         "<table><thead><tr><th>pair</th><th>under min</th><th>partition</th><th>d</th>"
         "<th>d / min(fw)</th><th>d / max(fw)</th><th>fw ratio</th><th>fw discarded</th>"

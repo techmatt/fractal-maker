@@ -2,16 +2,22 @@
 r"""precanon_calibration_sheet.py — the instrument Matt places the dedup boundary with.
 
 WHAT THIS IS FOR. `production_seeder.near_dup` cuts a candidate when the plane distance to a
-cloud row is under `DEDUP_K * scale(fw_a, fw_b)`. The `min(fw)` direction is validated
-(`precanon_minfw_replay.py` + `precanon_minfw_sheet.py`), but `DEDUP_K = 1.5` on the MIN scale
-is an inherited constant nobody chose: it transfers from the max-scale rule, where the same
+cloud row is under `K * scale(fw_a, fw_b)`. The `min(fw)` direction is validated
+(`precanon_minfw_replay.py` + `precanon_minfw_sheet.py`), but `K = 1.5` on the MIN scale
+was an inherited constant nobody chose: it transferred from the max-scale rule, where the same
 number means different geometry. This sheet asks the eye where the boundary actually is —
 pairs sorted along the rule's decision variable `d / min(fw)`, Matt marks where "close enough
 to be identical" becomes "sufficiently different to preserve".
 
-IT FLIPS NOTHING. `DEDUP_SCALE`/`DEDUP_K` are untouched, no row is scored, no admission code
-moves. The cut is derived from the exported verdicts by a FOLLOW-UP, and this module
-deliberately computes and displays no candidate boundary of its own.
+IT FLIPS NOTHING. No row is scored, no admission code moves. The cut is derived from the
+exported verdicts by a FOLLOW-UP, and this module deliberately computes and displays no
+candidate boundary of its own.
+
+IT IS A RECORD-REPLAY, SO IT READS `ps.RETIRED_DEDUP_K`/`RETIRED_DEDUP_SCALE`, NOT THE LIVE
+CONSTANTS. The 135 verdicts were taken on pairs the 1.5 x max(fw) rule collapsed and kept
+apart; that rule was retired 2026-08-04 (the verdicts are what retired it — see
+`data/atlas/precanon_calibration/adoption.json`). Reading the live pair would silently
+restratify the sample and stamp the wrong `dedup_k`/`dedup_scale` into a rebuilt plan's meta.
 
 NOT A LABEL SHEET. This is a dedup-IDENTITY instrument: it never enters the label corpus, the
 labeling rig or `labels/`. Verdicts export to their own record under `scratch/`.
@@ -22,7 +28,7 @@ THE SAMPLE. Two strata, interleaved by the sort so neither is identifiable on th
           (2,531 pairs, all resolvable). These are pairs the CURRENT rule collapsed.
   anchor  admitted rows paired with their nearest same-partition, same-identity admitted
           neighbour — pairs the current rule KEPT APART, i.e. real material at the distinct
-          end of the axis. Guaranteed `d >= DEDUP_K * max(fw)` by construction; `stage_plan`
+          end of the axis. Guaranteed `d >= 1.5 * max(fw)` by construction; `stage_plan`
           asserts it rather than trusting it.
 
 Stratified by fw ratio (max/min) into three bands, and within a band binned by RANK QUANTILE of
@@ -214,9 +220,10 @@ def anchor_pairs(rows: list[dict], ledger: dict) -> tuple[list[dict], list[str]]
             g = _geom(a, b)
             # The stratum's whole claim. Both rows are cloud members, so the later one was
             # `distinct` against the earlier: the current rule MUST have kept them apart.
-            if g["dist"] < ps.DEDUP_K * g["fw_max"] * (1 - 1e-12):
+            if g["dist"] < ps.RETIRED_DEDUP_K * g["fw_max"] * (1 - 1e-12):
                 viol.append(f"{key[0]} / {key[1]}: d={g['dist']:.6g} < "
-                            f"{ps.DEDUP_K}*max(fw)={ps.DEDUP_K * g['fw_max']:.6g}")
+                            f"{ps.RETIRED_DEDUP_K}*max(fw)="
+                            f"{ps.RETIRED_DEDUP_K * g['fw_max']:.6g}")
             out.append(dict(stratum="anchor", partition=part, a=a, b=b, geom=g))
     return out, viol
 
@@ -327,7 +334,8 @@ def stage_plan(args) -> int:
         p["left"] = "a" if (BMB._stable_seed(f"{args.seed}:side:{p['pair_id']}") & 1) == 0 else "b"
 
     plan = dict(
-        run=R.RUN_DIR.name, seed=args.seed, dedup_k=ps.DEDUP_K, dedup_scale=ps.DEDUP_SCALE,
+        run=R.RUN_DIR.name, seed=args.seed,
+        dedup_k=ps.RETIRED_DEDUP_K, dedup_scale=ps.RETIRED_DEDUP_SCALE,   # the rule the run ran
         domain_cap=args.domain_cap, n_bins=args.n_bins, per_bin=args.per_bin,
         n_anchor_per_band=args.n_anchor,
         n_precanon_dup=n_dup_total, n_dup_pairs=len(dups), n_anchor_pairs=len(anchors),

@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 r"""precanon_minfw_replay.py — replay one run's admission path under both dedup radius scales.
 
-THE QUESTION. `production_seeder.is_distinct` scales its dedup disc by `DEDUP_K * max(fw)`.
+THE QUESTION (asked while production was still `1.5 x max(fw)`; ADOPTED `0.25 x min(fw)`
+2026-08-04 partly on this measurement). `production_seeder.is_distinct` scaled its dedup disc
+by `1.5 * max(fw)`.
 The fate sheet established that in 28/28 top-tier pairs the displacer is the WIDER frame
 (median 17.3x), so `max(fw)` is set by the displacer every time and what the cut deletes is a
 deep zoom inside a wide outcome's disc. `min(fw)` — the scale-aware house pattern — is staged
@@ -76,6 +78,14 @@ import production_seeder as ps                  # noqa: E402
 
 RUN_DIR = ROOT / "data" / "discovery" / "harvest_v2_proving_20260803"
 OUT = Path(paths.scratch("precanon_minfw"))
+
+# THE K THIS REPLAY RUNS AT IS THE RUN'S OWN K, NOT THE LIVE ONE. The run executed under
+# 1.5 x max(fw); the self-check below refuses to report anything until it re-fires that
+# rule exactly, and the whole comparison is "same K, change the scale". Production moved to
+# 0.25 x min(fw) on 2026-08-04 (data/atlas/precanon_calibration/adoption.json) — reading
+# the LIVE ps.DEDUP_K here would break the self-check and silently redefine what was
+# measured.
+REPLAY_K = ps.RETIRED_DEDUP_K
 
 # fates a harvest CHECK can end in (the record's other two fates never reach the filter:
 # `below_tau_h` is never rendered and `interior_gt_30` is removed at sourcing).
@@ -224,7 +234,7 @@ def replay(rows: list[dict], scale: str, *, admit_frac: float, strict: bool) -> 
         # ---- stage 1: pre-canonical filter, cloud frozen for the whole batch ----------
         for r in batch:
             distinct, dup_of = ps.is_distinct(r["cx"], r["cy"], r["fw"],
-                                              clouds[r["partition"]], ps.DEDUP_K,
+                                              clouds[r["partition"]], REPLAY_K,
                                               c=r["ident"], scale=scale)
             r["rep_dup"] = None if distinct else dup_of
         if strict:
@@ -269,7 +279,7 @@ def replay(rows: list[dict], scale: str, *, admit_frac: float, strict: bool) -> 
                     raise SystemExit(f"[self-check] {r['key']} canon_not_q3 vs {r['fate']}")
                 continue
             pre_distinct, _ = ps.is_distinct(r["cx"], r["cy"], r["fw"],
-                                             clouds[r["partition"]], ps.DEDUP_K,
+                                             clouds[r["partition"]], REPLAY_K,
                                              c=r["ident"], scale=scale)
             if not pre_distinct:
                 out["q3_dup_prereframe"] += 1
@@ -296,7 +306,7 @@ def replay(rows: list[dict], scale: str, *, admit_frac: float, strict: bool) -> 
             if is_q3:
                 distinct, dup_of = ps.is_distinct(led["outcome_cx"], led["outcome_cy"],
                                                   led["outcome_fw"], clouds[r["partition"]],
-                                                  ps.DEDUP_K, c=r["ident"], scale=scale)
+                                                  REPLAY_K, c=r["ident"], scale=scale)
             if strict and (distinct != bool(led.get("distinct")) or dup_of != led.get("dup_of")):
                 raise SystemExit(f"[self-check] {r['key']} admit: replay "
                                  f"({distinct}, {dup_of!r}) != ledger "
@@ -329,7 +339,7 @@ def replay(rows: list[dict], scale: str, *, admit_frac: float, strict: bool) -> 
             oid = f"synth_{seq:06d}"
             seq += 1
             distinct, _ = ps.is_distinct(r["cx"], r["cy"], r["fw"], clouds[r["partition"]],
-                                         ps.DEDUP_K, c=r["ident"], scale=scale)
+                                         REPLAY_K, c=r["ident"], scale=scale)
             if distinct:
                 clouds[r["partition"]].append(synth_cloud_row(r, oid))
                 out["synth_admitted"] += 1
@@ -387,7 +397,7 @@ def distributions(newly, rejected, ledger) -> dict:
 def flat_floor_sweep(newly, ledger, floors=(1e-9, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3,
                                             1e-2, 0.1, 0.3)) -> list[dict]:
     """How many newly-surviving rows a FLAT absolute-distance floor would take back, i.e.
-    radius = max(DEDUP_K*min(fw), floor). A count per floor, not a proposal."""
+    radius = max(REPLAY_K*min(fw), floor). A count per floor, not a proposal."""
     g = [x for x in (pair_geometry(r, ledger) for r in newly) if x is not None]
     return [dict(floor=f, recaught=sum(1 for x in g if x["dist"] < f),
                  frac=(sum(1 for x in g if x["dist"] < f) / len(g)) if g else None)
@@ -436,7 +446,7 @@ def main() -> int:
     m2 = replay(rows, "min", admit_frac=obs_rate, strict=False)
 
     res = dict(
-        run=a.run_dir.name, dedup_k=ps.DEDUP_K, recorded_fates=dict(sorted(rec.items())),
+        run=a.run_dir.name, dedup_k=REPLAY_K, recorded_fates=dict(sorted(rec.items())),
         n_checks=len(rows), n_batches=len(set(r["batch"] for r in rows)),
         self_check=dict(reproduced=ok, **{k: base[k] for k in
                         ("precanon_dup", "admitted", "canon_not_q3", "q3_dup_prereframe",

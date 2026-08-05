@@ -27,9 +27,14 @@ def test_near_dup_within_and_outside():
     assert ps.near_dup(1.6, 0.0, 1.0, 0.0, 0.0, 1.0, k=1.5) is False   # 1.6 > 1.5
 
 
-def test_near_dup_same_center_different_zoom_merges():
-    # (nearly) same center, very different fw -> same PLACE (max(fw) dominates).
+def test_near_dup_same_center_different_zoom_merges_only_well_inside_the_finer_frame():
+    # (nearly) same center, very different fw. Under the calibrated min(fw) rule the FINER
+    # frame sets the radius, so this merges only while the offset is small against 1e-3 —
+    # the retired max(fw) rule merged the whole 2.0-wide disc, which is what 135 hand
+    # verdicts rejected. Both sides asserted so the direction cannot silently flip back.
     assert ps.near_dup(1e-6, 0.0, 1e-3, 0.0, 0.0, 2.0, k=1.5) is True
+    assert ps.near_dup(0.5, 0.0, 1e-3, 0.0, 0.0, 2.0, k=1.5) is False        # min-scale: distinct
+    assert ps.near_dup(0.5, 0.0, 1e-3, 0.0, 0.0, 2.0, k=1.5, scale="max") is True   # retired rule
 
 
 def test_near_dup_distant_pair_distinct():
@@ -49,15 +54,77 @@ def test_is_distinct_against_cloud():
 
 
 # --------------------------------------------------------------------------- #
-# radius-scaling mode (staged variant, no call site). DIFFERENTIAL: the two modes are
-# pinned against each other rather than against frozen literals, so the invariant that
-# matters — they can only differ on ASYMMETRIC pairs — is the thing asserted.
+# THE PRODUCTION RULE PIN. K and the scale were calibrated TOGETHER against 135 hand
+# verdicts (data/atlas/precanon_calibration/adoption.json, 2026-08-04); neither transfers
+# to the other scale, so both are pinned, and every assertion below is red under a revert
+# of EITHER one alone. The mode pair itself stays differential (the two can only differ on
+# ASYMMETRIC pairs) rather than frozen against literals.
 # --------------------------------------------------------------------------- #
-def test_dedup_scale_default_is_production_max():
-    """The staged variant must be inert until something asks for it."""
-    assert ps.DEDUP_SCALE == "max"
-    assert ps.dedup_radius(1.5, 1e-3, 2.0) == 1.5 * 2.0
-    assert ps.dedup_radius(1.5, 1e-3, 2.0, scale="min") == 1.5 * 1e-3
+def test_production_dedup_rule_is_the_calibrated_min_quarter():
+    """The adopted pair, and the RESOLVED radius it produces at the admission path.
+
+    Red under either revert, by construction:
+      * scale -> "max"  : the asymmetric radius becomes 0.25*2.0 = 0.5, not 0.25*1e-3
+      * K     -> 1.5    : the symmetric radius becomes 1.5*1.0, not 0.25*1.0
+    A single resolved-radius assertion catches both, so this cannot pass with one of the
+    two constants reverted."""
+    assert (ps.DEDUP_K, ps.DEDUP_SCALE) == (0.25, "min")
+    # resolved with NO explicit argument — what every production call site actually gets.
+    assert ps.dedup_radius(ps.DEDUP_K, 1e-3, 2.0) == 0.25 * 1e-3     # scale revert -> 0.5
+    assert ps.dedup_radius(ps.DEDUP_K, 1.0, 1.0) == 0.25 * 1.0       # K revert -> 1.5
+    # the retired rule is kept NAMED (the record-replaying diagnostics read it) and is not
+    # the default: a revert that flips the defaults back also breaks this pair's meaning.
+    assert (ps.RETIRED_DEDUP_K, ps.RETIRED_DEDUP_SCALE) == (1.5, "max")
+    assert (ps.DEDUP_K, ps.DEDUP_SCALE) != (ps.RETIRED_DEDUP_K, ps.RETIRED_DEDUP_SCALE)
+
+
+def test_production_dedup_verdicts_move_under_either_revert():
+    """The pin at the level that matters: the VERDICT `is_distinct` returns with no explicit
+    k/scale. Two fixtures, each isolating one constant — an asymmetric pair only the scale
+    moves, and a symmetric pair only K moves (min == max there, so the scale cannot touch
+    it). Both are what the calibration bought: a deep zoom inside a wide outcome survives,
+    and a same-scale neighbour at 0.5*fw is no longer swallowed."""
+    wide = [{"id": "wide", "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 2.0}]
+    # asymmetric: d=0.4 sits inside 0.25*max(fw)=0.5 but outside 0.25*min(fw)=2.5e-4.
+    assert ps.is_distinct(0.4, 0.0, 1e-3, wide) == (True, None)
+    assert ps.is_distinct(0.4, 0.0, 1e-3, wide, scale="max") == (False, "wide")
+    same = [{"id": "same", "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 1.0}]
+    # symmetric: d=0.5 is outside 0.25*fw and inside 1.5*fw, and min == max at equal fw.
+    assert ps.is_distinct(0.5, 0.0, 1.0, same) == (True, None)
+    assert ps.is_distinct(0.5, 0.0, 1.0, same, k=ps.RETIRED_DEDUP_K) == (False, "same")
+    assert ps.is_distinct(0.5, 0.0, 1.0, same, scale="max") == (True, None)   # K, not the scale
+    # and the rule still fires on what it is FOR: a genuine same-place revisit.
+    assert ps.is_distinct(0.5 * ps.DEDUP_K, 0.0, 1.0, same) == (False, "same")
+
+
+def test_admission_call_sites_resolve_the_live_rule():
+    """A source scan over the two admission modules: no `is_distinct`/`near_dup`/`build_cloud`
+    call there may pass an explicit `scale=` or a literal `k`, because such a call is exactly
+    how production silently keeps running the retired rule after this pin goes green. The
+    record-replaying diagnostics (fate sheet, calibration sheet, minfw replay/sheet,
+    campaign1_readout) are deliberately NOT scanned — pinning the retired rule is their job.
+
+    Derived + proved non-empty: the scan asserts it actually found call sites."""
+    import re
+    calls = 0
+    for name in ("production_seeder.py", "steered_frontier.py"):
+        src = (HERE / name).read_text(encoding="utf-8")
+        for m in re.finditer(r"(?<![\w.])(?:ps\.)?(is_distinct|near_dup|build_cloud)\(", src):
+            # take the call's argument text up to the matching close paren.
+            i, depth = m.end(), 1
+            while i < len(src) and depth:
+                depth += (src[i] == "(") - (src[i] == ")")
+                i += 1
+            args = src[m.end():i - 1]
+            if "scale=scale" in args or args.lstrip().startswith(("rows", "a_cx")):
+                continue        # the definitions and their own forwarding plumbing
+            calls += 1
+            for pin in ('scale="', "scale='", "RETIRED_DEDUP"):
+                assert pin not in args, \
+                    f"{name}: {m.group(1)} pins the rule ({pin}): {args[:120]!r}"
+            assert not re.search(r"\bk\s*=\s*[\d.]", args), \
+                f"{name}: {m.group(1)} pins a literal k: {args[:120]!r}"
+    assert calls >= 8, f"scan found only {calls} admission call sites — it has gone vacuous"
 
 
 def test_dedup_scale_rejects_an_unknown_mode():
@@ -110,14 +177,18 @@ def test_mode_never_overrides_the_identity_clauses():
 
 
 def test_build_cloud_forwards_the_scale():
-    """The cloud builder dedups with the same rule it is handed — a replay that rebuilds a
-    prior cloud under "min" must not silently collapse it under "max"."""
+    """The cloud builder dedups with the rule it is handed — a replay that rebuilds a prior
+    cloud under the RETIRED "max" must not silently get the live "min", or vice versa."""
     rows = [{"id": "wide", "family": "mandelbrot", "decoded_class": 3,
              "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 2.0},
             {"id": "deep", "family": "mandelbrot", "decoded_class": 3,
              "outcome_cx": 0.5, "outcome_cy": 0.0, "outcome_fw": 1e-3}]
-    assert [r["id"] for r in ps.build_cloud(rows, "mandelbrot")] == ["wide"]
+    # live default (min): the deep zoom inside the wide outcome is its own place.
+    assert [r["id"] for r in ps.build_cloud(rows, "mandelbrot")] == ["wide", "deep"]
     assert [r["id"] for r in ps.build_cloud(rows, "mandelbrot", scale="min")] == ["wide", "deep"]
+    # the retired rule swallowed it — and needs BOTH its constants to reproduce that.
+    assert [r["id"] for r in ps.build_cloud(rows, "mandelbrot", k=ps.RETIRED_DEDUP_K,
+                                            scale=ps.RETIRED_DEDUP_SCALE)] == ["wide"]
 
 
 # --------------------------------------------------------------------------- #
@@ -142,7 +213,9 @@ def test_same_c_near_identical_views_collide():
     assert ps.near_dup(1.6, 0.0, 1.0, 0.0, 0.0, 1.0, k=1.5, a_c=jc, b_c=jc) is False  # z too far
     cloud = [{"id": "ja", "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 1.0,
               "julia_c_re": jc[0], "julia_c_im": jc[1]}]
-    d, dup = ps.is_distinct(0.5, 0.0, 1.0, cloud, c=(jc[0] + 1e-9, jc[1]))   # c within eps
+    # distance stated RELATIVE to the live radius: this test is about the identity clause,
+    # so it must stay inside the disc whatever (DEDUP_K, DEDUP_SCALE) is.
+    d, dup = ps.is_distinct(0.5 * ps.DEDUP_K, 0.0, 1.0, cloud, c=(jc[0] + 1e-9, jc[1]))
     assert d is False and dup == "ja"
 
 
@@ -212,7 +285,8 @@ def test_same_phoenix_params_near_views_collide():
     assert ps.near_dup(1.4, 0.0, 1.0, 0.0, 0.0, 1.0, k=1.5, a_c=k, b_c=k) is True   # 1.4 < 1.5
     assert ps.near_dup(1.6, 0.0, 1.0, 0.0, 0.0, 1.0, k=1.5, a_c=k, b_c=k) is False  # z too far
     cloud = [_ph_row("pa", 0, 0, 1.0)]
-    d, dup = ps.is_distinct(0.5, 0.0, 1.0, cloud, c=ps.row_phoenix_key(_ph_row("q", 0, 0, 1.0)))
+    d, dup = ps.is_distinct(0.5 * ps.DEDUP_K, 0.0, 1.0, cloud,      # inside the live radius
+                            c=ps.row_phoenix_key(_ph_row("q", 0, 0, 1.0)))
     assert d is False and dup == "pa"
 
 
@@ -245,8 +319,11 @@ def test_coord_overlap_detects_phoenix_dups():
     import campaign1_readout as c1
 
     priors = {"phoenix": ps.build_cloud([_ph_row("pa", 0.0, 0.0, 1.0, p=(-0.5, 0.0))], "phoenix")}
-    dup = _ph_row("cand_dup", 0.5, 0.0, 1.0, p=(-0.5, 0.0))     # same params, viewport within 1.5*fw
-    distinct = _ph_row("cand_new", 0.5, 0.0, 1.0, p=(-0.4, 0.0))  # distinct p -> different place
+    # coord_overlap replays the RETIRED rule (the campaigns it reads out ran under it), so
+    # the fixture distance is stated against that radius, not the live one.
+    r = ps.RETIRED_DEDUP_K * 1.0
+    dup = _ph_row("cand_dup", 0.5 * r, 0.0, 1.0, p=(-0.5, 0.0))      # same params, inside the disc
+    distinct = _ph_row("cand_new", 0.5 * r, 0.0, 1.0, p=(-0.4, 0.0))  # distinct p -> different place
 
     hit, tot, per_fam = c1.coord_overlap([dup], priors)
     assert (hit, tot) == (1, 1), "same-params phoenix admission must read as an overlap"
@@ -316,13 +393,14 @@ def test_rejection_rule_dense_vs_open(monkeypatch):
 
 def test_near_dup_does_not_double_count_a_region():
     """A near-dup outcome does not enter the cloud, so it can't push a region over the
-    density cap by being counted twice. build_cloud dedups by 1.5*max(fw)."""
+    density cap by being counted twice. build_cloud dedups by DEDUP_K*min(fw), so the
+    near-dup's offset is stated against that radius rather than a frozen literal."""
     rows = [
         {"id": "a", "guard_pass": True, "decoded_class": 3,
          "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 0.01},
-        # near-dup of a (within 1.5*max(fw)=0.015): must NOT create a second member.
+        # near-dup of a (well inside DEDUP_K*min(fw)): must NOT create a second member.
         {"id": "a2", "guard_pass": True, "decoded_class": 3,
-         "outcome_cx": 0.005, "outcome_cy": 0.0, "outcome_fw": 0.01},
+         "outcome_cx": 0.5 * ps.DEDUP_K * 0.01, "outcome_cy": 0.0, "outcome_fw": 0.01},
         # genuinely distinct q3 place.
         {"id": "b", "guard_pass": True, "decoded_class": 3,
          "outcome_cx": 0.10, "outcome_cy": 0.0, "outcome_fw": 0.01},

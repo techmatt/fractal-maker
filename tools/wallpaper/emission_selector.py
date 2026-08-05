@@ -147,16 +147,24 @@ class ColorGrid:
 # fractal identity — mirrors the seeder's per-family dedup                     #
 # --------------------------------------------------------------------------- #
 # The seeder's coverage state is a q3 cloud deduped by `production_seeder.near_dup`
-# (plane distance < DEDUP_K * max(fw), a "one point per distinct place" rule), but
-# that dedup runs on the c-PLANE and never sees the julia z-plane viewport or the
-# phoenix z-plane. So the emission-side identity re-derives it per family:
+# (a "one point per distinct place" rule), but that dedup runs on the c-PLANE and never
+# sees the julia z-plane viewport or the phoenix z-plane. So the emission-side identity
+# re-derives it per family:
 #
-#   c-plane (mandelbrot / multibrot{3,4,5}): the seeder rule VERBATIM — same place
-#     iff plane dist(cx,cy) < K*max(fw). Same-center/different-zoom merges, exactly
-#     as the seeder intends — and safe here because the pool's c-plane candidates are
-#     ALREADY this-rule-deduped upstream (they are q3-cloud members), so a big-fw
-#     frame can never swallow a genuinely-distinct deep one at emission: it was never
-#     admitted to the cloud in the first place.
+#   c-plane (mandelbrot / multibrot{3,4,5}): what WAS the seeder rule verbatim — same
+#     place iff plane dist(cx,cy) < K*max(fw).
+#     *** STALE PREMISE, 2026-08-04 — READ BEFORE TRUSTING THIS BRANCH. *** Its safety
+#     argument was "the pool's c-plane candidates are ALREADY this-rule-deduped upstream
+#     (they are q3-cloud members), so a big-fw frame can never swallow a genuinely-
+#     distinct deep one HERE: it was never admitted to the cloud in the first place."
+#     The seeder rule moved to 0.25 * min(fw) (data/atlas/precanon_calibration/
+#     adoption.json), on 135 hand verdicts saying that the deep-zoom-inside-a-wide-
+#     outcome pair is NOT the same place. Those pairs now reach emission, where this
+#     branch is the last thing standing and would merge them on the retired rule's
+#     geometry. Nothing here has been re-calibrated and this line is deliberately
+#     unmoved — the adoption defers visual-layer rejection pressure as a separate
+#     decision — but the "already deduped upstream" justification no longer holds, and
+#     the first run under the new seeder rule is when this starts to bite.
 #
 #   julia* (julia, julia_multibrot{3,4,5}) AND phoenix: z-plane viewports that the
 #     seeder NEVER deduped, so their fw spans ~3 decades within one plane and a flat
@@ -178,7 +186,13 @@ class ColorGrid:
 #   viewports (see the validation report) — which the same prompt forbids ("do NOT
 #   collapse genuinely-distinct locations"). So julia gets the same scale-aware
 #   viewport rule as phoenix; the c-plane rule is unchanged and matches the seeder.
-DEDUP_K = 1.5                # mirrors production_seeder.DEDUP_K
+DEDUP_K = 1.5                # the emission-side viewport K. It NO LONGER mirrors
+                            # production_seeder.DEDUP_K: that pair was recalibrated to
+                            # 0.25 x min(fw) on 2026-08-04 against 135 hand verdicts about
+                            # the c-PLANE coordinate gate (adoption.json), and this rule is
+                            # a different one on a different population (z-plane viewports,
+                            # already min-scaled here, plus the ZOOM_RATIO clause). Moving
+                            # it needs its own calibration, not a copy of that one.
 ZOOM_RATIO = 4.0            # z-plane (julia/phoenix): frames farther apart than this in zoom are distinct places
 _C_TOL = 1e-9               # julia seed-c match tolerance (siblings share the exact seed; distinct c differ by >>tol)
 

@@ -5,7 +5,11 @@ The sheet (`precanon_calibration_sheet.py`) asked the eye where "close enough to
 becomes "different enough to preserve", along the rule's own decision variable `d / min(fw)`.
 This module is the follow-up it names: it DERIVES and AUDITS, and **adopts nothing** —
 `production_seeder.DEDUP_K` / `DEDUP_SCALE` are read (to state where the standing constant sits)
-and never written.
+and never written. Its output DID drive an adoption: Matt took `0.25 x min(fw)` from these
+numbers on 2026-08-04 (`data/atlas/precanon_calibration/adoption.json`), so the standing
+constants it prints are now the calibrated ones and the retired `1.5 x max(fw)` is kept in the
+sweep by name. The verdicts were taken under the retired rule; `population.dedup_k/scale` are
+read from the RECORD, never from the live module.
 
 Population: `data/atlas/precanon_calibration/verdicts.json` (the durable export) joined to its
 sibling `pairs.json` plan. UNSURE rows are reported separately and NEVER coerced to either side —
@@ -295,14 +299,16 @@ def main() -> int:
           f"(run {V['meta']['run']}, seed {V['meta']['seed']})")
     print(f"  verdicts  {dict(Counter(r['verdict'] for r in rows))}   "
           f"revealed-at-verdict {V['n_revealed_at_verdict']}")
-    print(f"  production rule: d < {ps.DEDUP_K} * {ps.DEDUP_SCALE}(fw)  "
-          f"(production_seeder.DEDUP_K/DEDUP_SCALE — READ, not moved). The min-scale variant "
-          f"the sheet interrogates would cut at d/min(fw) = {ps.DEDUP_K}, the constant "
-          f"transferred from the max rule.")
+    print(f"  standing rule now: d < {ps.DEDUP_K} * {ps.DEDUP_SCALE}(fw)  "
+          f"(production_seeder.DEDUP_K/DEDUP_SCALE — READ, not moved; adopted 2026-08-04 FROM "
+          f"these numbers). The verdicts below were taken on pairs cut by the RETIRED rule "
+          f"d < {V['meta']['dedup_k']} * {V['meta']['dedup_scale']}(fw).")
 
     res = {"population": dict(n=len(rows), run=V["meta"]["run"],
                              verdicts=dict(Counter(r["verdict"] for r in rows)),
-                             dedup_k=ps.DEDUP_K, dedup_scale=V["meta"]["dedup_scale"])}
+                             dedup_k=V["meta"]["dedup_k"],            # the RECORD's rule,
+                             dedup_scale=V["meta"]["dedup_scale"],    # not the live one
+                             standing_dedup_k=ps.DEDUP_K, standing_dedup_scale=ps.DEDUP_SCALE)}
 
     # --- 1. per band -------------------------------------------------------- #
     print("\n=== 1. SAME->DISTINCT transition along d/min(fw), per fw-ratio band ===")
@@ -355,13 +361,16 @@ def main() -> int:
     print("\n=== 2b. candidate cuts on d/min(fw): what each merges, on the judged pairs ===")
     dup = [r for r in rows if r["stratum"] == "dup"]
     dc = Counter(r["verdict"] for r in dup)
-    print(f"  the dup stratum ({len(dup)} pairs) is what the CURRENT max-scale rule already "
+    print(f"  the dup stratum ({len(dup)} pairs) is what the RETIRED max-scale rule "
           f"merged: {dict(dc)}")
-    print(f"    -> production is today collapsing {dc['distinct']} pairs Matt calls DISTINCT "
+    print(f"    -> that rule collapsed {dc['distinct']} pairs Matt calls DISTINCT "
           f"and {dc['unsure']} he is unsure about, per {dc['same']} it merges correctly "
           f"(judged sample of the run's {P['n_dup_pairs']} dup pairs, "
           f"d/min-stratified inside a {P['domain_cap']} cap).")
-    ks = sorted({0.25, 0.5, 1.0, ps.DEDUP_K, 2.0,
+    # ps.DEDUP_K (the adopted cut) AND ps.RETIRED_DEDUP_K (what it replaced) are both named,
+    # so the row that priced the decision cannot fall out of the table when the live
+    # constant moves inside the set of literals.
+    ks = sorted({0.25, 0.5, 1.0, 2.0, ps.DEDUP_K, ps.RETIRED_DEDUP_K,
                  round(res["all_bands"]["first_distinct"], 4)})
     sweep = []
     for k in ks:
@@ -450,7 +459,8 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     BOUNDARY.write_text(json.dumps(res, indent=1, default=str), encoding="utf-8")
     print(f"\n-> {BOUNDARY}")
-    print("ADOPTS NOTHING: DEDUP_K / DEDUP_SCALE untouched.")
+    print("ADOPTS NOTHING: this tool never writes DEDUP_K / DEDUP_SCALE. "
+          f"Standing rule: {ps.DEDUP_K} x {ps.DEDUP_SCALE}(fw).")
     return 0
 
 

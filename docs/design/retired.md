@@ -393,3 +393,23 @@ an item's evidence, the line points at it rather than restating it.
   `[code: tools/emission/descriptor.py::admit_quality; tools/emission/floors.py;
   tools/emission/test_intake_fail_closed.py; tools/emission/test_intake_union.py;
   docs/design/q4_harvest_emission.md]`
+
+- **2026-08-04 — `DEDUP_K = 1.5 x max(fw)` as the precanon / q3-cloud coordinate dedup.**
+  Replaced by the calibrated `0.25 x min(fw)` (`production_seeder.{DEDUP_K,DEDUP_SCALE}`).
+  On the 135 pairs Matt judged, the retired rule merged ~**8 pairs he would keep per 1 it
+  merged correctly** — `max(fw)` is set by the wider frame in 28/28 top-tier cases, so what
+  it deleted was the deep zoom inside a wide outcome's disc, i.e. the output guided descent
+  exists to produce. At the same verdicts, K=0.25 on the min scale merges 8 SAME with **0**
+  false merges against 1.5's 9 SAME / **35** false. The two constants were calibrated
+  together and neither transfers to the other scale.
+  Record (sweep, boundary, the n=14 SAME ceiling, the unexamined outliers, and the named
+  escape valve — K may move inside [0.25, 0.376] as a priced decision, never above without a
+  new calibration): `data/atlas/precanon_calibration/adoption.json`, beside the verdicts.
+  `1.5 x max` is NOT deleted: it stays reachable as `RETIRED_DEDUP_K`/`RETIRED_DEDUP_SCALE`
+  and as explicit `k=`/`scale=` arguments, because the diagnostics that replay records made
+  under it must keep replaying it.
+  `[decision: prompts/precanon_adopt_calibrated_prompt.md, Matt, 2026-08-04]`
+  `[code: tools/atlas/production_seeder.py::{DEDUP_K,DEDUP_SCALE,dedup_radius};
+  tools/atlas/test_production_seeder.py::{test_production_dedup_rule_is_the_calibrated_min_quarter,
+  test_production_dedup_verdicts_move_under_either_revert,
+  test_admission_call_sites_resolve_the_live_rule}; docs/design/morphology_dedup.md §6]`

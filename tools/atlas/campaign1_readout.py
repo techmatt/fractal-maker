@@ -112,12 +112,19 @@ def admissions(rows: list) -> list:
 # 4a. Coord library-overlap vs ALL prior ledgers (cheap; no render, no GPU).
 # --------------------------------------------------------------------------- #
 def prior_clouds(prior_ledgers: list[Path], partitions: list[str]) -> dict:
-    """Per-partition distinct-q3 cloud unioned over every prior ledger (built with the exact
-    production dedup so 'within coord-dup radius' means the same thing it does in the harvest)."""
+    """Per-partition distinct-q3 cloud unioned over every prior ledger (built with the dedup
+    rule the harvest that admitted them actually ran, so 'within coord-dup radius' means the
+    same thing it meant there)."""
     all_rows = []
     for led in prior_ledgers:
         all_rows += load_jsonl(led)
-    return {part: ps.build_cloud(all_rows, part) for part in partitions}
+    # PRIOR-RULE REPLAY: the campaigns being read out were admitted under 1.5 x max(fw)
+    # (retired 2026-08-04 for 0.25 x min(fw)), so the overlap question "did this land inside
+    # a prior admission's disc" is only meaningful under the rule those discs were drawn
+    # with. Reading the live pair would restate history under a radius it never ran.
+    return {part: ps.build_cloud(all_rows, part, k=ps.RETIRED_DEDUP_K,
+                                 scale=ps.RETIRED_DEDUP_SCALE)
+            for part in partitions}
 
 
 def coord_overlap(adm: list, priors: dict) -> tuple[int, int, dict]:
@@ -128,6 +135,7 @@ def coord_overlap(adm: list, priors: dict) -> tuple[int, int, dict]:
         part = r.get("family", "mandelbrot")
         cloud = priors.get(part, [])
         distinct, _ = ps.is_distinct(r["outcome_cx"], r["outcome_cy"], r["outcome_fw"], cloud,
+                                     k=ps.RETIRED_DEDUP_K, scale=ps.RETIRED_DEDUP_SCALE,
                                      c=ps.row_ident(r))   # family-aware identity (julia 2-vec,
         #                                                   phoenix 6-vec, c-plane None) — must
         #                                                   match build_cloud's row_ident, else a
@@ -419,7 +427,8 @@ def build(args) -> str:
       f"library embedding store for morph._\n")
     if ct:
         w(f"- **Coord-dup overlap: {ch}/{ct} = {ch/ct:.1%}** of campaign admissions fall inside a "
-          f"prior admission's coord-dup radius (same partition, DEDUP_K={ps.DEDUP_K}).")
+          f"prior admission's coord-dup radius (same partition, the rule these campaigns ran "
+          f"under: {ps.RETIRED_DEDUP_K} x {ps.RETIRED_DEDUP_SCALE}(fw)).")
         nz = [(p, h, t) for p, (h, t) in cpf.items() if t]
         if nz:
             w("  - per partition: " + ", ".join(f"{p} {h}/{t}" for p, h, t in sorted(nz)))
