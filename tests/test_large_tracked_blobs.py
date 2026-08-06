@@ -88,6 +88,9 @@ ALLOWLIST = [
           "2026-08-05 fresh-era batches). STAGED — wallpaper_pins still points at v3."),
     Entry("data/render_mode_head/v1/model_best.pt", WEIGHTS,
           "LIVE strange-mode (mining_v1) gate."),
+    Entry("data/render_mode_head/v2/model_best.pt", WEIGHTS,
+          "Render-mode head v2: the finetune of v1 on the 960-row rebuilt correction "
+          "sheet (2026-08-06). STAGED — mining_pins still pins v1."),
     Entry("data/queries/scorer/v3_gvo/model_best.pt", WEIGHTS,
           "LIVE palette-preference ranker (pref-v3-gvo)."),
 

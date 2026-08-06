@@ -485,6 +485,34 @@ __pycache__/
 !/data/classifier/v10/config.json
 !/data/classifier/v10/metrics.json
 
+# ---------------------------------------------------------------------------
+# render-mode ("mining") heads — DURABLE by exact path, same wiring and same reason as
+# the v9/v10 classifier block above. v1 was force-added and had no rule saying it belongs;
+# it is the LIVE gate (mining_pins.ACTIVE_MINING_CKPT) and its training corpus no longer
+# exists, so it is the least reproducible weight in the tree and the least appropriate one
+# to leave undeclared. v2 is the 2026-08-06 finetune of v1 on the fresh sheet: STAGED, not
+# deployed — the pin still reads v1, and v1 is therefore the rollback rung, which is why
+# both are re-included rather than only "the latest".
+#
+# The per-seed dirs (v2/seed_<s>/) stay ignored by the `/data/render_mode_head/v2/*`
+# re-exclusion: 5 x 10 MB of checkpoints whose selection is already recorded in
+# per_seed.json, and only the staged one is a deployable artifact.
+!/data/render_mode_head/
+/data/render_mode_head/*
+!/data/render_mode_head/v1/
+/data/render_mode_head/v1/*
+!/data/render_mode_head/v1/model_best.pt
+!/data/render_mode_head/v2/
+/data/render_mode_head/v2/*
+# The finetuned head (LFS), the three small records that say what produced it, and the
+# v1-vs-v2 + calibration report that is the run's uploadable deliverable.
+!/data/render_mode_head/v2/model_best.pt
+!/data/render_mode_head/v2/config.json
+!/data/render_mode_head/v2/metrics.json
+!/data/render_mode_head/v2/per_seed.json
+!/data/render_mode_head/v2/report.md
+!/data/render_mode_head/v2/report.json
+
 # data_large/ was deleted 2026-07-31 (repo-hygiene pass): it held one README and no
 # data, and its name collided with data/. Regenerable bulk goes out of tree via
 # ARTIFACTS_ROOT (docs/design/artifacts_resolver.md), not a second top-level store.

@@ -196,6 +196,12 @@ TRACKED_CANARIES = [
     # anchor (the shape data/classifier/ already has with v10/v8).
     "data/wallpaper_head/v4/model_best.pt",
     "data/render_mode_head/v1/model_best.pt",     # LIVE strange-mode (mining_v1) gate
+    # v2 — the 2026-08-06 finetune of v1 on the rebuilt 960-row correction sheet. STAGED,
+    # not deployed: mining_pins.ACTIVE_MINING_CKPT still reads v1. Same live/rollback-PAIR
+    # rationale as wallpaper_head v3/v4 above, and stronger here — v1's training corpus is
+    # gone, so v1 cannot be retrained if the pair is ever broken.
+    "data/render_mode_head/v2/model_best.pt",
+    "data/render_mode_head/v2/report.md",         # the v1-vs-v2 + calibration deliverable
     "data/queries/scorer/v3_gvo/model_best.pt",   # LIVE palette-preference ranker (pref-v3-gvo)
     # data/v<N>/* is deliberately ABSENT from this static list — those trees are guarded
     # relationally instead, by `test_v8_durable_declared_paths_tracked` below. See that

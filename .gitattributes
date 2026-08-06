@@ -8,6 +8,12 @@ data/wallpaper_head/v3/model_best.pt filter=lfs diff=lfs merge=lfs -text
 # in LFS when it is: `git add -f data/wallpaper_head/v4/model_best.pt`.
 data/wallpaper_head/v4/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/render_mode_head/v1/model_best.pt filter=lfs diff=lfs merge=lfs -text
+# v2: the 2026-08-06 finetune of v1 on the 960-row rebuilt correction sheet
+# (classifier/train_mining_head_v2.py). STAGED, not deployed — mining_pins still pins v1,
+# which stays the live gate and the rollback rung. Unlike v1 this path is NEGATED in
+# .gitignore rather than force-added, so a normal `git add` works and `git check-ignore
+# --no-index` confirms it independently of the index.
+data/render_mode_head/v2/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/queries/scorer/v3_gvo/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/harvest_log.jsonl filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/prio_terms.jsonl filter=lfs diff=lfs merge=lfs -text

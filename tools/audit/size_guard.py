@@ -337,7 +337,11 @@ REGISTRY: list[Entry] = [
           "trained wallpaper-quality heads (v1/v2/v3 .pt) — not GPU-reproducible; "
           "active + rollback -> precious-store, older versions curate to trash at move"),
     Entry("data/render_mode_head/", RELOCATE, PRECIOUS, "ignored",
-          "trained render-mode (strange-mode gate) head v1 .pt — not GPU-reproducible"),
+          "trained render-mode (strange-mode gate) head .pt — not GPU-reproducible. v1 is "
+          "the LIVE gate and its training corpus is gone, so it cannot be retrained at all; "
+          "v2 is the staged 2026-08-06 finetune plus its five per-seed checkpoints (~60 MB "
+          "total). v1/model_best.pt and v2/model_best.pt are tracked (LFS, negated by exact "
+          "path in .gitignore); the per-seed dirs are ignored working state"),
 
     # === RELOCATE -> trash — dead / superseded ================================
     Entry("scratchpad/", RELOCATE, TRASH, "ignored",

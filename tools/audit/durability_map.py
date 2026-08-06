@@ -127,9 +127,23 @@ REGISTRY = [
     ("data/queries/scorer/v3_gvo/model_best.pt", "tools/queries/scorer/*", DUR_F,
      "a retrain from the committed query labels", N,
      "MISMATCH (fragile). Same force-add shape."),
-    ("data/render_mode_head/v1/model_best.pt", "tools/render_mode_pilot/*", DUR_F,
-     "a retrain from the render-mode corpus — which is gone (see below)", N,
-     "MISMATCH (fragile). Same force-add shape, and its training corpus no longer exists."),
+    ("data/render_mode_head/v1/model_best.pt", "tools/render_mode_pilot/*", DUR,
+     "NOTHING — its training corpus (data/render_mode_corpus/dataset_v1/) is gone, so "
+     "'retrain' would produce a different head, not this one", Y,
+     "RESOLVED 2026-08-06. Was the force-add shape; .gitignore now carries an exact-path "
+     "negation (!/data/render_mode_head/v1/model_best.pt), so durable() accepts it and a "
+     "fresh clone's `git add -A` re-adds it. Reclassified population-defining as well as "
+     "unregenerable: it is the LIVE gate AND the head whose suggestions seeded the 960 "
+     "labels of the 2026-08-06 correction sheet, so every read on that sheet is quoted "
+     "against this exact weight file."),
+    ("data/render_mode_head/v2/{model_best.pt,config.json,metrics.json,per_seed.json,"
+     "report.{md,json}}", "classifier/train_mining_head_v2.py, "
+     "tools/mining/mining_v2_reads.py", DUR,
+     "a full GPU finetune — reproducible in recipe from the committed sheet + v1's weights, "
+     "but not bit-identical (GPU nondeterminism), and it needs v1 to exist", N,
+     "OK. Negated by exact path from the start rather than force-added — the wiring v9/v10 "
+     "established. STAGED, not deployed: mining_pins still pins v1. The per-seed dirs stay "
+     "ignored; their selection is recorded in per_seed.json."),
 
     # ---------------- calibration: the contract's own flagship --------------------
     ("data/calibration/energy_calibration.json", "src/energy.rs (`calibrate`)", DUR_F,

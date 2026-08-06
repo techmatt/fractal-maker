@@ -1,0 +1,108 @@
+{
+  "model": "render_mode_head_v2",
+  "target": "ordinal",
+  "num_classes": 3,
+  "loss": "CORN ordinal (K-1=2, K pinned=3)",
+  "geometry": "stretch",
+  "label_unit": "render (image_id)",
+  "augmentation": "geometric only (border_crop + h/v flip); NO color, NO jpeg jitter",
+  "aug_rationale": "palette/mode/color IS the label (same as head-v3 and v1)",
+  "class_weighting": "none",
+  "epochs": 40,
+  "batch_size": 32,
+  "backbone_lr": 0.0002,
+  "head_lr": 0.001,
+  "weight_decay": 0.05,
+  "drop_rate": 0.2,
+  "drop_path_rate": 0.1,
+  "border_crop": 0.05,
+  "num_workers": 4,
+  "grad_clip": 1.0,
+  "amp": "off",
+  "selection": "max eval good AP (marginal P>=3); full schedule (no early stop)",
+  "split": "PRE-SPLIT in-row provenance.split_side (union-find over Julia-parent-linked locations, seed 0); NOT re-derived",
+  "dataset": "C:\\Code\\fractal-maker\\data\\render_mode_corpus\\batches\\2026-08-06_render_mode_fresh_sheet_v1",
+  "batch_id": "2026-08-06_render_mode_fresh_sheet_v1",
+  "init": "finetune_from_render_mode_head_v1",
+  "init_from": "C:\\Code\\fractal-maker\\data\\render_mode_head\\v1\\model_best.pt",
+  "backbone": "mobilenetv4_conv_small.e2400_r224_in1k",
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "interpolation": "bicubic",
+  "input_size": [
+    3,
+    224,
+    224
+  ],
+  "src_dims": [
+    1280,
+    720
+  ],
+  "target_dims": [
+    384,
+    224
+  ],
+  "black_thresh": 0.3,
+  "gate": "marginal p_ge = cumprod(sigma); NEVER the CORN conditional",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "n_train": 538,
+  "n_eval": 422,
+  "modes": [
+    "tia",
+    "stripe",
+    "exp_smoothing",
+    "gaussian_int",
+    "trap_circle",
+    "curv_linear",
+    "smooth_mean_angle",
+    "smooth_angle_min",
+    "composite_c7_smooth_trap_circle",
+    "composite_c13_smooth_stripe",
+    "composite_c17_smooth_curvature",
+    "direct_trap_ring",
+    "direct_trap_screen",
+    "direct_trap_multiply",
+    "direct_trap_lines"
+  ],
+  "n_modes": 15,
+  "deviations_from_v1": {
+    "data": "fresh sheet 2026-08-06_render_mode_fresh_sheet_v1 (960 rows, in-row split_side); v1's dataset_v1/{train,eval}.jsonl did not survive the corpus loss",
+    "init": "v1 model_best.pt, strict load_state_dict; v1 was imagenet_backbone_fresh",
+    "selection": "eval AP at the >=3 boundary; v1 selected on >=2",
+    "modes": "all 15 roster modes; v1's trainer dropped ['trap_circle', 'exp_smoothing', 'direct_trap_screen']",
+    "per_mode_tiering": "rich/directional DERIVED from each mode's eval-q3 count (>= 10); v1 hardcoded the two lists"
+  },
+  "unchanged_from_v1": [
+    "backbone",
+    "num_classes",
+    "loss",
+    "geometry",
+    "epochs",
+    "batch_size",
+    "backbone_lr",
+    "head_lr",
+    "weight_decay",
+    "drop_rate",
+    "drop_path_rate",
+    "border_crop",
+    "grad_clip",
+    "amp",
+    "augmentation",
+    "gate",
+    "class_weighting"
+  ]
+}
