@@ -153,11 +153,34 @@ TRACKED_CANARIES = [
     "data/classifier/v7/model_best.pt",
     "data/classifier/v6/model_best.pt",
     "data/classifier/v5/model_best.pt",
+    # The wallpaper-quality label sidecars — 3,638 human tier verdicts across the five
+    # batches the head trains on, as a SET. Added 2026-08-05 with the v4 retrain, and the
+    # three July files are in here retroactively rather than "when they landed" because
+    # this list's own scope note says a glob cannot detect a file that is already gone —
+    # which is not hypothetical for these: the July batches' CROPS were deleted and only
+    # regenerate because images.jsonl survived, and these labels have no such producer.
+    # They are the one artifact in the wallpaper pipeline with no rebuild path at all
+    # (the crops are a pure function of images.jsonl; a tier judgment is a pure function
+    # of Matt). The batch images.jsonl files are NOT canaried alongside them the way the
+    # label_corpus pairs are — see the exclusion note above: they are already covered as
+    # a directory by the large-blob allowlist, and unlike scores.json they hold no labels
+    # of their own (`label.score` is null in every wallpaper row).
+    "labels/wallpaper_bootstrap_v1.json",         # 504 labels
+    "labels/wallpaper_humanq3_v1.json",           # 994 labels
+    "labels/wallpaper_headbatch_dramatic_v1.json",  # 1,000 labels
+    "labels/wallpaper_fresh_sheet_v1.json",       # 960 labels (2026-08-05 sitting)
+    "labels/wallpaper_colorize_path_v1.json",     # 180 labels (2026-08-05 sitting)
     # Live trained heads carried over in the fractal-maker migration (2026-07-24).
     # Same rationale as the classifier weights: trained .pt, not GPU-reproducible, no
     # rebuild path. Only the LATEST canonical weight of each is kept (no v1/v2 history,
     # no seed variants) — see docs/design/storage_classes.md, "Git history is a durability tier".
     "data/wallpaper_head/v3/model_best.pt",       # LIVE cross-location wallpaper-quality head
+    # v4 — the five-batch retrain, STAGED not deployed. Kept here rather than under the
+    # "only the LATEST canonical weight" rule because v3 is still the LIVE pin: this is a
+    # live/rollback PAIR, not v1/v2-style history, and the pair is the whole point until
+    # the adoption decision lands. If v4 is adopted, v3 stays as the one-flip rollback
+    # anchor (the shape data/classifier/ already has with v10/v8).
+    "data/wallpaper_head/v4/model_best.pt",
     "data/render_mode_head/v1/model_best.pt",     # LIVE strange-mode (mining_v1) gate
     "data/queries/scorer/v3_gvo/model_best.pt",   # LIVE palette-preference ranker (pref-v3-gvo)
     # data/v<N>/* is deliberately ABSENT from this static list — those trees are guarded

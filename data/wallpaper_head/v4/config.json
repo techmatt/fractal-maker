@@ -1,0 +1,80 @@
+{
+  "model": "wallpaper_head_v4",
+  "target": "ordinal",
+  "num_classes": 4,
+  "loss": "CORN ordinal (K-1=3, K pinned=4)",
+  "geometry": "stretch",
+  "label_unit": "render (image_id) \u2014 NO max-over-crops",
+  "augmentation": "geometric only (border_crop + h/v flip); NO color, NO jpeg jitter",
+  "class_weighting": "none",
+  "epochs": 40,
+  "batch_size": 32,
+  "backbone_lr": 0.0002,
+  "head_lr": 0.001,
+  "weight_decay": 0.05,
+  "drop_rate": 0.2,
+  "drop_path_rate": 0.1,
+  "border_crop": 0.05,
+  "num_workers": 4,
+  "grad_clip": 1.0,
+  "amp": "off",
+  "selection": "max POOLED-eval AP>=3 (marginal P>=3); full schedule (no early stop). CHANGED from v2/v3, which selected on not-bad AP>=2: the pooled eval is 1038 rows / 366 good, >=3 is the boundary the deployed gate cuts on, and >=2 AP was saturated (v3 read 0.956 on the old slice).",
+  "split": "bootstrap->train; humanq3->v2 split (split_seed=0, byte-identical); dramatic/fresh_sheet/colorize_path->stamped split_side; disjointness asserted on the c-inclusive key across all five batches",
+  "batch_ids": [
+    "2026-07-05_wallpaper_bootstrap_v1",
+    "2026-07-05_wallpaper_humanq3_v1",
+    "2026-07-09_wallpaper_headbatch_dramatic_v1",
+    "2026-08-05_wallpaper_fresh_sheet_v1",
+    "2026-08-05_wallpaper_colorize_path_v1"
+  ],
+  "init": "imagenet_backbone_fresh (NOT warm-started)",
+  "backbone": "mobilenetv4_conv_medium.e250_r384_in12k",
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "interpolation": "bicubic",
+  "input_size": [
+    3,
+    384,
+    384
+  ],
+  "src_dims": [
+    1280,
+    720
+  ],
+  "target_dims": [
+    384,
+    224
+  ],
+  "black_thresh": 0.3,
+  "split_seed": 0,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "forced_train_side": {
+    "collide_bootstrap": [
+      "whq3_010",
+      "whq3_012",
+      "whq3_016"
+    ],
+    "single_location_family": [
+      "whq3_014",
+      "whq3_040"
+    ],
+    "single_fam_names": [
+      "julia_multibrot3",
+      "multibrot5"
+    ]
+  }
+}

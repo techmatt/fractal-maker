@@ -83,6 +83,9 @@ ALLOWLIST = [
           "Not GPU-reproducible, so there is no rebuild path."),
     Entry("data/wallpaper_head/v3/model_best.pt", WEIGHTS,
           "LIVE cross-location wallpaper-quality head."),
+    Entry("data/wallpaper_head/v4/model_best.pt", WEIGHTS,
+          "Wallpaper head v4: the five-batch retrain (three July batches + the two "
+          "2026-08-05 fresh-era batches). STAGED — wallpaper_pins still points at v3."),
     Entry("data/render_mode_head/v1/model_best.pt", WEIGHTS,
           "LIVE strange-mode (mining_v1) gate."),
     Entry("data/queries/scorer/v3_gvo/model_best.pt", WEIGHTS,

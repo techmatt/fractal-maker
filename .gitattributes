@@ -1,6 +1,12 @@
 data/classifier/v5/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/classifier/*/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/wallpaper_head/v3/model_best.pt filter=lfs diff=lfs merge=lfs -text
+# v4: the five-batch retrain (2026-08-05 sitting folded in). STAGED, not deployed —
+# wallpaper_pins still pins v3, which stays the live head and the rollback rung. Both are
+# force-added (the blanket /data/* ignore covers data/wallpaper_head/, and unlike
+# data/classifier/ there is no negation block here), so this rule is what puts the weight
+# in LFS when it is: `git add -f data/wallpaper_head/v4/model_best.pt`.
+data/wallpaper_head/v4/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/render_mode_head/v1/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/queries/scorer/v3_gvo/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/harvest_log.jsonl filter=lfs diff=lfs merge=lfs -text

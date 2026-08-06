@@ -46,14 +46,21 @@ OUT = ROOT / "scratch" / "wallpaper_sitting"
 SITTING = ["2026-08-05_wallpaper_fresh_sheet_v1", "2026-08-05_wallpaper_colorize_path_v1"]
 GATE = 0.90                       # read from the pin below; this is only the doc value
 
-# The old-era comparison column: v3's held-out eval read on the dramatic+humanq3 population
-# (prompts/wallpaper_eval_revival_prompt.md, 2026-08-05). Frozen here as the RECORD it is —
-# its crops live in scratch and the slice is a different population, so it is quoted, never
-# recomputed alongside.
+# The old-era comparison column: v3's held-out eval read on the dramatic+humanq3
+# population. Frozen here as the RECORD it is — the slice is a different population, so it
+# is quoted, never recomputed alongside.
+#
+# Provenance names the PRODUCER, not a file. It was first measured by the eval revival
+# (prompts/wallpaper_eval_revival_prompt.md, 2026-08-05) into a scratch report, which made
+# this a citation of a deletable path — and the crops it was measured on had themselves
+# already been deleted once. `report_v4_eval.py` re-derives the same slice from the v3
+# checkpoint over the rebuilt crops, and on 2026-08-06 reproduced all nine values below
+# exactly (`slices.old_era_686.v3`, gate rungs under `precision_of_passers["0.9"]`). So the
+# numbers now have a maintained producer, and no wipe can orphan them.
 OLD_ERA = {"n": 686, "tiers": {1: 116, 2: 295, 3: 185, 4: 90},
            "ap_ge2": 0.956, "ap_ge3": 0.669, "ap_ge4": 0.345,
            "auc_ge3": 0.748, "gate_fire": 205, "gate_precision": 0.683, "gate_recall": 0.509,
-           "source": "scratch/wallpaper_eval_revival/report.json"}
+           "source": "tools/wallpaper/report_v4_eval.py -> slices.old_era_686.v3"}
 
 
 def log(m):
