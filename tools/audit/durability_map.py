@@ -229,6 +229,24 @@ REGISTRY = [
      "MISMATCH. Holds render-mode pilot labels and their split map, ignored under the "
      "blanket /data/* rule with no negation — unlike every other label corpus, which is "
      "negated. Absent in-tree and out; data/render_mode_head/v1 was trained on it."),
+    ("data/queries/{coldstart_v2,warmstart_v1,prefv2_dramatic_v1}/{records/*.json,images/},\n"
+     "     data/queries/scorer/v{1,2,3}/",
+     "tools/queries/{assemble_queries,regenerate_coldstart_v2,prefv2_dramatic_v1}.py, "
+     "tools/queries/scorer/train*.py", UND,
+     "NOTHING — coldstart_v2's records are drawn from data/queries/coldstart_v1/records/, "
+     "which is gone too; the scorer dirs need a retrain over the union those records define", Y,
+     "MISMATCH. This is the PREF-HEAD JOIN, and it is the counterpart to the render_mode "
+     "loss above with the halves swapped: there the labels went and the head survived, here "
+     "the labels survive and their join went. The three label stores ARE tracked "
+     "(data/queries/labels/*.json — 1,100 labeled passes over 1,000 queries) but they key "
+     "their tiers by candidate id alone; the (location, palette, coloring params) each id "
+     "names lives ONLY in records/, so the tracked labels are orphaned and the pref head "
+     "cannot be retrained from them. launch_query_label_server exits on the missing dir, "
+     "prefv2_dramatic_v1 reads these as 'durable query records' for its dedup exclusion, and "
+     "scorer/data.py's documented one-flip rollback ladder (v3_gvo -> v3 -> v2) points at "
+     "scorer dirs that do not exist — only v3_gvo survives, by force-add. Ignored under "
+     "/data/queries/* with negations only for labels/ and sampler_eval/; absent in-tree "
+     "and out."),
     ("data/curation/recolor_pass/, data/label_crops/loose0_v3/", "tools/curation/recolor_pass.py, "
      "tools/corpus/import_loose0_v3.py", UND,
      "re-render from the committed locations manifest", N,
