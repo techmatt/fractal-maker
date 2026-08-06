@@ -536,7 +536,7 @@ def write_batch(sel_rep, cluster_rep, grid_rep, sides, n_eval, failures, wall_s,
             "split_seed": FS.SPLIT_SEED, "eval_frac": FS.EVAL_FRAC,
             "shuffle_seed": SHUFFLE_SEED,
             "score_bins": list(FS.SCORE_BINS), "bin_labels": list(FS.BIN_LABELS),
-            "floor_admit_frac_target": FS.FLOOR_ADMIT_FRAC,
+            "floor_admit_frac_target": FS.FLOOR_SOURCE_DRAW_FRAC,
         },
         "selection_report": sel_rep,
         "sibling_location_overlap": {

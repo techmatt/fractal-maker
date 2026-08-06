@@ -150,7 +150,13 @@ FLOOR_LITERAL = re.compile(
 # otherwise not head scores; both are named, because an unnamed exclusion is a hole:
 #   * `descriptor.NEAR_DUP_THRESHOLD` (0.974) — a morph-CLIP COSINE, not a head score.
 #   * `library_seed_v2.FLOOR_LABEL` (3)       — a HUMAN label, excluded by the [0,1] rule.
-NOT_A_HEAD_SCORE = {"NEAR_DUP_THRESHOLD"}
+#   * `build_fresh_sheet.FLOOR_SOURCE_DRAW_FRAC` (0.40) — the share of a label batch's DRAW
+#     taken from the floor-ADMIT sources (`descriptor.FLOOR_ADMIT_SOURCES`). A sampling
+#     proportion, not a point on any head's scale: it cuts nothing, gates nothing, and moving
+#     it changes a sheet's composition rather than an operating point. It is here because the
+#     domain term for those sources is "floor-admit", so the honest name contains FLOOR and
+#     dodging the regex would cost the name its meaning.
+NOT_A_HEAD_SCORE = {"NEAR_DUP_THRESHOLD", "FLOOR_SOURCE_DRAW_FRAC"}
 
 
 def _probability_scale(value_text: str) -> bool:

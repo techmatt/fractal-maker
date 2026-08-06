@@ -162,10 +162,10 @@ def test_the_floor_admitted_sources_are_oversampled_INSIDE_every_bin(B):
     sel, rep = B.select(recs, target_locs=240, seed=7)
     pop_frac = sum(1 for r in recs if r["floor_admit"]) / len(recs)
     assert rep["floor_admit_frac_realized"] > pop_frac + 0.05, (rep["floor_admit_frac_realized"], pop_frac)
-    assert rep["floor_admit_frac_realized"] == pytest.approx(B.FLOOR_ADMIT_FRAC, abs=0.05)
+    assert rep["floor_admit_frac_realized"] == pytest.approx(B.FLOOR_SOURCE_DRAW_FRAC, abs=0.05)
     for b in rep["per_bin"]:
-        if b["drawn"] and b["available_floor_admit"] >= b["drawn"] * B.FLOOR_ADMIT_FRAC:
-            assert b["drawn_floor_admit"] / b["drawn"] == pytest.approx(B.FLOOR_ADMIT_FRAC, abs=0.06), b
+        if b["drawn"] and b["available_floor_admit"] >= b["drawn"] * B.FLOOR_SOURCE_DRAW_FRAC:
+            assert b["drawn_floor_admit"] / b["drawn"] == pytest.approx(B.FLOOR_SOURCE_DRAW_FRAC, abs=0.06), b
 
 
 def test_the_draw_is_reproducible_from_its_seed_and_moves_with_it(B):

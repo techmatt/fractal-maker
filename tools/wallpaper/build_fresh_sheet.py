@@ -116,7 +116,7 @@ BIN_LABELS = ("b0_lt.01", "b1_.01-.10", "b2_.10-.50", "b3_.50-.90", "b4_ge.90")
 
 # Floor-admitted share of the DRAWN locations, applied inside every score bin (so the
 # oversample cannot smuggle in a score shift). Population share is 276/919 = 30%.
-FLOOR_ADMIT_FRAC = 0.40
+FLOOR_SOURCE_DRAW_FRAC = 0.40
 
 # Location-grouped seeded split, stamped in-row (the dramatic batch's contract).
 EVAL_FRAC = 0.30
@@ -436,7 +436,7 @@ def select(screen_recs, target_locs=TARGET_LOCS, seed=SEED):
     """Stratified location draw. Returns (selected, report).
 
     Each surviving screen record gets `loc_p_ge3 = max_j p_ge3` and a bin. Bins receive an
-    equal-ish quota; inside each bin FLOOR_ADMIT_FRAC of the slots go to floor-admitted
+    equal-ish quota; inside each bin FLOOR_SOURCE_DRAW_FRAC of the slots go to floor-admitted
     locations (`q4_harvest` / `human_q3plus`) before the rest are drawn from discovery, with
     either side's shortfall handed to the other so the bin still fills."""
     ok = [r for r in screen_recs if not r["error"] and r["candidates"]]
@@ -459,7 +459,7 @@ def select(screen_recs, target_locs=TARGET_LOCS, seed=SEED):
         disc = [r for r in members if not r["floor_admit"]]
         rng.shuffle(floor)
         rng.shuffle(disc)
-        n_floor = min(len(floor), int(round(FLOOR_ADMIT_FRAC * q)))
+        n_floor = min(len(floor), int(round(FLOOR_SOURCE_DRAW_FRAC * q)))
         n_disc = min(len(disc), q - n_floor)
         n_floor = min(len(floor), q - n_disc)          # hand back the discovery shortfall
         take = floor[:n_floor] + disc[:n_disc]
@@ -475,7 +475,7 @@ def select(screen_recs, target_locs=TARGET_LOCS, seed=SEED):
         "target_locations": target_locs, "drawn_locations": len(selected),
         "screened": len(screen_recs), "screen_failures": len(screen_recs) - len(ok),
         "score_bins": list(SCORE_BINS), "bin_labels": list(BIN_LABELS),
-        "floor_admit_frac_target": FLOOR_ADMIT_FRAC,
+        "floor_admit_frac_target": FLOOR_SOURCE_DRAW_FRAC,
         "floor_admit_frac_realized": (sum(1 for r in selected if r["floor_admit"])
                                       / max(len(selected), 1)),
         "per_bin": per_bin,
