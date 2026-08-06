@@ -846,6 +846,77 @@ def check_wall_budget_supported(dive: bool, wall_budget_min) -> None:
             "`touch <run_dir>/STOP`.")
 
 
+# --------------------------------------------------------------------------- #
+# THE TWO-ENTRY-POINT CONTRACT. `run()` and `run_dive()` share one constructor, and 41 of
+# its attributes are read on the crawl path and never on the dive path. That is not a bug by
+# itself — most of them are genuinely inapplicable to a single-track descent — but until this
+# table existed the code could not tell "deliberately N/A in dive mode" from "silently dropped
+# in dive mode", and nothing detected the difference. `--wall-budget` was the second kind: it
+# parsed, converted, stored, and then no-oped, and the fact had nowhere to live but a
+# hand-written note in a launch record.
+#
+# So the inapplicable set is DECLARED, one line of reason each, and
+# `test_steered_frontier.py::test_every_crawl_only_constructor_attribute_is_declared`
+# recomputes the reachability from the AST and asserts set equality. A new flag that does not
+# reach the dive path now fails there — cheap, at the time it is written — instead of in a
+# launch record. Three ways to satisfy the test, in preference order:
+#
+#   1. make the dive path read it (it was meant to apply);
+#   2. REFUSE at the flag, like `check_wall_budget_supported` — the right answer whenever the
+#      attribute is a BOUND rather than a tuning knob, because a bound that silently does not
+#      apply is worse than no bound;
+#   3. add it here with the reason it cannot apply.
+#
+# NOT a list of dead attributes: every one of these is live on the crawl path.
+# --------------------------------------------------------------------------- #
+_MANEUVER_NA = ("maneuver machinery — `self.maneuvers` is forced False in dive mode, so "
+                "`propose_maneuvers` and everything under it is unreachable")
+DIVE_IGNORES: dict[str, str] = {
+    # --- explicitly neutralized in the constructor -------------------------------
+    "maneuvers": "forced False in dive mode (`... and not self.dive`): a dive is one track "
+                 "down from an admission, and a maneuver is a lateral re-aim",
+    # --- the maneuver internals, unreachable THROUGH that flag --------------------
+    **{a: _MANEUVER_NA for a in (
+        "man_ks", "man_lateral", "man_quota", "man_gov", "man_probe_s", "man_screens",
+        "man_screen_s", "man_range_dist", "man_range_prior", "man_range_gain", "man_nbh",
+        "man_nbh_m", "man_nbh_n", "man_nbh_probes", "man_passed_logged", "man_fields",
+        "man_view_prior", "man_view_gain", "man_view_params")},
+    # --- the frontier queue: a dive has no queue, no roots and no breadth ---------
+    "expansions_per_root": "per-root expansion budget, spent by `pop_batch*` — a dive expands "
+                           "one node per rung and pops nothing",
+    "last_refill_batch": "refill bookkeeping (`starved_families`/`refill_starved`); the dive "
+                         "never refills a queue because it never draws from one",
+    "seeders": "native root seeders, read only by `draw_roots` — a dive's starting points are "
+               "the source run's admissions, so no roots are drawn",
+    "pool_cursor": "julia/phoenix supply-pool cursor (`_take_from_pool`), seeding only",
+    "seed_pool_rate": "how often the supply pools are topped up — nothing seeds in dive mode",
+    "freshness_prior": "library-freshness prior on the ROOT DRAW; no roots are drawn",
+    "prior_rows": "the library rows that prior reads (`build_clouds`), same reason",
+    "root_draw_s": "cumulative in-loop root-draw wall, for the crawl's cost model",
+    "_served_partition": "round-robin partition service inside `pop_batch_scheduled/_quota`",
+    "node_embs": "frontier node embeddings, used to prune and re-rank a QUEUE of pending "
+                 "nodes; a dive holds one node at a time",
+    # --- priority / novelty: `lambda_m` is forced 0, so `push_children` never runs ---
+    "beta": "depth term of the frontier priority — the dive's child is argmax cheap p_good "
+            "with a Gumbel tie-break, never a priority score",
+    "morph_lo": "morph-novelty anchor (lo), read by `push_children` and the crawl's records",
+    "morph_hi": "morph-novelty anchor (hi), same",
+    "anchor_src": "provenance of those anchors, recorded by `save_state`/`finish`",
+    "sat_cos": "the saturation knee the crawl reports novelty against",
+    "recency_k": "morph-memory window size; consumed at construction into `MorphMemory`, "
+                 "which the dive only saves — it folds no expanded looks in",
+    "prio_log": "`push_children`'s per-candidate priority log",
+    "sat_log": "`push_children`'s saturation log",
+    # --- accounting the dive replaces wholesale ------------------------------------
+    "state_path": "the crawl checkpoint; the dive checkpoints to `dive_state_path`",
+    "_session_t0": "wall-clock origin for `wall_elapsed_s` — THE `--wall-budget` CLASS. The "
+                   "dive loop checks `--budget` and the STOP sentinel only, and the flag is "
+                   "refused at parse time by `check_wall_budget_supported` rather than "
+                   "silently ignored here",
+    "wall_s_base": "wall seconds carried across resumes, same class as `_session_t0`",
+}
+
+
 def interleave_dive_arms(plan: list) -> list:
     """Re-sequence a dive plan so EVERY PREFIX carries both arms in proportion.
 
@@ -3707,6 +3778,10 @@ class SteeredFrontier:
     # Rust expand emits a min_fw_floor `dead` before crossing --min-fw = dive_min_fw). The
     # run-scoped ledger is the durable admission record; a per-dive checkpoint makes resume
     # skip finished dives without re-descending.
+    #
+    # WHAT THE CONSTRUCTOR HANDS THIS PATH AND IT CANNOT USE is declared at module scope in
+    # `DIVE_IGNORES` (41 attributes, one reason each) and asserted by reachability in
+    # `test_steered_frontier.py`. Add a knob that misses this loop and that test fails.
     # ---------------------------------------------------------------------- #
     def _load_source_admissions(self):
         led = self.dive_source / "outcome_ledger.jsonl"

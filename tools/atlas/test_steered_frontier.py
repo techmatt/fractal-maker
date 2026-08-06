@@ -1416,3 +1416,122 @@ def test_the_guard_is_ON_THE_CONSTRUCTION_PATH_not_only_in_main():
     import inspect
     assert "check_wall_budget_supported(self.dive" in \
         inspect.getsource(sf.SteeredFrontier.__init__)
+
+
+# =========================================================================== #
+# The two-entry-point contract. `--wall-budget` was a flag that parsed, stored and then
+# no-oped on the dive path; the bug is not that one flag, it is that NOTHING distinguished
+# "deliberately N/A in dive mode" from "silently dropped in dive mode" across the 41
+# constructor attributes in that position. `sf.DIVE_IGNORES` declares the set; these tests
+# recompute it from the source and refuse the difference.
+# =========================================================================== #
+def _crawl_only_attributes(source: str, cls_name: str, entry: str, other: str) -> set:
+    """`{attr}` assigned in `__init__` and read from `entry`'s call closure but never from
+    `other`'s. Pure AST over `self.<name>` — no import, no execution.
+
+    `entry` is the OUTER path (`run` calls `run_dive`, so its closure is a superset); the
+    difference is therefore exactly "reachable when crawling, unreachable when diving"."""
+    import ast
+    cls = next(n for n in ast.walk(ast.parse(source))
+               if isinstance(n, ast.ClassDef) and n.name == cls_name)
+    methods = {n.name: n for n in cls.body if isinstance(n, ast.FunctionDef)}
+
+    def refs(node):
+        calls, reads, stores = set(), set(), set()
+        for sub in ast.walk(node):
+            if (isinstance(sub, ast.Attribute) and isinstance(sub.value, ast.Name)
+                    and sub.value.id == "self"):
+                if sub.attr in methods:
+                    calls.add(sub.attr)
+                elif isinstance(sub.ctx, ast.Load):
+                    reads.add(sub.attr)
+                elif isinstance(sub.ctx, ast.Store):
+                    stores.add(sub.attr)
+        return calls, reads, stores
+
+    def closure(name):
+        seen, stack = set(), [name]
+        while stack:
+            m = stack.pop()
+            if m in seen or m not in methods:
+                continue
+            seen.add(m)
+            stack += list(refs(methods[m])[0])
+        return seen
+
+    def reads_of(ms):
+        return set().union(*(refs(methods[m])[1] for m in ms)) if ms else set()
+
+    init_attrs = refs(methods["__init__"])[2]
+    return (reads_of(closure(entry)) - reads_of(closure(other))) & init_attrs
+
+
+def _sf_crawl_only():
+    import inspect
+    return _crawl_only_attributes(inspect.getsource(sf), "SteeredFrontier", "run", "run_dive")
+
+
+def test_every_crawl_only_constructor_attribute_is_declared():
+    """THE gate. A constructor attribute the dive path cannot reach must be either made to
+    apply, refused at the flag (`check_wall_budget_supported`), or declared here with the
+    reason. The set is recomputed from the AST, so a new flag that quietly misses the dive
+    path fails HERE, where it is cheap, instead of in a launch record."""
+    crawl_only = _sf_crawl_only()
+    declared = set(sf.DIVE_IGNORES)
+    undeclared = sorted(crawl_only - declared)
+    stale = sorted(declared - crawl_only)
+    assert not undeclared, (
+        f"{len(undeclared)} constructor attribute(s) are read on the crawl path and NEVER on "
+        f"the dive path, and nothing says whether that is deliberate: {undeclared}. Either "
+        f"make run_dive read them, refuse the flag at parse time like "
+        f"check_wall_budget_supported, or add them to DIVE_IGNORES with a one-line reason.")
+    assert not stale, (
+        f"DIVE_IGNORES declares {stale} inapplicable, but the dive path now reads them (or "
+        f"the constructor no longer sets them). Drop the entry — a stale exemption hides the "
+        f"next real one.")
+
+
+def test_the_declared_set_is_the_measured_41_and_every_entry_carries_a_reason():
+    """Non-vacuity for the gate above: an empty or trivially-satisfied analysis would pass
+    it. 41 is what the 2026-08-05 reachability measured, and a reason string that says
+    nothing is the same as no declaration."""
+    assert len(sf.DIVE_IGNORES) == 41, len(sf.DIVE_IGNORES)
+    assert _sf_crawl_only(), "the reachability analysis found nothing — it is not running"
+    for attr, why in sf.DIVE_IGNORES.items():
+        assert isinstance(why, str) and len(why) > 20, f"{attr}: reason is not a reason"
+
+
+def test_attributes_the_dive_path_DOES_read_are_not_in_the_exemption_set():
+    """The other half. A gate that exempted everything would also pass — these are read on
+    both paths and must stay outside the table."""
+    crawl_only = _sf_crawl_only()
+    for attr in ("tau_h", "dive_target_depth", "ledger", "morph", "totals", "rng", "clouds",
+                 "budget_s", "stop_path", "scheduler"):
+        assert attr not in crawl_only, f"{attr} is read on the dive path — analysis is wrong"
+        assert attr not in sf.DIVE_IGNORES, f"{attr} is exempted but the dive path reads it"
+
+
+def test_the_analysis_CATCHES_a_flag_that_misses_the_second_entry_point():
+    """The injection proof — the `--wall-budget` shape, in miniature. `bound_s` is stored by
+    the constructor and consumed only by the crawl loop; the dive loop has its own loop and
+    never reads it. If the analysis cannot see this, it cannot see the real one."""
+    src = '''
+class Runner:
+    def __init__(self, args):
+        self.bound_s = args.bound * 60.0      # the flag that misses the dive path
+        self.shared = args.shared             # read by both
+    def _crawl_step(self):
+        return self.bound_s > 0 and self.shared
+    def run_dive(self):
+        return self.shared
+    def run(self):
+        if self.dive:
+            return self.run_dive()
+        return self._crawl_step()
+'''
+    assert _crawl_only_attributes(src, "Runner", "run", "run_dive") == {"bound_s"}
+    # ...and once the dive loop reads it, it drops out of the set rather than needing an
+    # exemption — the preferred fix has to be visible to the same analysis.
+    fixed = src.replace("    def run_dive(self):\n        return self.shared",
+                        "    def run_dive(self):\n        return self.shared and self.bound_s")
+    assert _crawl_only_attributes(fixed, "Runner", "run", "run_dive") == set()
