@@ -1,0 +1,573 @@
+{
+  "created": "2026-08-06T08:34:35",
+  "batch_id": "2026-08-06_render_mode_fresh_sheet_v1",
+  "generator_version": "render_mode_fresh_sheet_v1",
+  "labeler": null,
+  "n_rows": 960,
+  "schema_note": "Render-mode (mining) CORRECTION SHEET, rebuilt after the loss of the original corpus. Every row carries the human label slot AND the complete render block, the mode + mode_params, the inherited colormap recipe (provenance.color_params \u2014 the crop is a pure function of the two), the location-grouped split_side, and the mining-v1 pre-label (head_mining_v1 / p_ge3 / pred / suggested_tier), in ONE tracked row. label.score is null on every row: the suggestion is NOT a label and is never merged as one. Presentation is sorted good->bad by pred (descending), stamped contiguous in sheet_order.",
+  "sheet_incomplete": false,
+  "incomplete_note": null,
+  "head": {
+    "ckpt": "data/render_mode_head/v1/model_best.pt",
+    "version": "v1",
+    "gate_version": "mining_v1",
+    "role": "PRE-LABEL only \u2014 no gate, floor, threshold or pin is applied or moved here; would_pass_gate is stamped for reference and gates nothing",
+    "scorer": "tools/mining/mining_gate.MiningScorer (fp32, no autocast; marginal p_ge = cumprod(sigmoid), NEVER the CORN conditional)",
+    "deploy_transform": "classifier.data.Transform(train=False) \u2014 384x224 bicubic stretch + the checkpoint's own mean/std"
+  },
+  "suggested_tier_rule": {
+    "rule": "tier = 1 + #{c in cuts : expected_tier >= c}; expected_tier = 1 + sum_k marginal_k",
+    "rule_owner": "tools/wallpaper/suggest_tier.py (expected_tier / tier_from_pred / fit_cuts) \u2014 imported, not restated",
+    "k_tiers": 3,
+    "cuts": [
+      1.3892908474841874,
+      1.933084785494296
+    ],
+    "cut_method": "PER-BATCH quantiles of this batch's own expected_tier, placed at the surviving mining corpus's tier prior (prior-matched). NOT fit_cuts: fit_cuts needs aligned (pred, human tier) pairs and the mining head has no such slice \u2014 its 1500 human tiers survive but every crop they name is gone with data/render_mode_corpus/.",
+    "scope_and_cost": "per-batch quantiles carry NO information about this corpus's absolute quality level, only each row's rank within it. An absolute cut would let a worse population receive more tier-1 suggestions; that property is deliberately given up here because there is no labeled slice to set an absolute cut against. A suggestion, never a label \u2014 nothing downstream may read it as one.",
+    "re_derive_when": "this sheet is labeled: a (pred, tier) slice on the new corpus is the first thing that makes fit_cuts possible again",
+    "derived": "2026-08-06",
+    "head": {
+      "ckpt": "data/render_mode_head/v1/model_best.pt",
+      "version": "v1"
+    },
+    "prior": {
+      "counts": {
+        "1": 948,
+        "2": 346,
+        "3": 206
+      },
+      "shares": {
+        "1": 0.632,
+        "2": 0.23066666666666666,
+        "3": 0.13733333333333334
+      },
+      "n": 1500,
+      "per_file": {
+        "labels/render_mode_pilot_v1.json": {
+          "1": 273,
+          "2": 123,
+          "3": 104
+        },
+        "labels/render_mode_scale_v1.json": {
+          "1": 675,
+          "2": 223,
+          "3": 102
+        }
+      },
+      "trainer_consumed": 1399,
+      "note": "the trainer used 1399 of these after three mode drops; WHICH 1399 is not recoverable (the manifest join is gone), so the prior is over all of them"
+    },
+    "realized_suggestion_hist": {
+      "1": 607,
+      "2": 221,
+      "3": 132
+    },
+    "realized_suggestion_shares": {
+      "1": 0.6322916666666667,
+      "2": 0.23020833333333332,
+      "3": 0.1375
+    },
+    "n_rows": 960
+  },
+  "population": {
+    "artifact": "data/render_mode_corpus/gate_passers_v3.json",
+    "rows": 401,
+    "locations": 112,
+    "family_locations": {
+      "julia": 35,
+      "julia_multibrot4": 3,
+      "julia_multibrot5": 3,
+      "mandelbrot": 63,
+      "multibrot3": 2,
+      "multibrot4": 2,
+      "multibrot5": 1,
+      "phoenix": 3
+    },
+    "head": {
+      "ckpt": "data/wallpaper_head/v3/model_best.pt",
+      "version": "v3",
+      "pin": "tools/wallpaper/wallpaper_pins.HEAD_CKPT_REL"
+    },
+    "gate": {
+      "statistic": "marginal p_ge3 = cumprod(sigmoid(logits))[1] (NEVER the CORN conditional)",
+      "rule": "p_ge3 > 0.9",
+      "threshold": 0.9,
+      "pin": "tools/wallpaper/wallpaper_pins.GATE_THRESHOLD"
+    },
+    "source_batch": "2026-07-09_wallpaper_headbatch_dramatic_v1"
+  },
+  "roster": {
+    "n_modes": 15,
+    "modes": [
+      "tia",
+      "stripe",
+      "exp_smoothing",
+      "gaussian_int",
+      "trap_circle",
+      "curv_linear",
+      "smooth_mean_angle",
+      "smooth_angle_min",
+      "composite_c7_smooth_trap_circle",
+      "composite_c13_smooth_stripe",
+      "composite_c17_smooth_curvature",
+      "direct_trap_ring",
+      "direct_trap_screen",
+      "direct_trap_multiply",
+      "direct_trap_lines"
+    ],
+    "kinds": {
+      "pure": 6,
+      "composite": 5,
+      "direct": 4
+    },
+    "why_15": "all registered non-smooth modes. The July scale sampler dropped ['trap_circle', 'exp_smoothing'] at SAMPLE time and the trainer dropped ['trap_circle', 'exp_smoothing', 'direct_trap_screen'] at TRAIN time; only the trainer's drop belongs downstream (a trainer re-runs, a corpus does not un-narrow). Decision 2026-08-06, Matt.",
+    "direct_grid": [
+      [
+        0.15,
+        0.05
+      ],
+      [
+        0.15,
+        0.08
+      ],
+      [
+        0.15,
+        0.12
+      ],
+      [
+        0.3,
+        0.05
+      ],
+      [
+        0.3,
+        0.08
+      ],
+      [
+        0.3,
+        0.12
+      ],
+      [
+        0.45,
+        0.05
+      ],
+      [
+        0.45,
+        0.08
+      ],
+      [
+        0.45,
+        0.12
+      ]
+    ],
+    "rolloff": {
+      "direct_trap_screen": "soft_knee@0.35"
+    }
+  },
+  "allocation": {
+    "target_rows": 960,
+    "planned_rows": 960,
+    "rule": "equal-ish per mode via apportion.deal_round_robin capped at the distinct-location supply; within a mode, families via the same rule (balanced-or-drained, NOT proportional \u2014 mandelbrot is 63/112 and would otherwise own the sheet)",
+    "per_mode": [
+      {
+        "mode": "tia",
+        "kind": "pure",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 27
+      },
+      {
+        "mode": "stripe",
+        "kind": "pure",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 28
+      },
+      {
+        "mode": "exp_smoothing",
+        "kind": "pure",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 27
+      },
+      {
+        "mode": "gaussian_int",
+        "kind": "pure",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 30
+      },
+      {
+        "mode": "trap_circle",
+        "kind": "pure",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 26
+      },
+      {
+        "mode": "curv_linear",
+        "kind": "pure",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 27
+      },
+      {
+        "mode": "smooth_mean_angle",
+        "kind": "composite",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 28
+      },
+      {
+        "mode": "smooth_angle_min",
+        "kind": "composite",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 28
+      },
+      {
+        "mode": "composite_c7_smooth_trap_circle",
+        "kind": "composite",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 29
+      },
+      {
+        "mode": "composite_c13_smooth_stripe",
+        "kind": "composite",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 28
+      },
+      {
+        "mode": "composite_c17_smooth_curvature",
+        "kind": "composite",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 29
+      },
+      {
+        "mode": "direct_trap_ring",
+        "kind": "direct",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 29
+      },
+      {
+        "mode": "direct_trap_screen",
+        "kind": "direct",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 30
+      },
+      {
+        "mode": "direct_trap_multiply",
+        "kind": "direct",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 26
+      },
+      {
+        "mode": "direct_trap_lines",
+        "kind": "direct",
+        "target": 64,
+        "drawn": 64,
+        "family_alloc": {
+          "julia": 25,
+          "julia_multibrot4": 3,
+          "julia_multibrot5": 3,
+          "mandelbrot": 25,
+          "multibrot3": 2,
+          "multibrot4": 2,
+          "multibrot5": 1,
+          "phoenix": 3
+        },
+        "family_balanced": true,
+        "family_balance": "max take 25, all cells within 1 or drained",
+        "eval_rows": 30
+      }
+    ],
+    "family_rows": {
+      "julia": 375,
+      "mandelbrot": 375,
+      "julia_multibrot4": 45,
+      "julia_multibrot5": 45,
+      "phoenix": 45,
+      "multibrot3": 30,
+      "multibrot4": 30,
+      "multibrot5": 15
+    },
+    "distinct_locations_used": 112,
+    "distinct_palettes_used": 36
+  },
+  "split": {
+    "rule": "union-find over locations linked by Julia-seed == parent-plane point; family-stratified seeded draw over UNITS, not locations",
+    "seed": 0,
+    "eval_frac": 0.4,
+    "n_locations": 112,
+    "n_units": 95,
+    "n_multi_loc_units": 12,
+    "largest_unit": 4,
+    "linked_base_parents": 9,
+    "n_eval_units": 38,
+    "n_eval_loc": 48,
+    "n_train_loc": 64,
+    "eval_rows": 422,
+    "train_rows": 538,
+    "units_disjoint": "95 units, each wholly on one side",
+    "rendered_eval_rows": 422,
+    "rendered_train_rows": 538
+  },
+  "seeds": {
+    "draw_seed": 20260806,
+    "split_seed": 0
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "filter": "lanczos3",
+    "jpg_quality": 95,
+    "interior_mode": "black",
+    "composition": "center",
+    "why_these_pins": "the July render-mode batches' own pins \u2014 the mining head was trained on crops at these settings (train_mining_head config src_dims [1280,720]), so a different render would ask v1 to pre-label a distribution it has never seen",
+    "render_path": {
+      "pure": "render-one --dump-field <field spec> -> colormap.render_candidate with the full approved colour params (transfer=grad faithful)",
+      "composite/direct": "render-one --coloring <specs/*.json> --palette --colormaps (transfer=grad NOT expressible -> provenance.transfer_dropped)"
+    }
+  },
+  "realized": {
+    "rows_by_mode": {
+      "composite_c13_smooth_stripe": 64,
+      "composite_c17_smooth_curvature": 64,
+      "composite_c7_smooth_trap_circle": 64,
+      "curv_linear": 64,
+      "direct_trap_lines": 64,
+      "direct_trap_multiply": 64,
+      "direct_trap_ring": 64,
+      "direct_trap_screen": 64,
+      "exp_smoothing": 64,
+      "gaussian_int": 64,
+      "smooth_angle_min": 64,
+      "smooth_mean_angle": 64,
+      "stripe": 64,
+      "tia": 64,
+      "trap_circle": 64
+    },
+    "rows_by_family": {
+      "mandelbrot": 375,
+      "julia": 375,
+      "phoenix": 45,
+      "julia_multibrot4": 45,
+      "julia_multibrot5": 45,
+      "multibrot4": 30,
+      "multibrot3": 30,
+      "multibrot5": 15
+    },
+    "rows_by_split": {
+      "train": 538,
+      "eval": 422
+    },
+    "suggested_tier_hist": {
+      "1": 607,
+      "2": 221,
+      "3": 132
+    },
+    "transfer_dropped_rows": 420,
+    "would_pass_mining_gate": 65,
+    "pred": {
+      "min": 1.0,
+      "max": 2.9419
+    }
+  },
+  "presentation": {
+    "order": "sheet_order \u2014 DESCENDING pred (good -> bad), ties on image_id",
+    "sorted_on": "the continuous head score (pred), NOT the suggested tier, so within-tier order is stable and meaningful",
+    "contiguous": true,
+    "source": "prompts/mining_sheet_addendum_sorted.md"
+  },
+  "labels_export": "labels/render_mode_fresh_sheet_v1.json",
+  "labeling": {
+    "ui": "tools/viz/wallpaper_label.html?corpus=render_mode_corpus&tiers=3&order=file&batch=2026-08-06_render_mode_fresh_sheet_v1",
+    "mode": "correction \u2014 every row shows its suggested tier PREFILLED; Enter confirms, 1-3 override. Only rows Matt acts on are exported.",
+    "bulk": "accept all remaining, and accept all BELOW THIS ROW (the positional sweep a sorted sheet makes natural) \u2014 both behind a confirm",
+    "merge": "uv run python tools/wallpaper/merge_sitting.py --corpus render_mode_corpus --batch 2026-08-06_render_mode_fresh_sheet_v1 --scores labels/scores_2026-08-06_render_mode_fresh_sheet_v1.json --apply"
+  },
+  "render_failures": [],
+  "run_status": {
+    "planned_rows": 960,
+    "rendered_rows": 960,
+    "n_failures": 0,
+    "n_unaccounted": 0,
+    "unaccounted_rows": [],
+    "unaccounted_note": "planned but neither rendered nor failed \u2014 a bounded (--limit) or interrupted run; re-run `render` then `write`"
+  }
+}

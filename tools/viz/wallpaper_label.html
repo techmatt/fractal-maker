@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><title>wallpaper label — 1/2/3/4</title>
+<!doctype html><html><head><meta charset="utf-8"><title>label sheet</title>
 <style>
 :root{color-scheme:dark}
 *{box-sizing:border-box}
@@ -47,12 +47,13 @@ code{color:#9bb}
 #lightbox .lbcap{color:#aaa;font-size:12px;text-align:center;max-width:90vw}
 </style></head><body>
 <header>
-  <h1>wallpaper label</h1>
+  <h1 id="page-title">wallpaper label</h1>
   <span class="batch" id="batch-label"></span>
   <span class="counts" id="counts"></span>
   <span class="spacer"></span>
   <button id="next-unscored">next unlabeled (u)</button>
   <button id="bulk" style="display:none">accept all remaining suggestions</button>
+  <button id="bulk-below" style="display:none">accept all below this row</button>
   <button id="reset" style="display:none">clear my labels</button>
   <button id="export">export scores.json</button>
   <label class="cap" style="cursor:pointer;color:#ccc">load scores<input id="load-scores" type="file" accept=".json" hidden></label>
@@ -78,12 +79,9 @@ code{color:#9bb}
       <span class="cap sugg" id="cap-sugg"></span>
       <span class="cur-score" id="cur-score"></span>
     </div>
-    <div class="score-btns">
-      <button class="sb1" data-s="1">1 · very bad</button>
-      <button class="sb2" data-s="2">2 · okay</button>
-      <button class="sb3" data-s="3">3 · good</button>
-      <button class="sb4" data-s="4">4 · exceptional</button>
-    </div>
+    <!-- built from TIERS at init: a K=3 corpus must not show a 4th button that its merge
+         would refuse, and a hardcoded 4 is the "equality test against a class ceiling". -->
+    <div class="score-btns" id="score-btns"></div>
     <div class="hint" id="hint">does <b>this render</b> work as a wallpaper · keys: <b>1</b>/<b>2</b>/<b>3</b>/<b>4</b> label &amp; advance · <b>←</b>/<b>→</b> move · <b>u</b> next unlabeled</div>
   </div>
   <aside><div class="grid" id="overview"></div></aside>
@@ -98,14 +96,28 @@ code{color:#9bb}
 // order, and every row keeps its own batch — crops resolve per batch and the export writes
 // ONE FILE PER BATCH, because `merge_scores --batch` places rows into one images.jsonl and a
 // pooled export would hand it keys belonging to a different corpus batch.
-const BATCH_IDS=(new URLSearchParams(location.search).get('batch')||'2026-07-05_wallpaper_bootstrap_v1')
+const QS=new URLSearchParams(location.search);
+const BATCH_IDS=(QS.get('batch')||'2026-07-05_wallpaper_bootstrap_v1')
   .split(',').map(s=>s.trim()).filter(Boolean);
 const BATCH_ID=BATCH_IDS[0];
+// --- WHICH CORPUS ---------------------------------------------------------
+// `?corpus=` names the tree under data/ this sitting labels. Default is the wallpaper
+// corpus, so every existing link keeps its exact behaviour; the render-mode (mining)
+// corpus passes ?corpus=render_mode_corpus&tiers=3&order=file. The page is a labeling RIG,
+// not a wallpaper page — one rig with three knobs beats a 460-line fork per corpus, and the
+// addendum makes the pre-labeled sorted sheet the standing default for FUTURE sheets, which
+// only means anything if they share this file.
+const CORPUS=QS.get('corpus')||'wallpaper_corpus';
+// Tier scale: 1..TIERS. The merge refuses anything outside it, so the page must not offer
+// a button the corpus cannot hold.
+const TIERS=Math.max(2,Math.min(4,parseInt(QS.get('tiers')||'4',10)||4));
 const ROOT='../../';                 // tools/viz/ -> repo root
-const batchDir=b=>'data/wallpaper_corpus/batches/'+b;
+const batchDir=b=>'data/'+CORPUS+'/batches/'+b;
 const BATCH_DIR=batchDir(BATCH_ID);
 const IMAGES_URL=ROOT+BATCH_DIR+'/images.jsonl';
-const LS_KEY='wallpaper_label::'+BATCH_IDS.join('+'); // localStorage is per-sitting
+// localStorage is per-sitting. The wallpaper key is UNSUFFIXED so the in-flight wallpaper
+// sitting resumes byte-identically; any other corpus namespaces itself.
+const LS_KEY='wallpaper_label::'+(CORPUS==='wallpaper_corpus'?'':CORPUS+'::')+BATCH_IDS.join('+');
 const SHUFFLE_SEED=0xC0FFEE;
 // --- CORRECTION MODE ------------------------------------------------------
 // A pre-labeled sheet (rows carry `suggested_tier`, e.g. the fresh-sheet batch) shows the
@@ -122,7 +134,15 @@ const SHUFFLE_SEED=0xC0FFEE;
 // head's ranking from anchoring an absolute-tier judgment; sorted, a labeler's threshold
 // drifting over the sitting becomes correlated with the predictor those labels will train.
 // Kept as a NAMED trade rather than a silent one — flip ORDER_BY back to 'shuffle' to undo.
-const ORDER_BY='pred';               // 'pred' (worst->best) | 'shuffle' (anti-anchoring)
+//
+// 'file' is the third option and the one a builder-sorted sheet uses: honor the stamped
+// contiguous `sheet_order` and derive NOTHING here. The mining correction sheet
+// (prompts/mining_sheet_addendum_sorted.md) is sorted good->best-first in the FILE — on the
+// head's continuous score, descending, ties on image_id — so the order is reproducible from
+// the artifact and auditable later instead of being a sort this page happens to perform.
+// Re-deriving an order in the browser that the builder already stamped is two owners for
+// one decision.
+const ORDER_BY=QS.get('order')||'pred';   // 'pred' (worst->best) | 'file' | 'shuffle'
 // Bumping STORE_V clears a CORRECTION sitting's saved labels on next load (see init) —
 // the order changed, so the old partial pass is not resumable in a meaningful sequence.
 const STORE_V=2;
@@ -131,7 +151,9 @@ let CORRECTION=false;
 let STALE_CLEARED=0;
 function suggOf(r){ return SUGG[r.image_id]; }
 function predOf(r){
+  if(typeof r.pred==='number') return r.pred;                       // flat, mining sheet
   if(r.head_v3 && typeof r.head_v3.pred==='number') return r.head_v3.pred;
+  if(r.head_mining_v1 && typeof r.head_mining_v1.pred==='number') return r.head_mining_v1.pred;
   if(typeof r.head_v2_pred==='number') return r.head_v2_pred;
   if(typeof r.p_ge3==='number') return r.p_ge3;
   return 0;
@@ -174,6 +196,16 @@ function locKey(r){
   return [rd.cx,rd.cy,rd.fw,rd.fractal_type,rd.c_re,rd.c_im].join('|');
 }
 function buildOrder(rows){
+  // Builder-stamped order: honor `sheet_order` exactly and derive nothing. Used by the
+  // mining sheet, which is sorted good->bad on the head's continuous score in the FILE.
+  // A row with no stamp sorts last rather than silently to position 0, so a half-stamped
+  // manifest is visible instead of scrambled.
+  if(ORDER_BY==='file'){
+    const out=rows.slice().sort((a,b)=>
+      ((a.sheet_order??Infinity)-(b.sheet_order??Infinity))||(a.image_id<b.image_id?-1:1));
+    out.forEach((r,i)=>{ r.__locstart=(i>0 && suggOf(r)!==suggOf(out[i-1])); });
+    return out;
+  }
   // Correction sheet: the builder already wrote images.jsonl in a SEEDED SHUFFLE and
   // stamped `sheet_order`, so honor that order rather than re-deriving one here (the
   // shuffle is then reproducible from the file, and the same for every labeler).
@@ -252,6 +284,10 @@ function init(rows){
     clearScores();
   }
   ROWS=buildOrder(rows);
+  buildScoreButtons();
+  document.title=CORPUS.replace(/_/g,' ')+' label — 1..'+TIERS;
+  document.getElementById('page-title').textContent=
+    CORPUS==='wallpaper_corpus'?'wallpaper label':CORPUS.replace(/_corpus$/,'').replace(/_/g,' ')+' label';
   document.getElementById('loader').style.display='none';
   document.getElementById('app').style.display='flex';
   const secs=BATCH_IDS.map(b=>`${b} (${rows.filter(r=>batchOf(r)===b).length})`).join(' + ');
@@ -260,13 +296,17 @@ function init(rows){
     +(STALE_CLEARED?` · cleared ${STALE_CLEARED} label(s) from the previous order`:'');
   if(CORRECTION){
     document.getElementById('bulk').style.display='';
+    document.getElementById('bulk-below').style.display='';
     document.getElementById('reset').style.display='';
+    const keys=tierList().join('</b>/<b>');
     document.getElementById('hint').innerHTML=
       (ORDER_BY==='pred'
         ? 'sorted <b>worst &rarr; best</b> by the head\'s predicted quality &mdash; suggested 1s, then 2s, then 3s, then 4s · '
+        : ORDER_BY==='file'
+        ? 'sorted <b>best &rarr; worst</b> by the head\'s continuous score (the builder\'s stamped order) &mdash; correct the top carefully, sweep the tail · '
         : '')+
       'each render shows the head\'s <b>suggested</b> tier &mdash; change only where you disagree · '+
-      'keys: <b>Enter</b>/<b>space</b> confirm the suggestion · <b>1</b>/<b>2</b>/<b>3</b>/<b>4</b> override · '+
+      'keys: <b>Enter</b>/<b>space</b> confirm the suggestion · <b>'+keys+'</b> override · '+
       '<b>←</b>/<b>→</b> move · <b>u</b> next unreviewed';
   }
   buildOverview();
@@ -298,30 +338,51 @@ function refreshCell(i){
 }
 
 function refreshCounts(){
-  let n1=0,n2=0,n3=0,n4=0,changed=0;
+  const n={},TT=tierList(); let changed=0;
+  TT.forEach(t=>n[t]=0);
   for(const r of ROWS){
     const s=scores[keyOf(r)];
-    if(s===1)n1++;else if(s===2)n2++;else if(s===3)n3++;else if(s===4)n4++;
+    if(n[s]!==undefined)n[s]++;
     if(s&&CORRECTION&&suggOf(r)&&s!==suggOf(r))changed++;
   }
-  const done=n1+n2+n3+n4;
+  const done=TT.reduce((a,t)=>a+n[t],0);
   document.getElementById('counts').innerHTML=
     `<b>${done}/${ROWS.length}</b> ${CORRECTION?'reviewed':'labeled'} &nbsp; `+
-    `<span class="bad">${n1}·bad</span> / <span class="mid">${n2}·okay</span> / <span class="good">${n3}·good</span> / <span class="exc">${n4}·exc</span>`+
+    TT.map(t=>`<span class="${CLS[t]}">${n[t]}·${SHORT[t]}</span>`).join(' / ')+
     (CORRECTION?` &nbsp; <span class="sugg">${changed} corrected</span>`:'');
 }
 
+// Tier vocabulary. `TIERS` is the scale's top; a K=3 corpus simply has no tier 4, so every
+// per-tier map is sliced by `tierList()` rather than iterated to a hardcoded 4.
 const LBL={1:'very bad',2:'okay',3:'good',4:'exceptional'};
+const SHORT={1:'bad',2:'okay',3:'good',4:'exc'};
 const CLS={1:'bad',2:'mid',3:'good',4:'exc'};
+function tierList(){ return Array.from({length:TIERS},(_,i)=>i+1); }
+function buildScoreButtons(){
+  const box=document.getElementById('score-btns');
+  box.innerHTML='';
+  tierList().forEach(t=>{
+    const b=document.createElement('button');
+    b.className='sb'+t; b.dataset.s=String(t);
+    b.textContent=`${t} · ${LBL[t]}`;
+    b.onclick=()=>setScore(t);
+    box.appendChild(b);
+  });
+}
 
 function show(){
   const r=ROWS[cur], rd=r.render||{}, pv=r.provenance||{};
   document.getElementById('cur-img').src=imgSrc(r);
   document.getElementById('cur-img').alt=keyOf(r);
   document.getElementById('cap-loc').textContent=`${cur+1}/${ROWS.length} · ${r.image_id}`;
-  document.getElementById('cap-fam').textContent=(rd.fractal_type||pv.family||'')+(pv.decoded_class!=null?(' · c'+pv.decoded_class):'');
+  // render_mode is shown because on the mining corpus the MODE is what the human is judging
+  // — the same location and palette appear under 15 of them, and "which one is this" is not
+  // recoverable from the image for the composite family.
+  const mode=(rd.render_mode&&rd.render_mode!=='smooth')?(' · '+rd.render_mode):'';
+  document.getElementById('cap-fam').textContent=(rd.fractal_type||pv.family||'')
+    +(pv.decoded_class!=null?(' · c'+pv.decoded_class):'')+mode;
   document.getElementById('cap-pal').textContent=rd.palette||'';
-  const pm=pv.params||{};
+  const pm=pv.params||pv.color_params||{};
   const pbits=[];
   if(pm.gamma!=null)pbits.push('γ'+(+pm.gamma).toFixed(2));
   if(pm.phase!=null)pbits.push('φ'+(+pm.phase).toFixed(2));
@@ -332,9 +393,12 @@ function show(){
   const pf=document.getElementById('cap-prefv2'), v=pv.pref_v2_score;
   pf.textContent=(typeof v==='number')?('pref-v2 '+v.toFixed(2)+(pv.score_stratum?(' · '+pv.score_stratum):'')):'';
   pf.style.color='#777';
-  // head-v2 predicted quality (drives this batch's presentation order) — shown per the ask.
-  const hf=document.getElementById('cap-headv2'), hv=r.head_v2_pred;
-  hf.textContent=(typeof hv==='number')?('head-v2 '+hv.toFixed(2)):'';
+  // the head's continuous readout (what the presentation order is sorted on) — shown per
+  // the ask, and shown for whichever head stamped the row.
+  const hf=document.getElementById('cap-headv2');
+  const hv=(typeof r.head_v2_pred==='number')?r.head_v2_pred
+          :((ORDER_BY==='file'&&typeof r.pred==='number')?r.pred:null);
+  hf.textContent=(hv===null)?'':((typeof r.head_v2_pred==='number'?'head-v2 ':'pred ')+hv.toFixed(2));
   hf.style.color='#8a7';
   // correction sheet: the head's own p_ge3 shown beside its suggestion (no hidden rows)
   const g=suggOf(r), gf=document.getElementById('cap-sugg');
@@ -376,15 +440,25 @@ document.getElementById('reset').onclick=()=>{
     +`want to keep them — this cannot be undone from the page.`)) return;
   clearScores(); cur=0; show();
 };
-document.getElementById('bulk').onclick=()=>{
-  const rest=ROWS.filter(r=>!reviewed(r)&&suggOf(r));
-  if(!rest.length){ alert('nothing left unreviewed'); return; }
-  if(!confirm(`Accept the head's suggestion, unchanged, for the ${rest.length} rows you have `
-    +`not looked at?\n\nThey become YOUR labels in scores.json. Only do this if you have `
-    +`actually read the sheet.`)) return;
+function bulkAccept(rest, what){
+  if(!rest.length){ alert('nothing left unreviewed '+what); return; }
+  if(!confirm(`Accept the head's suggestion, unchanged, for the ${rest.length} rows `+what
+    +`?\n\nThey become YOUR labels in scores.json. Only do this if you have actually read `
+    +`the sheet.`)) return;
   rest.forEach(r=>{ scores[r.image_id]=suggOf(r); });
   saveScores(); show();
-};
+}
+document.getElementById('bulk').onclick=()=>
+  bulkAccept(ROWS.filter(r=>!reviewed(r)&&suggOf(r)), 'you have not looked at');
+// THE POSITIONAL SWEEP. On a sorted sheet the natural gesture is "everything from here down
+// is fine as suggested" — correct the top carefully, sweep the tail. Distinct from
+// accept-all-remaining, which also takes unreviewed rows ABOVE the cursor: on a good->bad
+// order those are the ones most worth a human look, so sweeping them by accident is exactly
+// the mistake this button exists to avoid. Same confirm; the row under the cursor is
+// INCLUDED and the confirm says so.
+document.getElementById('bulk-below').onclick=()=>
+  bulkAccept(ROWS.slice(cur).filter(r=>!reviewed(r)&&suggOf(r)),
+             `from row ${cur+1} of ${ROWS.length} down (inclusive)`);
 
 let lbOpen=false;
 function syncLightbox(){
@@ -399,11 +473,12 @@ function closeLightbox(){ lbOpen=false; document.getElementById('lightbox').styl
 document.getElementById('cur-img').onclick=openLightbox;
 document.getElementById('lightbox').onclick=closeLightbox;
 
-document.querySelectorAll('.score-btns button').forEach(b=>b.onclick=()=>setScore(+b.dataset.s));
 window.addEventListener('keydown',e=>{
   if(document.getElementById('app').style.display==='none')return;
   if(e.key==='Escape'){ if(lbOpen)closeLightbox(); return; }
-  if(e.key==='1'||e.key==='2'||e.key==='3'||e.key==='4'){setScore(+e.key);e.preventDefault();}
+  // 1..TIERS only: on a K=3 corpus, `4` must do NOTHING rather than write a tier the merge
+  // will refuse hours later at the end of a sitting.
+  if(/^[1-9]$/.test(e.key)&&+e.key<=TIERS){setScore(+e.key);e.preventDefault();}
   else if(CORRECTION&&(e.key==='Enter'||e.key===' ')){confirmSuggestion();e.preventDefault();}
   else if(e.key==='ArrowRight')move(1);
   else if(e.key==='ArrowLeft')move(-1);

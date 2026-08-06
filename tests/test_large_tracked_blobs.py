@@ -122,6 +122,13 @@ ALLOWLIST = [
           "dereference. Labels without their referent are useless."),
     Entry("data/wallpaper_corpus/batches/", EXCEPTION,
           "Wallpaper-batch images.jsonl and progress ledgers."),
+    Entry("data/render_mode_corpus/batches/", EXCEPTION,
+          "Render-mode (mining) batch images.jsonl: the render coords, mode, mode_params "
+          "and colour recipe the committed human tiers dereference — carried IN-ROW "
+          "precisely because the previous corpus kept them in an untracked file and its "
+          "1500 tiers are now permanently orphaned. Larger per row than the wallpaper "
+          "batches by the mode block; that block is the difference between a label and a "
+          "label nobody can join."),
     Entry("data/orbital/screen_pool.jsonl", EXCEPTION,
           "Orbital screen pool: the scored candidate population behind the mode gates."),
 ]

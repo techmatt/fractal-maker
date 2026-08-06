@@ -14,6 +14,11 @@ Split (stamped, reused forever): EVAL_FRAC=0.40, location-disjoint, seed=0.
     base-family location sitting on that seed land in ONE split unit (union-find).
   * Split units (not raw locations) are family-stratified then 40% -> eval.
   Pilot rasters inherit this same location->side map at train time -> disjoint corpus.
+  The rule ITSELF moved to `tools/mining/split_units.py` (2026-08-06) when the fresh
+  render-mode corpus needed the identical design; this module imports it. RETIRED as a
+  runnable tool either way — its GATE_PASSERS and PILOT_IMAGES inputs are both gone
+  (see scratch/stage2_label_audit/report.md); `tools/mining/build_mining_sheet.py` is
+  the live sampler.
 
 Allocation (1000, mode-stratified, tilt-to-yield): floor 50/mode (650) + the remaining
 350 apportioned proportional to each mode's PILOT q3-rate (largest-remainder to 1000).
@@ -31,8 +36,14 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "corpus"))
+sys.path.insert(0, str(REPO))
 import location as loc_mod  # noqa: E402
 import numpy as np
+
+# The split rule this file introduced now lives in ONE place, because the fresh render-mode
+# corpus (tools/mining/build_mining_sheet.py) needs the identical design and a second copy is
+# how one split design becomes two. `JULIA_PARENT` is re-exported: this module still reads it.
+from tools.mining.split_units import JULIA_PARENT, build_split  # noqa: E402
 
 RMS_SEED = 20260711
 SPLIT_SEED = 0
@@ -69,110 +80,9 @@ MODES = [
 MODE_KIND = {m["mode"]: m["kind"] for m in MODES}
 DROPPED = {"trap_circle", "exp_smoothing"}
 
-# Julia family -> base (parent) family whose c-plane the seed lives in.
-JULIA_PARENT = {"julia": "mandelbrot", "julia_multibrot4": "multibrot4",
-                "julia_multibrot5": "multibrot5", "julia_multibrot3": "multibrot3"}
-
 
 def lockey(row):
     return loc_mod.from_render_block(row["render"]).key()
-
-
-# --------------------------------------------------------------------------- #
-# Split units: union-find over locations linked by Julia-seed == parent-point.
-# --------------------------------------------------------------------------- #
-class UF:
-    def __init__(self):
-        self.p = {}
-
-    def find(self, x):
-        self.p.setdefault(x, x)
-        while self.p[x] != x:
-            self.p[x] = self.p[self.p[x]]
-            x = self.p[x]
-        return x
-
-    def union(self, a, b):
-        ra, rb = self.find(a), self.find(b)
-        if ra != rb:
-            self.p[ra] = rb
-
-
-def _fkey(v, ndig=12):
-    """Float-tolerant string key for a decimal-string coordinate."""
-    return f"{float(v):.{ndig}g}"
-
-
-def build_split(locs):
-    """locs: {location_key: representative gate-passer row}. Returns {location_key: side}."""
-    uf = UF()
-    for k in locs:
-        uf.find(k)  # every location is its own node initially
-
-    # seed node per (parent_family, c_re, c_im); link Julia locations to it.
-    seed_nodes = {}   # (pfam, ckr, cki) -> node id
-    def seed_node(pfam, cr, ci):
-        key = (pfam, _fkey(cr), _fkey(ci))
-        node = seed_nodes.setdefault(key, f"seed::{pfam}::{key[1]}::{key[2]}")
-        return node, key
-
-    base_pts = collections.defaultdict(dict)   # base_family -> {(fkx,fky): location_key}
-    for k, r in locs.items():
-        fam = r["family"]; rd = r["render"]
-        if fam not in JULIA_PARENT:
-            base_pts[fam][(_fkey(rd["cx"]), _fkey(rd["cy"]))] = k
-
-    for k, r in locs.items():
-        fam = r["family"]; rd = r["render"]
-        if fam in JULIA_PARENT:
-            pfam = JULIA_PARENT[fam]
-            node, _ = seed_node(pfam, rd["c_re"], rd["c_im"])
-            uf.union(k, node)
-
-    # link a base-family location sitting exactly on a Julia seed to that seed unit.
-    linked_parents = 0
-    for (pfam, ckr, cki), node in seed_nodes.items():
-        pk = base_pts.get(pfam, {}).get((ckr, cki))
-        if pk is not None:
-            uf.union(pk, node)
-            linked_parents += 1
-
-    # components over the real locations only
-    comp = collections.defaultdict(list)
-    for k in locs:
-        comp[uf.find(k)].append(k)
-    units = list(comp.values())
-
-    # unit family = family of a base-family member if present else the modal family
-    def unit_family(members):
-        fams = [locs[m]["family"] for m in members]
-        base = [f for f in fams if f not in JULIA_PARENT]
-        return collections.Counter(base or fams).most_common(1)[0][0]
-
-    # family-stratified seeded split over UNITS -> 40% eval
-    rng = np.random.default_rng(SPLIT_SEED)
-    strata = collections.defaultdict(list)
-    for members in units:
-        strata[unit_family(members)].append(tuple(sorted(members)))
-    side = {}
-    n_eval_units = 0
-    for fam in sorted(strata):
-        us = sorted(strata[fam])
-        order = rng.permutation(len(us))
-        n_ev = int(round(EVAL_FRAC * len(us)))
-        ev = set(order[:n_ev].tolist())
-        for i, members in enumerate(us):
-            s = "eval" if i in ev else "train"
-            n_eval_units += (1 if i in ev else 0)
-            for m in members:
-                side[m] = s
-    meta = {"n_locations": len(locs), "n_units": len(units),
-            "n_multi_loc_units": sum(1 for u in units if len(u) > 1),
-            "linked_base_parents": linked_parents,
-            "n_eval_units": n_eval_units,
-            "n_eval_loc": sum(1 for s in side.values() if s == "eval"),
-            "n_train_loc": sum(1 for s in side.values() if s == "train")}
-    return side, meta
 
 
 # --------------------------------------------------------------------------- #

@@ -38,7 +38,11 @@ Two questions to ask of anything you are about to write:
    `auto_maxiter` closed form exist and are pinned to agree by a test, precisely because
    nothing structural keeps them equal. `[code: tools/scoring/test_maxiter_policy.py]`
 9. **Computed at insufficient precision to discriminate.** A statistic quantized below the
-   difference it must resolve reports agreement it never checked.
+   difference it must resolve reports agreement it never checked. Measured instance: the
+   wallpaper-v3 gate-passer population is **403** rows under `torch.autocast` and **401** at
+   fp32 — two rows sit close enough to `p_ge3 == 0.90` that fp16 accumulation moves them
+   across it. Autocast is fine where a score RANKS and wrong where it CUTS.
+   `[code: tools/mining/build_gate_passers.py::score_marginals]`
 10. **Ground truth that reconstructs itself through the code under test.** A test that
     injects the dependency, or derives its expectation from the same helper the subject
     uses, is asserting `f(x) == f(x)`.
@@ -153,7 +157,53 @@ rather than to fail the build. `[code: minibrot_maneuvers.md §2.6]`
   as a catch-all and gate only the callers you can name. `identify_nucleus` grew an optional
   `periods=` list; the sweep is untouched.
 
-## 9. Git as evidence
+## 9. Source-inspection tests are a last resort, and they need a paired control
+
+9 test files assert on `inspect.getsource` substrings (`test_steered_frontier.py` alone has
+11). They test TEXT, not behaviour, and they fail for reasons unrelated to the property: two
+written on 2026-08-05 went red on first run because a *report* line legitimately mentioned the
+token being located, and because the docstring contained it. That is the cost, and it is paid
+per edit to a file nobody was changing.
+
+- **Prefer a behavioural assertion wherever one exists.**
+  `test_a_truncated_dive_plan_keeps_BOTH_ARMS_at_every_cut_point` is worth more than any grep
+  for `interleave_dive_arms`, because it states what a truncated plan must contain rather than
+  which function was called.
+- **A behavioural test needs a CONTROL on the unfixed input**, or it cannot tell "the fix
+  works" from "this population would have passed anyway".
+  `test_the_UNFIXED_block_order_loses_an_arm_at_the_length_the_run_actually_reached` is the
+  pattern: the same truncation, applied to the pre-fix order, asserted to fail. Same shape as
+  §3's prove-it-red, aimed at the fixture instead of the guard.
+- **Where the property is genuinely about the source — "X runs before Y", "the rule is not
+  restated here", "the flag is passed, not dropped" — the source test is correct**, and
+  several are deliberately kept. Anchor it on the smallest stable token (a call shape like
+  `sort(key=queue_sort_key)`, not a bare name that also appears in prose), so that naming the
+  rule in a docstring or a report string does not go red.
+  `[code: tools/atlas/test_sitting_cutter.py::test_the_union_queue_and_the_single_run_queue_sort_on_the_SAME_key]`
+- **A structural property is better computed than grepped.** Where the claim is about
+  reachability or shape, walk the AST instead of matching text, and prove the analysis catches
+  the defect by running it on an injected miniature.
+  `[code: tools/atlas/test_steered_frontier.py::test_the_analysis_CATCHES_a_flag_that_misses_the_second_entry_point]`
+
+## 10. Two entry points that share a constructor need a declared contract
+
+`--wall-budget` parsed, converted, stored as `self.wall_budget_s`, and was then consumed only
+by `run()`; `run_dive()` has its own loop, so the flag silently did nothing and the fact had
+nowhere to live but a hand-written note in a launch record. 41 constructor attributes are in
+that same position, of which only 4 were explicitly neutralized — **the code could not
+distinguish "deliberately N/A on the second path" from "silently dropped on it", and nothing
+detected the difference.** That gap is the whole bug; the flag was just where it surfaced.
+
+The shape of the fix, reusable wherever two entry points share state: declare the
+inapplicable set as DATA with a one-line reason each (`steered_frontier.DIVE_IGNORES`),
+recompute it from the source and assert set equality in both directions (a stale exemption
+hides the next real one), and for anything that is a **bound** rather than a tuning knob,
+REFUSE rather than ignore — `check_wall_budget_supported` raises, because a bound that
+silently does not apply is worse than no bound (`CLAUDE.md`, "a backstop longer than the
+job's budget is not a backstop").
+`[code: tools/atlas/steered_frontier.py::DIVE_IGNORES; test_steered_frontier.py]`
+
+## 11. Git as evidence
 
 `git ls-files` is an **index query** — it answers "is this tracked *now*", never "did this
 ever exist". An absence verdict needs

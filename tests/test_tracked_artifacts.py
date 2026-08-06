@@ -170,6 +170,20 @@ TRACKED_CANARIES = [
     "labels/wallpaper_headbatch_dramatic_v1.json",  # 1,000 labels
     "labels/wallpaper_fresh_sheet_v1.json",       # 960 labels (2026-08-05 sitting)
     "labels/wallpaper_colorize_path_v1.json",     # 180 labels (2026-08-05 sitting)
+    # The render-mode (mining) tiers. These are the strongest case on the whole list and
+    # were missing from it: the corpus that gave their ids meaning is GONE
+    # (data/render_mode_corpus/ carried no .gitignore negation), so they are already
+    # orphaned — no crop, no render block, no mode. What survives is their DISTRIBUTION,
+    # and that is not a consolation prize: it is the reference prior the 2026-08-06 rebuild
+    # quantile-matches its pre-label cuts to (tools/mining/suggest_tier_mining.tier_prior,
+    # which reads these two files by name and hard-fails on either one's absence). Losing
+    # them now would take the last recoverable thing about the first mining corpus.
+    "labels/render_mode_pilot_v1.json",           # 500 tiers (2026-07-10 pilot)
+    "labels/render_mode_scale_v1.json",           # 1,000 tiers (2026-07-11 scale batch)
+    # NOT YET PRESENT: labels/render_mode_fresh_sheet_v1.json — the 2026-08-06 correction
+    # sheet's sidecar, written by merge_sitting once Matt's pass lands. Add it here in the
+    # same commit as the merge; a path that does not exist cannot be canaried, and this
+    # comment is the reminder rather than a skip that would pass on the absence.
     # Live trained heads carried over in the fractal-maker migration (2026-07-24).
     # Same rationale as the classifier weights: trained .pt, not GPU-reproducible, no
     # rebuild path. Only the LATEST canonical weight of each is kept (no v1/v2 history,

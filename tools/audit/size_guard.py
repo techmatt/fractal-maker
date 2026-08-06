@@ -232,11 +232,16 @@ REGISTRY: list[Entry] = [
     Entry("data/wallpaper_corpus/", RELOCATE, ARTIFACTS, "mixed",
           "wallpaper batch crops (regenerable); tracked images.jsonl/ledgers stay"),
     Entry("data/render_mode_corpus/", RELOCATE, ARTIFACTS, "mixed",
-          "render-mode batch crops (regenerable via present); tracked manifests stay. "
-          "FORWARD: empty today, but tools/render_mode_pilot/{render_batch,"
-          "render_scale_batch}.py write crops straight to data/render_mode_corpus/batches/"
-          "<id>/ IN-TREE (they do not route through artifacts.resolve), and the v1 "
-          "render-mode head they feed is the LIVE strange-mode gate.", forward=True),
+          "render-mode batch crops (regenerable from each row's own render block + colour "
+          "recipe); tracked manifests stay. NO LONGER EMPTY as of 2026-08-06: "
+          "tools/mining/build_mining_sheet.py writes ~960 crops to "
+          "data/render_mode_corpus/batches/<id>/crops/ IN-TREE (it does not route through "
+          "artifacts.resolve, same as the retired render_mode_pilot writers), and the v1 "
+          "render-mode head they feed is the LIVE strange-mode gate. The tracked half is "
+          "gate_passers_v3.json (462 kB) + images.jsonl + batch.json; crops/, _fields/ and "
+          "_progress_ledger.jsonl are gitignored by exact path. NO LONGER a forward "
+          "declaration: the flag was dropped when the 2026-08-06 batch landed 545 MB of "
+          "crops here, which is the condition it was declared against."),
     Entry("data/queries/", RELOCATE, ARTIFACTS, "mixed",
           "query-assembler field/colormap renders + scorer caches (regenerable via "
           "tools/queries); tracked queries/labels/*.json preference tiers stay"),

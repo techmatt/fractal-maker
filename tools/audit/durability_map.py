@@ -226,9 +226,32 @@ REGISTRY = [
     ("data/render_mode_corpus/batches/*/images.jsonl, rms_split_map.json",
      "tools/render_mode_pilot/*", UND,
      "NOTHING for the labels; the split map re-derives from them", Y,
-     "MISMATCH. Holds render-mode pilot labels and their split map, ignored under the "
-     "blanket /data/* rule with no negation — unlike every other label corpus, which is "
-     "negated. Absent in-tree and out; data/render_mode_head/v1 was trained on it."),
+     "MISMATCH, RESOLVED FORWARD 2026-08-06 — the loss stands, the hole is closed. Held the "
+     "render-mode pilot+scale labels and their split map, ignored under the blanket /data/* "
+     "rule with NO negation, unlike every other label corpus. Still absent in-tree and out, "
+     "and data/render_mode_head/v1 was trained on it, so the 1500 tiers in "
+     "labels/render_mode_{pilot,scale}_v1.json remain permanently orphaned — their ids are "
+     "defined nowhere. The tree now carries an exact negation (!/data/render_mode_corpus/ "
+     "with crops/, _fields/ and _progress_ledger.jsonl re-excluded) and a REBUILT corpus "
+     "under it (see the two rows below), so the next batch cannot repeat this."),
+    ("data/render_mode_corpus/gate_passers_v3.json",
+     "tools/mining/build_gate_passers.py", DUR,
+     "re-derivable EXACTLY: score the tracked 2026-07-09_wallpaper_headbatch_dramatic_v1 "
+     "crops with the pinned wallpaper v3 head at p_ge3>0.90 (fp32), count-verified against "
+     "the 401-row/112-location census the July samplers printed", N,
+     "OK. The population the render-mode samplers draw from, which used to live at "
+     "scratchpad/gate_passers_v3.json — the disposable tree — and went with the wipe. "
+     "Regenerable, so not population-defining in the un-rebuildable sense, but committed "
+     "anyway: its regeneration depends on gitignored crops, and it is 462 kB."),
+    ("data/render_mode_corpus/batches/2026-08-06_render_mode_fresh_sheet_v1/"
+     "{images.jsonl,batch.json}",
+     "tools/mining/build_mining_sheet.py", DUR,
+     "NOTHING once labeled — a human tier regenerates from nothing. The crops regenerate "
+     "from each row's own render block + colour recipe (both in-row).", Y,
+     "OK, and it is the fix for the row above: label slot, complete render block, mode + "
+     "mode_params, colormap recipe and split_side are all in ONE tracked row, so an id can "
+     "never again outlive its meaning. crops/, _fields/ and _progress_ledger.jsonl are "
+     "gitignored by exact path — the rebuildable half."),
     ("data/queries/{coldstart_v2,warmstart_v1,prefv2_dramatic_v1}/{records/*.json,images/},\n"
      "     data/queries/scorer/v{1,2,3}/",
      "tools/queries/{assemble_queries,regenerate_coldstart_v2,prefv2_dramatic_v1}.py, "

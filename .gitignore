@@ -189,6 +189,18 @@ __pycache__/
 # colorize+crop via the capture stage).
 !/data/q4_window_corpus/
 /data/q4_window_corpus/batches/*/crops/
+# Render-mode ("mining") corpus (tools/mining/build_mining_sheet.py) — the ONE label
+# corpus in this repo that had NO negation, which is exactly why the July pilot+scale
+# labels were unjoinable after the wipe (scratch/stage2_label_audit/report.md,
+# durability_map.py). Same policy as the three above: commit gate_passers_v3.json +
+# batch.json + images.jsonl, gitignore the rebuildable crops and the resume ledger.
+!/data/render_mode_corpus/
+/data/render_mode_corpus/batches/*/crops/
+/data/render_mode_corpus/batches/*/_fields/
+/data/render_mode_corpus/batches/*/_progress_ledger.jsonl
+# the render stage's hand-off to the write stage; the DURABLE copy of the same failures is
+# batch.json's `render_failures`, so tracking both is two owners for one record.
+/data/render_mode_corpus/batches/*/_render_errors.json
 # disposable per-batch working data (previews, guided-descend pools, intermediate
 # scores) — rebuildable from the committed metadata + generator, never committed.
 /data/label_corpus/batches/*/_work/
