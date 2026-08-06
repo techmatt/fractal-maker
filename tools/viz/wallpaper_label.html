@@ -53,6 +53,7 @@ code{color:#9bb}
   <span class="spacer"></span>
   <button id="next-unscored">next unlabeled (u)</button>
   <button id="bulk" style="display:none">accept all remaining suggestions</button>
+  <button id="reset" style="display:none">clear my labels</button>
   <button id="export">export scores.json</button>
   <label class="cap" style="cursor:pointer;color:#ccc">load scores<input id="load-scores" type="file" accept=".json" hidden></label>
 </header>
@@ -106,33 +107,58 @@ const BATCH_DIR=batchDir(BATCH_ID);
 const IMAGES_URL=ROOT+BATCH_DIR+'/images.jsonl';
 const LS_KEY='wallpaper_label::'+BATCH_IDS.join('+'); // localStorage is per-sitting
 const SHUFFLE_SEED=0xC0FFEE;
-let ROWS=[];                         // presentation-ordered rows {image_id, render, provenance, label}
-let scores=loadScores();             // { image_id: 1|2|3|4 }  — HUMAN decisions only
-let cur=0;
-
 // --- CORRECTION MODE ------------------------------------------------------
 // A pre-labeled sheet (rows carry `suggested_tier`, e.g. the fresh-sheet batch) shows the
-// machine's tier PREFILLED and asks the human to fix the ones it got wrong. Two invariants,
-// both load-bearing:
-//   * a SUGGESTION IS NOT A LABEL. `scores` holds only what Matt actually decided, and the
-//     export writes only `scores`. An unreviewed suggestion never leaves this page — a
-//     machine tier merged as a human label would poison the corpus silently, and the
-//     corpus's whole value is that its labels are human.
-//   * presentation order is the SEEDED SHUFFLE the builder stamped (`sheet_order`), not a
-//     quality sort: this is an absolute-tier task, so ordering by the head's own prediction
-//     would anchor every judgment on the thing being corrected.
+// machine's tier PREFILLED and asks the human to fix the ones it got wrong. The invariant
+// that does not bend: a SUGGESTION IS NOT A LABEL. `scores` holds only what Matt actually
+// decided, and the export writes only `scores`. An unreviewed suggestion never leaves this
+// page — a machine tier merged as a human label would poison the corpus silently, and the
+// corpus's whole value is that its labels are human.
+//
+// PRESENTATION ORDER, correction mode: ASCENDING by the head's own continuous readout
+// (head_v3.pred = 1 + sum of the CORN marginals), so the sitting runs worst -> best and the
+// suggested tiers arrive in blocks: every suggested 1, then every 2, then 3, then 4.
+// Requested 2026-08-05, overriding the seeded shuffle below. The shuffle existed to stop the
+// head's ranking from anchoring an absolute-tier judgment; sorted, a labeler's threshold
+// drifting over the sitting becomes correlated with the predictor those labels will train.
+// Kept as a NAMED trade rather than a silent one — flip ORDER_BY back to 'shuffle' to undo.
+const ORDER_BY='pred';               // 'pred' (worst->best) | 'shuffle' (anti-anchoring)
+// Bumping STORE_V clears a CORRECTION sitting's saved labels on next load (see init) —
+// the order changed, so the old partial pass is not resumable in a meaningful sequence.
+const STORE_V=2;
 let SUGG={};                         // { image_id: 1|2|3|4 } — the machine suggestion
 let CORRECTION=false;
+let STALE_CLEARED=0;
 function suggOf(r){ return SUGG[r.image_id]; }
+function predOf(r){
+  if(r.head_v3 && typeof r.head_v3.pred==='number') return r.head_v3.pred;
+  if(typeof r.head_v2_pred==='number') return r.head_v2_pred;
+  if(typeof r.p_ge3==='number') return r.p_ge3;
+  return 0;
+}
 function reviewed(r){ return !!scores[r.image_id]; }
 function shownTier(r){ return scores[r.image_id] || SUGG[r.image_id]; }
+let ROWS=[];                         // presentation-ordered rows {image_id, render, provenance, label}
+let cur=0;
 
 // the image_id IS the durable identity; the crop lives in ITS OWN batch's crops/ dir
 function keyOf(r){ return r.image_id; }
 function batchOf(r){ return r.__batch||BATCH_ID; }
 function imgSrc(r){ return ROOT+batchDir(batchOf(r))+'/crops/'+r.image_id+'.jpg'; }
-function loadScores(){ try{return JSON.parse(localStorage.getItem(LS_KEY))||{}}catch{return {}} }
-function saveScores(){ localStorage.setItem(LS_KEY,JSON.stringify(scores)); }
+// Stored shape is {__v, ...scores}; a bare {id:n} map is the pre-versioning shape and is
+// read as-is (version 1) so the three legacy batches keep resuming.
+function loadScores(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(LS_KEY))||{};
+    const {__v, ...s}=raw;
+    STORED_V=(typeof __v==='number')?__v:1;
+    return s;
+  }catch{ STORED_V=STORE_V; return {}; }
+}
+function saveScores(){ localStorage.setItem(LS_KEY,JSON.stringify({__v:STORE_V,...scores})); }
+function clearScores(){ scores={}; localStorage.removeItem(LS_KEY); }
+let STORED_V=STORE_V;
+let scores=loadScores();             // { image_id: 1|2|3|4 } — HUMAN decisions only
 
 // seeded PRNG (mulberry32) for reproducible presentation order
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -151,6 +177,18 @@ function buildOrder(rows){
   // Correction sheet: the builder already wrote images.jsonl in a SEEDED SHUFFLE and
   // stamped `sheet_order`, so honor that order rather than re-deriving one here (the
   // shuffle is then reproducible from the file, and the same for every labeler).
+  if(CORRECTION && ORDER_BY==='pred'){
+    // Worst -> best across EVERY loaded batch: one continuous quality ramp, so the suggested
+    // tiers arrive in blocks. Both regimes interleave rather than sitting in two sections —
+    // which is the better arrangement for label consistency anyway, since a threshold that
+    // drifts over the sitting then drifts across both alike instead of only the second.
+    const out=rows.slice().sort((a,b)=>
+      (predOf(a)-predOf(b))||(a.image_id<b.image_id?-1:1));
+    // The divider now marks where the SUGGESTED TIER changes — the only structural boundary
+    // this order actually has, and the one worth seeing coming.
+    out.forEach((r,i)=>{ r.__locstart=(i>0 && suggOf(r)!==suggOf(out[i-1])); });
+    return out;
+  }
   if(CORRECTION){
     // sections in the ?batch= order; inside a section, the builder's stamped seeded shuffle
     const rank=Object.fromEntries(BATCH_IDS.map((b,i)=>[b,i]));
@@ -205,14 +243,28 @@ function init(rows){
   // correction mode iff the batch carries machine suggestions
   CORRECTION=rows.some(r=>typeof r.suggested_tier==='number');
   if(CORRECTION){ for(const r of rows){ if(typeof r.suggested_tier==='number') SUGG[r.image_id]=r.suggested_tier; } }
+  // A correction sitting saved under an older STORE_V was labeled in a DIFFERENT order, so
+  // resuming it would drop you at an arbitrary point in a sequence that no longer exists.
+  // Cleared, and said out loud in the header rather than vanishing silently. Scoped to
+  // correction sheets: the three legacy batches keep their saved passes.
+  if(CORRECTION && STORED_V!==STORE_V){
+    STALE_CLEARED=Object.keys(scores).length;
+    clearScores();
+  }
   ROWS=buildOrder(rows);
   document.getElementById('loader').style.display='none';
   document.getElementById('app').style.display='flex';
-  const secs=BATCH_IDS.map(b=>`${b} (${rows.filter(r=>batchOf(r)===b).length})`).join(' → ');
-  document.getElementById('batch-label').textContent=secs+(CORRECTION?' · correction sheet':'');
+  const secs=BATCH_IDS.map(b=>`${b} (${rows.filter(r=>batchOf(r)===b).length})`).join(' + ');
+  document.getElementById('batch-label').textContent=secs
+    +(CORRECTION?' · correction sheet':'')
+    +(STALE_CLEARED?` · cleared ${STALE_CLEARED} label(s) from the previous order`:'');
   if(CORRECTION){
     document.getElementById('bulk').style.display='';
+    document.getElementById('reset').style.display='';
     document.getElementById('hint').innerHTML=
+      (ORDER_BY==='pred'
+        ? 'sorted <b>worst &rarr; best</b> by the head\'s predicted quality &mdash; suggested 1s, then 2s, then 3s, then 4s · '
+        : '')+
       'each render shows the head\'s <b>suggested</b> tier &mdash; change only where you disagree · '+
       'keys: <b>Enter</b>/<b>space</b> confirm the suggestion · <b>1</b>/<b>2</b>/<b>3</b>/<b>4</b> override · '+
       '<b>←</b>/<b>→</b> move · <b>u</b> next unreviewed';
@@ -317,6 +369,13 @@ function confirmSuggestion(){
   const g=suggOf(ROWS[cur]);
   if(g) setScore(g);
 }
+document.getElementById('reset').onclick=()=>{
+  const n=Object.keys(scores).length;
+  if(!n){ alert('nothing labeled yet'); return; }
+  if(!confirm(`Discard all ${n} labels in this sitting and start over?\n\nExport first if you `
+    +`want to keep them — this cannot be undone from the page.`)) return;
+  clearScores(); cur=0; show();
+};
 document.getElementById('bulk').onclick=()=>{
   const rest=ROWS.filter(r=>!reviewed(r)&&suggOf(r));
   if(!rest.length){ alert('nothing left unreviewed'); return; }
