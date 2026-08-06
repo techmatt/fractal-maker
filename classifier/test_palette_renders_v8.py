@@ -8,12 +8,23 @@ change is data, not a code edit — and the assertion still rejects a malformed 
 
 Bracketed three ways (the point of the change):
   * the OLD form (`len == 6`) FAILS on v8-shaped data;
-  * the NEW form PASSES on v8-shaped data AND on real v8 locations;
+  * the NEW form PASSES on v8-shaped data;
   * the NEW form still REJECTS a location with a missing or duplicated palette render.
+
+REMOVED 2026-08-06: `test_new_form_passes_on_real_v8_locations`, the fourth bracket, which
+replayed the first 6 locations out of `data/v8/cache_manifest.jsonl`. That file was DELETED
+on 2026-08-03 (`tools/v8/test_v8_cache_alignment.py` records the deletion and the 146 MB it
+freed), so the test had skipped every run since. It is deleted rather than left skipping for
+the reason that file already states: the manifest is regenerable from the committed manifest
+by `tools/v8/build_plan.py`, so "skipped" means only "nobody ran the command", printed once
+per suite run forever, and a suite that skips its own brackets reads green. The defect it
+caught — the derived spec disagreeing with a genuine v8 row — is carried by
+`test_palette_spec_derived_from_roster`, which derives the same spec from the surviving
+`data/v8/aug_roster.json`, plus the five synthetic-shape brackets below. `git show` has it
+verbatim if the manifest is ever rebuilt.
 """
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -23,8 +34,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "classifier"))
 import data_v4 as D  # noqa: E402
 
+# `load_palette_spec` resolves the recipe as `<cache_dir>/aug_roster.json`, so this is an
+# anchor for the DIRECTORY, not a file that has to exist — the manifest itself was deleted
+# on 2026-08-03 while `aug_roster.json` (small, committed) stayed. The spec tests below are
+# therefore live, not skipped: they read the real v8 recipe.
 REAL_CACHE = ROOT / "data" / "v8" / "cache_manifest.jsonl"
-REAL_ROSTER = ROOT / "data" / "v8" / "aug_roster.json"
 
 
 # --------------------------------------------------------------------------- #
@@ -118,32 +132,3 @@ def test_palette_renders_needs_spec():
     loc = _v8_loc(V8_PALETTES, spec=None)
     with pytest.raises(AssertionError, match="needs the recipe palette spec"):
         loc.palette_renders()
-
-
-# --------------------------------------------------------------------------- #
-# Real v8 data (fast: the manifest is grouped per location, so we stop early).
-# --------------------------------------------------------------------------- #
-def test_new_form_passes_on_real_v8_locations(tmp_path):
-    if not REAL_CACHE.exists():
-        pytest.skip("v8 cache manifest not present")
-    K = 6
-    keep = []
-    with REAL_CACHE.open(encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            if int(json.loads(line)["location_id"]) >= K:
-                break                        # grouped manifest -> the first K are complete
-            keep.append(line)
-    (tmp_path / "cache_manifest.jsonl").write_text("".join(keep), encoding="utf-8")
-    __import__("shutil").copy(REAL_ROSTER, tmp_path / "aug_roster.json")
-
-    locs = D.load_locations(tmp_path / "cache_manifest.jsonl", verify_paths=False)
-    assert len(locs) == K
-    for loc in locs:
-        got = loc.palette_renders()          # new form: passes on genuine v8 rows
-        pals = [r.palette for r in got]
-        assert len(got) == 4 and len(set(pals)) == 4
-        assert {"twilight_shifted", "blue_orange"} <= set(pals)
-        with pytest.raises(AssertionError):  # old form: fails on the same real location
-            _old_form(loc)

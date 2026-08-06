@@ -65,11 +65,40 @@ fact it records.
 - **A retired guard whose input was deliberately emptied keeps its MECHANISM tested via an
   injected value**, with the revival condition recorded beside it.
 
-Live absence-tolerant sites, named so they are decisions rather than misses:
-`tools/v8/test_v8_cache_alignment.py`'s module fixture (`pytest.skip` on any of the four
-v8 artifacts), `tools/v9/test_v9_staging.py`'s two `skipif`s, and the two `.exists()`
-guards in `tools/v9/build_plan.py::assert_recipe_parity`. The preconditions for the
-last two are in `storage_classes.md`.
+Live absence-tolerant sites, named so they are decisions rather than misses. **Re-derived
+2026-08-06** by running the default lane with `-rs`, because the previous version of this
+list had rotted in both directions — it named a `test_v8_cache_alignment.py` module fixture
+that no longer exists (that file now skips nothing; its docstring says so) and credited
+`test_v9_staging.py` with two `skipif`s where it has one, which does not fire here. A list of
+tolerated absences that is itself unchecked is the §5 rotted-allowlist defect aimed at §2.
+
+Exactly **two** tests skip in the default lane on this checkout:
+
+- `tools/emission/test_emission_diversity.py::test_location_ranker_cache_hit_matches_direct_scoring`
+  — needs `data/ranker/pref_loc_v0/{model,features}.npz`. **Legitimate**: `pref_loc_v0` is
+  live (≈10 importers) and the path is a declared durable in `tools/audit/durability_map.py`,
+  so this is *not fetched*, not *deleted on purpose*. It is the PRESENCE-FROM-DISK arm of §6's
+  two-test pairing; the absence arm runs unconditionally.
+- `tools/atlas/test_julia_seed_pool.py::test_committed_file_is_what_the_filter_reproduces`
+  — needs `build_julia_seed_pool.VIABLE_DEFAULT`, which is **`scratch/`-class, the one class
+  whose contract guarantees deletion**. It has therefore skipped since the wipe and will skip
+  until someone re-runs `q4_decisive`. **Flagged, not deleted** (2026-08-06): unlike the two
+  cases resolved that day, its input has a live producer, so the referent is regenerable
+  rather than gone. Either re-run the producer and freeze the comparison against a durable
+  copy of the input, or delete the test — a permanent skip is the one thing it should not
+  stay. The filter itself is covered unconditionally by
+  `test_filter_drops_anchor_and_projects_in_order`.
+
+Two non-skip absence tolerances remain outside the test suite: the `.exists()` guards in
+`tools/v9/build_plan.py::assert_recipe_parity`, whose preconditions are in
+`storage_classes.md`.
+
+Resolved on 2026-08-06 under this rule, recorded so the pattern is visible: three
+permanently-skipping tests were deleted — `test_recipe_parity_v5`/`_v6` (inputs wiped
+2026-07-25, never git-tracked, and no v5/v6 build can run again) and
+`test_new_form_passes_on_real_v8_locations` (reads `data/v8/cache_manifest.jsonl`, deleted
+2026-08-03, on the same reasoning `test_v8_cache_alignment.py` already used to delete three
+of its own).
 
 ## 3. Prove it red
 

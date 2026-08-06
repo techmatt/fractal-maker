@@ -12,8 +12,8 @@ A Rust engine for generating orbit-trap Mandelbrot/Julia fractal images as wallp
 cargo build --release            # always release — debug is ~50-200x slower
 cargo test                       # tests/*.rs + unit tests; --test <file> or a name substring narrows
 
-uv run pytest                    # Python suite, default lane, serial (~185s); slow excluded
-uv run pytest -n 4 --dist loadfile   # SAME suite in ~90s (2.06x). The full-suite command.
+uv run pytest                    # Python suite, default lane, serial (~217s); slow excluded
+uv run pytest -n 4 --dist loadfile   # SAME suite in ~118s (1.84x). The full-suite command.
 uv run pytest -m slow            # the opt-in lane — MUST stay serial, see below
 
 # Single render (no subcommand → one PNG):
@@ -32,7 +32,9 @@ its OWN `prompts/` directory holding a different set, so a prompt named in a ses
 found here is in the sibling — check there before globbing the tree.
 
 **Run the full suite parallel; run a single file serial.** `-n 4 --dist loadfile` halves
-the suite (185s → 90s, measured 2026-08-03). Three constraints, each load-bearing:
+the suite (217s → 118s, re-measured 2026-08-06 at 2,223 tests; it was 185s → 90s at 1,439
+on 2026-08-03 — the ratio falls as cheap tests are added, see the cost doc §5). Three
+constraints, each load-bearing:
 **`-n 4`, never `-n auto`** — `-n` bounds concurrent `fractal-generator.exe`, so `auto`
 (12 here) blows the 4-process cap below; `-n 6` measured no faster anyway. **Never
 `-n` with `-m slow`** — the guard tripwire spawns its own 4 engine subprocesses. **Never
@@ -69,7 +71,7 @@ deselect-to-zero run reads as a pass, so the `-m slow` must be there explicitly.
 **`version_pinned` is a LABEL, not a lane.** It is excluded from nothing — those tests run in
 the default suite like any other. It exists so the set of things a classifier-version flip
 touches can be *listed* instead of discovered by flipping and reading the wreckage:
-`uv run pytest -m version_pinned --collect-only -q` (93 tests, 10 files). Pair it with
+`uv run pytest -m version_pinned --collect-only -q` (104 tests, 12 files). Pair it with
 `production_pins.COUPLED_ARTIFACTS` (the revert-together set as data, walked by
 `tools/scoring/test_coupled_artifacts.py`) and `classifier_retrain_protocol.md` §5 before any
 `ACTIVE_CKPT` move.

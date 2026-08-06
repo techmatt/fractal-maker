@@ -1,33 +1,41 @@
 # The Python suite's cost model, its two lanes, and what is irreducible
 
-Measured 2026-07-31, **re-measured 2026-08-03**, on the 12-logical-core box
-(`uv run pytest --durations=50 -q`). The point of this doc is to stop the next person
-from re-deriving the profile, and from "optimizing" the things that are already at their
-floor.
+Measured 2026-07-31, re-measured 2026-08-03, **re-measured 2026-08-06**, on the
+12-logical-core box (`uv run pytest -n 4 --dist loadfile -q --durations=60`). The point of
+this doc is to stop the next person from re-deriving the profile, and from "optimizing" the
+things that are already at their floor.
 
 ## 1. The shape: a handful of files hold the whole cost
 
-The suite is **1,427 tests / ~178s** (2026-08-03), and the overwhelming majority run in
-under 0.15s each. Essentially all the wall clock lives in a handful of tests that drive
-the real engine, a real sklearn fit, or a real Newton solve. Anything you do to the ~1,400
-cheap tests is noise.
+The suite is **2,223 tests / 118.3s** parallel (2026-08-06, after the audit pass in §7), and
+the overwhelming majority run in under 0.15s each. Essentially all the wall clock lives in a
+handful of tests that drive the real engine, a real sklearn fit, or a real Newton solve.
+Anything you do to the ~2,200 cheap tests is noise.
 
-**The suite nearly doubled between 2026-07-31 and 2026-08-03** (767 → 1,427 tests), and
-both files that came to dominate the profile were added in that window and are absent
-from the older version of this table. That is the standing lesson here: this profile goes
-stale in days, so **re-measure before optimizing** rather than trusting the table.
+**The suite grew 56% between 2026-08-03 and 2026-08-06** (1,427 → 2,226 before the audit),
+and it had nearly doubled in the three days before that (767 → 1,427). Wall clock did NOT
+track: 178s serial-then, 118s parallel-now, because the growth is all in cheap tests while
+the expensive handful is unchanged. That is the standing lesson here: this profile goes
+stale in days and the test COUNT does not predict it, so **re-measure before optimizing**
+rather than trusting the table.
+
+Costs below are the 2026-08-06 parallel run (a `setup` line is a shared fixture, charged
+once). The 2026-08-03 column is kept where a fix moved it.
 
 | test | cost | what it actually is |
 |---|---|---|
-| `test_guard_tripwire::test_live_f64_path_reproduces_every_verdict` | 45.8s | 81 real `render-one --dump-field` subprocesses. `slow`-marked, out of the default lane. |
-| `test_descent_smoke::test_two_step_descent_emit_and_roundtrip` | 30.4s | three 1280×720 ss4 production renders |
-| `test_emit_staging` (4 tests) | 66.0s → **26.3s** | 2026-08-03: staged once, not four times (§3) |
-| `test_newton_divergence_abort` (2 grid tests) | 68.4s → **17.3s** | 2026-08-03: grid cut to 2×2 on a measured curve (§3) |
-| `test_q4_screen_parity` (both tests) | 24.5s | dense sliding-window `featurize` sweeps |
-| `test_triage` full-pool enumeration | 13.6s | Newton atom enumeration at 4.6 tasks/s |
-| `test_descent_smoke::test_box_guard_refuses_below_f64_wall` | 9.0s | real nav renders down to the f64 wall |
-| `test_t_good_sweep_decode::test_the_v8_anchor_…` | 9.1s | two full LOO-OOF `build_table` derivations, O(n²·\|GRID\|) |
-| `test_steered_frontier::test_keeper_cuts_rederive…` | 5.3s | the committed-constant drift gate |
+| `test_guard_tripwire::test_live_f64_path_reproduces_every_verdict` | 45.8s | 81 real `render-one --dump-field` subprocesses. `slow`-marked, out of the default lane — not in the 118.3s. |
+| `test_descent_smoke::test_two_step_descent_emit_and_roundtrip` | 36.0s | three 1280×720 ss4 production renders |
+| `test_emit_staging` (4 tests) | 66.0s → **30.6s** | 2026-08-03: staged once, not four times (§3). 16.7s of it is the shared `setup`. |
+| `test_newton_divergence_abort` (2 grid tests) | 68.4s → **22.0s** | 2026-08-03: grid cut to 2×2 on a measured curve (§3) |
+| `test_q4_screen_parity` (both tests + setup) | 19.1s | dense sliding-window `featurize` sweeps |
+| `test_triage` full-pool enumeration | 9.4s (setup) | Newton atom enumeration at 4.6 tasks/s |
+| `test_descent_smoke::test_box_guard_refuses_below_f64_wall` | 8.7s | real nav renders down to the f64 wall |
+| `test_t_good_sweep_decode::test_the_v8_anchor_…` | 8.6s | two full LOO-OOF `build_table` derivations, O(n²·\|GRID\|) |
+| `test_frozen_record_writes::test_derive_t_good_v10_writes_…` | 8.6s | a real v10 t_good derivation under both `--adopt` and not |
+| `test_steered_frontier::test_keeper_cuts_rederive…` | 6.6s | the committed-constant drift gate |
+| `test_view_fit_bar_read::test_the_frozen_read_is_the_read_this_code_takes` | 6.2s | re-runs the frozen bar read |
+| `test_import_hygiene::test_no_ambiguous_basename_is_imported_bare` | 5.2s | ASTs every tracked `.py` for bare ambiguous imports |
 
 ## 2. The two lanes
 
@@ -36,8 +44,9 @@ every marked module's docstring had *described* `slow` as opt-in since it was in
 but nothing implemented it, so a bare `pytest` ran the opt-in lane anyway — 49s of a 172s
 suite, 46s of it the guard tripwire.
 
-- **default lane** — `uv run pytest`, 1,422 tests + 5 skipped, ~178s (2026-08-03).
-- **opt-in lane** — `uv run pytest -m slow`, 9 tests. **It grew sharply on 2026-08-03**
+- **default lane** — `uv run pytest -n 4 --dist loadfile`, 2,221 passed + 2 skipped,
+  **118.3s** (2026-08-06). Serial: see §5.
+- **opt-in lane** — `uv run pytest -m slow`, 10 tests. **It grew sharply on 2026-08-03**
   and is no longer a ~1-minute lane: `test_full_roster_ring_seed_grid_is_parity_clean`
   adds 26,624 + 4,992 differential solves. Projected from the measured 0.239 s per
   non-converger at `max_steps=600` and the ~30% non-convergence rate in the table below,
@@ -47,7 +56,8 @@ suite, 46s of it the guard tripwire.
   the grid rather than contiguous-expensive).
 
 A third label, `version_pinned`, is **not** a lane and is excluded from nothing — see
-CLAUDE.md. `uv run pytest -m version_pinned --collect-only -q` lists 93 tests / 10 files.
+CLAUDE.md. `uv run pytest -m version_pinned --collect-only -q` lists 104 tests / 12 files
+(2026-08-06).
 
 Two things about the split that are easy to get wrong:
 
@@ -163,17 +173,24 @@ its consumers re-`_redirect` on entry.
 `pytest-xdist` is a dev dependency. **The full-suite command is:**
 
 ```bash
-uv run pytest -n 4 --dist loadfile      # 1,439 tests, ~90s (vs ~185s serial, 2.06x)
+uv run pytest -n 4 --dist loadfile      # 2,223 tests, 118s (vs 217s serial, 1.84x)
 ```
 
-Measured 2026-08-03 on a quiet box (the first attempt was invalidated by an unrelated
-render study saturating the machine — see §6):
+Measured on a quiet box (the first 2026-08-03 attempt was invalidated by an unrelated render
+study saturating the machine — see §6). **The two dates are different suites** — 1,439 vs
+2,223 tests — so read down a column, not across:
 
-| run | wall | vs serial |
-|---|---:|---:|
-| serial | 185.3s | 1.00× |
-| `-n 4 --dist loadfile` | 89.0s / 90.6s (two runs) | **2.06×** |
-| `-n 6 --dist loadfile` | 88.5s | 2.09× |
+| run | wall (2026-08-03) | wall (2026-08-06) | vs serial |
+|---|---:|---:|---:|
+| serial | 185.3s | 217.3s | 1.00× |
+| `-n 4 --dist loadfile` | 89.0s / 90.6s (two runs) | **118.3s** | 2.06× / **1.84×** |
+| `-n 6 --dist loadfile` | 88.5s | not re-measured | 2.09× |
+
+The speedup **fell** from 2.06× to 1.84× as the suite grew, which is the expected direction:
+784 new cheap tests spread evenly over 4 workers while the serial tail — one 36s render test
+that no amount of `-n` can split — did not move. Under `--dist loadfile` the floor is the
+single slowest FILE, so as cheap work is added the ratio walks toward
+`total / slowest_file`, not toward 4×. Do not read a falling ratio as xdist regressing.
 
 **`-n 4`, never `-n auto`.** `-n` is an upper bound on *concurrent engine subprocesses*,
 because any worker can be the one driving `render-one`. `-n auto` is 12 on this box and
@@ -238,3 +255,98 @@ redirects.
 Standing rule: **set process-global state through `monkeypatch`, never a bare
 `os.environ[...] =`.** Where a helper is a plain function that cannot take `monkeypatch`,
 pair it with an autouse restore fixture at the widest scope that redirects.
+
+## 7. The 2026-08-06 audit pass — what a whole-suite sweep actually found
+
+A deliberate audit of all 2,226 default-lane tests for vacuity, dead referents, redundancy
+and disproportionate cost. Recorded here because **the headline result is that there was
+almost nothing to cut**, and the next person should not repeat the sweep expecting a haul.
+
+Four mechanical sweeps over the 139 tracked test files (1,702 test functions):
+
+| sweep | method | found |
+|---|---|---|
+| duplicate tests | AST normalized (names/strings/args erased), hashed, grouped | **5** groups, all legitimate (parametrize siblings, one deliberate v5/v6 pair) |
+| assertion-free / tautological | AST: no `Assert`, or `Assert` on a constant | 90, of which **89** are `pytest.raises` fail-closed guards or the `assert False` fail-marker idiom |
+| self-swallowing guard | `try: … assert False, msg … except AssertionError` where the handler's own check matches `msg` | **1** — a real defect, §7.1 |
+| record-reader-only | AST: test calls nothing but file-read/json/builtins | 12, all deliberate frozen-record oracles |
+
+### 7.1 The one vacuous test
+
+`test_prospect.py::test_embedding_dim_assert_rejects_mismatch` caught its own marker:
+`assert False, "expected dim assert to fire"` raises `AssertionError`, its own
+`except AssertionError as e` caught it, and the `"dim" in str(e)` check it then ran matched
+the *marker's* text. **Verified vacuous** by deleting the production assert in
+`library_store.write_embedding_shard` — the file stayed green (52 passed). Rewritten as
+`pytest.raises(AssertionError, match=…)`, which goes red on the same injection.
+
+**The general rule:** a try/`assert False`/except block is safe only when the handler cannot
+catch `AssertionError`. Four sibling tests in `test_pool_rebalance.py` use the same idiom
+correctly — they catch `SystemExit`, so the marker propagates. Prefer `pytest.raises`.
+
+### 7.2 Three permanent skips deleted, one flagged
+
+Five tests skipped in the default lane; every one was §2-of-`verification_practice.md`'s
+absence-tolerant shape. Deleted, each because its referent is gone AND the defect it caught
+cannot recur:
+
+- `tools/v5/test_recipe_parity_v5.py`, `tools/v6/test_recipe_parity_v6.py` — inputs
+  (`data/v4|v5/cache_manifest.jsonl`) wiped 2026-07-25 and never git-tracked, so there is no
+  recovery path; no v5/v6 build will run again (`ACTIVE_CKPT` is v10, v8 the only rollback
+  rung). Side effect: both directories are now dead by both methods — `tools/README.md`'s
+  rows and its retirement-candidate table were updated to say so.
+- `classifier/test_palette_renders_v8.py::test_new_form_passes_on_real_v8_locations` — reads
+  `data/v8/cache_manifest.jsonl`, deleted 2026-08-03. `tools/v8/test_v8_cache_alignment.py`
+  had already deleted three of its own tests on this exact referent and reasoning; this one
+  was missed. Its contract survives in the five synthetic brackets beside it.
+
+Kept and flagged: `test_julia_seed_pool.py::test_committed_file_is_what_the_filter_reproduces`
+— its input is `scratch/`-class (guaranteed deletion) so it can never run as-is, but the
+producer is live, which makes it regenerable rather than gone. See `verification_practice.md`
+§2, which also had its live-absence-tolerant list re-derived: that list had rotted in both
+directions and named a fixture that no longer exists.
+
+### 7.3 One order-dependent file (the §6 shape, again)
+
+Running each test file **alone** (`pytest <file> --collect-only`, all 139) found exactly one
+that could not: `tools/wallpaper/test_prospect.py` imported `tools.corpus.corpus_common`,
+whose line-364 `import artifacts` is bare and resolves only once `tools/corpus` is on
+`sys.path` — which some *other* test file happened to do first. Its green belonged to that
+file. Fixed with an explicit `sys.path` insert in `test_prospect.py`. The other 138 are
+self-sufficient; a whole-file solo sweep is cheap (~4 min) and worth repeating after a batch
+of new files.
+
+### 7.4 Two shared-scan fixtures (the §3 pattern, applied to source scans)
+
+Repo-wide `git ls-files` + `ast.parse` scans are a growing family in this suite, and two
+files were paying for the same walk two or three times:
+
+- `tests/test_scratch_dependency_allowlist.py` — three tests each called `scan(REPO_ROOT)`.
+  An `lru_cache`d `repo_scan()` **8.6s → 2.5s** (file: 11 tests in 2.97s). The synthetic-tree
+  calls in the prove-it-red section deliberately bypass it: they plant a file and re-scan the
+  same root, which a cache would silently defeat.
+- `tools/emission/test_intake_fail_closed.py` — three scans of `tools/**/*.py`, two of them
+  parsing. A cached `_tools_sources()` took **9.9s → 6.1s**. It caches the WIDEST population
+  (test files included) and leaves narrowing to each caller, because the three scans disagree
+  on scope — a helper that pre-filtered test files would have silently shrunk
+  `test_no_call_site_can_swallow_the_abort`.
+
+**If a third file joins this family, promote the cached scan to a `tools/` helper** rather
+than writing a third private copy — the same argument `apportion.py` settled for the
+apportionment rules.
+
+### 7.5 What was deliberately NOT touched
+
+- Everything in §4. Each was re-checked against the fresh profile and still holds.
+- The 33 `inspect.getsource` assertions across 10 files. `verification_practice.md` §9 calls
+  them a last resort but explicitly keeps the ones anchored on call shapes — which, on
+  inspection, is all of them.
+- `test_steered_frontier.py`'s `assert len(sf.DIVE_IGNORES) == 41`. It is a re-baselined
+  count and the non-vacuity it claims is already carried by the `assert _sf_crawl_only()`
+  beside it, so it is loosenable — but its docstring states its purpose, which makes it a
+  deliberate pin rather than an accident. Flagged, not changed.
+
+**Net: 2,226 → 2,223 tests, 122.8s → 118.3s parallel.** Three deletions, one repair, one
+order-dependence fix, two shared fixtures. The speedup is incidental; the point was that
+2,223 of 2,226 tests earned their place, and now the reason each survivor did is written
+down.

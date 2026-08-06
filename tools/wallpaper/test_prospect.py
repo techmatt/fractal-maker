@@ -16,11 +16,17 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 _HERE = Path(__file__).resolve().parent
 _ROOT = _HERE.parents[1]
 sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_HERE))
+# `corpus_common` imports its `artifacts` sibling BARE, which only resolves once
+# tools/corpus is on sys.path. Without this line the dotted imports below raise
+# ModuleNotFoundError unless some other test file happened to be collected first — the
+# file's green would belong to that file, not to this one.
+sys.path.insert(0, str(_ROOT / "tools" / "corpus"))
 import library_store as store          # noqa: E402
 import library_annotate as ann         # noqa: E402
 from tools.corpus import location as loc_mod  # noqa: E402
@@ -177,15 +183,19 @@ def test_embedding_shard_roundtrip_and_dim_source_of_truth(tmp_path):
 
 
 def test_embedding_dim_assert_rejects_mismatch(tmp_path):
+    """`pytest.raises`, NOT try/assert-False/except AssertionError.
+
+    The earlier form caught its own marker: `assert False, "expected dim assert to fire"`
+    raises AssertionError, the handler caught it, and the message it then grepped for
+    ("dim") was in the marker itself — so the test passed green with the production assert
+    deleted (verified 2026-08-06 by removing it). Any marker-inside-try shape is unsafe
+    when the handler catches AssertionError; `raises` cannot make that mistake."""
     base = _tmp_base(tmp_path, dim=768)
     shards = tmp_path / "shards"
     bad = np.zeros((2, 512), np.float32)                   # wrong width
-    try:
+    with pytest.raises(AssertionError, match=r"morph_clip dim .* != base store dim 768"):
         store.write_embedding_shard("RUN", 1, ["a", "b"], bad,
                                     shards_dir=shards, emb_base=base)
-        assert False, "expected dim assert to fire"
-    except AssertionError as e:
-        assert "512" in str(e) or "dim" in str(e)
 
 
 def test_embedding_append_crash_safe(tmp_path):

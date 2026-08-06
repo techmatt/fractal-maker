@@ -61,6 +61,7 @@ Light lane: `git ls-files` + `ast`. No numpy/torch/GPU.
 from __future__ import annotations
 
 import ast
+import functools
 import re
 import subprocess
 from dataclasses import dataclass
@@ -287,13 +288,24 @@ def _covering(path: str) -> list[Entry]:
     return [e for e in ALLOWLIST if e.path == path]
 
 
+@functools.lru_cache(maxsize=1)
+def repo_scan() -> tuple[tuple[str, str, int], ...]:
+    """`scan(REPO_ROOT)` once for the whole module instead of once per test.
+
+    Three assertions below need the same full-tree read + AST walk (~2.8s each). The repo
+    tree does not change during a run, so memoizing is a pure speedup. The SYNTHETIC-tree
+    calls in the prove-it-red section deliberately do NOT go through here: those plant a
+    file and re-scan the same root, which a cache would silently defeat."""
+    return tuple(scan(REPO_ROOT))
+
+
 # --------------------------------------------------------------------------- #
 # The assertions
 # --------------------------------------------------------------------------- #
 def test_every_foreign_scratch_reference_is_on_the_ledger():
     """A committed tool reaching into another tool's scratch tree must be a DECLARED
     dependency. An undeclared one is a wipe hazard nobody has classified."""
-    uncovered = [(p, f, ln) for p, f, ln in scan(REPO_ROOT) if not _covering(p)]
+    uncovered = [(p, f, ln) for p, f, ln in repo_scan() if not _covering(p)]
     assert not uncovered, (
         "committed non-test code names a foreign scratch/ path that is not on the ledger "
         "in this file. Either delete the reference, route it through paths.scratch()/"
@@ -310,7 +322,7 @@ def test_no_path_is_covered_twice():
 def test_no_dead_ledger_entry():
     """An entry matching nothing is a line nobody classified, and a rotted allowlist is how
     the covering assertion beside it goes vacuous (verification_practice.md §5)."""
-    referenced = {p for p, _f, _ln in scan(REPO_ROOT)}
+    referenced = {p for p, _f, _ln in repo_scan()}
     dead = [e.path for e in ALLOWLIST if e.path not in referenced]
     assert not dead, (
         "ledger entries matching nothing in the tree — the reference was deleted or moved, "
@@ -320,7 +332,7 @@ def test_no_dead_ledger_entry():
 def test_scan_is_not_vacuous():
     """A derived set can pass by evaluating EMPTY. Pair every derived assertion with a
     non-vacuity check (verification_practice.md §5)."""
-    hits = scan(REPO_ROOT)
+    hits = repo_scan()
     assert len(hits) >= 20, f"the scanner found only {len(hits)} references — it broke"
     assert any(e.kind == INPUT for e in ALLOWLIST)
     assert any(e.kind == OUTPUT for e in ALLOWLIST)

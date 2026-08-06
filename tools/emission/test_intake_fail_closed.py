@@ -24,6 +24,7 @@ Two failures these pin, both found by the 2026-08-04 stage-2 survey:
 from __future__ import annotations
 
 import ast
+import functools
 import json
 import sys
 import tempfile
@@ -43,6 +44,27 @@ from tools.emission import library_seed_v2 as LS2     # noqa: E402
 import corpus_common as cc                            # noqa: E402
 
 DIM = 768
+
+
+@functools.lru_cache(maxsize=1)
+def _tools_sources() -> tuple[tuple[Path, str, ast.Module], ...]:
+    """(path, text, parsed tree) for EVERY `.py` under `tools/`, read and parsed once.
+
+    Three source scans below each walked the whole `tools/` tree independently — two of them
+    parsing it — for ~10s of this file's ~11s. The tree is immutable during a run, so this
+    is a pure speedup. It caches the WIDEST population (test files included) and leaves the
+    narrowing to each caller, because the three scans do not agree on scope:
+    `test_no_call_site_can_swallow_the_abort` deliberately covers test files too, and a
+    shared helper that pre-filtered them would silently shrink it."""
+    out = []
+    for py in sorted(ROOT.joinpath("tools").rglob("*.py")):
+        text = py.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:                                   # pragma: no cover
+            continue
+        out.append((py, text, tree))
+    return tuple(out)
 
 
 def _unit(v):
@@ -105,11 +127,7 @@ def test_no_call_site_can_swallow_the_abort():
     """A raise a caller catches is the warning it replaced. Mechanical, over the whole tree:
     no `load_library_seed(` call may sit inside a `try:` body."""
     offenders = []
-    for py in sorted(ROOT.joinpath("tools").rglob("*.py")):
-        try:
-            tree = ast.parse(py.read_text(encoding="utf-8"))
-        except SyntaxError:                                   # pragma: no cover
-            continue
+    for py, _text, tree in _tools_sources():                  # test files INCLUDED, on purpose
         for node in ast.walk(tree):
             if not isinstance(node, ast.Try):
                 continue
@@ -125,10 +143,10 @@ def test_the_scan_above_is_not_vacuous():
     """§5: a derived set can pass by evaluating empty. Prove the tree actually holds call
     sites for the scan to have looked at."""
     n = 0
-    for py in sorted(ROOT.joinpath("tools").rglob("*.py")):
+    for py, text, _tree in _tools_sources():
         if py.name.startswith("test_"):
             continue
-        if "load_library_seed(" in py.read_text(encoding="utf-8"):
+        if "load_library_seed(" in text:
             n += 1
     assert n >= 2, f"expected the two intake call sites, found {n}"
 
@@ -145,10 +163,9 @@ def test_every_seeded_clustering_call_site_runs_the_never_moved_verifier():
     verifier. (An UNseeded call — `library_recluster_diff`'s one-pass diff — has no prior to
     verify against and is correctly not matched.)"""
     seeded, verified, checked = [], [], 0
-    for py in sorted(ROOT.joinpath("tools").rglob("*.py")):
+    for py, _text, tree in _tools_sources():
         if py.name.startswith("test_"):
             continue
-        tree = ast.parse(py.read_text(encoding="utf-8"))
         for fn in ast.walk(tree):
             if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
