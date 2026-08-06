@@ -302,6 +302,23 @@ The fixed base defaults are `scratch/renders/` (bare render) and `scratch/strips
 >   from the state itself — a hardcoded `True` is how a metadata file outlives what it records.
 >   A committed record may keep what was true when written (`storage_classes.md`).
 
+> **Writing a builder for one instance.** Put the instance in a **frozen dataclass from the
+> start** — which batch, which seed, which id prefix, which run dir — even when there is only
+> one of them, and keep the module scope for the code. `sitting_cutter` held `SITTING_BATCH` /
+> `GEN_VERSION` / `PRESENTATION_SEED` at module scope, so a second sitting needed a refactor
+> before it could be built, while `build_combined_label_sheet` had already solved the same
+> problem with `SheetSpec`/`SPECS`. The cost is ~10 lines and it converts a refactor into an
+> entry. Both patterns are now in the tree (`SittingSpec`/`SITTINGS`, `SheetSpec`/`SPECS`) —
+> copy one.
+
+> **Give a long path a bounded end-to-end.** Every stage that costs minutes needs a flag that
+> runs the WHOLE path on a few rows, and it belongs on the stage that WRITES, not only on the
+> dry-run: `sitting_cutter dry-run` had `--embed-limit` and `draw` did not, so the first
+> execution of a 400-line refactor was the 13.9-minute production run and a join bug reached
+> it. A bounded run that writes real files must stamp itself unusable — `draw --embed-limit`
+> writes `sitting_cut.INCOMPLETE = true` into every `batch.json` it produces, derived from the
+> flag at the write site, never hardcoded.
+
 > **Adding a subcommand.** The per-subcommand `Args` struct (+ its `impl { resolved_* }` helpers)
 > lives **in the subcommand's own module**, next to its `run_*`. Four edit sites: (1) the
 > `#[derive(Args)]` struct there (e.g. `EnrichArgs` in `src/enrich.rs`), `use`-importing whatever

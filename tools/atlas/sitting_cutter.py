@@ -926,11 +926,35 @@ def check_registrations(spec: SittingSpec) -> dict:
     return out
 
 
+def completeness_stamp(embed_limit) -> dict:
+    """The `INCOMPLETE` / `embed_limit` pair a cut records about itself.
+
+    A pure function of the bound, shared by the writer and the test, so the stamp cannot drift
+    from what actually happened — the hazard `CLAUDE.md` states as "derive state in code;
+    freeze it in records" (a hardcoded `True` is how a metadata file outlives what it records).
+    `INCOMPLETE` is true iff the morph pass was bounded, because that is the ONE thing that
+    makes the written batches partial: the dedup runs on whatever the embedder reached."""
+    n = int(embed_limit) if embed_limit else 0
+    return dict(INCOMPLETE=n > 0, embed_limit=(n or None))
+
+
 def stage_draw(args) -> int:
     """Cut the sitting's union queue ONCE and write each leg as its own registered batch.
 
     Nothing is rendered here and no sheet is built: the cut has to be readable — and its
-    bar-readability slice reported — BEFORE hours of rendering are committed to it."""
+    bar-readability slice reported — BEFORE hours of rendering are committed to it.
+
+    `--embed-limit` IS THE CHEAP END-TO-END, and it exists because there was none. `dry-run`
+    could be bounded and `draw` could not, so the first execution of any change to this path
+    was the production run itself: a 400-line refactor's first run was 13.9 minutes long and
+    carried a join bug (`recover_dive_arms` handed a tier-SORTED queue where its contract is
+    append order) that a 20-row draw in ~15 s would have surfaced before any of it ran.
+
+    A BOUNDED DRAW WRITES REAL BATCH FILES, so it must be impossible to mistake for a real
+    cut: every leg's `batch.json` carries `sitting_cut.INCOMPLETE = true` plus the limit that
+    produced it, and the stage prints the same in its closing lines. The stamp is DERIVED from
+    the argument at the write site, never hardcoded (`CLAUDE.md`: derive state in code, freeze
+    it in records) — an unbounded draw stamps `false` and means it."""
     import time
     import paths
     import corpus_common as cc
@@ -949,11 +973,16 @@ def stage_draw(args) -> int:
           f"; cross-leg dups dropped {json.dumps(qrep['cross_leg_duplicates_dropped'])}")
     for b, why in qrep["dive_arm_join"].items():
         print(f"  dive arm ({b}): {why}")
+    embed_limit = getattr(args, "embed_limit", None)
+    if embed_limit:
+        print(f"!! BOUNDED DRAW: --embed-limit {embed_limit}. The morph pass stops there, so "
+              f"the dedup is PARTIAL and the batches written below are a smoke test, not a "
+              f"sitting. Every batch.json will say so (sitting_cut.INCOMPLETE = true).")
     cache = mec.MorphEmbedCache().open()
     t0 = time.time()
     res = cut_sitting(rows, max_rows=max_rows,
                       embed=make_embedder(Path(paths.scratch("sitting_cutter", "fields")),
-                                          None, cache),
+                                          embed_limit, cache),
                       progress=lambda d: print(json.dumps(d), flush=True))
     cut_wall = time.time() - t0
     cache_rep = cache.report()
@@ -991,6 +1020,10 @@ def stage_draw(args) -> int:
     sitting_cut = dict(
         sitting=spec.name, legs=list(spec.batches),
         run_dirs={l.batch_id: l.run_dir for l in spec.legs},
+        # DERIVED from the flag, so a bounded smoke-test cut can never be read as a real one.
+        # `embed_limit` is the whole story: the morph pass stopped there, so the dedup that
+        # follows it saw only part of the population.
+        **completeness_stamp(embed_limit),
         max_rows=max_rows, queue=qrep,
         n_in=cut["n_in"], n_sitting=cut["n_sitting"], n_over_cap=cut["n_over_cap"],
         stages=cut["stages"], cells=cut["cells"], balances=cut["balances"],
@@ -1075,6 +1108,10 @@ def stage_draw(args) -> int:
     print(f"  by tier:      {json.dumps(cut['by_tier'])}")
     for b, n, nr, bdir in written:
         print(f"  {b:38s} n={n:4d}  bar-readable={nr:4d}  assign_split={reg[b]}  -> {bdir}")
+    if embed_limit:
+        print(f"\n!! INCOMPLETE CUT — the morph pass was bounded at {embed_limit} embeds and "
+              f"every batch.json above is stamped sitting_cut.INCOMPLETE = true. Re-run "
+              f"`draw` with no --embed-limit before rendering or labelling any of it.")
     print("\n(NOTHING RENDERED — run `render` next)")
     return 0
 
@@ -1212,8 +1249,8 @@ def main():
     d.add_argument("--sitting", choices=sorted(SITTINGS), default=None)
     d.add_argument("--max-rows", type=int, default=MAX_ROWS)
     d.add_argument("--embed-limit", type=int, default=None,
-                   help="bound the morph pass (dry-run only). The unembedded remainder is "
-                        "counted as budget_not_reached, never silently dropped.")
+                   help="bound the morph pass. The unembedded remainder is counted as "
+                        "budget_not_reached, never silently dropped.")
     d.add_argument("--no-cache", action="store_true",
                    help="bypass the persistent morph-embed store (a COLD timing arm)")
     d.add_argument("--out", default=None)
@@ -1221,6 +1258,11 @@ def main():
     w = sub.add_parser("draw", help="cut the sitting and write each leg's registered batch")
     w.add_argument("--sitting", choices=sorted(SITTINGS), default=V2_SITTING.name)
     w.add_argument("--max-rows", type=int, default=None)
+    w.add_argument("--embed-limit", type=int, default=None,
+                   help="SMOKE TEST ONLY: bound the morph pass so the whole draw path runs "
+                        "end to end in seconds. The dedup is then PARTIAL, so every batch.json "
+                        "it writes is stamped sitting_cut.INCOMPLETE = true; re-run without "
+                        "the flag before rendering or labelling.")
     w.set_defaults(fn=stage_draw)
 
     r = sub.add_parser("render", help="render both crops per row; resumable, idempotent")

@@ -699,3 +699,49 @@ def test_the_ss_deviation_is_local_and_recorded_not_a_shared_constant_edit():
     assert sc.SITTING_CROP_SS != BMB.CROP_SS
     import corpus_common as cc
     assert "ss" in cc.RENDER_KEYS, "the deviation is only safe because ss is version-invariant"
+
+
+# =========================================================================== #
+# the cheap end-to-end. `dry-run` could be bounded and `draw` could not, so the first
+# execution of any change to the draw path WAS the 13.9-minute production run — which is how
+# a join bug reached it. `--embed-limit` on `draw` is the 15-second version, and the price of
+# having it is that a bounded cut must be impossible to mistake for a real one.
+# =========================================================================== #
+def test_draw_takes_an_embed_limit_and_it_reaches_the_stage():
+    """The flag exists on `draw`, not only on `dry-run` — asked of the real CLI, because the
+    parser is built inside `main()` and a test that rebuilt it would be testing its own copy."""
+    import subprocess
+    out = subprocess.run([sys.executable, str(ROOT / "tools" / "atlas" / "sitting_cutter.py"),
+                          "draw", "--help"], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert "--embed-limit" in out.stdout
+    assert "INCOMPLETE" in out.stdout, "the help must say what a bounded draw writes"
+
+
+def test_an_unbounded_cut_stamps_complete_and_a_bounded_one_stamps_INCOMPLETE():
+    """The stamp is a pure function of the bound, so it cannot say `false` about a run that
+    was in fact bounded. Both directions, because a stamp that is always true is as useless
+    as one that is always false."""
+    assert sc.completeness_stamp(None) == dict(INCOMPLETE=False, embed_limit=None)
+    assert sc.completeness_stamp(0) == dict(INCOMPLETE=False, embed_limit=None)
+    assert sc.completeness_stamp(20) == dict(INCOMPLETE=True, embed_limit=20)
+    assert sc.completeness_stamp("20") == dict(INCOMPLETE=True, embed_limit=20)
+
+
+def test_the_stamp_is_DERIVED_at_the_write_site_and_not_restated():
+    """`CLAUDE.md`: derive state in code, freeze it in records. A second literal `INCOMPLETE`
+    in the batch.json builder is how a metadata file outlives what it records."""
+    import inspect
+    src = inspect.getsource(sc.stage_draw)
+    assert "completeness_stamp(embed_limit)" in src
+    assert "INCOMPLETE=" not in src, "the stamp must come from the pure function, not a literal"
+
+
+def test_the_bounded_draw_uses_the_limit_it_was_given_not_a_hardcoded_None():
+    """The bug this whole item is about, in miniature: a flag that is parsed, stored and then
+    not passed to the thing it bounds. `draw` built its embedder with a literal `None`."""
+    import inspect
+    src = inspect.getsource(sc.stage_draw)
+    assert "make_embedder(" in src
+    call = src[src.index("make_embedder("):]
+    assert "embed_limit" in call[:200], "the draw's embedder ignores --embed-limit"
