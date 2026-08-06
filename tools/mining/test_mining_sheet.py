@@ -315,13 +315,42 @@ def test_sheet_order_is_contiguous_and_sorted_good_to_bad(written):
     assert len(set(preds)) > 1, "a constant pred makes the order claim vacuous"
 
 
-def test_no_row_carries_a_label_and_the_suggestion_is_a_separate_field(written):
+def test_the_BUILDER_emits_a_null_label_slot(written):
     """A suggestion is not a label. If `label.score` were pre-filled, the merge's null->value
-    rule would accept the machine tier as human on the first pass."""
+    rule would accept the machine tier as human on the first pass.
+
+    Asserted on the SOURCE, not on the store. This used to read `label.score is None` off the
+    committed images.jsonl, which states the property only until the first merge — and
+    null->value is the ONE mutation the store permits, so the guard fired on the sitting
+    landing (2026-08-06) rather than on any defect. The build-time claim is about what the
+    writer constructs; the store-side claim is the test below."""
+    src = (ROOT / "tools" / "mining" / "build_mining_sheet.py").read_text(encoding="utf-8")
+    assert re.search(r'"label":\s*\{\s*"score":\s*None,\s*"labeler":\s*None,\s*'
+                     r'"labeled_at":\s*None\s*\}', src), \
+        "the row constructor no longer emits an all-null label slot"
     for r in written:
-        assert r["label"]["score"] is None, r["image_id"]
         assert 1 <= r["suggested_tier"] <= ST.K_TIERS
         assert r["head_mining_v1"]["head_version"] == "v1"
+
+
+def test_a_SCORED_row_carries_human_attribution_and_is_not_the_suggestion_copied(written):
+    """The store-side half, and the one that survives a merge.
+
+    Two ways a machine tier becomes a label: written into the slot at build time (the source
+    check above), or merged in from an export that was really the suggestion column. The
+    second is invisible per-row — a merged suggestion carries a labeler like any other — so
+    it is caught in the aggregate: an export that WAS the suggestions agrees with them on
+    every row. The real sitting agrees on 92.9%, so the check has margin and is not vacuous.
+    """
+    scored = [r for r in written if r["label"]["score"] is not None]
+    if not scored:
+        pytest.skip("batch not labeled yet — the null slot is covered by the source check")
+    for r in scored:
+        assert 1 <= r["label"]["score"] <= ST.K_TIERS, r["image_id"]
+        assert r["label"]["labeler"] and r["label"]["labeled_at"], \
+            f"{r['image_id']} has a score with no labeler/date — no merge path writes that"
+    assert any(r["label"]["score"] != r["suggested_tier"] for r in scored), \
+        "every scored row equals its suggested tier: the suggestion column was merged as labels"
 
 
 def test_the_merge_REFUSES_a_tier_above_the_corpus_ceiling(tmp_path, written):
