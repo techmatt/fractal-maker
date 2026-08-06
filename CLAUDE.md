@@ -173,6 +173,16 @@ derived from eval-eligibility, `score_unconditioned` is the exemption flag, and
 `test_batch_registry.py` fails on a second literal copy **or** on any corpus batch id inside
 a manifest-build module).
 
+**Shared owner under `tools/` — `apportion.py`**, THE two apportionment rules, dependency-free
+so no layering argument justifies an eighth copy (there were seven, in two dialects, across
+seven modules). `deal_round_robin(sizes, n, *, preseed=None)` to **draw a subset** (floor-then-remainder;
+its ±1 claim is about NON-EXHAUSTED cells, and `preseed` is what makes a reservation a floor
+rather than a bonus); `sequence_by_deficit(sizes, *, tie_key=None)` to **order a whole set** so
+every prefix is near-proportional — the only one of the two that survives a truncating budget.
+They are **not interchangeable**, and the ±1 prefix bound is a **check each caller runs on the
+order it built**, not a theorem: it is tight for two cells and reaches 1.495 on a skewed 13-cell
+population. A source scan in `test_apportion.py` fails on a second copy of either rule.
+
 **The classifier** (`classifier/`, pkg). Weights/metrics in `data/classifier/v5…v10/`,
 **git-LFS tracked in-tree — NOT gitignored** (`.gitattributes` + exact-path `.gitignore`
 negation; guarded by `tests/test_tracked_artifacts.py` and the size-guard registry). A weight

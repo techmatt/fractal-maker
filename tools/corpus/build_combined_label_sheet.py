@@ -71,6 +71,7 @@ for _p in (str(HERE), str(ROOT), str(ROOT / "tools"), str(ROOT / "tools" / "viz"
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import apportion                      # noqa: E402  (THE two apportionment rules)
 import artifacts as _artifacts        # noqa: E402
 import corpus_common as cc            # noqa: E402
 import label_store as ls              # noqa: E402
@@ -381,16 +382,24 @@ def opaque_id(slot: int, batch: str, image_id: str, spec: SheetSpec = Q4_COMBINE
 def ordered_union(pairs, seed: int = UNION_SEED):
     """Seeded shuffle over the union, then a stratified round-robin over (source, family).
 
-    The deal is GREEDY LARGEST-DEFICIT (Webster/Sainte-Laguë sequencing): at position L the
-    next row comes from the cell whose running count is furthest below its proportional share
-    L*n_c/N. That is the apportionment-sequencing rule, and it is what actually holds every
-    cell within 1 of its share in EVERY prefix — the check asserts the bound on the built
-    order rather than trusting it.
+    The deal is GREEDY LARGEST-DEFICIT (Webster/Sainte-Laguë sequencing) and THE RULE ITSELF
+    LIVES IN `apportion.sequence_by_deficit` — one copy shared with the dive planner, which
+    used to be a second: at position L the next row comes from the cell whose running count is
+    furthest below its proportional share L*n_c/N. This function owns the CELLS (source x
+    family) and the within-cell order; it does not own the sequencing.
 
     The obvious alternative — lay each cell's rows at (i+0.5)/n_c and sort by that key — does
     NOT hold ±1 here and was measured failing it: with 15 cells its per-cell rounding errors
     accumulate through the shared threshold, and the 290-row near-minibrot cell reached a
-    deviation of 1.67. Cheaper to compute, wrong at this cell count.
+    deviation of 1.67. On this sheet's own cell shape it reaches 1.068 where the deficit rule
+    reaches 0.738 (`test_apportion.py` keeps that comparison as a live control). Cheaper to
+    compute, wrong at this cell count.
+
+    THE ±1 BOUND IS CHECKED, NOT TRUSTED: `stage_verify` asserts it on the order this function
+    actually built, and that check is load-bearing. The bound is a property of the RULE only
+    for two cells; on a skewed many-cell population greedy largest-deficit can exceed it
+    (1.495 on the frozen 13-cell counterexample in `test_apportion.py`). Do not read the rule
+    as a guarantee and simplify the check away.
 
     Ties break on a seeded per-cell jitter, so equal-deficit cells do not resolve in the same
     direction at every collision (which would group one cell ahead of another all sitting).
@@ -405,18 +414,13 @@ def ordered_union(pairs, seed: int = UNION_SEED):
 
     cells = sorted(per_cell)
     jitter = {c: random.Random(f"{seed}|{c}").random() for c in cells}
-    n_c = {c: len(per_cell[c]) for c in cells}
-    N = sum(n_c.values())
-    taken = {c: 0 for c in cells}
+    sizes = {c: len(per_cell[c]) for c in cells}
     cursor = {c: 0 for c in cells}
 
     out = []
-    for L in range(1, N + 1):
-        c = max((c for c in cells if cursor[c] < n_c[c]),
-                key=lambda c: (L * n_c[c] / N - taken[c], jitter[c], c))
+    for c in apportion.sequence_by_deficit(sizes, tie_key=lambda c: (jitter[c], c)):
         batch, row = per_cell[c][cursor[c]]
         cursor[c] += 1
-        taken[c] += 1
         out.append((c, batch, row))
     return out
 

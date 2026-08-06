@@ -59,6 +59,7 @@ for _p in (str(HERE), str(ROOT), str(ROOT / "tools"), str(ROOT / "tools" / "corp
         sys.path.insert(0, _p)
 
 import paths                                   # noqa: E402
+import apportion                                # noqa: E402  (THE apportionment rules)
 import corpus_common as cc                      # noqa: E402
 import build_minibrot_batch as BMB              # noqa: E402  (coords / palettes / io)
 import maneuver_inspection_sheet as mis         # noqa: E402  (the population loader)
@@ -196,13 +197,7 @@ def draw_stratified(pop: list[dict], n: int, edges: list[float], seed: int) -> l
         c.sort(key=lambda r: r["key"])
         rng.shuffle(c)
     keys = sorted(cells, key=lambda k: (str(k[0]), str(k[1]), k[2]))
-    take = {k: 0 for k in keys}
-    while sum(take.values()) < n:
-        cand = [k for k in keys if take[k] < len(cells[k])]
-        if not cand:
-            break
-        k = min(cand, key=lambda k: (take[k], -len(cells[k])))
-        take[k] += 1
+    take = apportion.deal_round_robin({k: len(cells[k]) for k in keys}, n)
     out = []
     for k in keys:
         out.extend(cells[k][:take[k]])

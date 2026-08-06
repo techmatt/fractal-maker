@@ -98,6 +98,7 @@ for _p in (HERE, ROOT, ROOT / "tools", ROOT / "tools" / "corpus",
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import apportion                                # noqa: E402  (THE apportionment rules)
 import apply_interior_rule as air               # noqa: E402  (the rule id + threshold)
 import supply_routing as srt                    # noqa: E402  (the per-partition discard table)
 
@@ -367,9 +368,10 @@ STAGES = (stage_interior, stage_machine_1, stage_morph_dedup)
 # =========================================================================== #
 def draw_balanced(rows, cell_of, n: int, preseed: dict | None = None):
     """`n` rows, round-robin over cells, best-first inside each cell — the caller's order is
-    the within-cell rank. Same floor-then-remainder shape as the v1 batch draw, restated here
-    only because the cells differ (partition x tier rather than fate x partition): a sitting
-    is one page and a fate-balanced page would spend the cap on rejects.
+    the within-cell rank. The allocation is `apportion.deal_round_robin`, the same
+    floor-then-remainder rule the v1 batch draw uses; only the CELLS differ here (partition x
+    tier rather than fate x partition), because a sitting is one page and a fate-balanced page
+    would spend the cap on rejects.
 
     `preseed` credits a cell with rows it was ALREADY given (the calibration reservation), so
     the round-robin continues from that count instead of restarting at zero. That is what makes
@@ -381,17 +383,14 @@ def draw_balanced(rows, cell_of, n: int, preseed: dict | None = None):
     cells = defaultdict(list)
     for r in rows:
         cells[cell_of(r)].append(r)
-    seed = {k: 0 for k in cells}
-    for k, v in (preseed or {}).items():
-        seed[k] = seed.get(k, 0) + int(v)
+    seed = {k: int(v) for k, v in (preseed or {}).items()}
     keys = sorted(set(cells) | set(seed), key=str)
-    take = {k: 0 for k in keys}
-    while sum(take.values()) < n:
-        cand = [k for k in keys if take[k] < len(cells[k])]
-        if not cand:
-            break
-        k = min(cand, key=lambda k: (take[k] + seed[k], -len(cells[k])))
-        take[k] += 1
+    # A reserved cell with no remaining supply still enters `sizes` at 0 — `deal_round_robin`
+    # refuses a preseed cell it cannot see, because a reservation that vanishes from the
+    # tie-breaks also vanishes from the accounting.
+    take = apportion.deal_round_robin({k: len(cells[k]) for k in keys}, n,
+                                      preseed=seed)
+    seed = {k: seed.get(k, 0) for k in keys}
     out = []
     for i in range(max(take.values(), default=0)):
         for k in keys:
@@ -795,7 +794,8 @@ def recover_dive_arms(store: Path, dive_log: Path) -> tuple[dict, str]:
     in execution order. So the i-th distinct root_id in APPEND order is the i-th dive.
 
     IT READS THE STORE ITSELF rather than taking rows, and that is the whole safety of it: the
-    argument is about APPEND order, and `build_queue` returns the same rows tier-SORTED. Handed
+    argument is about APPEND order, and `build_sorted_queue` returns the same rows tier-SORTED
+    (its name now says so). Handed
     the sorted rows this returned no mapping at all (the partition check caught it), which is
     the failure working — but a signature that can be handed the wrong order is a signature
     that will be.
@@ -848,7 +848,7 @@ def load_union_queue(spec: SittingSpec) -> tuple[list[dict], dict]:
     arms = {}
     for leg in spec.legs:
         run_dir = ROOT / leg.run_dir
-        leg_rows, _rep = bq.build_queue(run_dir)
+        leg_rows, _rep = bq.build_sorted_queue(run_dir)
         if leg.dive_log:
             m, why = recover_dive_arms(run_dir / "q4_candidates.jsonl",
                                        run_dir / leg.dive_log)
@@ -880,7 +880,7 @@ def load_union_queue(spec: SittingSpec) -> tuple[list[dict], dict]:
 def load_queue(run_dir: Path) -> list[dict]:
     """One run's record-and-rank store, tier-sorted, first-occurrence-wins on identity."""
     import build_q4_harvest_batches as bq
-    rows, _rep = bq.build_queue(Path(run_dir))
+    rows, _rep = bq.build_sorted_queue(Path(run_dir))
     return rows
 
 

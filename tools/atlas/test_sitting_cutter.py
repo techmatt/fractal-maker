@@ -535,7 +535,12 @@ def test_the_union_queue_and_the_single_run_queue_sort_on_the_SAME_key():
     assert "sort(key=bq.queue_sort_key)" in src and "bq.queue_identity(r)" in src
     # the sort key's own shape (descending tier, descending score) restated nowhere here
     assert "-int(" not in src and "-float(" not in src, "the sort key must not be restated"
-    assert inspect.getsource(bq.build_queue).count("queue_sort_key") == 1
+    # ...and the single-run loader APPLIES that same key rather than carrying its own: the
+    # count is on the call, not on the token, so the loader may still name the key in the
+    # order it reports (`rep["order"]`) without looking like a second copy.
+    q4 = inspect.getsource(bq.build_sorted_queue)
+    assert q4.count("sort(key=queue_sort_key)") == 1
+    assert "-int(" not in q4 and "-float(" not in q4, "the sort key must not be restated"
 
 
 def test_queue_rank_is_assigned_over_the_UNION_not_per_leg():
@@ -599,7 +604,7 @@ def test_a_dive_arm_join_whose_PARTITIONS_disagree_yields_no_arm(tmp_path):
 
 
 def test_the_arm_join_reads_the_APPEND_ORDERED_store_not_a_sorted_queue():
-    """The order argument is about append order, and `build_queue` returns the same rows
+    """The order argument is about append order, and `build_sorted_queue` returns the same rows
     tier-sorted. A signature that can be handed the wrong order will be, so this one takes the
     store path and reads it itself."""
     import inspect

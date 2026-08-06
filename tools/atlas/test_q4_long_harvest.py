@@ -509,3 +509,31 @@ def test_every_q4_fate_is_named():
     sf = _sf()
     assert "unknown" in sf.SteeredFrontier.Q4_FATES
     assert len(set(sf.SteeredFrontier.Q4_FATES)) == len(sf.SteeredFrontier.Q4_FATES)
+
+
+# =========================================================================== #
+# the loader says what it did to the order. A loader that silently reorders is a misuse
+# waiting at every call site: `recover_dive_arms` takes APPEND order and was handed this
+# queue's tier-SORTED output, which returned an empty join — caught only by an independent
+# partition cross-check, and a wrong arm would have inverted the contrast the dive measures.
+# =========================================================================== #
+def _cand(cx, tier, score, part="mandelbrot", fate="reject"):
+    return dict(partition=part, cx=str(cx), cy="0", fw="1e-3", rank_tier=tier,
+                rank_score=score, fate=fate)
+
+
+def test_the_queue_loader_reorders_and_both_its_NAME_and_its_REPORT_say_so(tmp_path):
+    """Behavioural, not a grep: rows go in in append order and come out tier-sorted, and the
+    report carries the order that was applied, so a caller that logs the report has a record
+    of which order it got."""
+    import json
+    b = _b()
+    rows = [_cand(1, 1, 0.9), _cand(2, 2, 0.1), _cand(3, 2, 0.5)]
+    (tmp_path / "q4_candidates.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    out, rep = b.build_sorted_queue(tmp_path)
+    assert [r["cx"] for r in out] == ["3", "2", "1"], "tier blocks first, score within tier"
+    assert [r["cx"] for r in rows] != [r["cx"] for r in out], "the loader DID reorder"
+    assert "order" in rep and "append order" in rep["order"], rep
+    assert not hasattr(b, "build_queue"), \
+        "the pre-rename name is back — a loader that reorders must say so in its name"

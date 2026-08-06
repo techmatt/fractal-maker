@@ -66,6 +66,7 @@ sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 sys.path.insert(0, str(ROOT / "tools"))
 
 import paths as _paths                   # noqa: E402  (storage-class helper: bulk() -> out-of-tree)
+import apportion                         # noqa: E402  (THE two apportionment rules; stdlib-only)
 
 # production_seeder wires its own sub-imports (prescreen / reframe / guard / score_lib /
 # active_ckpt) and owns the constants, root pipeline, near-dup machinery, guard, and the
@@ -859,12 +860,15 @@ def interleave_dive_arms(plan: list) -> list:
     that produced this plan hit it — so the plan has to be readable at whatever length it
     reaches, not only at N.
 
-    GREEDY LARGEST-DEFICIT (Webster/Sainte-Laguë) over the ARM axis, which is the same
-    apportionment-sequencing rule the label sheet uses over (source x family): at position L the
-    next entry comes from the arm furthest below its proportional share L*n_a/N, so each arm is
-    within 1 of its share in EVERY prefix. WITHIN an arm the incoming order is preserved
-    untouched, so the deficit sort above still does exactly what item 8 asked of it — deficit
-    families first, within each arm.
+    GREEDY LARGEST-DEFICIT (Webster/Sainte-Laguë) over the ARM axis — literally the same code
+    the label sheet deals (source x family) with, `apportion.sequence_by_deficit`, which is
+    where the rule now lives: at position L the next entry comes from the arm furthest below
+    its proportional share L*n_a/N, so each arm is within 1 of its share in EVERY prefix.
+    TWO ARMS is the case where that bound is a property of the rule rather than of the
+    population (worst deviation 0.5, exhaustive to 60x60 in `test_apportion.py`); it is still
+    asserted on the built order here, because the ARM COUNT is the reason it holds. WITHIN an
+    arm the incoming order is preserved untouched, so the deficit sort above still does exactly
+    what item 8 asked of it — deficit families first, within each arm.
 
     Unconditional, and that is the point: the scheduler-OFF plan is the worse of the two and had
     no re-ordering at all. Ties break toward the LARGER arm and then by name, so the sequence is
@@ -873,19 +877,14 @@ def interleave_dive_arms(plan: list) -> list:
     for e in plan:
         arms.setdefault(e["start_group"], []).append(e)
     keys = sorted(arms)
-    n = {k: len(arms[k]) for k in keys}
-    N = sum(n.values())
-    if len(keys) < 2 or N == 0:
+    sizes = {k: len(arms[k]) for k in keys}
+    if len(keys) < 2 or sum(sizes.values()) == 0:
         return list(plan)
-    taken = {k: 0 for k in keys}
     cursor = {k: 0 for k in keys}
     out = []
-    for L in range(1, N + 1):
-        k = max((k for k in keys if cursor[k] < n[k]),
-                key=lambda k: (L * n[k] / N - taken[k], n[k], k))
+    for k in apportion.sequence_by_deficit(sizes):      # default tie: larger arm, then name
         out.append(arms[k][cursor[k]])
         cursor[k] += 1
-        taken[k] += 1
     return out
 
 

@@ -54,6 +54,7 @@ for _p in (str(HERE), str(ROOT), str(ROOT / "tools"), str(ROOT / "tools" / "corp
         sys.path.insert(0, _p)
 
 import paths                                    # noqa: E402
+import apportion                                # noqa: E402  (THE apportionment rules)
 import corpus_common as cc                      # noqa: E402
 import build_minibrot_batch as BMB              # noqa: E402  (coords / palettes / io)
 import deep_center_finder as dcf                # noqa: E402  (the corpus crop cap policy)
@@ -120,11 +121,21 @@ def queue_sort_key(r: dict) -> tuple:
             str(r["cx"]), str(r["cy"]))
 
 
-def build_queue(run_dir: Path) -> tuple[list[dict], dict]:
+def build_sorted_queue(run_dir: Path) -> tuple[list[dict], dict]:
     """Every recorded candidate, tier-sorted. Highest tier first, then by score in tier.
 
     The append-only store is a SUPERSET of the population (a kill can replay a batch), so
-    first occurrence wins on the row identity, exactly as the maneuver loader does."""
+    first occurrence wins on the row identity, exactly as the maneuver loader does.
+
+    `SORTED` IS IN THE NAME BECAUSE THE REORDERING IS INVISIBLE AT THE CALL SITE OTHERWISE,
+    and that cost a session: `sitting_cutter.recover_dive_arms` takes an argument whose
+    contract is the store's APPEND order (i-th distinct `root_id` = i-th dive) and was handed
+    this function's output, which is the same rows tier-SORTED. The join returned nothing, and
+    it was caught only by an independent partition cross-check — with counts alone it would
+    have silently mislabelled every dive row's arm and inverted the contrast that leg exists to
+    measure. There is no way to get append order through here; read the store directly for
+    that (which `recover_dive_arms` now does). The applied order is also reported in
+    `rep["order"]`, so a caller that logs the report records which order it got."""
     rows, seen = [], set()
     for r in _jl(Path(run_dir) / "q4_candidates.jsonl"):
         key = queue_identity(r)
@@ -136,6 +147,7 @@ def build_queue(run_dir: Path) -> tuple[list[dict], dict]:
     for i, r in enumerate(rows, 1):
         r["queue_rank"] = i
     rep = dict(n=len(rows),
+               order="queue_sort_key (tier desc, score desc, cx, cy) — NOT store append order",
                by_tier=dict(Counter(str(r.get("rank_tier")) for r in rows)),
                by_fate=dict(Counter(r["fate"] for r in rows)),
                by_partition=dict(Counter(r["partition"] for r in rows)),
@@ -151,7 +163,7 @@ def queue_path(run_dir) -> Path:
 
 
 def stage_queue(args) -> int:
-    q, rep = build_queue(args.run_dir)
+    q, rep = build_sorted_queue(args.run_dir)
     if not q:
         raise SystemExit(f"no q4_candidates.jsonl rows under {args.run_dir}")
     p = queue_path(args.run_dir)
@@ -177,7 +189,9 @@ def draw_round_robin(rows, cell_of, n: int, *, order_key):
 
     Floor-then-remainder over the cells — every non-empty cell gives up its best remaining
     row before any cell gives up its second — so the chunk is the top of the queue
-    CONDITIONED on not letting one cell own the page.
+    CONDITIONED on not letting one cell own the page. THE ALLOCATION IS
+    `apportion.deal_round_robin`, shared with every other builder that draws a subset; what
+    this function owns is the cells, the within-cell order and the report.
 
     "BALANCED TO +/-1" IS AN INVARIANT ABOUT NON-EXHAUSTED CELLS, and stating it as a flat
     spread over all cells is wrong — measured on this run's own queue, where the flat spread
@@ -195,13 +209,7 @@ def draw_round_robin(rows, cell_of, n: int, *, order_key):
     for v in cells.values():
         v.sort(key=order_key)
     keys = sorted(cells, key=str)
-    take = {k: 0 for k in keys}
-    while sum(take.values()) < n:
-        cand = [k for k in keys if take[k] < len(cells[k])]
-        if not cand:
-            break
-        k = min(cand, key=lambda k: (take[k], -len(cells[k])))
-        take[k] += 1
+    take = apportion.deal_round_robin({k: len(cells[k]) for k in keys}, n)
     out = []
     for _round in range(max(take.values(), default=0)):
         for k in keys:
@@ -213,16 +221,13 @@ def draw_round_robin(rows, cell_of, n: int, *, order_key):
 
 
 def cells_balanced(rep: dict) -> tuple[bool, str]:
-    """The acceptance predicate for a round-robin draw. Pure, so `verify` and a test share it.
+    """The acceptance predicate for a round-robin draw, over THIS module's report shape.
 
-    Balanced iff every cell is within 1 of the maximum take OR was drained."""
-    if not rep:
-        return True, "no cells"
-    mx = max(v["taken"] for v in rep.values())
-    bad = {k: v for k, v in rep.items()
-           if v["taken"] < mx - 1 and not v["drained"]}
-    return (not bad), (f"max take {mx}; under-taken and NOT drained: {bad}" if bad
-                       else f"max take {mx}, all cells within 1 or drained")
+    Balanced iff every cell is within 1 of the maximum take OR was drained — the predicate
+    itself is `apportion.cells_balanced`; this reads it off the `{taken, available, drained}`
+    report the draw emits, which is the only thing that is local to here."""
+    return apportion.cells_balanced({k: v["taken"] for k, v in rep.items()},
+                                    {k: v["available"] for k, v in rep.items()})
 
 
 def render_family_of(partition: str) -> str:

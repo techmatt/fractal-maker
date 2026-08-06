@@ -62,6 +62,7 @@ for _p in (str(HERE), str(ROOT), str(ROOT / "tools"), str(ROOT / "tools" / "corp
         sys.path.insert(0, _p)
 
 import paths                                    # noqa: E402
+import apportion                                # noqa: E402  (THE apportionment rules)
 import corpus_common as cc                      # noqa: E402
 import build_minibrot_batch as BMB              # noqa: E402  (coords / palettes / io)
 import deep_center_finder as dcf                # noqa: E402  (the corpus crop cap policy)
@@ -179,12 +180,16 @@ def open_fields(run_dir: Path):
     return vfc.RunFieldCache(Path(run_dir) / "view_fields", mode="r")
 
 
-def build_queue(run_dir: Path) -> tuple[list[dict], dict]:
+def build_sorted_queue(run_dir: Path) -> tuple[list[dict], dict]:
     """Every kept candidate, scored by `view_fit_v1.1` and ranked. Highest logit first.
 
     A candidate whose cached field is missing is DROPPED and counted, not imputed: two of
     the model's twelve features are derived from that array, and a row scored with them
     imputed would sit in the same ranking as rows that were actually measured.
+
+    `SORTED` IS IN THE NAME because a loader that reorders and does not say so is a misuse
+    waiting at every call site — see `build_q4_harvest_batches.build_sorted_queue` for the
+    join this naming rule was earned by. The applied order rides in `rep["order"]`.
     """
     rows = [r for r in lsh.load_candidates(run_dir) if r.get("kept")]
     cache = open_fields(run_dir)
@@ -206,12 +211,13 @@ def build_queue(run_dir: Path) -> tuple[list[dict], dict]:
     for i, r in enumerate(out, 1):
         r["queue_rank"] = i
     rep = dict(kept=len(rows), scored=len(out), dropped_no_field=no_field,
+               order="fit_score desc, then candidate_key — NOT the harvest's append order",
                model=vf.MODEL_ID_V11)
     return out, rep
 
 
 def stage_queue(args) -> int:
-    q, rep = build_queue(args.run_dir)
+    q, rep = build_sorted_queue(args.run_dir)
     p = queue_path(args.run_dir)
     p.parent.mkdir(parents=True, exist_ok=True)
     with open(p, "w", encoding="utf-8") as f:
@@ -252,15 +258,10 @@ def draw_ranked_stratified(queue: list[dict], n: int) -> list[dict]:
     for c in cells.values():
         c.sort(key=lambda r: r["queue_rank"])
     keys = sorted(cells, key=lambda k: (str(k[0]), k[1]))
-    take = {k: 0 for k in keys}
-    while sum(take.values()) < n:
-        cand = [k for k in keys if take[k] < len(cells[k])]
-        if not cand:
-            break
-        # Fewest taken so far wins; the larger cell breaks the tie, so a round-robin that
-        # cannot fill every cell spends the remainder where there is supply.
-        k = min(cand, key=lambda k: (take[k], -len(cells[k])))
-        take[k] += 1
+    # Fewest taken so far wins; the larger cell breaks the tie, so a round-robin that cannot
+    # fill every cell spends the remainder where there is supply. `apportion.deal_round_robin`
+    # is the one copy of that rule.
+    take = apportion.deal_round_robin({k: len(cells[k]) for k in keys}, n)
     per_cell = {k: cells[k][:take[k]] for k in keys}
     out, cursor = [], {k: 0 for k in keys}
     for _round in range(max(take.values(), default=0)):

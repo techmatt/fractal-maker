@@ -49,6 +49,7 @@ for _p in (HERE, ROOT / "tools" / "orbital", ROOT / "tools" / "explorer",
         sys.path.insert(0, str(_p))
 
 import paths                                # noqa: E402
+import apportion                            # noqa: E402  (THE apportionment rules)
 import view_screen as vs                    # noqa: E402
 import prescreen                            # noqa: E402
 import render_core as rc                    # noqa: E402
@@ -201,13 +202,7 @@ def stratify(pool, n, seed):
     for c in cells.values():
         rng.shuffle(c)
     keys = sorted(cells, key=lambda k: (str(k[0]), str(k[1])))
-    take = {k: 0 for k in keys}
-    while sum(take.values()) < n:
-        cand = [k for k in keys if take[k] < len(cells[k])]
-        if not cand:
-            break
-        k = min(cand, key=lambda k: (take[k], -len(cells[k])))
-        take[k] += 1
+    take = apportion.deal_round_robin({k: len(cells[k]) for k in keys}, n)
     out = []
     for k in keys:
         out.extend(cells[k][:take[k]])
