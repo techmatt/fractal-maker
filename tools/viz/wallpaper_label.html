@@ -31,6 +31,13 @@ aside{width:340px;flex:none;max-height:86vh;overflow:auto;border:1px solid #1c1f
 .cell.s1{border-color:#5a2c2c}.cell.s2{border-color:#5a4a2c}.cell.s3{border-color:#2c5a3a}.cell.s4{border-color:#2c465a}
 .cell.locstart{margin-left:0;box-shadow:-3px 0 0 0 #3a3f4d}
 .hint{color:#777;font-size:11px;max-width:560px;text-align:center}
+/* --- correction mode: a SUGGESTION is dim + dashed; a human decision is solid --- */
+.sugg{color:#8a7}
+.cur-score.pending{color:#8a7}
+.score-btns button.suggested{box-shadow:inset 0 0 0 1px #8a7}
+.cell.sug1,.cell.sug2,.cell.sug3,.cell.sug4{border-style:dashed;border-color:#3a4038}
+.cell.sug1 .tag,.cell.sug2 .tag,.cell.sug3 .tag,.cell.sug4 .tag{color:#6d7a68}
+#bulk{border-color:#4a3a2c}
 #stage img{cursor:zoom-in}
 #loader{padding:30px;max-width:680px}
 input[type=file]{font:inherit}
@@ -45,6 +52,7 @@ code{color:#9bb}
   <span class="counts" id="counts"></span>
   <span class="spacer"></span>
   <button id="next-unscored">next unlabeled (u)</button>
+  <button id="bulk" style="display:none">accept all remaining suggestions</button>
   <button id="export">export scores.json</button>
   <label class="cap" style="cursor:pointer;color:#ccc">load scores<input id="load-scores" type="file" accept=".json" hidden></label>
 </header>
@@ -66,6 +74,7 @@ code{color:#9bb}
       <span class="cap" id="cap-params"></span>
       <span class="cap" id="cap-prefv2"></span>
       <span class="cap" id="cap-headv2"></span>
+      <span class="cap sugg" id="cap-sugg"></span>
       <span class="cur-score" id="cur-score"></span>
     </div>
     <div class="score-btns">
@@ -74,7 +83,7 @@ code{color:#9bb}
       <button class="sb3" data-s="3">3 · good</button>
       <button class="sb4" data-s="4">4 · exceptional</button>
     </div>
-    <div class="hint">does <b>this render</b> work as a wallpaper · keys: <b>1</b>/<b>2</b>/<b>3</b>/<b>4</b> label &amp; advance · <b>←</b>/<b>→</b> move · <b>u</b> next unlabeled</div>
+    <div class="hint" id="hint">does <b>this render</b> work as a wallpaper · keys: <b>1</b>/<b>2</b>/<b>3</b>/<b>4</b> label &amp; advance · <b>←</b>/<b>→</b> move · <b>u</b> next unlabeled</div>
   </div>
   <aside><div class="grid" id="overview"></div></aside>
 </main>
@@ -82,20 +91,46 @@ code{color:#9bb}
 
 <script>
 // --- which batch to label: ?batch=<dir> query param overrides, else this default
-//     (a dir under data/wallpaper_corpus/batches/) ---
-const BATCH_ID=new URLSearchParams(location.search).get('batch')||'2026-07-05_wallpaper_bootstrap_v1';
+//     (a dir under data/wallpaper_corpus/batches/).
+// A COMMA-SEPARATED list loads several batches as consecutive SECTIONS of one sitting
+// (?batch=a,b): section order is the order given, each section keeps its own presentation
+// order, and every row keeps its own batch — crops resolve per batch and the export writes
+// ONE FILE PER BATCH, because `merge_scores --batch` places rows into one images.jsonl and a
+// pooled export would hand it keys belonging to a different corpus batch.
+const BATCH_IDS=(new URLSearchParams(location.search).get('batch')||'2026-07-05_wallpaper_bootstrap_v1')
+  .split(',').map(s=>s.trim()).filter(Boolean);
+const BATCH_ID=BATCH_IDS[0];
 const ROOT='../../';                 // tools/viz/ -> repo root
-const BATCH_DIR='data/wallpaper_corpus/batches/'+BATCH_ID;
+const batchDir=b=>'data/wallpaper_corpus/batches/'+b;
+const BATCH_DIR=batchDir(BATCH_ID);
 const IMAGES_URL=ROOT+BATCH_DIR+'/images.jsonl';
-const LS_KEY='wallpaper_label::'+BATCH_ID; // localStorage is per-batch
+const LS_KEY='wallpaper_label::'+BATCH_IDS.join('+'); // localStorage is per-sitting
 const SHUFFLE_SEED=0xC0FFEE;
 let ROWS=[];                         // presentation-ordered rows {image_id, render, provenance, label}
-let scores=loadScores();             // { image_id: 1|2|3|4 }
+let scores=loadScores();             // { image_id: 1|2|3|4 }  — HUMAN decisions only
 let cur=0;
 
-// the image_id IS the durable identity; the crop lives at crops/<image_id>.jpg
+// --- CORRECTION MODE ------------------------------------------------------
+// A pre-labeled sheet (rows carry `suggested_tier`, e.g. the fresh-sheet batch) shows the
+// machine's tier PREFILLED and asks the human to fix the ones it got wrong. Two invariants,
+// both load-bearing:
+//   * a SUGGESTION IS NOT A LABEL. `scores` holds only what Matt actually decided, and the
+//     export writes only `scores`. An unreviewed suggestion never leaves this page — a
+//     machine tier merged as a human label would poison the corpus silently, and the
+//     corpus's whole value is that its labels are human.
+//   * presentation order is the SEEDED SHUFFLE the builder stamped (`sheet_order`), not a
+//     quality sort: this is an absolute-tier task, so ordering by the head's own prediction
+//     would anchor every judgment on the thing being corrected.
+let SUGG={};                         // { image_id: 1|2|3|4 } — the machine suggestion
+let CORRECTION=false;
+function suggOf(r){ return SUGG[r.image_id]; }
+function reviewed(r){ return !!scores[r.image_id]; }
+function shownTier(r){ return scores[r.image_id] || SUGG[r.image_id]; }
+
+// the image_id IS the durable identity; the crop lives in ITS OWN batch's crops/ dir
 function keyOf(r){ return r.image_id; }
-function imgSrc(r){ return ROOT+BATCH_DIR+'/crops/'+r.image_id+'.jpg'; }
+function batchOf(r){ return r.__batch||BATCH_ID; }
+function imgSrc(r){ return ROOT+batchDir(batchOf(r))+'/crops/'+r.image_id+'.jpg'; }
 function loadScores(){ try{return JSON.parse(localStorage.getItem(LS_KEY))||{}}catch{return {}} }
 function saveScores(){ localStorage.setItem(LS_KEY,JSON.stringify(scores)); }
 
@@ -113,6 +148,18 @@ function locKey(r){
   return [rd.cx,rd.cy,rd.fw,rd.fractal_type,rd.c_re,rd.c_im].join('|');
 }
 function buildOrder(rows){
+  // Correction sheet: the builder already wrote images.jsonl in a SEEDED SHUFFLE and
+  // stamped `sheet_order`, so honor that order rather than re-deriving one here (the
+  // shuffle is then reproducible from the file, and the same for every labeler).
+  if(CORRECTION){
+    // sections in the ?batch= order; inside a section, the builder's stamped seeded shuffle
+    const rank=Object.fromEntries(BATCH_IDS.map((b,i)=>[b,i]));
+    const out=rows.slice().sort((a,b)=>
+      ((rank[batchOf(a)]??99)-(rank[batchOf(b)]??99))||
+      ((a.sheet_order??0)-(b.sheet_order??0))||(a.image_id<b.image_id?-1:1));
+    out.forEach((r,i)=>{ r.__locstart=(i>0 && batchOf(r)!==batchOf(out[i-1])); });
+    return out;
+  }
   // Pre-label override: if rows carry a head_v2_pred (a deployed-head quality
   // estimate stamped before labeling), present in DESCENDING predicted order
   // (best first) for labeling speed — the anchoring bias is accepted. This is
@@ -155,10 +202,21 @@ function init(rows){
   if(!rows.length){ document.getElementById('loader-msg').textContent='images.jsonl has no rows'; return; }
   // seed local scores from any labels already baked into the file (resume across machines)
   for(const r of rows){ const s=r.label&&r.label.score; if(s&&!scores[r.image_id]) scores[r.image_id]=s; }
+  // correction mode iff the batch carries machine suggestions
+  CORRECTION=rows.some(r=>typeof r.suggested_tier==='number');
+  if(CORRECTION){ for(const r of rows){ if(typeof r.suggested_tier==='number') SUGG[r.image_id]=r.suggested_tier; } }
   ROWS=buildOrder(rows);
   document.getElementById('loader').style.display='none';
   document.getElementById('app').style.display='flex';
-  document.getElementById('batch-label').textContent=BATCH_ID;
+  const secs=BATCH_IDS.map(b=>`${b} (${rows.filter(r=>batchOf(r)===b).length})`).join(' → ');
+  document.getElementById('batch-label').textContent=secs+(CORRECTION?' · correction sheet':'');
+  if(CORRECTION){
+    document.getElementById('bulk').style.display='';
+    document.getElementById('hint').innerHTML=
+      'each render shows the head\'s <b>suggested</b> tier &mdash; change only where you disagree · '+
+      'keys: <b>Enter</b>/<b>space</b> confirm the suggestion · <b>1</b>/<b>2</b>/<b>3</b>/<b>4</b> override · '+
+      '<b>←</b>/<b>→</b> move · <b>u</b> next unreviewed';
+  }
   buildOverview();
   const u=ROWS.findIndex(r=>!scores[keyOf(r)]);
   cur = u<0?0:u;
@@ -180,18 +238,25 @@ function buildOverview(){
 function refreshCell(i){
   const cells=document.getElementById('overview').children;
   const c=cells[i]; if(!c) return;
-  const r=ROWS[i], s=scores[keyOf(r)];
-  c.className='cell'+(r.__locstart?' locstart':'')+(s?(' s'+s):'')+(i===cur?' cur':'');
-  c.querySelector('.tag').textContent=s||'';
+  const r=ROWS[i], s=scores[keyOf(r)], g=suggOf(r);
+  // reviewed -> solid tier color; unreviewed-but-suggested -> dashed, dim (visibly NOT a label)
+  const state = s ? (' s'+s) : (g ? (' sug'+g) : '');
+  c.className='cell'+(r.__locstart?' locstart':'')+state+(i===cur?' cur':'');
+  c.querySelector('.tag').textContent=(s||g||'');
 }
 
 function refreshCounts(){
-  let n1=0,n2=0,n3=0,n4=0;
-  for(const r of ROWS){const s=scores[keyOf(r)]; if(s===1)n1++;else if(s===2)n2++;else if(s===3)n3++;else if(s===4)n4++;}
+  let n1=0,n2=0,n3=0,n4=0,changed=0;
+  for(const r of ROWS){
+    const s=scores[keyOf(r)];
+    if(s===1)n1++;else if(s===2)n2++;else if(s===3)n3++;else if(s===4)n4++;
+    if(s&&CORRECTION&&suggOf(r)&&s!==suggOf(r))changed++;
+  }
   const done=n1+n2+n3+n4;
   document.getElementById('counts').innerHTML=
-    `<b>${done}/${ROWS.length}</b> labeled &nbsp; `+
-    `<span class="bad">${n1}·bad</span> / <span class="mid">${n2}·okay</span> / <span class="good">${n3}·good</span> / <span class="exc">${n4}·exc</span>`;
+    `<b>${done}/${ROWS.length}</b> ${CORRECTION?'reviewed':'labeled'} &nbsp; `+
+    `<span class="bad">${n1}·bad</span> / <span class="mid">${n2}·okay</span> / <span class="good">${n3}·good</span> / <span class="exc">${n4}·exc</span>`+
+    (CORRECTION?` &nbsp; <span class="sugg">${changed} corrected</span>`:'');
 }
 
 const LBL={1:'very bad',2:'okay',3:'good',4:'exceptional'};
@@ -219,11 +284,20 @@ function show(){
   const hf=document.getElementById('cap-headv2'), hv=r.head_v2_pred;
   hf.textContent=(typeof hv==='number')?('head-v2 '+hv.toFixed(2)):'';
   hf.style.color='#8a7';
+  // correction sheet: the head's own p_ge3 shown beside its suggestion (no hidden rows)
+  const g=suggOf(r), gf=document.getElementById('cap-sugg');
+  const pg=(typeof r.p_ge3==='number')?r.p_ge3:(r.head_v3&&r.head_v3.p_ge3);
+  gf.textContent=g?('suggests '+g+(typeof pg==='number'?(' · p≥3 '+pg.toFixed(2)):'')):'';
   if(lbOpen)syncLightbox();
   const s=scores[keyOf(r)];
   const sc=document.getElementById('cur-score');
-  sc.textContent=s?('label: '+s+' · '+LBL[s]):'unlabeled';
-  sc.className='cur-score'+(s?(' '+CLS[s]):'');
+  if(s){ sc.textContent='label: '+s+' · '+LBL[s]+(CORRECTION?(s===g?' (confirmed)':' (corrected from '+g+')'):'');
+         sc.className='cur-score '+CLS[s]; }
+  else if(CORRECTION&&g){ sc.textContent='suggested: '+g+' · '+LBL[g]+' — Enter to confirm, 1-4 to change';
+         sc.className='cur-score pending'; }
+  else { sc.textContent='unlabeled'; sc.className='cur-score'; }
+  document.querySelectorAll('.score-btns button').forEach(b=>
+    b.classList.toggle('suggested', CORRECTION && +b.dataset.s===g));
   [...document.getElementById('overview').children].forEach((c,i)=>refreshCell(i));
   document.getElementById('overview').children[cur]?.scrollIntoView({block:'nearest'});
   refreshCounts();
@@ -238,13 +312,28 @@ function move(d){ cur=(cur+d+ROWS.length)%ROWS.length; show(); }
 function nextUnscored(){
   for(let k=1;k<=ROWS.length;k++){const i=(cur+k)%ROWS.length; if(!scores[keyOf(ROWS[i])]){cur=i;show();return;}}
 }
+// Confirm the suggestion AS a human decision — the only way a suggestion becomes a label.
+function confirmSuggestion(){
+  const g=suggOf(ROWS[cur]);
+  if(g) setScore(g);
+}
+document.getElementById('bulk').onclick=()=>{
+  const rest=ROWS.filter(r=>!reviewed(r)&&suggOf(r));
+  if(!rest.length){ alert('nothing left unreviewed'); return; }
+  if(!confirm(`Accept the head's suggestion, unchanged, for the ${rest.length} rows you have `
+    +`not looked at?\n\nThey become YOUR labels in scores.json. Only do this if you have `
+    +`actually read the sheet.`)) return;
+  rest.forEach(r=>{ scores[r.image_id]=suggOf(r); });
+  saveScores(); show();
+};
 
 let lbOpen=false;
 function syncLightbox(){
   const r=ROWS[cur], rd=r.render||{}, pv=r.provenance||{}, s=scores[keyOf(r)];
   document.getElementById('lbimg').src=imgSrc(r);
   document.getElementById('lbcap').textContent=
-    `${cur+1}/${ROWS.length} · ${r.image_id} · ${rd.fractal_type||pv.family||''} · ${rd.palette||''} · ${s?('label '+s+' · '+LBL[s]):'unlabeled'}`;
+    `${cur+1}/${ROWS.length} · ${r.image_id} · ${rd.fractal_type||pv.family||''} · ${rd.palette||''} · `+
+    (s?('label '+s+' · '+LBL[s]):(CORRECTION&&suggOf(r)?('suggested '+suggOf(r)+' · '+LBL[suggOf(r)]):'unlabeled'));
 }
 function openLightbox(){ lbOpen=true; syncLightbox(); document.getElementById('lightbox').style.display='flex'; }
 function closeLightbox(){ lbOpen=false; document.getElementById('lightbox').style.display='none'; }
@@ -256,6 +345,7 @@ window.addEventListener('keydown',e=>{
   if(document.getElementById('app').style.display==='none')return;
   if(e.key==='Escape'){ if(lbOpen)closeLightbox(); return; }
   if(e.key==='1'||e.key==='2'||e.key==='3'||e.key==='4'){setScore(+e.key);e.preventDefault();}
+  else if(CORRECTION&&(e.key==='Enter'||e.key===' ')){confirmSuggestion();e.preventDefault();}
   else if(e.key==='ArrowRight')move(1);
   else if(e.key==='ArrowLeft')move(-1);
   else if(e.key==='u'||e.key==='U')nextUnscored();
@@ -263,13 +353,29 @@ window.addEventListener('keydown',e=>{
 document.getElementById('next-unscored').onclick=nextUnscored;
 
 document.getElementById('export').onclick=()=>{
-  // export only non-null integer scores, sorted by image_id for stable diffs
-  const out={};
-  Object.keys(scores).sort().forEach(k=>{ if(scores[k]) out[k]=scores[k]; });
-  const blob=new Blob([JSON.stringify(out,null,0)],{type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download='scores.json'; a.click();
-  URL.revokeObjectURL(a.href);
+  // Export only non-null integer scores, sorted by image_id for stable diffs.
+  // In correction mode this is `scores` — HUMAN decisions only. An unreviewed suggestion
+  // is deliberately absent: the merge must never see a machine tier as a label.
+  // ONE FILE PER BATCH when a sitting spans several: `merge_scores --batch <b>` writes into
+  // that batch's images.jsonl, so a pooled file would hand it keys from another batch.
+  const owner={};                       // image_id -> batch
+  for(const r of ROWS) owner[r.image_id]=batchOf(r);
+  const per={}; BATCH_IDS.forEach(b=>per[b]={});
+  Object.keys(scores).sort().forEach(k=>{
+    if(!scores[k]) return;
+    const b=owner[k]; if(b && per[b]) per[b][k]=scores[k];
+  });
+  const single=BATCH_IDS.length===1;
+  BATCH_IDS.forEach(b=>{
+    const out=per[b];
+    if(!single && !Object.keys(out).length) return;   // nothing reviewed in that section yet
+    const blob=new Blob([JSON.stringify(out,null,0)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=single?'scores.json':('scores_'+b+'.json');
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
 };
 document.getElementById('load-scores').onchange=e=>{
   const f=e.target.files[0]; if(!f)return;
@@ -289,9 +395,15 @@ document.getElementById('load-images').onchange=e=>{
   r.readAsText(f);
 };
 
-document.getElementById('images-url').textContent=IMAGES_URL;
-fetch(IMAGES_URL).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();})
-  .then(t=>init(parseJsonl(t)))
+document.getElementById('images-url').textContent=
+  BATCH_IDS.map(b=>ROOT+batchDir(b)+'/images.jsonl').join('  +  ');
+// Load every section. A section that 404s is a LOUD failure, not a short sitting: silently
+// labeling one of two batches is how half a sheet goes missing without anyone noticing.
+Promise.all(BATCH_IDS.map(b=>
+  fetch(ROOT+batchDir(b)+'/images.jsonl')
+    .then(r=>{if(!r.ok)throw new Error(b+': HTTP '+r.status);return r.text();})
+    .then(t=>parseJsonl(t).map(row=>{row.__batch=b; return row;}))))
+  .then(chunks=>init([].concat(...chunks)))
   .catch(err=>{document.getElementById('loader-msg').textContent='auto-load failed ('+err.message+') — use the picker below.';});
 </script>
 </body></html>

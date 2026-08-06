@@ -26,6 +26,8 @@ BUILDERS = [
     "build_humanq3.py",
     "build_fresh_discovery.py",
     "build_bootstrap.py",
+    "build_fresh_sheet.py",
+    "build_colorize_sheet.py",
 ]
 
 

@@ -1,0 +1,281 @@
+{
+  "created": "2026-08-05T19:27:59",
+  "labeler": null,
+  "generator_version": "wallpaper_fresh_sheet_v1",
+  "schema_note": "Fresh-era wallpaper CORRECTION SHEET. Locations drawn from the CURRENT stage-2 admitted intake (the seven-ledger union + the human_q3plus library seed), stratified across deployed-v3 score bins with the floor-admitted sources oversampled. Every row carries the complete render block + colormap recipe (provenance.params \u2014 the crop is a pure function of the two), the v3 pre-label (head_v3 / p_ge3 / suggested_tier) and a stamped location-grouped split_side. label.score is null on every row: the suggestion is NOT a label and is never merged as one.",
+  "head": {
+    "ckpt": "data/wallpaper_head/v3/model_best.pt",
+    "version": "v3",
+    "role": "pre-label only \u2014 no gate, floor or threshold is applied here",
+    "deploy_transform": "classifier.data.Transform(train=False) (1280x720 -> 384x224 bicubic stretch + normalize)"
+  },
+  "suggested_tier_rule": {
+    "rule": "tier = 1 + #{c in cuts : expected_tier >= c}; expected_tier = 1 + sum_k marginal_k",
+    "cuts": [
+      1.017,
+      2.615,
+      2.997
+    ],
+    "cut_method": "quantiles of expected_tier at the derivation slice's own tier prior (prior-matched), NOT accuracy-maximizing \u2014 see suggest_tier.py",
+    "derived": "2026-08-05",
+    "head": "data/wallpaper_head/v3/model_best.pt",
+    "slice": "wallpaper head v3 held-out eval: dramatic split_side==eval + humanq3 split_v2(seed=0, eval_frac=0.30), crops re-rendered via label_crop.render_label_crop (prompts/wallpaper_eval_revival_prompt.md)",
+    "n": 686,
+    "n_locations": 98,
+    "tier_prior": {
+      "1": 116,
+      "2": 295,
+      "3": 185,
+      "4": 90
+    },
+    "accuracy_on_slice": {
+      "exact": 0.414,
+      "within_one": 0.899,
+      "mae": 0.691,
+      "suggested_hist": {
+        "1": 116,
+        "2": 295,
+        "3": 183,
+        "4": 92
+      }
+    },
+    "alternatives_rejected": {
+      "corn_0.5": {
+        "exact": 0.376,
+        "within_one": 0.885,
+        "mae": 0.755,
+        "bias": -0.283,
+        "why": "biased low; 268/686 suggested tier 1 against a true 116"
+      },
+      "accuracy_max_cuts": {
+        "exact": 0.497,
+        "within_one": 0.915,
+        "why": "collapses \u2014 476/686 suggested tier 2"
+      }
+    },
+    "scope": "derived on the dramatic+humanq3 population, applied to the stage-2 intake; a suggestion, never a label"
+  },
+  "population": {
+    "union": {
+      "n": 751,
+      "diag": {
+        "n_union": 751,
+        "per_ledger": {
+          "data/discovery/campaign1/breadth/outcome_ledger.jsonl": 109,
+          "data/discovery/campaign1/dive/outcome_ledger.jsonl": 126,
+          "data/discovery/campaign2/breadth/outcome_ledger.jsonl": 139,
+          "data/discovery/campaign2/dive/outcome_ledger.jsonl": 161,
+          "data/discovery/phoenix_grid/grid/outcome_ledger_v7_t45.jsonl": 92,
+          "data/discovery/classic_phoenix/outcome_ledger.jsonl": 16,
+          "data/emission/q4_harvest/outcome_ledger.jsonl": 108
+        },
+        "n_location_overlaps": 0,
+        "n_id_collisions": 11
+      }
+    },
+    "human_q3plus": {
+      "n_looks": 168,
+      "n_kept": 168,
+      "n_dropped_dup_of_union": 0,
+      "source": "data/discovery/q4_long_harvest_20260803/human_q3plus_queue.jsonl"
+    },
+    "n_population": 919,
+    "n_floor_admit": 276,
+    "by_source_tag": {
+      "steered": 248,
+      "dive": 287,
+      "phoenix_grid": 92,
+      "classic_phoenix": 16,
+      "q4_harvest": 108,
+      "human_q3plus": 168
+    },
+    "by_partition": {
+      "multibrot3": 66,
+      "julia:multibrot5": 68,
+      "julia:multibrot3": 39,
+      "multibrot5": 69,
+      "julia:multibrot4": 79,
+      "mandelbrot": 291,
+      "julia:mandelbrot": 110,
+      "multibrot4": 63,
+      "phoenix": 118,
+      "phoenix:classic": 16
+    }
+  },
+  "sampling_metaparameters": {
+    "n_screen_candidates": 8,
+    "picks_per_loc": 4,
+    "target_locations": 240,
+    "palette_pool": 120,
+    "palette_draw": "sample_location.gen0_palettes(sampler, 120) \u2014 the deployed GEN0_SOURCE_WEIGHTS composition, farthest-point within each source bucket; per-location seeded subsample of N_SCREEN, params via query_sampler.sample_candidate",
+    "maxiter_policy": "auto_maxiter(fw) \u2014 native fw-dependent (bootstrap parity)",
+    "seed": 7,
+    "split_seed": 0,
+    "eval_frac": 0.3,
+    "shuffle_seed": 20260805,
+    "pick_rule": "PICKS_PER_LOC spread evenly across the location's own screen p_ge3 order (not top-K) \u2014 negatives and mid-range within a location, not only across locations"
+  },
+  "selection_report": {
+    "target_locations": 240,
+    "drawn_locations": 240,
+    "screened": 919,
+    "screen_failures": 0,
+    "score_bins": [
+      0.0,
+      0.01,
+      0.1,
+      0.5,
+      0.9,
+      1.01
+    ],
+    "bin_labels": [
+      "b0_lt.01",
+      "b1_.01-.10",
+      "b2_.10-.50",
+      "b3_.50-.90",
+      "b4_ge.90"
+    ],
+    "floor_admit_frac_target": 0.4,
+    "floor_admit_frac_realized": 0.4125,
+    "per_bin": [
+      {
+        "bin": "b0_lt.01",
+        "range": [
+          0.0,
+          0.01
+        ],
+        "available": 25,
+        "available_floor_admit": 11,
+        "quota": 25,
+        "drawn": 25,
+        "drawn_floor_admit": 11
+      },
+      {
+        "bin": "b1_.01-.10",
+        "range": [
+          0.01,
+          0.1
+        ],
+        "available": 29,
+        "available_floor_admit": 13,
+        "quota": 29,
+        "drawn": 29,
+        "drawn_floor_admit": 13
+      },
+      {
+        "bin": "b2_.10-.50",
+        "range": [
+          0.1,
+          0.5
+        ],
+        "available": 77,
+        "available_floor_admit": 26,
+        "quota": 62,
+        "drawn": 62,
+        "drawn_floor_admit": 25
+      },
+      {
+        "bin": "b3_.50-.90",
+        "range": [
+          0.5,
+          0.9
+        ],
+        "available": 180,
+        "available_floor_admit": 58,
+        "quota": 62,
+        "drawn": 62,
+        "drawn_floor_admit": 25
+      },
+      {
+        "bin": "b4_ge.90",
+        "range": [
+          0.9,
+          1.01
+        ],
+        "available": 608,
+        "available_floor_admit": 168,
+        "quota": 62,
+        "drawn": 62,
+        "drawn_floor_admit": 25
+      }
+    ],
+    "drawn_by_source_tag": {
+      "human_q3plus": 51,
+      "steered": 49,
+      "dive": 68,
+      "classic_phoenix": 5,
+      "phoenix_grid": 19,
+      "q4_harvest": 48
+    },
+    "drawn_by_intake_source": {
+      "human_q3plus_seed": 51,
+      "union_ledger": 189
+    },
+    "drawn_by_partition": {
+      "phoenix": 29,
+      "julia:mandelbrot": 29,
+      "multibrot4": 10,
+      "multibrot5": 15,
+      "julia:multibrot5": 19,
+      "julia:multibrot3": 9,
+      "multibrot3": 12,
+      "mandelbrot": 94,
+      "julia:multibrot4": 18,
+      "phoenix:classic": 5
+    },
+    "population_by_bin": {
+      "b0_lt.01": 25,
+      "b1_.01-.10": 29,
+      "b2_.10-.50": 77,
+      "b3_.50-.90": 180,
+      "b4_ge.90": 608
+    },
+    "population_floor_admit_by_bin": {
+      "b0_lt.01": 11,
+      "b1_.01-.10": 13,
+      "b2_.10-.50": 26,
+      "b3_.50-.90": 58,
+      "b4_ge.90": 168
+    }
+  },
+  "screen_vs_keeper": {
+    "n": 960,
+    "spearman": 0.9119598382810745,
+    "mean_abs_delta": 0.0847172129062645,
+    "gate_side_agreement_at_0.9": 0.959375,
+    "note": "screen = coarse 512x288 SCORING-ONLY path; keeper = the stored 1280x720 ss2 crop. The stamped head_v3/p_ge3 is the keeper score; the screen only chose what to render."
+  },
+  "split_summary": {
+    "eval_locations": 74,
+    "train_locations": 166,
+    "eval_rows": 296,
+    "train_rows": 664,
+    "rule": "location-grouped, seeded (SPLIT_SEED), stratified by screen score bin; one location -> one side"
+  },
+  "head_corpus_overlap": {
+    "no": 960
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "filter": "lanczos3",
+    "jpg_quality": 90,
+    "interior_mode": "black",
+    "composition": "center",
+    "render_path": "render-one --dump-field + colormap.render_candidate (tools/wallpaper/label_crop.py \u2014 the locked label-crop pins)"
+  },
+  "labels_export": "labels/wallpaper_fresh_sheet_v1.json",
+  "labeling": {
+    "ui": "tools/viz/wallpaper_label.html?batch=2026-08-05_wallpaper_fresh_sheet_v1",
+    "mode": "correction \u2014 every row shows its suggested tier PREFILLED; Enter confirms, 1-4 overrides. Only rows Matt acts on are exported."
+  },
+  "render_failures": [],
+  "run_status": {
+    "planned_locations": 240,
+    "completed_locations": 240,
+    "n_failures": 0,
+    "wall_seconds": 0.0
+  },
+  "n_rows": 960
+}

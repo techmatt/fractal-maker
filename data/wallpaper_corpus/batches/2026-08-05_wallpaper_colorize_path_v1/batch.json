@@ -1,0 +1,373 @@
+{
+  "created": "2026-08-05T19:47:42",
+  "labeler": null,
+  "generator_version": "wallpaper_colorize_path_v1",
+  "schema_note": "Colorize-path sibling of the fresh-era correction sheet. Same intake population, same seeded bin stratification, same label-crop pins, same v3 pre-label \u2014 but each location is COLOURED the way a live emission run colours it: morph cluster (production intake descriptor, library-seeded) -> deficit-assigned palette flavor (cells.choose_option against the release_mix target) -> pref-v3-gvo argmax palette within that flavor -> canonical inherited coloring params, smooth. provenance.coloring_source == 'colorize_path' separates it from the sibling's 'pool_draw'. label.score is null on every row.",
+  "coloring_source": "colorize_path",
+  "sibling_batch": "2026-08-05_wallpaper_fresh_sheet_v1",
+  "head": {
+    "ckpt": "data/wallpaper_head/v3/model_best.pt",
+    "version": "v3",
+    "role": "pre-label only; the pool floor is read for deficit bookkeeping and gates nothing in this batch"
+  },
+  "suggested_tier_rule": {
+    "rule": "tier = 1 + #{c in cuts : expected_tier >= c}; expected_tier = 1 + sum_k marginal_k",
+    "cuts": [
+      1.017,
+      2.615,
+      2.997
+    ],
+    "cut_method": "quantiles of expected_tier at the derivation slice's own tier prior (prior-matched), NOT accuracy-maximizing \u2014 see suggest_tier.py",
+    "derived": "2026-08-05",
+    "head": "data/wallpaper_head/v3/model_best.pt",
+    "slice": "wallpaper head v3 held-out eval: dramatic split_side==eval + humanq3 split_v2(seed=0, eval_frac=0.30), crops re-rendered via label_crop.render_label_crop (prompts/wallpaper_eval_revival_prompt.md)",
+    "n": 686,
+    "n_locations": 98,
+    "tier_prior": {
+      "1": 116,
+      "2": 295,
+      "3": 185,
+      "4": 90
+    },
+    "accuracy_on_slice": {
+      "exact": 0.414,
+      "within_one": 0.899,
+      "mae": 0.691,
+      "suggested_hist": {
+        "1": 116,
+        "2": 295,
+        "3": 183,
+        "4": 92
+      }
+    },
+    "alternatives_rejected": {
+      "corn_0.5": {
+        "exact": 0.376,
+        "within_one": 0.885,
+        "mae": 0.755,
+        "bias": -0.283,
+        "why": "biased low; 268/686 suggested tier 1 against a true 116"
+      },
+      "accuracy_max_cuts": {
+        "exact": 0.497,
+        "within_one": 0.915,
+        "why": "collapses \u2014 476/686 suggested tier 2"
+      }
+    },
+    "scope": "derived on the dramatic+humanq3 population, applied to the stage-2 intake; a suggestion, never a label"
+  },
+  "population": {
+    "union": {
+      "n": 751,
+      "diag": {
+        "n_union": 751,
+        "per_ledger": {
+          "data/discovery/campaign1/breadth/outcome_ledger.jsonl": 109,
+          "data/discovery/campaign1/dive/outcome_ledger.jsonl": 126,
+          "data/discovery/campaign2/breadth/outcome_ledger.jsonl": 139,
+          "data/discovery/campaign2/dive/outcome_ledger.jsonl": 161,
+          "data/discovery/phoenix_grid/grid/outcome_ledger_v7_t45.jsonl": 92,
+          "data/discovery/classic_phoenix/outcome_ledger.jsonl": 16,
+          "data/emission/q4_harvest/outcome_ledger.jsonl": 108
+        },
+        "n_location_overlaps": 0,
+        "n_id_collisions": 11
+      }
+    },
+    "human_q3plus": {
+      "n_looks": 168,
+      "n_kept": 168,
+      "n_dropped_dup_of_union": 0,
+      "source": "data/discovery/q4_long_harvest_20260803/human_q3plus_queue.jsonl"
+    },
+    "n_population": 919,
+    "n_floor_admit": 276,
+    "by_source_tag": {
+      "steered": 248,
+      "dive": 287,
+      "phoenix_grid": 92,
+      "classic_phoenix": 16,
+      "q4_harvest": 108,
+      "human_q3plus": 168
+    },
+    "by_partition": {
+      "multibrot3": 66,
+      "julia:multibrot5": 68,
+      "julia:multibrot3": 39,
+      "multibrot5": 69,
+      "julia:multibrot4": 79,
+      "mandelbrot": 291,
+      "julia:mandelbrot": 110,
+      "multibrot4": 63,
+      "phoenix": 118,
+      "phoenix:classic": 16
+    }
+  },
+  "colorize_path": {
+    "cluster": {
+      "library_seed_groups": {
+        "julia:mandelbrot": 91,
+        "julia:multibrot3": 8,
+        "julia:multibrot4": 2,
+        "julia:multibrot5": 10,
+        "mandelbrot": 7,
+        "multibrot3": 7,
+        "multibrot4": 2,
+        "multibrot5": 15,
+        "phoenix": 26
+      },
+      "seeded_joins": 38,
+      "distinct_clusters": 165,
+      "threshold": 0.974
+    },
+    "grid": {
+      "flavors": 19,
+      "styles": [
+        "smooth"
+      ],
+      "observed_type_cluster": 165,
+      "feasible_cells": 3135,
+      "release_shares": {
+        "julia:mandelbrot": 0.22727,
+        "julia:multibrot3": 0.07576,
+        "julia:multibrot4": 0.07576,
+        "julia:multibrot5": 0.07576,
+        "mandelbrot": 0.22727,
+        "multibrot3": 0.07576,
+        "multibrot4": 0.07576,
+        "multibrot5": 0.07576,
+        "phoenix": 0.07576,
+        "phoenix:classic": 0.01515
+      },
+      "attempt_cap": 6,
+      "softmax_temp": 0.35,
+      "target_source": "tools/scoring/release_mix.RATIO re-solved against the live feasible cells (cells.TargetMeasure.from_partition_shares)"
+    },
+    "palette_pick": "build_emission_diversity_v1.PaletteRanker(pick_mode='pref') \u2014 pref-v3-gvo argmax over the flavor's pool members, scored on the cached 640x360 field via the coarse recolor",
+    "color_params": "tools/mining/deploy_tail._color_params({}) \u2014 canonical inherited (transfer=pct, gamma=1, no reverse/phase/cycles)",
+    "geometry_note": "rendered at the shared label-crop pins (1280x720 ss2 lanczos3 q90), NOT the emission pool's 960x540: the batch has to union with the other four at train time.",
+    "flavor_histogram": {
+      "k16:11": 17,
+      "k16:10": 12,
+      "k16:1": 12,
+      "k16:14": 11,
+      "k16:6": 11,
+      "k16:15": 11,
+      "k16:5": 10,
+      "special:outlier": 10,
+      "k16:13": 10,
+      "k16:9": 10,
+      "k16:8": 10,
+      "k16:3": 9,
+      "k16:2": 8,
+      "k16:12": 8,
+      "special:spectral": 7,
+      "k16:7": 7,
+      "special:neutral": 6,
+      "k16:4": 6,
+      "k16:16": 5
+    },
+    "palette_histogram": {
+      "sparks": 10,
+      "afmhot": 7,
+      "cmr.sunburst": 7,
+      "cet_linear_bmw_5_95_c86": 7,
+      "795565-3840x2160-desktop-4k-fractal-wallpaper-image": 6,
+      "red-octavo-25": 5,
+      "wallhaven_wallhaven-6d3zz6": 4,
+      "gnuplot2": 4,
+      "cmr.flamingo": 4,
+      "glassworks-25": 4,
+      "bone": 4,
+      "cmr.gothic": 4,
+      "abstract-3d-wallpapers": 4,
+      "commons_Mandelbrot_6__C4_90_E1_BA_A7u_R_E1_BB_93ng": 3,
+      "pacific-shore-25": 3
+    },
+    "n_distinct_palettes": 88,
+    "passed_pool_floor": 74
+  },
+  "sampling_metaparameters": {
+    "target_locations": 180,
+    "renders_per_location": 1,
+    "seed": 11,
+    "sibling_seed": 7,
+    "split_seed": 0,
+    "eval_frac": 0.3,
+    "shuffle_seed": 20260806,
+    "score_bins": [
+      0.0,
+      0.01,
+      0.1,
+      0.5,
+      0.9,
+      1.01
+    ],
+    "bin_labels": [
+      "b0_lt.01",
+      "b1_.01-.10",
+      "b2_.10-.50",
+      "b3_.50-.90",
+      "b4_ge.90"
+    ],
+    "floor_admit_frac_target": 0.4
+  },
+  "selection_report": {
+    "target_locations": 180,
+    "drawn_locations": 180,
+    "screened": 919,
+    "screen_failures": 0,
+    "score_bins": [
+      0.0,
+      0.01,
+      0.1,
+      0.5,
+      0.9,
+      1.01
+    ],
+    "bin_labels": [
+      "b0_lt.01",
+      "b1_.01-.10",
+      "b2_.10-.50",
+      "b3_.50-.90",
+      "b4_ge.90"
+    ],
+    "floor_admit_frac_target": 0.4,
+    "floor_admit_frac_realized": 0.4166666666666667,
+    "per_bin": [
+      {
+        "bin": "b0_lt.01",
+        "range": [
+          0.0,
+          0.01
+        ],
+        "available": 25,
+        "available_floor_admit": 11,
+        "quota": 25,
+        "drawn": 25,
+        "drawn_floor_admit": 11
+      },
+      {
+        "bin": "b1_.01-.10",
+        "range": [
+          0.01,
+          0.1
+        ],
+        "available": 29,
+        "available_floor_admit": 13,
+        "quota": 29,
+        "drawn": 29,
+        "drawn_floor_admit": 13
+      },
+      {
+        "bin": "b2_.10-.50",
+        "range": [
+          0.1,
+          0.5
+        ],
+        "available": 77,
+        "available_floor_admit": 26,
+        "quota": 42,
+        "drawn": 42,
+        "drawn_floor_admit": 17
+      },
+      {
+        "bin": "b3_.50-.90",
+        "range": [
+          0.5,
+          0.9
+        ],
+        "available": 180,
+        "available_floor_admit": 58,
+        "quota": 42,
+        "drawn": 42,
+        "drawn_floor_admit": 17
+      },
+      {
+        "bin": "b4_ge.90",
+        "range": [
+          0.9,
+          1.01
+        ],
+        "available": 608,
+        "available_floor_admit": 168,
+        "quota": 42,
+        "drawn": 42,
+        "drawn_floor_admit": 17
+      }
+    ],
+    "drawn_by_source_tag": {
+      "human_q3plus": 37,
+      "steered": 45,
+      "dive": 45,
+      "classic_phoenix": 4,
+      "phoenix_grid": 11,
+      "q4_harvest": 38
+    },
+    "drawn_by_intake_source": {
+      "human_q3plus_seed": 37,
+      "union_ledger": 143
+    },
+    "drawn_by_partition": {
+      "julia:multibrot5": 17,
+      "multibrot5": 13,
+      "julia:mandelbrot": 14,
+      "phoenix": 19,
+      "multibrot4": 9,
+      "julia:multibrot3": 7,
+      "julia:multibrot4": 18,
+      "multibrot3": 10,
+      "mandelbrot": 69,
+      "phoenix:classic": 4
+    },
+    "population_by_bin": {
+      "b0_lt.01": 25,
+      "b1_.01-.10": 29,
+      "b2_.10-.50": 77,
+      "b3_.50-.90": 180,
+      "b4_ge.90": 608
+    },
+    "population_floor_admit_by_bin": {
+      "b0_lt.01": 11,
+      "b1_.01-.10": 13,
+      "b2_.10-.50": 26,
+      "b3_.50-.90": 58,
+      "b4_ge.90": 168
+    }
+  },
+  "sibling_location_overlap": {
+    "n_locations_here": 180,
+    "n_shared_with_sibling": 107,
+    "note": "shared locations are a FEATURE: at those the two batches differ only in the coloring regime, which is the cleanest contrast the pair supports."
+  },
+  "split_summary": {
+    "eval_locations": 56,
+    "train_locations": 124,
+    "eval_rows": 56,
+    "train_rows": 124,
+    "rule": "location-grouped, seeded, stratified by screen score bin (the sibling's assign_split, same seed) \u2014 one location -> one side"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "filter": "lanczos3",
+    "jpg_quality": 90,
+    "interior_mode": "black",
+    "composition": "center",
+    "render_path": "render-one --dump-field + colormap.render_candidate (tools/wallpaper/label_crop.py)"
+  },
+  "labels_export": "labels/wallpaper_colorize_path_v1.json",
+  "labeling": {
+    "ui": "tools/viz/wallpaper_label.html?batch=2026-08-05_wallpaper_fresh_sheet_v1,2026-08-05_wallpaper_colorize_path_v1",
+    "mode": "correction \u2014 served as the SECOND section after the sibling sheet; each batch exports its own scores file."
+  },
+  "render_failures": [],
+  "run_status": {
+    "planned_locations": 180,
+    "completed_locations": 180,
+    "n_failures": 0,
+    "wall_seconds": 864.8886766433716
+  },
+  "n_rows": 180
+}
