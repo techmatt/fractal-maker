@@ -32,7 +32,12 @@ HEAD_NAME = "render_mode_head"
 ACTIVE_MINING_CKPT = "data/render_mode_head/v1/model_best.pt"   # staged seed-0 (LIVE)
 MINING_V1_ROLLBACK = None       # first version -> no prior gate to fall back to
 MINING_GATE_THRESHOLD = 0.50    # marginal p_ge3 boundary; conservative / high-precision
-LOCK_PATH = "data/render_mode_head/v1/mining_gate_lock.json"   # frozen curve + parity
+# The frozen operating point the release floor is set against: written by
+# `lock_mining_gate.py --write` from the committed 2026-08-06 sitting, read back through its
+# `read_lock()`, which REFUSES when HEAD_VERSION no longer matches the head it was measured
+# on. The path is v1's because the lock describes the pinned head; a pin flip needs a new
+# record at the new head's path, not an edit to this one.
+LOCK_PATH = "data/render_mode_head/v1/mining_gate_lock.json"   # frozen ladder + operating point
 
 
 def head_version(ckpt: str | None = None) -> str:

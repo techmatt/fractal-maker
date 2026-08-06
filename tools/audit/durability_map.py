@@ -136,14 +136,23 @@ REGISTRY = [
      "unregenerable: it is the LIVE gate AND the head whose suggestions seeded the 960 "
      "labels of the 2026-08-06 correction sheet, so every read on that sheet is quoted "
      "against this exact weight file."),
-    ("data/render_mode_head/v2/{model_best.pt,config.json,metrics.json,per_seed.json,"
-     "report.{md,json}}", "classifier/train_mining_head_v2.py, "
-     "tools/mining/mining_v2_reads.py", DUR,
-     "a full GPU finetune — reproducible in recipe from the committed sheet + v1's weights, "
-     "but not bit-identical (GPU nondeterminism), and it needs v1 to exist", N,
+    ("data/render_mode_head/v1/mining_gate_lock.json",
+     "tools/mining/lock_mining_gate.py --write", DUR,
+     "re-derivable from data/render_mode_head/v2/report.json (pure Python, byte-identical) "
+     "— but ONLY while that report survives; the sitting behind it is a GPU pass over crops",
+     N,
+     "OK. Negated by exact path. The frozen operating point the LIVE 0.50 release floor is "
+     "set against; its reader (`read_lock`) refuses when the pin moves off v1. Its .md face "
+     "is generated beside it and is a view of the same record, not a second source."),
+    ("data/render_mode_head/v2/{config.json,metrics.json,per_seed.json,report.{md,json}}",
+     "classifier/train_mining_head_v2.py, tools/mining/mining_v2_reads.py", DUR,
+     "a full GPU finetune + a GPU eval pass — reproducible in recipe from the committed "
+     "sheet + v1's weights, but not bit-identical (GPU nondeterminism)", N,
      "OK. Negated by exact path from the start rather than force-added — the wiring v9/v10 "
-     "established. STAGED, not deployed: mining_pins still pins v1. The per-seed dirs stay "
-     "ignored; their selection is recorded in per_seed.json."),
+     "established. The WEIGHT (model_best.pt) was de-tracked 2026-08-06: v2 lost the winner "
+     "rule, and a rejected candidate is not a critical final weight. The record it left "
+     "behind is load-bearing in a way the weight is not — mining_gate_lock.json is derived "
+     "from report.json. The per-seed dirs were always ignored."),
 
     # ---------------- calibration: the contract's own flagship --------------------
     ("data/calibration/energy_calibration.json", "src/energy.rs (`calibrate`)", DUR_F,

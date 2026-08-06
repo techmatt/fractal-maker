@@ -1,12 +1,20 @@
-"""Report-only mining gate — durable would-cut log paired with the final selection.
+"""Mining-gate verdict log — durable, per strange candidate, paired with what happened.
 
-The strange-mode mining gate (`mining_v1`, threshold 0.50 on marginal p_ge3) is
-REPORT-ONLY: it no longer admits / cuts / keeps. Instead, per strange candidate
-reaching a release, it records HERE what it WOULD have cut and why, PAIRED with the
-actual selection outcome, so a future calibration pass reads labeled gate precision
-straight off accumulated releases — the gate's verdict against the selection (and,
-once eye-routing is joined, the human) verdict — instead of starting a fresh labeling
-session. See prompts/mining_gate_report_only.md.
+Per strange candidate reaching a release, this records what the gate (`mining_v1`,
+threshold 0.50 on marginal p_ge3) did to it and why, PAIRED with the actual outcome at
+that site.
+
+WHAT THE PAIRING IS WORTH DEPENDS ON WHETHER THE GATE ACTS, and it changed on 2026-08-06.
+While the gate was REPORT-ONLY (prompts/mining_gate_report_only.md) it cut nothing, so a
+`would_cut` row could still be SELECTED and `would_cut ∧ selected` accrued a labeled
+false-cut count on every run — precision read off accumulated releases instead of a fresh
+labeling session. The gate is ENFORCING again (prompts/mining_adoption_prompt.md,
+`floors.MINING_RELEASE`), so selection now implies passing and BOTH outcome joins
+(`would_cut ∧ selected`, and `would_cut_pool ∧ selected` since 0.25 < 0.50) are zero by
+construction. Nothing here changes shape: the file is still written on every run and is
+still the durable population record — every scored strange candidate, its p_ge3, and what
+each floor did to it. What a calibration pass can no longer get for free is the labels; it
+has to bring them.
 
 Why here and not scratch/: the log must survive `rm -r scratch/*`, so it is committed under
 `data/emission/` (NOT the disposable scratch/ tree where every existing per-candidate
@@ -54,27 +62,26 @@ def gate_report_row(*, site, key, location, style, palette, p_ge3, release_thres
 
     `p_ge3`      mining head marginal P(label>=3) (None on a render error).
 
-    RELEASE site (report-only):
-    `would_pass`/`would_cut` — the counterfactual verdict against the production RELEASE
-                 threshold the gate WOULD have used (0.50); the gate did NOT act on it.
-    `selected`   what actually happened (shipped / kept). The join target a calibration pass
-                 reads precision off: `would_cut` ∧ `selected` = a gate false-cut the
-                 selection overrode.
+    RELEASE site:
+    `would_pass`/`would_cut` — the verdict against the production RELEASE threshold (0.50).
+                 The field names are the report-only period's and are KEPT: a name change
+                 would split every accumulated file into two schemas over a fact the
+                 `release_threshold` beside it already carries.
+    `selected`   what actually happened (shipped / kept).
 
     POOL site (a HARD cut — capacity ordering, not curation):
-    `pool_floor` / `would_pass_pool` / `would_cut_pool` — the same counterfactual against
-                 the softer pool-admission floor (0.25), and
+    `pool_floor` / `would_pass_pool` / `would_cut_pool` — the same verdict against the softer
+                 pool-admission floor (0.25), and
     `pooled`     what actually happened AT THAT SITE (did the row enter the gated pool).
 
-    The pool pairing is deliberately recorded even though the pool floor still ACTS, which
-    makes `would_cut_pool == not pooled` by construction today. Two things make it worth the
-    two fields anyway. It is not degenerate against the release outcome — the release draw
-    bypasses the pool floor, so `would_cut_pool` ∧ `selected` is a real false-cut count at
-    the pool operating point, accruing for free on every run. And the pairing is what makes
-    the row readable if the pool floor ever moves or goes report-only: a row that records
-    only "0.25 would have cut this" and never records what happened cannot be joined later.
-    A `pooled=None` (site did not report an outcome) is preserved as null rather than coerced
-    to False, so "not pooled" and "nobody said" stay distinguishable.
+    BOTH `∧ selected` joins are now zero by construction (the release floor enforces, and
+    clearing 0.50 implies clearing 0.25), so neither is a measurement any more — see the
+    module docstring. The pairing is still recorded, for the reason it was worth recording
+    at the pool site even while that floor acted: a row that records only "0.25 would have
+    cut this" and never records what happened cannot be joined later, and either floor can
+    move or go report-only again. `pooled=None` (site did not report an outcome) is preserved
+    as null rather than coerced to False, so "not pooled" and "nobody said" stay
+    distinguishable.
     """
     would_pass = p_ge3 is not None and float(p_ge3) >= float(release_threshold)
     row = {

@@ -54,8 +54,12 @@ def test_every_row_gets_exactly_one_fate_and_the_fates_partition_the_pool():
 
 def test_fate_follows_the_release_RECORD_not_a_re_derivation_from_the_floors():
     """The property that keeps a caption honest. A strange row can be release-eligible while
-    sitting BELOW the mining release floor (that gate is report-only), so a sheet that decided
-    eligibility from the floors would file a genuinely-selectable row under 'rejected'."""
+    sitting BELOW the mining release floor — that was every strange row during the report-only
+    period, and those runs' records are still read by this sheet — so a sheet that decided
+    eligibility from TODAY's floors would file a genuinely-selected row under 'rejected'. The
+    floor going enforcing on 2026-08-06 makes this property MORE load-bearing, not less: it is
+    now the only thing standing between an old record and a re-derivation that contradicts
+    it."""
     ungated_strange = prow("s", style="tia", p=0.31)          # below the 0.50 mining floor
     fates = RCS.assign_fates([ungated_strange], {"s"}, {"s"}, lambda st: 0.50)
     assert fates["s"] == "selected"

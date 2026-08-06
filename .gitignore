@@ -490,23 +490,27 @@ __pycache__/
 # the v9/v10 classifier block above. v1 was force-added and had no rule saying it belongs;
 # it is the LIVE gate (mining_pins.ACTIVE_MINING_CKPT) and its training corpus no longer
 # exists, so it is the least reproducible weight in the tree and the least appropriate one
-# to leave undeclared. v2 is the 2026-08-06 finetune of v1 on the fresh sheet: STAGED, not
-# deployed — the pin still reads v1, and v1 is therefore the rollback rung, which is why
-# both are re-included rather than only "the latest".
+# to leave undeclared. Beside it: the gate lock (the frozen operating point + eval ladder
+# the 0.50 release floor is set against) and the adoption report that reads it.
 #
-# The per-seed dirs (v2/seed_<s>/) stay ignored by the `/data/render_mode_head/v2/*`
-# re-exclusion: 5 x 10 MB of checkpoints whose selection is already recorded in
-# per_seed.json, and only the staged one is a deployable artifact.
+# v2's WEIGHT IS DELIBERATELY NOT HERE. It was negated (and LFS-tracked) while it was a
+# live candidate; it lost the winner rule on 2026-08-06, and a rejected candidate is not a
+# critical final weight — the committed trainer (classifier/train_mining_head_v2.py), the
+# committed corpus batch and the recipe recorded in config.json reproduce it per-seed. Its
+# RUN RECORD stays tracked (config/metrics/per_seed/report.{md,json}); only the ~10 MB of
+# weights, and the per-seed dirs that were always ignored, are working state.
 !/data/render_mode_head/
 /data/render_mode_head/*
 !/data/render_mode_head/v1/
 /data/render_mode_head/v1/*
 !/data/render_mode_head/v1/model_best.pt
+!/data/render_mode_head/v1/mining_gate_lock.json
+!/data/render_mode_head/v1/mining_gate_lock.md
+!/data/render_mode_head/v1/report.md
 !/data/render_mode_head/v2/
 /data/render_mode_head/v2/*
-# The finetuned head (LFS), the three small records that say what produced it, and the
-# v1-vs-v2 + calibration report that is the run's uploadable deliverable.
-!/data/render_mode_head/v2/model_best.pt
+# The three small records that say what produced v2, and the v1-vs-v2 + calibration report
+# that is the run's uploadable deliverable. The weight itself is NOT re-included.
 !/data/render_mode_head/v2/config.json
 !/data/render_mode_head/v2/metrics.json
 !/data/render_mode_head/v2/per_seed.json

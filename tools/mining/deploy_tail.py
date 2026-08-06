@@ -20,12 +20,15 @@ INHERITED approved palette, score each with the LOCKED `mining_v1` gate
 (`tools/mining/mining_gate.MiningScorer`, threshold 0.50 on marginal p_ge3), and keep
 a diversity-allocated set as alternate wallpapers.
 
-REPORT-ONLY GATE (prompts/mining_gate_report_only.md): the 0.50 gate no longer CUTS.
-Every scored candidate flows into the diversity allocation (budget + per-mode floors
-unchanged); the gate's would-cut verdict is RECORDED — paired with the actual keep
-decision — in the committed log `data/emission/mining_gate_reports/deploy_tail.jsonl`
-(`tools/mining/gate_report.py`), not acted on. The head/threshold stay LOCKED (we still
-never retrain or re-threshold); it simply stops acting until emission is machine-curated.
+WHETHER THE GATE CUTS IS READ FROM THE OWNER, not decided here: `floors.MINING_RELEASE.acts`
+(`tools/emission/floors.py`). It was report-only from prompts/mining_gate_report_only.md and
+is ENFORCING again as of 2026-08-06 (prompts/mining_adoption_prompt.md), so the diversity
+allocation runs over gate-PASSERS — the shape it had before the report-only period. The
+would-cut verdict is still RECORDED per candidate in the committed log
+`data/emission/mining_gate_reports/deploy_tail.jsonl` (`tools/mining/gate_report.py`), paired
+with the keep decision; while the gate acts, "cut but kept anyway" is 0 by construction, which
+is the calibration signal report-only bought and enforcing gives back. The head/threshold stay
+LOCKED (we still never retrain or re-threshold here).
 
 Incremental / idempotent state (the load-bearing production delta over the pilot):
   * The durable state is `alternates.jsonl` (the kept strange alternates). On each run
@@ -59,10 +62,10 @@ Load-bearing (see prompts/deploy_tail_emit_wirein_prompt.md + the memories):
   * normal_map OFF for all modes (none of the specs enable it; `shade:none` composites).
 
 Keep / diversity allocation (tail_alloc.allocate_strange):
-  * REPORT-ONLY gate: the p_ge3 >= 0.50 cut no longer filters; every scored candidate is
-    eligible for allocation (would-cut recorded, not acted on). AT MOST ONE strange
-    alternate per location. The p_ge3 quality ORDER within the allocation is untouched —
-    allocation still prefers higher p_ge3, it just no longer hard-drops sub-0.50.
+  * The p_ge3 >= 0.50 cut filters the allocation input while `floors.MINING_RELEASE.acts`
+    (it does, since 2026-08-06); under report-only every scored candidate was eligible
+    instead. AT MOST ONE strange alternate per location. The p_ge3 quality ORDER within
+    the allocation is the same either way — the gate decides the input set, not the order.
   * Strange budget B = round(0.25 * n_emitted) is a CEILING across the batch.
   * Keepers are SPREAD across modes for diversity (not abundance-biased): each mode
     gets a floor ~B/(n+2), the surplus (~2/(n+2)*B) lands on the abundant modes by
@@ -98,7 +101,9 @@ sys.path.insert(0, str(REPO / "tools" / "queries"))
 import colormap as cm                     # noqa: E402
 import location as loc_mod                 # noqa: E402
 import query_sampler as qs                 # noqa: E402
-from tools.mining.mining_gate import MiningScorer, gate_stamp, MINING_GATE_THRESHOLD  # noqa: E402
+from tools.emission import floors as F     # noqa: E402  THE stage-2 cut owner (torch-free)
+from tools.mining.mining_gate import (  # noqa: E402
+    MiningScorer, gate_stamp, MINING_GATE_THRESHOLD, MINING_GATE_VERSION)
 from tools.mining.tail_alloc import allocate_strange, BUDGET_FRAC  # noqa: E402
 
 EXE = str(REPO / "target/release/fractal-generator.exe")
@@ -541,14 +546,19 @@ def main():
     #    modes for diversity. A location may pass in several modes -> batch-level (each
     #    location fills at most one mode's slot).
     #
-    #    REPORT-ONLY mining gate: the 0.50 gate no longer CUTS. EVERY scored candidate flows
-    #    into the diversity allocation (budget B + per-mode floors UNCHANGED — the diversity
-    #    machinery still spreads by quality); the gate's would-cut verdict is recorded, not
-    #    acted on (write_gate_report below). `passers` is kept purely as the report quantity
-    #    "would the gate have passed this" (new-supply / passer-loc counts), NOT as a filter.
-    #    See prompts/mining_gate_report_only.md.
-    passers = [c for c in cands if c.get("passed")]     # gate would-pass — REPORTED, not gating
-    keepers, alloc = allocate_strange(cands, n_emit, modes, STRANGE_BUDGET_FRAC,
+    #    WHETHER THE GATE CUTS IS DERIVED, NOT DECIDED HERE. `floors.MINING_RELEASE` is the
+    #    one owner of the mining release cut; this pass applies the SAME head at the SAME
+    #    threshold to the same question (may this strange render ship — a kept alternate is
+    #    durable product), so it reads `.acts` rather than carrying its own answer. Enforcing
+    #    since 2026-08-06 (prompts/mining_adoption_prompt.md): allocation runs over the
+    #    passers again, which is the shape it had before the report-only period. Were the
+    #    floor ever set back to report-only, allocation would flow over every scored candidate
+    #    again with no edit here — and the two branches differ only in the input set, so the
+    #    budget and per-mode floors are untouched either way.
+    passers = [c for c in cands if c.get("passed")]
+    gate_acts = F.MINING_RELEASE.acts
+    alloc_input = passers if gate_acts else cands
+    keepers, alloc = allocate_strange(alloc_input, n_emit, modes, STRANGE_BUDGET_FRAC,
                                       existing=existing_list)
     keepers.sort(key=lambda c: -c["p_ge3"])   # render/report in quality order
     n_loc_passer = len({c["loc_id"] for c in passers})
@@ -579,8 +589,9 @@ def main():
         selection_stage="keeper") for c in cands]
     # deploy_tail has no pool stage, so it logs no pool floor and `pool_c` is all zeros.
     gpath, n_tot, n_cut, n_cut_sel, _pool_c = GR.write_gate_report("deploy_tail", gr_rows)
-    print(f"[gate-report-only] strange mining gate REPORT-ONLY (not acting): {n_tot} candidate(s) "
-          f"logged, {n_cut} would-cut ({n_cut_sel} kept anyway) → {gpath.relative_to(REPO)}")
+    print(f"[gate-report] strange mining gate {'ENFORCING' if gate_acts else 'REPORT-ONLY'}: "
+          f"{n_tot} candidate(s) logged, {n_cut} cut ({n_cut_sel} kept anyway — 0 by "
+          f"construction while the gate acts) → {gpath.relative_to(REPO)}")
 
     # 6. Full-res render the NEW keepers alongside the smooth wallpaper (skip-if-exists so
     #    a re-run / adopted pilot keeper never re-renders), + side-by-side for eyeball.
@@ -648,10 +659,11 @@ def main():
         print(f"[state] alternates.jsonl now holds {len(all_alts)} alternate(s)")
 
     # 8. Correctness checks (ship with checks, not just reasoning). The idempotency sim is
-    #    fed `cands` — the report-only allocation input — not `passers`, so it mirrors the
-    #    real next-run allocation (which no longer pre-filters to gate-passers).
+    #    fed `alloc_input` — whatever the allocation above actually consumed — so it mirrors
+    #    the real next-run allocation under either gate mode. Feeding it a fixed set would
+    #    make the no-op claim true of a run that never happens.
     checks = run_checks(smooth_before, smooth_paths, emit_fields_before, emit_field_dir,
-                        cands, keepers, existing_list, n_emit, modes, args)
+                        alloc_input, keepers, existing_list, n_emit, modes, args)
 
     # 9. Parity: re-score 1-2 kept scoring crops through the standalone gate CLI
     #    (deploy path == measurement path across two independent entry points).
@@ -659,7 +671,7 @@ def main():
 
     # 10. Report.
     write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passer,
-                 scorer, parity, checks, thr_bite, floors_engaged, args)
+                 scorer, parity, checks, thr_bite, floors_engaged, args, gate_acts)
 
 
 def run_checks(smooth_before, smooth_paths, emit_fields_before, emit_field_dir,
@@ -737,14 +749,18 @@ def run_parity(keepers):
 
 
 def write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passer,
-                 scorer, parity, checks, thr_bite, floors_engaged, args):
+                 scorer, parity, checks, thr_bite, floors_engaged, args, gate_acts):
     keep_ids = {c["cid"] for c in keepers}
     n_total_alt = len(existing_alts) + len(keepers)
     degenerate = not floors_engaged
     # corpus-wide existing count per mode (existing alternates aren't in `cands`).
     ex_by_mode = {m: sum(1 for v in existing_alts.values() if v["mode"] == m) for m, _ in ROSTER}
     rep = {
-        "gate": {"version": "mining_v1", "threshold": scorer.threshold},
+        # `acts` is the run's OWN allocation behaviour, passed down from where the branch was
+        # taken — not re-read here, where it could disagree with what the run did.
+        "gate": {"version": MINING_GATE_VERSION, "threshold": scorer.threshold,
+                 "acts": bool(gate_acts),
+                 "cut_owner": f"floors.MINING_RELEASE ({F.MINING_RELEASE})"},
         "curation_pass": {
             "score_only": bool(args.score_only),
             "n_existing_alternates": len(existing_alts),
@@ -809,7 +825,10 @@ def write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passe
     L.append("# Render-mode deploy tail — production curation pass\n")
     q = rep["allocation"]
     ck = checks
-    L.append(f"**Gate** `mining_v1` (LOCKED) · threshold `{scorer.threshold}` on marginal p_ge3\n")
+    L.append(f"**Gate** `{rep['gate']['version']}` (LOCKED) · threshold "
+             f"`{scorer.threshold}` on marginal p_ge3 · "
+             f"**{'ENFORCING' if gate_acts else 'REPORT-ONLY'}** "
+             f"(owner: {rep['gate']['cut_owner']})\n")
     L.append(f"**Corpus** N=**{q['n_emitted']}** emitted · budget "
              f"B=round({q['budget_frac']:.0%}×{q['n_emitted']})=**{q['budget_B']}** · "
              f"floor=**{q['floor_per_mode']}**/mode (n={q['n_modes']}) · floor-bite at "

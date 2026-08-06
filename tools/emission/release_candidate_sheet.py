@@ -279,8 +279,10 @@ def build(run_dir: Path, record_root: Path, out_html: Path) -> dict:
              f"on a human label with <i>no machine quality cut</i> at intake; they still face "
              f"both stage-2 head floors like anything else. They are marked wherever they "
              f"appear so the two supplies can be compared by eye.</p>")
-    P.append(f"<p class=note><b>Cuts in force:</b> {escape(F.summary())}. The mining RELEASE "
-             f"floor is report-only — a strange row below it is still release-eligible.</p>")
+    P.append(f"<p class=note><b>Cuts in force:</b> {escape(F.summary())}. All four act as of "
+             f"2026-08-06, when the mining RELEASE floor stopped being report-only. Fates are "
+             f"read from the run's own release RECORD, not re-derived from today's floors, so "
+             f"a run made while that floor was report-only still reads as what it did.</p>")
 
     # readout tables
     P.append("<h2>Realized vs target — per-partition, over the selection</h2>")

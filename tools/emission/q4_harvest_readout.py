@@ -379,8 +379,10 @@ def _markdown(counts, selected, inventory, floor_rejected, rescored, ledger, bot
     w("")
     w("**The release-candidate view is the whole gated q4 pool, diversity-selected** (heads never "
       "compared in one greedy step — smooth via the wallpaper head, strange via the mining head, "
-      "two disjoint passes). v7 is a floor here and the mining head is uncalibrated on strange "
-      "renders, so the view is NOT truncated to the strict-floor subset — Matt judges by eye. "
+      "two disjoint passes). v7 is a floor here, so the view is NOT truncated to the "
+      "strict-floor subset — Matt judges by eye. The mining head is no longer uncalibrated on "
+      "strange renders (data/render_mode_head/v1/mining_gate_lock.json, 2026-08-06), which is "
+      "why its 0.50 floor now cuts in the driver; this readout still shows what it cut. "
       f"For reference, the driver's strict-floor pass shipped only "
       f"{counts.get('driver_strict_release_split', {}).get('smooth_selected', 0) + counts.get('driver_strict_release_split', {}).get('strange_selected', 0)} "
       f"(smooth ≥{STRICT_WP} + strange ≥{STRICT_MN}).\n")
@@ -389,7 +391,9 @@ def _markdown(counts, selected, inventory, floor_rejected, rescored, ledger, bot
     w("The gated q4 pool, diversity-selected. `wp`/`mn` = wallpaper-head / mining-head marginal "
       "`p_ge3`; `★` marks the ROUTED head (the score the driver gated on); `✓` = clears that "
       f"head's STRICT production floor (wallpaper {STRICT_WP} / mining {STRICT_MN}). The mining "
-      "head is uncalibrated on strange minibrot renders — treat mn as a hint, judge by eye.\n")
+      f"floor is measured on the 2026-08-06 sheet (97.0% precision of passers at "
+      f"{STRICT_MN} [84.7%-99.5%], recall 50.8%) — but on renders at locations v1 trained "
+      "at, so treat mn as an optimistic hint on a MINIBROT population and judge by eye.\n")
     w("| # | id | type/cluster | flavor/style | palette | wp p3 | mn p3 | strict? | G | minibrot | fw |")
     w("|--:|---|---|---|---|--:|--:|:-:|--:|---|--:|")
     for i, r in enumerate(selected, 1):

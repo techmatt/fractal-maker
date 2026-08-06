@@ -23,9 +23,11 @@ current). The flow:
                 similarity kernel.
 
 Every cut in stages 4-5 is owned by `tools/emission/floors.py` and stamped with the head
-version it was set against; a run whose live head pin disagrees refuses to gate.
-`--target-gated` counts POST-FLOOR rows only — ungated strange (the report-only mining
-release floor) is tracked and reported, never counted toward the surplus.
+version it was set against; a run whose live head pin disagrees refuses to gate. All four
+cuts now ACT — the mining release floor (0.50) stopped being report-only on 2026-08-06 —
+so `--target-gated`'s POST-FLOOR count and the release-eligible draw are the same set, and
+the run reports how many pooled strange rows that floor removed rather than letting them
+disappear at the eligibility boundary.
 
 Admissibility is routed through `corpus_common.is_current_decoded` — a v6/v5/unstamped row
 is never consumed. See prompts/build_emission_diversity_v1.md.
@@ -84,9 +86,10 @@ JPG_Q = 95
 # head it reads and the head version it was set against, and refuses to gate when the live
 # pin disagrees. This module used to declare all four as its own literals while three
 # readouts declared them again — six copies of four numbers, none checked against each other.
-# The mining RELEASE floor is report-only (`release_eligible()` admits every scored strange
-# row and `write_gate_report` logs the would-cut verdict); the mining POOL floor still cuts,
-# as capacity ordering. See prompts/mining_gate_report_only.md.
+# All four CUT: the mining RELEASE floor went enforcing on 2026-08-06 at the value it always
+# carried (prompts/mining_adoption_prompt.md), so `release_eligible()` applies one rule to
+# both heads. `write_gate_report` still logs the mining head's verdict at both sites; what it
+# can no longer observe is a would-cut row shipping anyway.
 DEFAULT_FLOOR = F.WALLPAPER_POOL.value                    # 0.75  wallpaper-head POOL floor
 DEFAULT_MINING_FLOOR = F.MINING_POOL.value                # 0.25  mining-head POOL floor
 DEFAULT_RELEASE_FLOOR = F.WALLPAPER_RELEASE.value         # 0.90  smooth  → wallpaper gate
@@ -384,8 +387,9 @@ class EmissionDiversity:
         self.rel_filt = getattr(args, "release_filt", None) or REL_FILT
         # target counts POST-FLOOR rows (release-eligible AND above their head's release
         # floor — `post_floor()`), so the colorize builds a 3×N surplus of genuinely
-        # release-grade candidates, not merely pool-admitted or report-only-admitted ones
-        # (§4 "3× post-floor surplus"). Ungated strange is tracked, never counted.
+        # release-grade candidates, not merely pool-admitted ones (§4 "3× post-floor
+        # surplus"). With every floor enforcing the two sets coincide; the accounting still
+        # computes both, because a divergence is what a report-only floor looks like.
         self.target_gated = args.target_gated or (3 * self.release_n)
         self.max_attempts = int(args.max_attempts)
         self.time_budget_s = float(args.time_budget_min) * 60.0
@@ -675,49 +679,64 @@ class EmissionDiversity:
             else self.mining_release_floor
 
     def release_eligible(self) -> list:
-        """Pool rows eligible for release selection.
+        """Pool rows eligible for release selection: pool-admitted ∧ clears its head's
+        RELEASE floor. One rule, both heads, since 2026-08-06.
 
-        Smooth (wallpaper head): gated ∧ p_ge3 ≥ release floor — UNCHANGED.
-        Strange (mining head): the mining gate is REPORT-ONLY — its pool (0.25) and
-        release (0.50) floors no longer CUT, so EVERY successfully-scored strange pool
-        row is release-eligible regardless of either floor; the would-cut verdict is
-        recorded (write_gate_report), not acted on. Drawn straight from `self.pool.rows`
-        (not `gated()`) so the softer pool floor is bypassed for release too, while
-        `passed`/`gated()`/deficit-fill accounting stays untouched — only the RELEASE
-        decision is report-only. See prompts/mining_gate_report_only.md."""
-        out = []
-        for r in self.pool.rows:
-            if head_for_style(r["render_style"]) == "mining":
-                if r.get("p_ge3") is not None:     # scored strange: report-only, admit all
-                    out.append(r)
-            elif r.get("passed") and (r["p_ge3"] or 0.0) >= self.release_floor_for(r["render_style"]):
-                out.append(r)
-        return out
+        The mining half used to be the exception: while the mining release floor was
+        report-only, every successfully-scored strange row was release-eligible regardless of
+        either floor, drawn straight from `self.pool.rows` rather than `gated()`, and the
+        would-cut verdict was logged instead of acted on. The floor is now ENFORCING
+        (prompts/mining_adoption_prompt.md, `floors.MINING_RELEASE.acts`), so the special
+        case is gone rather than parameterised — a branch that reads "if this head is the
+        report-only one" is how the exception survives its own reason.
+
+        `write_gate_report` still logs every scored strange candidate at BOTH sites; it reads
+        `self.pool.rows` directly and is unaffected by this. What it can no longer observe is
+        a would-cut row being selected anyway (see floors.py)."""
+        return [r for r in self.pool.rows
+                if r.get("passed")
+                and (r["p_ge3"] or 0.0) >= self.release_floor_for(r["render_style"])]
 
     def post_floor(self, rows=None) -> list:
-        """The release-eligible rows that actually CLEAR their head's release floor.
+        """The release-eligible rows that CLEAR their head's release floor — what
+        `--target-gated` counts.
 
-        This is what `--target-gated` counts, and it is NOT `release_eligible()`. The mining
-        release floor went report-only, so `release_eligible()` admits every scored strange
-        row including ones the 0.50 gate would cut — and `--target-gated` was reading that
-        set. The "3x post-floor surplus" contract silently became "3x anything that rendered":
-        a run with `--strange-frac 0.5` could hit its target on ungated strange alone and stop
-        colorizing while the smooth half had no surplus at all. Report-only is a decision
-        about what may SHIP, not a claim that an ungated row is surplus."""
+        Since the mining flip this is an IDENTITY on `release_eligible()`: eligibility
+        applies the same per-head floor, so every eligible row is post-floor by construction.
+        It is kept, and kept separately computed, for two reasons. It is the single predicate
+        `target_met` reads, so the surplus contract has one testable owner; and the identity
+        is ASSERTED by a test rather than assumed, so if any release floor ever goes
+        report-only again the two sets diverge and the accounting below reports the gap
+        instead of silently counting rows no floor vouched for.
+
+        That is not hypothetical history: while the mining floor was report-only,
+        `--target-gated` read `release_eligible()` and the "3x post-floor surplus" contract
+        silently became "3x anything that rendered" — a `--strange-frac 0.5` run could hit
+        its target on ungated strange alone while the smooth half had no surplus at all."""
         return [r for r in (self.release_eligible() if rows is None else rows)
                 if (r.get("p_ge3") or 0.0) >= self.release_floor_for(r["render_style"])]
 
     def target_accounting(self) -> dict:
-        """What the surplus target sees, split from what it does not.
+        """What the surplus target sees, and what the enforcing release floor removed.
 
-        `post_floor` counts toward `--target-gated`; `ungated_strange` never does. Both are
-        release-ELIGIBLE (the strange half can still be selected — that is what report-only
-        means), so the two numbers together are the whole draw pool and the difference is
-        exactly the part of it no floor has vouched for."""
+        `post_floor` counts toward `--target-gated`. `ungated_eligible` is the release-
+        ELIGIBLE-but-below-floor set, which is EMPTY while every floor acts — it is reported
+        because a non-zero value is the visible signature of a floor having gone report-only,
+        and reading zero from a computation is different from not computing it.
+
+        `cut_by_release_floor_strange` is the number the flip actually costs: scored,
+        pool-admitted strange rows that the 0.50 release floor now removes from the draw.
+        Under report-only these were `ungated_strange` and could still be selected; they are
+        counted here from the POOL, so the run still reports the size of the population it
+        stopped shipping instead of losing it at the eligibility boundary."""
         elig = self.release_eligible()
         post = self.post_floor(elig)
         post_ids = {r["id"] for r in post}
         ungated = [r for r in elig if r["id"] not in post_ids]
+        cut_strange = [r for r in self.pool.rows
+                       if head_for_style(r["render_style"]) == "mining"
+                       and r.get("passed") and r.get("p_ge3") is not None
+                       and r["p_ge3"] < self.release_floor_for(r["render_style"])]
         return {
             "target_gated": self.target_gated,
             "post_floor": len(post),
@@ -725,7 +744,8 @@ class EmissionDiversity:
                                      if head_for_style(r["render_style"]) == "wallpaper"),
             "post_floor_strange": sum(1 for r in post
                                       if head_for_style(r["render_style"]) == "mining"),
-            "ungated_strange": len(ungated),
+            "ungated_eligible": len(ungated),
+            "cut_by_release_floor_strange": len(cut_strange),
             "release_eligible": len(elig),
         }
 
@@ -859,14 +879,19 @@ class EmissionDiversity:
     def write_gate_report(self, selected):
         """Mining-head would-cut log, PAIRED with the actual outcome AT BOTH CUT SITES.
 
-        One row per scored strange candidate: what the gate would have cut against the live
-        mining release floor (report-only) and whether it was actually selected, AND what the
-        mining POOL floor would have cut and whether the row was actually pooled. The pool
-        floor still acts, so its pairing is only non-degenerate against the release outcome —
-        which is exactly the free signal: the release draw bypasses the pool floor, so
-        `would_cut_pool ∧ selected` counts pool-operating-point false cuts on every run at no
-        extra cost. Committed under data/emission/ so a future calibration pass reads labeled
-        precision off accumulated releases."""
+        One row per scored strange candidate: what the release floor cut and whether the row
+        was actually selected, AND what the mining POOL floor cut and whether the row was
+        actually pooled. Both sites keep accruing after the 2026-08-06 flip — this reads
+        `self.pool.rows`, not the eligible set, so the denominator is still every scored
+        strange candidate.
+
+        WHAT THE FLIP TOOK. Both outcome joins are now zero by construction: selection implies
+        clearing 0.50, which implies clearing 0.25, so neither `would_cut ∧ selected` nor
+        `would_cut_pool ∧ selected` can ever be non-zero again. That pairing was the free
+        false-cut signal report-only bought, and it is the price of enforcing (floors.py).
+        What the log still is: the durable population record of every strange candidate, its
+        p_ge3, and what each floor did to it — the denominator a labeled calibration pass
+        needs, which now has to bring its own labels. Committed under data/emission/."""
         from tools.mining import gate_report as GR
         sel_ids = {e["_rec"]["id"] for e in selected}
         rows = []
@@ -980,9 +1005,19 @@ class EmissionDiversity:
                   f"these): {self.floor_overrides}", flush=True)
         print(f"[colorize] pool-floors: wallpaper={self.floor} mining={self.mining_floor} · "
               f"release-floors: wallpaper={self.release_floor} (gate {heads.wp_gate}) "
-              f"mining={self.mining_release_floor} (gate {heads.mining_gate}, report-only) · "
+              f"mining={self.mining_release_floor} (gate {heads.mining_gate}, enforcing) · "
               f"target={self.target_gated} POST-FLOOR · palette-ranker={ranker.mode} · "
               f"loc-ranker={self.ranker_mode}", flush=True)
+        # The mining release floor now CUTS, so the run states what that cut is measured to
+        # buy — read from the frozen record, which refuses if the pin has moved off the head
+        # it was measured on. A number that removes rows should not be printed as a bare
+        # threshold once it has an operating point.
+        from tools.mining.lock_mining_gate import read_lock       # noqa: PLC0415 (torch-free)
+        _rel = read_lock()["cuts"]["mining_release"]
+        print(f"[colorize] mining release floor {_rel['value']} is measured: fires "
+              f"{_rel['fires']}/{_rel['n']} at precision {_rel['precision']:.3f} "
+              f"[{_rel['precision_ci95'][0]:.3f}-{_rel['precision_ci95'][1]:.3f}], recall "
+              f"{_rel['recall']:.3f} — OPTIMISTIC (mining_gate_lock.json caveats)", flush=True)
         if self.cover_all:
             print(f"[colorize] --cover-all: one colorize per location over "
                   f"{len(self.rows)} admitted locations (target/attempt/time cutoffs bypassed)",
@@ -991,26 +1026,27 @@ class EmissionDiversity:
         exhausted: set = set()
         while True:
             acct = self.target_accounting()
-            n_post, n_ung = acct["post_floor"], acct["ungated_strange"]
+            n_post, n_cut = acct["post_floor"], acct["cut_by_release_floor_strange"]
             if not self.cover_all:
                 if self.target_met():
                     print(f"[colorize] reached target: {n_post} POST-FLOOR "
                           f"(smooth {acct['post_floor_smooth']} + strange "
                           f"{acct['post_floor_strange']}) ≥ {self.target_gated}; "
-                          f"{n_ung} ungated strange tracked, not counted", flush=True)
+                          f"{n_cut} pooled strange cut by the {self.mining_release_floor} "
+                          f"release floor", flush=True)
                     break
                 if self.pool.n_attempts() >= self.max_attempts:
                     print(f"[colorize] hit max attempts {self.max_attempts} "
-                          f"(post-floor={n_post}, ungated-strange={n_ung})", flush=True)
+                          f"(post-floor={n_post}, strange-cut-at-release={n_cut})", flush=True)
                     break
                 if time.time() - t0 > self.time_budget_s:
                     print(f"[colorize] hit time budget (post-floor={n_post}, "
-                          f"ungated-strange={n_ung})", flush=True)
+                          f"strange-cut-at-release={n_cut})", flush=True)
                     break
             row = self.pick_location(exhausted)
             if row is None:
                 print(f"[colorize] all locations exhausted (post-floor={n_post}, "
-                      f"ungated-strange={n_ung})", flush=True)
+                      f"strange-cut-at-release={n_cut})", flush=True)
                 break
             # cover-all stops the instant pick_location wraps to a 2nd pass: it returns
             # fewest-attempts-first, so an already-attempted row means every location has one.
@@ -1035,7 +1071,8 @@ class EmissionDiversity:
                   f"{rec['p_ge3'] if rec['p_ge3'] is not None else 'ERR'} "
                   f"{'PASS' if rec['passed'] else 'floor-rej'} | gated={n_gated} "
                   f"post-floor={acct['post_floor']}/{self.target_gated} "
-                  f"(+{acct['ungated_strange']} ungated strange)", flush=True)
+                  f"({acct['cut_by_release_floor_strange']} strange cut at release)",
+                  flush=True)
         return self.target_accounting()["post_floor"]
 
     def ranker_reach(self) -> dict:
@@ -1198,8 +1235,9 @@ def main():
                          "greedy passes (never compared in one step).")
     ap.add_argument("--target-gated", type=int, default=0,
                     help="0 → 3×release-n POST-FLOOR rows (release-eligible AND above their "
-                         "head's release floor). Ungated strange (report-only mining gate) is "
-                         "tracked and reported but never satisfies the target.")
+                         "head's release floor). Every floor enforces, so only floor-clearing "
+                         "rows exist to count; strange rows the release floor cut are reported "
+                         "and never satisfy the target.")
     ap.add_argument("--cover-all", action="store_true",
                     help="colorize every admitted location exactly once, then stop (explicit "
                          "one-pass; bypasses --target-gated/--max-attempts/--time-budget-min)")
@@ -1215,7 +1253,8 @@ def main():
                          f"production gate)")
     ap.add_argument("--mining-release-floor", type=float, default=DEFAULT_MINING_RELEASE_FLOOR,
                     help=f"mining-head RELEASE floor (default = the "
-                         f"{DEFAULT_MINING_RELEASE_FLOOR} production gate; report-only)")
+                         f"{DEFAULT_MINING_RELEASE_FLOOR} production gate; ENFORCING since "
+                         f"2026-08-06 — strange below it is pooled but cannot ship)")
     ap.add_argument("--intake-floor", type=float, default=None,
                     help="OPTIONAL ranker percentile [0,1]; drop admitted locations below it "
                          "from the colorize queue. Default OFF (deliberate — the ranker ORDERS "
@@ -1277,14 +1316,16 @@ def main():
           f"accumulated → {rpath.relative_to(ROOT)} (population → {runs_path.relative_to(ROOT)})",
           flush=True)
     gpath, n_tot, n_cut, n_cut_sel, pool_c = eng.write_gate_report(selected)
-    print(f"[gate-report-only] strange mining gate REPORT-ONLY (not acting): {n_tot} strange "
-          f"candidate(s) logged, {n_cut} would-cut ({n_cut_sel} of those SELECTED anyway) → "
-          f"{gpath.relative_to(ROOT)}", flush=True)
-    print(f"[gate-report] POOL site (0.25 floor, still ACTING): "
+    acting = "ACTING" if F.MINING_RELEASE.acts else "REPORT-ONLY"
+    print(f"[gate-report] RELEASE site ({eng.mining_release_floor} floor, {acting}): {n_tot} "
+          f"strange candidate(s) logged, {n_cut} cut ({n_cut_sel} of those selected anyway — "
+          f"0 by construction while the floor acts) → {gpath.relative_to(ROOT)}", flush=True)
+    print(f"[gate-report] POOL site ({eng.mining_floor} floor, ACTING): "
           f"{pool_c['n_would_cut_pool']}/{pool_c['n_with_pool_site']} would-cut, of those "
           f"{pool_c['n_would_cut_pool_pooled']} pooled anyway and "
-          f"{pool_c['n_would_cut_pool_selected']} SELECTED anyway (the free pool-operating-"
-          f"point false-cut count)", flush=True)
+          f"{pool_c['n_would_cut_pool_selected']} selected anyway (also 0 by construction now "
+          f"that release ≥ pool is enforced — the free false-cut count was report-only's)",
+          flush=True)
     rel_paths = eng.render_release(selected, skip_render=args.no_release_render)
     R.write_report(eng, selected, sel_log, rel_paths)
 

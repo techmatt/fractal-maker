@@ -140,10 +140,26 @@ def test_style_routes_to_the_head_that_was_trained_on_it():
         F.for_style("smooth", "somewhere_else")
 
 
-def test_only_the_mining_release_floor_is_report_only():
-    """`acts` is the record of which cuts remove rows. The mining RELEASE floor went
-    report-only; the mining POOL floor deliberately did not (capacity ordering)."""
-    assert [f.name for f in F.ALL_FLOORS if not f.acts] == ["mining_release"]
+def test_the_liveness_census_finds_no_report_only_cut_left():
+    """THE census: `acts` is the record of which cuts remove rows, and the set that do not
+    is now EMPTY. The mining RELEASE floor was the only member; it went enforcing on
+    2026-08-06 once it had a measured operating point on strange renders
+    (data/render_mode_head/v1/mining_gate_lock.json), at the same value it always carried.
+
+    An empty census is exactly what a census reading the wrong field also returns, so the
+    mirror below injects a report-only cut and requires the same expression to name it."""
+    assert [f.name for f in F.ALL_FLOORS if not f.acts] == []
+    assert all(f.acts for f in F.ALL_FLOORS)
+    assert "report-only" not in F.summary()
+
+
+def test_the_census_still_names_a_report_only_cut(monkeypatch):
+    """NON-VACUITY for the census above, both in the list and in the run-banner summary."""
+    ghost = F.Floor(name="ghost_release", value=0.99, head=F.MINING_HEAD,
+                    stamp=MP.HEAD_VERSION, site="release", acts=False, basis="injected")
+    monkeypatch.setattr(F, "ALL_FLOORS", F.ALL_FLOORS + (ghost,))
+    assert [f.name for f in F.ALL_FLOORS if not f.acts] == ["ghost_release"]
+    assert "ghost_release 0.99 (render_mode_head/v1, report-only)" in F.summary()
 
 
 if __name__ == "__main__":

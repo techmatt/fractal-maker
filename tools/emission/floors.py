@@ -31,7 +31,27 @@ THE FOUR CUTS
   wallpaper pool        0.75  wallpaper_head/v3     YES — smooth below this is not pooled
   wallpaper release     0.90  wallpaper_head/v3     YES — smooth below this cannot ship
   mining pool           0.25  render_mode_head/v1   YES — capacity ordering (see below)
-  mining release        0.50  render_mode_head/v1   NO  — REPORT-ONLY (gate_report.py)
+  mining release        0.50  render_mode_head/v1   YES — since 2026-08-06 (was report-only)
+
+THE MINING RELEASE FLOOR STOPPED BEING REPORT-ONLY ON 2026-08-06. It went report-only
+because nobody could say what 0.50 bought on strange renders — the head was uncalibrated on
+that population and the July lock that would have said so did not survive the corpus loss.
+It is now measured: on the 422-row eval side of
+`2026-08-06_render_mode_fresh_sheet_v1`, v1 at 0.50 fires 33/422 (7.8%) at precision 97.0%
+[84.7%–99.5%] and recall 50.8%, against a 14.9% base rate. The frozen record of that ladder
+— both boundaries, both cuts, the head and batch identity, and the two caveats that make
+every number an OPTIMISTIC bound — is `data/render_mode_head/v1/mining_gate_lock.json`
+(`tools/mining/lock_mining_gate.py`), and its readers refuse when the pin moves off v1 for
+the same reason `Floor.gate` does.
+
+The flip has a cost, paid on purpose and named here so it is not rediscovered: the gate
+report's free false-cut signal is gone. While the floor was report-only, a `would_cut` row
+could still be SELECTED, so `would_cut ∧ selected` accrued a labeled false-cut count on
+every run. Enforcing makes selection imply passing, so that join — and the pool site's
+`would_cut_pool ∧ selected`, since 0.25 < 0.50 — is now zero BY CONSTRUCTION. The log keeps
+accruing (it is the population record of every scored strange candidate and what each floor
+did to it); what it no longer produces is precision without labels. See
+`tools/mining/gate_report.py`.
 
 The two RELEASE floors are not literals here: they ARE each head's production gate, imported
 from the head's own pin. That was already the stated contract ("default = each head's
@@ -160,16 +180,22 @@ MINING_POOL = Floor(
     site="pool", acts=True,
     basis="CAPACITY ORDERING, not curation: strange colorizes are cheap to make and expensive "
           "to carry, so the bottom quarter of the mining scale is dropped before it reaches "
-          "the pool. Deliberately kept as a hard cut while the release floor above it went "
-          "report-only — the would-cut verdict accrues at this site too (gate_report.py).")
+          "the pool. It was already a hard cut through the period when the release floor "
+          "above it was report-only, and its value is unchanged by that floor's 2026-08-06 "
+          "flip — the would-cut verdict accrues at this site too (gate_report.py). Measured "
+          "at the flip: fires 70/422 (16.6%) at precision 75.7% [64.5%-84.2%], keeping 84.1% "
+          "of the good rows, which is the retention the pool cut is for.")
 
 MINING_RELEASE = Floor(
     name="mining_release", value=_mn.MINING_GATE_THRESHOLD, head=MINING_HEAD,
-    stamp=_mn.HEAD_VERSION, site="release", acts=False,
+    stamp=_mn.HEAD_VERSION, site="release", acts=True,
     basis="IS the mining head's production gate (mining_pins.MINING_GATE_THRESHOLD), imported "
-          "not copied. REPORT-ONLY since prompts/mining_gate_report_only.md: the head is "
-          "uncalibrated on strange renders, so its verdict is logged against the actual "
-          "selection rather than acted on.")
+          "not copied. ENFORCING since 2026-08-06 (prompts/mining_adoption_prompt.md); it was "
+          "report-only from prompts/mining_gate_report_only.md until the head had a measured "
+          "operating point on strange renders. It now has one: 33/422 (7.8%) at precision "
+          "97.0% [84.7%-99.5%], recall 50.8%, base rate 14.9%, frozen in "
+          "data/render_mode_head/v1/mining_gate_lock.json. The value did not move; only "
+          "whether it cuts.")
 
 ALL_FLOORS = (WALLPAPER_POOL, WALLPAPER_RELEASE, MINING_POOL, MINING_RELEASE)
 

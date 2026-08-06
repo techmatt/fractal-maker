@@ -176,8 +176,8 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
              f"(order, not filter — diversity supply untouched). Pool floors (permissive): "
              f"wallpaper **{eng.floor}** / mining **{eng.mining_floor}**. **Release floors** "
              f"(per head, distinct): wallpaper **{eng.release_floor}** / mining "
-             f"**{eng.mining_release_floor}** (report-only). Release N=**{eng.release_n}** · "
-             f"target **{eng.target_gated}** POST-FLOOR rows.\n")
+             f"**{eng.mining_release_floor}** (enforcing since 2026-08-06). Release "
+             f"N=**{eng.release_n}** · target **{eng.target_gated}** POST-FLOOR rows.\n")
     L.append(f"Every cut above is owned by `tools/emission/floors.py` and stamped with the head "
              f"version it was set against — {F.summary()}. A run whose live head pin disagrees "
              f"with a stamp refuses to gate rather than gating on the wrong scale.\n")
@@ -188,10 +188,13 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         L.append(f"**{acct['post_floor']}** post-floor rows against a target of "
                  f"**{acct['target_gated']}** — smooth **{acct['post_floor_smooth']}** "
                  f"(≥ {eng.release_floor}) + strange **{acct['post_floor_strange']}** "
-                 f"(≥ {eng.mining_release_floor}). A further **{acct['ungated_strange']}** "
-                 f"strange rows are release-ELIGIBLE but below the mining release floor: the "
-                 f"mining gate is report-only, so they may still be selected, and they never "
-                 f"count toward the target. Draw pool = **{acct['release_eligible']}**.\n")
+                 f"(≥ {eng.mining_release_floor}). A further "
+                 f"**{acct.get('cut_by_release_floor_strange', 0)}** pool-admitted strange "
+                 f"rows sit BELOW the mining release floor: that floor enforces as of "
+                 f"2026-08-06, so they stay in the pool as inventory and cannot be selected. "
+                 f"Draw pool = **{acct['release_eligible']}** "
+                 f"(release-eligible-but-below-floor: **{acct.get('ungated_eligible', 0)}** — "
+                 f"non-zero only if some floor has gone report-only again).\n")
         L.append(f"**What the default 3×N surplus now means for a mixed `--strange-frac` run.** "
                  f"The target is a POOLED count across both heads, not a per-head one, while "
                  f"selection is two disjoint per-head passes with fixed slot budgets "

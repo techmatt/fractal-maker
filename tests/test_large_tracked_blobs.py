@@ -88,9 +88,10 @@ ALLOWLIST = [
           "2026-08-05 fresh-era batches). STAGED — wallpaper_pins still points at v3."),
     Entry("data/render_mode_head/v1/model_best.pt", WEIGHTS,
           "LIVE strange-mode (mining_v1) gate."),
-    Entry("data/render_mode_head/v2/model_best.pt", WEIGHTS,
-          "Render-mode head v2: the finetune of v1 on the 960-row rebuilt correction "
-          "sheet (2026-08-06). STAGED — mining_pins still pins v1."),
+    # data/render_mode_head/v2/model_best.pt had a line here while it was a live candidate.
+    # It lost the winner rule on 2026-08-06 and was de-tracked the same day: a rejected
+    # candidate is not a critical final weight, and this list is the policy's "essentially
+    # only" set. Its run record is small and stays tracked without needing a line here.
     Entry("data/queries/scorer/v3_gvo/model_best.pt", WEIGHTS,
           "LIVE palette-preference ranker (pref-v3-gvo)."),
 

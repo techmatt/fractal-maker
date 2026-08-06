@@ -36,6 +36,15 @@ Outputs -> data/render_mode_head/v2/ (per-seed under v2/seed_<s>/). The eval/cal
 reads that decide whether any of this is adopted are a SEPARATE harness that scores v1 and
 v2 through one code path: `tools/mining/mining_v2_reads.py`. Nothing here moves a pin, a
 floor or a gate.
+
+OUTCOME (2026-08-06): v2 LOST the winner rule — significantly worse at both >=2 boundaries
+on a 4,000-draw paired bootstrap, and no significant improvement on the three modes v1's
+trainer had dropped. Its WEIGHTS ARE THEREFORE NOT TRACKED: a rejected candidate is not a
+critical final weight, so `data/render_mode_head/v2/model_best.pt` (and the five per-seed
+checkpoints, always ignored) is working state. THIS FILE plus the committed corpus batch and
+the recipe stamped into `config.json` are what reproduce it per-seed; the run record
+(config/metrics/per_seed + the reads' report.{md,json}) stays committed. Re-running this
+trainer is the rollback path, not a `git checkout`.
 """
 from __future__ import annotations
 

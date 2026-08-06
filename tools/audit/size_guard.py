@@ -339,9 +339,11 @@ REGISTRY: list[Entry] = [
     Entry("data/render_mode_head/", RELOCATE, PRECIOUS, "ignored",
           "trained render-mode (strange-mode gate) head .pt — not GPU-reproducible. v1 is "
           "the LIVE gate and its training corpus is gone, so it cannot be retrained at all; "
-          "v2 is the staged 2026-08-06 finetune plus its five per-seed checkpoints (~60 MB "
-          "total). v1/model_best.pt and v2/model_best.pt are tracked (LFS, negated by exact "
-          "path in .gitignore); the per-seed dirs are ignored working state"),
+          "v1/model_best.pt is tracked (LFS, negated by exact path in .gitignore) alongside "
+          "the small mining_gate_lock.{json,md}. v2 (the 2026-08-06 finetune that LOST the "
+          "winner rule) is ~60 MB of ignored working state — staged weight plus five "
+          "per-seed checkpoints, de-tracked once it was a rejected candidate; only its "
+          "small run record stays in the index"),
 
     # === RELOCATE -> trash — dead / superseded ================================
     Entry("scratchpad/", RELOCATE, TRASH, "ignored",

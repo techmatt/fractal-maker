@@ -383,30 +383,36 @@ def _gate_rec(id, loc, style, p_ge3, cell):
 
 
 def test_release_floors_exclude_subfloor_and_short_fill(tmp_path):
-    # Wallpaper-head RELEASE floor (0.90) still CUTS a sub-floor smooth row (em_1). The mining
-    # head is REPORT-ONLY since b515017: its 0.50 release floor no longer cuts, so a sub-floor
-    # strange row (em_3) is release-eligible anyway (would-cut is logged, not acted on). See
-    # prompts/mining_gate_report_only.md / release_eligible().
+    # BOTH release floors CUT: the wallpaper head's 0.90 removes em_1, and the mining head's
+    # 0.50 removes em_3 — which it did NOT do between b515017 and the 2026-08-06 adoption,
+    # when the mining gate was report-only and a 0.30 strange row was release-eligible anyway.
+    # prompts/mining_adoption_prompt.md / release_eligible().
     eng = B.EmissionDiversity(_args(tmp_path))
     eng.embs = {}
-    # 4 pool-admitted rows in distinct cells: smooth floor cuts em_1; strange admits all scored.
+    # 4 pool-admitted rows in distinct cells; one row cut per head, so neither floor can be
+    # the only one doing the work.
     recs = [
         _gate_rec("em_0", "l0", "smooth", 0.95, ("mandelbrot", "m#0", "k16:1", "smooth")),  # ≥0.90 ✓
         _gate_rec("em_1", "l1", "smooth", 0.80, ("mandelbrot", "m#1", "k16:2", "smooth")),  # <0.90 CUT
-        _gate_rec("em_2", "l2", "tia",    0.60, ("mandelbrot", "m#2", "k16:3", "tia")),     # scored ✓
-        _gate_rec("em_3", "l3", "tia",    0.30, ("mandelbrot", "m#3", "k16:4", "tia")),     # <0.50 but report-only ✓
+        _gate_rec("em_2", "l2", "tia",    0.60, ("mandelbrot", "m#2", "k16:3", "tia")),     # ≥0.50 ✓
+        _gate_rec("em_3", "l3", "tia",    0.30, ("mandelbrot", "m#3", "k16:4", "tia")),     # <0.50 CUT
     ]
     for r in recs:
         eng.pool.append(r)
     elig = {r["id"] for r in eng.release_eligible()}
-    assert elig == {"em_0", "em_2", "em_3"}              # smooth floor cuts em_1; strange admits all scored
+    assert elig == {"em_0", "em_2"}                      # one survivor per head
     selected, _log = eng.select_release()
     sel_ids = {e["_rec"]["id"] for e in selected}
-    assert sel_ids == {"em_0", "em_2", "em_3"}           # smooth head still short-fills below its floor
+    assert sel_ids == {"em_0", "em_2"}                   # both heads short-fill below their floor
     sf = eng.release_short_fill
-    assert (sf["requested"], sf["eligible"], sf["selected"], sf["short_by"]) == (5, 3, 3, 2)
-    # head-split: one smooth (wallpaper) + two strange (mining), never compared in one step
-    assert eng.release_split["smooth_selected"] == 1 and eng.release_split["strange_selected"] == 2
+    assert (sf["requested"], sf["eligible"], sf["selected"], sf["short_by"]) == (5, 2, 2, 3)
+    # head-split: one smooth (wallpaper) + one strange (mining), never compared in one step
+    assert eng.release_split["smooth_selected"] == 1 and eng.release_split["strange_selected"] == 1
+    # the cut strange row is still POOLED — the release floor decides what ships, not what is
+    # kept as inventory — and the run reports how many it removed.
+    acct = eng.target_accounting()
+    assert acct["cut_by_release_floor_strange"] == 1 and acct["ungated_eligible"] == 0
+    assert {r["id"] for r in eng.pool.rows} == {"em_0", "em_1", "em_2", "em_3"}
 
 
 def test_release_floor_per_head_boundary(tmp_path):
@@ -514,8 +520,9 @@ def test_deficit_rebuild_from_pool_log(tmp_path):
 # --target-gated: the POST-FLOOR surplus contract (emission_floors_prompt.md D).
 # --------------------------------------------------------------------------- #
 def _target_pool(tmp_path, **over):
-    """A pool holding one post-floor smooth, one post-floor strange, and three UNGATED
-    strange rows — the shape that made `--target-gated` count rows no floor had vouched for."""
+    """A pool holding one post-floor smooth, one post-floor strange, and three sub-release-
+    floor strange rows — the shape that made `--target-gated` count rows no floor had
+    vouched for, back when the mining release floor was report-only."""
     eng = B.EmissionDiversity(_args(tmp_path, **over))
     eng.embs = {}
     recs = [
@@ -530,26 +537,51 @@ def _target_pool(tmp_path, **over):
     return eng
 
 
-def test_ungated_strange_never_counts_toward_target_gated(tmp_path):
-    """INJECTION for D. All five rows are release-ELIGIBLE (the mining release floor is
-    report-only), but only two are POST-FLOOR. `--target-gated` must see 2, not 5.
+def test_sub_floor_strange_is_neither_eligible_nor_counted(tmp_path):
+    """The enforcing floor's version of D: the three sub-0.50 strange rows are no longer
+    release-eligible at all, so `--target-gated` sees 2 — and the count of what the floor
+    removed is REPORTED rather than lost at the eligibility boundary.
 
-    Red before the fix: the break condition read `len(release_eligible())`, so a target of 5
-    was satisfied by three rows sitting at 0.26-0.40 on the mining scale — the exact "3x
-    post-floor surplus" claim the flag exists to make, made about rows no floor had passed."""
+    Red before the flip on the first assert (`release_eligible()` returned all 5) and before
+    the accounting change on the last (there was no key naming what the floor cut)."""
     eng = _target_pool(tmp_path)
-    assert len(eng.release_eligible()) == 5                  # report-only admits all scored
+    assert {r["id"] for r in eng.release_eligible()} == {"em_0", "em_1"}
     acct = eng.target_accounting()
     assert acct["post_floor"] == 2
     assert acct["post_floor_smooth"] == 1 and acct["post_floor_strange"] == 1
-    assert acct["ungated_strange"] == 3
-    assert acct["release_eligible"] == 5
+    assert acct["release_eligible"] == 2
+    assert acct["cut_by_release_floor_strange"] == 3          # 0.30 / 0.26 / 0.40, all pooled
+    assert acct["ungated_eligible"] == 0                      # nothing eligible below a floor
     assert {r["id"] for r in eng.post_floor()} == {"em_0", "em_1"}
 
 
-def test_a_target_of_three_is_not_met_by_ungated_strange(tmp_path):
+def test_post_floor_is_an_identity_on_eligible_while_every_floor_acts(tmp_path):
+    """The identity `post_floor() == release_eligible()` holds BECAUSE eligibility applies
+    the same per-head floor — asserted, not assumed, since it is the property that makes
+    `--target-gated`'s post-floor claim true by construction today."""
+    eng = _target_pool(tmp_path)
+    assert [r["id"] for r in eng.post_floor()] == [r["id"] for r in eng.release_eligible()]
+
+
+def test_a_report_only_floor_would_reopen_the_gap_and_be_reported(tmp_path):
+    """NON-VACUITY for the identity above. Simulate the report-only shape (eligibility that
+    admits every scored strange row regardless of floor) and the accounting must split again:
+    2 post-floor, 3 eligible-but-below-floor. If it could not, `ungated_eligible` would be a
+    constant 0 dressed as a measurement and the next report-only flip would silently restore
+    the "3x anything that rendered" bug."""
+    eng = _target_pool(tmp_path)
+    eng.release_eligible = lambda: list(eng.pool.rows)        # the pre-2026-08-06 behaviour
+    acct = eng.target_accounting()
+    assert acct["release_eligible"] == 5
+    assert acct["post_floor"] == 2
+    assert acct["ungated_eligible"] == 3
+    assert eng.target_met() is False                          # default target 15 (3×5)
+
+
+def test_a_target_of_three_is_not_met_by_sub_floor_strange(tmp_path):
     """THE break condition (`target_met`, which `run_colorize` reads verbatim): with 2
-    post-floor rows and 3 ungated ones, a target of 3 is NOT met and a target of 2 IS.
+    post-floor rows and 3 sub-floor strange ones, a target of 3 is NOT met and a target of 2
+    IS.
 
     Red before the fix on both halves — the old condition counted all 5 release-eligible
     rows, so a target of 3 (and of 5) read as met."""

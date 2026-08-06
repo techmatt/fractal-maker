@@ -7,7 +7,8 @@ path, so a smoke run looked isolated. Two sinks are not under `--out` and never 
 
   * `data/emission/release_records/<site>.jsonl` (+ `__runs.jsonl`) — the gate/release
     decision record and its population, written through `paths.durable()`;
-  * `data/emission/mining_gate_reports/<site>.jsonl` — the report-only mining-gate log.
+  * `data/emission/mining_gate_reports/<site>.jsonl` — the mining-gate verdict log (the gate
+    it records went from report-only to enforcing on 2026-08-06; the log accrues either way).
 
 Both UPSERT BY KEY and accumulate across runs, and the key is prefixed with the run id — so a
 smoke run does not corrupt an existing row, it ADDS rows. That is worse than it sounds: these

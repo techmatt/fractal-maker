@@ -1,0 +1,554 @@
+{
+  "schema": "mining_gate_lock/v2",
+  "what": "The operating point of the render-mode (mining) quality gate: what each live cut fires at, and at what measured precision/recall, on the one labeled population that exists for this head.",
+  "supersedes": {
+    "path": "data/render_mode_head/v1/mining_gate_lock.json",
+    "note": "the July lock at this path (frozen PR curve + deployed-scorer parity over data/render_mode_corpus/dataset_v1/) did not survive the corpus loss; its inputs are gone and it cannot be re-derived. Its operating point (precision 0.548 / recall 0.195 / pass-rate 0.050 at 0.50, base 0.139) survives only as prose quoted in fresh_sheet_reads.JULY_LOCK, measured on a DIFFERENT and genuinely held-out population."
+  },
+  "gate": {
+    "version": "mining_v1",
+    "checkpoint": "data/render_mode_head/v1/model_best.pt",
+    "threshold": 0.5,
+    "rollback": null,
+    "signal": "marginal p_ge3 = cumprod(sigma(logits)) \u2014 NEVER the CORN conditional",
+    "deploy_transform": "classifier.data.Transform(train=False): 384x224 bicubic stretch + the checkpoint's own mean/std",
+    "black_gate": "accept iff black_fraction < 0.30 (parity with the Rust render path)"
+  },
+  "head": {
+    "name": "render_mode_head",
+    "version": "v1",
+    "checkpoint": "data/render_mode_head/v1/model_best.pt",
+    "role": "LIVE mining gate (mining_pins.ACTIVE_MINING_CKPT)"
+  },
+  "corpus": {
+    "batch": "2026-08-06_render_mode_fresh_sheet_v1",
+    "slice": "eval side (provenance.split_side == 'eval'); NOT re-derived",
+    "n": 422,
+    "n_locations": 48,
+    "n_modes": 15,
+    "labels": {
+      "1": 246,
+      "2": 113,
+      "3": 63
+    },
+    "base_rate_ge3": 0.14928909952606634,
+    "base_rate_ge2": 0.41706161137440756,
+    "label_scale": "K=3 (1 bad / 2 okay / 3 good)"
+  },
+  "cuts": {
+    "mining_pool": {
+      "value": 0.25,
+      "site": "pool",
+      "acts": true,
+      "head": "render_mode_head/v1",
+      "basis": "CAPACITY ORDERING, not curation: strange colorizes are cheap to make and expensive to carry, so the bottom quarter of the mining scale is dropped before it reaches the pool. It was already a hard cut through the period when the release floor above it was report-only, and its value is unchanged by that floor's 2026-08-06 flip \u2014 the would-cut verdict accrues at this site too (gate_report.py). Measured at the flip: fires 70/422 (16.6%) at precision 75.7% [64.5%-84.2%], keeping 84.1% of the good rows, which is the retention the pool cut is for.",
+      "boundary": "p_ge3 (marginal P(label>=3))",
+      "fires": 70,
+      "n": 422,
+      "pass_rate": 0.16587677725118483,
+      "tp": 53,
+      "precision": 0.7571428571428571,
+      "precision_ci95": [
+        0.6450473904731996,
+        0.8424826738807688
+      ],
+      "recall": 0.8412698412698413
+    },
+    "mining_release": {
+      "value": 0.5,
+      "site": "release",
+      "acts": true,
+      "head": "render_mode_head/v1",
+      "basis": "IS the mining head's production gate (mining_pins.MINING_GATE_THRESHOLD), imported not copied. ENFORCING since 2026-08-06 (prompts/mining_adoption_prompt.md); it was report-only from prompts/mining_gate_report_only.md until the head had a measured operating point on strange renders. It now has one: 33/422 (7.8%) at precision 97.0% [84.7%-99.5%], recall 50.8%, base rate 14.9%, frozen in data/render_mode_head/v1/mining_gate_lock.json. The value did not move; only whether it cuts.",
+      "boundary": "p_ge3 (marginal P(label>=3))",
+      "fires": 33,
+      "n": 422,
+      "pass_rate": 0.07819905213270142,
+      "tp": 32,
+      "precision": 0.9696969696969697,
+      "precision_ci95": [
+        0.8468093832683193,
+        0.9946307279103482
+      ],
+      "recall": 0.5079365079365079
+    }
+  },
+  "ladder_ge3": [
+    {
+      "threshold": 0.0,
+      "fires": 422,
+      "pass_rate": 1.0,
+      "tp": 63,
+      "precision": 0.14928909952606634,
+      "precision_lo": 0.11845707260472257,
+      "precision_hi": 0.18644878910535925,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.05,
+      "fires": 187,
+      "pass_rate": 0.4431279620853081,
+      "tp": 63,
+      "precision": 0.33689839572192515,
+      "precision_lo": 0.27304196510962464,
+      "precision_hi": 0.4073212261442738,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.1,
+      "fires": 140,
+      "pass_rate": 0.33175355450236965,
+      "tp": 63,
+      "precision": 0.45,
+      "precision_lo": 0.3700223563402904,
+      "precision_hi": 0.5326483592246088,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.15,
+      "fires": 107,
+      "pass_rate": 0.25355450236966826,
+      "tp": 62,
+      "precision": 0.5794392523364486,
+      "precision_lo": 0.4847431920584032,
+      "precision_hi": 0.6686288271112947,
+      "recall": 0.9841269841269841,
+      "marks": []
+    },
+    {
+      "threshold": 0.2,
+      "fires": 87,
+      "pass_rate": 0.20616113744075829,
+      "tp": 55,
+      "precision": 0.632183908045977,
+      "precision_lo": 0.5272733007011118,
+      "precision_hi": 0.7259146660454009,
+      "recall": 0.873015873015873,
+      "marks": []
+    },
+    {
+      "threshold": 0.25,
+      "fires": 70,
+      "pass_rate": 0.16587677725118483,
+      "tp": 53,
+      "precision": 0.7571428571428571,
+      "precision_lo": 0.6450473904731996,
+      "precision_hi": 0.8424826738807688,
+      "recall": 0.8412698412698413,
+      "marks": [
+        "mining_pool"
+      ]
+    },
+    {
+      "threshold": 0.3,
+      "fires": 60,
+      "pass_rate": 0.14218009478672985,
+      "tp": 49,
+      "precision": 0.8166666666666667,
+      "precision_lo": 0.7008000677353371,
+      "precision_hi": 0.8944231096286387,
+      "recall": 0.7777777777777778,
+      "marks": []
+    },
+    {
+      "threshold": 0.35,
+      "fires": 52,
+      "pass_rate": 0.12322274881516587,
+      "tp": 45,
+      "precision": 0.8653846153846154,
+      "precision_lo": 0.7472642307950509,
+      "precision_hi": 0.9332320300570737,
+      "recall": 0.7142857142857143,
+      "marks": []
+    },
+    {
+      "threshold": 0.4,
+      "fires": 42,
+      "pass_rate": 0.0995260663507109,
+      "tp": 39,
+      "precision": 0.9285714285714286,
+      "precision_lo": 0.8099028671147483,
+      "precision_hi": 0.9754100364488272,
+      "recall": 0.6190476190476191,
+      "marks": []
+    },
+    {
+      "threshold": 0.45,
+      "fires": 38,
+      "pass_rate": 0.09004739336492891,
+      "tp": 37,
+      "precision": 0.9736842105263158,
+      "precision_lo": 0.8650482156319974,
+      "precision_hi": 0.9953395324464698,
+      "recall": 0.5873015873015873,
+      "marks": []
+    },
+    {
+      "threshold": 0.5,
+      "fires": 33,
+      "pass_rate": 0.07819905213270142,
+      "tp": 32,
+      "precision": 0.9696969696969697,
+      "precision_lo": 0.8468093832683193,
+      "precision_hi": 0.9946307279103482,
+      "recall": 0.5079365079365079,
+      "marks": [
+        "mining_release"
+      ]
+    },
+    {
+      "threshold": 0.55,
+      "fires": 31,
+      "pass_rate": 0.07345971563981042,
+      "tp": 30,
+      "precision": 0.967741935483871,
+      "precision_lo": 0.8380554282383037,
+      "precision_hi": 0.9942829259130554,
+      "recall": 0.47619047619047616,
+      "marks": []
+    },
+    {
+      "threshold": 0.6,
+      "fires": 22,
+      "pass_rate": 0.052132701421800945,
+      "tp": 21,
+      "precision": 0.9545454545454546,
+      "precision_lo": 0.7820151050048196,
+      "precision_hi": 0.9919307806988522,
+      "recall": 0.3333333333333333,
+      "marks": []
+    },
+    {
+      "threshold": 0.65,
+      "fires": 18,
+      "pass_rate": 0.04265402843601896,
+      "tp": 17,
+      "precision": 0.9444444444444444,
+      "precision_lo": 0.7424220019799247,
+      "precision_hi": 0.9901250641690756,
+      "recall": 0.2698412698412698,
+      "marks": []
+    },
+    {
+      "threshold": 0.7,
+      "fires": 15,
+      "pass_rate": 0.035545023696682464,
+      "tp": 14,
+      "precision": 0.9333333333333333,
+      "precision_lo": 0.7018292244757601,
+      "precision_hi": 0.9881334113938051,
+      "recall": 0.2222222222222222,
+      "marks": []
+    },
+    {
+      "threshold": 0.75,
+      "fires": 12,
+      "pass_rate": 0.02843601895734597,
+      "tp": 11,
+      "precision": 0.9166666666666666,
+      "precision_lo": 0.6461140782014047,
+      "precision_hi": 0.9851352905492264,
+      "recall": 0.1746031746031746,
+      "marks": []
+    },
+    {
+      "threshold": 0.8,
+      "fires": 9,
+      "pass_rate": 0.02132701421800948,
+      "tp": 8,
+      "precision": 0.8888888888888888,
+      "precision_lo": 0.5649937852319399,
+      "precision_hi": 0.9801096286728695,
+      "recall": 0.12698412698412698,
+      "marks": []
+    },
+    {
+      "threshold": 0.85,
+      "fires": 6,
+      "pass_rate": 0.014218009478672985,
+      "tp": 5,
+      "precision": 0.8333333333333334,
+      "precision_lo": 0.43649056343635395,
+      "precision_hi": 0.9699474141282697,
+      "recall": 0.07936507936507936,
+      "marks": []
+    },
+    {
+      "threshold": 0.9,
+      "fires": 3,
+      "pass_rate": 0.0071090047393364926,
+      "tp": 3,
+      "precision": 1.0,
+      "precision_lo": 0.43849391955098227,
+      "precision_hi": 1.0,
+      "recall": 0.047619047619047616,
+      "marks": []
+    },
+    {
+      "threshold": 0.95,
+      "fires": 0,
+      "pass_rate": 0.0,
+      "tp": 0,
+      "precision": null,
+      "precision_lo": null,
+      "precision_hi": null,
+      "recall": 0.0,
+      "marks": []
+    }
+  ],
+  "ladder_ge2": [
+    {
+      "threshold": 0.0,
+      "fires": 422,
+      "pass_rate": 1.0,
+      "tp": 176,
+      "precision": 0.41706161137440756,
+      "precision_lo": 0.37097175636344876,
+      "precision_hi": 0.4646478730950165,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.05,
+      "fires": 323,
+      "pass_rate": 0.7654028436018957,
+      "tp": 176,
+      "precision": 0.544891640866873,
+      "precision_lo": 0.4903730903119755,
+      "precision_hi": 0.598354905145151,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.1,
+      "fires": 256,
+      "pass_rate": 0.6066350710900474,
+      "tp": 172,
+      "precision": 0.671875,
+      "precision_lo": 0.6121866754618733,
+      "precision_hi": 0.7264811898837834,
+      "recall": 0.9772727272727273,
+      "marks": []
+    },
+    {
+      "threshold": 0.15,
+      "fires": 216,
+      "pass_rate": 0.5118483412322274,
+      "tp": 166,
+      "precision": 0.7685185185185185,
+      "precision_lo": 0.7078738914437736,
+      "precision_hi": 0.8197787457277171,
+      "recall": 0.9431818181818182,
+      "marks": []
+    },
+    {
+      "threshold": 0.2,
+      "fires": 187,
+      "pass_rate": 0.4431279620853081,
+      "tp": 162,
+      "precision": 0.8663101604278075,
+      "precision_lo": 0.8100923738370416,
+      "precision_hi": 0.9077804589205962,
+      "recall": 0.9204545454545454,
+      "marks": []
+    },
+    {
+      "threshold": 0.25,
+      "fires": 173,
+      "pass_rate": 0.4099526066350711,
+      "tp": 161,
+      "precision": 0.930635838150289,
+      "precision_lo": 0.8826827908094032,
+      "precision_hi": 0.9598791403199239,
+      "recall": 0.9147727272727273,
+      "marks": [
+        "mining_pool"
+      ]
+    },
+    {
+      "threshold": 0.3,
+      "fires": 156,
+      "pass_rate": 0.3696682464454976,
+      "tp": 152,
+      "precision": 0.9743589743589743,
+      "precision_lo": 0.9359319615454905,
+      "precision_hi": 0.9899846959454254,
+      "recall": 0.8636363636363636,
+      "marks": []
+    },
+    {
+      "threshold": 0.35,
+      "fires": 143,
+      "pass_rate": 0.33886255924170616,
+      "tp": 142,
+      "precision": 0.993006993006993,
+      "precision_lo": 0.9614538318329731,
+      "precision_hi": 0.998764525907613,
+      "recall": 0.8068181818181818,
+      "marks": []
+    },
+    {
+      "threshold": 0.4,
+      "fires": 122,
+      "pass_rate": 0.2890995260663507,
+      "tp": 122,
+      "precision": 1.0,
+      "precision_lo": 0.9694727339766817,
+      "precision_hi": 0.9999999999999999,
+      "recall": 0.6931818181818182,
+      "marks": []
+    },
+    {
+      "threshold": 0.45,
+      "fires": 101,
+      "pass_rate": 0.23933649289099526,
+      "tp": 101,
+      "precision": 1.0,
+      "precision_lo": 0.9633580563440465,
+      "precision_hi": 0.9999999999999998,
+      "recall": 0.5738636363636364,
+      "marks": []
+    },
+    {
+      "threshold": 0.5,
+      "fires": 91,
+      "pass_rate": 0.2156398104265403,
+      "tp": 91,
+      "precision": 1.0,
+      "precision_lo": 0.959494567784601,
+      "precision_hi": 1.0,
+      "recall": 0.5170454545454546,
+      "marks": [
+        "mining_release"
+      ]
+    },
+    {
+      "threshold": 0.55,
+      "fires": 77,
+      "pass_rate": 0.18246445497630331,
+      "tp": 77,
+      "precision": 1.0,
+      "precision_lo": 0.9524799113327793,
+      "precision_hi": 1.0,
+      "recall": 0.4375,
+      "marks": []
+    },
+    {
+      "threshold": 0.6,
+      "fires": 70,
+      "pass_rate": 0.16587677725118483,
+      "tp": 70,
+      "precision": 1.0,
+      "precision_lo": 0.9479751251327163,
+      "precision_hi": 0.9999999999999999,
+      "recall": 0.3977272727272727,
+      "marks": []
+    },
+    {
+      "threshold": 0.65,
+      "fires": 60,
+      "pass_rate": 0.14218009478672985,
+      "tp": 60,
+      "precision": 1.0,
+      "precision_lo": 0.9398260695220669,
+      "precision_hi": 0.9999999999999999,
+      "recall": 0.3409090909090909,
+      "marks": []
+    },
+    {
+      "threshold": 0.7,
+      "fires": 43,
+      "pass_rate": 0.1018957345971564,
+      "tp": 43,
+      "precision": 1.0,
+      "precision_lo": 0.9179874299767729,
+      "precision_hi": 1.0,
+      "recall": 0.24431818181818182,
+      "marks": []
+    },
+    {
+      "threshold": 0.75,
+      "fires": 32,
+      "pass_rate": 0.07582938388625593,
+      "tp": 32,
+      "precision": 1.0,
+      "precision_lo": 0.8928172849426366,
+      "precision_hi": 1.0,
+      "recall": 0.18181818181818182,
+      "marks": []
+    },
+    {
+      "threshold": 0.8,
+      "fires": 24,
+      "pass_rate": 0.05687203791469194,
+      "tp": 24,
+      "precision": 1.0,
+      "precision_lo": 0.8620194241710247,
+      "precision_hi": 1.0,
+      "recall": 0.13636363636363635,
+      "marks": []
+    },
+    {
+      "threshold": 0.85,
+      "fires": 21,
+      "pass_rate": 0.04976303317535545,
+      "tp": 21,
+      "precision": 1.0,
+      "precision_lo": 0.8453561767357979,
+      "precision_hi": 0.9999999999999999,
+      "recall": 0.11931818181818182,
+      "marks": []
+    },
+    {
+      "threshold": 0.9,
+      "fires": 12,
+      "pass_rate": 0.02843601895734597,
+      "tp": 12,
+      "precision": 1.0,
+      "precision_lo": 0.7574992425007574,
+      "precision_hi": 1.0,
+      "recall": 0.06818181818181818,
+      "marks": []
+    },
+    {
+      "threshold": 0.95,
+      "fires": 6,
+      "pass_rate": 0.014218009478672985,
+      "tp": 6,
+      "precision": 1.0,
+      "precision_lo": 0.6096569663469354,
+      "precision_hi": 0.9999999999999999,
+      "recall": 0.03409090909090909,
+      "marks": []
+    }
+  ],
+  "caveats": {
+    "eval_is_held_out_for_v2_only": "location-disjoint and unseen by v2's trainer; v1 trained on renders at these same 112 gate-passer locations, so v1 is read on a population it has partly memorised.",
+    "labels_are_anchored_to_v1": "correction sheet \u2014 every row was served with v1's suggested tier prefilled, sorted good->bad, Enter confirming. label and v1's score are coupled by construction.",
+    "direction": "BOTH caveats inflate v1 and neither touches v2. A v2 win is understated; a v1 win is partly an artifact this sitting cannot subtract."
+  },
+  "bound": "OPTIMISTIC. Both caveats above inflate v1 and neither is subtractable from these numbers: the head trained at these locations, and the labels were prefilled with its own suggestions. Every precision here is an upper bound on what the same cut buys at a FRESH location, and the honest use of this record is as a ceiling, not an estimate.",
+  "harness_parity": {
+    "what": "v1 re-scored here vs head_mining_v1.p_ge3 stamped into images.jsonl when the sheet was built. Same checkpoint, same deploy transform, months apart.",
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0,
+    "n": 422,
+    "tol": 1e-06,
+    "ok": true
+  },
+  "winner_rule": {
+    "winner": "v1",
+    "rule": "v2 is the calibration candidate iff (a) no overall eval metric is significantly worse than v1 (95% paired-bootstrap CI on the delta not entirely below 0) AND (b) on the pooled three-dropped-mode slice at least one boundary is significantly BETTER and none is significantly worse. Evaluated on the two pre-declared slices; no per-slice cherry-picking, and the losing head keeps the candidacy rather than the tie being resolved by whichever number looks best.",
+    "note": "v2 (a finetune of v1 on this batch's train side) lost this rule, so the calibration \u2014 and this lock \u2014 are on the incumbent."
+  },
+  "provenance": {
+    "source_report": "data/render_mode_head/v2/report.json",
+    "source_report_sha256": "ced58a675c68607f1c58e0c8c913573368d8dc82a5cb849054684b55ecea48fa",
+    "derived_by": "tools/mining/lock_mining_gate.py --write",
+    "sitting": "2026-08-06",
+    "adoption": "prompts/mining_adoption_prompt.md \u2014 the release floor went from report-only to enforcing on this record's numbers."
+  }
+}

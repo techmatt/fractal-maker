@@ -87,6 +87,10 @@ BATCH_DIR = (ROOT / "data" / "render_mode_corpus" / "batches"
              / "2026-08-06_render_mode_fresh_sheet_v1")
 V1_CKPT = "data/render_mode_head/v1/model_best.pt"
 V2_DIR = ROOT / "data" / "render_mode_head" / "v2"
+# v2's weights were DE-TRACKED after this sitting decided against them (2026-08-06), so a
+# fresh clone has the report but not the checkpoint: re-running this file means re-running
+# `classifier/train_mining_head_v2.py` first. `main()` already raises naming the missing
+# path rather than scoring one head and calling it a comparison.
 V2_CKPT = "data/render_mode_head/v2/model_best.pt"
 OUT = V2_DIR
 

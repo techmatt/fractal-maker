@@ -196,12 +196,17 @@ TRACKED_CANARIES = [
     # anchor (the shape data/classifier/ already has with v10/v8).
     "data/wallpaper_head/v4/model_best.pt",
     "data/render_mode_head/v1/model_best.pt",     # LIVE strange-mode (mining_v1) gate
-    # v2 — the 2026-08-06 finetune of v1 on the rebuilt 960-row correction sheet. STAGED,
-    # not deployed: mining_pins.ACTIVE_MINING_CKPT still reads v1. Same live/rollback-PAIR
-    # rationale as wallpaper_head v3/v4 above, and stronger here — v1's training corpus is
-    # gone, so v1 cannot be retrained if the pair is ever broken.
-    "data/render_mode_head/v2/model_best.pt",
+    # The gate lock: the frozen ladder + operating point the LIVE 0.50 release floor is set
+    # against. Unregenerable in the strict sense — `lock_mining_gate.py` rebuilds it from
+    # data/render_mode_head/v2/report.json, so both must survive together; the sitting that
+    # produced THAT is a GPU pass over crops, and the head's earlier corpus is already gone.
+    "data/render_mode_head/v1/mining_gate_lock.json",
+    # v2's WEIGHT WAS DE-TRACKED on 2026-08-06: it lost the winner rule and a rejected
+    # candidate is not a critical final weight (prompts/mining_adoption_prompt.md §3). The
+    # run RECORD stays, and stays canaried — it is what the lock above is derived from, and
+    # re-running the sitting needs a GPU, the crops and both checkpoints.
     "data/render_mode_head/v2/report.md",         # the v1-vs-v2 + calibration deliverable
+    "data/render_mode_head/v2/report.json",       # the machine-readable side the lock reads
     "data/queries/scorer/v3_gvo/model_best.pt",   # LIVE palette-preference ranker (pref-v3-gvo)
     # data/v<N>/* is deliberately ABSENT from this static list — those trees are guarded
     # relationally instead, by `test_v8_durable_declared_paths_tracked` below. See that
