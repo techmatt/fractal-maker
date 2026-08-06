@@ -360,9 +360,9 @@ exhaustive over the tree. Recording the gaps here so the contract stops silently
 disagreeing with what is on disk — an unstated exception reads as an oversight, and the
 next pass either "fixes" it or trips over it.
 
-- **`labels/` — durable corpus metadata living outside the durable store.** 45 flat
-  `.json` files (+1 stray `.md`, `cc_julia_dup_audit.md`), 448 KB, git-tracked and **not**
-  gitignored, under three competing naming schemes: 30 bare (`location_labels.json`), 15
+- **`labels/` — durable corpus metadata living outside the durable store.** 54 flat
+  `.json` files, 505 KB (2026-08-06: `git ls-files labels/`), git-tracked and **not**
+  gitignored, under three competing naming schemes: 37 bare (`location_labels.json`), 16
   `amend_<date>_…`, 1 `<date>_…`. Substantively these are `durable` — hand labels
   recording a human judgement that cannot be re-observed — but they are reached through
   `label_store.LABELS_DIR` (`os.path.join(ROOT, "labels")`), not `paths.durable()`, so
