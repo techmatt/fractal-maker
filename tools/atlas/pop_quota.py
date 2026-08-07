@@ -89,6 +89,7 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "sc
         sys.path.insert(0, str(_p))
 
 import run_record                                 # noqa: E402  (segmented run-record layer)
+import supply_routing as _srt                    # noqa: E402  (THE channel table; pure data)
 
 # ------------------------------------------------------------------------- #
 # Currency constants. Named here because three readers (the census, the in-run credit, the
@@ -329,21 +330,40 @@ class Allocation:
     floored: set                    # partitions whose share is the floor (floor-driven)
     pwd: dict                       # price-weighted deficit that drove the proportional part
     floor: float
+    # EXTERNALLY-SUPPLIED partitions held out of the floor and the pool (share 0.0). Recorded
+    # rather than inferred from `share == 0`: a partition can legitimately allocate to zero,
+    # and "we chose not to allocate" and "the arithmetic came out zero" are different facts.
+    external: set = field(default_factory=set)
 
     def bucket(self, partition: str) -> str:
         return "floor" if partition in self.floored else "deficit"
 
     def summary(self) -> dict:
         return dict(share={p: round(v, 4) for p, v in sorted(self.share.items())},
-                    floored=sorted(self.floored), floor=self.floor,
+                    floored=sorted(self.floored), external=sorted(self.external),
+                    floor=self.floor,
                     floor_share_total=round(sum(self.share[p] for p in self.floored), 4),
                     pwd={p: round(v, 5) for p, v in sorted(self.pwd.items())})
 
 
 def allocate(deficits: dict, prices: dict, partitions: list[str],
-             floor: float = FLOOR_FRAC) -> Allocation:
+             floor: float = FLOOR_FRAC, external: set | None = None) -> Allocation:
     """Intended time-share per partition: every partition >= `floor`, the rest proportional to
     price-weighted deficit. Shares sum to exactly 1.
+
+    SKIP SITE 2 of 3 (the per-partition FLOOR) and SKIP SITE 3 (the QUOTA itself) — an
+    EXTERNALLY-SUPPLIED partition (`supply_routing.is_externally_supplied`) gets share 0.0: it
+    is neither pinned up to the floor nor given any of the proportional pool, and the shares
+    still sum to 1 over the rest. Both skips live in this one function because both are the
+    same sentence — "how much of the crawl's clock does this partition get" — and the crawl
+    cannot serve it at all. A 5% floor on `phoenix:classic` reserved a twentieth of every run
+    for a job that only runs standalone.
+
+    It keeps its KEY with share 0.0 rather than being dropped: every downstream tally
+    (`fold_julia_intent`, the quota trace's `intended`, the realized-vs-intended report) is
+    shaped by this dict, and an explicit 0.0 reads as "allocated nothing on purpose" where a
+    missing key reads as a partition nobody tracked. `external` is resolved at CALL time from
+    the routing table (pass a set to test a non-flagged partition against the same code).
 
     WATER-FILLING, not "reserve n*floor then split the rest", and the difference is the
     addendum's own wording. Reserving 9x5% and splitting the other 55% would hand a partition
@@ -365,22 +385,28 @@ def allocate(deficits: dict, prices: dict, partitions: list[str],
 
     `floor * |floored|` is therefore the floor's total claim, and it is bounded by
     `floor * n` — the addendum's "up to ~45%" at nine partitions."""
-    parts = list(partitions)
+    if external is None:
+        external = set(_srt.externally_supplied_partitions(partitions))
+    else:
+        external = set(external)
+    skipped = [p for p in partitions if p in external]
+    parts = [p for p in partitions if p not in external]
     n = len(parts)
     if n == 0:
-        return Allocation(share={}, floored=set(), pwd={}, floor=floor)
+        return Allocation(share={p: 0.0 for p in skipped}, floored=set(), pwd={}, floor=floor,
+                          external=set(skipped))
     if floor * n >= 1.0:
-        share = {p: 1.0 / n for p in parts}
+        share = {p: 1.0 / n for p in parts} | {p: 0.0 for p in skipped}
         return Allocation(share=share, floored=set(parts), pwd={p: 0.0 for p in parts},
-                          floor=floor)
+                          floor=floor, external=set(skipped))
 
     pwd = {p: max(0.0, float(deficits.get(p, 0.0)))
               / max(float(prices.get(p, SEED_PRICE)), 1e-9) for p in parts}
     total = sum(pwd.values())
     if total <= 0.0:
-        share = {p: 1.0 / n for p in parts}
+        share = {p: 1.0 / n for p in parts} | {p: 0.0 for p in skipped}
         return Allocation(share=share, floored=(set(parts) if 1.0 / n < floor else set()),
-                          pwd=pwd, floor=floor)
+                          pwd=pwd, floor=floor, external=set(skipped))
 
     pinned: set = set()
     share = {p: pwd[p] / total for p in parts}
@@ -406,7 +432,9 @@ def allocate(deficits: dict, prices: dict, partitions: list[str],
         if s > 0:
             for p in rest:
                 share[p] = share[p] * pool / s
-    return Allocation(share=share, floored=pinned, pwd=pwd, floor=floor)
+    share.update({p: 0.0 for p in skipped})
+    return Allocation(share=share, floored=pinned, pwd=pwd, floor=floor,
+                      external=set(skipped))
 
 
 # ========================================================================== #
@@ -645,10 +673,18 @@ class PopQuota:
                  floor: float = FLOOR_FRAC, prices_config: dict | None = None,
                  census: CurrencyCensus | None = None,
                  julia_route_gain: float = JULIA_ROUTE_GAIN,
-                 ratios: dict | None = None):
+                 ratios: dict | None = None, external: set | None = None):
         self.partitions = list(partitions)
         self.run_dir = Path(run_dir)
         self.floor = float(floor)
+        # EXTERNALLY-SUPPLIED partitions, resolved ONCE at construction from the routing table
+        # and passed down to every `allocate` — the flag is a property of the channel table,
+        # not of the run, so re-reading it per pop would let a mid-run edit move an allocation
+        # a run is already being scored against. They keep their census, their target and their
+        # deficit (those are statements about LABELS and stay true); what they lose is the
+        # clock. See `supply_routing.is_externally_supplied`.
+        self.external = set(external if external is not None
+                            else _srt.externally_supplied_partitions(self.partitions))
         self.julia_route_gain = float(julia_route_gain)
         self.census = census if census is not None else label_currency(self.partitions)
         # The target vector is resolved HERE, from the live table, and kept beside the deficit
@@ -694,7 +730,8 @@ class PopQuota:
 
     # ---- allocation ----------------------------------------------------- #
     def allocation(self) -> Allocation:
-        return allocate(self.deficit, self.cost.prices(), self.partitions, self.floor)
+        return allocate(self.deficit, self.cost.prices(), self.partitions, self.floor,
+                        external=self.external)
 
     def pick(self, queue_lens: dict) -> str | None:
         alloc = self.allocation()
@@ -854,6 +891,7 @@ class PopQuota:
     def summary(self) -> dict:
         alloc = self.allocation()
         return dict(currency=self.census.summary(),
+                    externally_supplied=sorted(self.external),
                     deficit={p: round(self.deficit.get(p, 0.0), 3) for p in self.partitions},
                     target={p: round(self.target.get(p, 0.0), 3) for p in self.partitions},
                     ratio={p: self.ratios.get(p) for p in self.partitions},

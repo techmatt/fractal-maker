@@ -167,3 +167,100 @@ def test_an_already_current_ledger_is_verified_not_re_rendered(tmp_path, monkeyp
     got = LR.rescore_ledger("t", "rel", scorer=None)
     assert got["already_current"] is True and got["n_rescored"] == 0
     assert not D.rescore_path(led).exists()
+
+
+# --------------------------------------------------------------------------- #
+# The externally-supplied supply check at intake (`classic_supply_note`).
+#
+# `phoenix:classic` is the one partition no crawl produces, so its supply is invisible until
+# something looks. This is that something — and the low-water it compares against is derived
+# from the committed release mix, not declared, so these pin the derivation and not a literal.
+# --------------------------------------------------------------------------- #
+def _classic_row(rid, p_notbad, p_good, **over):
+    """A classic-phoenix ledger row: `family: phoenix` plus the pinned Ushiki axes, which is
+    what makes `partitions.partition_of_row` resolve it to `phoenix:classic`."""
+    row = {"id": rid, "family": "phoenix", "outcome_cx": "0.1", "outcome_cy": "0.2",
+           "outcome_fw": "0.01", "decoded_class": 3, "p_notbad": p_notbad, "p_good": p_good,
+           "t_good": 0.5, "guard_pass": True, "distinct": True, "dup_of": None,
+           "scorer_version": cc.active_scorer_version(), "mix_source": "classic_phoenix",
+           "phoenix_c_re": 0.5667, "phoenix_c_im": 0.0, "phoenix_p_re": -0.5,
+           "phoenix_p_im": 0.0, "phoenix_zm1_re": 0.0, "phoenix_zm1_im": 0.0}
+    row.update(over)
+    return row
+
+
+def _classic_ledger(tmp_path, rows):
+    p = tmp_path / "outcome_ledger.jsonl"
+    p.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    return p
+
+
+def test_the_servable_classic_count_is_re_decoded_at_the_partitions_own_t_good(tmp_path):
+    """A ledger row carries the `t_good` it was MINTED under. Reading its stamped
+    `decoded_class` would report a count against a threshold that may no longer be live, which
+    is precisely the failure `ledger_rescore` exists to fix one level up."""
+    import production_seeder as ps
+    t = ps.t_good_for("phoenix:classic")
+    led = _classic_ledger(tmp_path, [
+        _classic_row("a", 0.99, min(0.99, t + 0.2)),                  # clears the live cut
+        _classic_row("b", 0.99, min(0.99, t + 0.2)),
+        # stamped decoded_class 3 (so `load_admitted`'s q3 gate passes) but BELOW the live
+        # cut — the row the stamped count would have over-reported.
+        _classic_row("c", 0.99, max(0.0, t - 0.2), decoded_class=3),
+    ])
+    n = LR.classic_supply_note(ledger=led, n_union=100)
+    assert n["n_admitted"] == 3 and n["n_servable"] == 2
+    assert n["t_good"] == t and n["partition"] == "phoenix:classic"
+
+
+def test_a_varied_phoenix_row_is_not_counted_as_classic_supply(tmp_path):
+    """The split is on the PARAMETER POINT. Counting a swept-grid row here would report
+    supply for a plane it does not belong to — and the grid is the abundant one."""
+    varied = _classic_row("v", 0.99, 0.99, phoenix_c_re=-1.089, phoenix_c_im=0.481)
+    led = _classic_ledger(tmp_path, [_classic_row("a", 0.99, 0.99), varied])
+    n = LR.classic_supply_note(ledger=led, n_union=100)
+    assert n["n_admitted"] == 1 and n["n_servable"] == 1
+
+
+def test_the_low_water_is_derived_from_the_release_mix_not_declared(tmp_path):
+    """`wanted` must move with the intake size and with the ratio table. A literal would go
+    stale the first time either moved, and would read as a decision nobody made."""
+    import math
+    import release_mix as rm
+    share = rm.shares()["phoenix:classic"]
+    led = _classic_ledger(tmp_path, [_classic_row(f"r{i}", 0.99, 0.99) for i in range(5)])
+    small = LR.classic_supply_note(ledger=led, n_union=100)
+    big = LR.classic_supply_note(ledger=led, n_union=10_000)
+    assert small["wanted"] == math.ceil(share * 100)
+    assert big["wanted"] == math.ceil(share * 10_000)
+    assert big["wanted"] > small["wanted"]
+    assert small["low"] is False and big["low"] is True   # same supply, different demand
+
+
+def test_the_low_note_names_the_manual_job_from_the_routing_table(tmp_path):
+    """No automated top-up: the note has to say what to RUN, and it reads that from
+    `supply_routing` rather than restating a command."""
+    import supply_routing as srt
+    led = _classic_ledger(tmp_path, [_classic_row("a", 0.99, 0.99)])
+    n = LR.classic_supply_note(ledger=led, n_union=10_000)
+    assert n["low"] and n["externally_supplied"]
+    assert n["command"] == srt.supply_command("phoenix:classic")
+    assert "run-phoenix" in n["command"]
+
+
+def test_an_empty_classic_ledger_reads_as_zero_supply_not_as_healthy(tmp_path):
+    """The absence case. A partition with no rows at all is the LOUDEST version of the
+    problem, and must not fall out of the check by producing no row to look at."""
+    led = _classic_ledger(tmp_path, [])
+    n = LR.classic_supply_note(ledger=led, n_union=751)
+    assert n["n_admitted"] == 0 and n["n_servable"] == 0 and n["low"] is True
+
+
+def test_the_note_prints_without_raising_and_says_which_way_it_went(tmp_path, capsys):
+    led = _classic_ledger(tmp_path, [_classic_row("a", 0.99, 0.99)])
+    LR.print_classic_supply_note(LR.classic_supply_note(ledger=led, n_union=10_000))
+    out = capsys.readouterr().out
+    assert "phoenix:classic servable: 1" in out and "LOW" in out
+    assert "Top up manually" in out
+    LR.print_classic_supply_note(LR.classic_supply_note(ledger=led, n_union=10))
+    assert "Top up manually" not in capsys.readouterr().out

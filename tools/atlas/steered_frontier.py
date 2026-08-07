@@ -1857,11 +1857,25 @@ class SteeredFrontier:
         refill, each with the reason. A starved partition that is silently absent from both
         the refill list and the run record is indistinguishable from a healthy one — which is
         exactly how arm B ran 427 batches with eight empty queues and `root_refills=0`.
-"""
+
+        SKIP SITE 1 of 3 (the crawl CENSUS). An EXTERNALLY-SUPPLIED partition
+        (`supply_routing.is_externally_supplied`) is not reported here at all. It is not
+        starved and it is not deferred: no crawl channel feeds it, so an empty queue is its
+        NORMAL state, and calling it starved every batch is a permanent false alarm that
+        trains the reader to ignore this dict. That is a real cost — this dict exists to make
+        eight silently empty queues loud, and a row that is always red does the opposite.
+
+        WHERE THE VISIBILITY WENT, because "skipped" must not mean "invisible": the run
+        summary stamps `externally_supplied` (via `pop_quota.PopQuota.summary`), and the count
+        that can actually be acted on is printed at EMISSION INTAKE, where the servable classic
+        population is known and the manual job to run can be named
+        (`library_intake_2.classic_supply_note`)."""
         q = self.queue_lens() if queue_lens is None else queue_lens
         out = {}
         for part in self.partitions:
             if part in self.families or q.get(part, 0) >= self.partition_low_water:
+                continue
+            if srt.is_externally_supplied(part):
                 continue
             base = P.base_partition(part)
             key = (part if part in self.REFILL_DEFERRAL else

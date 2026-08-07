@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import shutil
 import sys
 import time
@@ -78,6 +79,9 @@ import location as loc_mod                      # noqa: E402
 import field_metrics as fm                      # noqa: E402  (POLICY_KEY — the axis's owner)
 import paths as _paths                          # noqa: E402
 from score_lib import corn_decode               # noqa: E402
+import partitions as P                          # noqa: E402  (THE partition map + the split)
+import release_mix as RM                        # noqa: E402  (THE release-mix ratio table)
+import supply_routing as srt                    # noqa: E402  (THE channel table; pure data)
 from tools.emission import descriptor as D      # noqa: E402
 
 # ---------------------------------------------------------------------------- #
@@ -285,6 +289,69 @@ def intake_union() -> dict:
                 overlap_sample=diag["overlap_sample"], driver_reachable=True)
 
 
+# ---------------------------------------------------------------------------- #
+# The externally-supplied supply check. Where the visibility that came OUT of the crawl
+# census (`steered_frontier.deferred_partitions` SKIP SITE 1) went back in.
+# ---------------------------------------------------------------------------- #
+def classic_supply_note(ledger: Path | None = None, n_union: int | None = None) -> dict:
+    """Servable `phoenix:classic` count at intake, and whether it is BELOW what the release
+    mix asks of it.
+
+    `phoenix:classic` is EXTERNALLY SUPPLIED (`supply_routing`): no crawl produces it, so the
+    only place its supply can be noticed is here, where the intake population is known. The
+    crawl used to report it as starved every batch, which is a permanent false alarm; this is
+    the same fact stated once, at the moment somebody could act on it.
+
+    SERVABLE = admitted through its own ledger (`descriptor.load_admitted`: current-decode ∧
+    guard ∧ distinct ∧ q3) AND still >= 3 when re-decoded at THIS partition's own threshold,
+    `t_good_for("phoenix:classic")`. The re-decode is not redundant: a ledger row carries the
+    `t_good` it was minted under (0.5 on every classic row today), and a later per-partition
+    derivation moves the cut without rewriting a single row — reading the stamped
+    `decoded_class` would report a count against a threshold nobody is using any more.
+
+    THE LOW-WATER IS DERIVED, NOT DECLARED. It is what the committed release mix asks for at
+    this intake's size: `release_mix.shares()["phoenix:classic"] * n_union`, rounded up. A
+    hardcoded "top up below 10" would be a number nobody decided that goes stale the moment
+    the ratio table or the library size moves; this one moves with both. The hint names the
+    command from the routing table (`supply_routing.supply_command`), so there is no second
+    copy of what `classic_plane_descent` actually is.
+
+    NO AUTOMATED TOP-UP. Printed count + manual run is the intended first version: the descent
+    is a GPU job of its own and a census command that silently launched one would be a very
+    surprising thing for `ledger_rescore status` to do."""
+    part = P.CLASSIC_PHOENIX
+    if ledger is None:
+        ledger = ledger_path(dict((t, r) for t, r in LEDGERS)["classic_phoenix"])
+    t_good = ps.t_good_for(part)
+    n_admitted = n_servable = 0
+    for row in D.load_admitted(Path(ledger)):
+        if P.partition_of_row(row, row.get("family")) != part:
+            continue
+        n_admitted += 1
+        if corn_decode(row["p_notbad"], row["p_good"], t_good, row.get("p_ge4")) >= 3:
+            n_servable += 1
+    if n_union is None:
+        n_union = intake_union()["n_union"]
+    share = RM.shares()[part]
+    wanted = int(math.ceil(share * float(n_union)))
+    return dict(partition=part, externally_supplied=srt.is_externally_supplied(part),
+                ledger=_rel(Path(ledger)), t_good=t_good, t_good_status=ps.t_good_status(part),
+                n_admitted=n_admitted, n_servable=n_servable,
+                release_share=share, n_union=n_union, wanted=wanted,
+                low=bool(n_servable < wanted), command=srt.supply_command(part))
+
+
+def print_classic_supply_note(note: dict):
+    st = "LOW" if note["low"] else "ok"
+    log(f"  {note['partition']} servable: {note['n_servable']}/{note['n_admitted']} admitted "
+        f"at t_good {note['t_good']:.2f} ({note['t_good_status']}) — "
+        f"release mix asks ~{note['wanted']} of a {note['n_union']}-row intake "
+        f"({note['release_share']:.2%}) — {st}")
+    if note["low"] and note["externally_supplied"]:
+        log(f"    EXTERNALLY SUPPLIED — no crawl makes classic. Top up manually: "
+            f"{note['command']}")
+
+
 def print_census(c: dict):
     log(f"\n=== INTAKE CENSUS (head {c['active_version']}, "
         f"maxiter policy {c['maxiter_policy_token']}) ===")
@@ -300,6 +367,7 @@ def print_census(c: dict):
         log(f"  {u['n_collisions']} run-scoped id collision(s), namespaced apart by ledger and "
             f"admitted as the distinct locations they are (a bare id-keyed union would have "
             f"dropped them). e.g. {u['collision_sample'][:3]}")
+    print_classic_supply_note(classic_supply_note(n_union=u["n_union"]))
 
 
 # ---------------------------------------------------------------------------- #

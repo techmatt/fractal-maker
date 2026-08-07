@@ -400,3 +400,116 @@ def test_the_exemption_is_real_and_still_needed():
     assert "julia_supply_pool_v2.json" in txt, (
         f"{STATIONARITY_EXEMPT} no longer loads v2 — delete STATIONARITY_EXEMPT")
     assert "539-c committed v2 pool" in sr.CSPACING_BASIS["measured_on"]
+
+
+# =========================================================================== #
+# EXTERNALLY SUPPLIED — the flag, and the three sites that honour it.
+#
+# Each site gets a CONTROL: the identical assertion with the flag off (or on a partition that
+# does not carry it) must come back the other way. Without that pairing a green here would be
+# indistinguishable from `phoenix:classic` happening to be special-cased somewhere else.
+# =========================================================================== #
+def test_the_flag_is_declared_on_exactly_the_partitions_no_crawl_can_feed():
+    """`phoenix:classic` alone today: its one channel is a standalone job. Every other
+    partition has at least one channel a crawl runs, so the flag must not spread."""
+    assert sr.externally_supplied_partitions() == ["phoenix:classic"]
+    assert sr.is_externally_supplied("phoenix:classic")
+    for p in sr.ROUTES:
+        if p != "phoenix:classic":
+            assert not sr.is_externally_supplied(p), p
+    assert sr.is_externally_supplied("not_a_partition") is False   # total, not KeyError
+    # the flag is useless without somewhere to send the reader
+    assert sr.supply_command("phoenix:classic")
+    assert sr.supply_command("mandelbrot") is None
+    assert "externally_supplied" in sr.summary()
+
+
+def test_SKIP_1_the_crawl_census_does_not_report_it_as_starved(monkeypatch):
+    """Site 1: `steered_frontier.deferred_partitions`. Driven through the real method on a
+    stub frontier, so it is the shipped code path and not a re-implementation."""
+    import types
+    import steered_frontier as sf
+    def _obj():
+        return types.SimpleNamespace(
+            frontier=[{"node_id": 1, "partition": "phoenix:classic"},
+                      {"node_id": 2, "partition": "phoenix"}],
+            partitions=["mandelbrot", "phoenix", "phoenix:classic"],
+            families=["mandelbrot"], partition_low_water=32,
+            queue_lens=sf.SteeredFrontier.queue_lens,
+            REFILL_DEFERRAL=sf.SteeredFrontier.REFILL_DEFERRAL)
+    o = _obj()
+    o.queue_lens = types.MethodType(sf.SteeredFrontier.queue_lens, o)
+    d = sf.SteeredFrontier.deferred_partitions(o)
+    assert set(d) == {"phoenix"}                       # classic skipped, its base still reported
+
+    monkeypatch.setattr(sf.srt, "is_externally_supplied", lambda p: False)   # CONTROL
+    o2 = _obj()
+    o2.queue_lens = types.MethodType(sf.SteeredFrontier.queue_lens, o2)
+    assert set(sf.SteeredFrontier.deferred_partitions(o2)) == {"phoenix", "phoenix:classic"}
+
+
+def test_SKIP_2_the_per_partition_floor_does_not_reserve_it_a_slice():
+    """Site 2: the universal 5% floor in `pop_quota.allocate`. A floored `phoenix:classic`
+    took a twentieth of every run's clock for a job that only runs standalone."""
+    import pop_quota as pq
+    parts = ["mandelbrot", "multibrot3", "phoenix:classic"]
+    # zero deficit everywhere: the floor is the ONLY thing that could give it a share
+    a = pq.allocate({p: 0.0 for p in parts}, {p: 3.0 for p in parts}, parts, floor=0.05)
+    assert a.share["phoenix:classic"] == 0.0
+    assert "phoenix:classic" not in a.floored
+    assert a.external == {"phoenix:classic"}
+    assert abs(sum(a.share.values()) - 1.0) < 1e-12    # the rest still sum to exactly 1
+
+    b = pq.allocate({p: 0.0 for p in parts}, {p: 3.0 for p in parts}, parts,   # CONTROL
+                    floor=0.05, external=set())
+    assert b.share["phoenix:classic"] == pytest.approx(1 / 3)
+    assert b.external == set()
+
+
+def test_SKIP_3_the_quota_never_allocates_to_it_however_large_its_deficit():
+    """Site 3: the proportional pool. A partition the crawl cannot serve accumulates the
+    biggest deficit there is, so the pool is where it would take the MOST time."""
+    import pop_quota as pq
+    parts = ["mandelbrot", "phoenix:classic"]
+    deficits = {"mandelbrot": 1.0, "phoenix:classic": 999.0}
+    a = pq.allocate(deficits, {p: 3.0 for p in parts}, parts, floor=0.05)
+    assert a.share == {"mandelbrot": 1.0, "phoenix:classic": 0.0}
+    # ...so the pop never serves it: `choose_partition` is a gap-to-intent argmax, and a zero
+    # intent means the gap can never be the largest while anything else is servable.
+    assert pq.choose_partition(a.share, {p: 0.0 for p in parts},
+                               servable=set(parts)) == "mandelbrot"
+    b = pq.allocate(deficits, {p: 3.0 for p in parts}, parts,          # CONTROL
+                    floor=0.05, external=set())
+    assert b.share["phoenix:classic"] == pytest.approx(0.95)   # 1 - mandelbrot's 5% floor
+    assert pq.choose_partition(b.share, {p: 0.0 for p in parts},
+                               servable=set(parts)) == "phoenix:classic"
+
+
+def test_a_NON_flagged_partition_still_floors_and_allocates_normally():
+    """The whole-table control. With one flagged partition in the set, every other partition's
+    floor and proportional share must be exactly what they were before the flag existed —
+    computed against the same call with the flagged one simply left out of `partitions`."""
+    import pop_quota as pq
+    parts = ["mandelbrot", "multibrot3", "multibrot4", "julia:mandelbrot", "phoenix",
+             "phoenix:classic"]
+    deficits = {"mandelbrot": 0.0, "multibrot3": 40.0, "multibrot4": 47.0,
+                "julia:mandelbrot": 27.0, "phoenix": 0.0, "phoenix:classic": 60.0}
+    prices = {p: 3.0 for p in parts}
+    withx = pq.allocate(deficits, prices, parts, floor=0.05)
+    rest = [p for p in parts if p != "phoenix:classic"]
+    without = pq.allocate(deficits, prices, rest, floor=0.05)
+    assert withx.floored == without.floored
+    for p in rest:
+        assert withx.share[p] == pytest.approx(without.share[p])
+    assert withx.share["mandelbrot"] == pytest.approx(0.05)     # zero deficit -> the floor
+    assert withx.share["multibrot4"] > 0.05                     # deficit-driven, above it
+    assert abs(sum(withx.share.values()) - 1.0) < 1e-12
+
+
+def test_the_release_mix_ratio_is_unchanged_by_the_flag():
+    """The flag is about WHO PRODUCES it, not about how much of a release it is worth. A
+    reader who saw the allocation drop to zero and 'tidied' the ratio away would silently
+    retire the partition from the release."""
+    import release_mix as rm
+    assert rm.RATIO["phoenix:classic"] == 0.2
+    assert "phoenix:classic" in rm.shares()

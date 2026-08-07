@@ -249,6 +249,14 @@ ROUTES = {
     # 2026-07-05_gather_v6 rows, overlay applied) — a fixed-plane descent, NOT a draw, so it
     # is a ceiling statement about the plane rather than a price on a sampler.
     "phoenix:classic": dict(channels=("classic_plane_descent",),
+                            externally_supplied=True,
+                            # The command that IS `classic_plane_descent`. Data, not prose:
+                            # emission intake prints it verbatim when classic runs low
+                            # (`ledger_rescore.classic_supply_note`), so the hint and the
+                            # channel cannot drift into naming two different jobs.
+                            supply_command=("uv run python tools/atlas/production_seeder.py "
+                                            "--run-phoenix   # then: uv run python "
+                                            "tools/phoenix/classic_phoenix_supply.py"),
                             evidence=">=2 32.9% / >=3 9.6% / class-4 1.4% (n=73 human labels, "
                                      "2026-07-05_gather_v6); 41 distinct looks TOTAL in the "
                                      "classic_phoenix ledger — a bounded plane, not a family"),
@@ -313,6 +321,50 @@ def thin_by_cspacing(cands, key=lambda r: (r["c_re"], r["c_im"]),
     return kept, dropped
 
 
+# --------------------------------------------------------------------------- #
+# EXTERNALLY SUPPLIED — the `externally_supplied` flag on a ROUTES entry.
+# --------------------------------------------------------------------------- #
+# A partition is EXTERNALLY SUPPLIED when none of its channels runs inside a crawl. Today
+# that is `phoenix:classic` alone: its one channel, `classic_plane_descent`, is
+# `production_seeder --run-phoenix`, a standalone job — no pool entry resolves it and no
+# `--families` value reaches it, so a `steered_frontier` run cannot produce a single classic
+# look no matter how much time it is given.
+#
+# WHY THE FLAG EXISTS RATHER THAN A SKIP AT EACH SITE. Before it, three independent readers
+# each concluded the same wrong thing from the same silence: the crawl census reported a
+# starved partition (`deferred_partitions`), the 5% per-partition floor reserved it a slice of
+# every run's clock, and the pop-quota allocated against a deficit it could never close. All
+# three were correct given what they could see — a tracked partition, a real deficit, an empty
+# queue — and all three were describing a job that was never going to run. One flag, read at
+# three named sites (`test_supply_routing.py`), is what turns "starved" back into "fed from
+# somewhere else".
+#
+# THE FLAG SUPPRESSES ALLOCATION, NOT VISIBILITY, and the difference is deliberate: a
+# partition silently absent from every report is exactly the shape `deferred_partitions` was
+# written to prevent. The visibility moves to the place that can act on it — emission intake
+# prints the SERVABLE classic count and names the manual job to run
+# (`library_intake_2.classic_supply_note`). Nothing here changes `release_mix.RATIO`:
+# classic is still 0.2 of a release, and the intake still weighs it at that. What changed is
+# only who is expected to produce it.
+def is_externally_supplied(partition: str) -> bool:
+    """Whether `partition`'s supply comes from a job OUTSIDE the crawl. THE predicate — the
+    three skip sites import it rather than testing for `phoenix:classic` by name, so a second
+    externally-supplied partition needs one table edit and no code change."""
+    return bool((ROUTES.get(partition) or {}).get("externally_supplied", False))
+
+
+def externally_supplied_partitions(partitions=None) -> list[str]:
+    """The flagged subset of `partitions` (default: the whole routing table), sorted."""
+    pool = list(ROUTES) if partitions is None else list(partitions)
+    return sorted(p for p in pool if is_externally_supplied(p))
+
+
+def supply_command(partition: str) -> str | None:
+    """The command that tops an externally-supplied partition up, or None. The hint printed at
+    emission intake reads THIS rather than restating a command."""
+    return (ROUTES.get(partition) or {}).get("supply_command")
+
+
 def summary(rung_record: Path | None = None) -> dict:
     """The whole routing decision as one JSON-able record, for the run config."""
     try:
@@ -320,6 +372,7 @@ def summary(rung_record: Path | None = None) -> dict:
     except FileNotFoundError as e:
         rc = dict(rung=None, why=f"UNMEASURED: {e}")
     return dict(routes=ROUTES, machine_1_discard=MACHINE_1_DISCARD,
+                externally_supplied=externally_supplied_partitions(),
                 retired_channels=RETIRED_CHANNELS,
                 cspacing_floor=CSPACING_FLOOR, cspacing_basis=CSPACING_BASIS,
                 near_dup_cos=NEAR_DUP_COS, rung=rc,

@@ -362,27 +362,45 @@ def test_a_starved_partition_the_refill_will_not_serve_is_REPORTED_with_its_reas
     """The other half of the scope statement above. `starved_families` correctly omits every
     non-c-plane partition, but an omitted starved partition and a healthy one read identically
     in a run record — which is exactly how arm B reported `root_refills=0` with eight empty
-    queues. `phoenix:classic` is the sharpest case: its plane is PINNED, so there is no second
-    root to draw and the deferral is permanent, not transient."""
+    queues.
+
+    `phoenix:classic` is NOT in this report (2026-08-07): it is EXTERNALLY SUPPLIED, so an
+    empty queue is its normal state rather than a starvation — see `deferred_partitions`
+    SKIP SITE 1 and the companion assertions below."""
     frontier = [{"node_id": i, "partition": "mandelbrot"} for i in range(100)]
     frontier += [{"node_id": 500, "partition": "julia:mandelbrot"},
                  {"node_id": 501, "partition": "phoenix"},
                  {"node_id": 502, "partition": "phoenix:classic"}]
     obj = _refill_obj(frontier, ["mandelbrot"])
     assert obj.starved_families() == []                 # nothing is asked for a draw...
-    d = obj.deferred_partitions()                        # ...and all three are reported
-    assert set(d) == {"julia:mandelbrot", "phoenix", "phoenix:classic"}
-    assert d["phoenix:classic"]["queue"] == 1 and d["phoenix:classic"]["low_water"] == 32
-    assert "PINNED" in d["phoenix:classic"]["reason"]
-    assert "classic_plane_descent" in d["phoenix:classic"]["reason"]
-    # the base and the derived partition give DIFFERENT reasons — a shared one would be a
-    # single sentence that is wrong for one of them
-    assert d["phoenix"]["reason"] != d["phoenix:classic"]["reason"]
+    d = obj.deferred_partitions()                        # ...and the crawl-fed ones are reported
+    assert set(d) == {"julia:mandelbrot", "phoenix"}
+    assert d["phoenix"]["queue"] == 1 and d["phoenix"]["low_water"] == 32
+    assert "phoenix-seed-pool" in d["phoenix"]["reason"]
     assert "julia-hook" in d["julia:mandelbrot"]["reason"]
     # a HEALTHY partition is never reported (non-vacuity: the report can be empty)
     assert "mandelbrot" not in d
-    assert _refill_obj([{"node_id": i, "partition": "phoenix:classic"} for i in range(40)],
+    assert _refill_obj([{"node_id": i, "partition": "phoenix"} for i in range(40)],
                        ["mandelbrot"]).deferred_partitions() == {}
+
+
+def test_an_externally_supplied_partition_is_not_censused_as_starved(monkeypatch):
+    """SKIP SITE 1 of 3. `phoenix:classic` has one channel and it is a standalone job, so an
+    empty queue is not news — reporting it every batch is a permanent false alarm on the one
+    dict whose job is to make a real empty queue loud.
+
+    The CONTROL is the same partition with the flag off: it must come straight back, so the
+    green here is the flag being honoured and not `phoenix:classic` being special-cased."""
+    frontier = [{"node_id": i, "partition": "mandelbrot"} for i in range(100)]
+    frontier += [{"node_id": 502, "partition": "phoenix:classic"}]
+    obj = _refill_obj(frontier, ["mandelbrot"])
+    assert "phoenix:classic" not in obj.deferred_partitions()
+
+    monkeypatch.setattr(sf.srt, "is_externally_supplied", lambda p: False)
+    d = _refill_obj(frontier, ["mandelbrot"]).deferred_partitions()
+    assert set(d) == {"phoenix:classic"}
+    assert "PINNED" in d["phoenix:classic"]["reason"]
+    assert "classic_plane_descent" in d["phoenix:classic"]["reason"]
 
 
 def test_a_phoenix_seed_pool_routes_each_point_to_its_own_partition():
