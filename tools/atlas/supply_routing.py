@@ -343,7 +343,7 @@ def thin_by_cspacing(cands, key=lambda r: (r["c_re"], r["c_im"]),
 # partition silently absent from every report is exactly the shape `deferred_partitions` was
 # written to prevent. The visibility moves to the place that can act on it — emission intake
 # prints the SERVABLE classic count and names the manual job to run
-# (`library_intake_2.classic_supply_note`). Nothing here changes `release_mix.RATIO`:
+# (`ledger_rescore.classic_supply_note`). Nothing here changes `release_mix.RATIO`:
 # classic is still 0.2 of a release, and the intake still weighs it at that. What changed is
 # only who is expected to produce it.
 def is_externally_supplied(partition: str) -> bool:

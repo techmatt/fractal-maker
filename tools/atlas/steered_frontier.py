@@ -1879,7 +1879,7 @@ class SteeredFrontier:
         summary stamps `externally_supplied` (via `pop_quota.PopQuota.summary`), and the count
         that can actually be acted on is printed at EMISSION INTAKE, where the servable classic
         population is known and the manual job to run can be named
-        (`library_intake_2.classic_supply_note`)."""
+        (`ledger_rescore.classic_supply_note`)."""
         q = self.queue_lens() if queue_lens is None else queue_lens
         out = {}
         for part in self.partitions:
