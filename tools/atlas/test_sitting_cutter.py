@@ -454,12 +454,33 @@ def test_the_sitting_batch_id_is_the_same_string_in_all_three_places():
 
 @pytest.mark.parametrize("name", sorted(sc.SITTINGS))
 def test_every_sitting_is_served_by_a_sheet_over_exactly_its_own_legs(name):
-    """The generalization of the pin above to N legs. The cutter writes the legs and the sheet
+    """The generalization of the pin above to N legs. The cutter writes the legs and something
     serves them; if the two disagree about the set, the sitting silently serves a subset — the
-    rows of the missing leg exist, are registered, are rendered, and are never shown."""
+    rows of the missing leg exist, are registered, are rendered, and are never shown.
+
+    TWO SERVING PATHS, ONE PROPERTY. A blind sitting is served by a `SheetSpec` whose
+    `sources` must equal the leg set. A CORRECTION sitting has no sheet — it is served
+    straight off its registered batches by the rig (`SittingSpec.serve_url`, see there for
+    why the blinding module is the wrong home for it) — so the check is that its URL names
+    every leg and nothing else. Both halves are the same assertion: what is served is exactly
+    what was cut."""
     sys.path.insert(0, str(ROOT / "tools" / "corpus"))
     import build_combined_label_sheet as bcs
     spec = sc.SITTINGS[name]
+    if spec.correction:
+        url = spec.serve_url()
+        served = url.split("batch=", 1)[1].split("&", 1)[0].split(",")
+        assert set(served) == set(spec.batches) and len(served) == len(spec.batches), (
+            f"correction sitting {name!r} has legs {spec.batches} but serves {served}")
+        assert "order=file" in url, (
+            "a correction sheet stamps its own contiguous sheet_order; without order=file the "
+            "rig re-derives an order in the browser and there are two owners for it")
+        assert "tiers=4" in url, "the label corpus holds 1..4; the rig must not offer a button "\
+                                 "the corpus cannot hold"
+        assert not any(set(s.sources) == set(spec.batches) for s in bcs.SPECS.values()), (
+            f"{name!r} is a correction sitting AND has a blind SheetSpec over the same legs — "
+            f"two serving paths for one cut, and the blind one would drop the suggestion")
+        return
     sheet = next((s for s in bcs.SPECS.values() if set(s.sources) == set(spec.batches)), None)
     assert sheet is not None, (
         f"sitting {name!r} has legs {spec.batches} and no SheetSpec serves exactly that set; "
@@ -745,3 +766,226 @@ def test_the_bounded_draw_uses_the_limit_it_was_given_not_a_hardcoded_None():
     assert "make_embedder(" in src
     call = src[src.index("make_embedder("):]
     assert "embed_limit" in call[:200], "the draw's embedder ignores --embed-limit"
+
+
+# =========================================================================== #
+# the CORRECTION sheet: bucket apportionment + the pre-label stamp (2026-08-07)
+# =========================================================================== #
+from collections import Counter        # noqa: E402
+
+
+def _brow(part, tier=2, rank=1, leg="A", dec=None, mix=None, trig=False, eord=None):
+    return dict(partition=part, rank_tier=tier, queue_rank=rank, _leg=leg,
+                canon_decoded=dec, mix_source=mix, triggered=trig, canon_eord=eord)
+
+
+def _bucket(name, target, pick):
+    return sc.CorrectionBucket(name, target, pick, why="test")
+
+
+def test_a_row_is_claimed_by_the_FIRST_bucket_that_wants_it():
+    """The buckets PARTITION the sheet. A class-4 mandelbrot row satisfies both the mandelbrot
+    bucket and the cross-partition class-4 slice; declaration order decides, and the counts
+    then add up to the page instead of double-counting it."""
+    rows = [_brow("mandelbrot", dec=4, rank=i) for i in range(10)]
+    buckets = (_bucket("mandelbrot", 5, lambda r: r["partition"] == "mandelbrot"),
+               _bucket("class4", 5, lambda r: r.get("canon_decoded") == 4))
+    out, rep = sc.draw_buckets(rows, sc.cell_of, 10, buckets)
+    assert rep["buckets"]["mandelbrot"]["available"] == 10
+    assert rep["buckets"]["class4"]["available"] == 0
+    assert len(out) == 10 and len(set(map(id, out))) == 10   # each row once, not twice
+
+
+def test_every_bucket_hits_its_target_when_supply_is_ample():
+    rows = ([_brow("mandelbrot", rank=i) for i in range(50)]
+            + [_brow("phoenix", rank=100 + i) for i in range(50)])
+    buckets = (_bucket("m", 6, lambda r: r["partition"] == "mandelbrot"),
+               _bucket("p", 4, lambda r: r["partition"] == "phoenix"))
+    out, rep = sc.draw_buckets(rows, sc.cell_of, 10, buckets)
+    assert [rep["buckets"][k]["granted"] for k in ("m", "p")] == [6, 4]
+    assert rep["shortfall_total"] == 0 and rep["redeal"] == []
+    assert Counter(r["partition"] for r in out) == {"mandelbrot": 6, "phoenix": 4}
+
+
+def test_a_shortfall_is_re_dealt_to_the_SCARCEST_bucket_not_the_most_abundant():
+    """The whole point of the re-deal rule. `m` is short by 8; `p` has 3 spare rows and `bulk`
+    has 200. Handing the slack to `bulk` is what "never pad with julia:multibrot bulk"
+    forbids, and scarcest-first is the rule that makes the forbidding structural."""
+    rows = ([_brow("mandelbrot", rank=i) for i in range(2)]
+            + [_brow("phoenix", rank=10 + i) for i in range(7)]
+            + [_brow("julia:multibrot4", rank=100 + i) for i in range(200)])
+    buckets = (_bucket("m", 10, lambda r: r["partition"] == "mandelbrot"),
+               _bucket("p", 4, lambda r: r["partition"] == "phoenix"),
+               _bucket("bulk", 6, lambda r: r["partition"] == "julia:multibrot4"))
+    out, rep = sc.draw_buckets(rows, sc.cell_of, 20, buckets)
+    assert rep["buckets"]["m"]["granted"] == 2 and rep["buckets"]["m"]["shortfall"] == 8
+    # p was scarcer than bulk, so p absorbs first and drains; only then does bulk take the rest
+    assert rep["buckets"]["p"]["redealt_in"] == 3 and rep["buckets"]["p"]["granted"] == 7
+    assert [d["bucket"] for d in rep["redeal"]][0] == "p"
+    assert len(out) == 20
+
+
+def test_a_fully_drained_set_returns_a_SHORT_sheet_rather_than_padding_it():
+    """Nothing is drawn from outside the buckets. The alternative — a general balanced fill —
+    is exactly how the page fills up with the material the sheet is not short of."""
+    rows = [_brow("mandelbrot", rank=i) for i in range(3)]
+    buckets = (_bucket("m", 10, lambda r: r["partition"] == "mandelbrot"),)
+    out, rep = sc.draw_buckets(rows, sc.cell_of, 10, buckets)
+    assert len(out) == 3 and rep["shortfall_total"] == 7 and rep["drawn"] == 3
+
+
+def test_a_later_leg_is_reached_ONLY_after_the_earlier_one_is_exhausted():
+    """Backfilled only where a bucket falls short, as a property. Leg B outnumbers leg A
+    25:1 and is still untouched while any leg-A row in the cell remains."""
+    rows = ([_brow("phoenix", rank=i, leg="B") for i in range(100)]
+            + [_brow("phoenix", rank=200 + i, leg="A") for i in range(4)])
+    buckets = (_bucket("p", 4, lambda r: r["partition"] == "phoenix"),)
+    out, rep = sc.draw_buckets(rows, sc.cell_of, 4, buckets, leg_rank={"A": 0, "B": 1})
+    assert rep["buckets"]["p"]["by_leg"] == {"A": 4}
+    buckets6 = (_bucket("p", 6, lambda r: r["partition"] == "phoenix"),)
+    out2, rep2 = sc.draw_buckets(rows, sc.cell_of, 6, buckets6, leg_rank={"A": 0, "B": 1})
+    assert rep2["buckets"]["p"]["by_leg"]["A"] == 4          # A first, then B backfills
+    assert rep2["buckets"]["p"]["by_leg"]["B"] == 2
+
+
+def test_bucket_targets_that_do_not_sum_to_the_cap_are_REFUSED_at_construction():
+    with pytest.raises(ValueError, match="sum to"):
+        sc.SittingSpec(name="bad", gen_version="x", seed=1, id_prefix="x", crop_ss=2,
+                       legs=(sc.SittingLeg("b", "d", "r", "p"),), max_rows=10,
+                       buckets=(_bucket("m", 3, lambda r: True),))
+
+
+def test_the_label_run_buckets_sum_to_the_cap_and_are_the_prompts_numbers():
+    spec = sc.LABEL_RUN_SITTING
+    assert spec.max_rows == 500 and spec.correction is True
+    assert {b.name: b.target for b in spec.buckets} == {
+        "mandelbrot": 150, "julia:mandelbrot": 125, "phoenix": 100,
+        "native_multibrot_maneuver": 75, "machine_class4_top": 50}
+    assert sum(b.target for b in spec.buckets) == spec.max_rows
+    # the class-4 slice is declared LAST, so it only sees what the partition buckets left
+    assert spec.buckets[-1].name == "machine_class4_top"
+
+
+def test_julia_mandelbrots_machine_1s_reach_the_sheet():
+    """The prompt's explicit requirement, and it is a property of the imported discard table
+    rather than of this sitting: P(Matt=1 | decoded 1) is 30.9% for julia:mandelbrot, so the
+    table keeps them. A sitting that had to special-case this would be a second owner."""
+    assert srt.MACHINE_1_DISCARD.get("julia:mandelbrot") is False
+    rows = [_brow("julia:mandelbrot", dec=1), _brow("multibrot4", dec=1)]
+    kept, removed, _rep = sc.stage_machine_1(rows, {})
+    assert [r["partition"] for r in kept] == ["julia:mandelbrot"]
+    assert [r["partition"] for r in removed] == ["multibrot4"]
+
+
+def test_the_native_multibrot_bucket_takes_maneuver_sourced_rows_ONLY():
+    pick = next(b for b in sc.LABEL_RUN_SITTING.buckets
+                if b.name == "native_multibrot_maneuver").pick
+    assert pick(_brow("multibrot4", mix="maneuver:neighborhood_expand:k=8.0"))
+    assert pick(_brow("multibrot3", trig=True))
+    assert not pick(_brow("multibrot4", mix="native"))
+    assert not pick(_brow("mandelbrot", trig=True))          # native MULTIbrot only
+
+
+def test_the_correction_stamp_is_good_to_bad_contiguous_and_never_a_label():
+    rows = [dict(image_id=f"lr{i:02d}", label=dict(score=None), _pred=p, _sugg=s)
+            for i, (p, s) in enumerate([(2.0, 2), (4.1, 4), (None, None), (3.5, 3)])]
+    rep = sc.stamp_correction(rows)
+    assert [r["image_id"] for r in rows] == ["lr01", "lr03", "lr00", "lr02"]  # 4.1,3.5,2.0,None
+    assert [r["sheet_order"] for r in rows] == [0, 1, 2, 3]
+    assert rows[-1]["pred"] is None and rows[-1]["suggested_tier"] is None
+    assert all(r["label"]["score"] is None for r in rows), "a suggestion is NOT a label"
+    assert rep["n_with_pred"] == 3 and rep["n_without_pred"] == 1
+    assert "_pred" not in rows[0] and "_sugg" not in rows[0]
+
+
+def test_head_pred_is_on_the_tier_scale_and_absent_without_a_canonical_decode():
+    assert sc.head_pred(dict(canon_eord=2.4)) == pytest.approx(3.4)
+    assert sc.head_pred(dict(canon_eord=None)) is None
+    assert sc.suggested_tier(dict(canon_decoded=3, reframe_decoded=4)) == 4   # reframe wins
+    assert sc.suggested_tier(dict(canon_decoded=3)) == 3
+    assert sc.suggested_tier(dict()) is None
+
+
+def test_a_bucketed_cut_does_not_ALSO_reserve():
+    """Five targets already sum to the cap; a sixth claim would silently displace one."""
+    rows = [_brow("phoenix", rank=i) for i in range(20)]
+    res = sc.cut_sitting(rows, max_rows=5, embed=lambda r: _unit(r["queue_rank"], 64),
+                         buckets=(_bucket("p", 5, lambda r: r["partition"] == "phoenix"),))
+    assert res["report"]["calibration_reservations"]["active"] == {}
+    assert res["report"]["buckets"]["drawn"] == 5
+
+
+def test_the_reservation_path_is_untouched_when_no_buckets_are_passed():
+    rows = [_brow("phoenix", rank=i) for i in range(20)]
+    res = sc.cut_sitting(rows, max_rows=5,
+                         embed=lambda r: _unit(r["queue_rank"], 64),
+                         reservations={})
+    assert res["report"]["buckets"] is None
+
+
+def test_a_no_pad_row_fills_its_OWN_target_but_never_anothers_shortfall():
+    """THE DEFECT THE REHEARSAL FOUND, as a regression.
+
+    `bulk` is abundant and `slice` is cross-partition, so "scarcest bucket with supply" walked
+    straight into the bulk material: the first bounded end-to-end drew 294 rows into a 50-row
+    class-4 slice and padded the page with 244 julia:multibrot rows. Both halves are asserted,
+    because a `no_pad` that also blocked the target would silently shrink the slice."""
+    rows = ([_brow("mandelbrot", rank=i) for i in range(2)]
+            + [_brow("julia:multibrot4", rank=100 + i, dec=4) for i in range(300)]
+            + [_brow("multibrot3", rank=500 + i, trig=True) for i in range(600)])
+    buckets = (_bucket("m", 10, lambda r: r["partition"] == "mandelbrot"),
+               _bucket("native", 5, lambda r: r["partition"] == "multibrot3"),
+               _bucket("slice", 5, lambda r: r.get("canon_decoded") == 4))
+    no_pad = lambda r: str(r.get("partition") or "").startswith("julia:multibrot")
+    out, rep = sc.draw_buckets(rows, sc.cell_of, 20, buckets, no_pad=no_pad)
+    assert len(out) == 20
+    # the slice still gets its OWN five, from the very material the pad rule blocks
+    assert rep["buckets"]["slice"]["granted"] == 5
+    assert rep["buckets"]["slice"]["redealt_in"] == 0
+    # ...and mandelbrot's 8-row shortfall was paid in native rows, not julia:multibrot bulk
+    assert rep["buckets"]["native"]["redealt_in"] == 8
+    assert sum(1 for r in out if r["partition"].startswith("julia:multibrot")) == 5
+    assert rep["pad_blocked_rows_left"] == 295
+
+
+def test_without_the_pad_rule_the_bulk_bucket_DOES_swallow_the_shortfall():
+    """The negative control for the test above: same population, no `no_pad`, and the slice
+    runs away with the page. Without this the guard could pass because the draw is short."""
+    rows = ([_brow("mandelbrot", rank=i) for i in range(2)]
+            + [_brow("julia:multibrot4", rank=100 + i, dec=4) for i in range(300)]
+            + [_brow("multibrot3", rank=500 + i, trig=True) for i in range(600)])
+    buckets = (_bucket("m", 10, lambda r: r["partition"] == "mandelbrot"),
+               _bucket("native", 5, lambda r: r["partition"] == "multibrot3"),
+               _bucket("slice", 5, lambda r: r.get("canon_decoded") == 4))
+    out, rep = sc.draw_buckets(rows, sc.cell_of, 20, buckets)
+    assert rep["buckets"]["slice"]["redealt_in"] == 8      # the bulk absorbs it
+    assert sum(1 for r in out if r["partition"].startswith("julia:multibrot")) == 13
+
+
+def test_the_label_run_pad_rule_names_julia_multibrot_and_carries_its_reason():
+    spec = sc.LABEL_RUN_SITTING
+    assert spec.no_pad is not None and spec.no_pad_rule
+    for p in ("julia:multibrot3", "julia:multibrot4", "julia:multibrot5"):
+        assert spec.no_pad(dict(partition=p)), p
+    for p in ("mandelbrot", "julia:mandelbrot", "phoenix", "multibrot4"):
+        assert not spec.no_pad(dict(partition=p)), p
+
+
+def test_a_pad_rule_without_a_stated_reason_is_REFUSED():
+    with pytest.raises(ValueError, match="no_pad_rule"):
+        sc.SittingSpec(name="bad", gen_version="x", seed=1, id_prefix="x", crop_ss=2,
+                       legs=(sc.SittingLeg("b", "d", "r", "p"),),
+                       no_pad=lambda r: True)
+
+
+def test_the_dry_run_cuts_the_SAME_WAY_the_draw_does():
+    """A rehearsal that took the balanced path while `draw` took the bucketed one would report
+    an apportionment nobody is about to build. Source-scanned because the two call sites are
+    what must agree, and there is no cheap way to run both real cuts in a unit test."""
+    src = (ROOT / "tools" / "atlas" / "sitting_cutter.py").read_text(encoding="utf-8")
+    calls = [src[m:src.index(")", src.index("no_pad", m))]
+             for m in [i for i in range(len(src)) if src.startswith("res = cut_sitting(", i)]]
+    assert len(calls) == 2, "expected exactly two cut_sitting call sites (draw + dry-run)"
+    for c in calls:
+        for kw in ("buckets=", "leg_rank=", "no_pad="):
+            assert kw in c, f"a cut_sitting call site is missing {kw}: {c[:160]}"

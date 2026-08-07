@@ -224,6 +224,33 @@ REGISTRY: dict[str, tuple[Registration, ...]] = {
                          "argmax child. Biased at the source AND at every rung — and the "
                          "control arm is unbiased only WITHIN the admitted set, which is "
                          "itself a screened population, so it is not an instrument either."),),
+    # ---- the 2026-08-07 label-collection run's CORRECTION sheet: TWO legs ----
+    # Registered BEFORE the cut (`sitting_cutter.check_registrations` refuses to build
+    # otherwise). Both are train-side, and a correction sheet is biased ONE MORE WAY than a
+    # blind sitting is: the rows are served pre-labelled with the head's own decode and
+    # ordered by its continuous score, so the labels are ANCHORED to the head as well as
+    # selected by it. That is not a reason to refuse the sheet — correcting a head is what a
+    # correction sheet is for — but a rate measured on it is a statement about agreement with
+    # v10, never a base rate, and it must never sit on the eval side.
+    "2026-08-07_label_run_correction_v1": (
+        Registration(source="label_run_correction", biased=True,
+                     why="the 2026-08-07 label-collection run's record-and-rank residue, "
+                         "bucket-apportioned and served as a CORRECTION sheet. Biased at "
+                         "four points: the cheap v10 ordinal decided which candidates earned "
+                         "a canonical confirmation, the rank is built from those scores, part "
+                         "of the supply was selected on view_screen.composite_v3, and the "
+                         "served row carries the head's own decode as a prefilled "
+                         "suggestion. Its partition mix came from an explicit run-scoped "
+                         "currency-target vector (--currency-targets), not the release mix, "
+                         "so no share of it is a policy statement either."),),
+    "2026-08-07_steady_state_v2_backfill_v1": (
+        Registration(source="steady_state_v2_backfill", biased=True,
+                     why="steady_state_v2_20260807's ranked residue, drawn ONLY where a "
+                         "bucket of the label-run sheet fell short. Same generation method "
+                         "and the same four biases as the leg above; a separate registration "
+                         "because it is a separate run, and because 'this row is here "
+                         "because the label run could not fill its bucket' is a selection "
+                         "story that has to survive into the corpus."),),
 }
 
 UNREGISTERED = Registration(

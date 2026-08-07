@@ -443,9 +443,145 @@ def draw_reserved(rows, cell_of, n: int, reservations: dict):
     return reserved_rows + fill, cells, res_rep
 
 
+# =========================================================================== #
+# BUCKET APPORTIONMENT — the correction sheet's draw (2026-08-07)
+# =========================================================================== #
+@dataclass(frozen=True)
+class CorrectionBucket:
+    """One named slice of a correction sheet, with a target and a membership rule.
+
+    WHY THIS IS NOT `reservations`. A calibration reservation is a FLOOR under a balanced draw
+    that fills everything else; these buckets ARE the sheet — their targets sum to the cap, so
+    there is no "everything else" for a balanced draw to fill. Using reservations for this
+    would leave the general draw with zero rows to deal and the whole apportionment would read
+    as five floors that happened to add up, which is not what makes it correct.
+
+    `pick` is a predicate over a surviving queue row. It is a function rather than a partition
+    list because two of the five buckets are not partition slices at all: one is
+    source-conditioned (native multibrot, maneuver-sourced only) and one is score-conditioned
+    and deliberately cross-partition (the machine-class-4 top slice)."""
+    name: str
+    target: int
+    pick: object                  # row -> bool
+    why: str
+
+
+def draw_buckets(rows, cell_of, n: int, buckets, leg_rank=None, no_pad=None):
+    """`n` rows apportioned across named BUCKETS, each drawn best-first, shortfalls recorded
+    and re-dealt to the SCARCEST bucket that can still absorb them.
+
+    ORDER OF DRAW IS THE DECLARED ORDER, and a row goes to the FIRST bucket that claims it, so
+    the buckets partition the sheet rather than overlapping it. That is what makes the
+    per-bucket counts add up to the page a human sits through.
+
+    THE CROSS-PARTITION CLASS-4 SLICE IS DECLARED LAST ON PURPOSE. A class-4 mandelbrot row
+    satisfies both the mandelbrot bucket and the class-4 slice, so the declaration order
+    decides which one spends it. Last means the slice surfaces the class-4s the partition
+    buckets did NOT already take — which is the only way it adds anything, and is also the one
+    channel through which abundant julia:multibrot material can legitimately reach the sheet
+    (gated on being a machine 4, never as bulk).
+
+    WITHIN A BUCKET the existing `draw_balanced` rule runs unchanged — round-robin over
+    (partition x tier) cells, caller's order as the within-cell rank — so a bucket spanning
+    three partitions is spread across them and across tiers instead of taking one cell's head.
+
+    BACKFILL IS AN ORDERING, NOT A SEPARATE PASS. `leg_rank` maps a row's leg to a priority;
+    each bucket's pool is sorted by it before the draw, so a later leg's rows are reached only
+    once the earlier leg's are exhausted IN THAT CELL. That is what "backfilled only where a
+    bucket falls short" means operationally, and it is per (bucket, cell) rather than per
+    bucket — worth stating, because a bucket can be short in one cell while another cell of
+    the same bucket still has first-leg supply.
+
+    THE RE-DEAL IS SCARCEST-FIRST AND BOUNDED BY SUPPLY. An unfilled target is offered to the
+    bucket with the least remaining supply first, because the abundant buckets are exactly the
+    ones whose material the sheet is not short of. Nothing fills from OUTSIDE the buckets: if
+    every bucket is drained the sheet comes back under `n`, short, and says so
+    (`CLAUDE.md`: no silent caps — the shortfall is a number, not a quiet truncation).
+
+    `no_pad` IS A SEPARATE RULE FROM `pick`, AND THE REHEARSAL IS WHY. A row it names may
+    still fill its own bucket's TARGET; it may never fill someone else's SHORTFALL. Without
+    the split, the first bounded end-to-end of this function drew 294 rows into a 50-row
+    cross-partition class-4 slice — it held 508 rows against native multibrot's 1,287, so
+    "scarcest with supply" picked it, and 244 rows of julia:multibrot bulk padded a page whose
+    whole purpose was the three partitions that came up short. Absolute remaining supply is
+    the wrong scarcity measure the moment one bucket is cross-partition, and the constraint
+    that actually matters ("never pad with julia:multibrot bulk") is a statement about the
+    ROWS, not about the bucket that happens to hold them. So it is enforced on the rows, at
+    the only place padding happens. The 50 the slice is owed still come from anywhere."""
+    rank = leg_rank or {}
+    pools: dict = {b.name: [] for b in buckets}
+    unclaimed = 0
+    for r in rows:
+        for b in buckets:
+            if b.pick(r):
+                pools[b.name].append(r)
+                break
+        else:
+            unclaimed += 1
+    for name in pools:
+        pools[name].sort(key=lambda r: (rank.get(r.get("_leg"), 99),
+                                        int(r.get("queue_rank") or 1 << 30)))
+
+    out, rep, taken_ids = [], {}, set()
+    for b in buckets:
+        want = min(b.target, n - len(out))
+        got, cells = draw_balanced(pools[b.name], cell_of, want)
+        out += got
+        taken_ids |= {id(r) for r in got}
+        rep[b.name] = dict(target=b.target, granted=len(got),
+                           shortfall=b.target - len(got), available=len(pools[b.name]),
+                           capped_by_sheet=want < b.target, why=b.why,
+                           by_leg=dict(Counter(r.get("_leg") for r in got)), cells=cells,
+                           redealt_in=0)
+
+    # --- the re-deal: scarcest-first, supply-bounded, never from outside the buckets, and
+    #     never from rows `no_pad` names (see the docstring — this is the julia:multibrot rule)
+    block = no_pad or (lambda r: False)
+    short = n - len(out)
+    redeal: list = []
+    blocked = 0
+    while short > 0:
+        left = {}
+        for b in buckets:
+            avail = [r for r in pools[b.name] if id(r) not in taken_ids]
+            left[b.name] = [r for r in avail if not block(r)]
+        cand = sorted((nm for nm in left if left[nm]), key=lambda nm: (len(left[nm]), nm))
+        if not cand:
+            break
+        nm = cand[0]
+        got, _ = draw_balanced(left[nm], cell_of, min(short, len(left[nm])))
+        if not got:
+            break
+        out += got
+        taken_ids |= {id(r) for r in got}
+        rep[nm]["granted"] += len(got)
+        rep[nm]["redealt_in"] += len(got)
+        for r in got:
+            rep[nm]["by_leg"][r.get("_leg")] = rep[nm]["by_leg"].get(r.get("_leg"), 0) + 1
+        redeal.append(dict(bucket=nm, rows=len(got), pad_eligible_left=len(left[nm])))
+        short = n - len(out)
+    blocked = sum(1 for r in rows if id(r) not in taken_ids and block(r))
+
+    summary = dict(
+        buckets=rep, unclaimed_by_any_bucket=unclaimed,
+        drawn=len(out), cap=n, shortfall_total=max(0, n - len(out)),
+        redeal=redeal,
+        # The rows the pad rule held back. Reported because a sheet that came back short and a
+        # sheet that could have been filled from forbidden material are different facts, and
+        # only one of them is a supply problem.
+        pad_blocked_rows_left=blocked,
+        rule=("declared order claims a row once; within a bucket draw_balanced over "
+              "(partition x tier); shortfall re-dealt to the SCARCEST bucket with "
+              "PAD-ELIGIBLE supply left; a `no_pad` row may fill its own target but never "
+              "another bucket's shortfall; NOTHING is drawn from outside the buckets, so a "
+              "fully drained set returns a short sheet rather than padding it"))
+    return out, summary
+
+
 def cut_sitting(rows, *, max_rows: int = MAX_ROWS, embed=None,
                 machine_1_discard=None, near_dup_cos: float = NEAR_DUP_COS,
-                progress=None, positives=None, reservations=None) -> dict:
+                progress=None, positives=None, reservations=None,
+                buckets=None, leg_rank=None, no_pad=None) -> dict:
     """Run every stage, then cut to one sitting. Returns the sitting and its full accounting.
 
     The accounting closes: `n_in == n_sitting + sum(removed per stage) + n_over_cap`. A cut
@@ -471,11 +607,22 @@ def cut_sitting(rows, *, max_rows: int = MAX_ROWS, embed=None,
     # the raw queue would look filled while every one of its rows was about to be auto-labelled
     # or deduped away.
     floor_used = None
-    if reservations is None:
-        positives = positives_census() if positives is None else positives
-        floor_used = min_pos()
-        reservations = plan_reservations(positives, max_rows, floor=floor_used)
-    sitting, cells, res_rep = draw_reserved(cur, cell_of, max_rows, reservations)
+    bucket_rep = None
+    if buckets:
+        # A BUCKETED CUT DOES NOT ALSO RESERVE. The buckets already sum to the cap, so a
+        # calibration reservation on top would be a sixth claim on a page with no slack —
+        # it would silently displace one of the five targets Matt sized. Recorded as an
+        # explicit empty plan rather than an absent feature (`cut_sitting`'s own contract).
+        reservations, res_rep = {}, {}
+        sitting, bucket_rep = draw_buckets(cur, cell_of, max_rows, buckets, leg_rank,
+                                           no_pad=no_pad)
+        cells = {k: v["cells"] for k, v in bucket_rep["buckets"].items()}
+    else:
+        if reservations is None:
+            positives = positives_census() if positives is None else positives
+            floor_used = min_pos()
+            reservations = plan_reservations(positives, max_rows, floor=floor_used)
+        sitting, cells, res_rep = draw_reserved(cur, cell_of, max_rows, reservations)
     over_cap = len(cur) - len(sitting)
 
     total_removed = sum(len(v) for v in removed_by_stage.values())
@@ -503,6 +650,8 @@ def cut_sitting(rows, *, max_rows: int = MAX_ROWS, embed=None,
             by_fate=dict(Counter(r.get("fate") for r in sitting)),
             triggered=sum(1 for r in sitting if r.get("triggered")),
             cells=cells,
+            # None on the reservation path; the whole apportionment on the bucketed one.
+            buckets=bucket_rep,
         ))
 
 
@@ -715,6 +864,19 @@ class SittingSpec:
     crop_ss: int
     legs: tuple
     max_rows: int = MAX_ROWS
+    # A CORRECTION SHEET (2026-08-07). The rows are served pre-labelled with the head's own
+    # decode, ordered good -> bad by its continuous score, and the human corrects what it got
+    # wrong. `correction=False` is every earlier sitting, byte-identical: blind, shuffled, no
+    # suggestion on the row. The invariant that does not bend either way is that a SUGGESTION
+    # IS NOT A LABEL — `label.score` stays null and the merge refuses to read the suggestion.
+    correction: bool = False
+    # BUCKET APPORTIONMENT. Empty => the calibration-reservation + balanced draw, unchanged.
+    buckets: tuple = ()
+    # ROWS THAT MAY FILL THEIR OWN BUCKET BUT MAY NEVER PAD ANOTHER'S SHORTFALL, and the
+    # prose that says why. Same pairing rule as `SheetSpec.row_filter`/`filter_rule`: a
+    # constraint on the draw whose reason is not written down is indistinguishable from a bug.
+    no_pad: object = None
+    no_pad_rule: str = ""
 
     @property
     def batches(self) -> tuple:
@@ -722,6 +884,51 @@ class SittingSpec:
 
     def leg(self, batch_id: str) -> SittingLeg:
         return next(l for l in self.legs if l.batch_id == batch_id)
+
+    def serve_url(self) -> str:
+        """WHERE A CORRECTION SITTING IS SERVED — derived from the legs, never written out.
+
+        A blind sitting is served by a `build_combined_label_sheet.SheetSpec`: a separate
+        directory with opaque post-shuffle ids, `provenance` DROPPED, and a route map back to
+        the source batches. A CORRECTION sitting cannot use that path and it is not an
+        oversight — every property that module exists to enforce is the negation of what a
+        correction sheet is. It shows the head's decode where the sheet drops the score
+        columns; it is ordered by that decode where the sheet deals a seeded apportionment
+        specifically so the head's ranking cannot anchor the labeler. Adding a non-blind mode
+        to the blinding module is exactly the drift its own docstring warns about.
+
+        So a correction sitting is served straight off its registered batches by the rig,
+        which already has the mode: `wallpaper_label.html` auto-detects CORRECTION from
+        `suggested_tier` and honours a builder-stamped contiguous `sheet_order` under
+        `order=file`. The legs go in as `?batch=id1,id2`, so the served set IS the leg set by
+        construction — which is the property the sheet's route map buys the blind path, bought
+        here by there being no second artifact to disagree with.
+
+        Derived from `self.legs` so a leg added to the spec is served without anyone
+        remembering to edit a URL (`CLAUDE.md`: derive state in code, freeze it in records)."""
+        if not self.correction:
+            raise ValueError(f"{self.name} is a BLIND sitting — it is served by a "
+                             f"build_combined_label_sheet.SheetSpec over {self.batches}, "
+                             f"not by a rig URL")
+        return (f"tools/viz/wallpaper_label.html?corpus=label_corpus"
+                f"&batch={','.join(self.batches)}&tiers=4&order=file")
+
+    @property
+    def leg_rank(self) -> dict:
+        """Declaration order as a draw priority — leg 0 is exhausted before leg 1 is reached.
+        This is the whole mechanism behind "backfilled only where a bucket falls short"."""
+        return {l.batch_id: i for i, l in enumerate(self.legs)}
+
+    def __post_init__(self):
+        if bool(self.no_pad) != bool(self.no_pad_rule):
+            raise ValueError(f"{self.name}: no_pad and no_pad_rule must be set together (a "
+                             f"draw constraint with no stated reason reads as a bug)")
+        if self.buckets and sum(b.target for b in self.buckets) != self.max_rows:
+            raise ValueError(
+                f"{self.name}: bucket targets sum to "
+                f"{sum(b.target for b in self.buckets)} but the cap is {self.max_rows}. A "
+                f"bucketed sheet has no balanced draw to absorb the difference, so targets "
+                f"that do not sum to the cap silently under- or over-fill the page.")
 
 
 V2_SITTING = SittingSpec(
@@ -776,7 +983,100 @@ STEADY_STATE_SITTING = SittingSpec(
     ),
 )
 
-SITTINGS = {s.name: s for s in (V2_SITTING, STEADY_STATE_SITTING)}
+# --- the label-collection run's CORRECTION sheet (2026-08-07), <=500 rows, TWO legs -------- #
+# Cut from `label_run_20260807`'s ranked residue, with `steady_state_v2_20260807`'s 1,544-row
+# residue declared SECOND so it is reached only where a bucket runs short (`SittingSpec.
+# leg_rank` -> `draw_buckets`). Both legs are the same generation method — a pop-quota steered
+# crawl's record-and-rank residue — so they are two registrations only because they are two
+# runs, and the bias argument is identical for both.
+NATIVE_MULTIBROT = ("multibrot3", "multibrot4", "multibrot5")
+
+
+def _maneuver_sourced(r) -> bool:
+    """A row the maneuver machinery produced, by the record's own stamp rather than by
+    inference. `triggered` is the on-admission trigger; `mix_source` carries the maneuver kind
+    for the quota-driven ones. Native multibrot supply is seeds + triggered maneuvers only
+    (`supply_routing`: raw unscreened dM-shell draws yield 0/48 at >=2), so a native bucket
+    that did not condition on this would be a bucket of draws nobody expects to be good."""
+    return bool(r.get("triggered")) or str(r.get("mix_source") or "").startswith("maneuver")
+
+
+LABEL_RUN_BUCKETS = (
+    CorrectionBucket(
+        "mandelbrot", 150, lambda r: r.get("partition") == "mandelbrot",
+        why="the run's largest currency target (ratio 30) and a FLOORED partition all run — "
+            "whatever the floor carry bought is the whole mandelbrot supply there is"),
+    CorrectionBucket(
+        "julia:mandelbrot", 125, lambda r: r.get("partition") == "julia:mandelbrot",
+        why="ratio 25, also floored. Its MACHINE-1s are included by construction: "
+            "supply_routing.MACHINE_1_DISCARD is False for this partition because "
+            "P(Matt=1 | decoded 1) is 30.9% here against 94-100% on the natives, so "
+            "stage_machine_1 never removes them and this bucket sees them"),
+    CorrectionBucket(
+        "phoenix", 100, lambda r: r.get("partition") == "phoenix",
+        why="ratio 20 and the run's deficit-driven engine (58% of intent) — the bucket most "
+            "likely to be supply-rich rather than short"),
+    CorrectionBucket(
+        "native_multibrot_maneuver", 75,
+        lambda r: r.get("partition") in NATIVE_MULTIBROT and _maneuver_sourced(r),
+        why="natives 5 each, and MANEUVER-SOURCED only: their root supply is seeds + "
+            "triggered maneuvers, so an unscreened raw draw is not what this bucket is for"),
+    CorrectionBucket(
+        "machine_class4_top", 50,
+        lambda r: r.get("canon_decoded") is not None and int(r["canon_decoded"]) == 4,
+        why="the cross-partition class-4 top slice. DECLARED LAST so it surfaces the class-4s "
+            "the four partition buckets did not already spend — including julia:multibrot "
+            "ones, which is the only way that material legitimately reaches the page"),
+)
+
+LABEL_RUN_SITTING = SittingSpec(
+    name="label_run",
+    gen_version="label_run_correction_v1",
+    seed=0x1AB0_0807,
+    id_prefix="lr",
+    crop_ss=SITTING_CROP_SS,
+    max_rows=500,
+    correction=True,
+    buckets=LABEL_RUN_BUCKETS,
+    no_pad=lambda r: str(r.get("partition") or "").startswith("julia:multibrot"),
+    no_pad_rule=(
+        "julia:multibrot{3,4,5} rows may fill the cross-partition class-4 slice's own 50, "
+        "and may never pad another bucket's shortfall. They are the cheapest partitions to "
+        "mine and the most abundant in both legs' residue (2,600 of the union's 5,718 rows "
+        "at rehearsal), so 'fill from the next-scarcest bucket' measured on absolute supply "
+        "reaches them almost immediately — the first bounded end-to-end put 244 of them onto "
+        "a page whose three short buckets were mandelbrot, julia:mandelbrot and phoenix. "
+        "Matt, prompt-label-run.md Part 3: 'never pad with julia:multibrot bulk'."),
+    legs=(
+        SittingLeg(
+            batch_id="2026-08-07_label_run_correction_v1",
+            run_dir="data/discovery/label_run_20260807",
+            selection_role="label_run_ranked",
+            purpose=("The 2026-08-07 LABEL-COLLECTION run's record-and-rank residue. The run "
+                     "allocated against an EXPLICIT run-scoped currency-target vector "
+                     "(--currency-targets), not the standing release mix, so its partition "
+                     "mix is a per-run instrument and no share of it is a policy statement. "
+                     "TRAIN-side and BIASED more than once — the cheap v10 ordinal decided "
+                     "which candidates earned a canonical confirmation, the rank is built "
+                     "from those scores, and part of the supply was selected on "
+                     "view_screen.composite_v3 (--maneuver-view-prior). Served as a "
+                     "CORRECTION sheet, so every row also carries the head's own decode as a "
+                     "suggestion: no rate measured on it is a base rate, and the labels are "
+                     "anchored to the head as well as selected by it.")),
+        SittingLeg(
+            batch_id="2026-08-07_steady_state_v2_backfill_v1",
+            run_dir="data/discovery/steady_state_v2_20260807",
+            selection_role="steady_state_v2_backfill",
+            purpose=("BACKFILL ONLY. steady_state_v2_20260807's 1,544-row ranked residue, "
+                     "declared second so `draw_buckets` reaches it only in a (bucket, cell) "
+                     "where the label run itself ran short. Same generation method and the "
+                     "same bias argument as the first leg; it is a separate registration "
+                     "because it is a separate run, and its per-bucket contribution is "
+                     "recorded in `sitting_cut.buckets[*].by_leg` rather than inferred.")),
+    ),
+)
+
+SITTINGS = {s.name: s for s in (V2_SITTING, STEADY_STATE_SITTING, LABEL_RUN_SITTING)}
 
 
 def _spec(args) -> SittingSpec:
@@ -905,6 +1205,79 @@ def _provenance(r: dict, cc, spec: SittingSpec, leg: SittingLeg) -> dict:
                                stratum=str(cell_of(r)), **fields)
 
 
+def head_pred(r: dict) -> float | None:
+    """The head's CONTINUOUS readout for one row, on the 1..K tier scale.
+
+    `canon_eord` is `model.score_from_logits` = sum of the CORN marginals in [0, K-1]; the
+    served `pred` is `1 + eord` so it is denominated in the same units as the tier a human is
+    about to press, which is what makes a sorted correction sheet readable as a quality ramp.
+    Same convention as the mining sheet (`build_mining_sheet`), not a second one.
+
+    None when the row never earned a canonical decode. Such a row cannot be pre-labelled, so
+    it must not be ORDERED as if it had been either — `stamp_correction` sorts it last rather
+    than letting a defaulted 0 put it at the good end of the page."""
+    e = r.get("canon_eord")
+    return (1.0 + float(e)) if e is not None else None
+
+
+def suggested_tier(r: dict) -> int | None:
+    """The head's own decode, served as the PREFILLED suggestion.
+
+    Taken straight from the record — no quantile mapping, unlike the mining sheet, and the
+    difference is that this head already emits a class. `reframe_decoded` wins when present:
+    the reframe is the decode of the frame the row would actually be SHOWN in, so it is the
+    verdict that matches the crop under the suggestion.
+
+    A SUGGESTION IS NOT A LABEL. `label.score` stays null on every row; the rig holds the
+    suggestion in a separate map and exports only what Matt actually pressed."""
+    for k in ("reframe_decoded", "canon_decoded"):
+        v = r.get(k)
+        if v is not None:
+            return int(v)
+    return None
+
+
+def stamp_correction(rows: list[dict]) -> dict:
+    """Add `pred` / `suggested_tier` / `sheet_order` to a correction sheet's served rows.
+
+    ORDER IS GOOD -> BAD on the continuous score, descending, ties on `image_id`, and it is
+    stamped in the FILE rather than derived in the browser: `wallpaper_label.html?order=file`
+    honours a contiguous `sheet_order` and derives nothing, so the order is reproducible from
+    the artifact and auditable later instead of being a sort the page happens to perform. Two
+    owners for one decision is the failure that convention avoids.
+
+    Rows with no canonical decode sort LAST and carry `suggested_tier: null`. The rig shows
+    them unprefilled, which is the honest presentation — a row the head never judged has no
+    suggestion to correct.
+
+    These three keys sit beside `render`/`provenance`/`label` rather than inside them: the
+    classifier reads only `render` (CLAUDE.md, the label-corpus contract), so a presentation
+    column here cannot reach training, and `provenance` is dropped wholesale by any blind
+    sheet — which a correction sheet is not, but the next sitting off these batches may be."""
+    for r in rows:
+        r["pred"] = r.pop("_pred", None)
+        r["suggested_tier"] = r.pop("_sugg", None)
+    rows.sort(key=lambda r: (r["pred"] is None,
+                             -(r["pred"] if r["pred"] is not None else 0.0),
+                             r["image_id"]))
+    for i, r in enumerate(rows):
+        r["sheet_order"] = i
+    assert [r["sheet_order"] for r in rows] == list(range(len(rows))), "sheet_order not contiguous"
+    have = [r for r in rows if r["pred"] is not None]
+    return dict(
+        order="sheet_order — DESCENDING pred (good -> bad), ties on image_id; rows with no "
+              "canonical decode sort last and carry no suggestion",
+        pred="1 + canon_eord (sum of the v10 CORN marginals), the 1..K tier scale",
+        suggestion="reframe_decoded if present else canon_decoded — the head's own class, "
+                   "NOT a quantile mapping. label.score stays null on every row.",
+        served_via=("tools/viz/wallpaper_label.html?corpus=label_corpus&batch=<ids>&tiers=4"
+                    "&order=file — CORRECTION mode is auto-detected from suggested_tier"),
+        n_with_pred=len(have), n_without_pred=len(rows) - len(have),
+        pred_range=([round(have[0]["pred"], 4), round(have[-1]["pred"], 4)] if have else None),
+        suggested_tier_hist=dict(sorted(Counter(
+            r["suggested_tier"] for r in rows).items(), key=lambda kv: str(kv[0]))))
+
+
 def check_registrations(spec: SittingSpec) -> dict:
     """EVERY leg registered EXPLICITLY, before anything is built.
 
@@ -985,7 +1358,9 @@ def stage_draw(args) -> int:
     res = cut_sitting(rows, max_rows=max_rows,
                       embed=make_embedder(Path(paths.scratch("sitting_cutter", "fields")),
                                           embed_limit, cache),
-                      progress=lambda d: print(json.dumps(d), flush=True))
+                      progress=lambda d: print(json.dumps(d), flush=True),
+                      buckets=(spec.buckets or None), leg_rank=spec.leg_rank,
+                      no_pad=spec.no_pad)
     cut_wall = time.time() - t0
     cache_rep = cache.report()
     cache.close()
@@ -1006,14 +1381,25 @@ def stage_draw(args) -> int:
     bq._PHOENIX_POOL_CACHE.update(bq._phoenix_points())
     names = BMB._palette_names()
     by_leg: dict = defaultdict(list)
+    built: list = []
     for r in sitting:
         leg = spec.leg(r.get("_leg") or spec.legs[0].batch_id)
         r["_palette"] = names[BMB._stable_seed(r["image_id"]) % len(names)]
         render = bq._render_block(r)
         render["ss"] = spec.crop_ss         # the recorded deviation; see SITTING_CROP_SS
-        by_leg[leg.batch_id].append(
-            cc.make_row(r["image_id"], render, _provenance(r, cc, spec, leg),
-                        cc.label_block()))
+        row = cc.make_row(r["image_id"], render, _provenance(r, cc, spec, leg),
+                          cc.label_block())
+        if spec.correction:
+            row["_pred"], row["_sugg"] = head_pred(r), suggested_tier(r)
+        built.append(row)
+        by_leg[leg.batch_id].append(row)
+
+    # The sheet spans every leg, so `sheet_order` is stamped over the UNION and is contiguous
+    # across the batches the rig loads together (`?batch=id1,id2`). A per-leg stamp would
+    # restart at 0 in the second file and the page would interleave two ramps.
+    correction_rep = stamp_correction(built) if spec.correction else None
+    if correction_rep:
+        print(f"[correction] {json.dumps(correction_rep)}", flush=True)
 
     cut = res["report"]
     # The cut is ONE event over the union, so every leg's batch.json carries the SAME cut
@@ -1029,6 +1415,11 @@ def stage_draw(args) -> int:
         max_rows=max_rows, queue=qrep,
         n_in=cut["n_in"], n_sitting=cut["n_sitting"], n_over_cap=cut["n_over_cap"],
         stages=cut["stages"], cells=cut["cells"], balances=cut["balances"],
+        # THE BUCKET APPORTIONMENT — targets, what each bucket actually got, every shortfall
+        # and every re-deal, plus the per-bucket leg split that says how much of it is
+        # backfill. None on a reservation-drawn sitting.
+        buckets=cut["buckets"],
+        correction=correction_rep,
         # WHICH RESERVATIONS WERE ACTIVE AND WHAT EACH ACTUALLY GOT. A reservation that
         # went unfilled for lack of supply records its shortfall here; the sitting was
         # filled from elsewhere, so the only trace it ever existed is this block.
@@ -1052,10 +1443,18 @@ def stage_draw(args) -> int:
             presentation_seed=spec.seed,
             vivid_companion=BMB.VIVID_PALETTE,
             served_manifest=None,
-            served_via=(f"a PRESENTATION SHEET, not this directory: "
-                        f"build_combined_label_sheet.py --spec {spec.name}. This batch holds "
-                        f"the rows and the provenance; the sheet holds the blind order the "
-                        f"labeler sees, and the single export routes back here."),
+            served_via=(
+                # DERIVED from the spec, so the two serving paths cannot be described by the
+                # wrong one: a correction sitting has no blind sheet to point at.
+                f"THIS DIRECTORY, as a CORRECTION sheet: {spec.serve_url()} . Rows carry the "
+                f"head's own decode as `suggested_tier` and a contiguous `sheet_order` "
+                f"(descending `pred`, good -> bad); `label.score` is null on every one and "
+                f"the merge refuses to read the suggestion."
+                if spec.correction else
+                f"a PRESENTATION SHEET, not this directory: "
+                f"build_combined_label_sheet.py --spec {spec.name}. This batch holds "
+                f"the rows and the provenance; the sheet holds the blind order the "
+                f"labeler sees, and the single export routes back here."),
             queued_for_labeling=False,
             purpose=leg.purpose,
             counts=dict(total=len(full),
@@ -1249,7 +1648,9 @@ def main():
                    help="a SINGLE run's record store. Omit and pass --sitting to dry-run the "
                         "declared spec's whole union.")
     d.add_argument("--sitting", choices=sorted(SITTINGS), default=None)
-    d.add_argument("--max-rows", type=int, default=MAX_ROWS)
+    # None => the SPEC's cap (or MAX_ROWS for a bare --run-dir). A hardcoded 1000 default made
+    # the rehearsal cut a different page size from the draw it rehearses.
+    d.add_argument("--max-rows", type=int, default=None)
     d.add_argument("--embed-limit", type=int, default=None,
                    help="bound the morph pass. The unembedded remainder is counted as "
                         "budget_not_reached, never silently dropped.")
@@ -1290,17 +1691,28 @@ def main():
     cc.set_below_normal_priority()
     if not a.run_dir and not a.sitting:
         raise SystemExit("dry-run needs --run-dir (one run) or --sitting (a declared union)")
+    # THE DRY RUN MUST CUT THE SAME WAY THE DRAW DOES. A rehearsal that took the balanced
+    # path while `draw` took the bucketed one would report an apportionment nobody is about to
+    # build — the bounded end-to-end exists to be the same path, cheaply, or it is not one
+    # (`CLAUDE.md`: give a long path a bounded end-to-end). `--run-dir` names a single run and
+    # no spec, so it has no buckets and no leg order to honour, and keeps the balanced draw.
+    spec = None
     if a.run_dir:
         rows, qrep = load_queue(a.run_dir), dict(source="--run-dir", run_dir=str(a.run_dir))
     else:
-        rows, qrep = load_union_queue(SITTINGS[a.sitting])
+        spec = SITTINGS[a.sitting]
+        rows, qrep = load_union_queue(spec)
         qrep["source"] = f"--sitting {a.sitting}"
+    max_rows = a.max_rows or (spec.max_rows if spec else MAX_ROWS)
     scratch = Path(paths.scratch("sitting_cutter", "fields"))
     cache = None if a.no_cache else mec.MorphEmbedCache().open()
     t0 = time.time()
-    res = cut_sitting(rows, max_rows=a.max_rows,
+    res = cut_sitting(rows, max_rows=max_rows,
                       embed=make_embedder(scratch, a.embed_limit, cache),
-                      progress=lambda d: print(json.dumps(d), flush=True))
+                      progress=lambda d: print(json.dumps(d), flush=True),
+                      buckets=((spec.buckets or None) if spec else None),
+                      leg_rank=(spec.leg_rank if spec else None),
+                      no_pad=(spec.no_pad if spec else None))
     elapsed = time.time() - t0
     rep = res["report"]
     rep["queue"] = qrep
