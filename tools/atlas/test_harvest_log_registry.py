@@ -29,6 +29,7 @@ import deficit_scheduler as D                    # noqa: E402
 import discovery_sinks                           # noqa: E402
 import harvest_log_registry as H                 # noqa: E402
 import tau_h_rederive as T                       # noqa: E402
+from tools import run_record                     # noqa: E402
 from tools import paths as _paths                # noqa: E402
 
 
@@ -76,7 +77,16 @@ def test_every_pinned_run_resolves_and_discovery_is_not_vacuous():
         "discovery found nothing beyond the pinned set — either the store moved or this is "
         "the hand list again with extra steps")
     for r in runs:
-        assert r.log.name == H.LOG_NAME and r.log.exists()
+        # `r.log` is the LOGICAL stream path, which is what readers hand to run_record —
+        # NOT a promise that a plain `harvest_log.jsonl` is on disk. A finalized run has
+        # only `harvest_log.000.jsonl.gz` (SegmentWriter.finalize), so `Path.exists()` here
+        # went red the first time a segmented run finished, on a healthy registry that was
+        # already resolving it correctly. Assert the STREAM has rows, which is the property
+        # the derivation actually depends on and the one that holds in either layout.
+        assert r.log.name == H.LOG_NAME
+        assert run_record.exists(r.log), (
+            f"{r.name}: no rows under either layout at {r.log} — a discovered run whose "
+            f"stream is empty would silently shrink the derivation population")
 
 
 def test_a_production_run_lands_in_a_registered_store():
