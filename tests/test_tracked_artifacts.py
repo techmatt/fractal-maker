@@ -180,10 +180,12 @@ TRACKED_CANARIES = [
     # them now would take the last recoverable thing about the first mining corpus.
     "labels/render_mode_pilot_v1.json",           # 500 tiers (2026-07-10 pilot)
     "labels/render_mode_scale_v1.json",           # 1,000 tiers (2026-07-11 scale batch)
-    # NOT YET PRESENT: labels/render_mode_fresh_sheet_v1.json — the 2026-08-06 correction
-    # sheet's sidecar, written by merge_sitting once Matt's pass lands. Add it here in the
-    # same commit as the merge; a path that does not exist cannot be canaried, and this
-    # comment is the reminder rather than a skip that would pass on the absence.
+    # The 2026-08-06 correction sheet's sidecar (960 tiers), written by merge_sitting. Unlike
+    # the two above its ids DO still dereference — the rebuilt corpus batch under
+    # data/render_mode_corpus/batches/2026-08-06_render_mode_fresh_sheet_v1/ is tracked — but
+    # the tiers themselves have no producer, and they are what the mining head's adoption
+    # decision and the 0.50 release floor were graded against.
+    "labels/render_mode_fresh_sheet_v1.json",     # 960 tiers (2026-08-06 correction sheet)
     # Live trained heads carried over in the fractal-maker migration (2026-07-24).
     # Same rationale as the classifier weights: trained .pt, not GPU-reproducible, no
     # rebuild path. Only the LATEST canonical weight of each is kept (no v1/v2 history,
@@ -212,6 +214,18 @@ TRACKED_CANARIES = [
     # relationally instead, by `test_v8_durable_declared_paths_tracked` below. See that
     # section's rationale: build artifacts are rebuilt periodically, and a static list that
     # has to be deleted and re-added around every rebuild spends half its life off.
+    # The emission gate/release decision records — the ONE artifact of a stage-2 run that is
+    # not under `--out` (i.e. not under scratch/). Unregenerable in the strictest sense the
+    # list has: the pool and the population each decision was taken against die with the run's
+    # scratch dir, so a re-run does not rebuild these rows, it writes different ones against a
+    # different pool. This is the shape that already lost campaign-2's whole emission stage and
+    # data/emission/campaign1/intake.json — declared durable, negated by `!/data/emission/`,
+    # and simply never committed, which is a declaration that never binds. The relational
+    # guard below covers files a FUTURE run adds; these three are the static half (a glob
+    # cannot detect a file that is already gone).
+    "data/emission/release_records/emission_diversity_v1.jsonl",        # 302 decisions
+    "data/emission/release_records/emission_diversity_v1__runs.jsonl",  # the per-run population
+    "data/emission/mining_gate_reports/emission_diversity_v1.jsonl",    # 240 gate verdicts
     # The prospect location library. Both are unregenerable: morph_v6 has no
     # producer and the CLIP arrays only regenerate value-approximate under a
     # verdict-sensitive threshold. (.gitignore negates these two exact paths; the
@@ -249,6 +263,63 @@ def test_canary_tracked(path):
         f"This file has no regeneration path. Check for a .gitignore rule that "
         f"swept it, or a deletion — do NOT delete it from the canary list to "
         f"make this green."
+    )
+
+
+# --------------------------------------------------------------------------- #
+# The emission record stores — guarded RELATIONALLY as well as by literal path.
+#
+# The static entries above guard DE-TRACKING of the three files that exist today. They cannot
+# guard the failure that actually happened: a run wrote its records, they landed at a durable
+# (negated, trackable) path, and nobody added them — so they sat untracked and invisible until
+# a census went looking. Nothing was red, because a file that was never added breaks nothing.
+#
+# Both stores are keyed by SITE (`<site>.jsonl`, plus `<site>__runs.jsonl` for releases), so a
+# new emission site is a new file, not a new row — and a static list would be blind to it by
+# construction. So the invariant is expressed against the directories:
+#
+#     every file present in an emission record store must be git-tracked.
+#
+# `emission_sinks` is what makes this safe to assert: a smoke/throwaway run physically cannot
+# name a path under data/ (it resolves an ephemeral record root under scratch/ and
+# `assert_isolated` fails closed), so anything that reaches these directories is by
+# construction a production record — the class the store exists to keep.
+# --------------------------------------------------------------------------- #
+EMISSION_RECORD_DIRS = [
+    "data/emission/release_records",
+    "data/emission/mining_gate_reports",
+]
+
+
+def _present_files(rel_dir: str) -> list[str]:
+    d = REPO_ROOT / rel_dir
+    return sorted(f"{rel_dir}/{p.name}" for p in d.iterdir() if p.is_file()) if d.is_dir() else []
+
+
+@pytest.mark.parametrize("rel_dir", EMISSION_RECORD_DIRS)
+def test_emission_record_store_populated(rel_dir):
+    """Guard the guard: an empty store makes the per-file assertion below vacuous, and an
+    empty store is itself the reportable state — these records only ever accumulate, so the
+    directory going empty means a deletion, not a quiet run."""
+    assert _present_files(rel_dir), (
+        f"{rel_dir}/ holds no files. These stores are append-only across runs and were "
+        f"populated by the 2026-08-06 post-flip run, so an empty store is a deletion — and it "
+        f"leaves the per-file tracking assertion below with nothing to assert."
+    )
+
+
+@pytest.mark.parametrize(
+    "rel", [p for d in EMISSION_RECORD_DIRS for p in _present_files(d)]
+)
+def test_emission_record_file_tracked(rel):
+    tracked, stderr = _git_tracked(rel)
+    assert tracked, (
+        f"CANARY TRIPPED: an emission record file is present but NOT git-tracked:\n"
+        f"    {rel}\n"
+        f"git: {stderr}\n"
+        f"This is a durable decision record — the pool and population it was taken against "
+        f"live under the run's scratch/ dir and are already gone, so it has no rebuild path. "
+        f"`git add` it; do not delete it to go green."
     )
 
 

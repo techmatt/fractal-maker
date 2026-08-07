@@ -86,12 +86,19 @@ REGISTRY = [
      "MISMATCH (realized). Same as above: declared durable, never committed, gone."),
     ("data/emission/release_records/*.jsonl", "tools/emission/release_record.py", DUR,
      "NOTHING — the pool a release decision was taken against dies with --out", Y,
-     "Class correct; zero artifacts present. Nothing has been written here yet — worth "
-     "knowing the durable slot is empty, not worth calling a misclassification."),
+     "OK as of 2026-08-06. The slot stopped being empty: the post-flip run wrote 302 "
+     "decisions + 1 population row, and they are now COMMITTED. Until that add they were the "
+     "exact shape that lost campaign1/intake.json — declared durable at a negated path and "
+     "untracked, where the declaration reads as coverage and binds nothing. Both stores are "
+     "keyed by SITE, so a future run's file is a new PATH: covered by the relational half of "
+     "tests/test_tracked_artifacts.py (every file present in the store must be tracked), not "
+     "by the static canary list, which by construction cannot name a file that does not "
+     "exist yet."),
     ("data/emission/mining_gate_reports/*.jsonl", "tools/mining/gate_report.py", DUR,
      "NOTHING — a would-cut log paired with the realized selections of one run", Y,
-     "Class correct (this is one of the two that surfaced and was fixed); zero artifacts "
-     "present. Declared durable, never populated."),
+     "OK as of 2026-08-06 (this is one of the two that surfaced and was fixed). Same story "
+     "as the row above: 240 gate verdicts from the post-flip run, untracked until now, "
+     "committed and covered by the same relational guard."),
 
     # ---------------- classifier training population + weights --------------------
     ("data/v7/manifest.jsonl", "tools/v7/build_manifest.py", UND,
