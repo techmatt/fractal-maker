@@ -167,12 +167,22 @@ def floor_vs_deficit(summary: dict) -> dict:
         return dict(verdict="ABSENT")
     f = q["floor_vs_deficit"]
     alloc = q["allocation"]
+    # The UNSPENT-FLOOR alarm (2026-08-07). Absent from every summary written before that
+    # date, which is a fact about the RECORD and not a clean run — so it reads as None and is
+    # labelled, the same way `price_aggregate` is in `cost_to_mine` below.
+    uf = q.get("unspent_floor")
+    alarms = None if uf is None else uf.get("alarms", [])
     return dict(floor_min=f["floor_min"], deficit_min=f["deficit_min"],
                 floor_share=f["floor_share"], deficit_share=f["deficit_share"],
                 floored_partitions=alloc["floored"],
                 intended_floor_claim=alloc["floor_share_total"],
                 per_partition=f["per_partition"],
-                verdict=("OK" if f["floor_min"] is not None else "ABSENT"))
+                unspent_floor=uf,
+                unspent_floor_partitions=alarms,
+                unspent_floor_source=("summary.pop_quota.unspent_floor" if uf is not None
+                                      else "not recorded (run pre-dates 2026-08-07)"),
+                verdict=("ABSENT" if f["floor_min"] is None else
+                         ("UNSPENT FLOOR" if alarms else "OK")))
 
 
 def view_screen(summary: dict) -> dict:
@@ -335,6 +345,20 @@ def main():
             print(f"L1 gap vs EFFECTIVE intent = {m['l1_gap_effective']:.3f}  -> "
                   f"{m['verdict_effective']}   <-- THE HEADLINE (what the pop acted on)",
                   file=sys.stderr)
+    fvd = rep["floor_vs_deficit"]
+    uf = fvd.get("unspent_floor")
+    if fvd.get("unspent_floor_partitions"):
+        print(f"\n!! UNSPENT FLOOR -> {fvd['verdict']}: "
+              f"{', '.join(fvd['unspent_floor_partitions'])} spent <= "
+              f"{(1 - uf['threshold']):.0%} of the {uf['allocated_min_per_partition']:.1f} "
+              f"floor minutes each was allocated", file=sys.stderr)
+        for p in fvd["unspent_floor_partitions"]:
+            d = uf["per_partition"][p]
+            print(f"   {p:22s} spent {d['spent_min']:7.2f}m  servable "
+                  f"{d['servable_min']:7.1f}m ({d['servable_frac']:.0%} of the run)",
+                  file=sys.stderr)
+    elif uf is None:
+        print(f"\nunspent-floor alarm: {fvd['unspent_floor_source']}", file=sys.stderr)
 
 
 if __name__ == "__main__":

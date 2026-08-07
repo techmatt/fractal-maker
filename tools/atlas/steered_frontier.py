@@ -4318,6 +4318,21 @@ class SteeredFrontier:
             # this run's equivalent number is the first thing in its own summary.
             summary["realized_vs_intended"] = summary["pop_quota"]["mix"]
             summary["floor_vs_deficit"] = summary["pop_quota"]["floor_vs_deficit"]
+            # THE UNSPENT-FLOOR ALARM, lifted to a screaming top-level key on the same idiom
+            # as UNSEEDED_RUN. run 2 allocated julia:mandelbrot 17.8 floor minutes against a
+            # full queue and spent 0.0 of them; that was recoverable only by reading a 361-row
+            # trace, and a run whose floor never bought anything must say so in its own summary.
+            uf = summary["pop_quota"]["unspent_floor"]
+            if uf.get("alarms"):
+                summary["UNSPENT_FLOOR_PARTITIONS"] = dict(
+                    partitions=uf["alarms"], threshold=uf["threshold"],
+                    allocated_min_per_partition=uf["allocated_min_per_partition"],
+                    detail={p: uf["per_partition"][p] for p in uf["alarms"]},
+                    why=("these partitions were ALLOCATED floor minutes and spent <= "
+                         f"{(1 - uf['threshold']):.0%} of them. `servable_min` says which "
+                         "kind of failure it is: near the run's total_min means the pop rule "
+                         "declined to serve a partition it could have, near zero means "
+                         "nothing could feed it (see refill_deferred_partitions)."))
         vf = self.finalize_view_fields()
         summary["maneuvers"] = self.maneuver_summary()
         if vf:
@@ -4392,6 +4407,21 @@ class SteeredFrontier:
             f = q["floor_vs_deficit"]
             print(f"    floor {f['floor_min']:.1f}m ({f['floor_share']}) vs deficit "
                   f"{f['deficit_min']:.1f}m ({f['deficit_share']})")
+            uf = q["unspent_floor"]
+            if uf.get("alarms"):
+                print(f"    !! UNSPENT FLOOR: {len(uf['alarms'])} partition(s) spent <= "
+                      f"{(1 - uf['threshold']):.0%} of the "
+                      f"{uf['allocated_min_per_partition']:.1f} floor minutes allocated "
+                      f"to them")
+                for p in uf["alarms"]:
+                    d = uf["per_partition"][p]
+                    print(f"       {p:20s} spent {d['spent_min']:7.2f}m of "
+                          f"{d['allocated_min']:.1f}m  (servable {d['servable_min']:.1f}m = "
+                          f"{d['servable_frac']:.0%} of the run)")
+            else:
+                print(f"    unspent-floor alarm: none "
+                      f"(floor {uf['allocated_min_per_partition']:.1f}m/partition, "
+                      f"carry trigger {uf['trigger_min']:.2f}m)")
             print(f"    price={q['cost']['price']} clamped={q['cost']['clamped']} "
                   f"capped={q['cost']['capped']}\n    trace -> {self.quota.trace_path}")
         if self.scheduler is not None:

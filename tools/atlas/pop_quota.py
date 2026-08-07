@@ -74,6 +74,57 @@ julia hooks into the deficit partitions.
 
 Every allocation is stamped floor-driven or deficit-driven per partition, so the realized
 floor-vs-deficit split is a read rather than a reconstruction.
+
+THE FLOOR IS CARRIED, NOT RE-OFFERED EACH BATCH (fix, 2026-08-07)
+-----------------------------------------------------------------
+`steady_state_v2_20260807` allocated `julia:mandelbrot` its 5% floor in all 361 batches,
+against a queue pinned full at 209 nodes, and popped it **zero** times. `mandelbrot` took 1
+pop / 1.54 min and `phoenix` 1 pop / 0.37 min against a 17.8-minute floor each. All three
+starved partitions were the FLOORED ones and no deficit-driven partition starved, which is
+what says the defect belongs to the floor rather than to the price or the allocation.
+
+The mechanism is in `choose_partition`'s gap. It is `intended_p - realized_p/total`, and
+since `realized_p >= 0` that gap is **bounded above by `intended_p`** — 0.05 for a floored
+partition, forever. Six hours unserved leaves a floored partition at exactly the 0.05 it had
+at batch 1: nothing in the rule grows with time-unserved, so an unspent entitlement is
+re-offered each batch rather than accumulated. Meanwhile the effective vector is re-derived
+every pop, and `fold_julia_intent` keeps concentrating the twins' large intent onto whichever
+c-plane parent's queue happens to be empty, so SOME competitor presented a gap above 0.05 in
+359 of the 361 batches (median best-competitor gap 0.126, minimum 0.042). In the only two
+batches where none did — 30 and 31 — the three floored partitions tied at exactly 0.05 and
+the `(gap, p)` tie-break, max by NAME, handed those two pops to `phoenix` and `mandelbrot`;
+`julia:mandelbrot` sorts first of the three and took neither. That is the whole 0-pop story,
+and note that it is not about cost: an expensive partition is not what fails here, a
+non-accumulating claim is.
+
+So unspent floor entitlement is now CARRIED, in MINUTES, by `FloorLedger`. Each charged batch
+accrues `floor * minutes` to every partition that COULD have been popped for it (servable and
+not capped) and spends what the served partition actually took; the debt is
+`max(0, entitled - realized)`. When a servable partition's debt reaches one mean batch —
+`FLOOR_DEBT_TRIGGER_BATCHES` times the run's own `total_min / pops` — it preempts the
+share-gap argmax. The debt grows without bound while a batch's cost does not, so a floored
+partition is provably served **regardless of its per-pop cost**; an expensive one overshoots
+by at most one batch when it takes its turn. This is deficit round-robin's fairness bound, in
+Matt's minutes.
+
+THE BOUND IS EXACT AND COST-FREE, which is worth stating because it is the number to check a
+run against. For a partition servable throughout and served nothing, `debt = floor * T` and
+`trigger = T / pops`, so it comes due at `pops >= 1 / floor` — **batch 20 at the 5% floor**,
+whatever a batch costs, because both sides scale with the same `T`. Anything later than that
+means the partition was unservable, capped, or the floor is not what it says.
+
+IT STAYS A FLOOR, AND THE DENOMINATION IS WHY. The carry is in minutes, not in pops: a cheap
+partition triggers, takes its short batch, and repays only what it took, so it comes back for
+another turn sooner and converges on the same 5% of the CLOCK. Being cheap buys more pops and
+not more time, which is exactly what "floor of ~5% of total time" says. And entitlement
+accrues only over minutes in which the partition was servable — a partition nobody could feed
+does not bank a claim while it waits, then spend it in a burst when its queue refills.
+
+`unspent_floor()` is the observability half, and it is independent of the fix: any partition
+that spent <= 10% of the floor minutes ALLOCATED to it (`UNSPENT_FLOOR_ALARM`) is reported
+loud at end of run, beside the servable-minutes that say whether the rule refused to serve it
+or nothing could. Run 2's exact failure — 100% / 91.3% / 97.9% unspent on three partitions —
+is un-missable in a summary that carries this key.
 """
 from __future__ import annotations
 
@@ -103,6 +154,13 @@ PRICE_EMA = 0.30                         # weight on the newest per-unit sample
 PRICE_CLAMP = 4.0                        # price stays within [seed/4, seed*4]
 CAP_MINUTES = 25.0                       # dry-time before a partition is capped out of service
 JULIA_ROUTE_GAIN = 1.0                   # unservable julia intent folded into its c-plane parent
+# How much unspent floor entitlement, in MEAN BATCHES, preempts the share-gap argmax. One
+# mean batch is the weakest statement that makes the claim affordable — the accumulated
+# entitlement has literally bought a pop — and it is read from the run's own
+# `total_min / pops` rather than configured, so it tracks whatever a batch costs today.
+FLOOR_DEBT_TRIGGER_BATCHES = 1.0
+# A partition that spent <= 10% of the floor minutes allocated to it is reported LOUD.
+UNSPENT_FLOOR_ALARM = 0.90
 
 
 def is_julia(partition: str) -> bool:
@@ -599,21 +657,141 @@ class CostToMine:
 
 
 # ========================================================================== #
+# 3b. The floor's CARRY — unspent floor entitlement, in minutes, across batches.
+# ========================================================================== #
+@dataclass
+class FloorLedger:
+    """What the floor is OWED and what it has been PAID, per partition, in minutes.
+
+    The share-gap rule cannot hold a floor because its gap saturates at the intent (module
+    docstring, "THE FLOOR IS CARRIED"): a floored partition's claim is 0.05 at batch 1 and
+    0.05 at batch 361, whatever happened in between. This carries the claim instead.
+
+    ACCRUAL IS OVER SERVABLE MINUTES, NOT OVER THE CLOCK, and the difference is a failure mode
+    rather than a nicety. Entitlement banked while a partition's queue was empty is spent in a
+    burst the moment it refills — the run pays six hours of arrears at once to a partition that
+    could not have been served for any of them. `settle` is therefore handed the set the pop
+    could actually have CHOSEN from (servable, minus capped), so "unspent" only ever means
+    "the rule declined to serve it".
+
+    `realized_min` is NOT mirrored here. It lives in `QuotaState` and is passed in to `debts`:
+    a second copy of the spend is a second thing to keep in step, and the whole defect this
+    fixes is an entitlement and a spend that stopped being read together."""
+    floor: float = FLOOR_FRAC
+    external: set = field(default_factory=set)
+    trigger_batches: float = FLOOR_DEBT_TRIGGER_BATCHES
+    servable_min: dict = field(default_factory=dict)   # partition -> minutes it could have run
+    total_min: float = 0.0                             # the run's whole charged clock
+    pops: int = 0
+
+    def settle(self, candidates, minutes: float):
+        """One charged batch: the clock advances for everyone, the claim accrues for whoever
+        could have taken it. Called once per served batch from `PopQuota.charge`."""
+        minutes = float(minutes)
+        self.total_min += minutes
+        self.pops += 1
+        for p in candidates:
+            if p in self.external:
+                continue                                # no clock, therefore no claim
+            self.servable_min[p] = self.servable_min.get(p, 0.0) + minutes
+
+    def entitled(self) -> dict:
+        return {p: self.floor * m for p, m in self.servable_min.items()}
+
+    def trigger(self) -> float:
+        """The debt that buys a pop: `trigger_batches` x the run's own mean minutes/batch.
+
+        Zero before the first charge, which disables the carry for the first pop — there is
+        no measured batch cost yet, and the share-gap rule already opens correctly by serving
+        the largest intent."""
+        return (self.trigger_batches * self.total_min / self.pops) if self.pops else 0.0
+
+    def debts(self, realized_min: dict) -> dict:
+        """Unspent entitlement per partition. Clamped at zero: a floor is a claim, not a
+        balance a heavy partition can bank negative and later be charged for."""
+        return {p: max(0.0, e - float(realized_min.get(p, 0.0)))
+                for p, e in self.entitled().items()}
+
+    def unspent_floor(self, realized_min: dict, partitions: list[str],
+                      threshold: float = UNSPENT_FLOOR_ALARM) -> dict:
+        """THE ALARM, and it is deliberately measured against the ALLOCATED floor minutes
+        (`floor * total_min`) rather than against the servable-weighted entitlement the carry
+        uses. Those two answer different questions and the loud one must be the blunt one:
+        the allocation promised this partition 5% of the run's clock, and this is how much of
+        that promise the run kept. `servable_min` rides alongside so a reader can separate
+        "the rule never chose it" from "nothing could feed it" without opening the trace."""
+        allocated = self.floor * self.total_min
+        rows, alarms = {}, []
+        for p in partitions:
+            if p in self.external:
+                continue                                # allocated 0.0 on purpose; see allocate()
+            spent = float(realized_min.get(p, 0.0))
+            sm = float(self.servable_min.get(p, 0.0))
+            frac = (1.0 - spent / allocated) if allocated > 0 else None
+            rows[p] = dict(allocated_min=round(allocated, 3), spent_min=round(spent, 3),
+                           unspent_frac=(None if frac is None else round(max(0.0, frac), 4)),
+                           servable_min=round(sm, 2),
+                           servable_frac=(round(sm / self.total_min, 4)
+                                          if self.total_min > 0 else None),
+                           never_servable=(sm <= 0.0))
+            if frac is not None and frac >= threshold:
+                alarms.append(p)
+        return dict(threshold=threshold, floor=self.floor,
+                    allocated_min_per_partition=round(allocated, 3),
+                    total_min=round(self.total_min, 2), pops=self.pops,
+                    trigger_min=round(self.trigger(), 4),
+                    alarms=sorted(alarms), per_partition=rows)
+
+    def state_dict(self) -> dict:
+        return dict(floor=self.floor, trigger_batches=self.trigger_batches,
+                    external=sorted(self.external), servable_min=self.servable_min,
+                    total_min=self.total_min, pops=self.pops)
+
+    def load_state(self, d: dict):
+        self.servable_min.update({p: float(v)
+                                  for p, v in (d.get("servable_min") or {}).items()})
+        self.total_min = float(d.get("total_min", self.total_min))
+        self.pops = int(d.get("pops", self.pops))
+
+
+def floor_carry_pick(cand: list[str], floor_debt: dict | None,
+                     debt_trigger: float) -> str | None:
+    """The partition the FLOOR CARRY claims, or None — the most-owed candidate whose unspent
+    entitlement has reached one mean batch.
+
+    Named and pure so `choose_partition` and the trace's `via` stamp read the SAME rule
+    instead of one deriving what the other did (`derive state in code`, CLAUDE.md)."""
+    if not floor_debt or debt_trigger <= 0:
+        return None
+    owed = [p for p in cand if floor_debt.get(p, 0.0) >= debt_trigger]
+    return max(owed, key=lambda p: (floor_debt[p], p)) if owed else None
+
+
+# ========================================================================== #
 # 4. The pop decision — PURE, and it is the quota.
 # ========================================================================== #
 def choose_partition(intended: dict, realized_min: dict, servable: set,
-                     capped: set | None = None) -> str | None:
-    """Serve the servable partition furthest BELOW its intended share of realized time.
+                     capped: set | None = None, floor_debt: dict | None = None,
+                     debt_trigger: float = 0.0) -> str | None:
+    """Serve the floor's oldest unpaid claim if one has come due; otherwise the servable
+    partition furthest BELOW its intended share of realized time.
 
-    Pure, deterministic, and a function of (intended shares, realized minutes, servability)
-    ONLY — no per-node score, no p_good, no RNG. Determinism is the point: v1's stochastic
-    argmax could steer a mix but never converge one, and a quota that is allowed to be lucky
-    cannot be read as evidence about the allocator.
+    Pure, deterministic, and a function of (intended shares, realized minutes, servability,
+    the floor ledger) ONLY — no per-node score, no p_good, no RNG. Determinism is the point:
+    v1's stochastic argmax could steer a mix but never converge one, and a quota that is
+    allowed to be lucky cannot be read as evidence about the allocator.
 
-    The gap is measured in SHARE space (`intended - realized/total`) rather than in minutes,
-    so it is scale-free: the same decision is made in minute one and hour six. Before any time
-    has been spent the realized share is zero everywhere, so the first pop goes to the largest
-    intended share — which is correct, and is why there is no special case for it.
+    THE FLOOR CARRY COMES FIRST, and it has to, because the gap rule below cannot express it.
+    The gap is measured in SHARE space (`intended - realized/total`), which is scale-free —
+    the same decision in minute one and hour six — but scale-free is exactly what forgets: the
+    gap saturates at `intended_p`, so 0.05 is a floored partition's claim no matter how long
+    it has been starved. `floor_debt` (minutes, from `FloorLedger`) is the term that grows,
+    and `debt_trigger` is the point at which it has bought a pop. With no ledger passed this
+    is the pre-2026-08-07 rule verbatim.
+
+    Before any time has been spent the realized share is zero everywhere and the trigger is
+    zero, so the first pop goes to the largest intended share — which is correct, and is why
+    there is no special case for it.
 
     A capped partition is excluded but keeps its intent, so its unserved share shows up in the
     realized-vs-intended report as a miss with a named cause rather than quietly redistributing.
@@ -621,6 +799,9 @@ def choose_partition(intended: dict, realized_min: dict, servable: set,
     cand = sorted(p for p in servable if p not in (capped or set()))
     if not cand:
         return None
+    owed = floor_carry_pick(cand, floor_debt, debt_trigger)
+    if owed is not None:
+        return owed
     total = sum(max(0.0, v) for v in realized_min.values())
     def gap(p):
         got = (realized_min.get(p, 0.0) / total) if total > 0 else 0.0
@@ -699,6 +880,9 @@ class PopQuota:
         self.deficit = {p: max(0.0, self.target[p] - float(self.census.currency.get(p, 0.0)))
                         for p in self.partitions}
         self.cost = CostToMine(self.partitions, prices_config)
+        # The floor's CARRY. Constructed with the same `floor` and the same `external` set the
+        # allocation uses, so the claim it accumulates is exactly the claim `allocate` grants.
+        self.floor_ledger = FloorLedger(floor=self.floor, external=set(self.external))
         self.state = QuotaState(
             realized_min={p: 0.0 for p in self.partitions},
             realized_by_bucket={p: {"floor": 0.0, "deficit": 0.0} for p in self.partitions},
@@ -712,6 +896,12 @@ class PopQuota:
         self._last_alloc: Allocation | None = None
         self._last_eff: dict | None = None
         self._served: str | None = None
+        # The set the last pop could have chosen from, and the debts it saw. `_last_cands` is
+        # what the floor ledger accrues against on the matching `charge`, so entitlement is
+        # never banked over minutes in which the partition was unservable or capped.
+        self._last_cands: set = set()
+        self._last_debt: dict = {}
+        self._last_via: str | None = None
         # TIME-WEIGHTED MEAN EFFECTIVE INTENT, accumulated as the run goes.
         #
         # This is the vector the realized mix must actually be scored against, and leaving it
@@ -740,7 +930,13 @@ class PopQuota:
         eff = fold_julia_intent(alloc.share, queue_lens, self.partitions,
                                 self.julia_route_gain)
         self._last_eff = eff
-        part = choose_partition(eff, self.state.realized_min, servable, self.cost.capped)
+        self._last_cands = {p for p in servable if p not in self.cost.capped}
+        self._last_debt = self.floor_ledger.debts(self.state.realized_min)
+        trigger = self.floor_ledger.trigger()
+        claim = floor_carry_pick(sorted(self._last_cands), self._last_debt, trigger)
+        part = choose_partition(eff, self.state.realized_min, servable, self.cost.capped,
+                                floor_debt=self._last_debt, debt_trigger=trigger)
+        self._last_via = "floor_carry" if (claim is not None and part == claim) else "gap"
         self._served = part
         return part
 
@@ -772,6 +968,10 @@ class PopQuota:
             for p, v in self._last_eff.items():
                 self._eff_accum[p] = self._eff_accum.get(p, 0.0) + v * minutes
             self._eff_weight += minutes
+        # The floor's clock. Same once-per-served-batch hook as the price window, and for the
+        # same reason: a driver that charges is a driver that accrues, so "the floor accrues
+        # over the minutes the run actually spent" is structural rather than a convention.
+        self.floor_ledger.settle(self._last_cands, minutes)
         capped = self.cost.charge(partition, minutes)
         self.cost.end_window()
         return capped
@@ -841,10 +1041,22 @@ class PopQuota:
                     floor_share=(round(tf / tot, 4) if tot else None),
                     deficit_share=(round(td / tot, 4) if tot else None))
 
+    def unspent_floor(self, threshold: float = UNSPENT_FLOOR_ALARM) -> dict:
+        """Any partition whose ALLOCATED floor minutes went `threshold` unspent. The run-2
+        failure, made un-missable: `alarms` is the list a readout screams about."""
+        return self.floor_ledger.unspent_floor(self.state.realized_min, self.partitions,
+                                               threshold)
+
     def log_choice(self, batch: int, chosen: str | None, queue_lens: dict):
         alloc = self._last_alloc or self.allocation()
         rec = dict(batch=batch, chosen=chosen,
                    bucket=(alloc.bucket(chosen) if chosen else None),
+                   # WHICH RULE MADE THIS POP. The floor carry and the share gap are two
+                   # rules in one function, and a trace that shows only the winner cannot
+                   # say whether the floor is being held or is merely not being tested.
+                   via=self._last_via,
+                   floor_debt={p: round(v, 3) for p, v in sorted(self._last_debt.items())},
+                   floor_trigger_min=round(self.floor_ledger.trigger(), 4),
                    intended={p: round(alloc.share.get(p, 0.0), 4) for p in self.partitions},
                    # The vector the pop ACTED on, logged rather than left to be recomputed
                    # from `intended` + `queue_lens` by a reader who knows the fold rule.
@@ -865,6 +1077,7 @@ class PopQuota:
         return dict(partitions=self.partitions, floor=self.floor,
                     julia_route_gain=self.julia_route_gain,
                     deficit=self.deficit, cost=self.cost.state_dict(),
+                    floor_ledger=self.floor_ledger.state_dict(),
                     realized_min=self.state.realized_min,
                     realized_by_bucket=self.state.realized_by_bucket,
                     pops=self.state.pops, candidates=self.state.candidates,
@@ -885,6 +1098,10 @@ class PopQuota:
                                       for p, v in (d.get("candidates") or {}).items()})
         self.state.admitted.update({p: int(v) for p, v in (d.get("admitted") or {}).items()})
         self.cost.load_state(d.get("cost") or {})
+        # RESTORED, not re-derived: the servable-minute accrual is a fact about batches this
+        # process never saw, and a resumed run that reset it would re-offer the floor from
+        # scratch every session — a slower version of the defect the carry exists to fix.
+        self.floor_ledger.load_state(d.get("floor_ledger") or {})
         if reopen_caps:
             self.cost.reopen_caps()
 
@@ -899,6 +1116,7 @@ class PopQuota:
                     target_rule=TARGET_RULE,
                     allocation=alloc.summary(), cost=self.cost.summary(),
                     mix=self.mix_report(), floor_vs_deficit=self.floor_vs_deficit(),
+                    unspent_floor=self.unspent_floor(),
                     realized_min={p: round(v, 2) for p, v in self.state.realized_min.items()},
                     trace=str(self.trace_path))
 

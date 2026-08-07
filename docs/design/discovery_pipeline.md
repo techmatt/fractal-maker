@@ -230,6 +230,54 @@ and `root_draw_share` **0.0114** against its 0.25 cap; `wall_over_active` 1.02, 
 appeared at **b381**, and this run stopped at b76. The mechanism is exercised; it is not
 evidence about the regime it was written for. `[code: tools/atlas/steered_frontier.py::refill_starved]`
 
+### 3.4 The floor was allocated and never popped
+
+`[measured: data/discovery/steady_state_v2_20260807, 356.7 active min / 361 batches, 2026-08-07]`
+`[cmd: uv run python tools/atlas/harvest_v2_readout.py --run-dir <run>]`
+
+**A floored partition can be allocated its 5% in every batch and served in none of them.**
+`julia:mandelbrot` held effective intent 0.05 for all 361 batches against a queue pinned full
+at 209 nodes and took **zero** pops; `mandelbrot` took 1 pop / 1.54 min and `phoenix` 1 pop /
+0.37 min against a 17.8-minute floor each. All three starved partitions were the floored ones
+and no deficit-driven partition starved, which is what locates the defect in the floor rather
+than in the price or the allocation. Unlike arm B this is **not** empty queues — all three
+were servable in every batch.
+
+The mechanism is `choose_partition`'s gap, `intended_p − realized_p/total`. Since
+`realized_p ≥ 0` that gap is **bounded above by `intended_p`**, so a floored partition's claim
+is 0.05 at batch 1 and 0.05 at batch 361 no matter how long it starves — nothing in the rule
+grows with time-unserved, and an unspent entitlement is re-offered rather than accumulated.
+Meanwhile the effective vector is re-derived every pop and the julia fold keeps swinging the
+twins' large intent onto whichever c-plane parent is momentarily unservable, so some
+competitor presented a gap above 0.05 in **359 of 361 batches** (median best-competitor gap
+0.126, minimum 0.042). In the only two where none did — batches 30 and 31 — the three floored
+partitions tied at exactly 0.05 and the `(gap, p)` tie-break, max by NAME, gave those pops to
+`phoenix` and `mandelbrot`; `julia:mandelbrot` sorts first of the three and got neither.
+
+**The fix carries the claim** (`pop_quota.FloorLedger`). Each charged batch accrues
+`floor × minutes` to every partition that *could* have been popped for it and spends what the
+served one took; the debt is `max(0, entitled − realized)` and preempts the gap rule once it
+reaches one mean batch (`total_min / pops`, read from the run's own telemetry). The debt grows
+without bound while a batch's cost does not, so a floored partition is served **regardless of
+its per-pop cost** — deficit round-robin's fairness bound, in minutes. The bound is exact and
+cost-free: `debt = floor·T` and `trigger = T/pops` both scale with the same `T`, so a
+partition servable throughout comes due at `pops ≥ 1/floor` — **batch 20 at the 5% floor**,
+whatever a batch costs. Anything later means it was unservable, capped, or the floor is not
+what it says. Denomination is what
+keeps it a floor: a cheap partition triggers more often and repays less each time, so it takes
+more POPS and the same ~5% of the CLOCK (measured on the reproduction: 20.7% of pops, 4.97% of
+minutes). Entitlement accrues over **servable** minutes only, so a partition nobody could feed
+does not bank arrears and spend them in a burst when its queue refills.
+`[code: tools/atlas/test_pop_quota.py §4b — the carry-off arm starves forever, as the control]`
+
+**And the failure is now un-missable.** `summary.pop_quota.unspent_floor` names any partition
+that spent ≤10% of the floor minutes allocated to it, with `servable_min` beside the spend so
+"the rule declined to serve it" and "nothing could feed it" are separable without opening the
+trace; the alarm is lifted to a top-level `UNSPENT_FLOOR_PARTITIONS` key and printed loud by
+both the run's own readout and `harvest_v2_readout`. The quota trace additionally stamps
+`via` (`gap` / `floor_carry`) per pop, so a floor being HELD is distinguishable from one that
+is merely never tested.
+
 ## 4. τ_h on record — the real per-partition curve
 
 `τ_h` is the **per-partition cheap-`p_good` harvest cut**: cheap score ≥ `τ_h` → one

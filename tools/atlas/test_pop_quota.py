@@ -394,6 +394,239 @@ _QUEUE: dict = {}
 
 
 # =========================================================================== #
+# 4b. THE FLOOR CARRY. The property `steady_state_v2_20260807` failed.
+#
+# Run 2 held julia:mandelbrot's 5% floor for all 361 batches against a queue pinned full at
+# 209 nodes and popped it ZERO times (mandelbrot 1 pop / 1.54 min and phoenix 1 pop / 0.37 min
+# against a 17.8-minute floor each). The shape below is that run's, reduced to its mechanism:
+# a c-plane parent and a julia twin whose queue drains to empty on every service, so
+# `fold_julia_intent` keeps swinging the pair's whole intent onto whichever member is
+# momentarily unservable while the realized minutes stay SPLIT between the two. One of the
+# pair therefore always shows a gap above the floor, and a floored partition's own gap
+# saturates at 0.05 no matter how long it starves.
+#
+# `_run2_sim` is driven twice — carry off is the CONTROL and must starve forever
+# (`verification_practice.md` §3: the fixture has to be able to fail), carry on must serve.
+# =========================================================================== #
+_RUN2_INTENT = {"mandelbrot": 0.05, "julia:mandelbrot": 0.05,
+                "multibrot3": 0.30, "julia:multibrot3": 0.60}
+
+
+def _run2_sim(carry: bool, n_batches=400, cost=None, floor=0.05):
+    """The run-2 shape through the SHIPPED rules (`fold_julia_intent`, `choose_partition`,
+    `FloorLedger`). `julia:mandelbrot` holds a queue it can never exhaust and is never fed by
+    anyone, exactly as in the run. Returns `(pops, minute share, first batch served)`."""
+    parts = list(_RUN2_INTENT)
+    cost = cost or {p: 1.0 for p in parts}
+    queue = {"mandelbrot": 60, "julia:mandelbrot": 209, "multibrot3": 60,
+             "julia:multibrot3": 0}
+    realized = {p: 0.0 for p in parts}
+    pops = {p: 0 for p in parts}
+    first: dict = {}
+    led = pq.FloorLedger(floor=floor)
+    for b in range(n_batches):
+        servable = {p for p, k in queue.items() if k > 0}
+        eff = pq.fold_julia_intent(_RUN2_INTENT, queue, parts)
+        part = pq.choose_partition(
+            eff, realized, servable,
+            floor_debt=(led.debts(realized) if carry else None),
+            debt_trigger=(led.trigger() if carry else 0.0))
+        if part is None:
+            break
+        if part == "julia:multibrot3":
+            queue[part] = 0                      # the twin drains on service -> refolds
+        else:
+            queue[part] -= 1
+        if part == "multibrot3":                 # serving the parent manufactures one twin
+            queue["julia:multibrot3"] += 1
+            queue["multibrot3"] += 1
+        if part in ("mandelbrot", "julia:mandelbrot"):
+            queue[part] += 1                     # pinned full, as both were for all 361 batches
+        realized[part] += cost[part]
+        pops[part] += 1
+        first.setdefault(part, b)
+        led.settle(servable, cost[part])
+    tot = sum(realized.values())
+    return pops, {p: v / tot for p, v in realized.items()}, first
+
+
+def test_run2_a_floored_partition_with_a_full_queue_is_NEVER_served_without_the_carry():
+    """THE CONTROL, and it is the run-2 defect itself: zero pops, forever, on a partition
+    that was servable in every single batch. Without this arm the fixed arm below proves
+    nothing about the mechanism — a rule that served the floor anyway would pass it."""
+    pops, share, _first = _run2_sim(carry=False, n_batches=400)
+    assert pops["julia:mandelbrot"] == 0, pops
+    assert pops["mandelbrot"] == 0, pops
+    assert share["julia:mandelbrot"] == 0.0
+    # ... and it is not a slow start: the competitors have taken the whole run.
+    assert share["multibrot3"] + share["julia:multibrot3"] == pytest.approx(1.0)
+
+
+def test_the_floor_carry_serves_both_floored_partitions_within_a_bounded_number_of_batches():
+    """Carry on, same fixture. The bound is exact and cost-free: `debt = floor * T` and
+    `trigger = T / pops`, so a partition servable throughout comes due at `pops >= 1/floor`
+    = batch 20 at a 5% floor, whatever a batch costs. Both floored partitions must be served
+    by then plus one for the second of them — and the realized minute share must land ON the
+    floor, not above it."""
+    pops, share, first = _run2_sim(carry=True, n_batches=400)
+    assert first["julia:mandelbrot"] <= 21, first
+    assert first["mandelbrot"] <= 21, first
+    assert pops["julia:mandelbrot"] > 0 and pops["mandelbrot"] > 0
+    for p in ("julia:mandelbrot", "mandelbrot"):
+        assert abs(share[p] - 0.05) < 0.01, (p, share)
+
+
+def test_the_carry_is_in_MINUTES_so_a_cheap_floored_partition_gets_pops_not_time():
+    """"The floor stays a floor" is a claim about the CLOCK, and this is what enforces it.
+    A floored partition whose batches cost a fifth of the mean triggers five times as often
+    and repays a fifth as much each time, so it takes ~5x the POPS and the SAME minutes."""
+    cheap = {p: 1.0 for p in _RUN2_INTENT} | {"julia:mandelbrot": 0.2}
+    pops, share, _ = _run2_sim(carry=True, n_batches=3000, cost=cheap)
+    assert abs(share["julia:mandelbrot"] - 0.05) < 0.01, share
+    pop_share = pops["julia:mandelbrot"] / sum(pops.values())
+    assert pop_share > 4 * share["julia:mandelbrot"], (pop_share, share)
+
+
+def test_an_EXPENSIVE_floored_partition_is_served_regardless_of_its_per_pop_cost():
+    """The half of the fix the prompt's leading hypothesis was about: a partition whose batch
+    costs 5x the mean cannot be priced out of its floor, because the debt grows without bound
+    while a batch's cost does not. It overshoots by at most one batch when it takes its turn."""
+    dear = {p: 1.0 for p in _RUN2_INTENT} | {"julia:mandelbrot": 5.0}
+    pops, share, first = _run2_sim(carry=True, n_batches=3000, cost=dear)
+    # Same `pops >= 1/floor` bound as the flat-cost case, because both sides of the trigger
+    # scale with total minutes — a 5x batch does not buy a 5x wait.
+    assert pops["julia:mandelbrot"] > 0 and first["julia:mandelbrot"] <= 21, first
+    assert abs(share["julia:mandelbrot"] - 0.05) < 0.01, share
+
+
+def test_with_no_ledger_the_pop_rule_is_the_pre_carry_share_gap_verbatim():
+    """The carry is additive: pass no ledger and the shipped rule is the one every other
+    test in §3/§4 was written against."""
+    intended = {"a": 0.5, "b": 0.3, "c": 0.2}
+    realized = {"a": 50.0, "b": 10.0, "c": 0.0}
+    assert pq.choose_partition(intended, realized, {"a", "b", "c"}) == "c"
+    assert pq.choose_partition(intended, realized, {"a", "b", "c"},
+                               floor_debt={}, debt_trigger=0.0) == "c"
+    # a trigger of zero must not make every partition "owed" — a zero debt is not a claim.
+    assert pq.choose_partition(intended, realized, {"a", "b"},
+                               floor_debt={"a": 0.0, "b": 0.0}, debt_trigger=0.0) == "b"
+
+
+def test_the_carry_preempts_the_gap_only_once_the_debt_has_bought_a_batch():
+    cand = ["a", "b"]
+    assert pq.floor_carry_pick(cand, {"a": 0.9, "b": 0.0}, 1.0) is None    # not yet due
+    assert pq.floor_carry_pick(cand, {"a": 1.0, "b": 0.0}, 1.0) == "a"     # exactly due
+    assert pq.floor_carry_pick(cand, {"a": 3.0, "b": 9.0}, 1.0) == "b"     # most owed first
+    assert pq.floor_carry_pick(["a"], {"b": 9.0}, 1.0) is None             # not a candidate
+
+
+def test_entitlement_accrues_only_over_the_minutes_a_partition_COULD_have_been_served():
+    """A partition nobody could feed must not bank arrears and spend them in a burst when its
+    queue refills. `settle` is handed the set the pop could have chosen from, not everyone."""
+    led = pq.FloorLedger(floor=0.05)
+    for _ in range(100):
+        led.settle({"a"}, 1.0)                   # b unservable for the whole stretch
+    assert led.debts({"a": 0.0, "b": 0.0}) == {"a": pytest.approx(5.0)}
+    led.settle({"a", "b"}, 1.0)
+    assert led.debts({"a": 0.0, "b": 0.0})["b"] == pytest.approx(0.05)
+
+
+def test_an_externally_supplied_partition_banks_no_floor_claim():
+    """SKIP SITE 2's consequence: a partition the crawl cannot serve is allocated 0.0 on
+    purpose, so it must not accrue a claim it would later preempt with."""
+    led = pq.FloorLedger(floor=0.05, external={"ext"})
+    for _ in range(100):
+        led.settle({"a", "ext"}, 1.0)
+    assert "ext" not in led.debts({"a": 0.0, "ext": 0.0})
+    rep = led.unspent_floor({"a": 5.0, "ext": 0.0}, ["a", "ext"])
+    assert rep["alarms"] == [] and "ext" not in rep["per_partition"]
+
+
+# --------------------------------------------------------------------------- #
+# The OBSERVABILITY half — independent of the fix, and it must fire on run 2's numbers.
+# --------------------------------------------------------------------------- #
+def test_the_unspent_floor_alarm_fires_on_the_injected_run2_case():
+    """Run 2's own figures: 356.7 charged minutes, a 5% floor = 17.8 allocated minutes each,
+    against which julia:mandelbrot spent 0.00, mandelbrot 1.54 and phoenix 0.37. All three
+    must be named; multibrot4, which spent 112.15, must not be."""
+    led = pq.FloorLedger(floor=0.05)
+    parts = ["julia:mandelbrot", "mandelbrot", "phoenix", "multibrot4"]
+    for _ in range(361):
+        led.settle(set(parts), 356.7 / 361)
+    realized = {"julia:mandelbrot": 0.0, "mandelbrot": 1.54, "phoenix": 0.37,
+                "multibrot4": 112.15}
+    rep = led.unspent_floor(realized, parts)
+    assert rep["alarms"] == ["julia:mandelbrot", "mandelbrot", "phoenix"], rep["alarms"]
+    assert rep["allocated_min_per_partition"] == pytest.approx(17.835, abs=1e-3)
+    d = rep["per_partition"]["julia:mandelbrot"]
+    assert d["unspent_frac"] == pytest.approx(1.0)
+    # SERVABLE the whole run: that is what makes it the pop rule's failure and not the
+    # frontier's, and it is why the number is reported beside the spend.
+    assert d["servable_frac"] == pytest.approx(1.0) and d["never_servable"] is False
+    assert rep["per_partition"]["mandelbrot"]["unspent_frac"] == pytest.approx(0.9137, abs=1e-3)
+
+
+def test_the_unspent_floor_alarm_is_silent_when_the_floor_was_actually_spent():
+    """VACUITY GUARD: an alarm that cannot stay quiet is not an alarm."""
+    led = pq.FloorLedger(floor=0.05)
+    for _ in range(100):
+        led.settle({"a", "b"}, 1.0)
+    assert led.unspent_floor({"a": 5.0, "b": 95.0}, ["a", "b"])["alarms"] == []
+
+
+def test_the_alarm_separates_a_starved_partition_from_an_unfeedable_one():
+    """Both spend zero. `servable_min` is the only thing that tells them apart, so it rides
+    in the same row rather than in a different file."""
+    led = pq.FloorLedger(floor=0.05)
+    for _ in range(100):
+        led.settle({"served", "starved"}, 1.0)      # `dead` never servable
+    rep = led.unspent_floor({"served": 100.0, "starved": 0.0, "dead": 0.0},
+                            ["served", "starved", "dead"])
+    assert rep["alarms"] == ["dead", "starved"]
+    assert rep["per_partition"]["starved"]["never_servable"] is False
+    assert rep["per_partition"]["dead"]["never_servable"] is True
+
+
+def test_the_quota_reports_the_alarm_and_the_trace_says_which_rule_popped(tmp_path):
+    """End to end through `PopQuota`: the ledger accrues off `pick`/`charge`, the alarm lands
+    in `summary()`, and the trace stamps `via` so a reader can tell a floor that is being HELD
+    from one that is merely never tested."""
+    q = _quota(tmp_path, {"mandelbrot": 100.0, "julia:mandelbrot": 100.0,
+                          "multibrot3": 40.0, "julia:multibrot3": 0.0}, floor=0.05)
+    queue = {"mandelbrot": 60, "julia:mandelbrot": 209, "multibrot3": 60,
+             "julia:multibrot3": 0}
+    for i in range(200):
+        part = q.pick(dict(queue))
+        q.log_choice(i, part, dict(queue))
+        q.charge(part, 1.0)
+        queue["julia:multibrot3"] = 0 if part == "julia:multibrot3" else \
+            queue["julia:multibrot3"] + (1 if part == "multibrot3" else 0)
+    rows = run_record.read_rows(tmp_path / "quota_trace.jsonl")
+    assert {r["via"] for r in rows} == {"gap", "floor_carry"}
+    carried = [r for r in rows if r["via"] == "floor_carry"]
+    assert all(r["floor_debt"][r["chosen"]] >= r["floor_trigger_min"] for r in carried)
+    assert {r["chosen"] for r in carried} == {"mandelbrot", "julia:mandelbrot"}
+    s = q.summary()
+    assert s["unspent_floor"]["alarms"] == []          # the carry held both floors
+    assert q.state.pops["julia:mandelbrot"] > 0 and q.state.pops["mandelbrot"] > 0
+
+
+def test_the_floor_ledger_survives_a_resume(tmp_path):
+    """A resumed run that reset the ledger would re-offer the floor from scratch every
+    session — the same defect on a longer period."""
+    q = _quota(tmp_path, {"rich": 100.0, "poor": 0.0})
+    for _ in range(10):
+        q.charge(q.pick({"rich": 5, "poor": 5}), 1.0)
+    st = json.loads(json.dumps(q.state_dict()))
+    q2 = _quota(tmp_path, {"rich": 100.0, "poor": 0.0})
+    q2.load_state(st)
+    assert q2.floor_ledger.total_min == pytest.approx(q.floor_ledger.total_min)
+    assert q2.floor_ledger.pops == q.floor_ledger.pops
+    assert q2.floor_ledger.debts(q2.state.realized_min) == \
+        pytest.approx(q.floor_ledger.debts(q.state.realized_min))
+
+
+# =========================================================================== #
 # 5. price model
 # =========================================================================== #
 def test_price_is_minutes_per_currency_unit_and_a_class2_is_not_a_credit():
@@ -676,11 +909,17 @@ def test_log_choice_writes_intent_realized_and_bucket(tmp_path):
 # =========================================================================== #
 def test_no_p_good_or_classifier_score_reaches_the_pop_decision():
     """`deficit_scheduler.py`'s HARD SCOPE INVARIANT, re-asserted for the replacement: the
-    cross-partition choice is a function of intended shares and realized minutes only. Pinned
-    by signature so a later kwarg smuggling a score in is a red test, not a review miss."""
+    cross-partition choice is a function of intended shares, realized minutes and the floor
+    ledger only. Pinned by signature so a later kwarg smuggling a score in is a red test, not
+    a review miss. `floor_debt`/`debt_trigger` (2026-08-07) are MINUTES out of `FloorLedger`
+    and widen the pin deliberately — the invariant is that nothing per-node or per-image
+    arrives here, not that the signature never changes."""
     import inspect
     sig = inspect.signature(pq.choose_partition)
-    assert list(sig.parameters) == ["intended", "realized_min", "servable", "capped"]
+    assert list(sig.parameters) == ["intended", "realized_min", "servable", "capped",
+                                    "floor_debt", "debt_trigger"]
+    assert list(inspect.signature(pq.floor_carry_pick).parameters) == \
+        ["cand", "floor_debt", "debt_trigger"]
     # The DOCSTRING names the banned quantities on purpose (it explains why they are absent),
     # so the scan is over the code body only — a guard pinned to prose goes red when the
     # prose is corrected (`verification_practice.md` §6).
