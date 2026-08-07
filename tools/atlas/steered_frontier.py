@@ -1391,6 +1391,9 @@ class SteeredFrontier:
         # added here — this records the limitation at the flag rather than implementing it.
         check_wall_budget_supported(self.dive, getattr(args, "wall_budget", 0.0))
         self.wall_budget_s = float(getattr(args, "wall_budget", 0.0) or 0.0) * 60.0
+        # None => ROOT_DRAW_BUDGET_S (see `root_draw_budget_s`). Minutes on the flag, seconds here.
+        _rdb = getattr(args, "root_draw_budget", None)
+        self.root_draw_budget_override = float(_rdb) * 60.0 if _rdb else None
         self.wall_s_base = 0.0             # wall seconds spent by PREVIOUS sessions
         self._session_t0 = None
 
@@ -1709,11 +1712,18 @@ class SteeredFrontier:
         run has not started. Clamped so the backstop can never be longer than what is left of
         the run (the failure `unit_timeout_s` was written for), floored at
         `MIN_ROOT_DRAW_S` so a legitimately slow draw near the end is not shot for being slow.
-        No wall budget => the standing constant, which is still a bound where there was none."""
+        No wall budget => the standing constant, which is still a bound where there was none.
+
+        `--root-draw-budget` overrides the constant. It exists because 40 min is sized for an
+        overnight run and is NOT a bound at all for a run whose total commitment is a few
+        hours: a contended pre-loop draw can spend 40 min outside both caps and there is no
+        flag-reachable way to say otherwise. Default `None` => `ROOT_DRAW_BUDGET_S`, i.e. every
+        run that does not pass it is byte-identical."""
+        cap = float(getattr(self, "root_draw_budget_override", None) or ROOT_DRAW_BUDGET_S)
         if not self.wall_budget_s:
-            return float(ROOT_DRAW_BUDGET_S)
+            return cap
         remaining = max(0.0, self.wall_budget_s - self.wall_elapsed_s())
-        return float(min(ROOT_DRAW_BUDGET_S, max(MIN_ROOT_DRAW_S, remaining)))
+        return float(min(cap, max(MIN_ROOT_DRAW_S, remaining)))
 
     def draw_roots(self, only=None):
         """Draw a batch of native depth-1 seeds per family (q3-density rejection +
@@ -3539,6 +3549,14 @@ class SteeredFrontier:
             families=self.families, partitions=self.partitions,
             family_weights=self.family_weights,
             budget_min=self.budget_s / 60.0, wall_budget_min=self.wall_budget_s / 60.0,
+            # The CONFIGURED cap, not `root_draw_budget_s()`: run_config is the
+            # pre-registration, and that method returns the value already clamped to whatever
+            # wall happened to be left when it was called. (Calling it here also drags
+            # `wall_elapsed_s` into the dive path's static reachability, which
+            # `test_every_crawl_only_constructor_attribute_is_declared` correctly refuses.)
+            root_draw_budget_min=round(
+                float(getattr(self, "root_draw_budget_override", None)
+                      or ROOT_DRAW_BUDGET_S) / 60.0, 2),
             tau_h=self.tau_h, tau_rec=self.tau_rec,
             tau_h_uncalibrated=self.tau_h_uncalibrated,
             t_good={p: ps.t_good_for(p) for p in self.partitions},
@@ -4264,7 +4282,9 @@ class SteeredFrontier:
             pre_loop_draw_min=(round(self.pre_loop_draw_s / 60.0, 2)
                                if getattr(self, "pre_loop_draw_s", None) is not None
                                else None),
-            root_draw_budget_min=round(ROOT_DRAW_BUDGET_S / 60.0, 2),
+            root_draw_budget_min=round(
+                float(getattr(self, "root_draw_budget_override", None)
+                      or ROOT_DRAW_BUDGET_S) / 60.0, 2),
             # IN-LOOP root draws (global replenishment + per-partition refill), and the share
             # of loop wall they took. The share is the affordability bound's own utilisation:
             # a run that reports it pinned at the cap spent its whole allowance on refills and
@@ -4605,6 +4625,14 @@ def main():
                          "finish rule. CRAWL MODE ONLY: run_dive() has its own loop and "
                          "checks only --budget and the STOP sentinel, so passing this with "
                          "--dive is REFUSED rather than silently ignored.")
+    ap.add_argument("--root-draw-budget", type=float, default=None,
+                    help="wall bound in MINUTES for one draw_roots call, overriding the "
+                         f"{ROOT_DRAW_BUDGET_S // 60:.0f}-minute standing constant. The bound "
+                         "that matters is the PRE-LOOP draw's: it runs before either cap's "
+                         "clock starts, so it is spent whatever --budget/--wall-budget say, "
+                         "and the constant is sized for an overnight run. A run whose TOTAL "
+                         "commitment is a few hours should pass this. Default: the constant "
+                         "(byte-identical to not passing it).")
     ap.add_argument("--batch", type=int, default=0, help="nodes per batch (0 = default 32)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--lambda-m", type=float, default=LAMBDA_M_DEFAULT,

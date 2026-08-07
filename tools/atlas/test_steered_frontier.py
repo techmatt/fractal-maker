@@ -1225,6 +1225,59 @@ def test_the_root_draw_bound_is_clamped_to_the_REMAINING_wall_budget():
     assert sf.SteeredFrontier.root_draw_budget_s(stub) == float(sf.ROOT_DRAW_BUDGET_S)
 
 
+def test_root_draw_budget_flag_overrides_the_constant_and_still_clamps():
+    """`--root-draw-budget` is the only flag-reachable bound on the PRE-LOOP draw, which runs
+    outside both caps — so a run whose whole commitment is hours can say so. Three things have
+    to hold together: absent => byte-identical to the constant (the default is not a new
+    behaviour), present => it wins even with no wall budget (the pre-loop case, where
+    `wall_elapsed_s` is 0), and the remaining-wall clamp still outranks it (a smaller override
+    must not become a FLOOR)."""
+    import types
+
+    def mk(override_min, wall_budget_min=0.0, spent_min=0.0):
+        s = types.SimpleNamespace(
+            wall_budget_s=wall_budget_min * 60.0, wall_s_base=spent_min * 60.0,
+            _session_t0=None,
+            root_draw_budget_override=(override_min * 60.0 if override_min else None))
+        s.wall_elapsed_s = lambda: sf.SteeredFrontier.wall_elapsed_s(s)
+        return s
+
+    # absent => the constant, with and without a wall budget
+    assert sf.SteeredFrontier.root_draw_budget_s(mk(None)) == float(sf.ROOT_DRAW_BUDGET_S)
+    assert sf.SteeredFrontier.root_draw_budget_s(mk(None, 414)) == float(sf.ROOT_DRAW_BUDGET_S)
+
+    # present => wins, including with no wall budget at all (the pre-loop draw's own case)
+    assert sf.SteeredFrontier.root_draw_budget_s(mk(15)) == pytest.approx(15 * 60.0)
+    assert sf.SteeredFrontier.root_draw_budget_s(mk(15, 414)) == pytest.approx(15 * 60.0)
+
+    # the override is a CEILING, not a floor: 5 min of wall left beats a 15-min override
+    assert sf.SteeredFrontier.root_draw_budget_s(
+        mk(15, 414, 409)) == pytest.approx(5 * 60.0)
+    # ...and the MIN_ROOT_DRAW_S floor still applies underneath both
+    assert sf.SteeredFrontier.root_draw_budget_s(
+        mk(15, 414, 500)) == float(sf.MIN_ROOT_DRAW_S)
+
+    # an override LARGER than the constant is honoured too — this is a bound the caller sets,
+    # not a shrink-only knob, and a run that wants the overnight bound explicit can say it.
+    assert sf.SteeredFrontier.root_draw_budget_s(mk(90)) == pytest.approx(90 * 60.0)
+
+
+def test_root_draw_budget_flag_default_is_None_so_unpassed_runs_are_unchanged():
+    """The default must be `None`, not the constant: a numeric default would be baked into
+    every `run_config.json` as if the run had chosen it, and a later change to the constant
+    would silently stop reaching runs that never asked to opt out."""
+    import argparse
+    ap = sf.build_argparser() if hasattr(sf, "build_argparser") else None
+    if ap is None:                                    # parser built inline in main()
+        import inspect
+        src = inspect.getsource(sf)
+        assert '"--root-draw-budget", type=float, default=None' in src, \
+            "the flag must default to None so an unpassed run keeps the constant"
+        return
+    ns = ap.parse_args(["--run-dir", "x"])
+    assert ns.root_draw_budget is None
+
+
 def test_a_SLOW_draw_stops_drawing_families_and_SAYS_SO(monkeypatch, capsys):
     """The granularity a per-probe timeout cannot cover: nine families each finishing just
     inside their own timeout is still hours. The deadline is checked between families.
