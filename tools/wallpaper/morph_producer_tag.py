@@ -19,9 +19,9 @@ sys.path.insert(0, str(ROOT))
 from tools import colormap as cm
 from tools.curation.colored_clip import location_from_record, load_clip, embed_clip
 from tools.wallpaper import library_annotate as la
+from tools.wallpaper.library_store import RECORDS_PATH as RECORDS
 
 STORE = ROOT / "data/library_embeddings/embeddings.npz"
-RECORDS = ROOT / "data/library/library_records.jsonl"
 FIELDS = ROOT / "scratch/curation/morph_fields"
 
 

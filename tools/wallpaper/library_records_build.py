@@ -19,7 +19,11 @@ NOTE: EMB below points at the promoted base store, whose key names are
 morph_uids/morph_clip/morph_v6 (the wiped gray embeddings.npz used uids/clip/v6); the
 `load()` reader keys off `uids` and would need remapping if this producer is re-run.
 """
-import json, os
+import json, os, sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools.wallpaper.library_store import RECORDS_PATH as OUT   # noqa: E402
 
 ROOT = "scratch/wallpaper/overnight/overnight_20260713_001420"
 LEDGER = "data/discovery/fresh_runs/overnight_20260713_001420/outcome_ledger.jsonl"
@@ -27,7 +31,6 @@ GATHER = ["phoenix", "mandelbrot", "multibrot3", "multibrot4", "multibrot5"]
 PC = "data/palettes/palette_categories.json"
 DT = "scratch/mining/deploy_tail/report.json"
 EMB = "data/library_embeddings/embeddings.npz"
-OUT = "data/library/library_records.jsonl"
 
 # Fixed Ushiki phoenix constants (src/v4_cache.rs:44-45) -- implicit per-record.
 PHOENIX_C = {"re": "0.5667", "im": "0.0"}

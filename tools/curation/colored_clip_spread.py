@@ -30,11 +30,15 @@ from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
 
+import sys
+
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from tools.wallpaper.library_store import RECORDS_PATH as RECORDS   # noqa: E402
+
 STORE = ROOT / "data/library_embeddings/embeddings.npz"
-RECORDS = ROOT / "data/library/library_records.jsonl"
 DEFAULT_CELL_LEVEL = "k16"   # the committed default ward cut (palette_categories.json)
 
 

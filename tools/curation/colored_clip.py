@@ -55,9 +55,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tools import colormap as cm                      # noqa: E402
 from tools.corpus import location as loc_mod          # noqa: E402
+from tools.wallpaper.library_store import RECORDS_PATH as RECORDS   # noqa: E402
 import timm                                            # noqa: E402
 
-RECORDS = ROOT / "data/library/library_records.jsonl"
 # Historical grayscale-morphology source. Its producer (visual_dup/embed.py) was wiped;
 # its rows are already PROMOTED into STORE (morph_uids/morph_clip/morph_v6). build()/report()
 # below only run to (re)promote — dead unless the gray producer is rebuilt (see morph_parity.md).
