@@ -1096,3 +1096,114 @@ def test_the_labeled_defaulted_population_still_carries_mandelbrots_currency():
         f"defaulted rows carry {cur_def:.1f} of mandelbrot's {cur_all:.1f} currency "
         f"({share:.1%}). Outside the band this default stopped being the thing that "
         f"determines mandelbrot's price — re-read pop_quota._partition_of_render.")
+
+
+# =========================================================================== #
+# 8. the RUN-SCOPED currency-target override (--currency-targets, 2026-08-07)
+# =========================================================================== #
+def _targets_file(tmp_path, targets, **extra):
+    p = tmp_path / "targets.json"
+    p.write_text(json.dumps(dict(targets=targets, **extra)), encoding="utf-8")
+    return p
+
+
+def test_an_explicit_target_vector_is_read_verbatim_and_the_file_comes_back_whole(tmp_path):
+    """The resolved vector is the file's numbers, unscaled and unanchored — and the raw file
+    rides along so `run_config.json` can record what was passed rather than what was parsed."""
+    f = _targets_file(tmp_path, {p: 10.0 * (i + 1) for i, p in enumerate(PARTS)},
+                      ratios={p: 1.0 for p in PARTS}, note="hi")
+    tgt, raw = pq.load_currency_targets(f, PARTS)
+    assert tgt == {"a": 10.0, "b": 20.0, "c": 30.0, "d": 40.0}
+    assert raw["note"] == "hi" and raw["ratios"] == {p: 1.0 for p in PARTS}
+
+
+def test_an_explicit_target_defeats_the_anchor_that_zeroes_the_RICHEST_partition(tmp_path):
+    """THE REASON THE FLAG EXISTS, as a property rather than as prose.
+
+    Under the derived rule the census-maximum partition lands at exactly zero deficit whenever
+    it also carries the maximum ratio, and NO reweighting of the ratio table moves it — raising
+    its ratio cannot raise it above the anchor it itself defines. That is run 2's
+    `julia:mandelbrot` (190.6 currency, ratio 3.0, zero pops in 361 batches). The override is
+    the only thing that can give that partition demand, so this asserts both halves."""
+    have = {"a": 100.0, "b": 40.0, "c": 40.0, "d": 40.0}          # 'a' is the census maximum
+    rich = dict(a=3.0, b=1.0, c=1.0, d=1.0)
+    assert pq.deficits_from_currency(have, PARTS, rich)["a"] == 0.0
+    # ...and cranking its ratio to the sky does not help, because it IS the anchor.
+    assert pq.deficits_from_currency(have, PARTS, dict(a=99.0, b=1.0, c=1.0, d=1.0))["a"] == 0.0
+    f = _targets_file(tmp_path, {"a": 150.0, "b": 40.0, "c": 40.0, "d": 40.0})
+    tgt, _ = pq.load_currency_targets(f, PARTS)
+    assert tgt["a"] - have["a"] == 50.0
+
+
+def test_a_missing_or_stray_partition_RAISES_in_both_directions(tmp_path):
+    """`release_mix.check_complete`'s two failures, one layer down. An absent target reads
+    downstream as a measured zero demand; a target for an untracked partition reads as applied
+    while reaching no allocation."""
+    with pytest.raises(KeyError, match="tracked with no target"):
+        pq.load_currency_targets(_targets_file(tmp_path, {"a": 1.0, "b": 1.0, "c": 1.0}), PARTS)
+    with pytest.raises(KeyError, match="untracked partition"):
+        pq.load_currency_targets(
+            _targets_file(tmp_path, {p: 1.0 for p in PARTS} | {"zz": 1.0}), PARTS)
+
+
+def test_a_file_with_no_targets_object_RAISES_rather_than_falling_back(tmp_path):
+    p = tmp_path / "t.json"
+    p.write_text(json.dumps({"ratios": {"a": 1.0}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="non-empty top-level `targets`"):
+        pq.load_currency_targets(p, PARTS)
+
+
+def test_the_two_target_paths_are_MUTUALLY_EXCLUSIVE_not_blended(tmp_path, monkeypatch):
+    """Passing both an explicit vector and a ratio table is a third rule nobody wrote down."""
+    cen = pq.CurrencyCensus(counts={}, currency={p: 1.0 for p in PARTS}, defaulted_rows=0,
+                            sources={}, partitions=PARTS)
+    with pytest.raises(ValueError, match="does not reweight"):
+        pq.PopQuota(PARTS, tmp_path, census=cen, external=set(),
+                    targets={p: 5.0 for p in PARTS}, ratios={p: 1.0 for p in PARTS})
+
+
+def test_an_overridden_quota_reports_NO_anchor_and_names_the_override_rule(tmp_path):
+    """The anchor is a fact about the DERIVED rule. Reporting max(target) as one would invent a
+    derivation the run never performed, so it is None and every reader formats it."""
+    cen = pq.CurrencyCensus(counts={}, currency={p: 1.0 for p in PARTS}, defaulted_rows=0,
+                            sources={}, partitions=PARTS)
+    src = {"targets": {p: 5.0 for p in PARTS}, "ratios": {p: 2.0 for p in PARTS}}
+    q = pq.PopQuota(PARTS, tmp_path, census=cen, external=set(),
+                    targets={p: 5.0 for p in PARTS}, targets_source=src)
+    assert q.anchor is None
+    assert q.target_rule == pq.TARGET_RULE_OVERRIDE and q.target_rule != pq.TARGET_RULE
+    assert q.deficit == {p: 4.0 for p in PARTS}
+    s = q.summary()
+    assert s["anchor"] is None and s["target_rule"] == pq.TARGET_RULE_OVERRIDE
+    assert s["currency_targets_file"] == src
+    # declared ratios are PROVENANCE — carried, never multiplied by
+    assert q.ratios == {p: 2.0 for p in PARTS}
+
+
+def test_the_derived_path_is_untouched_when_no_override_is_passed(tmp_path):
+    cen = pq.CurrencyCensus(counts={}, currency={"a": 9.0, "b": 3.0, "c": 3.0, "d": 3.0},
+                            defaulted_rows=0, sources={}, partitions=PARTS)
+    q = pq.PopQuota(PARTS, tmp_path, census=cen, external=set(),
+                    ratios={p: 1.0 for p in PARTS})
+    assert q.anchor == 9.0 and q.target_rule == pq.TARGET_RULE
+    assert q.summary()["currency_targets_file"] is None
+
+
+def test_the_shipped_label_run_targets_file_resolves_against_the_live_partitions():
+    """The instrument this run actually launches with. It is a committed artifact, so a
+    partition registered or retired after it was written must go red HERE rather than at
+    launch — and the canonical ratio table must NOT have been edited to produce it."""
+    import release_mix                                            # noqa: E402
+    f = ROOT / "data" / "atlas" / "currency_targets_label_run_20260807.json"
+    parts = ["mandelbrot", "multibrot3", "multibrot4", "multibrot5", "julia:mandelbrot",
+             "julia:multibrot3", "julia:multibrot4", "julia:multibrot5", "phoenix"]
+    tgt, raw = pq.load_currency_targets(f, parts)
+    assert set(tgt) == set(parts) and all(v > 0 for v in tgt.values())
+    # the scale rule, re-derived from the file's own recorded inputs
+    k = raw["_provenance"]["scale_k"]
+    for p in parts:
+        assert abs(tgt[p] - raw["ratios"][p] * k) < 1e-3
+    assert abs(sum(tgt.values()) - raw["_provenance"]["derived_total_target"]) < 1e-2
+    # the canonical policy table is NOT what this file says
+    assert release_mix.RATIO["mandelbrot"] == 3.0 and release_mix.RATIO["phoenix"] == 1.0
+    assert raw["ratios"]["mandelbrot"] == 30.0 and raw["ratios"]["phoenix"] == 20.0

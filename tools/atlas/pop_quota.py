@@ -328,6 +328,60 @@ def label_currency(partitions: list[str], corpus_dir: str | None = None,
 TARGET_RULE = ("ratio-weighted (release_mix.RATIO): target_p = anchor * ratio_p / max(ratio), "
                "anchor = the richest partition's holding")
 
+# The RUN-SCOPED override (2026-08-07). Not a second policy — a per-run instrument.
+TARGET_RULE_OVERRIDE = ("EXPLICIT run-scoped currency targets (--currency-targets): target_p is "
+                        "read verbatim from the file. release_mix.RATIO and the richest-holding "
+                        "anchor are NOT consulted.")
+
+
+def load_currency_targets(path, partitions: list[str]) -> tuple[dict, dict]:
+    """`(target per partition, the file verbatim)` for an EXPLICIT run-scoped target vector.
+
+    WHY A FLAG AND NOT AN EDIT TO `release_mix.RATIO`. The derived path answers "what does a
+    RELEASE want", anchored to the richest partition's holding, and it is right for steady
+    state. It cannot express "this run exists to mine where LABELS are thin", and the reason is
+    structural rather than a tuning problem: `currency_targets` anchors at `max(have)`, so the
+    richest partition lands at exactly zero deficit whenever it also carries the maximum ratio —
+    and no reweighting of the ratio table moves it, because raising its ratio cannot raise it
+    above the anchor it defines. `julia:mandelbrot` is that partition today (190.6 currency, the
+    census maximum, ratio 3.0 = max) and it read as ZERO demand through all of run 2 while being
+    popped zero times. A label-deficient partition and a label-rich one are indistinguishable to
+    a rule whose scale IS the label stock.
+
+    So the target vector is supplied directly, for ONE run, and the canonical table is untouched.
+    That separation is the point: `release_mix.RATIO` keeps meaning "the intended release mix"
+    and is not quietly re-purposed into "what run 3 felt like mining", which is how a policy
+    table stops being readable as policy.
+
+    COMPLETENESS IS CHECKED IN BOTH DIRECTIONS, exactly as `release_mix.check_complete` does,
+    and for the same two failures: a partition with no target would allocate against a deficit
+    of `max(0, 0 - have) = 0` and read downstream as "that partition had no demand" — the
+    silent-default failure this whole layer exists to refuse — and a target for a partition the
+    run does not track is a decision that never reaches an allocation, which reads as applied
+    and is not.
+
+    The file is returned VERBATIM alongside the resolved vector so `run_config.json` records
+    what was passed rather than a re-serialization of what was parsed."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    tgt = raw.get("targets")
+    if not isinstance(tgt, dict) or not tgt:
+        raise ValueError(
+            f"{path}: a currency-targets file needs a non-empty top-level `targets` object "
+            f"({{partition: currency}}). Everything else in the file is provenance and is "
+            f"recorded, not read.")
+    missing = [p for p in partitions if p not in tgt]
+    extra = [p for p in tgt if p not in partitions]
+    if missing or extra:
+        raise KeyError(
+            f"{path}: explicit currency targets and the run's partitions disagree — tracked "
+            f"with no target: {missing}; target for an untracked partition: {extra}. An absent "
+            f"target reads downstream as a measured zero demand, and a target nobody allocates "
+            f"against reads as applied while having no effect.")
+    bad = sorted(p for p in tgt if not (float(tgt[p]) >= 0.0))
+    if bad:
+        raise ValueError(f"{path}: negative currency target for {bad}.")
+    return {p: float(tgt[p]) for p in partitions}, raw
+
 
 def currency_targets(currency: dict, partitions: list[str],
                      ratios: dict | None = None) -> tuple[dict, float]:
@@ -854,7 +908,8 @@ class PopQuota:
                  floor: float = FLOOR_FRAC, prices_config: dict | None = None,
                  census: CurrencyCensus | None = None,
                  julia_route_gain: float = JULIA_ROUTE_GAIN,
-                 ratios: dict | None = None, external: set | None = None):
+                 ratios: dict | None = None, external: set | None = None,
+                 targets: dict | None = None, targets_source: dict | None = None):
         self.partitions = list(partitions)
         self.run_dir = Path(run_dir)
         self.floor = float(floor)
@@ -871,12 +926,39 @@ class PopQuota:
         # The target vector is resolved HERE, from the live table, and kept beside the deficit
         # it produced — the deficit alone cannot say whether a partition is quiet because it is
         # near its target or because its target is small.
-        self.target, self.anchor = currency_targets(self.census.currency, self.partitions,
-                                                    ratios)
-        if ratios is None:
-            import release_mix                                # noqa: E402 (tools/scoring)
-            ratios = release_mix.ratios(self.partitions)
-        self.ratios = {p: float(ratios[p]) for p in self.partitions}
+        #
+        # THE TWO PATHS ARE MUTUALLY EXCLUSIVE (`load_currency_targets`), and the exclusion is
+        # enforced rather than documented: an explicit vector blended with a derived one would
+        # be a third rule nobody wrote down, and the run would be scored against a target that
+        # is neither of the two things a reader could go and check.
+        self.targets_source = dict(targets_source) if targets_source else None
+        if targets is not None:
+            if ratios is not None:
+                raise ValueError(
+                    "explicit `targets` and a `ratios` table both name the target vector — "
+                    "--currency-targets REPLACES the derived path, it does not reweight it.")
+            missing = [p for p in self.partitions if p not in targets]
+            if missing:
+                raise KeyError(f"explicit currency targets miss tracked partitions {missing}")
+            self.target = {p: float(targets[p]) for p in self.partitions}
+            # The anchor is a fact about the DERIVED rule (the richest holding). Under an
+            # explicit vector there is no anchor, and reporting the max target as one would
+            # invent a derivation. `None` is the honest value and every reader formats it.
+            self.anchor = None
+            self.target_rule = TARGET_RULE_OVERRIDE
+            # Declared ratios, if the file carries them: provenance for the readout, and NOT
+            # arithmetic — nothing multiplies by these.
+            _decl = (self.targets_source or {}).get("ratios") or {}
+            self.ratios = {p: (float(_decl[p]) if p in _decl else None)
+                           for p in self.partitions}
+        else:
+            self.target, self.anchor = currency_targets(self.census.currency, self.partitions,
+                                                        ratios)
+            self.target_rule = TARGET_RULE
+            if ratios is None:
+                import release_mix                            # noqa: E402 (tools/scoring)
+                ratios = release_mix.ratios(self.partitions)
+            self.ratios = {p: float(ratios[p]) for p in self.partitions}
         self.deficit = {p: max(0.0, self.target[p] - float(self.census.currency.get(p, 0.0)))
                         for p in self.partitions}
         self.cost = CostToMine(self.partitions, prices_config)
@@ -1112,8 +1194,9 @@ class PopQuota:
                     deficit={p: round(self.deficit.get(p, 0.0), 3) for p in self.partitions},
                     target={p: round(self.target.get(p, 0.0), 3) for p in self.partitions},
                     ratio={p: self.ratios.get(p) for p in self.partitions},
-                    anchor=round(self.anchor, 3),
-                    target_rule=TARGET_RULE,
+                    anchor=(None if self.anchor is None else round(self.anchor, 3)),
+                    target_rule=self.target_rule,
+                    currency_targets_file=self.targets_source,
                     allocation=alloc.summary(), cost=self.cost.summary(),
                     mix=self.mix_report(), floor_vs_deficit=self.floor_vs_deficit(),
                     unspent_floor=self.unspent_floor(),

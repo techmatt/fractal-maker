@@ -1,0 +1,62 @@
+{
+  "_schema": "pop_quota_currency_targets/1",
+  "_doc": "RUN-SCOPED explicit per-partition currency targets for the LABEL-COLLECTION run (data/discovery/label_run_20260807). Consumed by `steered_frontier.py --currency-targets`, which reads ONLY the `targets` object; every other key here is provenance and is recorded verbatim into run_config.json. This file does NOT change policy: tools/scoring/release_mix.RATIO is untouched and every other run still derives its targets from it.",
+  "targets": {
+    "mandelbrot": 248.028,
+    "multibrot3": 41.338,
+    "multibrot4": 41.338,
+    "multibrot5": 41.338,
+    "julia:mandelbrot": 206.69,
+    "julia:multibrot3": 27.2831,
+    "julia:multibrot4": 27.2831,
+    "julia:multibrot5": 27.2831,
+    "phoenix": 165.352
+  },
+  "ratios": {
+    "mandelbrot": 30.0,
+    "julia:mandelbrot": 25.0,
+    "phoenix": 20.0,
+    "multibrot3": 5.0,
+    "multibrot4": 5.0,
+    "multibrot5": 5.0,
+    "julia:multibrot3": 3.3,
+    "julia:multibrot4": 3.3,
+    "julia:multibrot5": 3.3
+  },
+  "_provenance": {
+    "author": "Matt, prompt-label-run.md Part 1 (2026-08-07)",
+    "purpose": "this run mines where LABELS are deficient, not to the standing release mix. The derived rule anchors the target vector at the RICHEST partition's holding (pop_quota.currency_targets), so the census maximum lands at exactly zero deficit whenever it also carries the maximum ratio. julia:mandelbrot is that partition today (190.6 currency = census max, release_mix ratio 3.0 = max): it read as ZERO demand through all 361 batches of steady_state_v2_20260807 and was popped zero times. No reweighting of release_mix.RATIO can fix that, because raising a partition's ratio cannot raise it above the anchor it itself defines. Hence an explicit vector.",
+    "ratio_source": "dictated in prompt-label-run.md Part 1, verbatim; sum = 99.9",
+    "scale_rule": "PRESERVE THE DERIVED TOTAL DEMAND LEVEL over the tracked partitions",
+    "scale_rule_why": "the ratios are a statement about DISTRIBUTION and carry no scale, so a scale has to be chosen and it must not be arbitrary. Holding sum(target) fixed at what the derived rule asks for today means this file moves WHERE the demand points and not HOW MUCH demand the run believes exists \u2014 the one degree of freedom the prompt specifies, and nothing else. Two alternatives were rejected: anchoring the max-ratio partition at the old 190.6 anchor leaves mandelbrot a 3.8 deficit and reproduces the run-2 failure one partition over; scaling until every partition has positive deficit needs sum(target) = 1.7x the derived level and makes the julia twins deficit-driven, which contradicts the prompt's own read of them as the cheap fallback that overserves.",
+    "derived_total_target": 825.9333,
+    "derived_anchor": 190.6,
+    "scale_k": 8.267601,
+    "formula": "target_p = ratio_p * (sum_q derived_target_q) / (sum_q ratio_q)",
+    "census_currency_at_write": {
+      "mandelbrot": 186.8,
+      "multibrot3": 38.0,
+      "multibrot4": 21.5,
+      "multibrot5": 34.1,
+      "julia:mandelbrot": 190.6,
+      "julia:multibrot3": 28.5,
+      "julia:multibrot4": 37.1,
+      "julia:multibrot5": 46.0,
+      "phoenix": 84.5
+    },
+    "census_note": "the holdings are quoted for readability of the deficits this implies; they are NOT read back \u2014 the run re-censuses at construction, so a sitting landing between write and launch moves the deficit and not the target",
+    "implied_deficit_at_write": {
+      "mandelbrot": 61.228,
+      "multibrot3": 3.338,
+      "multibrot4": 19.838,
+      "multibrot5": 7.238,
+      "julia:mandelbrot": 16.09,
+      "julia:multibrot3": 0.0,
+      "julia:multibrot4": 0.0,
+      "julia:multibrot5": 0.0,
+      "phoenix": 80.852
+    },
+    "phoenix_classic": "absent on purpose: externally supplied (supply_routing), allocated 0.0 by `allocate`, and not a tracked partition of this run",
+    "scope": "ONE run. Not a rollback rung, not a default, not read by anything else."
+  }
+}

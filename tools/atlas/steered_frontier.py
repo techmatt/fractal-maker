@@ -1561,10 +1561,19 @@ class SteeredFrontier:
             pcfg = load_quota_prices(getattr(args, "quota_prices", None))
             self.quota_prices_path = str(
                 Path(getattr(args, "quota_prices", None) or QUOTA_PRICES_DEFAULT))
+            # RUN-SCOPED TARGET OVERRIDE. Absent (the default) => the derived release_mix path,
+            # byte-identical to every run before this flag existed.
+            self.currency_targets_path = getattr(args, "currency_targets", None)
+            _tgt = _tsrc = None
+            if self.currency_targets_path:
+                _tgt, _tsrc = pquota.load_currency_targets(self.currency_targets_path,
+                                                           self.partitions)
+                print(f"[quota] EXPLICIT currency targets <- {self.currency_targets_path} "
+                      f"(release_mix.RATIO not read)", flush=True)
             self.quota = pquota.PopQuota(
                 self.partitions, self.run_dir,
                 floor=float(getattr(args, "quota_floor", pquota.FLOOR_FRAC)),
-                prices_config=pcfg)
+                prices_config=pcfg, targets=_tgt, targets_source=_tsrc)
 
     def build_clouds(self) -> dict:
         """Per-partition q3 cloud from (prior-library rows ⊕ this run's ledger rows). Prior rows
@@ -3648,9 +3657,15 @@ class SteeredFrontier:
                 # and the module's `summary()` described the target in two independent literals
                 # until 2026-08-04, which is how a run_config can announce a target rule the
                 # allocator stopped using.
-                target_rule=pquota.TARGET_RULE,
+                target_rule=q.target_rule,
                 ratio=q.ratios, target={p: round(v, 3) for p, v in q.target.items()},
-                anchor=round(q.anchor, 3),
+                anchor=(None if q.anchor is None else round(q.anchor, 3)),
+                # The override file VERBATIM (None on the derived path). Recorded as passed,
+                # not re-serialized from the parsed vector: a per-run instrument that moves the
+                # whole allocation has to be readable back exactly as it was handed in.
+                currency_targets_file=str(self.currency_targets_path)
+                if self.currency_targets_path else None,
+                currency_targets=q.targets_source,
                 census=q.census.summary(), deficit={p: round(v, 3)
                                                     for p, v in q.deficit.items()},
                 intended=q.allocation().summary(),
@@ -4819,6 +4834,16 @@ def main():
                          f"cap_minutes). DEFAULT: {QUOTA_PRICES_DEFAULT_REL} (the "
                          "median-shrunk seed). A MISSING table is fatal — the flat seed "
                          "price is never a silent fallback.")
+    ap.add_argument("--currency-targets", type=str, default=None,
+                    help="RUN-SCOPED override of the per-partition currency TARGET vector "
+                         "(JSON; required key `targets` = {partition: currency}, everything "
+                         "else recorded as provenance). MUTUALLY EXCLUSIVE with the derived "
+                         "path: release_mix.RATIO and the richest-holding anchor are not read "
+                         "at all, and the canonical ratio table is untouched. For a run whose "
+                         "purpose is not the standing release mix — a label-deficient "
+                         "partition that is also the census maximum has zero deficit under the "
+                         "derived rule, and no reweighting of the ratios can move it. "
+                         "DEFAULT: the derived path.")
     # --- dive mode ---
     ap.add_argument("--dive", action="store_true",
                     help="single-track descent off a completed run's admissions (uses dive_state.json)")
