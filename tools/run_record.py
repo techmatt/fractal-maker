@@ -6,20 +6,26 @@ the segmentation invisible to every consumer.
 WHY THIS EXISTS. A `steered_frontier` run commits its whole per-row record. Measured on
 `data/discovery/steady_state_v1_20260805` (70 active min, 10.30 MB committed) the record grows
 at 8.9 MB/h, and `harvest_v2_proving_20260803` hit 14.2 MB/h — so an 8 h run lands at 50-70 MB
-and every run past ~2.5 h crosses the 20 MB commit rule in CLAUDE.md. None of it is
+and every run past ~2.5 h crosses the 20 MB commit rule in CLAUDE.md. Every size in this
+docstring is TREE BYTES (the working-tree size of what gets tracked), which is the unit that
+rule counts — settled 2026-08-07, and the framing this whole module is sized against. None of it is
 regenerable: `harvest_log.jsonl` is the tau_h curve's data on record, `prio_terms.jsonl` is the
 only record of the never-admitted majority, `q4_candidates.jsonl` is the reject-autopsy
 population. THINNING IS THEREFORE NOT AVAILABLE — the record has to get smaller without
 losing a row or a field.
 
-WHY COMPRESSION AND NOT FIELD-DROPPING, with the measurement that decided it. Git already
-zlib-compresses ordinary blobs, so gzipping a plain-tracked file buys nothing on the remote:
-committing `maneuvers.jsonl` raw packs to 451,089 B and committing the same rows as a `.gz`
-packs to 451,314 B (measured 2026-08-07, `git gc --aggressive` on a scratch repo, both ways).
-The reason it wins anyway is `.gitattributes`: the four largest streams here — harvest_log,
-prio_terms, maneuvers, q4_candidates, 87-98% of the record — are **LFS-tracked**, and LFS ships
-the object BYTE-FOR-BYTE. There is no zlib in that path, so the 8-11x these streams gzip at is
-8-11x off the bytes the rule counts. Field-dropping was measured on the same file for
+WHY COMPRESSION AND NOT FIELD-DROPPING, with the measurement that decided it. On TREE bytes
+the 8-11x is just the win, for all five streams, since the tree holds the compressed file —
+that is the unit the rule counts and the reason this module exists. It is worth knowing the
+other framing, because it does not follow: git already zlib-compresses ordinary blobs, so
+gzipping a plain-tracked file buys nothing on the REMOTE — committing `maneuvers.jsonl` raw
+packs to 451,089 B and committing the same rows as a `.gz` packs to 451,314 B (measured
+2026-08-07, `git gc --aggressive` on a scratch repo, both ways). The remote shrinks anyway
+because of `.gitattributes`: the four largest streams here — harvest_log, prio_terms,
+maneuvers, q4_candidates, 87-98% of the record — are **LFS-tracked**, and LFS ships the object
+BYTE-FOR-BYTE, with no zlib in that path. So: tree bytes are why we compress, LFS is why the
+remote benefits too, and `quota_trace` (the one non-LFS stream) gains on the first and not the
+second. Field-dropping was measured on the same file for
 comparison and is not competitive: dropping `atom_key` saves 5.7% of compressed bytes,
 `screen.interior_radial` 7.4%, every null 0.9% — each one paying real information for a
 fraction of what compression gives for free.

@@ -221,11 +221,20 @@ pass `--model` explicitly or resolve through `ACTIVE_CKPT`
 
 > **No commit ≥20 MB without Matt's explicit prior confirmation.** The threshold is per
 > *commit*, on the **aggregate** of everything it adds — not the largest single blob — and
-> **LFS-tracked bytes count** (an LFS pointer is 130 bytes in the tree and 300 MB on the
-> remote; the rule is about the bytes, not the pointer). At the threshold, **stop and report
-> the sizes instead of committing** — do not split a large commit into smaller ones to stay
-> under it, which is the same bytes with the confirmation removed. Applies to every commit,
-> including ones a prompt explicitly asks for.
+> the unit is **TREE BYTES: the working-tree size of what gets tracked** (settled 2026-08-07).
+> Not remote bytes, not packed bytes, not LFS-transfer bytes — those are all smaller and all
+> depend on how git happens to store the object, which is the wrong thing for a rule about
+> what you are putting in the repo. **LFS-tracked bytes therefore count at FULL SIZE** (an
+> LFS pointer is 130 bytes in the index and 300 MB in the tree; the rule counts the 300 MB),
+> and so does a `.gz` — at its compressed size, because that is what the tree holds. The two
+> framings are not academic: the segmented run record was ~12.4 MB of remote bytes at 8 h and
+> **71 MB of tree bytes**, i.e. never-crossed under one reading and badly crossed under the
+> other. At the threshold, **stop and report the sizes instead of committing** — do not split
+> a large commit into smaller ones to stay under it, which is the same bytes with the
+> confirmation removed. Applies to every commit, including ones a prompt explicitly asks for.
+> This is a stop-and-ask, not a test; the standing *population* guards are
+> `tests/test_large_tracked_blobs.py` (what may be tracked at all) and
+> `tools/audit/size_guard.py` (what may sit in the working tree).
 
 > **Commit prompt work to `main`; branch only on an explicit request.** A production config
 > change sitting on an unmerged branch looks applied and isn't, and the failure is silent — the

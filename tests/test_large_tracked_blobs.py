@@ -21,17 +21,38 @@ SANCTIONS it (`WEIGHTS`) or it is a GRANDFATHERED exception carried with a reaso
 costs are lopsided in the right direction: forgetting to declare a new weight costs a red
 build, which is cheap and immediate; a silently-accepted 100 MB blob costs a repo.
 
-The three assertions:
+The assertions:
   1. every over-threshold tracked path is covered by an entry (new bulk -> red);
   2. no entry is dead — an entry matching nothing over threshold is a line nobody
      classified, and a rotted allowlist is how the covering assertion goes vacuous;
-  3. no image bulk at any size, tracked or LFS — the one half of the policy that needs
-     no allowlist because the answer is never yes.
+  3. no media/archive bulk at any size, tracked or LFS — the one half of the policy that
+     needs no allowlist because the answer is never yes;
+  4. every tracked file's EXTENSION is declared — text-by-nature, or an opaque/binary
+     class allowed under one named path prefix with a reason. See "WHY 4 EXISTS".
+
+WHY 4 EXISTS (the gap 3 leaves open). Assertion 3 is a DENYLIST, and a denylist of media
+extensions is only as good as the last time someone thought about image formats: `.avif`,
+`.heic`, `.jxl`, `.webm`, `.svg`, `.qoi` and `.tga` all sailed through it, and the hazard
+this guard exists for — a sloppy run checking in a thousand renders — needs exactly one
+format nobody listed. Assertion 4 inverts the polarity: the tracked tree is `.py/.rs/.json/
+.jsonl/.md/.html/...` plus a handful of declared binaries (trained `.pt` weights, `.npz`
+feature/embedding stores, `.jsonl.gz` run-record segments), so ANY extension outside that
+set is red by default and a new image format is caught the first time one is staged,
+whether or not anyone anticipated it. 3 is kept because it names media specifically and so
+gives an unambiguous message, and because it is asserted over paths 4 would let through if
+a media extension were ever added to the text set (which 4's own source scan refuses).
 
 SIZE IS MEASURED THROUGH LFS. `git cat-file -s :path` returns ~130 bytes for an
 LFS-tracked file (the size of the POINTER), so a naive size scan reports a 96 MB
 cache_manifest as tiny — precisely inverting the thing being guarded. Pointer blobs are
 parsed for their `size` field instead.
+
+THE PER-COMMIT 20 MB RULE IS A DIFFERENT INSTRUMENT AND IS NOT ENFORCED HERE. That rule
+(CLAUDE.md) is about the aggregate TREE BYTES one commit adds — the working-tree size of
+what gets tracked, an LFS-tracked file counted at its full content size and not at its
+130-byte pointer — and it is a stop-and-ask, not a test. This file is the standing
+population check: what may be large-and-tracked at all, and what may never be tracked at
+any size.
 
   uv run pytest tests/test_large_tracked_blobs.py
 """
@@ -55,8 +76,46 @@ LARGE = 1 * 1024 * 1024
 # Bulk that is never acceptable in the index, at any size — the policy's second sentence.
 # Extensions, not a size rule: one tracked 40 KB PNG is a precedent, and precedent is what
 # the 358 MB of dead binary weight in this repo's history was made of.
-IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff",
-              ".mp4", ".mov", ".avi", ".zip", ".tar", ".gz", ".7z")
+#
+# This is a DENYLIST and denylists rot — `.avif`/`.heic`/`.webm`/`.svg` were all absent
+# until 2026-08-07. It is not the load-bearing assertion any more (TEXT_EXTS +
+# BINARY_ALLOWLIST below are: everything undeclared is red); it stays because a media hit
+# deserves a message that says "media", not "undeclared extension".
+#
+# `.gz` is NOT here, deliberately. `data/discovery/**/*.jsonl.gz` is the run-record segment
+# format (tools/run_record.py) and is declared in BINARY_ALLOWLIST; a `.tar.gz` still lands
+# on `.tar`... which `os.path.splitext` does not see, so `.tgz`/`.tbz2` are listed too.
+MEDIA_EXTS = (
+    # raster
+    ".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".tif", ".tiff",
+    ".avif", ".heic", ".heif", ".jxl", ".qoi", ".tga", ".dds", ".ico",
+    ".ppm", ".pgm", ".pnm", ".pbm", ".exr", ".hdr", ".psd", ".xcf",
+    # vector / document
+    ".svg", ".pdf", ".eps",
+    # video / audio
+    ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".wmv", ".flv",
+    ".mp3", ".wav", ".flac", ".ogg",
+    # archives
+    ".zip", ".tar", ".7z", ".rar", ".tgz", ".tbz2", ".xz", ".bz2", ".zst", ".iso", ".dmg",
+)
+IMAGE_EXTS = MEDIA_EXTS          # back-compat alias for the older name
+
+# ---- assertion 4: the tracked tree's extension vocabulary -------------------------- #
+# Text by nature — source, config, records, prose. Allowed at ANY path, because none of
+# them can be a thousand renders. `.gz` is deliberately absent (see MEDIA_EXTS).
+TEXT_EXTS = frozenset({
+    ".py", ".pyi", ".rs", ".toml", ".lock", ".json", ".jsonl", ".md", ".txt", ".csv",
+    ".html", ".css", ".js", ".yml", ".yaml", ".cfg", ".ini", ".sh", ".ps1", ".bat",
+    ".cmd", ".map", ".ugr", ".sql", ".rst",
+    ".complete",   # `<stage>_table.COMPLETE` — empty stage-done markers under data/atlas/
+})
+
+# Extensionless tracked files, by BASENAME. Same argument as TEXT_EXTS — each is a marker
+# or a repo-config file with no extension for `os.path.splitext` to check, so the name is
+# the declaration. A renamed blob cannot hide here without also claiming one of these names.
+NO_EXT_BASENAMES = frozenset({
+    ".gitignore", ".gitattributes", ".gitkeep", ".gitmodules", "LICENSE", "COMPLETE",
+})
 
 WEIGHTS = "WEIGHTS"        # sanctioned by the policy: a critical final trained weight
 EXCEPTION = "EXCEPTION"    # grandfathered: the policy would exclude it; kept, with a reason
@@ -135,6 +194,56 @@ ALLOWLIST = [
           "label nobody can join."),
     Entry("data/orbital/screen_pool.jsonl", EXCEPTION,
           "Orbital screen pool: the scored candidate population behind the mode gates."),
+]
+
+
+@dataclass(frozen=True)
+class BinaryEntry:
+    """One opaque-content class: an extension, allowed only under `prefix`.
+
+    Scoped by PATH as well as extension on purpose. `.npz` is a fine thing for a run to
+    emit next to its ledger and a terrible thing to accept anywhere — a per-extension
+    blanket pass would let a fresh `scratch`-shaped directory of them into the index
+    unnoticed, which is the shape of every bulk incident this repo has had."""
+    prefix: str
+    ext: str
+    reason: str
+    forward: bool = False    # declared before the first file lands; see size_guard.Entry
+
+    def covers(self, rel: str) -> bool:
+        return rel.startswith(self.prefix) and rel.lower().endswith(self.ext)
+
+
+# Every tracked extension that is NOT text-by-nature must match one of these.
+BINARY_ALLOWLIST = [
+    BinaryEntry("data/classifier/", ".pt",
+                "CORN ordinal head weights (v5..v10) — the live scorer + rollback anchors; "
+                "not GPU-reproducible."),
+    BinaryEntry("data/wallpaper_head/", ".pt",
+                "Wallpaper-quality head weights (v3 live, v4 staged)."),
+    BinaryEntry("data/render_mode_head/", ".pt",
+                "Render-mode (strange-mode) gate weight — v1, whose training corpus is "
+                "gone, so it cannot be retrained at all."),
+    BinaryEntry("data/queries/scorer/", ".pt",
+                "Palette-preference ranker weight (pref-v3-gvo)."),
+    BinaryEntry("data/library_embeddings/", ".npz",
+                "Prospect-library CLIP embeddings — the immutable base store; regenerable "
+                "only value-approximately."),
+    BinaryEntry("data/discovery/", ".npz",
+                "Per-run `outcome_feats.npz` — the outcome feature matrix for a walk that "
+                "cannot be re-walked. Float arrays, so JSONL would be lossy AND larger."),
+    BinaryEntry("data/atlas/", ".npz",
+                "Round-1/2 arm embeddings + `distinct_looks.npz`: the frozen vectors the "
+                "atlas arms' distinctness verdicts were taken on."),
+    BinaryEntry("data/discovery/", ".jsonl.gz",
+                "Rotated run-record segments (`<stem>.NNN.jsonl.gz`, tools/run_record.py). "
+                "The ONE tracked-compressed class: LFS ships objects raw, so gzip here is "
+                "8-11x off the bytes both the LFS remote and the 20 MB tree-byte commit "
+                "rule count. Content is JSONL — `run_record.iter_rows` reads it as text. "
+                "FORWARD: the segmenting writer landed 2026-08-07 and no run has committed "
+                "since, so nothing matches yet; the .gitattributes LFS rule for exactly "
+                "this glob is already in the tree, which is what makes the write imminent "
+                "rather than hypothetical.", forward=True),
 ]
 
 
@@ -247,10 +356,71 @@ def test_no_image_or_archive_bulk_is_tracked_at_any_size():
     """The half of the policy that needs no allowlist: media never belongs in the index,
     LFS included. Asserted over EVERY tracked path, not just the large ones — one small
     committed PNG is the precedent, and precedent is what a 358 MB history is made of."""
-    offenders = sorted(p for p in SIZES if p.lower().endswith(IMAGE_EXTS))
+    offenders = sorted(p for p in SIZES if p.lower().endswith(MEDIA_EXTS))
     assert not offenders, (
-        "images/archives are tracked — they do not belong in the repo even in LFS:\n  "
-        + "\n  ".join(f"{p} ({SIZES[p] / 1048576:.2f} MiB)" for p in offenders))
+        f"{len(offenders)} image/archive path(s) are tracked — they do not belong in the "
+        f"repo even in LFS:\n  "
+        + "\n  ".join(f"{p} ({SIZES[p] / 1048576:.2f} MiB)" for p in offenders[:25])
+        + ("" if len(offenders) <= 25 else f"\n  ... and {len(offenders) - 25} more"))
+
+
+def _undeclared_extension(rel: str) -> str | None:
+    """The extension of `rel` if nothing declares it, else None.
+
+    NOT `rel.endswith(...)`: `foo.png.json` is JSON and `foo.json.png` is a PNG, and only
+    splitext gets both right. Case-folded, because Windows made `arm1_table.COMPLETE`."""
+    base = rel.rsplit("/", 1)[-1]
+    ext = ("." + base.rsplit(".", 1)[1].lower()) if "." in base[1:] else ""
+    if not ext:
+        return None if base in NO_EXT_BASENAMES else f"<no extension: {base}>"
+    if ext in TEXT_EXTS:
+        return None
+    if any(e.covers(rel) for e in BINARY_ALLOWLIST):
+        return None
+    return ext
+
+
+def test_every_tracked_extension_is_declared():
+    """The ALLOWLIST half of the media policy, and the one that survives a format nobody
+    listed. A tracked file is either text-by-nature (TEXT_EXTS, any path) or an opaque
+    class declared under one prefix with a reason (BINARY_ALLOWLIST) — everything else is
+    red on the FIRST file, which is what makes it a guard against a thousand of them."""
+    offenders = sorted((p for p in SIZES if _undeclared_extension(p)),
+                       key=lambda p: (_undeclared_extension(p), p))
+    kinds = sorted({_undeclared_extension(p) for p in offenders})
+    assert not offenders, (
+        f"{len(offenders)} tracked path(s) of {len(kinds)} undeclared kind(s) {kinds}:\n  "
+        + "\n  ".join(f"{p} ({SIZES[p] / 1048576:.2f} MiB)" for p in offenders[:25])
+        + ("" if len(offenders) <= 25 else f"\n  ... and {len(offenders) - 25} more")
+        + "\nThe tracked tree is source, config, records and a handful of declared "
+          "binaries. If this is bulk it belongs under ARTIFACTS_ROOT "
+          "(tools/corpus/artifacts.py); if it is a new legitimate class, add a TEXT_EXTS "
+          f"or BINARY_ALLOWLIST line in {Path(__file__).name} saying what it is.")
+
+
+def test_no_media_extension_is_declared_text():
+    """Guard the guard, in the one direction that would silently disarm assertion 4: the
+    cheapest way to make a red `.png` go green is to append it to TEXT_EXTS, which reads
+    like every other line there. Assertion 3 would still catch `.png` itself — this
+    catches the case where the two lists disagree at all."""
+    overlap = sorted(TEXT_EXTS & set(MEDIA_EXTS))
+    assert not overlap, (f"{overlap} are in TEXT_EXTS AND MEDIA_EXTS — a media extension "
+                         f"declared text-by-nature disarms the allowlist assertion")
+    bad = sorted(e for e in BINARY_ALLOWLIST if e.ext in MEDIA_EXTS)
+    assert not bad, (f"BINARY_ALLOWLIST grants media extensions: "
+                     f"{[(e.prefix, e.ext) for e in bad]}")
+
+
+@pytest.mark.parametrize("entry", [e for e in BINARY_ALLOWLIST if not e.forward],
+                         ids=lambda e: f"{e.prefix}*{e.ext}")
+def test_no_binary_allowlist_entry_is_dead(entry):
+    """Same argument as test_no_allowlist_entry_is_dead: an opaque-content grant that
+    covers nothing is an unreviewed standing permission. `forward=True` entries are exempt
+    — emptiness alone cannot tell not-yet-written from dead, and the flag is where that
+    judgement is recorded (same split as tools/audit/size_guard.py's Entry.forward)."""
+    assert any(entry.covers(p) for p in SIZES), (
+        f"DEAD binary grant: {entry.prefix!r} + {entry.ext!r} covers no tracked path. "
+        f"Delete the line (the class it admitted is gone) or mark it forward=True.")
 
 
 def test_every_lfs_tracked_path_is_declared_too():

@@ -65,6 +65,13 @@ classified. Both are actionable in one edit, so neither is a standing warning. A
 relocate, their RELOCATE lines come out; when only KEEP lines remain, every in-tree
 exception is explicit and reviewed.
 
+Relationship to the 20 MB per-commit rule (CLAUDE.md). That rule counts **TREE BYTES** —
+the working-tree size of what gets tracked, LFS files at full content size, not the remote
+or packed size (settled 2026-08-07). This scan measures the same unit, which is why the two
+are commensurable: the rule is the per-commit stop-and-ask, this is the standing check on
+the accumulated tree. Neither is the index-side policy guard — that is
+`tests/test_large_tracked_blobs.py` (what may be tracked at all, and what may never be).
+
 This module MOVES / DELETES / COMMITS NOTHING. It scans and reports.
 
 Usage
