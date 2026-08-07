@@ -8,7 +8,7 @@ and hands them here to persist.
 
 Three durable artifacts, all surviving `rm -r scratch/*` (they live under `data/`):
 
-  data/library/records.jsonl                 append-only, one JSON record per LOCATION.
+  data/library/library_records.jsonl         append-only, one JSON record per LOCATION.
                                              `location_id` is the primary key; appends
                                              DEDUP on it, so re-running a cycle adds 0
                                              duplicates (resume idempotence).
@@ -57,7 +57,17 @@ from tools.corpus import location as loc_mod  # noqa: E402
 
 # --- durable roots (data/ = survives `rm -r scratch/*`) ---
 LIB_ROOT = ROOT / "data" / "library"
-RECORDS_PATH = LIB_ROOT / "records.jsonl"
+# THE records store. It named `records.jsonl` until 2026-08-07 — a file that has never
+# existed. The real 47-row store one directory level in the same dir is `library_records.jsonl`
+# (built by library_records_build.py, read by tools/curation/colored_clip*.py,
+# tools/wallpaper/morph_producer_tag.py and tools/mining/build_gate_passers.py), and every
+# one of those reached it by hardcoding the name rather than importing this constant. So the
+# store was fine and the CONSTANT was dead: `store_summary()` returned records: 0 / by_family:
+# {} against a populated store, and prospect_orchestrator reported that 0 as
+# `library_records_total` at the end of every run. Nothing was ever written to the dead path
+# (`append_records` is the only writer and no run has taken this default since), so pointing
+# it at the real file joins the loop to the store rather than merging two populations.
+RECORDS_PATH = LIB_ROOT / "library_records.jsonl"
 THUMBS_DIR = LIB_ROOT / "thumbs"
 FIELD_CACHE_DIR = LIB_ROOT / "field_cache"
 EMB_ROOT = ROOT / "data" / "library_embeddings"

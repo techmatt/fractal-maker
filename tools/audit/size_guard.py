@@ -315,31 +315,40 @@ REGISTRY: list[Entry] = [
     # Not GPU-reproducible (float nondeterminism), so no rebuild path. Active +
     # rollback anchors move to the precious store; the classifier weights are CANARY
     # paths — their eventual move needs a deliberate test_tracked_artifacts update.
+    # Ladder as at 2026-08-07: v10 LIVE -> v8 -> v7 -> v6 -> v5; v9 is NOT a rung.
+    # These notes said "ACTIVE_CKPT still names v8" for five days after the 2026-08-02 flip
+    # (found by the pre-distillation census). The version each line DESCRIBES is fine to
+    # write down; which one is DEPLOYED is derived state, so read it from
+    # production_pins.ACTIVE_CKPT and never re-assert it here — that is the whole "derive
+    # state in code, freeze it in records" rule, applied to a comment.
     Entry("data/classifier/v10/", RELOCATE, PRECIOUS, "tracked",
           "v10 model_best.pt — the v9 recipe (itself v8's, verbatim) retrained on the "
-          "corpus EXTENDED with 1,267 maneuver-view locations. BUILT, NOT DEPLOYED: "
-          "ACTIVE_CKPT still names v8, and the flip is its own pass judged against "
-          "data/v10/prereg_v10.json. Declared by exact-path .gitignore negation, so a plain "
+          "corpus EXTENDED with 1,267 maneuver-view locations. This is what "
+          "production_pins.ACTIVE_CKPT resolves to (flipped 2026-08-02 against "
+          "data/v10/prereg_v10.json). Declared by exact-path .gitignore negation, so a plain "
           "`git add` reaches it. model_last.pt is deliberately untracked (selection is on "
           "best). CANARY.", canary=True),
     Entry("data/classifier/v9/", RELOCATE, PRECIOUS, "tracked",
           "v9 model_best.pt — the v8 recipe retrained verbatim on the corpus re-rendered "
-          "at the raised iteration cap (docs/design/auto_maxiter.md). BUILT, NOT DEPLOYED: "
-          "ACTIVE_CKPT still names v8, and the flip is its own pass. Unlike v2..v8 these "
-          "weights are declared by an exact-path .gitignore negation rather than a "
-          "force-add, so a plain `git add` reaches them. model_last.pt is deliberately "
-          "untracked (selection is on best). CANARY.", canary=True),
+          "at the raised iteration cap (docs/design/auto_maxiter.md). BUILT, STAGED, NEVER "
+          "ADOPTED, and NOT a rollback rung: the v10 adoption went straight past it "
+          "(data/v10/build_metadata.json:rollback_ladder.why_not_v9). Kept because a "
+          "not-GPU-reproducible weight cannot be rebuilt if the judgement is revisited. "
+          "Unlike v2..v8 these weights are declared by an exact-path .gitignore negation "
+          "rather than a force-add, so a plain `git add` reaches them. model_last.pt is "
+          "deliberately untracked (selection is on best). CANARY.", canary=True),
     Entry("data/classifier/v8/", RELOCATE, PRECIOUS, "tracked",
-          "v8 model_best.pt — LIVE deployed discovery-gate weight (K=4 ordinal head; the "
-          "first version that can decode class 4). CANARY.", canary=True),
+          "v8 model_best.pt — the ONE-FLIP rollback anchor (K=4 ordinal head; the first "
+          "version that could decode class 4, and the live gate until v10). CANARY.",
+          canary=True),
     Entry("data/classifier/v7/", RELOCATE, PRECIOUS, "tracked",
-          "v7 model_best.pt — one-flip rollback anchor (the role v6 held before the v8 "
-          "promotion); ALSO the frozen penultimate the pref_loc_v1 ranker's features are "
-          "pinned to, so this weight is load-bearing beyond rollback. CANARY.", canary=True),
+          "v7 model_best.pt — two-flip rollback rung; ALSO the frozen penultimate the "
+          "pref_loc_v1 ranker's features are pinned to, so this weight is load-bearing "
+          "beyond rollback. CANARY.", canary=True),
     Entry("data/classifier/v6/", RELOCATE, PRECIOUS, "tracked",
-          "v6 model_best.pt — deeper rollback anchor. CANARY.", canary=True),
+          "v6 model_best.pt — deeper rollback rung. CANARY.", canary=True),
     Entry("data/classifier/v5/", RELOCATE, PRECIOUS, "tracked",
-          "v5 model_best.pt — deepest rollback anchor. CANARY.", canary=True),
+          "v5 model_best.pt — deepest rollback rung. CANARY.", canary=True),
     Entry("data/wallpaper_head/", RELOCATE, PRECIOUS, "ignored",
           "trained wallpaper-quality heads (v1/v2/v3 .pt) — not GPU-reproducible; "
           "active + rollback -> precious-store, older versions curate to trash at move"),

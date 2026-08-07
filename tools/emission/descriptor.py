@@ -243,7 +243,16 @@ def location_of(row: dict) -> loc_mod.Location:
 #
 # and the READER overlays it (`resolve_rows`). Two properties earn the version in the name.
 # (a) It cannot collide with the two existing `rescored.jsonl` files, which are RESUME STATE
-# for their own producers (`classic_phoenix_supply`, `q4_harvest_ledger`) and not overlays.
+# for their own producers and not overlays:
+#         data/discovery/classic_phoenix/rescored.jsonl   (classic_phoenix_supply, 184 rows
+#                                                          = one per coord, not per ledger row)
+#         data/emission/q4_harvest/rescored.jsonl         (q4_harvest_ledger)
+#     Worth naming the paths, because the resemblance misleads on sight: a 2026-08-06 census
+#     read classic's as a stale-convention overlay and a cleanup pass proposed renaming it to
+#     `outcome_ledger.rescored_v10.jsonl`. That would feed 184 resume rows to `resolve_rows`
+#     as a rescore of a 24-row ledger AND break its producer's resume. Classic has no overlay
+#     because it does not need one — it re-mints under the live pins every run and purges any
+#     row not stamped with the active version, so it arrives current instead of being patched.
 # (b) It is fail-correct across the NEXT flip: v11 looks for `rescored_v11.jsonl`, does not
 # find it, falls through to the original rows, and `is_current_decoded` rejects them — the
 # intake goes empty and loud rather than quietly serving v10 verdicts under v11's name.

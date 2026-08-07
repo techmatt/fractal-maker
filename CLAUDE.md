@@ -194,8 +194,10 @@ anchor, v9 was built and staged but never adopted and is NOT a rollback rung), r
 by ~41 modules — most of them still through the `active_ckpt` re-export, which is an alias, not
 a copy (`test_production_pins.py`). Every version is a CORN **ordinal** head on
 `mobilenetv4_conv_medium.e250_r384_in12k` emitting K−1 rank-consistent logits; **K is
-per-version — read `data/classifier/<v>/config.json`** (K=3 through v7, labels 1–3; **K=4 from
-v8 onward**, labels 1–4 — v8 is the first K=4 head, not v9). Deploy transform = `classifier.data.Transform(train=False)`: the
+per-version** — K=3 through v7 (labels 1–3), **K=4 from v8 onward** (labels 1–4; v8 is the
+first K=4 head, not v9). Read it from `data/classifier/<v>/config.json` **where that file
+exists, which is v8+ only** — v5/v6/v7 ship the LFS weight and nothing else, so on all three
+rollback rungs the documented read fails and the K=3 above is the record. Deploy transform = `classifier.data.Transform(train=False)`: the
 deterministic **1280×720 → 384×224 bicubic stretch + normalize** mirror of `present.rs`'s JPG
 path (no jitter/flips). `model.score_from_logits` returns `Σ σ(logit_k)` ∈ [0,K−1] — the
 monotone rank score used for AP. **P(not-bad) = σ(logit₀)** (= P(rank≥1) = P(label≥2)).
@@ -211,7 +213,7 @@ the selected `(location, argmax-palette)` rows are rendered to JPG (`enrich --mo
 ss4 Lanczos3 wallpaper quality). Two readers of that stream: the live one is the library
 `tools/mining/score_lib.py::run_enrich_score` (driven by `tools/mining/harvest.py`);
 `tools/corpus/enrich_score.py` is the standalone CLI sibling. Both default to a checkpoint
-that **no longer exists on disk** (v2 / v3 — `data/classifier/` holds v5…v9). Those pins are
+that **no longer exists on disk** (v2 / v3 — `data/classifier/` holds v5…v10). Those pins are
 kept on purpose — they record what those batches were scored with — and are **not**
 repointed; each now goes through a `require_ckpt` that raises naming the missing file, so
 pass `--model` explicitly or resolve through `ACTIVE_CKPT`

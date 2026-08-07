@@ -214,12 +214,15 @@ PER_WALK_RNG = True          # ON for all walk + probe runs
 
 # --- probe / scorer ---
 PROBE_DEPTH = 2              # --depth-min 2 --depth-max 2, keep reached>=2
-SCORER_PATH = ACTIVE_CKPT   # single source of truth (active_ckpt.ACTIVE_CKPT — currently v7); explicit, NEVER a default scorer
-# Provenance stamp for new outcome rows: the classifier version dir ("v6") parsed off the
-# active checkpoint path, so it tracks ACTIVE_CKPT automatically. Stamped by both ledger
-# writers (append_outcome + GatherLedger.append) so post-deploy rows are distinguishable
-# from v5-era rows in the ledger and the q3 cloud.
-SCORER_VERSION = Path(SCORER_PATH).parent.name   # "v7" (tracks ACTIVE_CKPT)
+SCORER_PATH = ACTIVE_CKPT   # single source of truth (active_ckpt.ACTIVE_CKPT); explicit, NEVER a default scorer
+# Provenance stamp for new outcome rows: the classifier version dir parsed off the active
+# checkpoint path, so it tracks ACTIVE_CKPT automatically. Stamped by both ledger writers
+# (append_outcome + GatherLedger.append) so post-deploy rows are distinguishable from
+# earlier-version rows in the ledger and the q3 cloud. Deliberately NOT named here: the two
+# comments on these lines said "v7"/"v6" for the five days after the 2026-08-02 flip to v10
+# (pre-distillation census, 2026-08-06), which is what a hand-written copy of derived state
+# always ends up doing. `production_pins.ACTIVE_VERSION` is where to read it.
+SCORER_VERSION = Path(SCORER_PATH).parent.name   # tracks ACTIVE_CKPT
 
 # --- run ---
 WALLCLOCK_BUDGET_MIN = 30

@@ -82,11 +82,13 @@ V7_CKPT_ROLLBACK = "data/classifier/v7/model_best.pt"   # also the frozen pref_l
 V6_CKPT_ROLLBACK = "data/classifier/v6/model_best.pt"
 V5_CKPT_ROLLBACK = "data/classifier/v5/model_best.pt"
 DEFAULT_MODEL = ACTIVE_CKPT             # unified location-quality model (== ACTIVE_CKPT)
-# Version token of the live checkpoint ("v7"/"v8"...), parsed off the checkpoint dir. This
-# is the SINGLE SOURCE OF TRUTH for what "current" means: corpus_common.is_current_decoded
-# and production_seeder.SCORER_VERSION both resolve the decode-stamp version from here, so
-# flipping ACTIVE_CKPT moves the whole notion of "current-decoded" with it.
-ACTIVE_VERSION = Path(ACTIVE_CKPT).parent.name   # "v8"
+# Version token of the live checkpoint, parsed off the checkpoint dir. This is the SINGLE
+# SOURCE OF TRUTH for what "current" means: corpus_common.is_current_decoded and
+# production_seeder.SCORER_VERSION both resolve the decode-stamp version from here, so
+# flipping ACTIVE_CKPT moves the whole notion of "current-decoded" with it. No literal in
+# the comment on purpose — this line carried `# "v8"` through the 2026-08-02 flip, one line
+# below the ACTIVE_CKPT it is derived from and disagreeing with it.
+ACTIVE_VERSION = Path(ACTIVE_CKPT).parent.name
 JPG_Q = 90                              # match corpus crop quality
 DEFAULT_SS = 4                          # ss4 = v4/v5 deploy-canonical antialiased view
 

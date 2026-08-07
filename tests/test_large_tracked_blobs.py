@@ -138,8 +138,10 @@ class Entry:
 ALLOWLIST = [
     # ---- sanctioned: critical final trained weights (the policy's "essentially only") --
     Entry("data/classifier/", WEIGHTS,
-          "CORN ordinal heads v5..v9: the live deployed scorer plus its rollback anchors. "
-          "Not GPU-reproducible, so there is no rebuild path."),
+          "CORN ordinal heads v5..v10: the live deployed scorer (whichever "
+          "production_pins.ACTIVE_CKPT names — v10 since 2026-08-02) plus its rollback "
+          "rungs, and v9, built and staged but never adopted. Not GPU-reproducible, so "
+          "there is no rebuild path for any of them."),
     Entry("data/wallpaper_head/v3/model_best.pt", WEIGHTS,
           "LIVE cross-location wallpaper-quality head."),
     Entry("data/wallpaper_head/v4/model_best.pt", WEIGHTS,

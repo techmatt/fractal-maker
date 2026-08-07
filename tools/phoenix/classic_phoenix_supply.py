@@ -32,6 +32,21 @@ Durable outputs under data/discovery/classic_phoenix/ (survive rm -r scratch/*):
   coords.jsonl           collected legacy q3 coords (source + orig id + viewport)
   rescored.jsonl         per-coord rescore result (q3 AND sub-threshold) — resume state
   outcome_ledger.jsonl   admitted q3 classic_phoenix rows (intake-ready)
+
+  `rescored.jsonl` IS NOT `descriptor.RESCORE_SUFFIX_FMT` AND MUST NOT BE RENAMED TO IT.
+  Two files with near-identical names sit next to each other here and they are opposites:
+  `rescored.jsonl` is THIS producer's own resume state (184 rows = every coord, one per
+  line of coords.jsonl, appended as Stage B goes and rewritten by `purge_stale`), while
+  `outcome_ledger.rescored_<version>.jsonl` — which this directory does not have and does
+  not need — is a READER-side overlay `descriptor.resolve_rows` merges onto a ledger whose
+  decode block went stale at a head flip. `descriptor.RESCORE_SUFFIX_FMT` names the version
+  partly so the two cannot collide; renaming this file into that convention would hand 184
+  resume rows to the overlay reader as if they were a rescore of a 24-row ledger, and take
+  `purge_stale`'s resume out from under Stage B on the same edit. The 2026-08-06 census
+  noticed the missing sibling and a cleanup pass proposed exactly that rename; it does not
+  apply. CLASSIC NEEDS NO OVERLAY: this pass re-mints under the LIVE pins every run and
+  `purge_stale` drops any row not stamped with the active version, so the ledger is current
+  by construction (all 24 rows read `scorer_version: v10` today) rather than by patch.
   outcome_feats.npz      id -> 1280-D active-head feature for each admitted q3
   distinct_looks.npz     run-global morph distinct-look tally (cos 0.974), resumable
   summary.json           counts + config
