@@ -12,6 +12,22 @@ nothing. The decision is that allocation should be BIASED toward the measured pr
 being GOVERNED by them: cheap partitions keep earning flat-ish volume rather than being handed
 the whole batch stream.
 
+ALPHA 0.7 -> 0.9 AND THE CLAMP 4x -> 16x (Matt, 2026-08-07), because run 2 turned the
+regularizer into the error source. `steady_state_v2_20260807` is 357 active minutes against
+run 1's 60 and mines 10-60x the currency per partition, so "one warm-up hour" is no longer
+what the seed rests on and the shrink no longer has that much uncertainty to absorb. The
+CLAMP is the sharper of the two: it bounds the LIVE EMA to a factor around the seed, and run
+2 finished with three of nine partitions pinned at the band edge — `price_raw/seed` was
+**15.6x on multibrot4, 18.1x on multibrot3 and 5.0x on julia:multibrot3**, all reported at
+4.0x. A run whose own measurement is pricing 3 of 9 partitions AT THE BOUND is not measuring
+those partitions, which is the same objection `derive_quota_prices` raises against a magnitude
+band on the seed. 16x is wide enough to hold every ratio run 2 actually produced.
+
+    ALPHA 0.7 -> 0.9   spread S -> S**0.9 (was S**0.7): the shrink is a smaller correction
+                       because the population under it is a 6-hour run, not a warm-up hour.
+    CLAMP 4x -> 16x    the live EMA is free to reach what the run measures; the seed still
+                       orders the early batches and still centres the band.
+
 THE ESTIMATOR IS SHRINKAGE, NOT A BOUND, AND THAT IS THE POINT. `derive_quota_prices` refused
 a magnitude band (`[seed/4, seed*4]`) because a clamp cannot tell "implausible" from "the
 thing we ran the run to find out" — at the band edge it reports the BAND, discarding the
@@ -28,11 +44,14 @@ the median is unchanged; every log-ratio between two partitions is multiplied by
 ALPHA=0.7). Geometric and not arithmetic because a price is a RATE — the meaningful distance
 between 0.1 and 1.0 min/unit is the same as between 1.0 and 10.0.
 
-SEED ONLY. This touches `prices`, which `pop_quota.CostToMine` reads exactly once, into
-`self.seed`. The in-run batch-aggregated pricing (`end_window` -> the EMA in `self.raw`) is
-untouched and converges to whatever the run actually measures within a few windows; the seed
-orders the early batches and sets the clamp band around itself. Regularizing a live EMA would
-be a different and much worse thing — a run that cannot learn its own costs.
+SEED ONLY — AND THE CLAMP, WHICH IS THE ONE THING HERE THAT IS NOT. `prices` is read exactly
+once by `pop_quota.CostToMine`, into `self.seed`; the in-run batch-aggregated pricing
+(`end_window` -> the EMA in `self.raw`) is untouched and converges to whatever the run
+actually measures. Regularizing a live EMA would be a different and much worse thing — a run
+that cannot learn its own costs. `price_clamp` is carried in the same file because
+`CostToMine` reads it from the same config, and it is a BAND AROUND THE SEED rather than a
+value applied to one: widening it does not move a price, it stops the seed from holding the
+EMA away from the measurement.
 
 DEFAULTED ROWS ARE NOT SHRUNK AND DO NOT SET THE MEDIAN. A defaulted row carries `SEED_PRICE`
 because it has no measurement (`derive_quota_prices`, MIN_UNITS); shrinking it toward the
@@ -73,16 +92,25 @@ from tools import paths as _paths                       # noqa: E402
 SCHEMA = "pop_quota_cost_to_mine/1"                     # same schema as the measured table:
 #: the CONSUMER contract is identical, only the derivation of `prices` differs.
 
-DEFAULT_SOURCE = "data/atlas/quota_prices_v1.json"
-DEFAULT_OUT = "data/atlas/quota_prices_regularized_v1.json"
+DEFAULT_SOURCE = "data/atlas/quota_prices_20260807.json"
+DEFAULT_OUT = "data/atlas/quota_prices_regularized_20260807.json"
 
-# The shrinkage weight on the MEASURED price, in log space. Matt, 2026-08-05. 1.0 would be the
-# raw measured table (fully governed by one warm-up hour); 0.0 would be a flat table at the
-# median (the measurement discarded). 0.7 is the stated intent — "biased toward the prices but
-# not fully governed by a 32x spread" — and it lands the table's spread at 32.2**0.7 = 11.4x.
-# A NAMED CONSTANT and recorded in the artifact, so a later reader can re-derive at a different
-# alpha instead of guessing which one produced the file in front of them.
-ALPHA = 0.7
+# The shrinkage weight on the MEASURED price, in log space. Matt: 0.7 on 2026-08-05, 0.9 on
+# 2026-08-07. 1.0 would be the raw measured table; 0.0 a flat table at the median (the
+# measurement discarded). 0.7 was sized against one 60-minute all-warm-up run; 0.9 is sized
+# against `steady_state_v2_20260807`, 357 active minutes and 10-60x the currency per
+# partition, where the measurement carries most of the weight it claims. A NAMED CONSTANT and
+# recorded in the artifact, so a later reader can re-derive at a different alpha instead of
+# guessing which one produced the file in front of them.
+ALPHA = 0.9
+
+# The band the LIVE EMA may occupy around its seed, as a factor (`CostToMine.price` bounds
+# `raw` into `[seed/clamp, seed*clamp]`). 4.0 — `pop_quota.PRICE_CLAMP`, the module default a
+# table-less run still gets — bound three of nine partitions for the whole of run 2 and
+# reported 4.0x where the run had measured 15.6x, 18.1x and 5.0x. Carried in the derived table
+# rather than changed in `pop_quota` because it is a property of THIS seed population: a wide
+# band is only safe around a seed with a long run behind it.
+CLAMP = 16.0
 
 # The shrink target. `median` and not `mean`: the target is a location for the log-price
 # distribution and the measured table is 9 rows with a 32x range, where one partition priced
@@ -131,7 +159,8 @@ def spread(prices) -> float:
     return (max(vals) / lo) if lo > 0 else float("inf")
 
 
-def regularize(doc: dict, *, alpha: float = ALPHA, source: str | None = None) -> dict:
+def regularize(doc: dict, *, alpha: float = ALPHA, clamp: float = CLAMP,
+               source: str | None = None) -> dict:
     """The regularized table + the provenance that lets a reader re-derive it or read it
     beside the measurement it came from.
 
@@ -167,20 +196,36 @@ def regularize(doc: dict, *, alpha: float = ALPHA, source: str | None = None) ->
               "with tools/atlas/regularize_quota_prices.py — never hand-edit a row, and "
               "never edit the measured table this is derived from." % alpha),
         prices=out_prices,
-        # Carried over verbatim: this re-derives the SEED only. The EMA rate, the clamp band
-        # and the dry-time cap are the run's own mechanism and are not a shrinkage decision.
+        # Carried over verbatim: the EMA rate and the dry-time cap are the run's own
+        # mechanism and are not a seed decision. `price_clamp` is the exception and is set
+        # HERE — it is the band around the seed this file writes, so it belongs to the same
+        # decision as ALPHA (see the module docstring).
         seed_price=float(doc.get("seed_price", pquota.SEED_PRICE)),
         price_ema=float(doc.get("price_ema", pquota.PRICE_EMA)),
-        price_clamp=float(doc.get("price_clamp", pquota.PRICE_CLAMP)),
+        price_clamp=float(clamp),
         cap_minutes=float(doc.get("cap_minutes", pquota.CAP_MINUTES)),
         _provenance=dict(
             estimand="the measured seed, shrunk toward the measured median in LOG space",
             formula=FORMULA,
             alpha=alpha,
-            alpha_basis=("Matt, 2026-08-05: allocation biased toward the measured prices but "
-                         "not governed by a 32x spread read off a single 60-min all-warm-up "
-                         "run. Every log-ratio is multiplied by alpha, so the table's spread "
-                         "goes from S to S**alpha."),
+            alpha_basis=("Matt, 2026-08-05 at 0.7: allocation biased toward the measured "
+                         "prices but not governed by a 32x spread read off a single 60-min "
+                         "all-warm-up run. Every log-ratio is multiplied by alpha, so the "
+                         "table's spread goes from S to S**alpha. RAISED to 0.9 on "
+                         "2026-08-07: the source is now a 357-active-minute run mining "
+                         "10-60x the currency per partition, so there is less uncertainty "
+                         "for the shrink to absorb."),
+            price_clamp=float(clamp),
+            price_clamp_basis=("Matt, 2026-08-07: 4.0 (pop_quota.PRICE_CLAMP) bound 3 of 9 "
+                               "partitions for the whole of steady_state_v2_20260807 — "
+                               "price_raw/seed was 15.6x (multibrot4), 18.1x (multibrot3) "
+                               "and 5.0x (julia:multibrot3), every one reported at 4.0x. "
+                               "The clamp bounds the LIVE EMA around this seed, so at the "
+                               "band edge the run is quoting the band instead of its own "
+                               "measurement."),
+            price_clamp_applies_to=("the in-run EMA only (CostToMine.price bounds `raw` into "
+                                    "[seed/clamp, seed*clamp]); it moves no price in this "
+                                    "file"),
             shrink_target=SHRINK_TARGET,
             shrink_target_value=round(target, 6),
             shrink_target_population=("MEASURED rows only; a defaulted row carries SEED_PRICE "
@@ -222,6 +267,8 @@ def format_table(table: dict) -> str:
                      f"{ratio:>7.2f}  {c['status']}")
     lines.append(f"  {'spread (max/min)':{w}s} {prov['spread_measured']:>10.1f}x "
                  f"{prov['spread_regularized']:>11.1f}x")
+    lines.append(f"  live-EMA clamp band: [seed/{prov['price_clamp']:g}, "
+                 f"seed*{prov['price_clamp']:g}]")
     return "\n".join(lines)
 
 
@@ -233,6 +280,10 @@ def main():
     ap.add_argument("--alpha", type=float, default=ALPHA,
                     help="shrinkage weight on the measured price in log space "
                          "(default %(default)s)")
+    ap.add_argument("--price-clamp", type=float, default=CLAMP,
+                    help="the band the LIVE in-run EMA may occupy around its seed, as a "
+                         "factor (default %(default)s); written into the artifact and read "
+                         "by pop_quota.CostToMine")
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--write", action="store_true",
                     help="write the artifact; without it this prints the two columns only")
@@ -241,7 +292,8 @@ def main():
     src = Path(a.source)
     if not src.is_absolute():
         src = ROOT / src
-    table = regularize(load_measured(src), alpha=a.alpha, source=a.source)
+    table = regularize(load_measured(src), alpha=a.alpha, clamp=a.price_clamp,
+                       source=a.source)
     print(format_table(table))
     if not a.write:
         print("\n(dry run — pass --write to write the artifact)", file=sys.stderr)

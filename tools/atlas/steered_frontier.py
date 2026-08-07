@@ -83,6 +83,7 @@ from active_ckpt import ACTIVE_CKPT, auto_maxiter  # noqa: E402
 import partitions as P                   # noqa: E402  (THE partition registry + phoenix split)
 import deficit_scheduler as dsched       # noqa: E402  (pure; torch-free scheduling logic)
 import pop_quota as pquota               # noqa: E402  (harvest v2 allocator; pure, torch-free)
+import regularize_quota_prices as rqp    # noqa: E402  (THE seed-table paths; pure, no torch)
 import supply_routing as srt             # noqa: E402  (harvest v2 channel table; pure data)
 import minibrot_maneuvers as mnv         # noqa: E402  (pure mpmath; no subprocess, no torch)
 import maneuver_screen as msc            # noqa: E402  (the field half: spawns the engine)
@@ -432,11 +433,15 @@ ROOT_REFILL_SHARE = 0.25     # in-loop root-draw seconds may not exceed this sha
 # invisibly: nothing in the run record distinguishes "seeded flat on purpose" from "the file
 # moved". So the default is the artifact, and its ABSENCE IS FATAL (`load_quota_prices`).
 #
-# The REGULARIZED table and not the measured one: the measured prices come from one 60-minute
-# all-warm-up run, and Matt's 2026-08-05 decision is that allocation is biased toward them
-# without being governed by them (`regularize_quota_prices.py`, alpha=0.7). The measured table
+# The REGULARIZED table and not the measured one: allocation is biased toward the measured
+# prices without being governed by them (`regularize_quota_prices.py`). The measured table
 # stays on disk as the evidence and is what the regularized one is re-derived from.
-QUOTA_PRICES_DEFAULT_REL = "data/atlas/quota_prices_regularized_v1.json"
+#
+# RESEEDED OFF RUN 2 (2026-08-07): `..._regularized_20260807.json`, derived from
+# `steady_state_v2_20260807` (357 active min) at alpha=0.9 with a 16x live-EMA band. The
+# run-1 pair (`quota_prices_v1.json` / `..._regularized_v1.json`, 60 warm-up minutes,
+# alpha=0.7, 4x band) stays on disk as the record of what run 2 itself was seeded with.
+QUOTA_PRICES_DEFAULT_REL = "data/atlas/quota_prices_regularized_20260807.json"
 QUOTA_PRICES_DEFAULT = ROOT / QUOTA_PRICES_DEFAULT_REL
 
 
@@ -458,8 +463,8 @@ def load_quota_prices(path=None) -> dict:
             f"allocation policy, not a degraded one, and it would run unrecorded.\n"
             f"Rebuild it:\n"
             f"    uv run python tools/atlas/regularize_quota_prices.py --write\n"
-            f"(which reads the measured table `data/atlas/quota_prices_v1.json`; regenerate "
-            f"THAT from a finished run with tools/atlas/derive_quota_prices.py)")
+            f"(which reads the measured table `{rqp.DEFAULT_SOURCE}`; regenerate THAT from a "
+            f"finished run with tools/atlas/derive_quota_prices.py)")
     return json.loads(p.read_text(encoding="utf-8"))
 
 # Steered production walk config (mirror of production_seeder; keeps the gates identical).

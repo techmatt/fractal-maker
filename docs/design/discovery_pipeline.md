@@ -230,7 +230,7 @@ and `root_draw_share` **0.0114** against its 0.25 cap; `wall_over_active` 1.02, 
 appeared at **b381**, and this run stopped at b76. The mechanism is exercised; it is not
 evidence about the regime it was written for. `[code: tools/atlas/steered_frontier.py::refill_starved]`
 
-### 3.4 The floor was allocated and never popped
+### 3.4 The floor was allocated and never popped — and the reseed off run 2
 
 `[measured: data/discovery/steady_state_v2_20260807, 356.7 active min / 361 batches, 2026-08-07]`
 `[cmd: uv run python tools/atlas/harvest_v2_readout.py --run-dir <run>]`
@@ -277,6 +277,25 @@ trace; the alarm is lifted to a top-level `UNSPENT_FLOOR_PARTITIONS` key and pri
 both the run's own readout and `harvest_v2_readout`. The quota trace additionally stamps
 `via` (`gap` / `floor_carry`) per pop, so a floor being HELD is distinguishable from one that
 is merely never tested.
+
+**The price table is reseeded off run 2, and the clamp was the error source.** Run 2 is 357
+active minutes against run 1's 60 and mines 10–60× the currency per partition, so the α = 0.7
+shrink sized for "one warm-up hour" now removes more than it should: the reseed is **α = 0.9**
+(`data/atlas/quota_prices_20260807.json` → `..._regularized_20260807.json`, the new
+`--quota-prices` default; the run-1 pair stays as the record of what run 2 itself ran on).
+The sharper change is the **live-EMA clamp, 4× → 16×**: run 2 finished with three of nine
+partitions pinned at the band edge — `price_raw/seed` was **15.6× (multibrot4), 18.1×
+(multibrot3), 5.0× (julia:multibrot3)**, every one reported at 4.0×. A run whose own EMA is
+quoting the bound for a third of its partitions is not measuring them, which is the objection
+`derive_quota_prices` already raises against a magnitude band on the seed. The clamp is
+therefore written by the regularizer rather than inherited from the measured table: it is a
+band around *this* seed, so it belongs to the same decision as α. **Two rows are `defaulted`
+at `SEED_PRICE` 3.0** — `julia:mandelbrot` (0 units) and `mandelbrot` (0.3 units, below the
+`CLASS_WEIGHT[4]` evidence floor) — because the starvation above is exactly what stopped them
+being measured. Neither moves an allocation today (both are floor-bound: deficits 0.0 and 3.8
+against price-weighted deficits two orders larger elsewhere), and the carry now guarantees
+they are served and priced next run.
+`[code: tools/atlas/test_regularize_quota_prices.py; tools/atlas/test_derive_quota_prices.py]`
 
 ## 4. τ_h on record — the real per-partition curve
 

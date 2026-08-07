@@ -25,8 +25,11 @@ for _p in (HERE, ROOT, ROOT / "tools"):
 import pop_quota as pquota                 # noqa: E402
 import regularize_quota_prices as rq       # noqa: E402
 
-MEASURED = ROOT / "data" / "atlas" / "quota_prices_v1.json"
-REGULARIZED = ROOT / "data" / "atlas" / rq.DEFAULT_OUT.split("/")[-1]
+# Both read off the module's OWN constants: the pair moves together every time the seed is
+# reseeded off a new run (run 1 -> run 2 on 2026-08-07), and a test pinned to a literal path
+# goes red against the previous run's record rather than against the live table.
+MEASURED = ROOT / rq.DEFAULT_SOURCE
+REGULARIZED = ROOT / rq.DEFAULT_OUT
 
 
 def _table(prices, *, defaulted=(), **kw):
@@ -110,14 +113,26 @@ def test_a_foreign_price_table_is_refused_by_schema(tmp_path):
         rq.load_measured(p)
 
 
-def test_the_ema_clamp_and_cap_are_carried_over_untouched():
-    """SEED ONLY. Regularizing the live EMA or the clamp band would be a run that cannot learn
-    its own costs; only `prices` may differ from the source table."""
+def test_the_ema_rate_and_cap_are_carried_over_untouched():
+    """SEED ONLY. Regularizing the live EMA rate or the dry-time cap would be a run that
+    cannot learn its own costs; they are the run's mechanism, not a seed decision."""
     src = _table({"a": 0.1, "b": 1.0}, )
     src.update(price_ema=0.42, price_clamp=7.0, cap_minutes=13.0, seed_price=5.0)
     t = rq.regularize(src)
-    assert (t["price_ema"], t["price_clamp"], t["cap_minutes"], t["seed_price"]) == \
-        (0.42, 7.0, 13.0, 5.0)
+    assert (t["price_ema"], t["cap_minutes"], t["seed_price"]) == (0.42, 13.0, 5.0)
+
+
+def test_the_clamp_band_is_SET_here_and_not_inherited_from_the_measured_table():
+    """The 2026-08-07 exception, and the reason it is an exception: `price_clamp` is a band
+    AROUND THE SEED THIS FILE WRITES, so it belongs to the same decision as ALPHA. Inheriting
+    it is how run 2 ran a 4x band around a run-1 seed and reported 4.0x for three partitions
+    whose EMA had measured 15.6x, 18.1x and 5.0x."""
+    src = _table({"a": 0.1, "b": 1.0})
+    src.update(price_clamp=7.0)                      # the source table's band is ignored
+    assert rq.regularize(src)["price_clamp"] == rq.CLAMP == 16.0
+    assert rq.regularize(src, clamp=2.5)["price_clamp"] == 2.5
+    prov = rq.regularize(src)["_provenance"]
+    assert prov["price_clamp"] == rq.CLAMP and "EMA" in prov["price_clamp_applies_to"]
 
 
 # --------------------------------------------------------------------------- #

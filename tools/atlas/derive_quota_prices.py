@@ -39,7 +39,14 @@ is defaulted to `SEED_PRICE` and stamped. `CostToMine.price` still bounds the LI
 factor around whatever seed it is handed, which is the bound that belongs to the run.
 
     uv run python tools/atlas/derive_quota_prices.py \
-        --run-dir data/discovery/steady_state_v1_20260805 --out data/atlas/quota_prices_v1.json
+        --run-dir data/discovery/steady_state_v2_20260807 \
+        --out data/atlas/quota_prices_20260807.json
+
+EACH REGENERATION TAKES A NEW DATED `--out`. A measured table is the EVIDENCE a seed was
+derived from, and every earlier one stays as a record — `quota_prices_v1.json`
+(steady_state_v1_20260805) is not superseded by `quota_prices_20260807.json`, it is the other
+run. `DEFAULT_OUT` therefore tracks the newest table rather than a stable name, and pointing a
+regeneration at an existing file overwrites a record.
 
 Consumed by `steered_frontier.py --quota-prices <path>`; the file's keys are exactly the
 config `CostToMine.__init__` reads (`prices`, `seed_price`, `price_ema`, `price_clamp`,
@@ -63,7 +70,8 @@ import pop_quota as pquota                              # noqa: E402
 from tools import paths as _paths                       # noqa: E402
 from tools.corpus import artifacts as _artifacts        # noqa: E402
 
-DEFAULT_OUT = "data/atlas/quota_prices_v1.json"
+DEFAULT_OUT = "data/atlas/quota_prices_20260807.json"     # the NEWEST measured table; a new
+#: derivation takes a new dated name (see the module docstring) — this is not a stable path.
 SCHEMA = "pop_quota_cost_to_mine/1"
 
 # The evidence floor a row must clear to be PRICED rather than defaulted: one full class-4's
