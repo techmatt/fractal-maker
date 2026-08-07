@@ -33,6 +33,9 @@ except Exception:
     pass
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 DISC = ROOT / "data/discovery"
 
 JPARTS = ["julia:mandelbrot", "julia:multibrot3", "julia:multibrot4", "julia:multibrot5"]
@@ -46,7 +49,7 @@ def load(run_or_path):
     p = Path(run_or_path)
     if not p.is_absolute():
         p = DISC / run_or_path / "harvest_log.jsonl"
-    return [json.loads(l) for l in open(p, encoding="utf-8") if l.strip()]
+    return run_record.require_rows(p)  # segments-aware; absence stays LOUD
 
 
 def load_summary(run_or_path):

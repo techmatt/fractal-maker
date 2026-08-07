@@ -41,6 +41,7 @@ for _p in (str(HERE), str(ROOT), str(ROOT / "tools"), str(ROOT / "tools" / "corp
            str(ROOT / "tools" / "scoring"), str(ROOT / "tools" / "mining")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import paths                                    # noqa: E402
 import prescreen                                # noqa: E402
@@ -65,10 +66,7 @@ FATE_ORDER = ("admitted", "q3_dup", "canon_not_q3", "reframe_not_q3", "guarded",
 def load_rows(run_dir: Path) -> list[dict]:
     p = Path(run_dir) / "q4_candidates.jsonl"
     rows, seen = [], set()
-    for line in p.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        r = json.loads(line)
+    for r in run_record.require_rows(p):
         key = (r["partition"], r["cx"], r["cy"], r["fw"], r.get("julia_c_re"))
         if key in seen:
             continue

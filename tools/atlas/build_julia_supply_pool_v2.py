@@ -64,6 +64,7 @@ ROOT = HERE.parents[1]
 for _p in (HERE, ROOT, ROOT / "tools", ROOT / "tools" / "sourcing"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import paths                                    # noqa: E402
 import supply_routing as sr                     # noqa: E402
@@ -82,8 +83,7 @@ CHANNEL_ORDER = ("q4_mining_ranked", "q4_mining_recall", "near_minibrot", "seede
 
 
 def _jl(p: Path):
-    return [json.loads(l) for l in Path(p).read_text(encoding="utf-8").splitlines()
-            if l.strip()]
+    return run_record.require_rows(p)     # segments-aware (q4_candidates.jsonl rotates)
 
 
 # --------------------------------------------------------------------------- #

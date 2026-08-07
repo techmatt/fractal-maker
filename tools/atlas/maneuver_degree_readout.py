@@ -35,6 +35,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "tools"))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import minibrot_maneuvers as mnv    # noqa: E402
 import paths                        # noqa: E402
@@ -57,8 +58,7 @@ def load_maneuvers(run_dir: Path):
       no parent view. They are not operator decisions and must not enter an availability
       rate; filtered on the field an operator row always has.
     """
-    rows = [json.loads(l) for l in
-            (run_dir / "maneuvers.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    rows = run_record.require_rows(run_dir / "maneuvers.jsonl")
     # Node ids this run pushed as maneuver ORIGINS. A later probe whose parent is one of
     # them is the operator being applied to its own output — see `self_fed` below.
     pushed_ids = {r["node_id_pushed"] for r in rows if r.get("node_id_pushed") is not None}

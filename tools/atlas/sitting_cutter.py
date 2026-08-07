@@ -97,6 +97,7 @@ for _p in (HERE, ROOT, ROOT / "tools", ROOT / "tools" / "corpus",
            ROOT / "tools" / "sourcing"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import apportion                                # noqa: E402  (THE apportionment rules)
 import apply_interior_rule as air               # noqa: E402  (the rule id + threshold)
@@ -806,8 +807,9 @@ def recover_dive_arms(store: Path, dive_log: Path) -> tuple[dict, str]:
     recoverable, where a wrong arm would silently invert the contrast the leg exists to
     measure."""
     def _rd(p):
-        return [json.loads(l) for l in
-                Path(p).read_text(encoding="utf-8").splitlines() if l.strip()]
+        # run_record: `store` is q4_candidates.jsonl, which rotates into .jsonl.gz segments —
+        # and APPEND ORDER across segments is exactly what the join argument below rests on.
+        return run_record.require_rows(p)
     rows, log = _rd(store), _rd(dive_log)
     seen: list = []
     for r in rows:

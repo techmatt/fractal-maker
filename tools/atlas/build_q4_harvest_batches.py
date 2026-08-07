@@ -52,6 +52,7 @@ for _p in (str(HERE), str(ROOT), str(ROOT / "tools"), str(ROOT / "tools" / "corp
            str(ROOT / "tools" / "sourcing"), str(ROOT / "tools" / "scoring")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import paths                                    # noqa: E402
 import apportion                                # noqa: E402  (THE apportionment rules)
@@ -89,10 +90,7 @@ LEAK_KEYS = ("fate", "rank_tier", "rank_score", "cheap_eord", "cheap_pgood", "ch
 
 
 def _jl(p):
-    p = Path(p)
-    if not p.exists():
-        return []
-    return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return run_record.read_rows(p)      # segments-aware; [] when the stream has no files
 
 
 # =========================================================================== #

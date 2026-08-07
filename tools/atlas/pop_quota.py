@@ -88,6 +88,8 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "sc
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import run_record                                 # noqa: E402  (segmented run-record layer)
+
 # ------------------------------------------------------------------------- #
 # Currency constants. Named here because three readers (the census, the in-run credit, the
 # readout) must weight a class-3 identically or the deficit and the price stop being
@@ -668,6 +670,9 @@ class PopQuota:
             candidates={p: 0 for p in self.partitions},
             admitted={p: 0 for p in self.partitions})
         self.trace_path = self.run_dir / "quota_trace.jsonl"
+        # Segmented (run_record.SEGMENTED_STREAMS): opened lazily so constructing an allocator
+        # never creates a run dir, and so a resumed run adopts its existing tail.
+        self._trace_writer: "run_record.SegmentWriter | None" = None
         self._last_alloc: Allocation | None = None
         self._last_eff: dict | None = None
         self._served: str | None = None
@@ -814,8 +819,9 @@ class PopQuota:
                    capped=sorted(self.cost.capped),
                    queue_lens={p: int(queue_lens.get(p, 0)) for p in self.partitions})
         self.trace_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.trace_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec) + "\n")
+        if self._trace_writer is None:
+            self._trace_writer = run_record.SegmentWriter(self.trace_path)
+        self._trace_writer.write_row(rec)
 
     # ---- state ---------------------------------------------------------- #
     def state_dict(self) -> dict:

@@ -66,6 +66,7 @@ import maneuver_inspection_sheet as mis         # noqa: E402  (the population lo
 import deep_center_finder as dcf                # noqa: E402  (the corpus crop cap policy)
 from tools.v7 import build_manifest as bm       # noqa: E402  (assign_split — the authority)
 sys.path.insert(0, str(bm.ROOT / "tools" / "scoring"))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 import batch_registry as br                     # noqa: E402  (THE registry bm reads)
 
 STAMP = "2026-08-01"
@@ -100,8 +101,7 @@ LEAK_KEYS = ("selection_role", "stratum", "composite", "composite_bin", "exempla
 
 
 def _read_jsonl(p):
-    return [json.loads(l) for l in Path(p).read_text(encoding="utf-8").splitlines()
-            if l.strip()]
+    return run_record.require_rows(p)     # segments-aware (maneuvers.jsonl rotates)
 
 
 # =========================================================================== #

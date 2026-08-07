@@ -66,6 +66,7 @@ ROOT = HERE.parents[1]
 for _p in (HERE, ROOT / "tools" / "orbital", ROOT / "tools" / "corpus", ROOT / "tools"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import paths                                    # noqa: E402
 import field_metrics as fm                      # noqa: E402  DENSITY, _plane_radius_grid
@@ -327,8 +328,7 @@ def load_model(variant: str = "primary", path=None) -> FittedScore:
 # the fit driver
 # =========================================================================== #
 def _jl(p):
-    return [json.loads(l) for l in Path(p).read_text(encoding="utf-8").splitlines()
-            if l.strip()]
+    return run_record.require_rows(p)     # segments-aware (maneuvers.jsonl rotates)
 
 
 def load_table(root: Path = ROOT) -> list[dict]:
@@ -363,14 +363,12 @@ def load_table(root: Path = ROOT) -> list[dict]:
     # partition-qualified because node ids are per-partition tree indices.
     want = {r["candidate_key"] for r in feats}
     roots = {}
-    with (root / RUN_DIR_REL / "maneuvers.jsonl").open(encoding="utf-8") as f:
-        for line in f:
-            r = json.loads(line)
-            if not r.get("available") or r.get("op") == "probe":
-                continue
-            key = f"{r.get('atom_key')}|{r.get('k')}"
-            if key in want and key not in roots:
-                roots[key] = f"{r.get('partition')}:{r.get('root_id')}"
+    for r in run_record.iter_rows(root / RUN_DIR_REL / "maneuvers.jsonl"):
+        if not r.get("available") or r.get("op") == "probe":
+            continue
+        key = f"{r.get('atom_key')}|{r.get('k')}"
+        if key in want and key not in roots:
+            roots[key] = f"{r.get('partition')}:{r.get('root_id')}"
     if len(roots) != len(want):
         raise SystemExit(f"root_id join is short: {len(roots)} of {len(want)}")
 

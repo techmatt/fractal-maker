@@ -57,6 +57,7 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "atlas", ROOT / "tools" / "cor
            ROOT / "tools" / "mining", ROOT / "tools" / "scoring", ROOT / "tools" / "reframe"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import harvest_log_registry as hreg                          # noqa: E402
 import location as loc_mod                                   # noqa: E402
@@ -108,11 +109,9 @@ def _harvest_rows(runs=None):
     out = []
     for run in (hreg.require_harvest_runs() if runs is None else runs):
         n, no_geom, off_partition = 0, 0, 0
-        for line in open(run.log, encoding="utf-8"):
-            line = line.strip()
-            if not line:
-                continue
-            r = json.loads(line)
+        # require_, not iter_: a pinned run whose log has gone would otherwise contribute
+        # zero rows and print as a run with zero re-scoreable checks.
+        for r in run_record.require_rows(run.log):
             # Geometry was added to the harvest row late (the "every reject fate is
             # renderable from the log alone" fix). Older rows carry no cx/cy/fw and are
             # simply not re-scoreable — counted, never guessed at. This is ALSO what keeps

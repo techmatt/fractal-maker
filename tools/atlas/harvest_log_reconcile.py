@@ -57,6 +57,7 @@ ROOT = HERE.parents[1]
 for _p in (HERE, ROOT, ROOT / "tools"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 LOG_NAME = "harvest_log.jsonl"
 
@@ -76,15 +77,12 @@ def read_rows(run_dir: Path) -> list[dict]:
     absence-tolerant read of exactly the kind that un-guards when its subject is damaged, so
     it is returned as a count for the caller to report."""
     p = Path(run_dir) / LOG_NAME
-    if not p.exists():
+    if not run_record.exists(p):
         raise ReconcileError(f"{p} missing — the run wrote no harvest log. A run that "
                              f"harvested nothing still creates it on its first check, so "
                              f"absence means the run never reached a harvest.")
     rows, torn = [], 0
-    for line in p.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    for line in run_record.iter_lines(p):
         try:
             rows.append(json.loads(line))
         except json.JSONDecodeError:

@@ -39,6 +39,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "tools"))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 try:                        # a readout that CRASHES on its own last print reports
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # a non-zero exit for a
@@ -74,10 +75,10 @@ def per_batch_depth(run_dir: Path) -> dict[int, dict]:
     This is the durable half of the join: the run records it itself, and it is per-candidate
     rather than per-admission, so it does not inherit the admission gate's selection."""
     p = run_dir / "prio_terms.jsonl"
-    if not p.exists():
+    if not run_record.exists(p):
         return {}
     depths: dict[int, list] = defaultdict(list)
-    for line in p.read_text(encoding="utf-8").splitlines():
+    for line in run_record.iter_lines(p):
         if not line.strip():
             continue
         r = json.loads(line)
@@ -194,9 +195,9 @@ def main() -> int:
           "where the walk chose to go (`measurement_practice.md`).", ""]
     probes, decisions = Counter(), Counter()
     mpath = rd / "maneuvers.jsonl"
-    if mpath.exists():
+    if run_record.exists(mpath):
         seen = set()
-        for line in mpath.read_text(encoding="utf-8").splitlines():
+        for line in run_record.iter_lines(mpath):
             if not line.strip():
                 continue
             r = json.loads(line)
@@ -216,8 +217,8 @@ def main() -> int:
             decisions[d] += 1
     pops = Counter()
     ppath = rd / "prio_terms.jsonl"
-    if ppath.exists():
-        for line in ppath.read_text(encoding="utf-8").splitlines():
+    if run_record.exists(ppath):
+        for line in run_record.iter_lines(ppath):
             if line.strip():
                 d = mnv.degree_of(json.loads(line).get("partition") or "")
                 if d is not None:

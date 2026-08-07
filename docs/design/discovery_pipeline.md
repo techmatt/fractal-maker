@@ -331,3 +331,36 @@ steered) logs are committed via LFS, so the curve is on record and future runs r
 *Other* gitignored reject-class telemetry still survives only in the backup —
 `prio_terms.jsonl` (per pushed candidate incl. the never-admitted majority, 57 MB),
 `julia_hooks.jsonl`, `saturation.jsonl` — inventoried but not recovered here.
+
+### The committed record is SEGMENTED (2026-08-07)
+
+Retaining all of it made the record large: measured on `steady_state_v1_20260805` (70 active
+min) the committed run dir is **10.30 MB**, i.e. **8.9 MB/h**, and `harvest_v2_proving_20260803`
+ran at **14.2 MB/h** — so an 8 h run lands at 50–70 MB and anything past ~2.5 h crosses
+CLAUDE.md's 20 MB commit rule. None of it is regenerable and none of it may be thinned, so the
+five per-row streams are **rotated into gzipped segments** instead
+(`tools/run_record.py`, `SEGMENTED_STREAMS` = harvest_log / prio_terms / maneuvers /
+q4_candidates / quota_trace):
+
+```
+<run>/harvest_log.000.jsonl.gz   segment 0, closed and compressed (LFS)
+<run>/harvest_log.001.jsonl.gz   ...
+<run>/harvest_log.jsonl          the LIVE tail — plain, <= 4 MiB, absent once the run finishes
+```
+
+Rows are read segments-then-tail, i.e. write order, by `run_record.iter_rows` /
+`read_rows` — **which is how every consumer must read them**: a finished run has no plain
+`.jsonl` at all, so `open(run/"harvest_log.jsonl")` sees nothing, and a `glob` keyed on that
+exact name stops discovering runs the moment they complete (`harvest_log_registry.LOG_GLOB`).
+`tools/test_run_record.py` fails on any tracked module that reads one directly. A run dir
+written before this change has no segments and reads unchanged.
+
+**Why compression and not field-dropping.** Git zlib-compresses an ordinary blob already:
+committing `maneuvers.jsonl` raw packs to 451,089 B and committing the same rows as `.gz`
+packs to 451,314 B (measured 2026-08-07, `git gc --aggressive`, both ways). Compression wins
+here only because the four big streams are **LFS-tracked**, and LFS ships the object
+byte-for-byte — so their 7–11× is 7–11× off the bytes the rule counts. Field-dropping was
+measured on the same file as the alternative and is not competitive: `atom_key` −5.7% of
+compressed bytes, `screen.interior_radial` −7.4%, every null −0.9%, each paying real
+information. Result: the same five runs go from 12–114 MB to **1.6–17.0 MB projected at 8 h**
+(worst observed rate: `steady_state_v1_20260805`, 17.0 MB tree / 12.4 MB LFS+pack).

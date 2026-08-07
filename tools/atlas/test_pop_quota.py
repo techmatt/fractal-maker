@@ -18,9 +18,10 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-for _p in (HERE, ROOT, ROOT / "tools" / "scoring"):
+for _p in (HERE, ROOT, ROOT / "tools", ROOT / "tools" / "scoring"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+import run_record  # noqa: E402
 
 import pop_quota as pq   # noqa: E402
 
@@ -665,7 +666,7 @@ def test_log_choice_writes_intent_realized_and_bucket(tmp_path):
     q = _quota(tmp_path, {"a": 10.0, "b": 0.0})
     q.pick({"a": 1, "b": 1})
     q.log_choice(1, "a", {"a": 1, "b": 1})
-    rec = json.loads((tmp_path / "quota_trace.jsonl").read_text(encoding="utf-8").strip())
+    rec = run_record.read_rows(tmp_path / "quota_trace.jsonl")[0]
     assert rec["chosen"] == "a" and rec["bucket"] in ("floor", "deficit")
     assert set(rec) >= {"intended", "realized", "deficit", "price", "capped", "queue_lens"}
 
@@ -733,7 +734,7 @@ def test_the_trace_logs_the_effective_vector_rather_than_leaving_it_derivable(tm
     q = _quota(tmp_path, {"multibrot3": 0.0, "julia:multibrot3": 0.0})
     q.pick({"multibrot3": 5, "julia:multibrot3": 0})
     q.log_choice(1, "multibrot3", {"multibrot3": 5, "julia:multibrot3": 0})
-    rec = json.loads((tmp_path / "quota_trace.jsonl").read_text(encoding="utf-8").strip())
+    rec = run_record.read_rows(tmp_path / "quota_trace.jsonl")[0]
     assert rec["effective"]["multibrot3"] == pytest.approx(1.0)
     assert rec["effective"]["julia:multibrot3"] == 0.0
     assert rec["intended"] != rec["effective"]

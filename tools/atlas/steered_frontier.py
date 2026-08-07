@@ -67,6 +67,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import paths as _paths                   # noqa: E402  (storage-class helper: bulk() -> out-of-tree)
 import apportion                         # noqa: E402  (THE two apportionment rules; stdlib-only)
+import run_record                        # noqa: E402  (THE segmented run-record layer; stdlib-only)
 
 # production_seeder wires its own sub-imports (prescreen / reframe / guard / score_lib /
 # active_ckpt) and owns the constants, root pipeline, near-dup machinery, guard, and the
@@ -1149,6 +1150,27 @@ class SteeredFrontier:
             return self.run_dir / "scratch"     # run_dir already out-of-tree
         return _paths.bulk(rel.as_posix() + "/scratch")
 
+    def _writer(self, path: Path):
+        """THE append path for a committed per-row stream. One `run_record.SegmentWriter` per
+        stream, opened lazily (so constructing the crawl creates no run dir) and cached (so the
+        live-tail size is tracked in memory rather than stat'ed per row). Every one of these
+        streams is in `run_record.SEGMENTED_STREAMS`; a bare `open(path, "a")` beside one is
+        what `test_run_record.py`'s source scan fails on."""
+        w = self._stream_writers.get(path)
+        if w is None:
+            w = self._stream_writers[path] = run_record.SegmentWriter(path)
+        return w
+
+    def finalize_streams(self):
+        """Compress every live tail at the end of a run so the committed record is entirely
+        `.jsonl.gz` segments. A killed run simply never calls this and keeps a plain tail of at
+        most `run_record.ROTATE_BYTES` — readable by the same reader, just bigger."""
+        for w in self._stream_writers.values():
+            w.finalize()
+        q = getattr(self, "quota", None)
+        if q is not None and getattr(q, "_trace_writer", None) is not None:
+            q._trace_writer.finalize()
+
     def __init__(self, args):
         self.args = args
         self.run_dir = Path(args.run_dir).resolve()
@@ -1159,6 +1181,7 @@ class SteeredFrontier:
         # single resolver, so a new campaign needs no registry line at all; a run whose
         # run_dir is already out-of-tree (or under scratch/) keeps <run_dir>/scratch.
         self.scratch = self._bulk_scratch()
+        self._stream_writers: dict = {}          # path -> run_record.SegmentWriter (see _writer)
         self.state_path = self.run_dir / "state.json"
         self.stop_path = self.run_dir / "STOP"
         self.harvest_log = self.run_dir / "harvest_log.jsonl"
@@ -1833,7 +1856,8 @@ class SteeredFrontier:
         """Partitions below the low-water that `starved_families` deliberately will not
         refill, each with the reason. A starved partition that is silently absent from both
         the refill list and the run record is indistinguishable from a healthy one — which is
-        exactly how arm B ran 427 batches with eight empty queues and `root_refills=0`."""
+        exactly how arm B ran 427 batches with eight empty queues and `root_refills=0`.
+"""
         q = self.queue_lens() if queue_lens is None else queue_lens
         out = {}
         for part in self.partitions:
@@ -2436,8 +2460,7 @@ class SteeredFrontier:
         return 1
 
     def _log_maneuver(self, row: dict):
-        with open(self.man_log, "a", encoding="utf-8") as f:
-            f.write(json.dumps(row, default=str) + "\n")
+        self._writer(self.man_log).write_row(row, default=str)
 
     def _split_reserved(self, pool: list[dict]) -> tuple[list[dict], list[dict]]:
         """Take the batch out of a PRIORITY-SORTED `pool`, honouring the maneuver floor.
@@ -3072,21 +3095,20 @@ class SteeredFrontier:
         # gap the julia audit hit (precanon_dup / canonical-not-q3 rejects had no coords, so no
         # human could ever eyeball them). Cheap: 3 floats + an optional c pair per harvest check.
         jc = c.get("c")
-        with open(self.harvest_log, "a", encoding="utf-8") as f:
-            f.write(json.dumps(dict(
-                batch=self.batch_i, partition=c["partition"], depth=c["depth"],
-                node_id=c["node_id"], root_id=c["root_id"],
-                cx=c["cx"], cy=c["cy"], fw=c["fw"],
-                julia_c_re=(None if jc is None else str(jc[0])),
-                julia_c_im=(None if jc is None else str(jc[1])),
-                cheap_pgood=c["cheap_pgood"], cheap_eord=c["cheap_eord"],
-                canon_nb=c.get("canon_nb"), canon_pgood=c.get("canon_pg"),
-                canon_pge4=c.get("canon_pge4"),   # third cutpoint (None on a K=3 head)
-                canon_decoded=c.get("canon_decoded"), reframe_decoded=reframe_decoded,
-                admitted=bool(admitted), tau_h=self.tau_h[c["partition"]],
-                precanon_dup=precanon_dup, mix_source=c.get("mix_source"),
-                maneuver=c.get("man"),   # operator/k/origin ride every check, admitted or not
-            )) + "\n")
+        self._writer(self.harvest_log).write_row(dict(
+            batch=self.batch_i, partition=c["partition"], depth=c["depth"],
+            node_id=c["node_id"], root_id=c["root_id"],
+            cx=c["cx"], cy=c["cy"], fw=c["fw"],
+            julia_c_re=(None if jc is None else str(jc[0])),
+            julia_c_im=(None if jc is None else str(jc[1])),
+            cheap_pgood=c["cheap_pgood"], cheap_eord=c["cheap_eord"],
+            canon_nb=c.get("canon_nb"), canon_pgood=c.get("canon_pg"),
+            canon_pge4=c.get("canon_pge4"),   # third cutpoint (None on a K=3 head)
+            canon_decoded=c.get("canon_decoded"), reframe_decoded=reframe_decoded,
+            admitted=bool(admitted), tau_h=self.tau_h[c["partition"]],
+            precanon_dup=precanon_dup, mix_source=c.get("mix_source"),
+            maneuver=c.get("man"),   # operator/k/origin ride every check, admitted or not
+        ))
 
     # ------------------------------------------- maneuvers-on-admissions (v1.6)
     def fire_triggered_maneuvers(self, c, ocx, ocy, ofw, oid, decoded) -> int:
@@ -3298,8 +3320,7 @@ class SteeredFrontier:
             branch=c.get("branch"), scorer_version=ps.SCORER_VERSION,
         )
         self.totals["q4_recorded"] += 1
-        with open(self.q4_log, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec) + "\n")
+        self._writer(self.q4_log).write_row(rec)
 
     # ------------------------------------------------- interior gate (sourcing)
     def interior_gate(self, cands):
@@ -3403,9 +3424,7 @@ class SteeredFrontier:
                     mem_total=len(self.morph),
                 )) + "\n")
         if prio_rows:
-            with open(self.prio_log, "a", encoding="utf-8") as f:
-                for r in prio_rows:
-                    f.write(json.dumps(r) + "\n")
+            self._writer(self.prio_log).write_rows(prio_rows)
         # prune to the memory bound (keep the best); drop pruned nodes' cached embeddings.
         # Maneuver-originated nodes are PROTECTED, not exempt: they are the population the
         # reserved floor exists to protect, and pruning the pooled frontier by priority
@@ -3969,6 +3988,9 @@ class SteeredFrontier:
                 reason="run has --scheduler OFF: nothing to seed",
                 source=str(dsched.library_seed_paths()[0]),
                 source_exists=dsched.library_seed_paths()[0].exists())
+        # Compress every live tail BEFORE the summary lands, so a finished run's committed
+        # record is entirely `.jsonl.gz` segments (run_record.SegmentWriter.finalize).
+        self.finalize_streams()
         (self.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print("\n=== DIVE SUMMARY ===")
         print(f"  {done_idx}/{len(plan)} dives, active {self.active_s/60:.1f}m")
@@ -4301,6 +4323,9 @@ class SteeredFrontier:
                 emb_dir=str(dsched.library_seed_paths()[1]),
                 source_exists=dsched.library_seed_paths()[0].exists(),
                 resolved_from=dsched.resolve_seed_source()[0])
+        # Compress every live tail BEFORE the summary lands, so a finished run's committed
+        # record is entirely `.jsonl.gz` segments (run_record.SegmentWriter.finalize).
+        self.finalize_streams()
         (self.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print("\n=== STEERED FRONTIER SUMMARY ===")
         print(f"  active {self.active_s/60:.1f}m over {self.batch_i} batches")

@@ -20,6 +20,15 @@ data/discovery/**/harvest_log.jsonl filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/prio_terms.jsonl filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/maneuvers.jsonl filter=lfs diff=lfs merge=lfs -text
 data/discovery/**/q4_candidates.jsonl filter=lfs diff=lfs merge=lfs -text
+# ...and their ROTATED SEGMENTS (`<stem>.<nnn>.jsonl.gz`, tools/run_record.py). This rule is
+# what makes the compaction real rather than cosmetic: git zlib-compresses an ordinary blob
+# already (committing maneuvers.jsonl raw and committing the same rows gzipped both pack to
+# ~451 kB, measured 2026-08-07), so gzip only buys bytes where the object ships RAW — which
+# is exactly the LFS path the four streams above take. One pattern rather than four because
+# the segment suffix is the same for every stream and a per-stream rule would go stale the
+# next time a stream joins `run_record.SEGMENTED_STREAMS`
+# (`test_run_record.py::test_the_lfs_rules_cover_the_segments_of_every_lfs_tracked_stream`).
+data/discovery/**/*.jsonl.gz filter=lfs diff=lfs merge=lfs -text
 # Frozen v7 eval slice: only a full GPU eval-freeze (classifier/train_v7.py) produces it
 # and it's ignored by the blanket /data/* rule, so it must be force-added like the
 # classifier weights. This ensures it lands in LFS when it is: `git add -f

@@ -17,8 +17,11 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+for _p in (HERE, HERE.parent):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
+import run_record             # noqa: E402  (the segmented run-record reader)
 import steered_frontier as sf   # noqa: E402
 import keeper_cut as kc         # noqa: E402
 
@@ -210,8 +213,13 @@ def _push_children_node(cand, **over):
         lambda_m=0.0, beta=0.0, morph_lo=0.85, morph_hi=0.974, sat_cos=0.9666,
         batch_i=3, totals=collections.Counter(),
         prio_log=over.pop("prio_log"), sat_log=over.pop("sat_log"),
+        _stream_writers={},
     )
     obj.prune_frontier = types.MethodType(lambda s: None, obj)
+    # The prio log goes through the REAL `_writer` (run_record.SegmentWriter), not a
+    # stub: it is the append path the stub is standing in front of, and a fake that
+    # skipped it would let the rebuild write to a stream nothing rotates.
+    obj._writer = types.MethodType(sf.SteeredFrontier._writer, obj)
     sf.SteeredFrontier.push_children(obj, [cand])
     assert len(obj.frontier) == 1
     return obj.frontier[0]
@@ -241,7 +249,7 @@ def test_push_children_carries_the_lineage_stamps_onto_the_rebuilt_node(tmp_path
 
     (Measured on q4_long_harvest_20260803, the run this fix is owed to: 616 of 794
     triggered-lineage rows and 1,221 of 1,238 phoenix rows were written stamp-less.)"""
-    node = _push_children_node(_cand(), prio_log=tmp_path / "p.jsonl",
+    node = _push_children_node(_cand(), prio_log=tmp_path / "prio_terms.jsonl",
                                sat_log=tmp_path / "s.jsonl")
     assert node[field] == value
 
@@ -253,7 +261,7 @@ def test_push_children_does_not_invent_a_stamp_the_candidate_never_had(tmp_path)
     because the triggered arm is the small one."""
     node = _push_children_node(_cand(triggered=None, phoenix=None, mix_source="sampler",
                                      man=None),
-                               prio_log=tmp_path / "p.jsonl", sat_log=tmp_path / "s.jsonl")
+                               prio_log=tmp_path / "prio_terms.jsonl", sat_log=tmp_path / "s.jsonl")
     assert not node["triggered"] and node["phoenix"] is None
 
 
@@ -552,7 +560,7 @@ def test_pop_batch_quota_logs_every_choice_with_its_bucket(tmp_path):
     frontier = [{"node_id": 1, "root_id": 1, "partition": "a", "priority": 1.0}]
     obj, q = _quota_obj(tmp_path, frontier, {"a": 0.0, "b": 5.0})
     sf.SteeredFrontier.pop_batch_quota(obj)
-    rec = json.loads((tmp_path / "quota_trace.jsonl").read_text(encoding="utf-8").strip())
+    rec = run_record.read_rows(tmp_path / "quota_trace.jsonl")[0]
     assert rec["chosen"] == "a" and rec["queue_lens"] == {"a": 1, "b": 0}
 
 

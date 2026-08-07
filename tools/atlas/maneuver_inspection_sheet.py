@@ -49,6 +49,7 @@ for _p in (HERE, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "mi
            ROOT / "tools" / "scoring", ROOT / "tools" / "explorer"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import paths                                    # noqa: E402
 import prescreen                                # noqa: E402
@@ -78,12 +79,7 @@ def load_population(logs: list[Path]) -> list[dict]:
     `bench_lateral_seeding.load_cases` already carries)."""
     seen, out = set(), []
     for log in logs:
-        if not log.exists():
-            continue
-        for line in log.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            r = json.loads(line)
+        for r in run_record.iter_rows(log):     # segments-aware (maneuvers.jsonl rotates)
             if not r.get("available") or r.get("op") == "probe":
                 continue
             sc = r.get("screen") or {}

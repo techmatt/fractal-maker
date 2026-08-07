@@ -33,6 +33,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "tools"))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import minibrot_maneuvers as mnv    # noqa: E402
 import paths                        # noqa: E402
@@ -46,10 +47,7 @@ def load_cases(log: Path, limit: int | None) -> list[dict]:
     The log is append-only and a kill replays a batch, so it is a SUPERSET of the
     checkpointed counters — quoting it undeduped double-counts."""
     seen, cases = set(), []
-    for line in log.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        r = json.loads(line)
+    for r in run_record.require_rows(log):  # segments-aware; absence stays LOUD
         if r.get("op") != "lateral_to_sibling":
             continue
         key = (r.get("batch"), r.get("parent_node_id"), r.get("op"), str(r.get("k")))

@@ -25,6 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 import location as loc_mod                       # noqa: E402
 from active_ckpt import BIN, PALETTE, JPG_Q, auto_maxiter  # noqa: E402
 
@@ -33,9 +34,7 @@ MANIFEST_DIR = ROOT / "scratch" / "steered_pilot_manifest"
 
 
 def load_jsonl(p: Path) -> list[dict]:
-    if not p.exists():
-        return []
-    return [json.loads(l) for l in open(p, encoding="utf-8") if l.strip()]
+    return run_record.read_rows(p)     # segments-aware (harvest_log.jsonl rotates)
 
 
 def admitted_q3(rows: list[dict]) -> list[dict]:

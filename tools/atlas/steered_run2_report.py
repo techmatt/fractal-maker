@@ -37,6 +37,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools" / "atlas"))
 sys.path.insert(0, str(ROOT / "tools" / "mining"))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import tools.studies.steered_pilot_morph as spm      # noqa: E402
 import keeper_cut as kc                                # noqa: E402
@@ -59,7 +60,7 @@ FAMILIES = ["mandelbrot", "multibrot3", "multibrot4", "multibrot5",
 
 
 def load_jsonl(p: Path):
-    return [json.loads(l) for l in open(p, encoding="utf-8") if l.strip()] if p.exists() else []
+    return run_record.read_rows(p)     # segments-aware (prio_terms.jsonl rotates)
 
 
 def parse_batch_timeline(stdout: Path):

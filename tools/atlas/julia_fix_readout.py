@@ -19,6 +19,12 @@ import argparse
 import json
 from collections import Counter, defaultdict
 from pathlib import Path
+import sys
+
+_RR_ROOT = Path(__file__).resolve().parents[2]
+if str(_RR_ROOT) not in sys.path:
+    sys.path.insert(0, str(_RR_ROOT))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 # Campaign-1 breadth+dive julia checks/admit under the BUGGY z-only metric (recomputed
 # 2026-07-19; the baseline this fix is measured against). checks, admits.
@@ -32,9 +38,7 @@ JULIA_PARTS = list(CAMPAIGN1_JULIA)
 
 
 def load_jsonl(p: Path) -> list:
-    if not p.exists():
-        return []
-    return [json.loads(l) for l in open(p, encoding="utf-8") if l.strip()]
+    return run_record.read_rows(p)     # segments-aware (harvest_log.jsonl rotates)
 
 
 def build(run: Path) -> str:

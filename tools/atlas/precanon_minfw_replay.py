@@ -72,6 +72,7 @@ ROOT = HERE.parents[1]
 for _p in (str(HERE), str(ROOT), str(ROOT / "tools")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import paths                                    # noqa: E402
 import production_seeder as ps                  # noqa: E402
@@ -97,7 +98,7 @@ CHECK_FATES = frozenset({"precanon_dup", "canon_not_q3", "q3_dup", "admitted",
 # records
 # =========================================================================== #
 def _jl(p: Path) -> list[dict]:
-    return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return run_record.require_rows(p)     # segments-aware (q4_candidates/harvest_log rotate)
 
 
 def _key(r: dict) -> tuple:

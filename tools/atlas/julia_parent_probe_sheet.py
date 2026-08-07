@@ -19,6 +19,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 BIN = ROOT / "target" / "release" / "fractal-generator.exe"
 UNIT = ROOT / "data/discovery/julia_parent_probe/breadth"
 OUT = ROOT / "scratch/julia_parent_probe/sheets"
@@ -80,7 +83,7 @@ def montage(recs, path, title):
 def main():
     TILES.mkdir(parents=True, exist_ok=True)
     led = [json.loads(l) for l in open(UNIT / "outcome_ledger.jsonl", encoding="utf-8") if l.strip()]
-    harv = [json.loads(l) for l in open(UNIT / "harvest_log.jsonl", encoding="utf-8") if l.strip()]
+    harv = run_record.require_rows(UNIT / "harvest_log.jsonl")   # segments-aware, loud
 
     # admitted: distinct-q3 julia:mandelbrot ledger rows. Join to harvest_log admitted rows by
     # coord to recover the ROOT supply (ledger mix_source is the generic "steered" tag).

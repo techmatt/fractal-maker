@@ -47,6 +47,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 DISCOVERY = ROOT / "data" / "discovery"
 STORE = "q4_candidates.jsonl"
@@ -92,10 +93,16 @@ def audit_rows(rows: list[dict]) -> dict:
 
 
 def read_jsonl(p: Path) -> list[dict]:
-    return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return run_record.read_rows(p)     # segments-aware (q4_candidates.jsonl rotates)
 
 
 def write_jsonl_atomic(p: Path, rows: list[dict]):
+    """Replace the store. Routed through `run_record.replace_stream` for a segmented stream:
+    writing a plain `q4_candidates.jsonl` back beside rotated `.jsonl.gz` segments would
+    DOUBLE every rotated row, and every reader here concatenates without complaint."""
+    if run_record.is_segmented(p):
+        run_record.replace_stream(p, rows)
+        return
     tmp = p.with_suffix(p.suffix + ".tmp")
     with open(tmp, "w", encoding="utf-8") as f:
         for r in rows:
@@ -113,12 +120,12 @@ def report(run_dirs: list[Path]) -> dict:
     for d in sorted(run_dirs):
         rec: dict = {}
         store = d / STORE
-        if store.exists():
+        if run_record.exists(store):
             rows = read_jsonl(store)
             rec["q4_candidates"] = audit_rows(rows)
         for other in ("outcome_ledger.jsonl", "harvest_log.jsonl"):
             p = d / other
-            if not p.exists():
+            if not run_record.exists(p):
                 continue
             rows = read_jsonl(p)
             rec[other] = dict(
@@ -136,7 +143,7 @@ def apply(run_dir: Path) -> dict:
     """Backfill `q4_candidates.jsonl` in `run_dir`. Fails loud on any carrier disagreement or
     any row that would have to be CLEARED; writes an audit sidecar beside the store."""
     store = run_dir / STORE
-    if not store.exists():
+    if not run_record.exists(store):
         raise SystemExit(f"{store} does not exist — nothing to backfill "
                          f"(only the record-and-rank store carries a `triggered` column)")
     rows = read_jsonl(store)

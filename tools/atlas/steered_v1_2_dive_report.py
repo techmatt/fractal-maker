@@ -32,6 +32,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools" / "atlas"))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import tools.studies.steered_pilot_morph as spm      # noqa: E402
 
@@ -40,7 +41,7 @@ LOOSE_CUT = spm.LOOSE_CUT        # 0.95 perceptual
 
 
 def load_jsonl(p: Path):
-    return [json.loads(l) for l in open(p, encoding="utf-8") if l.strip()] if p.exists() else []
+    return run_record.read_rows(p)     # segments-aware (prio_terms.jsonl rotates)
 
 
 def canon_pgood(r):

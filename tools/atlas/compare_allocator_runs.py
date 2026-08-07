@@ -47,6 +47,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 PREREG = ROOT / "data/discovery/allocator_prereg_v1.json"
 
 # The per-batch line steered_frontier prints: "  batch 12: ... | 19s active=3.4m".
@@ -82,7 +85,10 @@ class Arm:
         self.run_id = spec["run_id"]
         self.allocator = spec.get("allocator", "?")
         self.dir = ROOT / spec["run_dir"]
-        self.present = (self.dir / "harvest_log.jsonl").exists()
+        # run_record.exists, not Path.exists: a FINISHED run has no plain `harvest_log.jsonl`
+        # left — its rows are in `.jsonl.gz` segments, and a bare exists() would report the
+        # arm as absent and drop it from the comparison without saying so.
+        self.present = run_record.exists(self.dir / "harvest_log.jsonl")
         self.adm_by_batch: dict[int, int] = {}
         self.last_batch = 0
         self.summary: dict = {}
@@ -91,15 +97,11 @@ class Arm:
             self._load()
 
     def _load(self):
-        with (self.dir / "harvest_log.jsonl").open(encoding="utf-8") as fh:
-            for line in fh:
-                if not line.strip():
-                    continue
-                r = json.loads(line)
-                b = int(r["batch"])
-                self.last_batch = max(self.last_batch, b)
-                if r.get("admitted"):
-                    self.adm_by_batch[b] = self.adm_by_batch.get(b, 0) + 1
+        for r in run_record.iter_rows(self.dir / "harvest_log.jsonl"):
+            b = int(r["batch"])
+            self.last_batch = max(self.last_batch, b)
+            if r.get("admitted"):
+                self.adm_by_batch[b] = self.adm_by_batch.get(b, 0) + 1
         sp = self.dir / "summary.json"
         if sp.exists():
             self.summary = json.loads(sp.read_text(encoding="utf-8"))

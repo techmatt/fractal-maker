@@ -29,6 +29,12 @@ import concurrent.futures as cf
 import json
 import random
 from pathlib import Path
+import sys
+
+_RR_ROOT = Path(__file__).resolve().parents[2]
+if str(_RR_ROOT) not in sys.path:
+    sys.path.insert(0, str(_RR_ROOT))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 from PIL import Image, ImageDraw
 
@@ -45,7 +51,7 @@ FATE_COLOR = {
 
 
 def _load_jsonl(p: Path) -> list:
-    return [json.loads(l) for l in open(p, encoding="utf-8") if l.strip()] if p.exists() else []
+    return run_record.read_rows(p)     # segments-aware (harvest_log.jsonl rotates)
 
 
 def _seed_c(re, im):

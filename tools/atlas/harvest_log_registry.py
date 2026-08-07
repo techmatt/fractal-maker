@@ -59,6 +59,10 @@ from tools import paths as _paths                       # noqa: E402
 from tools.corpus import artifacts as _artifacts        # noqa: E402
 
 LOG_NAME = "harvest_log.jsonl"
+# What DISCOVERY matches: the live tail `harvest_log.jsonl` OR any rotated segment
+# `harvest_log.<nnn>.jsonl[.gz]` (run_record). One glob covers both because a rotated segment
+# name is the live name with `.<nnn>` spliced in front of the extension.
+LOG_GLOB = "harvest_log*.jsonl*"
 
 # How deep below a store a run dir may sit. 2 because the campaign runs are `<campaign>/
 # <leg>` (campaign1/breadth) while the later ones are flat (`popquota_v2_20260804`). Bounded
@@ -155,14 +159,21 @@ def discover_run_dirs(*, registry=None, pinned=None) -> tuple[list[HarvestRun], 
         if not store.exists():
             continue
         for depth in range(1, MAX_RUN_DEPTH + 1):
-            for log in sorted(store.glob("/".join(["*"] * depth + [LOG_NAME]))):
-                run_dir = log.parent
+            # DISCOVER ON THE STREAM, NOT ON THE PLAIN FILE. A finished run's harvest log is
+            # `harvest_log.000.jsonl.gz` + friends and has no `harvest_log.jsonl` at all
+            # (run_record.SegmentWriter.finalize), so globbing LOG_NAME alone would stop
+            # discovering runs the moment they finish — a population that shrinks silently,
+            # which is the exact failure this module exists to prevent. `log` stays the
+            # LOGICAL stream path (`<run>/harvest_log.jsonl`): that is the identity readers
+            # pass to `run_record.iter_rows`, which resolves whichever layout is on disk.
+            for hit in sorted(store.glob("/".join(["*"] * depth + [LOG_GLOB]))):
+                run_dir = hit.parent
                 name = run_dir.relative_to(store).as_posix()
                 if name in found:
                     continue
                 found[name] = HarvestRun(
                     name=name, store=store_name, dir=_refuse_disposable(f"run ({name})", run_dir),
-                    log=log, pinned=name in pins)
+                    log=run_dir / LOG_NAME, pinned=name in pins)
 
     missing = [p for p in pins if p not in found]
     ordered = [found[p] for p in pins if p in found]

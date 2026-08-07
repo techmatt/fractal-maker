@@ -33,13 +33,11 @@ ROOT = HERE.parents[1]
 for _p in (HERE, ROOT, ROOT / "tools", ROOT / "tools" / "scoring"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 
 def _jl(p: Path):
-    if not Path(p).exists():
-        return []
-    return [json.loads(l) for l in Path(p).read_text(encoding="utf-8").splitlines()
-            if l.strip()]
+    return run_record.read_rows(p)     # segments-aware (quota_trace/q4_candidates rotate)
 
 
 def mix(summary: dict, launch_intended: dict | None = None,

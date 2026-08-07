@@ -183,6 +183,9 @@ REGISTRY = [
     ("data/discovery/**/{outcome_ledger,probe_rejects}.jsonl", "tools/atlas/production_seeder.py", DUR,
      "NOTHING — append-only record of one run's admissions", Y,
      "OK. Negated, committed (18 tracked), disk_audit NEVER. The reference case."),
+    # `<stem>.jsonl` here names the STREAM, not one file: since 2026-08-07 the four LFS
+    # streams rotate into `<stem>.<nnn>.jsonl.gz` segments (tools/run_record.py) and a
+    # finished run has no plain file at all. Read them with `run_record.iter_rows`.
     ("data/discovery/**/harvest_log.jsonl", "tools/atlas/steered_frontier.py", DUR,
      "NOTHING — re-deriving needs the cheap scorer AND canonical render over every "
      "candidate; a full re-derivation, not a ledger replay", Y,

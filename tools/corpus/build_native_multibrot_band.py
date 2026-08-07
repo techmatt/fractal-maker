@@ -42,6 +42,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import corpus_common as cc  # noqa: E402
 from active_ckpt import BIN, PALETTE, JPG_Q, auto_maxiter  # noqa: E402
@@ -110,8 +111,7 @@ def load_pool(fam):
     # 2) campaign2 harvest canon-rejects (admitted=False), score = canon_pgood (v7).
     for lane in HARVEST_LANES:
         p = ROOT / "data/discovery" / lane / "harvest_log.jsonl"
-        for line in open(p, encoding="utf-8"):
-            h = json.loads(line)
+        for h in run_record.require_rows(p):  # segments-aware; absence stays LOUD
             if h.get("partition") != fam or h.get("julia_c_re") is not None or "cx" not in h:
                 continue
             if h.get("admitted"):  # admitted rows carry SEED coords (dupes of §1) — skip

@@ -45,6 +45,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mining"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "atlas"))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 from score_lib import corn_decode  # noqa: E402
 from production_seeder import t_good_for  # noqa: E402
 
@@ -68,7 +69,7 @@ PARTS = ["mandelbrot", "multibrot3", "multibrot4", "multibrot5",
 
 def load(run):
     p = DISC / run / "harvest_log.jsonl"
-    return [json.loads(l) for l in open(p, encoding="utf-8") if l.strip()]
+    return run_record.require_rows(p)  # segments-aware; absence stays LOUD
 
 
 def era_gate(rows, run):

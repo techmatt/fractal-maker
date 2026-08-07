@@ -54,6 +54,7 @@ for _p in (str(HERE), str(ROOT), str(ROOT / "tools"), str(ROOT / "tools" / "corp
            str(ROOT / "tools" / "sourcing"), str(ROOT / "tools" / "scoring")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import paths                                   # noqa: E402
 import corpus_common as cc                     # noqa: E402
@@ -93,7 +94,9 @@ RENDER_WORKERS, RENDER_THREADS = 3, 4          # 3 processes x 4 threads on a 12
 # the join
 # =========================================================================== #
 def _jl(p: Path) -> list[dict]:
-    return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+    # run_record: reads a segmented stream (harvest_log/q4_candidates) across its .jsonl.gz
+    # segments; a plain file is read unchanged.
+    return run_record.require_rows(p)
 
 
 def _gkey(cx, cy, fw) -> tuple:

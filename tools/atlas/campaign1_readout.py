@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parents[2]
 for p in (ROOT, ROOT / "tools" / "atlas", ROOT / "tools" / "corpus",
           ROOT / "tools" / "scoring", ROOT / "tools" / "studies", ROOT / "tools" / "wallpaper"):
     sys.path.insert(0, str(p))
+from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import production_seeder as ps                      # noqa: E402
 import steered_pilot_morph as spm                   # noqa: E402
@@ -56,7 +57,7 @@ C_FAMILIES = ("mandelbrot", "multibrot3", "multibrot4", "multibrot5")
 # Loaders
 # --------------------------------------------------------------------------- #
 def load_jsonl(p: Path) -> list:
-    return [json.loads(l) for l in open(p, encoding="utf-8") if l.strip()] if p.exists() else []
+    return run_record.read_rows(p)     # segments-aware (harvest_log.jsonl rotates)
 
 
 def load_state(run_dir: Path) -> dict:
