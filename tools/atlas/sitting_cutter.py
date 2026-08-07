@@ -877,6 +877,12 @@ class SittingSpec:
     # constraint on the draw whose reason is not written down is indistinguishable from a bug.
     no_pad: object = None
     no_pad_rule: str = ""
+    # THE POPULATION THIS SITTING CUTS FROM, applied to the union queue before any stage.
+    # `None` is the whole queue, which is every earlier sitting. Paired with its prose for the
+    # same reason as `no_pad`, and for the same reason `SheetSpec` pairs `row_filter`: a
+    # subset whose rule is not written down is indistinguishable from a lossy build.
+    population: object = None
+    population_rule: str = ""
 
     @property
     def batches(self) -> tuple:
@@ -920,6 +926,9 @@ class SittingSpec:
         return {l.batch_id: i for i, l in enumerate(self.legs)}
 
     def __post_init__(self):
+        if bool(self.population) != bool(self.population_rule):
+            raise ValueError(f"{self.name}: population and population_rule must be set "
+                             f"together (a subset with no stated rule reads as a lossy build)")
         if bool(self.no_pad) != bool(self.no_pad_rule):
             raise ValueError(f"{self.name}: no_pad and no_pad_rule must be set together (a "
                              f"draw constraint with no stated reason reads as a bug)")
@@ -1038,6 +1047,18 @@ LABEL_RUN_SITTING = SittingSpec(
     max_rows=500,
     correction=True,
     buckets=LABEL_RUN_BUCKETS,
+    population=lambda r: int(r.get("rank_tier") or 0) >= 2,
+    population_rule=(
+        "THE RANKED RESIDUE: rank_tier >= 2, i.e. rows that earned a CANONICAL decode. This "
+        "is what 'residue' already means everywhere else — steady_state_v2's readout reports "
+        "its 1,544 rankable rows as 'tier-2 minus admitted', over the fates q3_dup / "
+        "canon_not_q3 / reframe_not_q3 — so the union queue's tier-1 rows (below_tau_h, "
+        "precanon_dup) were never part of it. It is also what makes this a CORRECTION sheet "
+        "at all: a tier-1 row has no canonical verdict to prefill, and the first bounded draw "
+        "put 223 such rows on a 500-row page, 45% of it unprefilled. The cheap score is NOT a "
+        "substitute — it comes off a 384x216 ss1 render where every canonical rate was "
+        "measured at 640x360 ss2, which is the cap/geometry error `stage_machine_1` refuses "
+        "for exactly the same reason."),
     no_pad=lambda r: str(r.get("partition") or "").startswith("julia:multibrot"),
     no_pad_rule=(
         "julia:multibrot{3,4,5} rows may fill the cross-partition class-4 slice's own 50, "
@@ -1177,6 +1198,28 @@ def load_union_queue(spec: SittingSpec) -> tuple[list[dict], dict]:
                by_fate=dict(Counter(r.get("fate") for r in rows)),
                by_partition=dict(Counter(r.get("partition") for r in rows)))
     return rows, rep
+
+
+def apply_population(rows: list[dict], spec: SittingSpec) -> tuple[list, dict]:
+    """Narrow the union queue to the population the SPEC cuts from, and report the narrowing.
+
+    Applied BEFORE the three stages, so what they report removing is denominated in the
+    population rather than in a queue half of which was never a candidate. `None` filter =>
+    the whole queue, byte-identical to every sitting before this field existed.
+
+    The counts are kept per tier and per fate because "5,946 -> 1,900" on its own reads as a
+    cut that lost most of its material; what it actually is here is the difference between the
+    record-and-rank QUEUE and the ranked RESIDUE, and only the by-fate split says so."""
+    if spec is None or spec.population is None:
+        return rows, dict(rule=None, kept=len(rows), dropped=0)
+    keep = [r for r in rows if spec.population(r)]
+    drop = [r for r in rows if not spec.population(r)]
+    return keep, dict(
+        rule=spec.population_rule, kept=len(keep), dropped=len(drop),
+        dropped_by_tier=dict(Counter(str(r.get("rank_tier")) for r in drop)),
+        dropped_by_fate=dict(Counter(r.get("fate") for r in drop)),
+        kept_by_tier=dict(Counter(str(r.get("rank_tier")) for r in keep)),
+        kept_by_fate=dict(Counter(r.get("fate") for r in keep)))
 
 
 def load_queue(run_dir: Path) -> list[dict]:
@@ -1344,6 +1387,7 @@ def stage_draw(args) -> int:
     max_rows = getattr(args, "max_rows", None) or spec.max_rows
 
     rows, qrep = load_union_queue(spec)
+    rows, qrep["population"] = apply_population(rows, spec)
     print(f"queue: {qrep['n']} rows over {len(spec.legs)} leg(s) {json.dumps(qrep['by_leg'])}"
           f"; cross-leg dups dropped {json.dumps(qrep['cross_leg_duplicates_dropped'])}")
     for b, why in qrep["dive_arm_join"].items():
@@ -1702,6 +1746,7 @@ def main():
     else:
         spec = SITTINGS[a.sitting]
         rows, qrep = load_union_queue(spec)
+        rows, qrep["population"] = apply_population(rows, spec)
         qrep["source"] = f"--sitting {a.sitting}"
     max_rows = a.max_rows or (spec.max_rows if spec else MAX_ROWS)
     scratch = Path(paths.scratch("sitting_cutter", "fields"))
