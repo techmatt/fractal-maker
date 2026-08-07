@@ -359,8 +359,10 @@ REGISTRY = [
      "disk, LS.FIELDS -> paths.bulk(). Local LFS objects deliberately NOT pruned. Every "
      "reader now funnels through LS._require_field, which raises with the rebuild command; "
      "a fourth hardcoded copy of the path in q4_richness_grid.py (missed by the original "
-     "collapse, and dangling since) was collapsed onto LS.FIELDS at the same time. Holding "
-     "copy of the deleted bytes: C:\\Code\\fractal-maker-holding\\q4_stage1_fields."),
+     "collapse, and dangling since) was collapsed onto LS.FIELDS at the same time. The "
+     "out-of-repo holding copy of the deleted bytes was itself deleted 2026-08-07 at the "
+     "end of its stated lifetime, so the `corpus-fields` rebuild in this row's regen column "
+     "is now the whole recovery path — which is what it was the whole time."),
     ("data/emission/campaign1/embs/*.npy", "tools/emission/campaign1_intake.py", BULK,
      "re-embed the intake's medoids — needs intake.json, which is gone", N,
      "Was scratch/emission/campaign1/embs and that is why campaign1 is DARK: the vectors "

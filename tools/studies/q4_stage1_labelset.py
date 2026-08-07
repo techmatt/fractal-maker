@@ -280,14 +280,11 @@ def _require_field(mb_id):
         f"  as irreproducibility, but these fields come from `--dump-field-source f64`,\n"
         f"  which reproduces them BYTE-IDENTICALLY (sha256 equal on 4/4 spot-checked).\n"
         f"\n"
-        f"  HOW TO FIX. Rebuild all 33 (~60 s; resumable, skips what is present):\n"
+        f"  HOW TO FIX — this is the ONLY recovery path; there is no copy anywhere.\n"
+        f"  Rebuild all 33 (~60 s; resumable, skips what is present):\n"
         f"      uv run python tools/studies/q4_multibrot_transfer.py corpus-fields\n"
         f"  The selection needs no input from you: HT.mb_info() derives it from the tracked\n"
-        f"  window store data/q4_window_corpus/batches/ (33/33 coverage, verified).\n"
-        f"\n"
-        f"  A holding copy of the deleted bytes was placed outside the repo at\n"
-        f"  C:\\Code\\fractal-maker-holding\\q4_stage1_fields (expected lifetime one to two\n"
-        f"  checkpoints — treat the rebuild above as the real recovery path, not that copy).")
+        f"  window store data/q4_window_corpus/batches/ (33/33 coverage, verified).")
 
 
 def load_field_values(mb_id):

@@ -284,10 +284,16 @@ an item's evidence, the line points at it rather than restating it.
   `LS.FIELDS` is now `paths.bulk()`, every reader funnels through `LS._require_field` (which
   raises naming the rebuild command), and a **fourth** hardcoded copy of the path in
   `q4_richness_grid.py` — missed by the original three-reader collapse, and dangling since —
-  was collapsed onto it. Local LFS objects deliberately **not** pruned. Holding copy of the
-  deleted bytes at `C:\Code\fractal-maker-holding\q4_stage1_fields` (66 files, 351,581,091 B,
-  count + sha256 spot-checked), expected lifetime one to two checkpoints — the rebuild
-  command, not that copy, is the recovery path.
+  was collapsed onto it. Local LFS objects deliberately **not** pruned. A holding copy of the
+  deleted bytes was kept outside the repo at `C:\Code\fractal-maker-holding\q4_stage1_fields`
+  (66 files, 351,581,091 B, count + sha256 spot-checked) for its stated one-to-two-checkpoint
+  lifetime and **DELETED 2026-08-07**, together with the `pre-fields-rewrite-backup.bundle`
+  beside it (`git bundle verify` re-run first: complete history, `9124b24` an ancestor of
+  `main`, i.e. a strict prefix of live history). **The sole recovery path is now the rebuild
+  command** — which is what it was the whole time; the copy was never the plan:
+  `uv run python tools/studies/q4_multibrot_transfer.py corpus-fields` (~60 s, resumable,
+  skips what is present; selection derived by `HT.mb_info()` from the tracked window store
+  `data/q4_window_corpus/batches/`, 33/33).
   `[measured: 4/4 fields sha256-identical vs `--dump-field-source f64`; featurize/_v2_drop
   parity over 8 windows of mb00_p04; 2026-08-04]`
   `[code: tools/studies/q4_stage1_labelset.py::{FIELDS,_require_field}; .gitattributes;
