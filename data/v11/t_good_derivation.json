@@ -18,7 +18,15 @@
   "min_pos": 15,
   "no_class4_threshold": true,
   "class4_decode": "natural cutpoint P(>=4) >= 0.5, no per-family calibration",
-  "native_multibrot_tightening": "NOT adopted (fork-scheduled proposals left on record)",
+  "native_multibrot_tightening": {
+    "adopted": {
+      "multibrot3": 0.61,
+      "multibrot4": 0.85,
+      "multibrot5": 0.61
+    },
+    "withheld": {},
+    "not_derivable": []
+  },
   "eval_slice": "data/v11/eval_scores_v11.jsonl",
   "model": "v11",
   "derived": {
@@ -237,6 +245,135 @@
         }
       }
     },
+    "multibrot3": {
+      "n": 196,
+      "pos": 49,
+      "objective": "F0.5",
+      "beta": 0.5,
+      "objective_rationale": "precision-weighted (supply abundant)",
+      "t_good": 0.61,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.61,
+          "precision": 0.5833,
+          "recall": 0.5714,
+          "fbeta": 0.5809,
+          "tp": 28,
+          "fp": 20,
+          "fn": 21,
+          "plateau": [
+            0.61,
+            0.61
+          ],
+          "plateau_steps": 1,
+          "beta": 0.5,
+          "fbeta_oof": 0.515
+        },
+        "F2": {
+          "t": 0.12,
+          "precision": 0.395,
+          "recall": 0.9592,
+          "fbeta": 0.746,
+          "tp": 47,
+          "fp": 72,
+          "fn": 2,
+          "plateau": [
+            0.12,
+            0.12
+          ],
+          "plateau_steps": 1,
+          "beta": 2.0,
+          "fbeta_oof": 0.6774
+        }
+      }
+    },
+    "multibrot4": {
+      "n": 151,
+      "pos": 32,
+      "objective": "F0.5",
+      "beta": 0.5,
+      "objective_rationale": "precision-weighted (supply abundant)",
+      "t_good": 0.85,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.85,
+          "precision": 0.7037,
+          "recall": 0.5938,
+          "fbeta": 0.6786,
+          "tp": 19,
+          "fp": 8,
+          "fn": 13,
+          "plateau": [
+            0.81,
+            0.85
+          ],
+          "plateau_steps": 5,
+          "beta": 0.5,
+          "fbeta_oof": 0.6786
+        },
+        "F2": {
+          "t": 0.4,
+          "precision": 0.4746,
+          "recall": 0.875,
+          "fbeta": 0.7487,
+          "tp": 28,
+          "fp": 31,
+          "fn": 4,
+          "plateau": [
+            0.38,
+            0.4
+          ],
+          "plateau_steps": 3,
+          "beta": 2.0,
+          "fbeta_oof": 0.7258
+        }
+      }
+    },
+    "multibrot5": {
+      "n": 164,
+      "pos": 38,
+      "objective": "F0.5",
+      "beta": 0.5,
+      "objective_rationale": "precision-weighted (supply abundant)",
+      "t_good": 0.61,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.61,
+          "precision": 0.6667,
+          "recall": 0.5789,
+          "fbeta": 0.6471,
+          "tp": 22,
+          "fp": 11,
+          "fn": 16,
+          "plateau": [
+            0.61,
+            0.61
+          ],
+          "plateau_steps": 1,
+          "beta": 0.5,
+          "fbeta_oof": 0.6471
+        },
+        "F2": {
+          "t": 0.28,
+          "precision": 0.4111,
+          "recall": 0.9737,
+          "fbeta": 0.7645,
+          "tp": 37,
+          "fp": 53,
+          "fn": 1,
+          "plateau": [
+            0.28,
+            0.28
+          ],
+          "plateau_steps": 1,
+          "beta": 2.0,
+          "fbeta_oof": 0.7469
+        }
+      }
+    },
     "phoenix": {
       "n": 113,
       "pos": 55,
@@ -282,30 +419,6 @@
     }
   },
   "uncalibrated": {
-    "multibrot3": {
-      "n": 196,
-      "pos": 49,
-      "t_good": 0.5,
-      "status": "UNCALIBRATED",
-      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
-      "withheld_t_good": 0.61
-    },
-    "multibrot4": {
-      "n": 151,
-      "pos": 32,
-      "t_good": 0.5,
-      "status": "UNCALIBRATED",
-      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
-      "withheld_t_good": 0.85
-    },
-    "multibrot5": {
-      "n": 164,
-      "pos": 38,
-      "t_good": 0.5,
-      "status": "UNCALIBRATED",
-      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
-      "withheld_t_good": 0.61
-    },
     "phoenix:classic": {
       "n": 0,
       "pos": 0,
@@ -314,140 +427,16 @@
       "reason": "8 holdout rows / 1 positive and 0 instrument rows \u2014 below MIN_POS=15 on both eval roles, the only partition still short of it under the grouped-holdout rule"
     }
   },
-  "withheld": {
-    "multibrot3": {
-      "n": 196,
-      "pos": 49,
-      "objective": "F0.5",
-      "beta": 0.5,
-      "would_adopt": 0.61,
-      "by_objective": {
-        "F0.5": {
-          "t": 0.61,
-          "precision": 0.5833,
-          "recall": 0.5714,
-          "fbeta": 0.5809,
-          "tp": 28,
-          "fp": 20,
-          "fn": 21,
-          "plateau": [
-            0.61,
-            0.61
-          ],
-          "plateau_steps": 1,
-          "beta": 0.5,
-          "fbeta_oof": 0.515
-        },
-        "F2": {
-          "t": 0.12,
-          "precision": 0.395,
-          "recall": 0.9592,
-          "fbeta": 0.746,
-          "tp": 47,
-          "fp": 72,
-          "fn": 2,
-          "plateau": [
-            0.12,
-            0.12
-          ],
-          "plateau_steps": 1,
-          "beta": 2.0,
-          "fbeta_oof": 0.6774
-        }
-      },
-      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block."
-    },
-    "multibrot4": {
-      "n": 151,
-      "pos": 32,
-      "objective": "F0.5",
-      "beta": 0.5,
-      "would_adopt": 0.85,
-      "by_objective": {
-        "F0.5": {
-          "t": 0.85,
-          "precision": 0.7037,
-          "recall": 0.5938,
-          "fbeta": 0.6786,
-          "tp": 19,
-          "fp": 8,
-          "fn": 13,
-          "plateau": [
-            0.81,
-            0.85
-          ],
-          "plateau_steps": 5,
-          "beta": 0.5,
-          "fbeta_oof": 0.6786
-        },
-        "F2": {
-          "t": 0.4,
-          "precision": 0.4746,
-          "recall": 0.875,
-          "fbeta": 0.7487,
-          "tp": 28,
-          "fp": 31,
-          "fn": 4,
-          "plateau": [
-            0.38,
-            0.4
-          ],
-          "plateau_steps": 3,
-          "beta": 2.0,
-          "fbeta_oof": 0.7258
-        }
-      },
-      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block."
-    },
-    "multibrot5": {
-      "n": 164,
-      "pos": 38,
-      "objective": "F0.5",
-      "beta": 0.5,
-      "would_adopt": 0.61,
-      "by_objective": {
-        "F0.5": {
-          "t": 0.61,
-          "precision": 0.6667,
-          "recall": 0.5789,
-          "fbeta": 0.6471,
-          "tp": 22,
-          "fp": 11,
-          "fn": 16,
-          "plateau": [
-            0.61,
-            0.61
-          ],
-          "plateau_steps": 1,
-          "beta": 0.5,
-          "fbeta_oof": 0.6471
-        },
-        "F2": {
-          "t": 0.28,
-          "precision": 0.4111,
-          "recall": 0.9737,
-          "fbeta": 0.7645,
-          "tp": 37,
-          "fp": 53,
-          "fn": 1,
-          "plateau": [
-            0.28,
-            0.28
-          ],
-          "plateau_steps": 1,
-          "beta": 2.0,
-          "fbeta_oof": 0.7469
-        }
-      },
-      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block."
-    }
-  },
+  "withheld": {},
   "adopted": {
     "julia:mandelbrot": 0.85,
     "julia:multibrot3": 0.26,
     "julia:multibrot4": 0.1,
     "julia:multibrot5": 0.39,
     "mandelbrot": 0.9,
+    "multibrot3": 0.61,
+    "multibrot4": 0.85,
+    "multibrot5": 0.61,
     "phoenix": 0.77
   },
   "notes": [
@@ -461,9 +450,12 @@
     "julia:multibrot5: adopted t=0.39 sits on a 2-step plateau \u2014 knife-edge, re-derive rather than nudge",
     "mandelbrot: F0.5 picks t=0.90 vs F2 t=0.37 \u2014 objective choice is load-bearing, not cosmetic",
     "mandelbrot: adopted t=0.90 sits on a 1-step plateau \u2014 knife-edge, re-derive rather than nudge",
-    "multibrot3: DERIVABLE at t=0.61 and WITHHELD \u2014 DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
-    "multibrot4: DERIVABLE at t=0.85 and WITHHELD \u2014 DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
-    "multibrot5: DERIVABLE at t=0.61 and WITHHELD \u2014 DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
+    "multibrot3: F0.5 picks t=0.61 vs F2 t=0.12 \u2014 objective choice is load-bearing, not cosmetic",
+    "multibrot3: adopted F0.5 in-sample 0.581 vs OOF 0.515 (gap +0.066) \u2014 threshold overfit at n=196, pos=49; the OOF value is the honest one",
+    "multibrot3: adopted t=0.61 sits on a 1-step plateau \u2014 knife-edge, re-derive rather than nudge",
+    "multibrot4: F0.5 picks t=0.85 vs F2 t=0.40 \u2014 objective choice is load-bearing, not cosmetic",
+    "multibrot5: F0.5 picks t=0.61 vs F2 t=0.28 \u2014 objective choice is load-bearing, not cosmetic",
+    "multibrot5: adopted t=0.61 sits on a 1-step plateau \u2014 knife-edge, re-derive rather than nudge",
     "phoenix: F0.5 picks t=0.77 vs F2 t=0.04 \u2014 objective choice is load-bearing, not cosmetic"
   ],
   "note": "ADOPTED \u2014 production_seeder.T_GOOD_OVERRIDES mirrors `adopted`, and the `uncalibrated` partitions are named in production_seeder.T_GOOD_UNCALIBRATED (they RUN at the baseline but were never derived; the two 0.50s must stay distinguishable). tools/scoring/test_t_good_adoption.py holds the ACTIVE version's artifact and the adopted table in agreement.",
@@ -632,6 +624,18 @@
     "mandelbrot": {
       "v10": 0.03,
       "v11": 0.9
+    },
+    "multibrot3": {
+      "v10": null,
+      "v11": 0.61
+    },
+    "multibrot4": {
+      "v10": null,
+      "v11": 0.85
+    },
+    "multibrot5": {
+      "v10": null,
+      "v11": 0.61
     },
     "phoenix": {
       "v10": null,

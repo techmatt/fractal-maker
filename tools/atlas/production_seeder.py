@@ -387,7 +387,10 @@ def julia_partition(fam: str) -> str:
 # hand-nudge.
 #
 # NO class-4 threshold: class 4 decodes at its natural cutpoint P(>=4) >= 0.5 with no
-# per-family calibration (score_lib.corn_decode t_great). NO native-multibrot tightening.
+# per-family calibration (score_lib.corn_decode t_great). The native-multibrot tightening that
+# every version through the v11 flip declined IS NOW ADOPTED (2026-08-08) — see the block under
+# T_GOOD_OVERRIDES; the artifact states it as derived state, not as a sentence
+# (`native_multibrot_tightening`).
 # =========================================================================== #
 T_GOOD_BASELINE = 0.50    # conservative default for every unswept / undecidable partition
 T_GOOD_OVERRIDES = {
@@ -397,9 +400,21 @@ T_GOOD_OVERRIDES = {
     "julia:multibrot3": 0.26,  # v11 F2-argmax, census fallback (n=54, pos=19) — supply scarce
     "julia:multibrot4": 0.10,  # v11 F2-argmax, grouped holdout (n=44, pos=28) — supply scarce
     "julia:multibrot5": 0.39,  # v11 F2-argmax, grouped holdout (n=58, pos=28) — supply scarce
+    "multibrot3": 0.61,        # v11 F0.5-argmax, grouped holdout (n=196, pos=49) — abundant
+    "multibrot4": 0.85,        # v11 F0.5-argmax, grouped holdout (n=151, pos=32) — abundant
+    "multibrot5": 0.61,        # v11 F0.5-argmax, grouped holdout (n=164, pos=38) — abundant
 }
 # MIRRORED from data/v11/t_good_derivation.json at the 2026-08-08 flip; test_t_good_adoption
 # holds the two equal and re-runs the estimator against the artifact as a drift gate.
+#
+# THE NATIVE MULTIBROT TIGHTENING LANDED 2026-08-08, hours after the flip that withheld it.
+# The three cuts are the SAME numbers the flip's `withheld` block recorded — same holdout, same
+# F0.5, same estimator, nothing re-derived — released by the fork that owned the decision
+# (deferred_recalibration.md § "Related"). 0.50 -> 0.61/0.85/0.61 is a TIGHTENING and it is not
+# free: on the derivation's own holdout it drops admitted 65->48 / 47->27 / 53->33 (73.8% /
+# 57.4% / 62.3% retained), and on the tau_h harvest arm's canonical renders (300/partition,
+# closer to a frontier draw) 161->136 / 208->100 / 161->126. multibrot4 is where the tightening
+# bites: it takes the highest cut in the whole table and keeps under half its admissions.
 #
 # THE POPULATION CHANGED AT THIS FLIP AND THE HEAD DID TOO — read every move below as both.
 # v10 cut each partition on ONE FROZEN INSTRUMENT; v11 cuts on the randomized location-GROUPED
@@ -419,37 +434,37 @@ T_GOOD_OVERRIDES = {
 # cost of calibrating at all on six partitions that had no eval row of any kind; the first
 # v11-era run's per-partition admitted precision is the read that checks it.
 #
-# KNIFE-EDGES, stamped: mandelbrot t=0.90 and julia:multibrot4 t=0.10 each sit on a 1-step
-# plateau and julia:multibrot5 t=0.39 on a 2-step one — re-derive rather than nudge. The two
-# NEW partitions are NOT knife-edged (julia:mandelbrot plateau [0.83,0.85], phoenix
+# KNIFE-EDGES, stamped: mandelbrot t=0.90, julia:multibrot4 t=0.10, multibrot3 t=0.61 and
+# multibrot5 t=0.61 each sit on a 1-step plateau and julia:multibrot5 t=0.39 on a 2-step one —
+# re-derive rather than nudge. multibrot4's t=0.85 is the widest plateau in the table
+# ([0.81,0.85], 5 steps) and is the one native cut that is NOT knife-edged. The two NEW
+# partitions are NOT knife-edged either (julia:mandelbrot plateau [0.83,0.85], phoenix
 # [0.73,0.77]), which is the opposite of what the first read on the biased draw suggested.
+#
+# OVERFIT, stamped: multibrot3's F0.5 is 0.581 in-sample vs 0.515 OOF (gap +0.066 at n=196,
+# pos=49) — the largest gap in the adopted table and the OOF number is the honest one.
 
 # UNCALIBRATED — these partitions RUN at T_GOOD_BASELINE but are not DERIVED under v11.
 # A baseline 0.50 and a derived 0.50 are indistinguishable as a bare number, and six months
 # from now nobody remembers which is which — so the distinction lives here explicitly rather
 # than in absence-from-a-table.
 #
-# THE SET SHRANK BY TWO AT THE v11 FLIP AND THE REMAINING FOUR SPLIT INTO TWO KINDS.
-# julia:mandelbrot and phoenix left it: the grouped-holdout population rule reaches 70 and 55
-# keeper positives for them where every frozen instrument through v10 reached none, so both
-# are DERIVED for the first time since v7 (whose 0.22 / 0.45 were cuts on v7's scale and are
-# retired, not carried). What is left:
+# THE SET IS DOWN TO ONE, and getting there took two separate decisions on the same day.
+# julia:mandelbrot and phoenix left it at the v11 FLIP: the grouped-holdout population rule
+# reaches 70 and 55 keeper positives for them where every frozen instrument through v10 reached
+# none, so both are DERIVED for the first time since v7 (whose 0.22 / 0.45 were cuts on v7's
+# scale and are retired, not carried). The three native multibrots left it at the FORK LAUNCH
+# hours later — derivable at the flip and deliberately withheld there, adopted at 0.61/0.85/0.61
+# once the owner of the native-tightening decision took it (see the block above). What is left:
 #
-#   * WITHHELD (3) — derivable and deliberately not adopted. The native multibrots clear
-#     MIN_POS on the holdout for the first time (49/32/38 positives, against 0 keepers in
-#     v10's uniform instrument) and would take 0.61/0.85/0.61. A native multibrot tightening
-#     is FORK-SCHEDULED — decided at the next fork launch together with tau_h, not as a side
-#     effect of a checkpoint flip (deferred_recalibration.md § "Related"). The derived values
-#     are preserved in data/v11/t_good_derivation.json § withheld so that decision is a read,
-#     not a re-derivation.
 #   * BELOW MIN_POS (1) — phoenix:classic, and it is now the ONLY partition the population
 #     rule cannot reach: 8 holdout rows with 1 positive and no instrument rows at all. Split
 #     off `phoenix` on 2026-08-04 (partitions.CLASSIC_PHOENIX). NOT the never-looked case — a
 #     human has labeled every one of its rows; the eval side simply draws too few.
+#
+# A single-element set is a state, not a degenerate case: `t_good_status` still has to answer
+# UNCALIBRATED for it, and `uniform_eval_draws._check_uncalibrated_coverage` still walks it.
 T_GOOD_UNCALIBRATED = frozenset({
-    "multibrot3",         # v11: derivable at 0.61 on 196 holdout rows — WITHHELD, fork-scheduled
-    "multibrot4",         # v11: derivable at 0.85 on 151 holdout rows — WITHHELD
-    "multibrot5",         # v11: derivable at 0.61 on 164 holdout rows — WITHHELD
     "phoenix:classic",    # v11: 8 holdout rows / 1 positive, 0 instrument rows — below MIN_POS
 })
 

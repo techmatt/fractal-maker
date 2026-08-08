@@ -144,13 +144,21 @@ def test_sweep_and_served_agree_on_every_row_of_the_live_slice():
 # that is the expected direction: counting reaches 2 via `p_ge4 >= 0.5` without the `p_ge3`
 # leg. These are locations the head is confident are class 4 while being unsure they are
 # class 3, which CORN's cumulative probabilities do not forbid. The served rule is
-# `corn_decode`, so these 34 rows admit in production; the sweep that chose the thresholds
+# `corn_decode`, so these 39 rows admit in production; the sweep that chose the thresholds
 # swept the same rule, so the cuts already account for them.
+#
+# THE v11 NUMBER MOVED ONCE, 34 -> 39, and it is the same mechanism read a second time. The
+# native-multibrot tightening adopted later on 2026-08-08 (0.50 -> 0.61/0.85/0.61) raised two
+# of these partitions' cuts, and the gap grew ONLY there: multibrot3 4->5 and multibrot4 2->6,
+# every other partition byte-unchanged. That is the signature the comment above predicts — a
+# stricter `p_ge3` leg opens more room for a row to reach 2 by the `p_ge4` leg alone — and
+# multibrot4, which took the table's highest cut, moved most. `and_only` stayed EMPTY through
+# the change, which is the assertion that would have caught a twin drift instead.
 LIVE_ALIGNMENT_GAP = {
     "v10": {"total": 0, "by_partition": {}},
-    "v11": {"total": 34, "by_partition": {
-        "mandelbrot": 13, "julia:mandelbrot": 8, "phoenix": 5, "multibrot3": 4,
-        "julia:multibrot3": 2, "multibrot4": 2}},
+    "v11": {"total": 39, "by_partition": {
+        "mandelbrot": 13, "julia:mandelbrot": 8, "phoenix": 5, "multibrot3": 5,
+        "julia:multibrot3": 2, "multibrot4": 6}},
 }
 
 

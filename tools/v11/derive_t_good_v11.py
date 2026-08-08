@@ -61,15 +61,26 @@ THREE THINGS THIS PASS DECIDES, none inherited:
      * multibrot{3,4,5} (native) — ABUNDANT (419/191/269). Recorded, and the partitions are
        WITHHELD (see 3), so the objective never fires.
 
-3. WHAT IS DERIVABLE AND DELIBERATELY NOT ADOPTED. Under the new population rule the three
-   NATIVE multibrots clear MIN_POS for the first time (49/32/38 holdout positives against
-   zero keeper positives in v10's uniform instrument). Adopting them would be a native
-   multibrot tightening, and that decision is FORK-SCHEDULED — taken at the next fork launch
-   together with tau_h, not as a side effect of a flip (deferred_recalibration.md §
-   "Related, but not part of this cluster"). So they go through `withhold`: the numbers are
-   derived and written to the artifact's `withheld` block for the owner of that decision, and
-   the three partitions run at the 0.50 baseline with a reason that says "withheld", not
+3. THE NATIVE MULTIBROTS — WITHHELD AT THE FLIP, ADOPTED THE SAME DAY. Under the new
+   population rule the three NATIVE multibrots clear MIN_POS for the first time (49/32/38
+   holdout positives against zero keeper positives in v10's uniform instrument). Adopting
+   them is a native multibrot tightening, and that decision was FORK-SCHEDULED — taken at
+   the fork launch together with tau_h, not as a side effect of a flip
+   (deferred_recalibration.md § "Related, but not part of this cluster"). So they first went
+   through `withhold`: derived, written to the artifact's `withheld` block for the owner of
+   the decision, and running at the 0.50 baseline with a reason that said "withheld", not
    "no data".
+
+   **The fork ran on 2026-08-08 and the owner approved the tightening**, so `WITHHOLD` is now
+   empty and `multibrot{3,4,5}` are DERIVED at 0.61 / 0.85 / 0.61 — byte-for-byte the values
+   the `withheld` block had already recorded, which is what that path exists to guarantee.
+   0.50 -> 0.61/0.85/0.61 is a TIGHTENING on all three; read the admitted-count deltas in
+   `scratch/tau_h_enlargement_report.md`, not the thresholds, for what it costs.
+
+   Two stamps that ride along and are NOT weakened by adoption: multibrot3 and multibrot5 sit
+   on 1-step plateaus (knife-edge — re-derive rather than nudge), and the holdout is biased
+   exactly as training is, so 0.583 / 0.704 / 0.667 precision is NOT what the gate delivers on
+   a discovery frontier. Both are emitted automatically by the shared estimator.
 
    `phoenix:classic` is the one partition the rule still cannot reach: 8 holdout rows with 1
    positive, no instrument rows at all. It stays UNCALIBRATED at 0.50, below MIN_POS.
@@ -121,21 +132,26 @@ OBJECTIVE = {
     "mandelbrot": 0.5,          # abundant (anchor partition; small draw is a deficit artifact)
     "julia:mandelbrot": 0.5,    # NEW — abundant (814 since 2026-08-03, largest param-plane draw)
     "phoenix": 0.5,             # NEW — abundant (525; supply is a parameter grid)
-    "multibrot3": 0.5,          # abundant (419) — recorded; partition is WITHHELD
-    "multibrot4": 0.5,          # abundant (191) — recorded; partition is WITHHELD
-    "multibrot5": 0.5,          # abundant (269) — recorded; partition is WITHHELD
+    "multibrot3": 0.5,          # abundant (419) — ADOPTED 2026-08-08 (was WITHHELD at the flip)
+    "multibrot4": 0.5,          # abundant (191) — ADOPTED 2026-08-08 (was WITHHELD at the flip)
+    "multibrot5": 0.5,          # abundant (269) — ADOPTED 2026-08-08 (was WITHHELD at the flip)
     "julia:multibrot3": 2.0,    # scarce — 198 drawn, gate-limited, smallest param-plane families
     "julia:multibrot4": 2.0,    # scarce — 266
     "julia:multibrot5": 2.0,    # scarce — 281
 }
 
-# --- derivable, deliberately not adopted (see §3 above) ----------------------------------- #
-_FORK = ("DERIVABLE under v11's grouped holdout (first time — v10's uniform instrument "
-         "carried 0 keeper positives) and WITHHELD from adoption: a native multibrot "
-         "tightening is fork-scheduled, decided at the next fork launch together with tau_h, "
-         "not as a side effect of a checkpoint flip (deferred_recalibration.md § 'Related, "
-         "but not part of this cluster'). The derived value is in the `withheld` block.")
-WITHHOLD = {"multibrot3": _FORK, "multibrot4": _FORK, "multibrot5": _FORK}
+# --- the withhold, and its 2026-08-08 release (see §3 above) ------------------------------ #
+# EMPTY ON PURPOSE, and it is not empty because nothing was withheld — the three native
+# multibrots WERE withheld at the flip earlier the same day, and the fork that owned the
+# decision released them the same day (Matt-approved, `tau_h_enlargement.md` §1). They are now
+# DERIVED at exactly the numbers the `withheld` block recorded (0.61/0.85/0.61), off the same
+# holdout population, same F0.5 objective, same estimator — the withhold path's whole point
+# was that the owner would not have to re-derive, and it did not.
+#
+# Do NOT re-add these three to buy back the old behaviour: the pre-adoption record is
+# `tau_h_base_v11.json`'s superseded sibling and the v11-flip artifact in git history, and a
+# re-withhold would be a NEW loosening decision needing its own justification.
+WITHHOLD: dict = {}
 
 UNCAL_REASON = {
     # The ONE partition the grouped holdout still cannot reach. NOT the never-looked case: a

@@ -233,9 +233,32 @@ decision (`aesthetic_scoring.md` §2).
 
 ## Related, but not part of this cluster
 
-**Native-multibrot `t_good` adoption** is fork-scheduled, not release-gated: it's decided at the
-next fork launch together with τ_h, and a flip retro-re-decodes the library through the
-decode-version predicate. Tracked with the discovery/classifier work, not here. As of v10 the
-three native multibrot partitions do at last have unbiased eval rows (24/25/29 from
-`maneuver_uniform_v1`) and **zero keeper positives among the 78**, so they stay UNCALIBRATED at
-the 0.50 baseline — now because they were looked at rather than because they weren't.
+**Native-multibrot `t_good` adoption — TAKEN 2026-08-08 at the fork launch. Closed.** It was
+fork-scheduled, not release-gated: decided at the fork launch together with τ_h, and a flip
+retro-re-decodes the library through the decode-version predicate. The history, since the
+verdict reversed twice on changing evidence:
+
+- **v10:** the three partitions got unbiased eval rows for the first time (24/25/29 from
+  `maneuver_uniform_v1`) and carried **zero keeper positives among the 78** — UNCALIBRATED at
+  0.50 because they were looked at, not because they weren't.
+- **v11 flip:** the grouped-holdout population rule reached 196/151/164 rows with **49/32/38
+  positives**, clearing `MIN_POS` for the first time. Derivable at 0.61/0.85/0.61 — and
+  **withheld**, because the decision belonged to the fork, not to a flip.
+- **v11 fork launch, same day:** adopted at exactly those numbers, off the same holdout, same
+  F0.5 objective, same estimator. Nothing was re-derived; that is what the `withhold` path
+  exists to guarantee. `data/v11/t_good_derivation.json` now states the outcome as DERIVED
+  state (`native_multibrot_tightening`) rather than as the sentence "NOT adopted", which had
+  been hardcoded in the shared estimator since v8 and would have outlived what it recorded.
+
+**0.50 → 0.61/0.85/0.61 is a TIGHTENING, and the cost is measured, not assumed.** Admitted
+counts before → after: on the derivation's own holdout **65→48 / 47→27 / 53→33** (73.8% /
+57.4% / 62.3% retained, n=196/151/164); on the τ_h harvest arm's canonical renders — a
+frontier-shaped population — **161→136 / 208→100 / 161→126** (n=300 each). **multibrot4 is
+where it bites**: it takes the highest cut in the whole table and keeps under half its
+admissions on both populations. Two stamps ride along: multibrot3 and multibrot5 sit on 1-step
+plateaus (re-derive rather than nudge), and multibrot3 carries the adopted table's largest
+in-sample→OOF gap (0.581 → 0.515). And the holdout is biased exactly as training is, so
+0.583/0.704/0.667 precision is not what the gate delivers on a discovery frontier — the first
+v11-era run's per-partition admitted precision is the read that checks it.
+
+`production_seeder.T_GOOD_UNCALIBRATED` is now a **one-element set** (`phoenix:classic`).

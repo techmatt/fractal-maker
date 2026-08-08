@@ -492,6 +492,18 @@ def build_table(rows, version: str, eval_slice: str, objective: dict = None,
         for nt in notes:
             print(f"    * {nt}")
 
+    # DERIVED from what this pass actually did, never asserted. This field used to be the
+    # literal string "NOT adopted (fork-scheduled proposals left on record)", which was true
+    # for v8..v11-flip and became a lie the moment the fork adopted the three cuts — the
+    # hardcoded-`True` failure in CLAUDE.md § "Derive state in code". `multibrot*` is spelled
+    # as a predicate over ALL_FAMS rather than a second literal list of the native degrees.
+    _native_mb = [f for f in ALL_FAMS if f.startswith("multibrot")]
+    tightening = {
+        "adopted": {f: adopted[f] for f in _native_mb if f in adopted},
+        "withheld": {f: withheld[f]["would_adopt"] for f in _native_mb if f in withheld},
+        "not_derivable": [f for f in _native_mb if f not in adopted and f not in withheld],
+    }
+
     out = {
         "objective": "per-partition F_beta-argmax, tie-break higher t",
         "objective_principle": ("Weight recall where supply is SCARCE, weight precision where "
@@ -509,7 +521,7 @@ def build_table(rows, version: str, eval_slice: str, objective: dict = None,
         "baseline": BASELINE, "min_pos": MIN_POS,
         "no_class4_threshold": True,
         "class4_decode": "natural cutpoint P(>=4) >= 0.5, no per-family calibration",
-        "native_multibrot_tightening": "NOT adopted (fork-scheduled proposals left on record)",
+        "native_multibrot_tightening": tightening,
         "eval_slice": eval_slice,
         "model": version,
         "derived": derived,
