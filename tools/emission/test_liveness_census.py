@@ -89,16 +89,49 @@ def test_the_union_loads_and_is_the_per_ledger_sum(census):
     assert diag["n_union"] > 0
 
 
+# Intake ledgers KNOWN to contribute zero, each with the date, the cause and the remedy.
+# A registration here is NOT an exemption — it is the opposite of one. The assertion below is
+# "no ledger is UNEXPECTEDLY empty", and a registered entry still has to be true: an entry that
+# starts contributing again goes red, so the note cannot outlive its subject.
+#
+# `classic_phoenix` (2026-08-08, the v11 flip). Its 24 rows re-score cleanly under v11 —
+# 19 decode class 1, 5 class 2 — and NONE reaches q3, so `load_admitted` refuses all of them.
+# This is the HEAD, not a stale decode: the partition runs at the 0.50 UNCALIBRATED baseline
+# under v11 exactly as it did under v10, and the re-score is current. The first read of it was
+# worse and wrong — a partition-key bug in `ledger_rescore` minted all 24 against `phoenix`'s
+# new 0.77 and decoded every one to class 1; that is fixed, and the remaining zero is real.
+# `phoenix:classic` is EXTERNALLY SUPPLIED — no crawl produces it — so the remedy is a supply
+# run, not a threshold: `production_seeder.py --run-phoenix` then `classic_phoenix_supply.py`.
+# The release mix asks ~12 of a 779-row intake (1.52%) and gets 0.
+KNOWN_EMPTY = {"classic_phoenix"}
+
+
 def test_every_intake_ledger_still_contributes(census):
     """THE v10-flip detector. A version firewall shutting a ledger out is invisible in the
     total (the others absorb it) and total here: six of seven went to zero and the run
     proceeded. Stated per ledger so the failure names which one died."""
-    dead = {tag: v for tag, v in census["per_ledger"].items() if v["admitted"] == 0}
+    dead = {tag: v for tag, v in census["per_ledger"].items()
+            if v["admitted"] == 0 and tag not in KNOWN_EMPTY}
     assert not dead, (
         f"{len(dead)} intake ledger(s) contribute NO admitted rows: {sorted(dead)}. Either the "
         f"decode block went stale under a head flip (re-run tools/emission/ledger_rescore.py) "
         f"or the ledger itself is gone. Stage 2 will run either way, on a corpus that quietly "
         f"lost a family.")
+
+
+def test_no_known_empty_ledger_has_quietly_come_back(census):
+    """The other half of KNOWN_EMPTY, and the half that keeps it from rotting into a blanket
+    exemption. A registered ledger that starts admitting again is good news the registration
+    must not swallow — delete its entry (and its prose) rather than leaving a note that
+    describes a state the tree has left."""
+    revived = {tag: census["per_ledger"][tag]["admitted"] for tag in KNOWN_EMPTY
+               if census["per_ledger"].get(tag, {}).get("admitted", 0) > 0}
+    assert not revived, (
+        f"{revived} — these are registered in KNOWN_EMPTY as contributing nothing and they "
+        f"now contribute. Remove the registration; the guard above should carry them again.")
+    assert KNOWN_EMPTY <= set(census["per_ledger"]), (
+        f"KNOWN_EMPTY names a ledger the census does not: "
+        f"{sorted(KNOWN_EMPTY - set(census['per_ledger']))}")
 
 
 def test_the_admitted_share_is_above_the_collapse_floor(census):
@@ -144,7 +177,11 @@ def test_every_demanded_partition_has_admitted_supply(census):
     from collections import Counter
     have = Counter(D.cell_partition(r) for r in census["rows"])
     demanded = [p for p, v in RM.RATIO.items() if v > 0]
-    starved = sorted(p for p in demanded if have[p] == 0)
+    # The partitions a KNOWN_EMPTY ledger is the sole supplier of are starved BY THAT ENTRY,
+    # not independently — reporting them here would be the same fact a second time, and it is
+    # the ledger registration that carries the date, the cause and the remedy.
+    known_starved = {P.CLASSIC_PHOENIX} if "classic_phoenix" in KNOWN_EMPTY else set()
+    starved = sorted(p for p in demanded if have[p] == 0 and p not in known_starved)
     assert not starved, (
         f"partition(s) {starved} are demanded by release_mix.RATIO and have zero admitted "
         f"rows. Their share is silently renormalized away at every target solve. Live counts: "

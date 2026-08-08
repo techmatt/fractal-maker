@@ -130,6 +130,15 @@ class SheetSpec:
     # is indistinguishable from a build that silently dropped rows.
     row_filter: object = None
     filter_rule: str = ""
+    # THE CLASSIFIER VERSION THIS SHEET'S FILTER WAS CUT UNDER. `None` means "the live pin",
+    # which is right for a sheet not yet built and wrong for every sheet that has been: a
+    # frozen `route.json` is a record of a selection, and re-deriving that selection from a
+    # LIVE `t_good` status re-answers a question the sheet already answered. The v11 flip is
+    # what proved it — `steady_state_uncal` was cut on 2026-08-05 under v10's statuses, and
+    # when phoenix and julia:mandelbrot left UNCALIBRATED the live predicate selected a
+    # different population than the committed route. Derive in code, freeze in records
+    # (storage_classes.md): the code is the filter, the record is the version it ran under.
+    filter_version: str | None = None
 
     def __post_init__(self):
         if bool(self.row_filter) != bool(self.filter_rule):
@@ -218,21 +227,27 @@ STEADY_STATE_SITTING = SheetSpec(
 # =========================================================================== #
 # row filters — the SUBSET rules a spec may carry
 # =========================================================================== #
-@functools.lru_cache(maxsize=1)
-def _t_good_statuses() -> dict:
-    """`{partition: DERIVED|UNCALIBRATED}` off the ADOPTED derivation artifact for the LIVE
-    pin, via the module that WRITES that artifact (`derive_t_good.adopted_statuses`).
+@functools.lru_cache(maxsize=8)
+def _t_good_statuses(version: str | None = None) -> dict:
+    """`{partition: DERIVED|UNCALIBRATED}` off the ADOPTED derivation artifact, via the module
+    that WRITES that artifact (`derive_t_good.adopted_statuses`).
+
+    `version=None` is the LIVE pin, which is what an unbuilt sheet wants. A BUILT sheet passes
+    the version its filter was cut under (`SheetSpec.filter_version`): the selection is frozen
+    in `route.json`, so re-deriving it from a live status re-answers a settled question, and at
+    the v11 flip it did — phoenix and julia:mandelbrot left UNCALIBRATED and the predicate
+    started selecting a different population than the sheet had actually served.
 
     Imported lazily, the same way `_loc()` is: `derive_t_good` pulls numpy and, through
     `score_lib`, torch — and a sheet with no filter must stay buildable without them. Cached
-    for the process because a build reads it once per row over hundreds of rows; a CLI run is
-    the unit of freshness here, and re-deriving t_good mid-run is not a thing that happens.
+    per version because a build reads it once per row over hundreds of rows; a CLI run is the
+    unit of freshness here, and re-deriving t_good mid-run is not a thing that happens.
     """
     import derive_t_good
-    return derive_t_good.adopted_statuses()
+    return derive_t_good.adopted_statuses(version)
 
 
-def t_good_status_of(row) -> str:
+def t_good_status_of(row, version: str | None = None) -> str:
     """The stamped t_good status of a corpus row's PARTITION. Resolved from the render block
     (`partition_of_row` — version-invariant, and the only thing that knows the phoenix split),
     never from `provenance.family`, which is version-tagged and may be null."""
@@ -241,10 +256,10 @@ def t_good_status_of(row) -> str:
         raise KeyError(f"row {row.get('image_id')!r}: fractal_type "
                        f"{row['render'].get('fractal_type')!r} resolves to no registered "
                        f"partition — register it in partitions.ALL_FAMS before serving it")
-    return _t_good_statuses()[part]
+    return _t_good_statuses(version)[part]
 
 
-def uncalibrated_t_good_in(*batches):
+def uncalibrated_t_good_in(*batches, version: str | None = None):
     """A `row_filter` that keeps, IN THE NAMED BATCHES ONLY, rows whose partition's t_good is
     stamped UNCALIBRATED; every other batch of the sheet is served whole.
 
@@ -259,17 +274,18 @@ def uncalibrated_t_good_in(*batches):
     def _keep(batch: str, row) -> bool:
         if batch not in scoped:
             return True
-        return t_good_status_of(row) == "UNCALIBRATED"
+        return t_good_status_of(row, version) == "UNCALIBRATED"
 
     # What the predicate READ, resolved at build time and frozen into batch.json — a rule
     # naming "the adopted artifact" is not reproducible six months on unless the record says
     # which file that was ("derive state in code; freeze it in records", CLAUDE.md).
     def _provenance():
         import derive_t_good
-        p = derive_t_good.adopted_path()
+        p = derive_t_good.adopted_path(version)
         return {"t_good_artifact": p.relative_to(ROOT).as_posix(),
+                "t_good_version": version or "LIVE at build time",
                 "scoped_batches": sorted(scoped),
-                "statuses": dict(sorted(_t_good_statuses().items()))}
+                "statuses": dict(sorted(_t_good_statuses(version).items()))}
 
     _keep.provenance = _provenance
     return _keep
@@ -298,7 +314,11 @@ STEADY_STATE_UNCAL = SheetSpec(
              "registration; the single export routes back through route.json "
              "(merge_scores.py --route). The excluded ranked rows remain registered and "
              "labelable by a later sheet."),
-    row_filter=uncalibrated_t_good_in("2026-08-05_steady_state_ranked_v1"),
+    # PINNED TO v10, the version this sheet was CUT under on 2026-08-05. Not the live pin:
+    # the sitting has been built and its route.json frozen, so its population is a record, and
+    # the v11 flip moved two partitions out of UNCALIBRATED. See SheetSpec.filter_version.
+    row_filter=uncalibrated_t_good_in("2026-08-05_steady_state_ranked_v1", version="v10"),
+    filter_version="v10",
     filter_rule=("dive leg served whole; ranked leg restricted to partitions whose t_good "
                  "status is UNCALIBRATED in data/<ACTIVE_VERSION>/t_good_derivation.json "
                  "(derive_t_good.adopted_statuses), resolved per row by "

@@ -299,17 +299,47 @@ def test_the_filtered_sitting_is_exactly_uncalibrated_ranked_plus_the_whole_dive
     full = B.load_sources(spec, filtered=False)
 
     from partitions import partition_of_row
+    # Through the spec's OWN `filter_version`, not the live pin. The sheet was cut under v10
+    # and its route.json is frozen; re-deriving its population from whatever t_good is adopted
+    # today re-answers a settled question, which is exactly what went red at the v11 flip when
+    # phoenix and julia:mandelbrot left UNCALIBRATED.
     want = {(b, r["image_id"]) for b, r in full
-            if b != ranked or B.t_good_status_of(r) == "UNCALIBRATED"}
+            if b != ranked or B.t_good_status_of(r, spec.filter_version) == "UNCALIBRATED"}
     assert {(b, r["image_id"]) for b, r in sel} == want
     assert {b for b, _ in sel if b == dive} == {dive}
     assert sum(1 for b, _ in sel if b == dive) == sum(1 for b, _ in full if b == dive), \
         "the dive leg is served WHOLE — it is not scoped by the filter"
-    # and nothing DERIVED survives from the scoped leg.
+    # and nothing DERIVED survives from the scoped leg — under the version the sheet was cut
+    # under. Not the live pin: this is a statement about the SELECTION, and the selection is
+    # frozen. What the live table says about those partitions today is a different question,
+    # and it is asked (and answered "two of them are now DERIVED") by the test below.
+    v = spec.filter_version
     assert not [r for b, r in sel
-                if b == ranked and B.t_good_status_of(r) != "UNCALIBRATED"]
+                if b == ranked and B.t_good_status_of(r, v) != "UNCALIBRATED"]
     served = {partition_of_row(r["render"]) for b, r in sel if b == ranked}
-    assert served and all(B._t_good_statuses()[p] == "UNCALIBRATED" for p in served)
+    assert served and all(B._t_good_statuses(v)[p] == "UNCALIBRATED" for p in served)
+
+
+def test_the_frozen_sitting_records_a_selection_the_live_table_no_longer_reproduces():
+    """The point of `SheetSpec.filter_version`, proved NON-VACUOUS.
+
+    A pinned version that happened to agree with the live one would make every assertion above
+    pass for the wrong reason, and this file would keep passing right up until it silently
+    stopped meaning anything. The v11 flip is what makes the two disagree: `phoenix` and
+    `julia:mandelbrot` were UNCALIBRATED under v10 — which is why the sitting served them —
+    and are DERIVED under v11. If a future flip ever makes the two tables agree again, this
+    goes red, and the right response is to check whether the pin is still doing work rather
+    than to delete it."""
+    spec = B.SPECS["steady_state_uncal"]
+    assert spec.filter_version, "the built sitting must pin the version its filter was cut under"
+    frozen = B._t_good_statuses(spec.filter_version)
+    live = B._t_good_statuses(None)
+    moved = {p for p in frozen if frozen[p] != live.get(p)}
+    assert moved, (
+        f"the {spec.filter_version} and live t_good status tables are identical, so pinning "
+        f"the version is currently a no-op and every assertion above would pass unpinned — "
+        f"re-check that filter_version is still load-bearing")
+    assert {"phoenix", "julia:mandelbrot"} <= moved, sorted(moved)
 
 
 def test_the_excluded_rows_stay_registered_labelable_and_unlabeled():

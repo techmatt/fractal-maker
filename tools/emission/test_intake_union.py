@@ -29,17 +29,23 @@ from tools.emission import descriptor as D          # noqa: E402
 from tools.emission import ledger_rescore as LR     # noqa: E402
 import corpus_common as cc                          # noqa: E402
 
-# The live census, 2026-08-04, head v10 (`uv run python tools/emission/ledger_rescore.py
-# status`). 751 admitted rows over the seven intake ledgers, 0 cross-ledger same-location
-# overlaps, 11 bare-id collisions that the namespacing keeps apart. The PRE-namespacing union
-# was 689 — it dropped exactly those 11 distinct locations before aborting on them.
+# The live census, 2026-08-08, head v11 (`uv run python tools/emission/ledger_rescore.py
+# status`). 779 admitted rows over the seven intake ledgers, 0 cross-ledger same-location
+# overlaps, 16 bare-id collisions that the namespacing keeps apart.
 #
-# 700 -> 751 on 2026-08-04 when the v7-era badness floor was deleted from the floor-admit path
-# (emission_floors_prompt.md §B): `q4_harvest` went 57 -> 108 of its 108 guard-passing rows.
-# The +51 is entirely that one ledger; the other six admit on the q3 gate and did not move.
-UNION_ADMITTED = 751
+# 751 (v10) -> 779 (v11), and the composition moved more than the total: the six q3-gated
+# ledgers moved with the head and the new per-partition t_good together, and `classic_phoenix`
+# went to ZERO (see KNOWN_EMPTY in test_liveness_census.py — the head, not a stale decode).
+# Earlier: 700 -> 751 on 2026-08-04 when the v7-era badness floor was deleted from the
+# floor-admit path (emission_floors_prompt.md §B), `q4_harvest` 57 -> 108 of its 108
+# guard-passing rows.
+#
+# THIS PIN IS SUPPOSED TO BREAK ON A RE-SCORE. It is a census — "what the union IS" — and its
+# job is to make a change in the intake population an explicit edit. The standing ALIVE check
+# is the relational floor in test_liveness_census.py, which a legitimate re-score leaves green.
+UNION_ADMITTED = 779
 Q4_HARVEST_ADMITTED = 108        # the floor-admit ledger, whole (guard ∧ distinct ∧ current)
-ID_COLLISIONS = 11
+ID_COLLISIONS = 16
 LOCATION_OVERLAPS = 0
 
 LEDGERS = [LR.ledger_path(rel) for _tag, rel in LR.LEDGERS]
@@ -129,4 +135,24 @@ def test_every_admitted_row_resolves_to_a_registered_partition(union):
     from partitions import ALL_FAMS
     parts = {D.cell_partition(r) for r in rows}
     assert parts <= set(ALL_FAMS)
-    assert "phoenix:classic" in parts, "the classic supply is in the union and must be keyed"
+
+
+def test_the_classic_split_is_still_resolvable_off_a_row(union):
+    """The `phoenix:classic` KEY, checked without depending on the union containing one.
+
+    This used to be `assert "phoenix:classic" in parts` on the union above — which asserted
+    two things at once and broke on the weaker of them: at the v11 flip the classic ledger's
+    24 rows stopped reaching q3, so the partition left the union and the RESOLVER assertion
+    went red for a SUPPLY fact (test_liveness_census.KNOWN_EMPTY carries that one, with its
+    cause and remedy). What has to hold here is that `cell_partition` can still tell classic
+    from varied phoenix when handed a classic row — the thing that would silently mis-key the
+    cell axis — so it is asserted against a row built for the purpose, and it stays true
+    whether or not any classic row is currently admissible."""
+    import partitions as P
+    axes = dict(zip(("c_re", "c_im", "p_re", "p_im", "zm1_re", "zm1_im"),
+                    P.PHOENIX_CLASSIC_POINT))
+    row = {"family": "phoenix", "fractal_type": "phoenix",
+           **{f"phoenix_{k}": v for k, v in axes.items()}}
+    assert D.cell_partition(row) == P.CLASSIC_PHOENIX, (
+        "a row at the pinned Ushiki point does not resolve to phoenix:classic — the cell axis "
+        "would pool the classic supply into varied phoenix")

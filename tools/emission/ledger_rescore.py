@@ -161,7 +161,18 @@ def _score_row(scorer, row: dict, tile: Path) -> dict:
         assert guard_pass == (reason is None), \
             f"guard disagreement: sentinel_pass={guard_pass} field_reason={reason}"
 
-    t = ps.t_good_for(row["family"])
+    # THE PARTITION, RESOLVED FROM THE ROW — not `row["family"]`, which is the ledger's
+    # partition for the nine BASE partitions and wrong for exactly one: a classic-phoenix row
+    # says `phoenix`. This read `t_good_for(row["family"])` until 2026-08-08 and the bug was
+    # invisible for as long as it mattered least — phoenix and phoenix:classic were BOTH
+    # UNCALIBRATED at 0.50, so the wrong key returned the right number. The v11 flip
+    # calibrated phoenix at 0.77 and left phoenix:classic at the baseline, at which point the
+    # first re-score minted all 24 classic rows against 0.77 (max p_good 0.639), decoded every
+    # one to class 1, and took the partition's entire admitted supply to zero — which the
+    # liveness census caught, and which reads as "v11 lost classic phoenix" rather than as a
+    # key resolution bug. `classic_phoenix_servable` below already used the row resolver;
+    # these two sites now agree.
+    t = ps.t_good_for(P.partition_of_row(row, row.get("family")))
     decoded = corn_decode(notbad, good, t, great) if guard_pass else None
     return {
         "decoded_class": decoded, "p_notbad": notbad, "p_good": good, "p_ge4": great,
