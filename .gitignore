@@ -463,7 +463,14 @@ __pycache__/
 !/data/v11/build_record.json
 !/data/v11/aug_recipe.json
 !/data/v11/colormaps.json
+# The v11 train/certify records. A negation is a DECLARATION that the file belongs in the
+# tree, and tests/test_tracked_artifacts.py holds every declared path to being tracked — so
+# each line lands in the commit that lands its file, never ahead of it.
+#   `prereg_v11.json` is the whole point of pre-registration: a bar in a committed artifact
+# the eval script loads cannot be edited after seeing the results.
+!/data/v11/prereg_v11.json
 /data/v11/aug_cache/
+/data/v11/eval_canon/
 /data/v11/plan.jsonl
 
 # ---------------------------------------------------------------------------

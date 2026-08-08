@@ -1,0 +1,284 @@
+{
+  "version": "v11",
+  "written": "BEFORE any v11 eval ran; tools/v11/eval_v11.py loads this file rather than restating its constants. No model is loaded here \u2014 every number below is a label count or a closed-form power calculation.",
+  "adoption": "THIS PROMPT DOES NOT ADOPT. ACTIVE_CKPT stays v10, t_good is not re-derived, no keeper cut or ledger is touched. Adoption is a separate prompt judged against these bars.",
+  "baseline": "v10 RE-SCORED on the v11 canonical tiles, not v10's own numbers from data/v10/eval_results_v10.json. v10 is the deployed head; pairing both arms on identical inputs is what leaves the MODEL as the only difference between them. v10's own tiles are a different render path (v4-render-batch direct vs crop-batch's extended field), which the diagnostic arm below quantifies.",
+  "canonical_view": {
+    "cell": "twilight_shifted / identity framing / antialiased:lanczos3 / q85",
+    "why_it_is_produced": "v4..v10 fanned out as a PRODUCT so this cell existed for every location. v11 draws its 32 tiles independently: tile 0 is twilight_shifted at the identity framing by the recipe floor, but its AA level is a 50/50 draw, so only 1,448 of 2,860 eval locations carry it. tools/v11/build_eval_canon.py replays those tile-0 rows at antialiased/q85 \u2014 the cache's own code path, verified byte-identical on the 38 locations that already had the cell.",
+    "manifest": "data/v11/eval_canon_manifest.jsonl (bulk)"
+  },
+  "instrument_check": {
+    "rule": "classifier_retrain_protocol.md \u00a73, the v9 block",
+    "intervention": "CORPUS + SPLIT RULE + AUG RECIPE \u2014 11,303 labeled locations against v10's 8,382, a stratified randomized holdout over leakage-closure groups instead of v8's frozen prefix, and 32 independently drawn tiles instead of a 24-slot product.",
+    "why_the_check_inverts": "v9's intervention was the render path, so identical eval tiles meant a blind instrument. v11's is the data and the split, so what must move is the MODEL \u2014 and the arms are paired on identical tiles by construction. The failure mode to guard instead is a tile-path change masquerading as a model change, which is what the diagnostic arm measures.",
+    "diagnostic_tile_path": {
+      "what": "v10 scored on its OWN v10 cache canonical tile vs v10 scored on the v11 canonical tile, census-144, AUC(label>=3)",
+      "expectation": "|delta| <= 0.02. The two paths were measured at functional parity (tools/v11/parity_crop_mode.py: 0/30 decision flips at the identity crop), so a larger move means the battery is reading the renderer and every verdict below is void.",
+      "gating": false,
+      "abort_if": "abs(delta) > 0.02"
+    }
+  },
+  "eval_population": {
+    "instrument": {
+      "prospect_census": {
+        "n": 144,
+        "n_ge2": 121,
+        "n_ge3": 65,
+        "n_eq4": 22,
+        "by_label": {
+          "1": 23,
+          "2": 56,
+          "3": 43,
+          "4": 22
+        }
+      },
+      "loose0_v3_floor": {
+        "n": 526,
+        "n_ge2": 188,
+        "n_ge3": 26,
+        "n_eq4": 0,
+        "by_label": {
+          "1": 338,
+          "2": 162,
+          "3": 26,
+          "4": 0
+        }
+      },
+      "maneuver_uniform_v1": {
+        "n": 90,
+        "n_ge2": 22,
+        "n_ge3": 0,
+        "n_eq4": 0,
+        "by_label": {
+          "1": 68,
+          "2": 22,
+          "3": 0,
+          "4": 0
+        }
+      },
+      "q4_uniform_eval": {
+        "n": 290,
+        "n_ge2": 62,
+        "n_ge3": 14,
+        "n_eq4": 0,
+        "by_label": {
+          "1": 228,
+          "2": 48,
+          "3": 14,
+          "4": 0
+        }
+      }
+    },
+    "holdout_partitions_first_calibration": {
+      "julia:mandelbrot": {
+        "n": 254,
+        "n_ge2": 135,
+        "n_ge3": 70,
+        "n_eq4": 12,
+        "by_label": {
+          "1": 119,
+          "2": 65,
+          "3": 58,
+          "4": 12
+        }
+      },
+      "phoenix": {
+        "n": 113,
+        "n_ge2": 84,
+        "n_ge3": 55,
+        "n_eq4": 15,
+        "by_label": {
+          "1": 29,
+          "2": 29,
+          "3": 40,
+          "4": 15
+        }
+      }
+    },
+    "correction_sitting": {
+      "holdout_out_of_sample_for_both": {
+        "n": 87,
+        "n_ge2": 85,
+        "n_ge3": 72,
+        "n_eq4": 41,
+        "by_label": {
+          "1": 2,
+          "2": 13,
+          "3": 31,
+          "4": 41
+        }
+      },
+      "train_side_v11": {
+        "n": 413,
+        "n_ge2": 405,
+        "n_ge3": 346,
+        "n_eq4": 148,
+        "by_label": {
+          "1": 8,
+          "2": 59,
+          "3": 198,
+          "4": 148
+        }
+      },
+      "all": {
+        "n": 500,
+        "n_ge2": 490,
+        "n_ge3": 418,
+        "n_eq4": 189,
+        "by_label": {
+          "1": 10,
+          "2": 72,
+          "3": 229,
+          "4": 189
+        }
+      },
+      "in_v10_corpus": 0
+    }
+  },
+  "arms": {
+    "primary_census144": {
+      "instrument": "prospect_census, 144 locations",
+      "metric": "AUC(label>=3 vs rest), paired DeLong, v11 vs v10 on the same tiles",
+      "n": 144,
+      "n_pos": 65,
+      "bar": "NON-INFERIOR iff AUC_v11 >= AUC_v10 - 0.05 AND the paired DeLong does not put v11 significantly below v10 (p < 0.05 AND delta < 0)",
+      "noninf_margin": 0.05,
+      "gating": true,
+      "style": "identical construction to the v8-vs-v7, v9-vs-v8 and v10-vs-v8 primaries; eval-side in every build since v7",
+      "reads": "julia:multibrot only. v11 changes the split everywhere, so unlike v10 this arm is not blind to the intervention \u2014 but it is still the frozen comparability instrument, not the motivating one."
+    },
+    "floor_loose0_v3": {
+      "instrument": "loose0_v3_floor, 526 unbiased base-rate mandelbrot locations",
+      "metric": "AUC(label>=3 vs rest), paired DeLong, v11 vs v10 on the same tiles",
+      "n": 526,
+      "n_pos": 26,
+      "bar": "NON-INFERIOR iff AUC_v11 >= AUC_v10 - 0.05 AND the paired DeLong does not put v11 significantly below v10 (p < 0.05 AND delta < 0)",
+      "noninf_margin": 0.05,
+      "gating": true,
+      "note": "SYMMETRIC: eval-side in both builds, so neither arm is flattered."
+    },
+    "uniform90": {
+      "instrument": "maneuver_uniform_v1, 90 locations \u2014 the score-unconditioned draw over the maneuver-view population",
+      "metric": "AUC(label>=2 vs rest); AUC + bootstrap CI for both models, plus paired DeLong",
+      "n": 90,
+      "n_pos": 22,
+      "boundary_choice": ">=2, not >=3: 0 positives at >=3 (v10's reasoning, and the counts are unchanged)",
+      "power": {
+        "method": "Hanley-McNeil SE",
+        "min_detectable_auc_vs_chance": 0.64,
+        "se_at_that_auc": 0.071,
+        "reproduces_v10_bar": true
+      },
+      "bar": "SEPARATES iff AUC_v11 >= 0.64 AND the 95% bootstrap CI's lower bound > 0.50; AND NON-INFERIOR iff AUC_v11 >= AUC_v10 - 0.05 AND the paired DeLong does not put v11 significantly below v10 (p < 0.05 AND delta < 0)",
+      "separation_bar": 0.64,
+      "noninf_margin": 0.05,
+      "gating": true,
+      "gating_note": "GATING now, unlike in v10's battery, for the reason v10's prereg gave: 'a future v11 can make it gating once a v10 number exists to beat.' It does \u2014 0.8282, SEPARATES.",
+      "v10_measured": 0.8282
+    },
+    "q4_uniform290": {
+      "instrument": "q4_uniform_eval, 290 locations \u2014 registered 2026-08-03, FIRST eval use",
+      "metric": "AUC(label>=2 vs rest); AUC + bootstrap CI for both models",
+      "n": 290,
+      "n_pos": 62,
+      "boundary_choice": ">=2: 14 positives at >=3 is below any usable power; >=2 has 62",
+      "power": {
+        "method": "Hanley-McNeil SE",
+        "min_detectable_auc_vs_chance": 0.59,
+        "se_at_that_auc": 0.042
+      },
+      "bar": "SEPARATES iff AUC >= 0.59 AND the 95% CI's lower bound > 0.50",
+      "separation_bar": 0.59,
+      "gating": false,
+      "gating_note": "NOT gating: this is the arm's first run and it has no prior version to be non-inferior to \u2014 exactly the position the uniform-90 was in at v10. Reported for BOTH heads because these 290 locations postdate v10's build and so are out-of-sample for it as well.",
+      "clean_for_both": true
+    },
+    "motivating_class4_correction87": {
+      "instrument": "the 87 correction-sitting locations (2026-08-07_label_run_correction_v1 + 2026-08-07_steady_state_v2_backfill_v1) that v11's stratified holdout drew into eval",
+      "why_this_population": "the prompt names 'the correction-sitting rows'. All 500 postdate v10's build, so all 500 are out-of-sample for v10 \u2014 but 413 are v11 TRAIN, and an in-sample-for-v11 vs out-of-sample-for-v10 comparison is rigged for v11 in exactly the direction the claim runs. These 87 are the subset out-of-sample for BOTH.",
+      "n": 87,
+      "n_pos_class4": 41,
+      "observed_class4_rate": 0.4713,
+      "defect_under_test": "v10's class-4 CUTPOINT is loose while its ORDERING is sound \u2014 of the 320 class-4 decodes the sheet served as prefills, 172 survived as human 4s (53.8%) and 96.6% survived as >=3, and 68% of all corrections sat on the 3|4 boundary alone (commit a66dd56).",
+      "cutpoint_metric": "the decode rule sigma(logit_2) >= 0.5 => 'class 4': precision, recall, F1 and predicted-4 rate, for v10 and v11 on the same tiles",
+      "cutpoint_bar": "TIGHTENED iff precision_v11 > precision_v10 AND the predicted-4 rate moves toward the observed rate (0.4713), i.e. |rate_v11 - observed| < |rate_v10 - observed|. Direction pre-registered, magnitude not.",
+      "ordering_metric": "AUC(label==4 vs rest), paired DeLong, same 87 tiles",
+      "ordering_bar": "NOT DAMAGED iff AUC_v11 >= AUC_v10 - 0.05 AND the paired DeLong does not put v11 significantly below v10. A cutpoint fix bought with ordering damage FAILS here and must be reported as a failure.",
+      "calibration_metric": "mean predicted P(label>=4) vs the observed rate",
+      "noninf_margin": 0.05,
+      "class4_decode_t": 0.5,
+      "gating": false,
+      "gating_note": "NOT gating for adoption \u2014 it is an 87-row arm on a biased draw. It is the arm the retrain is FOR and is reported at equal prominence.",
+      "companion_contaminated": "the same reads over all 500 correction rows, stamped CONTAMINATED: 413 are v11 TRAIN, so v11's number there is in-sample and v10's is not. Descriptive only, never a verdict."
+    },
+    "class4_census_descriptive": {
+      "instrument": "the 22 class-4 census locations",
+      "metric": "AUC(label==4 vs rest) for v11 and v10",
+      "n_class4_eval_census": 22,
+      "bar": null,
+      "gating": false,
+      "note": "DESCRIPTIVE, no bar. Carried forward from v10's battery so the julia:multibrot 3|4 read stays continuous across versions."
+    },
+    "palette_invariance": {
+      "instrument": "prospect_census under twilight_shifted vs the 8 held-out palettes",
+      "metric": "Spearman(twilight, palette) per palette; mean / range / pooled",
+      "held_out_palettes": [
+        "cet_cyclic_wrwbw_40_90_c42",
+        "cet_diverging_bwr_40_95_c42",
+        "cet_linear_bmw_5_95_c86",
+        "cet_linear_kry_5_98_c75",
+        "cet_linear_protanopic_deuteranopic_kbw_5_98_c40",
+        "cmr.ocean",
+        "cmr.seasons",
+        "cmr.viola"
+      ],
+      "held_out_asserted_equal_to_v9_v10": true,
+      "bar": null,
+      "gating": false,
+      "v10_measured_mean": 0.845,
+      "investigate_delta": 0.1,
+      "read_rule": "INVESTIGATE iff |mean_v11 - 0.845| > 0.1 \u2014 a move that large is not a corpus effect. Otherwise DESCRIPTIVE.",
+      "note": "the 8 palettes are held out of the DRAW POOL, so no v11 cache tile uses one; the battery renders them fresh at the canonical geometry and the live cap, as v10's did."
+    },
+    "per_partition_calibration_first_reads": {
+      "instrument": "the v11 HOLDOUT rows of julia:mandelbrot and phoenix \u2014 partitions that have never had a calibration read, because before v11's grouped random split they had no eval population at all",
+      "populations": {
+        "julia:mandelbrot": {
+          "n": 254,
+          "n_ge2": 135,
+          "n_ge3": 70,
+          "n_eq4": 12,
+          "by_label": {
+            "1": 119,
+            "2": 65,
+            "3": 58,
+            "4": 12
+          }
+        },
+        "phoenix": {
+          "n": 113,
+          "n_ge2": 84,
+          "n_ge3": 55,
+          "n_eq4": 15,
+          "by_label": {
+            "1": 29,
+            "2": 29,
+            "3": 40,
+            "4": 15
+          }
+        }
+      },
+      "min_pos": 15,
+      "metric": "base rate, reliability (ECE over deciles of P(label>=3)), Brier, and the F_beta-argmax over the P(>=3) grid with its plateau width, at BOTH beta=0.5 and beta=2",
+      "bar": null,
+      "gating": false,
+      "reported_for": "v11 ONLY as a first instrument; v10's numbers on the same rows are printed CONTAMINATED (v10 trained on much of this population) and are not a comparison.",
+      "why_no_beta_is_chosen": "protocol \u00a74 sets beta per family from SUPPLY, and neither of these two has that argument made. Both are reported so the choice is a later decision with the numbers already in hand.",
+      "explicitly_not_adopted": "no t_good is derived, no threshold is written, production_seeder.T_GOOD_OVERRIDES is not touched. These are reads, not cuts.",
+      "holdout_caveat": "the holdout is a stratified random draw over the split groups, biased exactly as training is. Precision/recall on it are statements about the ranker over the population training is drawn from \u2014 NOT base rates, which may only be read off the score-unconditioned instruments."
+    }
+  },
+  "label_noise_discipline": "No small-AUC-difference reads on the >=3 boundary. Only the bars above are verdicts; every other number in the battery is descriptive and labeled so. A wash is a reportable outcome and per protocol \u00a73 means 'label more', not 'the model failed'.",
+  "no_cherry_picking": "The arms above are the whole battery. Every one is reported with its verdict whatever the result, and no per-slice arm is added after the fact."
+}

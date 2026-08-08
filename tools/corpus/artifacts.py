@@ -153,8 +153,19 @@ def _is_v11_build_rows(r: str) -> bool:
     The split is on EXTENSION and it is the honest one: under ``data/v11/`` every ``.jsonl``
     is derived rows (regenerable from the committed corpus + the recorded seed) and every
     ``.json`` is a committed record — ``build_record``, ``aug_recipe``, ``colormaps``. So a
-    new row file fails toward out-of-tree and a new record stays where git can keep it."""
-    return r.startswith("data/v11/") and r.endswith(".jsonl")
+    new row file fails toward out-of-tree and a new record stays where git can keep it.
+
+    ONE EXEMPTION, by name: the frozen eval slice ``eval_scores_<v>.jsonl``. It is rows, and
+    it is not derived-cheap — it is a GPU eval's frozen output, the instrument a keeper cut
+    and a `t_good` derivation are re-cut from without re-scoring, and its v9/v10 siblings are
+    committed. ``tools/scoring/eval_slice.path_for`` resolves it as ``ROOT/data/<v>/...``
+    directly, NOT through this resolver, so relocating it would put the file somewhere its
+    own owner does not look. Matched by the naming convention rather than the v11 literal so
+    a v12 slice lands in-tree the same way."""
+    if not (r.startswith("data/v11/") and r.endswith(".jsonl")):
+        return False
+    name = r.rsplit("/", 1)[-1]
+    return not (name.startswith("eval_scores_") and name.endswith(".jsonl"))
 
 
 def _is_discovery_scratch(r: str) -> bool:
@@ -278,6 +289,30 @@ def _is_aug_cache(r: str) -> bool:
     )
 
 
+def _is_eval_canon(r: str) -> bool:
+    """True iff ``r`` is a versioned eval-canonical tile tree: ``data/v<N>/eval_canon/**``.
+
+    v11's cache draws each of its 32 tiles independently, so — unlike the v4..v10 product
+    fan-out — it does NOT hold a deploy-canonical tile for every location (the AA level of
+    the floored identity/twilight tile is a 50/50 draw; 1,448 of 2,860 eval locations have
+    one). ``tools/v11/build_eval_canon.py`` produces the missing cell by replaying the
+    cache's own tile-0 rows, and its output is bulk for the same reason the cache is:
+    deterministic from the committed corpus, the build modules and the recorded recipe.
+
+    A CLASS, not a ``data/v11/eval_canon`` literal, and registered BEFORE the first write
+    (storage_classes.md rule 5) — same argument ``_is_aug_cache`` records, which was earned
+    by v10's first dry run resolving in-tree because the registry held one literal per
+    version. Component-exact, so ``data/v11/eval_canon_manifest.jsonl`` is NOT matched here;
+    it relocates as a row file through ``_is_v11_build_rows``."""
+    parts = r.split("/")
+    return (
+        len(parts) >= 3
+        and parts[0] == "data"
+        and bool(_AUG_CACHE_VERSION_RE.match(parts[1]))
+        and parts[2] == "eval_canon"
+    )
+
+
 def artifacts_root() -> Path:
     """Root under which relocated artifacts live (env override or repo sibling)."""
     env = os.environ.get(ARTIFACTS_ENV)
@@ -296,15 +331,16 @@ def _norm(rel) -> str:
 
 def is_relocated(rel) -> bool:
     """True iff ``rel`` (repo-relative) belongs to a relocated family: a literal
-    aug-cache prefix, any versioned ``data/v<N>/aug_cache`` tree, any discovery-scratch
+    aug-cache prefix, any versioned ``data/v<N>/aug_cache`` or ``eval_canon`` tree, any
+    discovery-scratch
     tree, any label-corpus crop/vivid tree, any descent-harness image tree, or the
     minibrot source-sheet tiles/sheets bulk (all but the literals matched by class)."""
     r = _norm(rel)
     if any(r == p or r.startswith(p + "/") for p in RELOCATED_PREFIXES):
         return True
-    return (_is_aug_cache(r) or _is_discovery_scratch(r) or _is_label_corpus_crop(r)
-            or _is_descent_harness_crop(r) or _is_minibrot_source_bulk(r)
-            or _is_v11_build_rows(r))
+    return (_is_aug_cache(r) or _is_eval_canon(r) or _is_discovery_scratch(r)
+            or _is_label_corpus_crop(r) or _is_descent_harness_crop(r)
+            or _is_minibrot_source_bulk(r) or _is_v11_build_rows(r))
 
 
 def resolve(rel) -> Path:

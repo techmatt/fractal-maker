@@ -104,6 +104,18 @@ def _scan_in_tree_offenders(repo_root: Path) -> list[str]:
                     n = _count_files(full)
                     if n:
                         offenders.append(f"{rel} has {n}+ files in-tree at {full}")
+    # versioned bulk trees under data/v<N>/: the aug caches (matched as a class since v10,
+    # so v10's and v11's are covered here and not by the v8/v9 literals above) and the
+    # eval-canonical tiles v11 introduced. One walk, because both are `data/v<N>/<name>`.
+    dv = repo_root / "data"
+    if dv.exists():
+        for vdir in sorted(p for p in dv.glob("v*") if p.is_dir()):
+            for full in sorted(p for p in vdir.iterdir() if p.is_dir()):
+                rel = full.relative_to(repo_root).as_posix()
+                if A._is_aug_cache(rel) or A._is_eval_canon(rel):
+                    n = _count_files(full)
+                    if n:
+                        offenders.append(f"{rel} has {n}+ files in-tree at {full}")
     # minibrot source-sheet class: tiles/ and sheets/ under data/minibrot_sources.
     msrc = repo_root / "data" / "minibrot_sources"
     if msrc.exists():
@@ -329,6 +341,35 @@ def test_relocated_prefixes_map_under_artifacts_root():
         assert A.is_relocated(sample)
         resolved = A.resolve(sample)
         assert resolved == root / sample, (prefix, resolved)
+
+
+def test_eval_canon_class_maps_under_artifacts_root():
+    """Any ``data/v<N>/eval_canon`` relocates by pattern — v11's is the first, and a future
+    version's needs no registry line. Component-exact: the SIBLING manifest and record must
+    not be swept in by it (the manifest relocates as a v11 row file, the record is
+    committed)."""
+    root = A.artifacts_root()
+    for rel in ["data/v11/eval_canon/7.jpg", "data/v11/eval_canon",
+                "data/v12/eval_canon/1.jpg"]:                     # future version
+        assert A._is_eval_canon(A._norm(rel)), rel
+        assert A.resolve(rel) == root / A._norm(rel), rel
+    for rel in ["data/v11/eval_canon_manifest.jsonl", "data/v11/eval_canon_record.json",
+                "data/v11/eval_canonical/1.jpg"]:
+        assert not A._is_eval_canon(A._norm(rel)), rel
+    # ...and the record it sits beside is COMMITTED, so it must resolve in-tree.
+    assert A.resolve("data/v11/eval_canon_record.json") == \
+        A.REPO_ROOT / "data/v11/eval_canon_record.json"
+
+
+def test_tripwire_fires_on_synthetic_eval_canon_in_tree(tmp_path):
+    """A canonical-tile tree that reappears in the working tree is caught, for a version
+    that is in no registry at all."""
+    mirror = tmp_path / "repo"
+    (mirror / "data" / "v13" / "eval_canon").mkdir(parents=True)
+    assert not _scan_in_tree_offenders(mirror)
+    (mirror / "data" / "v13" / "eval_canon" / "1.jpg").write_bytes(b"x")
+    offenders = _scan_in_tree_offenders(mirror)
+    assert any("v13/eval_canon" in o for o in offenders), offenders
 
 
 def test_discovery_scratch_class_maps_under_artifacts_root():
