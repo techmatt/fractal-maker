@@ -273,9 +273,30 @@ def main() -> None:
               f"{'' if ok else '  ** UNRECOVERED **'}", flush=True)
 
     n_rows = finish(a.chunks)
+    n_tiles = tiles_on_disk()
     print(f"\ncache_manifest: {n_rows} rows -> {paths.bulk(CACHE_MANIFEST)}", flush=True)
-    print(f"tiles on disk : {tiles_on_disk()} / {expected}", flush=True)
+    print(f"tiles on disk : {n_tiles} / {expected}", flush=True)
     print(f"wall          : {(time.time()-t_start)/3600:.2f} h", flush=True)
+
+    # THE CLEAN CLOSE. The 40 chunk parts exist so the per-tile manifest is durable at a
+    # chunk boundary while the run is in flight; once the concatenation is complete they are
+    # 355 MB of exact duplicate. Pruned only on the complete-and-agreeing condition — every
+    # planned row present AND every planned tile on disk — so an interrupted run keeps its
+    # checkpoints and `--finish` can still be re-run. (The preceding commit on this repo was
+    # a run whose scratch reached 86% of the store because its cleanup was manual.)
+    if n_rows == expected and n_tiles == expected:
+        freed = 0
+        for i in range(a.chunks):
+            p = part_path(i)
+            if p.exists():
+                freed += p.stat().st_size
+                p.unlink()
+        print(f"pruned        : {freed/1024**2:.0f} MB of chunk parts (run complete and "
+              f"agreeing: {n_rows} rows == {n_tiles} tiles == {expected} planned)", flush=True)
+    else:
+        print(f"kept          : chunk parts retained — run is INCOMPLETE "
+              f"({n_rows} rows / {n_tiles} tiles vs {expected} planned). Re-run to continue.",
+              flush=True)
 
 
 if __name__ == "__main__":
