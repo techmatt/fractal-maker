@@ -1,0 +1,1258 @@
+{
+  "run_ts": "label_run_20260807",
+  "mode": "steered",
+  "families": [
+    "mandelbrot",
+    "multibrot3",
+    "multibrot4",
+    "multibrot5"
+  ],
+  "julia_hook": true,
+  "julia_hook_spacing": 0.032,
+  "freshness_prior": true,
+  "prior_rows": 14319,
+  "budget_min": 139.0,
+  "wall_budget_min": 160.0,
+  "wall_min": 137.01,
+  "wall_over_active": 1.01,
+  "pre_loop_draw_min": 7.72,
+  "root_draw_budget_min": 15.0,
+  "root_draw_min": 0.71,
+  "root_draw_share": 0.0052,
+  "partition_low_water": 32,
+  "root_refill_cooldown": 10,
+  "root_refill_share_cap": 0.25,
+  "final_queue_lens": {
+    "multibrot4": 284,
+    "multibrot5": 351,
+    "julia:mandelbrot": 992,
+    "mandelbrot": 448,
+    "phoenix": 225,
+    "multibrot3": 792,
+    "julia:multibrot3": 1,
+    "julia:multibrot4": 4
+  },
+  "refill_deferred_partitions": {
+    "julia:multibrot3": {
+      "queue": 1,
+      "low_water": 32,
+      "reason": "fed by --julia-hook / --julia-seed-pool, not by a root draw"
+    },
+    "julia:multibrot4": {
+      "queue": 4,
+      "low_water": 32,
+      "reason": "fed by --julia-hook / --julia-seed-pool, not by a root draw"
+    },
+    "julia:multibrot5": {
+      "queue": 0,
+      "low_water": 32,
+      "reason": "fed by --julia-hook / --julia-seed-pool, not by a root draw"
+    }
+  },
+  "lambda_m": 0.5,
+  "beta": 0.02,
+  "recency_k": 0,
+  "morph_mem": 1591,
+  "morph_perm": 1591,
+  "morph_recency": 0,
+  "morph_lo": 0.8775,
+  "morph_hi": 0.939,
+  "anchor_src": "morph_anchors.json",
+  "sat_cos": 0.9328,
+  "sat_frac": 0.6728,
+  "active_min": 135.52,
+  "batches": 68,
+  "tau_h": {
+    "mandelbrot": 0.02286625504493713,
+    "multibrot3": 0.36908935904502865,
+    "multibrot4": 0.408690321445465,
+    "multibrot5": 0.3513681888580322,
+    "julia:mandelbrot": 0.412648469209671,
+    "julia:multibrot3": 0.28186094164848324,
+    "julia:multibrot4": 0.05198849514126777,
+    "julia:multibrot5": 0.07040942013263703,
+    "phoenix": 0.5
+  },
+  "totals": {
+    "expanded": 1873,
+    "candidates": 6315,
+    "harvest_checks": 1783,
+    "canonical_q3": 1079,
+    "admitted": 633,
+    "q3_dup": 445,
+    "guarded": 0,
+    "julia_roots": 215,
+    "julia_hooks_skipped": 69,
+    "precanon_dup": 448,
+    "cap_hits": 16,
+    "dead_nodes": 99,
+    "novelty_hits": 5702,
+    "nov_scored": 6315,
+    "sat_hits": 4249,
+    "distinct_looks": 0,
+    "canon_not_q3": 256,
+    "reframe_not_q3": 1,
+    "render_failed": 0,
+    "frontier_pushed": 6315,
+    "interior_gated": 0,
+    "interior_unmeasured": 0,
+    "q4_recorded": 2412,
+    "q4_recorded_below_tau_h": 629,
+    "root_draw_truncated": 0,
+    "root_draw_timeouts": 0,
+    "root_refills": 1,
+    "root_refill_families": 4,
+    "root_refill_deferred": 0,
+    "trig_fired": 37,
+    "trig_atoms": 82,
+    "trig_nodes_pushed": 101,
+    "trig_admitted": 39,
+    "trig_unavailable": 558,
+    "trig_budget_skip": 38,
+    "trig_expanded": 66,
+    "trig_candidates": 0,
+    "man_probes_rolled": 768,
+    "man_probes_fired": 163,
+    "man_probes_coin_skip": 510,
+    "man_probes_cache_skip": 95,
+    "man_op_available": 1297,
+    "man_op_unavailable": 200,
+    "man_avail_unused": 635,
+    "man_nodes_pushed": 524,
+    "man_quota_bound": 35,
+    "man_quota_unfilled": 192,
+    "man_nodes_expanded": 491,
+    "man_admitted": 72,
+    "man_screened": 0,
+    "man_unscreenable": 0,
+    "man_screen_cache_hits": 0,
+    "man_nbh_passed_over": 68,
+    "man_quota_passed_over": 1410,
+    "man_frontier_pruned": 0,
+    "man_view_screened": 720,
+    "man_view_unscreenable": 0,
+    "man_view_vetoed": 181,
+    "man_view_fields_cached": 720,
+    "phoenix_roots": 96
+  },
+  "cloud_sizes": {
+    "mandelbrot": 577,
+    "multibrot3": 688,
+    "multibrot4": 626,
+    "multibrot5": 697,
+    "julia:mandelbrot": 786,
+    "julia:multibrot3": 731,
+    "julia:multibrot4": 1436,
+    "julia:multibrot5": 867,
+    "phoenix": 775
+  },
+  "pop_quota": {
+    "currency": {
+      "currency": {
+        "mandelbrot": 186.8,
+        "multibrot3": 38.0,
+        "multibrot4": 21.5,
+        "multibrot5": 34.1,
+        "julia:mandelbrot": 190.6,
+        "julia:multibrot3": 28.5,
+        "julia:multibrot4": 37.1,
+        "julia:multibrot5": 46.0,
+        "phoenix": 84.5
+      },
+      "counts": {
+        "mandelbrot": {
+          "1": 4309,
+          "2": 858,
+          "3": 488,
+          "4": 138
+        },
+        "multibrot3": {
+          "1": 345,
+          "2": 497,
+          "3": 170,
+          "4": 21
+        },
+        "multibrot4": {
+          "3": 105,
+          "1": 317,
+          "4": 11,
+          "2": 373
+        },
+        "multibrot5": {
+          "1": 333,
+          "2": 376,
+          "4": 19,
+          "3": 151
+        },
+        "julia:mandelbrot": {
+          "3": 536,
+          "4": 137,
+          "2": 516,
+          "1": 574
+        },
+        "julia:multibrot3": {
+          "2": 133,
+          "1": 77,
+          "4": 23,
+          "3": 55
+        },
+        "julia:multibrot4": {
+          "4": 31,
+          "3": 61,
+          "2": 123,
+          "1": 51
+        },
+        "julia:multibrot5": {
+          "2": 186,
+          "4": 35,
+          "3": 110,
+          "1": 26
+        },
+        "phoenix": {
+          "2": 273,
+          "1": 364,
+          "4": 67,
+          "3": 175
+        }
+      },
+      "defaulted_rows": 4935,
+      "sources": {
+        "label_corpus": 12137,
+        "library": 0
+      },
+      "weights": {
+        "4": 1.0,
+        "3": 0.1
+      }
+    },
+    "externally_supplied": [],
+    "deficit": {
+      "mandelbrot": 61.228,
+      "multibrot3": 3.338,
+      "multibrot4": 19.838,
+      "multibrot5": 7.238,
+      "julia:mandelbrot": 16.09,
+      "julia:multibrot3": 0.0,
+      "julia:multibrot4": 0.0,
+      "julia:multibrot5": 0.0,
+      "phoenix": 80.852
+    },
+    "target": {
+      "mandelbrot": 248.028,
+      "multibrot3": 41.338,
+      "multibrot4": 41.338,
+      "multibrot5": 41.338,
+      "julia:mandelbrot": 206.69,
+      "julia:multibrot3": 27.283,
+      "julia:multibrot4": 27.283,
+      "julia:multibrot5": 27.283,
+      "phoenix": 165.352
+    },
+    "ratio": {
+      "mandelbrot": 30.0,
+      "multibrot3": 5.0,
+      "multibrot4": 5.0,
+      "multibrot5": 5.0,
+      "julia:mandelbrot": 25.0,
+      "julia:multibrot3": 3.3,
+      "julia:multibrot4": 3.3,
+      "julia:multibrot5": 3.3,
+      "phoenix": 20.0
+    },
+    "anchor": null,
+    "target_rule": "EXPLICIT run-scoped currency targets (--currency-targets): target_p is read verbatim from the file. release_mix.RATIO and the richest-holding anchor are NOT consulted.",
+    "currency_targets_file": {
+      "_schema": "pop_quota_currency_targets/1",
+      "_doc": "RUN-SCOPED explicit per-partition currency targets for the LABEL-COLLECTION run (data/discovery/label_run_20260807). Consumed by `steered_frontier.py --currency-targets`, which reads ONLY the `targets` object; every other key here is provenance and is recorded verbatim into run_config.json. This file does NOT change policy: tools/scoring/release_mix.RATIO is untouched and every other run still derives its targets from it.",
+      "targets": {
+        "mandelbrot": 248.028,
+        "multibrot3": 41.338,
+        "multibrot4": 41.338,
+        "multibrot5": 41.338,
+        "julia:mandelbrot": 206.69,
+        "julia:multibrot3": 27.2831,
+        "julia:multibrot4": 27.2831,
+        "julia:multibrot5": 27.2831,
+        "phoenix": 165.352
+      },
+      "ratios": {
+        "mandelbrot": 30.0,
+        "julia:mandelbrot": 25.0,
+        "phoenix": 20.0,
+        "multibrot3": 5.0,
+        "multibrot4": 5.0,
+        "multibrot5": 5.0,
+        "julia:multibrot3": 3.3,
+        "julia:multibrot4": 3.3,
+        "julia:multibrot5": 3.3
+      },
+      "_provenance": {
+        "author": "Matt, prompt-label-run.md Part 1 (2026-08-07)",
+        "purpose": "this run mines where LABELS are deficient, not to the standing release mix. The derived rule anchors the target vector at the RICHEST partition's holding (pop_quota.currency_targets), so the census maximum lands at exactly zero deficit whenever it also carries the maximum ratio. julia:mandelbrot is that partition today (190.6 currency = census max, release_mix ratio 3.0 = max): it read as ZERO demand through all 361 batches of steady_state_v2_20260807 and was popped zero times. No reweighting of release_mix.RATIO can fix that, because raising a partition's ratio cannot raise it above the anchor it itself defines. Hence an explicit vector.",
+        "ratio_source": "dictated in prompt-label-run.md Part 1, verbatim; sum = 99.9",
+        "scale_rule": "PRESERVE THE DERIVED TOTAL DEMAND LEVEL over the tracked partitions",
+        "scale_rule_why": "the ratios are a statement about DISTRIBUTION and carry no scale, so a scale has to be chosen and it must not be arbitrary. Holding sum(target) fixed at what the derived rule asks for today means this file moves WHERE the demand points and not HOW MUCH demand the run believes exists \u2014 the one degree of freedom the prompt specifies, and nothing else. Two alternatives were rejected: anchoring the max-ratio partition at the old 190.6 anchor leaves mandelbrot a 3.8 deficit and reproduces the run-2 failure one partition over; scaling until every partition has positive deficit needs sum(target) = 1.7x the derived level and makes the julia twins deficit-driven, which contradicts the prompt's own read of them as the cheap fallback that overserves.",
+        "derived_total_target": 825.9333,
+        "derived_anchor": 190.6,
+        "scale_k": 8.267601,
+        "formula": "target_p = ratio_p * (sum_q derived_target_q) / (sum_q ratio_q)",
+        "census_currency_at_write": {
+          "mandelbrot": 186.8,
+          "multibrot3": 38.0,
+          "multibrot4": 21.5,
+          "multibrot5": 34.1,
+          "julia:mandelbrot": 190.6,
+          "julia:multibrot3": 28.5,
+          "julia:multibrot4": 37.1,
+          "julia:multibrot5": 46.0,
+          "phoenix": 84.5
+        },
+        "census_note": "the holdings are quoted for readability of the deficits this implies; they are NOT read back \u2014 the run re-censuses at construction, so a sitting landing between write and launch moves the deficit and not the target",
+        "implied_deficit_at_write": {
+          "mandelbrot": 61.228,
+          "multibrot3": 3.338,
+          "multibrot4": 19.838,
+          "multibrot5": 7.238,
+          "julia:mandelbrot": 16.09,
+          "julia:multibrot3": 0.0,
+          "julia:multibrot4": 0.0,
+          "julia:multibrot5": 0.0,
+          "phoenix": 80.852
+        },
+        "phoenix_classic": "absent on purpose: externally supplied (supply_routing), allocated 0.0 by `allocate`, and not a tracked partition of this run",
+        "scope": "ONE run. Not a rollback rung, not a default, not read by anything else."
+      }
+    },
+    "allocation": {
+      "share": {
+        "julia:mandelbrot": 0.2412,
+        "julia:multibrot3": 0.05,
+        "julia:multibrot4": 0.05,
+        "julia:multibrot5": 0.05,
+        "mandelbrot": 0.0636,
+        "multibrot3": 0.05,
+        "multibrot4": 0.1345,
+        "multibrot5": 0.05,
+        "phoenix": 0.3107
+      },
+      "floored": [
+        "julia:multibrot3",
+        "julia:multibrot4",
+        "julia:multibrot5",
+        "multibrot3",
+        "multibrot5"
+      ],
+      "external": [],
+      "floor": 0.05,
+      "floor_share_total": 0.25,
+      "pwd": {
+        "julia:mandelbrot": 67.64517,
+        "julia:multibrot3": 0.0,
+        "julia:multibrot4": 0.0,
+        "julia:multibrot5": 0.0,
+        "mandelbrot": 17.84008,
+        "multibrot3": 2.11012,
+        "multibrot4": 37.71909,
+        "multibrot5": 7.01376,
+        "phoenix": 87.15008
+      }
+    },
+    "cost": {
+      "price": {
+        "julia:mandelbrot": 0.238,
+        "julia:multibrot3": 0.271,
+        "julia:multibrot4": 0.132,
+        "julia:multibrot5": 0.139,
+        "mandelbrot": 3.432,
+        "multibrot3": 1.582,
+        "multibrot4": 0.526,
+        "multibrot5": 1.032,
+        "phoenix": 0.928
+      },
+      "price_raw": {
+        "julia:mandelbrot": 0.238,
+        "julia:multibrot3": 0.271,
+        "julia:multibrot4": 0.132,
+        "julia:multibrot5": 0.139,
+        "mandelbrot": 3.432,
+        "multibrot3": 1.582,
+        "multibrot4": 0.526,
+        "multibrot5": 1.032,
+        "phoenix": 0.928
+      },
+      "seed": {
+        "julia:mandelbrot": 3.0,
+        "julia:multibrot3": 0.13,
+        "julia:multibrot4": 0.111,
+        "julia:multibrot5": 0.128,
+        "mandelbrot": 3.0,
+        "multibrot3": 1.164,
+        "multibrot4": 0.621,
+        "multibrot5": 0.6,
+        "phoenix": 0.308
+      },
+      "clamped": [],
+      "units_mined": {
+        "julia:mandelbrot": 177.6,
+        "julia:multibrot3": 16.1,
+        "julia:multibrot4": 74.6,
+        "julia:multibrot5": 53.9,
+        "mandelbrot": 2.3,
+        "multibrot3": 6.0,
+        "multibrot4": 36.2,
+        "multibrot5": 9.8,
+        "phoenix": 123.3
+      },
+      "min_spent": {
+        "julia:mandelbrot": 31.2,
+        "julia:multibrot3": 3.98,
+        "julia:multibrot4": 11.05,
+        "julia:multibrot5": 8.54,
+        "mandelbrot": 5.93,
+        "multibrot3": 10.09,
+        "multibrot4": 15.86,
+        "multibrot5": 10.97,
+        "phoenix": 37.91
+      },
+      "price_aggregate": {
+        "julia:mandelbrot": 0.176,
+        "julia:multibrot3": 0.247,
+        "julia:multibrot4": 0.148,
+        "julia:multibrot5": 0.159,
+        "mandelbrot": 2.577,
+        "multibrot3": 1.681,
+        "multibrot4": 0.438,
+        "multibrot5": 1.119,
+        "phoenix": 0.307
+      },
+      "price_samples": {
+        "julia:mandelbrot": 11,
+        "julia:multibrot3": 4,
+        "julia:multibrot4": 4,
+        "julia:multibrot5": 4,
+        "mandelbrot": 3,
+        "multibrot3": 4,
+        "multibrot4": 3,
+        "multibrot5": 3,
+        "phoenix": 15
+      },
+      "capped": [],
+      "clamp_factor": 16.0
+    },
+    "mix": {
+      "minutes": {
+        "mandelbrot": {
+          "intended": 0.0649,
+          "effective": 0.0609,
+          "realized": 0.0437,
+          "delta": -0.0212,
+          "delta_effective": -0.0171
+        },
+        "multibrot3": {
+          "intended": 0.05,
+          "effective": 0.0849,
+          "realized": 0.0744,
+          "delta": 0.0244,
+          "delta_effective": -0.0104
+        },
+        "multibrot4": {
+          "intended": 0.1372,
+          "effective": 0.1158,
+          "realized": 0.117,
+          "delta": -0.0202,
+          "delta_effective": 0.0012
+        },
+        "multibrot5": {
+          "intended": 0.05,
+          "effective": 0.064,
+          "realized": 0.0809,
+          "delta": 0.0309,
+          "delta_effective": 0.0169
+        },
+        "julia:mandelbrot": {
+          "intended": 0.2308,
+          "effective": 0.1043,
+          "realized": 0.2302,
+          "delta": -0.0006,
+          "delta_effective": 0.1259
+        },
+        "julia:multibrot3": {
+          "intended": 0.05,
+          "effective": 0.0151,
+          "realized": 0.0294,
+          "delta": -0.0206,
+          "delta_effective": 0.0142
+        },
+        "julia:multibrot4": {
+          "intended": 0.05,
+          "effective": 0.0463,
+          "realized": 0.0816,
+          "delta": 0.0316,
+          "delta_effective": 0.0353
+        },
+        "julia:multibrot5": {
+          "intended": 0.05,
+          "effective": 0.036,
+          "realized": 0.063,
+          "delta": 0.013,
+          "delta_effective": 0.027
+        },
+        "phoenix": {
+          "intended": 0.3171,
+          "effective": 0.4727,
+          "realized": 0.2797,
+          "delta": -0.0374,
+          "delta_effective": -0.193
+        }
+      },
+      "candidates": {
+        "mandelbrot": {
+          "intended": 0.0649,
+          "effective": 0.0609,
+          "realized": 0.0686,
+          "delta": 0.0037,
+          "delta_effective": 0.0077
+        },
+        "multibrot3": {
+          "intended": 0.05,
+          "effective": 0.0849,
+          "realized": 0.1641,
+          "delta": 0.1141,
+          "delta_effective": 0.0792
+        },
+        "multibrot4": {
+          "intended": 0.1372,
+          "effective": 0.1158,
+          "realized": 0.063,
+          "delta": -0.0742,
+          "delta_effective": -0.0528
+        },
+        "multibrot5": {
+          "intended": 0.05,
+          "effective": 0.064,
+          "realized": 0.0754,
+          "delta": 0.0254,
+          "delta_effective": 0.0114
+        },
+        "julia:mandelbrot": {
+          "intended": 0.2308,
+          "effective": 0.1043,
+          "realized": 0.1984,
+          "delta": -0.0324,
+          "delta_effective": 0.0941
+        },
+        "julia:multibrot3": {
+          "intended": 0.05,
+          "effective": 0.0151,
+          "realized": 0.0644,
+          "delta": 0.0144,
+          "delta_effective": 0.0493
+        },
+        "julia:multibrot4": {
+          "intended": 0.05,
+          "effective": 0.0463,
+          "realized": 0.0325,
+          "delta": -0.0175,
+          "delta_effective": -0.0138
+        },
+        "julia:multibrot5": {
+          "intended": 0.05,
+          "effective": 0.036,
+          "realized": 0.0331,
+          "delta": -0.0169,
+          "delta_effective": -0.0029
+        },
+        "phoenix": {
+          "intended": 0.3171,
+          "effective": 0.4727,
+          "realized": 0.3006,
+          "delta": -0.0165,
+          "delta_effective": -0.1722
+        }
+      },
+      "admitted": {
+        "mandelbrot": {
+          "intended": 0.0649,
+          "effective": 0.0609,
+          "realized": 0.0221,
+          "delta": -0.0428,
+          "delta_effective": -0.0387
+        },
+        "multibrot3": {
+          "intended": 0.05,
+          "effective": 0.0849,
+          "realized": 0.0095,
+          "delta": -0.0405,
+          "delta_effective": -0.0754
+        },
+        "multibrot4": {
+          "intended": 0.1372,
+          "effective": 0.1158,
+          "realized": 0.06,
+          "delta": -0.0772,
+          "delta_effective": -0.0558
+        },
+        "multibrot5": {
+          "intended": 0.05,
+          "effective": 0.064,
+          "realized": 0.0269,
+          "delta": -0.0231,
+          "delta_effective": -0.0371
+        },
+        "julia:mandelbrot": {
+          "intended": 0.2308,
+          "effective": 0.1043,
+          "realized": 0.3175,
+          "delta": 0.0868,
+          "delta_effective": 0.2132
+        },
+        "julia:multibrot3": {
+          "intended": 0.05,
+          "effective": 0.0151,
+          "realized": 0.0269,
+          "delta": -0.0231,
+          "delta_effective": 0.0117
+        },
+        "julia:multibrot4": {
+          "intended": 0.05,
+          "effective": 0.0463,
+          "realized": 0.1406,
+          "delta": 0.0906,
+          "delta_effective": 0.0943
+        },
+        "julia:multibrot5": {
+          "intended": 0.05,
+          "effective": 0.036,
+          "realized": 0.1406,
+          "delta": 0.0906,
+          "delta_effective": 0.1046
+        },
+        "phoenix": {
+          "intended": 0.3171,
+          "effective": 0.4727,
+          "realized": 0.2559,
+          "delta": -0.0612,
+          "delta_effective": -0.2168
+        }
+      },
+      "pops": {
+        "mandelbrot": {
+          "intended": 0.0649,
+          "effective": 0.0609,
+          "realized": 0.0588,
+          "delta": -0.0061,
+          "delta_effective": -0.002
+        },
+        "multibrot3": {
+          "intended": 0.05,
+          "effective": 0.0849,
+          "realized": 0.1618,
+          "delta": 0.1118,
+          "delta_effective": 0.0769
+        },
+        "multibrot4": {
+          "intended": 0.1372,
+          "effective": 0.1158,
+          "realized": 0.0588,
+          "delta": -0.0784,
+          "delta_effective": -0.057
+        },
+        "multibrot5": {
+          "intended": 0.05,
+          "effective": 0.064,
+          "realized": 0.0735,
+          "delta": 0.0235,
+          "delta_effective": 0.0095
+        },
+        "julia:mandelbrot": {
+          "intended": 0.2308,
+          "effective": 0.1043,
+          "realized": 0.1618,
+          "delta": -0.069,
+          "delta_effective": 0.0575
+        },
+        "julia:multibrot3": {
+          "intended": 0.05,
+          "effective": 0.0151,
+          "realized": 0.1176,
+          "delta": 0.0676,
+          "delta_effective": 0.1025
+        },
+        "julia:multibrot4": {
+          "intended": 0.05,
+          "effective": 0.0463,
+          "realized": 0.0588,
+          "delta": 0.0088,
+          "delta_effective": 0.0125
+        },
+        "julia:multibrot5": {
+          "intended": 0.05,
+          "effective": 0.036,
+          "realized": 0.0588,
+          "delta": 0.0088,
+          "delta_effective": 0.0228
+        },
+        "phoenix": {
+          "intended": 0.3171,
+          "effective": 0.4727,
+          "realized": 0.25,
+          "delta": -0.0671,
+          "delta_effective": -0.2227
+        }
+      },
+      "l1_gap_minutes": 0.0999,
+      "l1_gap_minutes_effective": 0.2205,
+      "effective_intent": {
+        "julia:mandelbrot": 0.1043,
+        "julia:multibrot3": 0.0151,
+        "julia:multibrot4": 0.0463,
+        "julia:multibrot5": 0.036,
+        "mandelbrot": 0.0609,
+        "multibrot3": 0.0849,
+        "multibrot4": 0.1158,
+        "multibrot5": 0.064,
+        "phoenix": 0.4727
+      }
+    },
+    "floor_vs_deficit": {
+      "per_partition": {
+        "mandelbrot": {
+          "floor": 3.586,
+          "deficit": 2.34
+        },
+        "multibrot3": {
+          "floor": 10.086,
+          "deficit": 0.0
+        },
+        "multibrot4": {
+          "floor": 0.0,
+          "deficit": 15.862
+        },
+        "multibrot5": {
+          "floor": 10.965,
+          "deficit": 0.0
+        },
+        "julia:mandelbrot": {
+          "floor": 3.674,
+          "deficit": 27.526
+        },
+        "julia:multibrot3": {
+          "floor": 3.979,
+          "deficit": 0.0
+        },
+        "julia:multibrot4": {
+          "floor": 11.055,
+          "deficit": 0.0
+        },
+        "julia:multibrot5": {
+          "floor": 8.544,
+          "deficit": 0.0
+        },
+        "phoenix": {
+          "floor": 0.0,
+          "deficit": 37.906
+        }
+      },
+      "floor_min": 51.89,
+      "deficit_min": 83.63,
+      "floor_share": 0.3829,
+      "deficit_share": 0.6171
+    },
+    "unspent_floor": {
+      "threshold": 0.9,
+      "floor": 0.05,
+      "allocated_min_per_partition": 6.776,
+      "total_min": 135.52,
+      "pops": 68,
+      "trigger_min": 1.993,
+      "alarms": [],
+      "per_partition": {
+        "mandelbrot": {
+          "allocated_min": 6.776,
+          "spent_min": 5.927,
+          "unspent_frac": 0.1254,
+          "servable_min": 135.52,
+          "servable_frac": 1.0,
+          "never_servable": false
+        },
+        "multibrot3": {
+          "allocated_min": 6.776,
+          "spent_min": 10.086,
+          "unspent_frac": 0.0,
+          "servable_min": 135.52,
+          "servable_frac": 1.0,
+          "never_servable": false
+        },
+        "multibrot4": {
+          "allocated_min": 6.776,
+          "spent_min": 15.862,
+          "unspent_frac": 0.0,
+          "servable_min": 135.52,
+          "servable_frac": 1.0,
+          "never_servable": false
+        },
+        "multibrot5": {
+          "allocated_min": 6.776,
+          "spent_min": 10.965,
+          "unspent_frac": 0.0,
+          "servable_min": 135.52,
+          "servable_frac": 1.0,
+          "never_servable": false
+        },
+        "julia:mandelbrot": {
+          "allocated_min": 6.776,
+          "spent_min": 31.2,
+          "unspent_frac": 0.0,
+          "servable_min": 135.52,
+          "servable_frac": 1.0,
+          "never_servable": false
+        },
+        "julia:multibrot3": {
+          "allocated_min": 6.776,
+          "spent_min": 3.979,
+          "unspent_frac": 0.4127,
+          "servable_min": 41.04,
+          "servable_frac": 0.3028,
+          "never_servable": false
+        },
+        "julia:multibrot4": {
+          "allocated_min": 6.776,
+          "spent_min": 11.055,
+          "unspent_frac": 0.0,
+          "servable_min": 125.46,
+          "servable_frac": 0.9257,
+          "never_servable": false
+        },
+        "julia:multibrot5": {
+          "allocated_min": 6.776,
+          "spent_min": 8.544,
+          "unspent_frac": 0.0,
+          "servable_min": 97.59,
+          "servable_frac": 0.7201,
+          "never_servable": false
+        },
+        "phoenix": {
+          "allocated_min": 6.776,
+          "spent_min": 37.906,
+          "unspent_frac": 0.0,
+          "servable_min": 135.52,
+          "servable_frac": 1.0,
+          "never_servable": false
+        }
+      }
+    },
+    "realized_min": {
+      "mandelbrot": 5.93,
+      "multibrot3": 10.09,
+      "multibrot4": 15.86,
+      "multibrot5": 10.97,
+      "julia:mandelbrot": 31.2,
+      "julia:multibrot3": 3.98,
+      "julia:multibrot4": 11.05,
+      "julia:multibrot5": 8.54,
+      "phoenix": 37.91
+    },
+    "trace": "C:\\Code\\fractal-maker\\data\\discovery\\label_run_20260807\\quota_trace.jsonl"
+  },
+  "realized_vs_intended": {
+    "minutes": {
+      "mandelbrot": {
+        "intended": 0.0649,
+        "effective": 0.0609,
+        "realized": 0.0437,
+        "delta": -0.0212,
+        "delta_effective": -0.0171
+      },
+      "multibrot3": {
+        "intended": 0.05,
+        "effective": 0.0849,
+        "realized": 0.0744,
+        "delta": 0.0244,
+        "delta_effective": -0.0104
+      },
+      "multibrot4": {
+        "intended": 0.1372,
+        "effective": 0.1158,
+        "realized": 0.117,
+        "delta": -0.0202,
+        "delta_effective": 0.0012
+      },
+      "multibrot5": {
+        "intended": 0.05,
+        "effective": 0.064,
+        "realized": 0.0809,
+        "delta": 0.0309,
+        "delta_effective": 0.0169
+      },
+      "julia:mandelbrot": {
+        "intended": 0.2308,
+        "effective": 0.1043,
+        "realized": 0.2302,
+        "delta": -0.0006,
+        "delta_effective": 0.1259
+      },
+      "julia:multibrot3": {
+        "intended": 0.05,
+        "effective": 0.0151,
+        "realized": 0.0294,
+        "delta": -0.0206,
+        "delta_effective": 0.0142
+      },
+      "julia:multibrot4": {
+        "intended": 0.05,
+        "effective": 0.0463,
+        "realized": 0.0816,
+        "delta": 0.0316,
+        "delta_effective": 0.0353
+      },
+      "julia:multibrot5": {
+        "intended": 0.05,
+        "effective": 0.036,
+        "realized": 0.063,
+        "delta": 0.013,
+        "delta_effective": 0.027
+      },
+      "phoenix": {
+        "intended": 0.3171,
+        "effective": 0.4727,
+        "realized": 0.2797,
+        "delta": -0.0374,
+        "delta_effective": -0.193
+      }
+    },
+    "candidates": {
+      "mandelbrot": {
+        "intended": 0.0649,
+        "effective": 0.0609,
+        "realized": 0.0686,
+        "delta": 0.0037,
+        "delta_effective": 0.0077
+      },
+      "multibrot3": {
+        "intended": 0.05,
+        "effective": 0.0849,
+        "realized": 0.1641,
+        "delta": 0.1141,
+        "delta_effective": 0.0792
+      },
+      "multibrot4": {
+        "intended": 0.1372,
+        "effective": 0.1158,
+        "realized": 0.063,
+        "delta": -0.0742,
+        "delta_effective": -0.0528
+      },
+      "multibrot5": {
+        "intended": 0.05,
+        "effective": 0.064,
+        "realized": 0.0754,
+        "delta": 0.0254,
+        "delta_effective": 0.0114
+      },
+      "julia:mandelbrot": {
+        "intended": 0.2308,
+        "effective": 0.1043,
+        "realized": 0.1984,
+        "delta": -0.0324,
+        "delta_effective": 0.0941
+      },
+      "julia:multibrot3": {
+        "intended": 0.05,
+        "effective": 0.0151,
+        "realized": 0.0644,
+        "delta": 0.0144,
+        "delta_effective": 0.0493
+      },
+      "julia:multibrot4": {
+        "intended": 0.05,
+        "effective": 0.0463,
+        "realized": 0.0325,
+        "delta": -0.0175,
+        "delta_effective": -0.0138
+      },
+      "julia:multibrot5": {
+        "intended": 0.05,
+        "effective": 0.036,
+        "realized": 0.0331,
+        "delta": -0.0169,
+        "delta_effective": -0.0029
+      },
+      "phoenix": {
+        "intended": 0.3171,
+        "effective": 0.4727,
+        "realized": 0.3006,
+        "delta": -0.0165,
+        "delta_effective": -0.1722
+      }
+    },
+    "admitted": {
+      "mandelbrot": {
+        "intended": 0.0649,
+        "effective": 0.0609,
+        "realized": 0.0221,
+        "delta": -0.0428,
+        "delta_effective": -0.0387
+      },
+      "multibrot3": {
+        "intended": 0.05,
+        "effective": 0.0849,
+        "realized": 0.0095,
+        "delta": -0.0405,
+        "delta_effective": -0.0754
+      },
+      "multibrot4": {
+        "intended": 0.1372,
+        "effective": 0.1158,
+        "realized": 0.06,
+        "delta": -0.0772,
+        "delta_effective": -0.0558
+      },
+      "multibrot5": {
+        "intended": 0.05,
+        "effective": 0.064,
+        "realized": 0.0269,
+        "delta": -0.0231,
+        "delta_effective": -0.0371
+      },
+      "julia:mandelbrot": {
+        "intended": 0.2308,
+        "effective": 0.1043,
+        "realized": 0.3175,
+        "delta": 0.0868,
+        "delta_effective": 0.2132
+      },
+      "julia:multibrot3": {
+        "intended": 0.05,
+        "effective": 0.0151,
+        "realized": 0.0269,
+        "delta": -0.0231,
+        "delta_effective": 0.0117
+      },
+      "julia:multibrot4": {
+        "intended": 0.05,
+        "effective": 0.0463,
+        "realized": 0.1406,
+        "delta": 0.0906,
+        "delta_effective": 0.0943
+      },
+      "julia:multibrot5": {
+        "intended": 0.05,
+        "effective": 0.036,
+        "realized": 0.1406,
+        "delta": 0.0906,
+        "delta_effective": 0.1046
+      },
+      "phoenix": {
+        "intended": 0.3171,
+        "effective": 0.4727,
+        "realized": 0.2559,
+        "delta": -0.0612,
+        "delta_effective": -0.2168
+      }
+    },
+    "pops": {
+      "mandelbrot": {
+        "intended": 0.0649,
+        "effective": 0.0609,
+        "realized": 0.0588,
+        "delta": -0.0061,
+        "delta_effective": -0.002
+      },
+      "multibrot3": {
+        "intended": 0.05,
+        "effective": 0.0849,
+        "realized": 0.1618,
+        "delta": 0.1118,
+        "delta_effective": 0.0769
+      },
+      "multibrot4": {
+        "intended": 0.1372,
+        "effective": 0.1158,
+        "realized": 0.0588,
+        "delta": -0.0784,
+        "delta_effective": -0.057
+      },
+      "multibrot5": {
+        "intended": 0.05,
+        "effective": 0.064,
+        "realized": 0.0735,
+        "delta": 0.0235,
+        "delta_effective": 0.0095
+      },
+      "julia:mandelbrot": {
+        "intended": 0.2308,
+        "effective": 0.1043,
+        "realized": 0.1618,
+        "delta": -0.069,
+        "delta_effective": 0.0575
+      },
+      "julia:multibrot3": {
+        "intended": 0.05,
+        "effective": 0.0151,
+        "realized": 0.1176,
+        "delta": 0.0676,
+        "delta_effective": 0.1025
+      },
+      "julia:multibrot4": {
+        "intended": 0.05,
+        "effective": 0.0463,
+        "realized": 0.0588,
+        "delta": 0.0088,
+        "delta_effective": 0.0125
+      },
+      "julia:multibrot5": {
+        "intended": 0.05,
+        "effective": 0.036,
+        "realized": 0.0588,
+        "delta": 0.0088,
+        "delta_effective": 0.0228
+      },
+      "phoenix": {
+        "intended": 0.3171,
+        "effective": 0.4727,
+        "realized": 0.25,
+        "delta": -0.0671,
+        "delta_effective": -0.2227
+      }
+    },
+    "l1_gap_minutes": 0.0999,
+    "l1_gap_minutes_effective": 0.2205,
+    "effective_intent": {
+      "julia:mandelbrot": 0.1043,
+      "julia:multibrot3": 0.0151,
+      "julia:multibrot4": 0.0463,
+      "julia:multibrot5": 0.036,
+      "mandelbrot": 0.0609,
+      "multibrot3": 0.0849,
+      "multibrot4": 0.1158,
+      "multibrot5": 0.064,
+      "phoenix": 0.4727
+    }
+  },
+  "floor_vs_deficit": {
+    "per_partition": {
+      "mandelbrot": {
+        "floor": 3.586,
+        "deficit": 2.34
+      },
+      "multibrot3": {
+        "floor": 10.086,
+        "deficit": 0.0
+      },
+      "multibrot4": {
+        "floor": 0.0,
+        "deficit": 15.862
+      },
+      "multibrot5": {
+        "floor": 10.965,
+        "deficit": 0.0
+      },
+      "julia:mandelbrot": {
+        "floor": 3.674,
+        "deficit": 27.526
+      },
+      "julia:multibrot3": {
+        "floor": 3.979,
+        "deficit": 0.0
+      },
+      "julia:multibrot4": {
+        "floor": 11.055,
+        "deficit": 0.0
+      },
+      "julia:multibrot5": {
+        "floor": 8.544,
+        "deficit": 0.0
+      },
+      "phoenix": {
+        "floor": 0.0,
+        "deficit": 37.906
+      }
+    },
+    "floor_min": 51.89,
+    "deficit_min": 83.63,
+    "floor_share": 0.3829,
+    "deficit_share": 0.6171
+  },
+  "maneuvers": {
+    "enabled": true,
+    "quota": 4,
+    "probe_p": 0.25,
+    "ks": [
+      "none",
+      8.0,
+      16.0
+    ],
+    "lateral": true,
+    "probes_rolled": 768,
+    "probes_fired": 163,
+    "probes_coin_skip": 510,
+    "probes_cache_skip": 95,
+    "op_calls": 1497,
+    "op_available": 1297,
+    "op_unavailable": 200,
+    "avail_unused": 635,
+    "nodes_pushed": 524,
+    "nodes_expanded": 491,
+    "admitted": 72,
+    "quota_bound": 35,
+    "quota_unfilled": 192,
+    "quota_passed_over": 1410,
+    "visited_atoms": 625,
+    "probe_s": 220.98,
+    "probe_share_of_active": 0.027176218146769595,
+    "neighborhood": true,
+    "nbh_m": 8,
+    "nbh_n": 2,
+    "nbh_probes": 12,
+    "nbh_passed_over": 68,
+    "range_prior": false,
+    "range_gain": 0.5,
+    "screened": 0,
+    "unscreenable": 0,
+    "screen_cache_hits": 0,
+    "screen_policy": "mi12000k0.3c4800-67000",
+    "screen_geometry": [
+      64,
+      36,
+      1
+    ],
+    "screen_frame_mult": 4.0,
+    "screen_s": 60.78,
+    "screen_share_of_active": 0.007474480428621546,
+    "range_dist_n": 0,
+    "view_prior": true,
+    "view_gain": 0.5,
+    "view_screened": 720,
+    "view_unscreenable": 0,
+    "view_vetoed": 181,
+    "view_fields_cached": 720,
+    "view_dist_n": 720,
+    "view_params": {
+      "veto": 0.3403,
+      "cap_range": 21.3236,
+      "cap_rings": 66.0,
+      "band_edge": 0.12,
+      "band_exp": 8.0
+    },
+    "view_fields": "C:\\Code\\fractal-maker\\data\\discovery\\label_run_20260807\\view_fields",
+    "view_fit_model": "view_fit_v1.1",
+    "view_fit_scored": 720,
+    "view_fit_coverage": 1.0,
+    "view_fit_is_sort_key": false,
+    "log": "C:\\Code\\fractal-maker\\data\\discovery\\label_run_20260807\\maneuvers.jsonl",
+    "view_fields_finalized": {
+      "root": "C:\\Code\\fractal-maker\\data\\discovery\\label_run_20260807\\view_fields",
+      "n": 720,
+      "policy": "mi12000k0.3c4800-67000",
+      "bytes": 6635520
+    }
+  },
+  "library_seed": {
+    "status": "never_attempted",
+    "reason": "run has --pop-quota: demand is denominated in HUMAN LABELS, not in distinct looks, so there is no look tally to seed and the deficits are library-wide without one (see summary.pop_quota.currency)",
+    "source": "C:\\Code\\fractal-maker\\data\\emission\\library_seed_v2\\intake.json",
+    "emb_dir": "C:\\Code\\fractal-maker-artifacts\\data\\emission\\library_seed_v2\\embs",
+    "source_exists": true,
+    "resolved_from": "library_seed_v2"
+  }
+}

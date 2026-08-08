@@ -1,0 +1,489 @@
+{
+  "schema_version": 1,
+  "batch_id": "2026-08-07_steady_state_v2_backfill_v1",
+  "generator_version": "label_run_correction_v1",
+  "created": null,
+  "labeler": null,
+  "presentation_seed": 447744007,
+  "vivid_companion": "blue_orange",
+  "served_manifest": null,
+  "served_via": "THIS DIRECTORY, as a CORRECTION sheet: tools/viz/wallpaper_label.html?corpus=label_corpus&batch=2026-08-07_label_run_correction_v1,2026-08-07_steady_state_v2_backfill_v1&tiers=4&order=file . Rows carry the head's own decode as `suggested_tier` and a contiguous `sheet_order` (descending `pred`, good -> bad); `label.score` is null on every one and the merge refuses to read the suggestion.",
+  "queued_for_labeling": false,
+  "purpose": "BACKFILL ONLY. steady_state_v2_20260807's 1,544-row ranked residue, declared second so `draw_buckets` reaches it only in a (bucket, cell) where the label run itself ran short. Same generation method and the same bias argument as the first leg; it is a separate registration because it is a separate run, and its per-bucket contribution is recorded in `sitting_cut.buckets[*].by_leg` rather than inferred.",
+  "counts": {
+    "total": 63,
+    "by_partition": {
+      "multibrot3": 25,
+      "multibrot5": 14,
+      "julia:multibrot5": 9,
+      "julia:multibrot3": 11,
+      "multibrot4": 4
+    },
+    "by_tier": {
+      "2": 63
+    },
+    "bar_readable": 37
+  },
+  "registration": {
+    "assign_split": [
+      "train",
+      true,
+      "steady_state_v2_backfill"
+    ],
+    "registered_explicitly": true,
+    "NOTE": "registered in tools/scoring/batch_registry BEFORE the cut"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "ss_deviates_from_corpus_default": {
+      "corpus_default": 4,
+      "this_batch": 2,
+      "why": "Matt's call 2026-08-03 \u2014 ~4x fewer samples over ~1000 rows x 2 crops; see sitting_cutter.SITTING_CROP_SS for what it costs"
+    },
+    "filter": "lanczos3",
+    "interior_mode": "black",
+    "composition": "center",
+    "palette_roster": "data/palettes/score3_colormaps.json",
+    "vivid_companion": "blue_orange",
+    "maxiter": "deep_center_finder._maxiter_for_fw(fw)"
+  },
+  "render_recipe": {
+    "path": "render-one --palette --colormaps",
+    "palette_source": "data/palettes/score3_colormaps.json",
+    "jpg_quality": 90
+  },
+  "sitting_cut": {
+    "sitting": "label_run",
+    "legs": [
+      "2026-08-07_label_run_correction_v1",
+      "2026-08-07_steady_state_v2_backfill_v1"
+    ],
+    "run_dirs": {
+      "2026-08-07_label_run_correction_v1": "data/discovery/label_run_20260807",
+      "2026-08-07_steady_state_v2_backfill_v1": "data/discovery/steady_state_v2_20260807"
+    },
+    "INCOMPLETE": false,
+    "embed_limit": null,
+    "max_rows": 500,
+    "queue": {
+      "n": 7945,
+      "by_leg": {
+        "2026-08-07_label_run_correction_v1": 2363,
+        "2026-08-07_steady_state_v2_backfill_v1": 5582
+      },
+      "cross_leg_duplicates_dropped": {
+        "2026-08-07_steady_state_v2_backfill_v1": 26
+      },
+      "dive_arm_join": {},
+      "by_tier": {
+        "2": 5045,
+        "1": 2900
+      },
+      "by_fate": {
+        "admitted": 2871,
+        "q3_dup": 1305,
+        "canon_not_q3": 863,
+        "reframe_not_q3": 6,
+        "precanon_dup": 1006,
+        "below_tau_h": 1887,
+        "interior_gt_30": 7
+      },
+      "by_partition": {
+        "julia:mandelbrot": 583,
+        "julia:multibrot4": 1989,
+        "multibrot4": 890,
+        "julia:multibrot5": 1509,
+        "julia:multibrot3": 1002,
+        "multibrot5": 498,
+        "multibrot3": 344,
+        "phoenix": 1031,
+        "mandelbrot": 99
+      },
+      "population": {
+        "rule": "THE RANKED RESIDUE: rank_tier >= 2, i.e. rows that earned a CANONICAL decode. This is what 'residue' already means everywhere else \u2014 steady_state_v2's readout reports its 1,544 rankable rows as 'tier-2 minus admitted', over the fates q3_dup / canon_not_q3 / reframe_not_q3 \u2014 so the union queue's tier-1 rows (below_tau_h, precanon_dup) were never part of it. It is also what makes this a CORRECTION sheet at all: a tier-1 row has no canonical verdict to prefill, and the first bounded draw put 223 such rows on a 500-row page, 45% of it unprefilled. The cheap score is NOT a substitute \u2014 it comes off a 384x216 ss1 render where every canonical rate was measured at 640x360 ss2, which is the cap/geometry error `stage_machine_1` refuses for exactly the same reason.",
+        "kept": 5045,
+        "dropped": 2900,
+        "dropped_by_tier": {
+          "1": 2900
+        },
+        "dropped_by_fate": {
+          "precanon_dup": 1006,
+          "below_tau_h": 1887,
+          "interior_gt_30": 7
+        },
+        "kept_by_tier": {
+          "2": 5045
+        },
+        "kept_by_fate": {
+          "admitted": 2871,
+          "q3_dup": 1305,
+          "canon_not_q3": 863,
+          "reframe_not_q3": 6
+        }
+      }
+    },
+    "n_in": 5045,
+    "n_sitting": 500,
+    "n_over_cap": 1669,
+    "stages": [
+      {
+        "stage": "interior_gt30",
+        "removed": 0,
+        "unmeasured_kept": 0,
+        "rule_id": "interior_gt30_v1",
+        "threshold": 0.3,
+        "comparison": "strict >",
+        "disposition": "auto-labelled class 1, NEVER presented"
+      },
+      {
+        "stage": "machine_1_discard",
+        "removed": 75,
+        "no_canonical_verdict_kept": {},
+        "table": {
+          "julia:mandelbrot": false,
+          "julia:multibrot3": false,
+          "julia:multibrot4": false,
+          "julia:multibrot5": false,
+          "mandelbrot": false,
+          "multibrot3": true,
+          "multibrot4": true,
+          "multibrot5": true,
+          "phoenix": true,
+          "phoenix:classic": false
+        },
+        "by_partition": {
+          "multibrot3": 20,
+          "multibrot4": 19,
+          "phoenix": 14,
+          "multibrot5": 22
+        },
+        "disposition": "discarded from the SITTING; the discovery record keeps them"
+      },
+      {
+        "stage": "morph_dedup",
+        "removed": 2801,
+        "unembeddable_kept": 0,
+        "threshold": 0.974,
+        "budget_not_reached": 0,
+        "embedded": 4970,
+        "unembeddable_reasons": {},
+        "recipe": "library morph CLIP (640x360 ss2 -> robustz_tanh_k2_v1 -> vit_base_patch16_clip_224.openai)",
+        "looks_kept": 2169,
+        "disposition": "PRESENTATION only \u2014 the discovery record keeps every candidate"
+      }
+    ],
+    "cells": {
+      "mandelbrot": {
+        "('mandelbrot', 2)": {
+          "taken": 67,
+          "available": 67,
+          "reserved": 0,
+          "drained": true
+        }
+      },
+      "julia:mandelbrot": {
+        "('julia:mandelbrot', 2)": {
+          "taken": 125,
+          "available": 138,
+          "reserved": 0,
+          "drained": false
+        }
+      },
+      "phoenix": {
+        "('phoenix', 2)": {
+          "taken": 100,
+          "available": 146,
+          "reserved": 0,
+          "drained": false
+        }
+      },
+      "native_multibrot_maneuver": {
+        "('multibrot3', 2)": {
+          "taken": 25,
+          "available": 74,
+          "reserved": 0,
+          "drained": false
+        },
+        "('multibrot4', 2)": {
+          "taken": 25,
+          "available": 299,
+          "reserved": 0,
+          "drained": false
+        },
+        "('multibrot5', 2)": {
+          "taken": 25,
+          "available": 193,
+          "reserved": 0,
+          "drained": false
+        }
+      },
+      "machine_class4_top": {
+        "('julia:multibrot3', 2)": {
+          "taken": 14,
+          "available": 47,
+          "reserved": 0,
+          "drained": false
+        },
+        "('julia:multibrot4', 2)": {
+          "taken": 15,
+          "available": 161,
+          "reserved": 0,
+          "drained": false
+        },
+        "('julia:multibrot5', 2)": {
+          "taken": 15,
+          "available": 72,
+          "reserved": 0,
+          "drained": false
+        },
+        "('multibrot3', 2)": {
+          "taken": 1,
+          "available": 1,
+          "reserved": 0,
+          "drained": true
+        },
+        "('multibrot4', 2)": {
+          "taken": 4,
+          "available": 4,
+          "reserved": 0,
+          "drained": true
+        },
+        "('multibrot5', 2)": {
+          "taken": 1,
+          "available": 1,
+          "reserved": 0,
+          "drained": true
+        }
+      }
+    },
+    "balances": true,
+    "buckets": {
+      "buckets": {
+        "mandelbrot": {
+          "target": 150,
+          "granted": 67,
+          "shortfall": 83,
+          "available": 67,
+          "capped_by_sheet": false,
+          "why": "the run's largest currency target (ratio 30) and a FLOORED partition all run \u2014 whatever the floor carry bought is the whole mandelbrot supply there is",
+          "by_leg": {
+            "2026-08-07_label_run_correction_v1": 67
+          },
+          "cells": {
+            "('mandelbrot', 2)": {
+              "taken": 67,
+              "available": 67,
+              "reserved": 0,
+              "drained": true
+            }
+          },
+          "redealt_in": 0
+        },
+        "julia:mandelbrot": {
+          "target": 125,
+          "granted": 138,
+          "shortfall": 0,
+          "available": 138,
+          "capped_by_sheet": false,
+          "why": "ratio 25, also floored. Its MACHINE-1s are included by construction: supply_routing.MACHINE_1_DISCARD is False for this partition because P(Matt=1 | decoded 1) is 30.9% here against 94-100% on the natives, so stage_machine_1 never removes them and this bucket sees them",
+          "by_leg": {
+            "2026-08-07_label_run_correction_v1": 138
+          },
+          "cells": {
+            "('julia:mandelbrot', 2)": {
+              "taken": 125,
+              "available": 138,
+              "reserved": 0,
+              "drained": false
+            }
+          },
+          "redealt_in": 13
+        },
+        "phoenix": {
+          "target": 100,
+          "granted": 146,
+          "shortfall": 0,
+          "available": 146,
+          "capped_by_sheet": false,
+          "why": "ratio 20 and the run's deficit-driven engine (58% of intent) \u2014 the bucket most likely to be supply-rich rather than short",
+          "by_leg": {
+            "2026-08-07_label_run_correction_v1": 146
+          },
+          "cells": {
+            "('phoenix', 2)": {
+              "taken": 100,
+              "available": 146,
+              "reserved": 0,
+              "drained": false
+            }
+          },
+          "redealt_in": 46
+        },
+        "native_multibrot_maneuver": {
+          "target": 75,
+          "granted": 99,
+          "shortfall": 0,
+          "available": 566,
+          "capped_by_sheet": false,
+          "why": "natives 5 each, and MANEUVER-SOURCED only: their root supply is seeds + triggered maneuvers, so an unscreened raw draw is not what this bucket is for",
+          "by_leg": {
+            "2026-08-07_label_run_correction_v1": 62,
+            "2026-08-07_steady_state_v2_backfill_v1": 37
+          },
+          "cells": {
+            "('multibrot3', 2)": {
+              "taken": 25,
+              "available": 74,
+              "reserved": 0,
+              "drained": false
+            },
+            "('multibrot4', 2)": {
+              "taken": 25,
+              "available": 299,
+              "reserved": 0,
+              "drained": false
+            },
+            "('multibrot5', 2)": {
+              "taken": 25,
+              "available": 193,
+              "reserved": 0,
+              "drained": false
+            }
+          },
+          "redealt_in": 24
+        },
+        "machine_class4_top": {
+          "target": 50,
+          "granted": 50,
+          "shortfall": 0,
+          "available": 286,
+          "capped_by_sheet": false,
+          "why": "the cross-partition class-4 top slice. DECLARED LAST so it surfaces the class-4s the four partition buckets did not already spend \u2014 including julia:multibrot ones, which is the only way that material legitimately reaches the page",
+          "by_leg": {
+            "2026-08-07_label_run_correction_v1": 24,
+            "2026-08-07_steady_state_v2_backfill_v1": 26
+          },
+          "cells": {
+            "('julia:multibrot3', 2)": {
+              "taken": 14,
+              "available": 47,
+              "reserved": 0,
+              "drained": false
+            },
+            "('julia:multibrot4', 2)": {
+              "taken": 15,
+              "available": 161,
+              "reserved": 0,
+              "drained": false
+            },
+            "('julia:multibrot5', 2)": {
+              "taken": 15,
+              "available": 72,
+              "reserved": 0,
+              "drained": false
+            },
+            "('multibrot3', 2)": {
+              "taken": 1,
+              "available": 1,
+              "reserved": 0,
+              "drained": true
+            },
+            "('multibrot4', 2)": {
+              "taken": 4,
+              "available": 4,
+              "reserved": 0,
+              "drained": true
+            },
+            "('multibrot5', 2)": {
+              "taken": 1,
+              "available": 1,
+              "reserved": 0,
+              "drained": true
+            }
+          },
+          "redealt_in": 0
+        }
+      },
+      "unclaimed_by_any_bucket": 966,
+      "drawn": 500,
+      "cap": 500,
+      "shortfall_total": 0,
+      "redeal": [
+        {
+          "bucket": "julia:mandelbrot",
+          "rows": 13,
+          "pad_eligible_left": 13
+        },
+        {
+          "bucket": "phoenix",
+          "rows": 46,
+          "pad_eligible_left": 46
+        },
+        {
+          "bucket": "native_multibrot_maneuver",
+          "rows": 24,
+          "pad_eligible_left": 491
+        }
+      ],
+      "pad_blocked_rows_left": 1159,
+      "rule": "declared order claims a row once; within a bucket draw_balanced over (partition x tier); shortfall re-dealt to the SCARCEST bucket with PAD-ELIGIBLE supply left; a `no_pad` row may fill its own target but never another bucket's shortfall; NOTHING is drawn from outside the buckets, so a fully drained set returns a short sheet rather than padding it"
+    },
+    "correction": {
+      "order": "sheet_order \u2014 DESCENDING pred (good -> bad), ties on image_id; rows with no canonical decode sort last and carry no suggestion",
+      "pred": "1 + canon_eord (sum of the v10 CORN marginals), the 1..K tier scale",
+      "suggestion": "reframe_decoded if present else canon_decoded \u2014 the head's own class, NOT a quantile mapping. label.score stays null on every row.",
+      "served_via": "tools/viz/wallpaper_label.html?corpus=label_corpus&batch=<ids>&tiers=4&order=file \u2014 CORRECTION mode is auto-detected from suggested_tier",
+      "n_with_pred": 500,
+      "n_without_pred": 0,
+      "pred_range": [
+        4.0,
+        1.0218
+      ],
+      "suggested_tier_hist": {
+        "1": 12,
+        "2": 84,
+        "3": 84,
+        "4": 320
+      }
+    },
+    "calibration_reservations": {
+      "min_pos": null,
+      "positives": null,
+      "frac": 0.05,
+      "cap_frac": 0.15,
+      "active": {},
+      "granted_total": 0,
+      "shortfall_total": 0
+    },
+    "cut_wall_s": 59.2,
+    "morph_cache": {
+      "path": "C:\\Code\\fractal-maker-artifacts\\data\\morph_embed_cache\\morph_clip_v1.mec",
+      "created": false,
+      "records_at_open": 13203,
+      "records_now": 13276,
+      "hits": 4897,
+      "misses": 73,
+      "appends": 73,
+      "bytes_dropped": 0,
+      "truncated_at": null,
+      "size_bytes": 45308659
+    },
+    "by_leg": {
+      "2026-08-07_label_run_correction_v1": 437,
+      "2026-08-07_steady_state_v2_backfill_v1": 63
+    },
+    "auto_labeled_never_presented": []
+  },
+  "bar_readability": {
+    "n": 37,
+    "of": 63,
+    "definition": "served rows carrying BOTH view_fit_v1.1 (provenance.fit_score / fit_model) and composite_v3 (provenance.composite) \u2014 the slice the pre-registered +0.1181 delta-AP margin reads on",
+    "by_partition": {
+      "multibrot3": 24,
+      "multibrot5": 13
+    }
+  },
+  "calibration_aids": "NONE \u2014 no exemplars, no reference strip, no score shown"
+}
