@@ -310,6 +310,15 @@ def main() -> int:
     # `split == "train"` and every number computed on them is stamped; they are excluded
     # from every verdict by the masks below, which key on `source` and `eval_role`.
     allocs = load_locations_v11(verify_paths=False)
+    # Partition resolution needs the WHOLE manifest row, not the family token: phoenix
+    # splits into `phoenix` and `phoenix:classic` on its parameter axes, at the READER
+    # (partitions.partition_of_row). Resolving from `fractal_type` alone would fold the 8
+    # classic holdout rows into phoenix and make the arm's population disagree with the
+    # pre-registration's 113 — the same number said two ways, which is how a slice quietly
+    # stops being the slice a bar was set on.
+    man = {r["loc_id"]: r for r in
+           (json.loads(x) for x in
+            paths.bulk("data/v11/manifest.jsonl").open(encoding="utf-8") if x.strip())}
     locs = [l for l in allocs
             if l.split == "eval"
             or any(b in l.source for b in CORRECTION_BATCHES)]
@@ -411,8 +420,8 @@ def main() -> int:
             row = {"location_id": l.location_id, "label": l.label, "source": l.source,
                    "eval_role": l.eval_role, "group_id": l.group_id,
                    "split_group": l.split_group, "fractal_type": l.fractal_type,
-                   "partition": P.partition_of_row(
-                       {"fractal_type": l.fractal_type}, l.fractal_type),
+                   "partition": P.partition_of_row(man[l.location_id],
+                                                   l.fractal_type),
                    "v11_score": float(s11[i]), "v10_score": float(s10[i])}
             for k in range(K11 - 1):
                 row[f"v11_p_ge{k+2}"] = float(p11[i, k])
@@ -422,7 +431,7 @@ def main() -> int:
 
     # ---------------- PER-PARTITION calibration, first reads ----------------
     results["per_partition_calibration_first_reads"] = partition_calibration(
-        locs, labels, p11, p10, K11, arms)
+        locs, man, labels, p11, p10, K11, arms)
 
     # ---------------- PALETTE INVARIANCE ----------------
     a = arms["palette_invariance"]
@@ -551,14 +560,14 @@ def contaminated_companion(locs, labels, p10, p11, t):
     return out
 
 
-def partition_calibration(locs, labels, p11, p10, K11, arms):
+def partition_calibration(locs, man, labels, p11, p10, K11, arms):
     """First calibration reads for the partitions the grouped split gave an eval population.
 
     HOLDOUT rows only, and the caveat travels with the number: the holdout is a stratified
     random draw over the split groups, biased exactly as training is, so these are statements
     about the ranker over the population training is drawn from and NOT base rates."""
     a = arms["per_partition_calibration_first_reads"]
-    part = np.array([P.partition_of_row({"fractal_type": l.fractal_type}, l.fractal_type)
+    part = np.array([P.partition_of_row(man[l.location_id], l.fractal_type)
                      for l in locs])
     is_ho = np.array([l.eval_role == "holdout" for l in locs])
     out = {"caveat": a["holdout_caveat"], "explicitly_not_adopted": a["explicitly_not_adopted"],
@@ -568,6 +577,13 @@ def partition_calibration(locs, labels, p11, p10, K11, arms):
         if not m.any():
             out["partitions"][name] = {"error": "no holdout rows"}
             continue
+        # The population must be the one the pre-registration recorded. It is not a bar, so
+        # nothing is gated on it — but a slice that quietly stopped being the pre-registered
+        # slice is the failure a bar cannot see, and here it has an exact expected count.
+        want = a["populations"][name]["n"]
+        assert int(m.sum()) == want, (
+            f"{name}: {int(m.sum())} holdout rows, pre-registration says {want} — the "
+            f"partition resolution or the split moved")
         y3 = (labels[m] >= 3).astype(int)
         p3_11, p3_10 = p11[m][:, 1], p10[m][:, 1]
         block = {"n": int(m.sum()), "n_pos_ge3": int(y3.sum()),

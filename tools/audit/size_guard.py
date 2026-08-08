@@ -321,6 +321,20 @@ REGISTRY: list[Entry] = [
     # write down; which one is DEPLOYED is derived state, so read it from
     # production_pins.ACTIVE_CKPT and never re-assert it here — that is the whole "derive
     # state in code, freeze it in records" rule, applied to a comment.
+    Entry("data/classifier/v11/", RELOCATE, PRECIOUS, "tracked",
+          "v11 model_best.pt — the v10 recipe VERBATIM (itself v9's, itself v8's) retrained "
+          "on the v11 corpus under the randomized grouped split. BUILT, STAGED, NOT "
+          "ADOPTED: nothing points at it, and the flip is a separate prompt judged against "
+          "data/v11/prereg_v11.json. Same position v9 held below, and kept for the same "
+          "reason — a not-GPU-reproducible weight cannot be rebuilt if the judgement is "
+          "revisited. Declared by exact-path .gitignore negation, so a plain `git add` "
+          "reaches it; model_last.pt is deliberately untracked (selection is on best). "
+          "NOT a canary: canary status belongs to the deployed head and the rollback rungs, "
+          "and a staged candidate is neither (test_tracked_artifacts.py's note on v9). "
+          "FORWARD while the run is in flight: the live writer is classifier/train_v11.py, "
+          "which lands model_best.pt/model_last.pt (~34 MB each) plus config/metrics at the "
+          "end of its 40 epochs. The flag comes off when the weight is committed.",
+          canary=False, forward=True),
     Entry("data/classifier/v10/", RELOCATE, PRECIOUS, "tracked",
           "v10 model_best.pt — the v9 recipe (itself v8's, verbatim) retrained on the "
           "corpus EXTENDED with 1,267 maneuver-view locations. This is what "

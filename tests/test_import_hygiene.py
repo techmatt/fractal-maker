@@ -118,6 +118,12 @@ def test_every_ambiguous_name_is_a_known_copy_forward_family():
     mods = _by_basename()
     ambiguous = sorted(m for m, v in mods.items() if len(v) > 1)
     known = {"__init__", "app", "build_features", "build_manifest", "build_plan", "data",
+             # `prereg` joined the tools/vN/ copy-forward family with v11: each version
+             # writes its OWN committed pre-registration and the module that computes it is
+             # per-version by construction (v10's bars are not v11's). Both are loaded by
+             # explicit path (importlib in the test, `uv run python tools/vN/prereg.py` in
+             # use), never by bare import, so the ambiguity is listed rather than live.
+             "prereg",
              "render_cache", "report", "sheet", "train", "train_v3", "verify_cache_alignment"}
     new = set(ambiguous) - known
     assert not new, (
