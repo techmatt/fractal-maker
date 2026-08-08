@@ -130,6 +130,13 @@ __pycache__/
 !/data/minibrot_sources/
 /data/minibrot_sources/tiles/
 /data/minibrot_sources/sheets/
+# Newton divergence-abort parity table (tools/sourcing/newton_parity.py): the pinned
+# outcome of the PRE-ABORT reference solver over the two slow-lane roster grids. ~1 MB of
+# text, it is an INPUT to test_newton_divergence_abort.py, and re-deriving it was 80.6% of
+# the whole `slow` lane -> durable, committed by exact path.
+!/data/sourcing/
+/data/sourcing/*
+!/data/sourcing/newton_parity_ref.json
 # Orbital-falloff measures (tools/orbital/, prompts/orbital_falloff_criterion.md):
 # per-atom field metrics keyed by the shared content-hash atom id, plus the maxiter
 # stability check and the validation outcome. Small, load-bearing text -> committed.

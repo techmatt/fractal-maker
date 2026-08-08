@@ -20,11 +20,23 @@ abort carries two obligations and this file discharges both:
 The pre-registered bar was ZERO lost convergers. It is met on every population checked here
 and on the 8,132-solve neighborhood-operator replay the rule was derived from.
 
+TWO WAYS THE REFERENCE ARM IS SUPPLIED. The default-lane grids run BOTH arms live — they are
+small, and they are what keeps the pinned table below honest about the reference still being
+reproducible at all. The slow-lane grids (26,624 + 4,992 solves) read the reference from
+`data/sourcing/newton_parity_ref.json` instead. The reference is a reimplementation of code
+that no longer exists, so for a fixed (seed, period, degree, max_steps, dps) its outcome is a
+constant; re-deriving 31,616 of them every run was 80.6% of the entire `slow` lane (measured
+2026-08-08 — the live arm, which is the code under test, was 13.1%). Pinning them changes no
+evidence: `lost == 0` is still checked against the reference's real verdict, because that
+verdict is exactly what the table holds. Rationale in full: `tools/sourcing/newton_parity.py`.
+Rebuild the table with `tools/sourcing/build_newton_parity_ref.py`.
+
 Run: uv run pytest tools/sourcing/test_newton_divergence_abort.py -q
      uv run pytest tools/sourcing/test_newton_divergence_abort.py -m slow   # + the full grid
 """
 from __future__ import annotations
 
+import concurrent.futures as cf
 import json
 import math
 import sys
@@ -40,8 +52,17 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "sourcing"):
 
 import deep_center_finder as dcf                        # noqa: E402
 import build_minibrot_roster as brs                     # noqa: E402
+import newton_parity as npar                            # noqa: E402
 
 ROSTER = ROOT / "data" / "minibrot_roster" / "roster.jsonl"
+
+# Parallel width for the pinned slow grids. These are ~50 MB pure-mpmath processes, one core
+# each — NOT the heavyweight `fractal-generator.exe` that CLAUDE.md's 4-process cap is
+# written against (own rayon pool, resident LUTs, corpus scan), so the cap does not bind
+# here. Measured 2026-08-08 on the 12-core box, 312-solve grid: 2.92x at 4, 4.01x at 8 (that
+# grid is only 24 jobs, so load imbalance dominates; the pinned grids are 2,048 jobs and
+# scale better). Matches `tools/v8/render_cache.py`'s WORKERS=6 carve-out in kind.
+PARITY_WORKERS = 8
 
 
 # --------------------------------------------------------------------------- #
@@ -247,11 +268,37 @@ def test_committed_roster_keys_round_trip_through_the_live_solver():
 # --------------------------------------------------------------------------- #
 # 4. GREEN on the derivation that actually contains non-convergers
 # --------------------------------------------------------------------------- #
+def _tally(live_conv, live_iters, live_dig, ref_conv, ref_iters, ref_dig, acc):
+    """THE bucketing rule, shared by the live-both-arms and the pinned-reference paths so
+    the two cannot drift. `acc` is a 5-list [n_conv, lost, mismatch, aborted, gained].
+
+    `gained` is not decoration. The original bucketing had `elif got.iters < exp.iters` as
+    the sole non-converger branch, so a solve where the LIVE arm converged and the reference
+    did not fell into it and was silently counted as a successful abort. That is impossible
+    if the two arms differ only by an early abort — which is exactly why it should be an
+    assertion rather than an unreachable branch nobody wrote."""
+    if ref_conv:
+        acc[0] += 1
+        if not live_conv:
+            acc[1] += 1                      # lost: the abort killed a real converger
+        elif live_dig != ref_dig:
+            acc[2] += 1                      # mismatch: converged, but to a different value
+    elif live_conv:
+        acc[4] += 1                          # gained: live converged where the reference did not
+    elif live_iters < ref_iters:
+        acc[3] += 1                          # aborted: the guard cut the budget short
+    return acc
+
+
 def _grid_parity(n_ang, n_rad, degrees, max_steps=None):
-    """Run both arms over the roster's own ring-seed x period Newton grid and return
-    (n_solves, n_conv, lost, mismatched, aborted)."""
+    """Run BOTH arms live over the roster's own ring-seed x period Newton grid and return
+    (n_solves, n_conv, lost, mismatched, aborted, gained).
+
+    Used by the default-lane grids, which are small. The slow lane runs the same comparison
+    against a pinned reference instead — see `_grid_parity_pinned`."""
     max_steps = brs.NEWTON_STEPS if max_steps is None else max_steps
-    n = n_conv = lost = mismatch = aborted = 0
+    n = 0
+    acc = [0, 0, 0, 0, 0]
     for deg in degrees:
         for sr, si in brs.ring_seeds(deg, n_ang, n_rad):
             seed = mp.mpc(sr, si)
@@ -259,15 +306,69 @@ def _grid_parity(n_ang, n_rad, degrees, max_steps=None):
                 got = dcf.newton_nucleus(seed, p, degree=deg, max_steps=max_steps)
                 exp = ref_newton_nucleus(seed, p, degree=deg, max_steps=max_steps)
                 n += 1
-                if exp.converged:
-                    n_conv += 1
-                    if not got.converged:
-                        lost += 1
-                    elif not _same(got, exp):
-                        mismatch += 1
-                elif got.iters < exp.iters:
-                    aborted += 1
-    return n, n_conv, lost, mismatch, aborted
+                _tally(got.converged, got.iters, npar.result_digest(got),
+                       exp.converged, exp.iters, npar.result_digest(exp), acc)
+    return (n, *acc)
+
+
+# --------------------------------------------------------------------------- #
+# The pinned-reference path (slow lane). The reference arm is a reimplementation of code
+# that no longer exists, so its outcome for a fixed (seed, period, degree, max_steps, dps)
+# is a constant; `newton_parity.py`'s docstring has the full argument. Only the LIVE arm —
+# the code actually under test — runs here, and it runs in parallel.
+# --------------------------------------------------------------------------- #
+def _live_init():
+    """Spawn-safe worker setup. The autouse `_dps` fixture does not reach a subprocess, so
+    a worker that skipped this would solve at mpmath's default dps and mismatch everything."""
+    import mpmath as _mp
+    import build_minibrot_roster as _brs
+    _mp.mp.dps = _brs.NUCLEUS_DPS
+
+
+def _live_job(args):
+    """One (degree, seed) column of the LIVE arm -> one row per period, in PERIODS order."""
+    deg, _idx, sr, si, max_steps = args
+    seed = mp.mpc(sr, si)
+    return [npar.row_of(dcf.newton_nucleus(seed, p, degree=deg, max_steps=max_steps))
+            for p in brs.PERIODS]
+
+
+def _grid_parity_pinned(n_ang, n_rad, max_steps, *, workers=PARITY_WORKERS):
+    """Same tally as `_grid_parity`, with the reference arm read from the pinned table.
+    Returns (tally, offenders) where offenders localizes lost/mismatch/gained solves."""
+    doc = npar.load()
+    assert not doc.get("incomplete", False), (
+        f"{npar.fixture_path()} was written by a bounded `--limit` run and covers only part "
+        f"of the grid; rebuild it unbounded before trusting this test")
+    key = npar.grid_key(n_ang, n_rad, max_steps)
+    assert key in doc["grids"], f"no pinned grid {key!r} in {npar.fixture_path()}"
+    g = doc["grids"][key]
+    pinned = g["rows"]
+
+    jobs = npar.grid_jobs(n_ang, n_rad, brs.DEGREES)
+    payload = [(deg, idx, sr, si, max_steps) for deg, idx, sr, si in jobs]
+    live = []
+    with cf.ProcessPoolExecutor(max_workers=workers, initializer=_live_init) as ex:
+        for out in ex.map(_live_job, payload, chunksize=1):
+            live.extend(out)
+
+    assert len(live) == len(pinned), (
+        f"live produced {len(live)} solves, the pinned table has {len(pinned)} — the grid "
+        f"enumeration moved out from under the fixture; rebuild it")
+
+    acc = [0, 0, 0, 0, 0]
+    offenders = []
+    n_per = len(brs.PERIODS)
+    for i, ((lc, li, ld), (pc, pi, pd)) in enumerate(zip(live, pinned)):
+        before = tuple(acc)
+        _tally(bool(lc), li, ld, bool(pc), pi, pd, acc)
+        # lost / mismatch / gained moved -> record which solve, so a flip is localized
+        if (acc[1], acc[2], acc[4]) != (before[1], before[2], before[4]):
+            deg, idx, _sr, _si = jobs[i // n_per]
+            offenders.append(f"deg={deg} seed={idx} period={brs.PERIODS[i % n_per]} "
+                             f"live=(conv={bool(lc)},iters={li}) "
+                             f"pinned=(conv={bool(pc)},iters={pi})")
+    return (len(live), *acc), offenders
 
 
 # The default-lane grids are 2 ang x 2 rad. Their cost is essentially LINEAR IN THE
@@ -287,6 +388,11 @@ def _grid_parity(n_ang, n_rad, degrees, max_steps=None):
 # kind of evidence, and the committed 64 x 8 density is what the `slow` lane below is
 # for. n_rad must stay >= 2: at n_rad=1 every seed converges (0 non-convergers), the
 # abort never fires and both tests go vacuous.
+#
+# That cost model is ALSO why the slow lane pins its reference arm rather than shrinking its
+# grid: the expensive half is the REFERENCE burning its full budget on non-convergers (80.6%
+# of that test, measured 2026-08-08), and that half is a constant. Cutting the density would
+# delete the one thing the slow lane adds over these two grids.
 GRID_ANG, GRID_RAD = 2, 2
 
 
@@ -295,10 +401,11 @@ def test_roster_ring_seed_grid_loses_no_converger_and_aborts_real_burners():
     3..15, at a reduced ring count so it stays a default-lane test. Zero convergers lost,
     zero converged solves changed, and the abort demonstrably fires — the last clause is
     what stops this passing because nothing happened."""
-    n, n_conv, lost, mismatch, aborted = _grid_parity(GRID_ANG, GRID_RAD, brs.DEGREES)
+    n, n_conv, lost, mismatch, aborted, gained = _grid_parity(GRID_ANG, GRID_RAD, brs.DEGREES)
     assert n_conv > 0 and n - n_conv > 0, f"need both populations, got {n_conv}/{n}"
     assert lost == 0, f"{lost} converged solves lost of {n_conv}"
     assert mismatch == 0, f"{mismatch} converged solves changed value of {n_conv}"
+    assert gained == 0, f"{gained} solves converged live but not in the reference arm"
     assert aborted > 0, "the abort never fired — this grid proves nothing"
 
 
@@ -309,26 +416,66 @@ def test_the_grid_stays_parity_clean_at_the_library_default_budget():
     same seed must be judged against 200 steps' worth of retirable residual here and 600
     there, so a bound that had quietly become a magnitude threshold would show up as a
     converger lost at exactly one of the two budgets."""
-    n, n_conv, lost, mismatch, aborted = _grid_parity(GRID_ANG, GRID_RAD, brs.DEGREES,
-                                                      max_steps=200)
+    n, n_conv, lost, mismatch, aborted, gained = _grid_parity(GRID_ANG, GRID_RAD, brs.DEGREES,
+                                                              max_steps=200)
     assert n_conv > 0 and n - n_conv > 0, f"need both populations, got {n_conv}/{n}"
     assert lost == 0, f"{lost} converged solves lost of {n_conv} at max_steps=200"
     assert mismatch == 0, f"{mismatch} converged solves changed value of {n_conv}"
+    assert gained == 0, f"{gained} solves converged live but not in the reference arm"
     assert aborted > 0, "the abort never fired at max_steps=200"
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("n_ang,n_rad,max_steps,expect_n", [
+SLOW_GRIDS = [
     (64, 8, brs.NEWTON_STEPS, 26624),      # the committed roster grid, production budget
     (24, 4, 200, 4992),                    # the same shape at the library default budget
-])
+]
+
+
+def test_the_pinned_reference_table_covers_both_slow_grids():
+    """Cheap integrity gate on the fixture itself (no solving) — the sibling of
+    `test_guard_tripwire.test_fixture_is_the_canonical_81_20_set`, and for the same reason:
+    a corrupt or truncated table is exactly what would make the pinned pass vacuous, and
+    checking it costs nothing. Deliberately NOT `slow`.
+
+    Both populations must be present in every grid: a table whose solves all converged
+    would let `lost == 0` pass on a grid where the abort can never fire."""
+    doc = npar.load()
+    assert doc["incomplete"] is False, "the pinned table is from a bounded --limit run"
+    assert doc["env"]["dps"] == brs.NUCLEUS_DPS
+    assert doc["env"]["newton_steps"] == brs.NEWTON_STEPS
+    for n_ang, n_rad, max_steps, expect_n in SLOW_GRIDS:
+        g = doc["grids"][npar.grid_key(n_ang, n_rad, max_steps)]
+        assert g["expect_n"] == expect_n
+        assert len(g["rows"]) == expect_n, f"{len(g['rows'])} rows for {expect_n} solves"
+        assert g["degrees"] == brs.DEGREES and g["periods"] == brs.PERIODS
+        n_conv = sum(r[0] for r in g["rows"])
+        assert n_conv == g["n_converged"]
+        assert n_conv > 0 and expect_n - n_conv > 0, (
+            f"grid {n_ang}x{n_rad} has {n_conv}/{expect_n} convergers — one population is "
+            f"empty, so the parity assertions cannot fail")
+        assert all(len(r) == 3 and len(r[2]) == 16 for r in g["rows"])
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("n_ang,n_rad,max_steps,expect_n", SLOW_GRIDS)
 def test_full_roster_ring_seed_grid_is_parity_clean(n_ang, n_rad, max_steps, expect_n):
     """The differential at the roster's COMMITTED seed density (64 ang x 8 rad x 4 degrees
     x 13 periods) — the exact Newton grid `build_minibrot_roster.source_degree` walks — and
-    again at the 200-step library default. Opt-in because it is minutes of mpmath."""
-    n, n_conv, lost, mismatch, aborted = _grid_parity(n_ang, n_rad, brs.DEGREES,
-                                                      max_steps=max_steps)
+    again at the 200-step library default.
+
+    The reference arm is READ FROM `data/sourcing/newton_parity_ref.json`, not re-derived:
+    it is a reimplementation of code that no longer exists, so its outcome per solve is a
+    constant, and re-deriving 31,616 constants was 80.6% of the whole `slow` lane (measured
+    2026-08-08). The evidence is unchanged — `lost == 0` is still checked against the
+    reference's real verdict, which is what the table holds. Only the LIVE arm runs here,
+    and it runs across `PARITY_WORKERS` processes."""
+    (n, n_conv, lost, mismatch, aborted, gained), offenders = _grid_parity_pinned(
+        n_ang, n_rad, max_steps)
     assert n == expect_n, n
-    assert lost == 0, f"{lost} converged solves lost of {n_conv}"
-    assert mismatch == 0, f"{mismatch} converged solves changed value of {n_conv}"
+    assert lost == 0, (f"{lost} converged solves lost of {n_conv}:\n  "
+                       + "\n  ".join(offenders[:8]))
+    assert mismatch == 0, (f"{mismatch} converged solves changed value of {n_conv}:\n  "
+                           + "\n  ".join(offenders[:8]))
+    assert gained == 0, (f"{gained} solves converged live but not in the reference arm:\n  "
+                         + "\n  ".join(offenders[:8]))
     assert aborted > 0.5 * (n - n_conv), f"abort fired on only {aborted} of {n-n_conv} failures"

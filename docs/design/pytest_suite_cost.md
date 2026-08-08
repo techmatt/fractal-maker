@@ -46,14 +46,9 @@ suite, 46s of it the guard tripwire.
 
 - **default lane** — `uv run pytest -n 4 --dist loadfile`, 2,221 passed + 2 skipped,
   **118.3s** (2026-08-06). Serial: see §5.
-- **opt-in lane** — `uv run pytest -m slow`, 10 tests. **It grew sharply on 2026-08-03**
-  and is no longer a ~1-minute lane: `test_full_roster_ring_seed_grid_is_parity_clean`
-  adds 26,624 + 4,992 differential solves. Projected from the measured 0.239 s per
-  non-converger at `max_steps=600` and the ~30% non-convergence rate in the table below,
-  that is **≈35 min**, dominated by the 64×8 grid. That is a mean-cost projection, not a
-  timed run — the lane has not been run end-to-end since (CLAUDE.md's rule about
-  projecting a long run's wall clock applies, though here the work is homogeneous across
-  the grid rather than contiguous-expensive).
+- **opt-in lane** — `uv run pytest -m slow`, 18 tests. It grew sharply on 2026-08-03 to
+  **≈33 min** when `test_full_roster_ring_seed_grid_is_parity_clean` added 26,624 + 4,992
+  differential solves, and came back down to **≈2 min** on 2026-08-08 (§4).
 
 A third label, `version_pinned`, is **not** a lane and is excluded from nothing — see
 CLAUDE.md. `uv run pytest -m version_pinned --collect-only -q` lists 104 tests / 12 files
@@ -146,6 +141,65 @@ The shared-fixture moves interact with a hazard already flagged in `test_triage.
 `_redirect()` repoints `triage_store` module globals with **no teardown**, so last writer
 wins and every test must set its own. A module-scoped fixture is safe here only because
 its consumers re-`_redirect` on entry.
+
+### 2026-08-08 — the opt-in lane, ≈33 min → ≈2 min
+
+The lane was **one test**: the first five tests finished in 55s and
+`test_full_roster_ring_seed_grid_is_parity_clean` was ~90% of the wall clock. That alone
+kills xdist as a remedy here — Amdahl caps `-n` across the lane at ~1.1×, independently of
+the standing ban in §5. The only lever was inside the test.
+
+**Where its time went** (measured, 2×2 grid, 208 solves, `max_steps=600`):
+
+| component | share | per solve |
+|---|---:|---:|
+| **reference arm on NON-convergers** | **80.6%** | 279 ms |
+| live arm (the code under test), total | 13.1% | 23 ms non-conv |
+| reference arm on convergers | 6.3% | 9.5 ms |
+
+The reference arm has no abort, so it burns all 600 Newton steps on every non-converger.
+That cost is **not** gratuitous — `lost == 0` (the pre-registered bar: the abort never
+kills a real converger) can only be certified by running the reference to full budget,
+because divergence is a negative and the only proof is exhausting the budget. What it is
+*not* is new information each run: the reference is a reimplementation of pre-abort code
+that no longer exists, so for a fixed (seed, period, degree, max_steps, dps) its outcome
+is a **constant**. Three changes, in order of size:
+
+1. **Pinned the reference arm** (−80.6%) into `data/sourcing/newton_parity_ref.json`
+   (1.87 MB, 31,616 rows, `[converged, iters, digest16]`), the same move
+   `data/atlas/guard_tripwire.json` makes for the 81 guard verdicts. Owner module
+   `tools/sourcing/newton_parity.py`; generator `build_newton_parity_ref.py` (has
+   `--limit`, which stamps `incomplete: true` at the write site). The evidence is
+   unchanged — `lost == 0` is still checked against the reference's real verdict, which is
+   what the table holds. The default-lane 2×2 grids still run **both arms live**, which is
+   what keeps the table honest about the reference remaining reproducible.
+2. **Parallelized the live arm** across `PARITY_WORKERS = 8` processes. Measured 2.92× at
+   4 and 4.01× at 8 on a 312-solve grid (only 24 jobs, so load imbalance dominates; the
+   pinned grids are 2,048 jobs and scale better). These are ~50 MB pure-mpmath workers,
+   one core each — **not** the heavyweight `fractal-generator.exe` that CLAUDE.md's
+   4-process cap is written against, same carve-out in kind as `render_cache.py`'s
+   `WORKERS = 6`.
+3. **gmpy2** (1.48×, project-wide). mpmath was on `BACKEND='python'`; adding the dep flips
+   it to `'gmpy'` automatically. It also speeds the *production* roster build, which walks
+   this same grid. Verified 208/208 solves bit-identical across backends on
+   (converged, iters, c, residual) — and note `mpf._mpf_` carries a `gmpy2.mpz` mantissa
+   under one backend and a plain `int` under the other, so the fixture digest normalizes
+   every component through `int()` or the table would not be portable.
+
+**Result: the two grids went 32 min → 58.2s + 5.5s.** Proved red by dropping
+`DIVERGENCE_SAFETY` 4.0 → 0.02: 922 lost convergers, each localized to
+(degree, seed, period) with live-vs-pinned iters.
+
+**What was deliberately not done: shrinking the 64×8 grid.** §3's table shows the
+population is homogeneous (`lost == mismatch == 0`, `aborted == non-conv` at every
+density), so a smaller grid would pass identically — but walking the committed roster grid
+is the *only* thing the slow lane adds over the default lane's 2×2. Fix the cost, not the
+coverage.
+
+A defect found while reading it: the tally's sole non-converger branch was
+`elif got.iters < exp.iters`, so a solve where the **live** arm converged and the reference
+did not was silently counted as a successful abort. It is now a `gained` bucket asserted to
+be 0, and the bucketing rule is shared by both paths (`_tally`) so they cannot drift.
 
 ## 4. What is at its floor — do not re-litigate
 

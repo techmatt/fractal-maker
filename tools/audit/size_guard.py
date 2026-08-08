@@ -226,6 +226,21 @@ REGISTRY: list[Entry] = [
           "prospect-library CLIP embeddings (embeddings.npz, tracked): unregenerable "
           "except value-approximate under a verdict-sensitive threshold. CANARY.",
           canary=True),
+    Entry("data/sourcing/", KEEP, None, "tracked",
+          "DISPOSITION: KEEP — Newton divergence-abort parity table. The violator is "
+          "newton_parity_ref.json (1.87 MB, 31,616 rows of [converged, iters, digest16]): "
+          "the pinned outcome of the PRE-ABORT reference solver over the two slow-lane "
+          "roster grids. It is an INPUT to tools/sourcing/test_newton_divergence_abort.py, "
+          "not an output of one. Two reasons it stays in-tree: (1) re-deriving it was "
+          "80.6% of the entire `slow` lane (~55 min of the 61-min baseline, 2026-08-08) "
+          "and the lane is 2.5 min with it; (2) what it pins is a MATHEMATICAL CONSTANT — "
+          "the reference is a reimplementation of code deleted when the abort landed, so "
+          "for a fixed (seed, period, degree, max_steps, dps) its outcome can never "
+          "change, which is what makes pinning it lossless rather than a staleness risk. "
+          "Rebuildable by tools/sourcing/build_newton_parity_ref.py (~4.4 min at 8 "
+          "workers), but a rebuild is not free and the file is text and diffable. "
+          "durable() + .gitignore negation; rationale in tools/sourcing/newton_parity.py "
+          "and docs/design/pytest_suite_cost.md §3."),
     Entry("data/orbital/", KEEP, None, "tracked",
           "DISPOSITION: KEEP — orbital screen. The >=1 MiB violator is "
           "screen_pool.jsonl (1.2 MB, 4,669 rows), and it carries the ENUMERATION "
