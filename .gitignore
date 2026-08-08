@@ -446,6 +446,27 @@ __pycache__/
 /data/v10/aug_cache/
 
 # ---------------------------------------------------------------------------
+# v11 classifier build — DURABLE by exact path, and it is ONE path, which is the
+# difference from v8/v9/v10 above.
+#
+# v11's manifest, eval_slice, plan and cache_manifest are all `paths.bulk()`: they are a
+# deterministic function of the committed label corpus, `tools/v11/build_{manifest,plan}.py`
+# and the seed/config recorded below, so they rebuild rather than being restored, and at
+# 11,303 locations x 32 tiles the plan alone is ~140 MB of derived rows. What IS committed
+# is the small record that makes them rebuildable and checkable: the seed tag, the recipe
+# flags, the realized counts and the gate outcomes.
+#
+# The bulk half resolves out-of-tree through artifacts.RELOCATED_PREFIXES; the two
+# backstops below keep it un-committable if it ever reappears in the tree.
+!/data/v11/
+/data/v11/*
+!/data/v11/build_record.json
+!/data/v11/aug_recipe.json
+!/data/v11/colormaps.json
+/data/v11/aug_cache/
+/data/v11/plan.jsonl
+
+# ---------------------------------------------------------------------------
 # v9 classifier weights — DURABLE by exact path, and by NEGATION rather than by
 # force-add. data/classifier/v2..v8 are ignored by the blanket /data/* rule and were
 # force-added (`git add -f`), which works but leaves no rule saying they belong: a

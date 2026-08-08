@@ -123,7 +123,38 @@ RELOCATED_PREFIXES = (
     # `!/data/minibrot_batch/` re-include, so `/data/*` already ignores an in-tree
     # straggler; the resolver is what keeps 1.6 GB out of the working tree at all.
     "data/minibrot_batch/fields",
+    # The v11 build's four derived row-files. Registered BEFORE the first render (rule 5 —
+    # a new bulk family is born out-of-tree), and as four FILE literals rather than the
+    # `data/v11/` directory, because `data/v11/build_record.json` is durable and must stay
+    # in the tree beside them.
+    #
+    # Why bulk and not durable, unlike v8/v9/v10's committed manifests: v11's split is a
+    # SEEDED randomized draw, so the manifest is a pure function of the committed label
+    # corpus, `tools/v11/build_manifest.py` and the seed in build_record.json — it rebuilds
+    # rather than being restored. And the plan is ~140 MB of derived rows (11,303 locations
+    # x 32 tiles), an order of magnitude past what v10 committed at 24. What makes that
+    # safe is the record: the seed, the recipe flags and the realized counts are committed,
+    # so a rebuild is checkable against what was actually rendered rather than merely
+    # rerunnable.
 )
+
+
+def _is_v11_build_rows(r: str) -> bool:
+    """True iff ``r`` is one of the v11 build's derived ROW files: ``data/v11/*.jsonl``.
+
+    A CLASS, not a list of literals, and it was a list of literals for about an hour. The
+    four names the build was known to write were registered — manifest, eval_slice, plan,
+    cache_manifest — and the render supervisor then wrote a fifth shape nobody had listed,
+    ``cache_manifest.part000.jsonl`` (one per chunk, so the per-tile manifest is durable at a
+    chunk boundary). Those landed in the working tree, where ``tools/audit/size_guard.py``
+    caught them at 8.4 MB — the same silent-bulk outcome ``_is_aug_cache`` was made a class
+    to prevent, reproduced by the same mistake one file later.
+
+    The split is on EXTENSION and it is the honest one: under ``data/v11/`` every ``.jsonl``
+    is derived rows (regenerable from the committed corpus + the recorded seed) and every
+    ``.json`` is a committed record — ``build_record``, ``aug_recipe``, ``colormaps``. So a
+    new row file fails toward out-of-tree and a new record stays where git can keep it."""
+    return r.startswith("data/v11/") and r.endswith(".jsonl")
 
 
 def _is_discovery_scratch(r: str) -> bool:
@@ -272,7 +303,8 @@ def is_relocated(rel) -> bool:
     if any(r == p or r.startswith(p + "/") for p in RELOCATED_PREFIXES):
         return True
     return (_is_aug_cache(r) or _is_discovery_scratch(r) or _is_label_corpus_crop(r)
-            or _is_descent_harness_crop(r) or _is_minibrot_source_bulk(r))
+            or _is_descent_harness_crop(r) or _is_minibrot_source_bulk(r)
+            or _is_v11_build_rows(r))
 
 
 def resolve(rel) -> Path:

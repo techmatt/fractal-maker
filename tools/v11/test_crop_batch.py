@@ -25,6 +25,7 @@ import hashlib
 import json
 import subprocess
 import sys
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import pytest
@@ -218,3 +219,123 @@ def test_limit_stamps_every_row_incomplete(tmp_path):
     assert part, "--limit 1 emitted no rows"
     assert {r["loc_id"] for r in part} == {LOCS[0]["loc_id"]}
     assert all(r["batch_incomplete"] is True for r in part)
+
+
+# --------------------------------------------------------------------------------------- #
+# The INDEPENDENT-draw mode (`--tiles N`) — the v11 recipe's fan-out.
+#
+# The product-mode tests above do not cover it: they assert on `crop.geom`, which is a
+# shared index there and a per-tile index here, and they never exercise the floor, the
+# per-tile palette draw or the per-tile AA coin.
+# --------------------------------------------------------------------------------------- #
+POOL = "twilight_shifted viridis cividis inferno magma plasma turbo coolwarm"
+N_TILES = 12
+
+
+def emit_indep(d: Path, tag: str, name: str, **kw) -> tuple[Path, list]:
+    lp = write_locs(d)
+    root, mf = d / name, d / f"{name}.jsonl"
+    args = ["--locations", str(lp), "--out-root", str(root), "--manifest", str(mf),
+            "--seed-tag", tag, "--tiles", str(N_TILES), "--palette-pool", POOL,
+            "--floor-palette", "twilight_shifted:2 blue_orange:2", "--floor-identity", "1",
+            "--aa", "aliased:point antialiased:lanczos3",
+            "--jpg-quality-lo", "60", "--jpg-quality-hi", "95",
+            "--no-resume", "--log-every", "100"]
+    for k, v in kw.items():
+        args += [f"--{k.replace('_', '-')}", str(v)]
+    run(d, *args)
+    rows = [json.loads(l) for l in mf.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return root, rows
+
+
+def test_independent_mode_floor_is_drawn_from_the_tiles(tmp_path):
+    """The floor is a MINIMUM taken out of N, never added to it — the distinction
+    `tools/apportion.py` draws between a preseed and a bonus, here on the palette axis."""
+    _require_inputs()
+    root, rows = emit_indep(tmp_path, "indep-A", "a")
+    assert len(rows) == len(LOCS) * N_TILES, f"{len(rows)} rows for {len(LOCS)}x{N_TILES}"
+    assert len(digests(root)) == len(rows)
+
+    for loc_id in {r["loc_id"] for r in rows}:
+        mine = [r for r in rows if r["loc_id"] == loc_id]
+        assert len(mine) == N_TILES
+        pal = Counter(r["palette"] for r in mine)
+        assert pal["twilight_shifted"] >= 2, pal
+        assert pal["blue_orange"] >= 2, pal
+        ident = [r for r in mine
+                 if r["crop"]["scale"] == 1.0 and r["crop"]["shift_frac"] == 0.0]
+        assert len(ident) >= 1, "no exact-identity geometry tile"
+        # blue_orange is floor-only (not in the pool), so it must appear EXACTLY twice —
+        # which is also the check that the floor did not silently become additive.
+        assert pal["blue_orange"] == 2, pal
+        # Every tile index is distinct, so the filenames cannot collide under a draw that
+        # happens to repeat a (palette, scale, shift, aa, q) tuple.
+        assert len({r["tile"] for r in mine}) == N_TILES
+        assert len({r["out"] for r in mine}) == N_TILES
+
+
+def test_independent_mode_draws_are_per_tile_and_seeded(tmp_path):
+    """Same seed → identical bytes; different seed → every free draw moves.
+
+    The control matters more here than in the product mode: with 12 tiles per location an
+    implementation that drew ONE geometry and reused it would still be deterministic, still
+    satisfy the floor, and still look right in a manifest."""
+    _require_inputs()
+    root_a, rows_a = emit_indep(tmp_path, "indep-A", "a")
+    root_a2, rows_a2 = emit_indep(tmp_path, "indep-A", "a2")
+    assert digests(root_a) == digests(root_a2)
+
+    free = [r for r in rows_a if r["tile"] >= 1]      # tile 0 is the reserved identity
+    geo = {(r["loc_id"], r["tile"]): (r["crop"]["scale"], r["crop"]["shift_frac"],
+                                      r["crop"]["shift_angle"]) for r in free}
+    assert len(set(geo.values())) == len(geo), "geometries repeat — the draw is not per-tile"
+
+    _root_b, rows_b = emit_indep(tmp_path, "indep-B", "b")
+    geo_b = {(r["loc_id"], r["tile"]): (r["crop"]["scale"], r["crop"]["shift_frac"],
+                                        r["crop"]["shift_angle"])
+             for r in rows_b if r["tile"] >= 1}
+    assert all(geo[k] != geo_b[k] for k in geo), "a free geometry did not move with the seed"
+    # The reserved slots stay reserved under any seed — that is what makes them a floor.
+    for rows in (rows_a, rows_b):
+        by_loc = defaultdict(list)
+        for r in rows:
+            by_loc[r["loc_id"]].append(r)
+        for mine in by_loc.values():
+            t0 = next(r for r in mine if r["tile"] == 0)
+            assert (t0["crop"]["scale"], t0["crop"]["shift_frac"]) == (1, 0)
+            assert t0["palette"] == "twilight_shifted"
+
+
+def test_independent_mode_aa_and_quality_are_per_tile_draws(tmp_path):
+    """Both AA levels and a spread of qualities appear, and both are per-TILE.
+
+    A fixture that only ever emitted one AA level would let a `--aa` regression through
+    silently, so the assertion is on the presence of both, not on the ratio (12 tiles is far
+    too few to test a 50/50 coin — the corpus-level share is what
+    `tools/v11/verify_cache.py` reads)."""
+    _require_inputs()
+    _root, rows = emit_indep(tmp_path, "indep-A", "a")
+    assert {r["aa"]["level"] for r in rows} == {"aliased", "antialiased"}
+    assert {r["aa"]["mode"] for r in rows} == {"point", "lanczos3"}
+    q = {r["jpg_quality"] for r in rows}
+    assert len(q) > 1 and min(q) >= 60 and max(q) <= 95, q
+    # Per-tile, not per-location: two tiles of ONE location must differ on each axis.
+    for loc_id in {r["loc_id"] for r in rows}:
+        mine = [r for r in rows if r["loc_id"] == loc_id]
+        assert len({r["aa"]["level"] for r in mine}) == 2
+        assert len({r["jpg_quality"] for r in mine}) > 1
+
+
+def test_independent_mode_rejects_a_floor_bigger_than_the_fan_out(tmp_path):
+    """A floor that cannot come out of N is a contradiction, not a clamp."""
+    _require_inputs()
+    lp = write_locs(tmp_path)
+    proc = subprocess.run(
+        [str(BIN), "crop-batch", "--colormaps", str(COLORMAPS), "--locations", str(lp),
+         "--out-root", str(tmp_path / "y"), "--manifest", str(tmp_path / "y.jsonl"),
+         "--tiles", "3", "--palette-pool", POOL,
+         "--floor-palette", "twilight_shifted:2 blue_orange:2"],
+        cwd=str(ROOT), env=cc.default_engine_env(),
+        creationflags=cc.default_creationflags(), capture_output=True, text=True)
+    assert proc.returncode != 0
+    assert "drawn FROM the tiles" in proc.stderr, proc.stderr[-2000:]

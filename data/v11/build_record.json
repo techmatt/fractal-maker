@@ -1,0 +1,486 @@
+{
+  "build": "v11",
+  "mode": "fresh_full_rebuild",
+  "rebuild": "uv run python tools/v11/build_manifest.py",
+  "why_not_an_append": "protocol \u00a71's frozen prefix and a re-randomized split cannot both hold, and the split rule is what v11 changes. Comparability is carried by the four instruments, reproduced location-for-location (GATE 7 pins the census-144).",
+  "artifacts": {
+    "manifest": {
+      "path": "data/v11/manifest.jsonl",
+      "class": "bulk",
+      "rows": 11303
+    },
+    "eval_slice": {
+      "path": "data/v11/eval_slice.jsonl",
+      "class": "bulk",
+      "rows": 2860
+    },
+    "note": "bulk, not durable: both are a deterministic function of the committed label corpus, this module and the config below \u2014 regenerable, and too large to be worth committing (CLAUDE.md's persistent-store convention)."
+  },
+  "config": {
+    "split_seed": 20260808,
+    "eval_share_target": 0.2,
+    "strata": [
+      "fractal_type",
+      "group_has_label_ge3"
+    ],
+    "split_group_relations": [
+      "shared_minibrot_atom",
+      "shared_seed_c",
+      "shared_parent_oid"
+    ],
+    "atom_key_source": "DERIVED from render.cx/cy + provenance.degree (tools/corpus/atom_identity.py), not provenance.atom_key",
+    "loc_id": "dense 0..N-1 over this build's row order; no cross-version meaning",
+    "row_order": "(fractal_type, cx, cy, fw, c_re, c_im, family_params)"
+  },
+  "population": {
+    "labeled_crops": 12637,
+    "labeled_locations": 11303,
+    "manifest_rows": 11303,
+    "neighborhood_groups": 7646,
+    "split_groups": 6096,
+    "split_group_merges": 1550,
+    "split_group_relations_detail": [
+      {
+        "relation": "shared_minibrot_atom",
+        "keys_spanning_groups": 213,
+        "group_merges": 250
+      },
+      {
+        "relation": "shared_dynamical_plane",
+        "keys_spanning_groups": 254,
+        "group_merges": 1300
+      },
+      {
+        "relation": "shared_parent_oid",
+        "keys_spanning_groups": 0,
+        "group_merges": 0
+      }
+    ],
+    "train": 8443,
+    "eval": 2860,
+    "eval_instrument": 1050,
+    "eval_holdout": 1810,
+    "realized_eval_share_all_rows": 0.253,
+    "realized_holdout_share_of_non_instrument": 0.1765,
+    "class_train": {
+      "1": 3862,
+      "2": 2503,
+      "3": 1564,
+      "4": 514
+    },
+    "class_instrument": {
+      "1": 657,
+      "2": 288,
+      "3": 83,
+      "4": 22
+    },
+    "class_holdout": {
+      "1": 919,
+      "2": 497,
+      "3": 296,
+      "4": 98
+    },
+    "per_partition": {
+      "julia:mandelbrot": {
+        "holdout": {
+          "1": 119,
+          "2": 65,
+          "3": 58,
+          "4": 12
+        },
+        "instrument": {
+          "1": 25,
+          "2": 15,
+          "3": 8
+        },
+        "train": {
+          "1": 430,
+          "2": 438,
+          "3": 543,
+          "4": 188
+        }
+      },
+      "julia:multibrot3": {
+        "holdout": {
+          "1": 10,
+          "2": 12,
+          "3": 1,
+          "4": 2
+        },
+        "instrument": {
+          "1": 15,
+          "2": 20,
+          "3": 13,
+          "4": 6
+        },
+        "train": {
+          "1": 52,
+          "2": 102,
+          "3": 46,
+          "4": 22
+        }
+      },
+      "julia:multibrot4": {
+        "holdout": {
+          "1": 7,
+          "2": 9,
+          "3": 8,
+          "4": 20
+        },
+        "instrument": {
+          "1": 6,
+          "2": 21,
+          "3": 16,
+          "4": 8
+        },
+        "train": {
+          "1": 38,
+          "2": 92,
+          "3": 37,
+          "4": 15
+        }
+      },
+      "julia:multibrot5": {
+        "holdout": {
+          "1": 5,
+          "2": 25,
+          "3": 21,
+          "4": 7
+        },
+        "instrument": {
+          "1": 2,
+          "2": 15,
+          "3": 14,
+          "4": 8
+        },
+        "train": {
+          "1": 19,
+          "2": 144,
+          "3": 80,
+          "4": 29
+        }
+      },
+      "mandelbrot": {
+        "holdout": {
+          "1": 585,
+          "2": 122,
+          "3": 69,
+          "4": 21
+        },
+        "instrument": {
+          "1": 347,
+          "2": 165,
+          "3": 26
+        },
+        "train": {
+          "1": 2380,
+          "2": 494,
+          "3": 273,
+          "4": 82
+        }
+      },
+      "multibrot3": {
+        "holdout": {
+          "1": 53,
+          "2": 94,
+          "3": 43,
+          "4": 6
+        },
+        "instrument": {
+          "1": 69,
+          "2": 3
+        },
+        "train": {
+          "1": 221,
+          "2": 397,
+          "3": 144,
+          "4": 29
+        }
+      },
+      "multibrot4": {
+        "holdout": {
+          "1": 55,
+          "2": 64,
+          "3": 24,
+          "4": 8
+        },
+        "instrument": {
+          "1": 65,
+          "2": 8
+        },
+        "train": {
+          "1": 189,
+          "2": 297,
+          "3": 91,
+          "4": 28
+        }
+      },
+      "multibrot5": {
+        "holdout": {
+          "1": 51,
+          "2": 75,
+          "3": 32,
+          "4": 6
+        },
+        "instrument": {
+          "1": 69,
+          "2": 8
+        },
+        "train": {
+          "1": 213,
+          "2": 293,
+          "3": 131,
+          "4": 27
+        }
+      },
+      "phoenix": {
+        "holdout": {
+          "1": 29,
+          "2": 29,
+          "3": 40,
+          "4": 15
+        },
+        "instrument": {
+          "1": 59,
+          "2": 33,
+          "3": 6
+        },
+        "train": {
+          "1": 276,
+          "2": 231,
+          "3": 213,
+          "4": 94
+        }
+      },
+      "phoenix:classic": {
+        "holdout": {
+          "1": 5,
+          "2": 2,
+          "4": 1
+        },
+        "instrument": {},
+        "train": {
+          "1": 44,
+          "2": 15,
+          "3": 6
+        }
+      }
+    },
+    "per_batch_labeled_crops": {
+      "2026-06-23_flat_generate_loose0_v3": 1043,
+      "2026-06-24_guided_descend_rev4": 1176,
+      "2026-06-24_guided_descend_rev4occfix_v2filtered": 1066,
+      "2026-06-25_mining_v3guided_v1": 450,
+      "2026-06-25_scale_2x2_labelset": 600,
+      "2026-06-25_scale_controlled_2x2": 600,
+      "2026-07-05_gather_v6": 640,
+      "2026-07-11_jm3_band_v1": 58,
+      "2026-07-12_blindspot_v6reject_v1": 219,
+      "2026-07-12_jm45_band_v1": 71,
+      "2026-07-17_prospect_run1_baserate_R_v1": 86,
+      "2026-07-17_prospect_run1_baserate_v1": 83,
+      "2026-07-21_phoenix_grid": 500,
+      "2026-07-22_native_multibrot_band_v1": 300,
+      "2026-07-26_anchor_class4_v1": 8,
+      "2026-07-26_minibrot_roster_v2": 487,
+      "2026-07-27_interior_band_v1": 80,
+      "2026-08-01_supply_crawl_exemplar_v1": 60,
+      "2026-08-01_supply_crawl_strat_a_v1": 290,
+      "2026-08-01_supply_crawl_strat_b_v1": 290,
+      "2026-08-01_supply_crawl_uniform_v1": 90,
+      "2026-08-02_label_seeded_v2_a": 291,
+      "2026-08-02_label_seeded_v2_b": 289,
+      "2026-08-03_q4_harvest_ranked_v1": 290,
+      "2026-08-03_q4_near_minibrot_v1": 290,
+      "2026-08-03_q4_uniform_eval_v1": 290,
+      "2026-08-03_v2_sitting_v1": 1000,
+      "2026-08-05_steady_state_dive_v1": 94,
+      "2026-08-05_steady_state_ranked_v1": 396,
+      "2026-08-07_label_run_correction_v1": 437,
+      "2026-08-07_steady_state_v2_backfill_v1": 63,
+      "julia_ladder_j0": 1000
+    },
+    "dropped_biased_in_forced_eval_group": 0
+  },
+  "atom_identity": {
+    "locations_with_an_atom_key": 1906,
+    "rows_that_also_stored_the_column": 1310,
+    "rows_newly_covered_by_the_derivation": 614,
+    "why": "v10 read provenance.atom_key and so covered exactly the six batches that opted in; tools/atlas/sitting_cutter.py withholds the column deliberately. The key is a pure read of the render block, verified against every stored key in the corpus (tools/corpus/test_atom_identity.py), so participation in the split rule no longer depends on which builder wrote the row."
+  },
+  "holdout_strata": [
+    {
+      "stratum": "julia|neg",
+      "groups": 111,
+      "locations": 294,
+      "largest_group": 10,
+      "eval_locations": 59,
+      "realized_share": 0.2007,
+      "granularity": 0.034
+    },
+    {
+      "stratum": "julia|pos",
+      "groups": 62,
+      "locations": 975,
+      "largest_group": 112,
+      "eval_locations": 195,
+      "realized_share": 0.2,
+      "granularity": 0.1149
+    },
+    {
+      "stratum": "julia_multibrot3|neg",
+      "groups": 7,
+      "locations": 39,
+      "largest_group": 13,
+      "eval_locations": 13,
+      "realized_share": 0.3333,
+      "granularity": 0.3333
+    },
+    {
+      "stratum": "julia_multibrot3|pos",
+      "groups": 8,
+      "locations": 71,
+      "largest_group": 32,
+      "eval_locations": 12,
+      "realized_share": 0.169,
+      "granularity": 0.4507
+    },
+    {
+      "stratum": "julia_multibrot4|neg",
+      "groups": 31,
+      "locations": 54,
+      "largest_group": 4,
+      "eval_locations": 11,
+      "realized_share": 0.2037,
+      "granularity": 0.0741
+    },
+    {
+      "stratum": "julia_multibrot4|pos",
+      "groups": 20,
+      "locations": 167,
+      "largest_group": 55,
+      "eval_locations": 33,
+      "realized_share": 0.1976,
+      "granularity": 0.3293
+    },
+    {
+      "stratum": "julia_multibrot5|neg",
+      "groups": 23,
+      "locations": 40,
+      "largest_group": 9,
+      "eval_locations": 8,
+      "realized_share": 0.2,
+      "granularity": 0.225
+    },
+    {
+      "stratum": "julia_multibrot5|pos",
+      "groups": 23,
+      "locations": 197,
+      "largest_group": 44,
+      "eval_locations": 50,
+      "realized_share": 0.2538,
+      "granularity": 0.2234
+    },
+    {
+      "stratum": "mandelbrot|neg",
+      "groups": 2594,
+      "locations": 3487,
+      "largest_group": 8,
+      "eval_locations": 697,
+      "realized_share": 0.1999,
+      "granularity": 0.0023
+    },
+    {
+      "stratum": "mandelbrot|pos",
+      "groups": 299,
+      "locations": 500,
+      "largest_group": 14,
+      "eval_locations": 100,
+      "realized_share": 0.2,
+      "granularity": 0.028
+    },
+    {
+      "stratum": "multibrot3|neg",
+      "groups": 605,
+      "locations": 670,
+      "largest_group": 3,
+      "eval_locations": 134,
+      "realized_share": 0.2,
+      "granularity": 0.0045
+    },
+    {
+      "stratum": "multibrot3|pos",
+      "groups": 196,
+      "locations": 311,
+      "largest_group": 14,
+      "eval_locations": 62,
+      "realized_share": 0.1994,
+      "granularity": 0.045
+    },
+    {
+      "stratum": "multibrot4|neg",
+      "groups": 517,
+      "locations": 557,
+      "largest_group": 4,
+      "eval_locations": 111,
+      "realized_share": 0.1993,
+      "granularity": 0.0072
+    },
+    {
+      "stratum": "multibrot4|pos",
+      "groups": 130,
+      "locations": 198,
+      "largest_group": 6,
+      "eval_locations": 40,
+      "realized_share": 0.202,
+      "granularity": 0.0303
+    },
+    {
+      "stratum": "multibrot5|neg",
+      "groups": 541,
+      "locations": 584,
+      "largest_group": 3,
+      "eval_locations": 117,
+      "realized_share": 0.2003,
+      "granularity": 0.0051
+    },
+    {
+      "stratum": "multibrot5|pos",
+      "groups": 175,
+      "locations": 237,
+      "largest_group": 4,
+      "eval_locations": 47,
+      "realized_share": 0.1983,
+      "granularity": 0.0169
+    },
+    {
+      "stratum": "phoenix|neg",
+      "groups": 216,
+      "locations": 239,
+      "largest_group": 4,
+      "eval_locations": 48,
+      "realized_share": 0.2008,
+      "granularity": 0.0167
+    },
+    {
+      "stratum": "phoenix|pos",
+      "groups": 173,
+      "locations": 363,
+      "largest_group": 26,
+      "eval_locations": 73,
+      "realized_share": 0.2011,
+      "granularity": 0.0716
+    }
+  ],
+  "eval_roles": {
+    "instrument": "the four score-unconditioned registrations, forced 100% eval. UNBIASED. Base rates and version-over-version non-regression read off these only.",
+    "holdout": "a stratified random draw over the remaining split groups. BIASED exactly as training is \u2014 a held-out sample of the population the model is trained on, which is what a calibration cut needs and what a base rate must never be read from."
+  },
+  "partitions_below_min_pos": {
+    "min_pos": 15,
+    "partitions": [
+      "phoenix:classic"
+    ]
+  },
+  "deploy_note": "ACTIVE_CKPT NOT switched; no threshold touched; t_good NOT re-derived; nothing trained by this build."
+}

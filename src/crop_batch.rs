@@ -51,6 +51,25 @@
 //! a true point sample, displaced by at most half a field subpixel. That is the closest
 //! honest scheme, and it is why the AA spec below names a *mode*, not a supersample factor.
 //!
+//! ## Two fan-out modes
+//!
+//! **Product** (the default, v8b's shape): `--geoms × --aa × palettes`, where the palettes
+//! are `--palettes` plus `--draw-palettes` sampled once per LOCATION, and every (palette,
+//! AA) cell shares the same geometries.
+//!
+//! **Independent** (`--tiles N`, the v11 recipe): N tiles per location, each one draw from
+//! the joint distribution — its own palette (uniform over `--palette-pool`, with
+//! replacement), geometry, AA level and JPEG quality, from its own seed slot. The axes are
+//! then decorrelated across the corpus instead of crossed within a location. `--floor-
+//! palette <name>:<count>` and `--floor-identity <n>` reserve the low slots so a guaranteed
+//! minimum (the deploy-matched map, the labeler's map, the exact deploy composition) is
+//! present on every location; the reservation comes out OF the N, never on top of it.
+//!
+//! The two cost the same: every tile is a full resample+colourize in both, so the choice is
+//! about what the network sees, not about render budget. Independent mode does pay one more
+//! percentile stretch per tile on the beautiful families (each tile owns its crop window,
+//! so the normalization cache no longer has `--geoms` hits per entry).
+//!
 //! ## Determinism and replay
 //!
 //! Every draw (crop geometry, drawn palettes, JPG quality) comes from a `SplitMix64` seeded
@@ -125,6 +144,11 @@ fn slot_seed(tag: u64, loc_id: u64, slot: u64) -> u64 {
 const SLOT_GEOM: u64 = 1_000;
 const SLOT_PALETTE: u64 = 2_000;
 const SLOT_QUALITY: u64 = 3_000;
+/// Independent mode only: the per-tile AA coin and the per-tile palette draw. Separate
+/// namespaces from `SLOT_PALETTE` (the product mode's per-LOCATION sample) so the two
+/// modes cannot alias, and from each other so adding an axis never reshuffles the rest.
+const SLOT_AA: u64 = 4_000;
+const SLOT_TILE_PALETTE: u64 = 5_000;
 
 // --------------------------------------------------------------------------- //
 // Tile axes
@@ -668,6 +692,121 @@ fn plan_tiles(args: &CropBatchArgs, aa: &[AaLevel], fg: &FieldGeom, loc: &Loc, t
     out
 }
 
+/// The parsed `--floor-palette` reservation: `(name, count)` pairs, in flag order.
+///
+/// A floor is drawn **from** the N tiles, never added to them — it reserves the first
+/// `sum(count)` slots of the location's fan-out. That is the whole difference between a
+/// floor and a bonus (`tools/apportion.py` makes the same distinction with `preseed`), and
+/// it is why the reservation is applied before the uniform draw rather than after it.
+fn parse_floor(specs: &[String]) -> Result<Vec<(String, usize)>, String> {
+    let mut out = Vec::new();
+    for s in specs {
+        let (name, n) = s.rsplit_once(':').ok_or_else(|| {
+            format!("--floor-palette entry '{s}' must be <palette>:<count>, e.g. 'blue_orange:2'")
+        })?;
+        let n: usize = n
+            .parse()
+            .map_err(|_| format!("--floor-palette entry '{s}': '{n}' is not a count"))?;
+        if name.is_empty() || n == 0 {
+            return Err(format!("--floor-palette entry '{s}' has an empty name or a zero count"));
+        }
+        out.push((name.to_string(), n));
+    }
+    Ok(out)
+}
+
+/// The floor's slot→palette expansion: `[twilight_shifted, twilight_shifted, blue_orange,
+/// blue_orange]` for `twilight_shifted:2 blue_orange:2`.
+fn floor_slots(floor: &[(String, usize)]) -> Vec<String> {
+    floor.iter().flat_map(|(n, c)| std::iter::repeat(n.clone()).take(*c)).collect()
+}
+
+/// **Independent mode** (`--tiles N`): N tiles per location, each drawing its own palette,
+/// geometry, AA level and JPEG quality from its own seed slot.
+///
+/// This is not the product fan-out with different numbers. Under the v8b product recipe a
+/// location's tiles share `--geoms` distinct fields and every (palette, AA) cell sees the
+/// same geometries; here each tile is one draw from the joint distribution, so the axes are
+/// decorrelated across the corpus rather than crossed within a location. Both cost the same
+/// — every tile is a full resample+colourize either way — so the choice is entirely about
+/// what the network sees.
+///
+/// The **floor** occupies the low slots: `floor_slots` fixes the palette of the first
+/// `F = Σ counts` tiles and `--floor-identity` fixes the geometry of the first `I` to the
+/// exact identity framing. Everything above those indices is a free draw, and a floor
+/// palette that is also in the pool can be drawn again — the floor is a minimum, not a quota.
+fn plan_tiles_independent(
+    args: &CropBatchArgs,
+    aa: &[AaLevel],
+    fg: &FieldGeom,
+    loc: &Loc,
+    tag: u64,
+    n_tiles: usize,
+    floor: &[String],
+) -> Vec<TileSpec> {
+    let mut out = Vec::with_capacity(n_tiles);
+    for tile in 0..n_tiles {
+        // -- palette: reserved by the floor, else uniform over the pool WITH replacement.
+        let palette = match floor.get(tile) {
+            Some(p) => p.clone(),
+            None => {
+                let mut rng = SplitMix64(slot_seed(tag, loc.loc_id, SLOT_TILE_PALETTE + tile as u64));
+                args.palette_pool[rng.below(args.palette_pool.len())].clone()
+            }
+        };
+        // -- geometry: the exact identity on the reserved low slots, else a fresh draw.
+        let geom = if tile < args.floor_identity {
+            Geom::identity()
+        } else {
+            Geom::draw(
+                slot_seed(tag, loc.loc_id, SLOT_GEOM + tile as u64),
+                args.scale_lo,
+                args.scale_hi,
+                args.shift_frac_max,
+            )
+        };
+        let (src_x0, src_y0, ratio) = fg.window(geom);
+        // -- AA: a uniform draw over the declared levels (two levels => the 50/50 coin).
+        let level = {
+            let mut rng = SplitMix64(slot_seed(tag, loc.loc_id, SLOT_AA + tile as u64));
+            &aa[rng.below(aa.len())]
+        };
+        // -- quality: uniform integer in [lo, hi].
+        let q = if args.jpg_quality_hi > args.jpg_quality_lo {
+            let mut rng = SplitMix64(slot_seed(tag, loc.loc_id, SLOT_QUALITY + tile as u64));
+            let span = (args.jpg_quality_hi - args.jpg_quality_lo) as usize + 1;
+            args.jpg_quality_lo + rng.below(span) as u8
+        } else {
+            args.jpg_quality_lo
+        };
+        // The tile index leads the filename. In the product mode (palette, geom, ss) is a
+        // uniqueness key; under independent draws it is not — two free slots may land on
+        // the same palette and round to the same 4-dp scale/shift — so uniqueness is made
+        // structural rather than left to the draw.
+        let name = format!(
+            "t{tile:02}__{palette}__s{:.4}__sh{:.4}__{}__q{q}.jpg",
+            geom.scale, geom.shift_frac, level.label
+        );
+        out.push(TileSpec {
+            tile,
+            // Each tile owns its geometry here, so the beautiful path's per-crop
+            // normalization cache is keyed on the tile — a shared key would hand tile B
+            // the percentile stretch of tile A's window.
+            geom_idx: tile,
+            geom,
+            aa_label: level.label.clone(),
+            aa_mode: level.mode,
+            palette,
+            jpg_quality: q,
+            src_x0,
+            src_y0,
+            ratio,
+            out: format!("{}/{}/{}", args.out_root.trim_end_matches('/'), loc.loc_id, name),
+        });
+    }
+    out
+}
+
 fn manifest_row(loc: &Loc, fg: &FieldGeom, t: &TileSpec, args: &CropBatchArgs,
                 bailout: f64, profile: &str, incomplete: bool) -> String {
     let (ex, ey) = fg.realized_extend();
@@ -877,8 +1016,46 @@ pub fn run_crop_batch(args: &CropBatchArgs) -> Result<(), String> {
     if aa.is_empty() {
         return Err("--aa needs at least one <label>:<mode> entry".into());
     }
-    if args.palettes.is_empty() && args.draw_palettes == 0 {
-        return Err("no palettes: pass --palettes and/or --palette-pool with --draw-palettes".into());
+    let floor_spec = parse_floor(&args.floor_palette)?;
+    let floor = floor_slots(&floor_spec);
+    match args.tiles {
+        Some(n) => {
+            // Independent mode owns the whole fan-out, so the product flags must not be
+            // half-set: a run that passed both would silently render one of them.
+            if n == 0 {
+                return Err("--tiles must be > 0".into());
+            }
+            if args.palette_pool.is_empty() {
+                return Err("--tiles needs --palette-pool (the per-tile palette draw)".into());
+            }
+            if args.draw_palettes > 0 {
+                return Err("--draw-palettes is the product mode's per-LOCATION sample; \
+                            --tiles draws a palette per TILE. Pass one or the other."
+                    .into());
+            }
+            if floor.len() > n {
+                return Err(format!(
+                    "--floor-palette reserves {} of {n} tiles — the floor is drawn FROM the \
+                     tiles, not added to them",
+                    floor.len()
+                ));
+            }
+            if args.floor_identity > n {
+                return Err(format!("--floor-identity {} exceeds --tiles {n}", args.floor_identity));
+            }
+        }
+        None => {
+            if !floor.is_empty() || args.floor_identity > 0 {
+                return Err("--floor-palette/--floor-identity only apply to --tiles \
+                            (independent-draw) mode"
+                    .into());
+            }
+            if args.palettes.is_empty() && args.draw_palettes == 0 {
+                return Err(
+                    "no palettes: pass --palettes and/or --palette-pool with --draw-palettes".into(),
+                );
+            }
+        }
     }
 
     if let Some(replay) = &args.replay {
@@ -891,7 +1068,10 @@ pub fn run_crop_batch(args: &CropBatchArgs) -> Result<(), String> {
     let mut locs: Vec<Loc> = Vec::new();
     for (i, line) in text.lines().enumerate() {
         let line = line.trim();
-        if line.is_empty() {
+        // `#` lines are the plan's own header. A bulk plan file resolves out-of-tree, away
+        // from the module that wrote it, so it carries the command that rebuilds it —
+        // which is only possible if the reader tolerates a comment.
+        if line.is_empty() || line.starts_with('#') {
             continue;
         }
         locs.push(parse_loc(line, locs.len(), args).map_err(|e| format!("line {}: {e}", i + 1))?);
@@ -912,7 +1092,13 @@ pub fn run_crop_batch(args: &CropBatchArgs) -> Result<(), String> {
     let cm_text = std::fs::read_to_string(&args.colormaps)
         .map_err(|e| format!("read {}: {e}", args.colormaps))?;
     let library = parse_colormaps(&cm_text).map_err(|e| format!("parse {}: {e}", args.colormaps))?;
-    let mut names: Vec<String> = args.palettes.clone();
+    let mut names: Vec<String> = if args.tiles.is_some() {
+        // Independent mode never applies `--palettes` (the product mode's always-on list);
+        // building those palettes would only hide a typo in the floor.
+        floor.clone()
+    } else {
+        args.palettes.clone()
+    };
     names.extend(args.palette_pool.iter().cloned());
     names.sort();
     names.dedup();
@@ -932,14 +1118,21 @@ pub fn run_crop_batch(args: &CropBatchArgs) -> Result<(), String> {
     let probe = FieldGeom::build(args.width, args.height, args.field_ss, args.extend, 1.0);
     let (ex, ey) = probe.realized_extend();
     let n_pal = args.palettes.len() + args.draw_palettes;
+    let fanout = match args.tiles {
+        Some(n) => format!(
+            "{n} independent tiles/loc (pool {}, floor {:?}, identity {})",
+            args.palette_pool.len(),
+            floor_spec,
+            args.floor_identity
+        ),
+        None => format!("{} geoms x {} AA x {n_pal} palettes", args.geoms, aa.len()),
+    };
     eprintln!(
-        "crop-batch: {} locations x {} geoms x {} AA x {} palettes = {} tiles; field {}x{} \
+        "crop-batch: {} locations x [{}] = {} tiles; field {}x{} \
          (ss{}, pad {}/{}, realized extend {:.5}/{:.5}), q{}..{}{}",
         locs.len(),
-        args.geoms,
-        aa.len(),
-        n_pal,
-        locs.len() * args.geoms * aa.len() * n_pal,
+        fanout,
+        locs.len() * args.tiles.unwrap_or(args.geoms * aa.len() * n_pal),
         probe.sub_w,
         probe.sub_h,
         args.field_ss,
@@ -968,7 +1161,10 @@ pub fn run_crop_batch(args: &CropBatchArgs) -> Result<(), String> {
 
     locs.par_iter().for_each(|loc| {
         let fg = FieldGeom::build(args.width, args.height, args.field_ss, args.extend, loc.fw);
-        let tiles = plan_tiles(args, &aa, &fg, loc, tag);
+        let tiles = match args.tiles {
+            Some(n) => plan_tiles_independent(args, &aa, &fg, loc, tag, n, &floor),
+            None => plan_tiles(args, &aa, &fg, loc, tag),
+        };
         // The manifest row is DERIVED, not rendered — emitted even for a resumed
         // (skipped) tile, so a resumed run still produces a complete manifest.
         let profile_str = match loc.resolve(args.width) {
@@ -1252,6 +1448,23 @@ pub struct CropBatchArgs {
     /// without replacement).
     #[arg(long, default_value_t = 0)]
     pub draw_palettes: usize,
+
+    /// **Independent-draw mode**: emit exactly N tiles per location, each drawing its own
+    /// palette (uniform over `--palette-pool`, with replacement), geometry, AA level and
+    /// JPEG quality from its own seed slot. Replaces the `geoms x AA x palettes` product;
+    /// `--geoms`, `--palettes` and `--draw-palettes` do not apply.
+    #[arg(long)]
+    pub tiles: Option<usize>,
+
+    /// Guaranteed floor inside `--tiles`, as `<palette>:<count>` — reserves the LOW tile
+    /// slots. Drawn FROM the N tiles, never added to them.
+    #[arg(long, num_args = 0.., value_delimiter = ' ')]
+    pub floor_palette: Vec<String>,
+
+    /// How many of the `--tiles` carry the exact identity framing (dead centre, scale 1.0
+    /// — the deploy composition). Reserves the low slots, alongside `--floor-palette`.
+    #[arg(long, default_value_t = 0)]
+    pub floor_identity: usize,
 
     /// Per-tile JPEG quality draw, lower bound. `lo == hi` disables the draw (and is what
     /// reproduces the v4..v10 cache's flat q85).
