@@ -59,6 +59,7 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "atlas", ROOT / "tools" / "cor
         sys.path.insert(0, str(_p))
 from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
+import corpus_common as cc                                   # noqa: E402  (engine launch defaults)
 import harvest_log_registry as hreg                          # noqa: E402
 import location as loc_mod                                   # noqa: E402
 import paths                                                 # noqa: E402
@@ -95,6 +96,11 @@ WALK_LEDGER = ROOT / "data/discovery/fresh_runs/prospect_run1/outcome_ledger.jso
 WORK = paths.bulk("data/atlas/tau_h_rederive")
 ARTIFACT = ROOT / "data" / "atlas" / f"tau_h_base_{ACTIVE_VERSION}.json"
 WORKERS = 4            # concurrent render-one PROCESSES (project cap)
+# Threads PER engine process. `DEFAULT_ENGINE_THREADS` (7) is the ONE-process default and
+# WORKERS=4 of them would oversubscribe this 12-core box 28-to-12; 3 x 4 = 12 fits it exactly.
+# Passed explicitly for the reason the convention states: a multi-process fan-out has no
+# standing number and must not inherit the single-process one.
+RENDER_THREADS = 3
 
 
 # --------------------------------------------------------------------------- #
@@ -140,6 +146,59 @@ def _harvest_rows(runs=None):
               + (f"  ({no_geom} pre-geometry rows skipped)" if no_geom else "")
               + (f"  ({off_partition} phoenix rows skipped)" if off_partition else ""))
     return out
+
+
+def truncation_record(runs):
+    """Per-partition, the LEFT-TRUNCATION LEVELS the harvest pool is actually made of.
+
+    THE CONFOUND, MADE FIRST-CLASS. `caveat` has always said the harvest arm is left-truncated
+    at "the previous head's tau_h" — singular, as if there were one level. There is not. Every
+    harvest row carries the tau_h that was LIVE FOR ITS RUN (`steered_frontier._log_harvest`),
+    and pooling 22 runs pools four distinct tau eras: mandelbrot alone spans 0.0229 (the v10
+    era) to 0.7041 (the v8 era), a 30x range, and the (1-keep) quantile over that mixture is
+    an upper bound whose TIGHTNESS varies by partition according to how its rows happen to be
+    split across eras. A partition drawn mostly from a 0.02-truncated run is nearly
+    untruncated; one drawn mostly from a 0.77-truncated run is barely a sample at all.
+
+    Returned per partition: every distinct level with its row count, the min/max, and the
+    row-weighted mean — so a reader can see the mixture instead of being told a single number.
+    Computed over the POOL the registry offers (not the post-`sample` draw), which is the same
+    thing whenever `--per-partition` exceeds every pool size, and `per_partition` is stamped
+    beside it so a capped run is visibly a different statement."""
+    by_part = defaultdict(lambda: defaultdict(int))
+    by_run = defaultdict(dict)
+    for run in runs:
+        for r in run_record.require_rows(run.log):
+            if r.get("cx") is None or r.get("fw") is None or r["partition"] == "phoenix":
+                continue
+            t = r.get("tau_h")
+            if t is None:                       # pre-tau_h-stamp rows: counted, never guessed
+                by_part[r["partition"]]["unstamped"] += 1
+                continue
+            t = round(float(t), 6)
+            by_part[r["partition"]][t] += 1
+            by_run[run.name][r["partition"]] = t
+    out = {}
+    for part, levels in sorted(by_part.items()):
+        num = {k: v for k, v in levels.items() if k != "unstamped"}
+        n = sum(num.values())
+        out[part] = dict(
+            levels={f"{k:.6f}": v for k, v in sorted(num.items())},
+            n_levels=len(num), n_rows=n,
+            min=(min(num) if num else None), max=(max(num) if num else None),
+            row_weighted_mean=(sum(k * v for k, v in num.items()) / n if n else None),
+            unstamped_rows=levels.get("unstamped", 0),
+        )
+    return dict(
+        by_partition=out,
+        by_run={r: dict(sorted(v.items())) for r, v in sorted(by_run.items())},
+        note=("Each harvest log is left-truncated at the tau_h that was LIVE FOR ITS OWN RUN, "
+              "not at one shared level: the pool mixes tau eras and the levels above are the "
+              "mixture. The harvest arm therefore stays an UPPER bound on the untruncated "
+              "quantile, and the bound is NOT uniformly tight across partitions — read "
+              "`row_weighted_mean` against `tau_h_base` per partition before treating any "
+              "single harvest number as near-unbiased."),
+    )
 
 
 def _walk_rows():
@@ -209,7 +268,15 @@ def _render(row, w, h, ss, out: Path) -> bool:
            "--supersample", str(ss), "--maxiter", str(auto_maxiter(float(row["fw"]))),
            "--palette", PALETTE, "--jpg-quality", str(JPG_Q), "--out", str(out)
            ] + loc_mod.render_one_flags(loc)
-    p = subprocess.run(cmd, capture_output=True, text=True)
+    # Through the committed helpers, not a bare `subprocess.run` (CLAUDE.md § Runtime
+    # discipline). This launcher fans out WORKERS=4 engine processes, so the per-process 7 is
+    # NOT the number to inherit — `DEFAULT_ENGINE_THREADS` is the one-process default and
+    # "multiple parallel engine processes has no standing number", so threads are sized for
+    # the actual N against the box's 12 logical cores and passed explicitly. Missing the
+    # BELOW_NORMAL flag is what made the adoption run contend with the desktop for 26 min.
+    p = subprocess.run(cmd, capture_output=True, text=True,
+                       env=cc.default_engine_env(threads=RENDER_THREADS),
+                       creationflags=cc.default_creationflags())
     return p.returncode == 0 and out.exists()
 
 
@@ -287,6 +354,38 @@ def assert_rows_current(rows, rows_jsonl):
                          f"(no p_ge4 column) — delete {rows_jsonl} and re-run")
 
 
+# The fields that make one derivation a DIFFERENT STATEMENT from another, rather than a
+# re-run of the same one. Population size and the estimator's settings; NOT the derived
+# values, which are exactly what a legitimate re-run is allowed to move.
+SUPERSEDE_KEYS = ("per_partition", "n_rows_harvest", "n_rows_walk", "keep", "seed", "combine")
+
+
+def assert_not_superseding(out: Path, art: dict, overwrite: bool) -> None:
+    """Refuse to overwrite an artifact that records a derivation over a DIFFERENT population.
+
+    A tau_h artifact is the RECORD of a derivation over a stated population, and the file name
+    carries only the model version — so a re-derivation at a different size silently destroys
+    the record of what production was actually served. It nearly did: the 2026-08-08
+    enlargement re-derives v11 over 64,365 rows where the adoption-era v11 artifact was 3,492,
+    and both want to be `tau_h_base_v11.json`. The remedy is to ARCHIVE the old one under a
+    distinguishing name (`tau_h_base_v11_adoption.json`) and pass `--overwrite`, so replacing a
+    record is a deliberate act that leaves the superseded one readable.
+
+    Re-running the SAME derivation is not superseding and passes untouched — the guard compares
+    `SUPERSEDE_KEYS`, never the derived values, or every legitimate re-run would trip it."""
+    if not out.exists() or overwrite:
+        return
+    old = json.loads(out.read_text(encoding="utf-8"))
+    differs = {k: (old.get(k), art[k]) for k in SUPERSEDE_KEYS if old.get(k) != art[k]}
+    if differs:
+        raise SystemExit(
+            f"{out} already records a derivation over a DIFFERENT population/settings "
+            f"({', '.join(f'{k}: {a} -> {b}' for k, (a, b) in differs.items())}). It is the "
+            f"record of what production was served; overwriting it loses that. Archive it "
+            f"under a distinguishing name and re-run with --overwrite, or write this "
+            f"derivation elsewhere with --out.")
+
+
 # --------------------------------------------------------------------------- #
 # the estimator
 # --------------------------------------------------------------------------- #
@@ -354,6 +453,10 @@ def main():
                     help="skip rendering; re-derive from the cached rows.jsonl")
     ap.add_argument("--work", type=Path, default=WORK)
     ap.add_argument("--out", type=Path, default=ARTIFACT)
+    ap.add_argument("--overwrite", action="store_true",
+                    help="replace an existing artifact that recorded a DIFFERENT population "
+                         "or settings (archive the old one first — it is the record of what "
+                         "production was served)")
     args = ap.parse_args()
 
     import production_seeder as ps                        # noqa: E402 (heavy)
@@ -428,22 +531,28 @@ def main():
         n_rows_harvest=len(h_rows), n_rows_walk=len(w_rows),
         harvest_runs=[r.name for r in harvest_runs],
         harvest_registry=hreg.registry_record(harvest_runs),
+        harvest_truncation=truncation_record(harvest_runs),
         walk_ledger=str(WALK_LEDGER),
         t_good={p: ps.t_good_for(p) for p in partitions},
         t_good_status={p: ps.t_good_status(p) for p in partitions},
         tau_h_base=final, harvest_estimate=h_val, walk_estimate=w_val,
         harvest_detail=h_det, walk_detail=w_det, arms_used=arms_used,
         pooled_harvest=h_pool, pooled_walk=w_pool, pooled_fallback_allowed=False,
-        caveat=("The harvest population is LEFT-TRUNCATED at the previous head's tau_h, so "
-                "its quantile is an UPPER bound on the untruncated value; the walk-outcome "
-                "population is untruncated but off-distribution (walk outcomes, not frontier "
-                "candidates). combine=min takes the conservative side."),
+        caveat=("The harvest population is LEFT-TRUNCATED at the tau_h each run was serving "
+                "WHEN IT RAN — not at one level; see `harvest_truncation` for the per-run and "
+                "per-partition mixture and the non-uniformity it implies. Its quantile is "
+                "therefore an UPPER bound on the untruncated value, loosely for a partition "
+                "whose rows come from high-tau eras and nearly tight for one whose rows come "
+                "from low-tau eras. The walk-outcome population is untruncated but "
+                "off-distribution (walk outcomes, not frontier candidates). combine=min takes "
+                "the conservative side."),
         no_pooling=("EVERY partition is cut on its OWN population. An arm with fewer than "
                     "min_n=5 own passing rows is UNAVAILABLE and contributes nothing; the "
                     "pooled cross-family quantile is computed and reported but NEVER served. "
                     "`arms_used` names, per partition, which arms existed and which was "
                     "taken — read it before comparing a partition against a prior version."),
     )
+    assert_not_superseding(args.out, art, args.overwrite)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(art, indent=2), encoding="utf-8")
 
