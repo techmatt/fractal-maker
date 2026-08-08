@@ -74,7 +74,7 @@ def check_replay(cm, recipe, n) -> dict:
     src.write_text("".join(json.dumps(r) + "\n" for r in sample), encoding="utf-8")
     dest = OUT / "replay_tiles"
     dest.mkdir(parents=True, exist_ok=True)
-    for p in dest.glob("*"):
+    for p in dest.rglob("*.jpg"):
         p.unlink()
     pr = subprocess.run(
         [str(BIN), "crop-batch", "--replay", str(src), "--replay-out-root", str(dest),
@@ -87,7 +87,10 @@ def check_replay(cm, recipe, n) -> dict:
     ident, differ, missing = 0, [], []
     for r in sample:
         orig = Path(r["out"])
-        repl = dest / orig.name
+        # `--replay-out-root` MIRRORS `<loc_id>/<slot>.jpg` rather than writing flat —
+        # a tile's basename carries no loc_id, so a flat root would collide on the
+        # reserved slot 0 of two locations that drew the same quality.
+        repl = dest / str(r["loc_id"]) / orig.name
         if not orig.exists() or not repl.exists():
             missing.append(str(orig))
             continue
