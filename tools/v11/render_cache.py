@@ -137,9 +137,29 @@ def run_chunk(i: int, chunk: Path, recipe: dict, timeout: int) -> tuple[bool, fl
     return pr.returncode == 0, time.time() - t0, tail
 
 
+def rel_out(out: str, abs_root: str) -> str:
+    """A tile's `out` as a REPO-RELATIVE path, matching v10's `cache_manifest.path`.
+
+    The engine is handed an absolute `--out-root` (it must be — the cache is bulk and lives
+    out-of-tree) and stamps that absolute path into all 361,696 rows. Leaving it there bakes
+    one machine's `ARTIFACTS_ROOT` into an artifact whose whole claim is that it regenerates
+    anywhere, and defeats the resolver that exists to place it. So the concat rewrites it to
+    `data/v11/aug_cache/<loc_id>/<name>`, which a reader resolves with `paths.bulk()` exactly
+    as it resolves v10's `path`. Separators are normalized on the way (the engine joins its
+    own `/` onto a Windows root, so raw rows carry both).
+
+    Consequence worth stating: `crop-batch --replay` writes to `out` when no
+    `--replay-out-root` is given, and a relative `out` resolves against the CWD. Every replay
+    against this manifest must pass `--replay-out-root` (`tools/v11/verify_cache.py` does)."""
+    norm = out.replace("\\", "/")
+    root = abs_root.replace("\\", "/").rstrip("/")
+    return CACHE_DIR + norm[len(root):] if norm.startswith(root + "/") else norm
+
+
 def finish(n_chunks: int) -> int:
     """Concatenate the per-chunk manifests, in chunk order, into the one cache manifest."""
     dest = paths.bulk(CACHE_MANIFEST)
+    abs_root = str(paths.bulk(CACHE_DIR))
     n = 0
     with dest.open("w", encoding="utf-8") as out:
         for i in range(n_chunks):
@@ -147,9 +167,12 @@ def finish(n_chunks: int) -> int:
             if not p.exists():
                 continue
             for line in p.read_text(encoding="utf-8").splitlines():
-                if line.strip():
-                    out.write(line + "\n")
-                    n += 1
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                row["out"] = rel_out(row["out"], abs_root)
+                out.write(json.dumps(row) + "\n")
+                n += 1
     return n
 
 

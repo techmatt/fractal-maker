@@ -86,7 +86,7 @@ def check_replay(cm, recipe, n) -> dict:
 
     ident, differ, missing = 0, [], []
     for r in sample:
-        orig = Path(r["out"])
+        orig = paths.bulk(r["out"])
         # `--replay-out-root` MIRRORS `<loc_id>/<slot>.jpg` rather than writing flat —
         # a tile's basename carries no loc_id, so a flat root would collide on the
         # reserved slot 0 of two locations that drew the same quality.
@@ -132,7 +132,9 @@ def main() -> None:
         for p in d.glob("*.jpg"):
             on_disk[str(p)] = p.stat().st_size
             total_bytes += on_disk[str(p)]
-    planned = {r["out"] for r in cm}
+    # `out` is repo-relative in the concatenated manifest (render_cache.rel_out),
+    # so it is resolved the same way the tiles were written.
+    planned = {str(paths.bulk(r["out"])) for r in cm}
     missing = sorted(planned - set(on_disk))
     orphan = sorted(set(on_disk) - planned)
     report["agreement"] = {"manifest_rows": len(cm), "tiles_on_disk": len(on_disk),
