@@ -29,10 +29,10 @@ and overriding three recorded fields:
     jpg_quality   -> 85                (v4..v10's flat canonical quality)
 
 That is the v4..v10 canonical view's construction, realized through v11's field pipeline.
-It is also CHECKABLE rather than argued: the 38 eval locations whose tile 0 was ALREADY
-antialiased at q85 must replay byte-identically to the cache tile, and `--verify` asserts
-exactly that. A path that cannot reproduce the tiles it already has is not the path that
-made them.
+It is also CHECKABLE rather than argued: every location whose tile 0 was ALREADY antialiased
+at q85 must replay byte-identically to the cache tile, and `--verify` asserts exactly that
+and prints the population it checked (45 as built). A path that cannot reproduce the tiles it
+already has is not the path that made them.
 
 Storage class: bulk. 2,860 JPGs + a manifest, a deterministic function of the committed
 corpus, `tools/v11/build_{manifest,plan}.py`, the cache and this module. Registered in
@@ -64,6 +64,11 @@ COLORMAPS = ROOT / "data" / "v11" / "colormaps.json"
 
 CACHE_MANIFEST = "data/v11/cache_manifest.jsonl"
 EVAL_SLICE = "data/v11/eval_slice.jsonl"
+MANIFEST = "data/v11/manifest.jsonl"
+# The 2026-08-07 correction sitting, both legs. Train-side rows included in the canonical
+# set for the pre-registered CONTAMINATED companion read — see `eval_loc_ids`.
+CORRECTION_BATCHES = ("2026-08-07_label_run_correction_v1",
+                      "2026-08-07_steady_state_v2_backfill_v1")
 CANON_DIR = "data/v11/eval_canon"
 CANON_MANIFEST = "data/v11/eval_canon_manifest.jsonl"
 RECORD = ROOT / "data" / "v11" / "eval_canon_record.json"
@@ -84,7 +89,19 @@ def read_jsonl(p: Path):
 
 
 def eval_loc_ids() -> set[int]:
-    return {r["loc_id"] for r in read_jsonl(paths.bulk(EVAL_SLICE))}
+    """The population the certification battery scores: the eval slice, PLUS the correction
+    sitting's train-side rows.
+
+    Those 413 rows are not eval and never become eval — they are v11 TRAINING data. They are
+    canonicalized anyway because `prereg_v11.json` pre-registers a CONTAMINATED companion
+    read over all 500 correction rows beside the 87-row instrument, and a companion that
+    silently covered only the 87 already-eval ones would be the pre-registered read narrowed
+    after the fact. Every number computed on them is stamped in-sample for v11; the stamp is
+    the point, and it is cheaper to render them than to weaken the record."""
+    ids = {r["loc_id"] for r in read_jsonl(paths.bulk(EVAL_SLICE))}
+    ids |= {r["loc_id"] for r in read_jsonl(paths.bulk(MANIFEST))
+            if any(b in r["source"] for b in CORRECTION_BATCHES)}
+    return ids
 
 
 def canon_rel(loc_id: int) -> str:
@@ -211,8 +228,10 @@ def write_manifest(ids, rows, *, incomplete: bool) -> None:
     RECORD.write_text(json.dumps({
         "build": "v11-eval-canon",
         "what": ("the deploy-canonical view (twilight_shifted / identity framing / "
-                 "antialiased:lanczos3 / q85) for every v11 eval location — the one cell "
-                 "the independent-draw cache does not guarantee"),
+                 "antialiased:lanczos3 / q85) for every location the v11 certification "
+                 "battery scores — the eval slice plus the correction sitting's train-side "
+                 "rows (the pre-registered CONTAMINATED companion read). The one cell the "
+                 "independent-draw cache does not guarantee."),
         "rebuild": "uv run python tools/v11/build_eval_canon.py",
         "verify": "uv run python tools/v11/build_eval_canon.py --verify",
         "path": {"tiles": CANON_DIR, "manifest": CANON_MANIFEST, "class": "bulk"},
