@@ -49,16 +49,25 @@ data/classifier/**/eval_scores_v7.jsonl filter=lfs diff=lfs merge=lfs -text
 # index.
 #   v8's plan.jsonl + cache_manifest.jsonl had LFS rules here until 2026-08-03, when both
 #   files were deleted: 146 MB of rows that tools/v8/build_plan.py reproduces byte-for-byte
-#   from the committed manifest. v9's and v10's pairs below are NOT in the same position —
-#   v10 extends v9's cache and its recipe-parity gate reads v9's plan directly.
+#   from the committed manifest. v9's pair followed on 2026-08-08 on the same argument, once
+#   the recipe-parity gate that read it was retired with the aug-cache trees; v10's pair is
+#   the one still tracked.
 data/classifier/**/eval_scores_v8.jsonl filter=lfs diff=lfs merge=lfs -text
-# v9 build artifacts — same shape and size class as v8's (7,117 locations x 24 slots =
-# 170,808 rows each), so the two per-render files go through LFS on the same rule. Also
-# negated by exact path in .gitignore, so a normal `git add` works.
-data/v9/plan.jsonl filter=lfs diff=lfs merge=lfs -text
-data/v9/cache_manifest.jsonl filter=lfs diff=lfs merge=lfs -text
+# v9 build artifacts.
+#   v9's plan.jsonl + cache_manifest.jsonl had LFS rules here until 2026-08-08, when both
+#   files were deleted: 146 MB of rows that tools/v9/build_plan.py reproduces byte-for-byte
+#   from data/v8/manifest.jsonl (measured — sha256 equal on both, 2026-08-08). They were
+#   tracked to arm the v10 recipe-parity gate on a cache extension; the gate was retired the
+#   same day along with data/v{9,10}/aug_cache. v10's pair below is NOT in the same position
+#   yet — nothing has retired what reads it.
 data/classifier/**/eval_scores_v9.jsonl filter=lfs diff=lfs merge=lfs -text
-data/v9/eval_scores_v9.jsonl filter=lfs diff=lfs merge=lfs -text
+#   data/v9/eval_scores_v9.jsonl had an LFS rule here for UNIFORMITY with v10's and v11's,
+#   not for its size (281 KB). It was removed 2026-08-08 with the pair above: LFS is not a
+#   side door, so tests/test_large_tracked_blobs.py requires every LFS-tracked path to sit
+#   under an allowlist entry that covers something over 1 MiB, and once v9's plan and
+#   cache_manifest went there was nothing large left under data/v9/ to hang the exception
+#   on. A 281 KB text file in plain git is the honest answer; the uniformity argument was
+#   uniformity with two files that no longer exist.
 # v10 build artifacts — same shape and size class as v8/v9's (8,382 locations x 24 slots
 # = 201,168 rows each), so the two per-render files go through LFS on the same rule. Also
 # negated by exact path in .gitignore, so a normal `git add` works.
@@ -67,8 +76,10 @@ data/v10/cache_manifest.jsonl filter=lfs diff=lfs merge=lfs -text
 data/v10/eval_scores_v10.jsonl filter=lfs diff=lfs merge=lfs -text
 # v11's frozen eval slice. v11 commits NO plan/cache_manifest pair — both are bulk and
 # out-of-tree (.gitignore, and artifacts._is_v11_build_rows) — so this is the only v11 row
-# file with an LFS rule, and it is here to keep `data/v<N>/eval_scores_<N>.jsonl` uniform
-# across v9/v10/v11 rather than for its size. The weight itself needs no line: the
+# file with an LFS rule, and at 1.4 MB it is the only one of the three that earns the rule
+# on its own size — v10's rides data/v10/'s big pair and v9's went plain on 2026-08-08 (see
+# above), so `data/v<N>/eval_scores_<N>.jsonl` is no longer uniform and no longer should be.
+# The weight itself needs no line: the
 # `data/classifier/*/model_best.pt` glob above already covers v11.
 data/v11/eval_scores_v11.jsonl filter=lfs diff=lfs merge=lfs -text
 # (data/q4_stage1/fields/*.bin was tracked through LFS here on 2026-08-04 and untracked the

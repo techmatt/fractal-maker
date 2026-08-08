@@ -240,18 +240,12 @@ def test_only_the_2026_08_batches_record_an_atom_key():
 
 
 # --------------------------------------------------------------------------- #
-# 6. The expensive one: prefix plan rows are byte-identical to v9's.
+# 6. RETIRED 2026-08-08 — `test_prefix_plan_rows_are_byte_identical_to_v9s`.
+#
+# It was the slow guard on GATE A: every prefix plan row byte-identical to its v9 row, the
+# claim that made reusing 170,760 v9 tiles legitimate. Both aug-cache trees were deleted
+# 2026-08-08 and `data/v9/plan.jsonl` demoted to bulk() with them, so the test's referent
+# is gone twice over. DELETED rather than skipped: a fixture that skips on a missing input
+# reads green, and green-by-absence is the failure mode this file exists to avoid (the same
+# call `tools/v8/test_v8_cache_alignment.py` made on 2026-08-03).
 # --------------------------------------------------------------------------- #
-@pytest.mark.slow
-def test_prefix_plan_rows_are_byte_identical_to_v9s():
-    """The claim that makes reusing 170,760 v9 tiles legitimate. If a prefix row differed
-    on ANY field — cap, palette, geometry — the tile on disk would not be the tile the
-    plan asks for, and nothing downstream would notice: the trainer reads whatever JPG is
-    at that path. `slow` because it parses two plans totalling ~120 MB."""
-    v9 = {r["out"]: r for r in _jsonl("data/v9/plan.jsonl")}
-    v10 = _jsonl("data/v10/plan.jsonl")
-    prefix = [r for r in v10 if int(Path(r["out"]).parent.name) <= 7140]
-    assert len(prefix) == 7115 * 24 == 170760
-    bad = [r["out"] for r in prefix if v9.get(r["out"]) != r]
-    assert not bad, f"{len(bad)} prefix plan rows differ from v9's, e.g. {bad[:3]}"
-    assert len(v10) - len(prefix) == 1267 * 24

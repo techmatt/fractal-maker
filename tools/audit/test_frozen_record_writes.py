@@ -163,13 +163,16 @@ def test_prereg_refuses_a_rewritten_amendment_but_allows_an_appended_one(prereg,
     assert json.loads(dest.read_text(encoding="utf-8"))["amendments"][-1]["n"] == 99
 
 
-@pytest.mark.slow
-@pytest.mark.skipif(not PREREG_REC.exists(), reason="no committed v10 pre-registration")
-def test_prereg_build_still_reproduces_the_committed_record():
-    """What makes --adopt safe at all: the bars are still a function of the committed inputs.
-    `slow` because build() reads data/v{9,10}/plan.jsonl — 116 MB, ~9 s."""
-    prereg = _load("_prereg_v10_build", "tools/v10/prereg.py")
-    assert json.dumps(prereg.build(), indent=2) == PREREG_REC.read_text(encoding="utf-8")
+# RETIRED 2026-08-08 — `test_prereg_build_still_reproduces_the_committed_record`.
+#
+# It re-ran `prereg.build()` and asserted it reproduced the committed record byte for byte,
+# which is what made `--adopt` safe. `build()` reads `data/v9/plan.jsonl`, demoted to bulk()
+# on 2026-08-08 with the aug-cache trees it described, so the input is absent by design and
+# the test could only pass after a rebuild. DELETED rather than made skip-on-missing: this
+# file's whole subject is writes that silently falsify a record, and a guard that goes green
+# because its input vanished is that failure in test form. The refusal half of the contract
+# is untouched and still fast — `--adopt` will not rewrite an existing record, proved above
+# with `build()` pinned.
 
 
 # --------------------------------------------------------------------------- #

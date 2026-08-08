@@ -184,12 +184,18 @@ REGISTRY: list[Entry] = [
           "bulk() and out-of-tree. CANARY.", canary=True),
     Entry("data/v9/", KEEP, None, "tracked",
           "v9 classifier build — the v8 corpus re-rendered at the raised iteration cap "
-          "(docs/design/auto_maxiter.md). Same shape and same reason as data/v8/ above: "
-          "plan/cache_manifest are 170,808 rows each (~54/92 MB, LFS) and are the ONLY "
-          "thing mapping a cached tile back to a location. It has no manifest.jsonl of "
-          "its own on purpose — it reads v8's and records that file's sha256, so 'same "
-          "corpus' is a checked claim rather than a copy that can drift. The aug_cache "
-          "JPGs are bulk() and out-of-tree. durable() + canaried. CANARY.", canary=True),
+          "(docs/design/auto_maxiter.md). What is left here is the RECORD: roster, "
+          "colormaps, build_metadata, eval products. It has no manifest.jsonl of its own "
+          "on purpose — it reads v8's and records that file's sha256, so 'same corpus' is "
+          "a checked claim rather than a copy that can drift. plan.jsonl + "
+          "cache_manifest.jsonl (146 MB) were DELETED 2026-08-08: byte-reproducible from "
+          "v8's manifest by tools/v9/build_plan.py (proved by rebuild + sha256), and the "
+          "v10 recipe-parity gate that was the reason to track them was retired the same "
+          "day. The aug_cache tree itself is gone (12.09 GiB, 2026-08-08). FORWARD: nothing "
+          "here is over threshold now, and the live writer is tools/v9/build_plan.py, which "
+          "still writes the 146 MB pair back to data/v9/{plan,cache_manifest}.jsonl "
+          "(bulk(), in-tree, untracked). This line is the disposition that write lands "
+          "under.", forward=True),
     Entry("data/v11/", KEEP, None, "tracked",
           "v11 classifier build — ONE tracked row file, unlike v8/v9/v10. The manifest, "
           "plan and cache_manifest are bulk and out-of-tree (the split is a seeded "

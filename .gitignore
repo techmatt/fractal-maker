@@ -391,11 +391,17 @@ __pycache__/
 #
 # Re-included BY EXACT PATH, not by directory, for the v8 reason: a bare `!/data/v9/`
 # would also re-include an accidental in-tree aug_cache/ rebuild.
+#   v9's plan.jsonl + cache_manifest.jsonl had negations here (and LFS rules in
+#   .gitattributes) until 2026-08-08, when both were deleted: 146 MB of rows that
+#   `tools/v9/build_plan.py` reproduces BYTE-IDENTICALLY from data/v8/manifest.jsonl plus
+#   the committed colormap sources (proved by rebuilding over the originals and comparing
+#   sha256, 2026-08-08). They were tracked to arm the v10 recipe-parity gate; that gate was
+#   retired the same day with the two aug-cache trees it protected. The pair is bulk() now
+#   — deliberately untracked, byte-reproducible, and NOT a RELOCATED_PREFIXES entry, so it
+#   resolves in-tree at the same path every reader already opens.
 !/data/v9/
 /data/v9/*
 !/data/v9/build_metadata.json
-!/data/v9/plan.jsonl
-!/data/v9/cache_manifest.jsonl
 !/data/v9/aug_roster.json
 # The merged render library the v9 tiles were coloured through — asserted byte-identical
 # to v8's at build time, but committed anyway for v8's reason: a plan row names a palette

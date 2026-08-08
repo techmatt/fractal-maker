@@ -174,8 +174,13 @@ ALLOWLIST = [
     Entry("data/v8/", EXCEPTION,
           "v8 build record: manifest + plan + cache_manifest (~148 MB, mostly LFS). The "
           "split assignment the LIVE deployed checkpoint was trained under."),
-    Entry("data/v9/", EXCEPTION,
-          "v9 build record, same shape as v8's (~152 MB, LFS)."),
+    # data/v9/ was one entry until 2026-08-08 ("v9 build record, same shape as v8's, ~152
+    # MB, LFS"). Its plan.jsonl + cache_manifest.jsonl were the only OVER-THRESHOLD files
+    # under it and both were de-tracked that day — byte-reproducible from v8's manifest, and
+    # the v10 recipe-parity gate that read the plan was retired with the aug-cache trees.
+    # The line went because assertion 2 (no dead entry) is what removes a spent exception,
+    # and it took v9's LFS rule with it: eval_scores_v9.jsonl is 281 KB, was LFS only for
+    # uniformity with v10's, and had nothing over 1 MiB left under data/v9/ to sit under.
     Entry("data/v10/", EXCEPTION,
           "v10 build record: v8's manifest appended with 1,267 maneuver-view locations "
           "(8,382 x 24 slots, ~180 MB, LFS). Carries the split assignment for the third "

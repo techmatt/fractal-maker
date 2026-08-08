@@ -88,14 +88,27 @@ READS `data/v8/manifest.jsonl` — v9 has no manifest of its own, because "same 
 same split, same loc_ids" is the whole point. Its sha256 is asserted against the committed
 one before anything is written.
 
-Writes (all `paths.durable()`):
-  data/v9/colormaps.json       the merged render library (asserted == v8's, byte for byte)
-  data/v9/aug_roster.json      the recipe, the pool, the held-out names, the draw rule,
-                               + the cap policy block that is the only intended difference
-  data/v9/plan.jsonl           one row per render, for `v4-render-batch` (now with maxiter)
-  data/v9/cache_manifest.jsonl one row per cached tile, for the trainer's loader
-  data/v9/build_metadata.json  the manifest's build block, copied from v8, + `aug_recipe`
-The JPGs themselves are `paths.bulk()` -> ARTIFACTS_ROOT/data/v9/aug_cache/, out of tree.
+Writes:
+  data/v9/colormaps.json       durable() — the merged render library (asserted == v8's)
+  data/v9/aug_roster.json      durable() — the recipe, the pool, the held-out names, the
+                               draw rule, + the cap policy block that is the only
+                               intended difference
+  data/v9/build_metadata.json  durable() — the manifest's build block, copied from v8
+  data/v9/plan.jsonl           bulk()    — one row per render, for `v4-render-batch`
+  data/v9/cache_manifest.jsonl bulk()    — one row per cached tile, for the loader
+The JPGs are gone: `data/v9/aug_cache` (170,808 tiles / 12.09 GiB) was deleted 2026-08-08
+with v10's, under the ACTIVE+PREVIOUS weights-retention policy — a rollback to v10 uses its
+weights, not its cache, and v11 is a fresh crop-batch build with no chain to either.
+
+WHY THE PAIR IS bulk() AND THE OTHER THREE ARE durable(). Both were tracked (LFS, 146 MB)
+to arm the v10 recipe-parity gate, which read data/v9/plan.jsonl directly; that gate was
+retired 2026-08-08 with the trees it protected, so nothing live claims them. They are a
+byte-identical function of `data/v8/manifest.jsonl` and the committed colormap sources —
+measured, not argued: rebuilt over the originals on 2026-08-08 and sha256-equal on both
+(56,424,452 B and 96,018,396 B). The other three are NOT byte-reproducible: `reuse_audit`
+inside the roster and build_metadata is a live disk probe frozen into a record, and a
+re-run today writes `v8_tree_retained_as_rollback: false` where the committed record says
+`true` — which was correct when it was written. Those stay tracked and frozen.
 """
 from __future__ import annotations
 
@@ -875,12 +888,19 @@ def main() -> None:
     roster_p.write_text(
         json.dumps(carry_marginal(roster_committed, recipe_block, a.measure_marginal,
                                   ROSTER_OUT), indent=2), encoding="utf-8")
-    with paths.durable(PLAN_OUT, mkparents=True).open("w", encoding="utf-8") as f:
-        for row in plan_rows:
-            f.write(json.dumps(row) + "\n")
-    with paths.durable(CACHE_MANIFEST_OUT, mkparents=True).open("w", encoding="utf-8") as f:
-        for row in cm_rows:
-            f.write(json.dumps(row) + "\n")
+    # PLAN_OUT and CACHE_MANIFEST_OUT are bulk(), not durable(), as of 2026-08-08. They are
+    # byte-reproducible from data/v8/manifest.jsonl + the committed colormap sources by this
+    # very function, so they rebuild rather than being restored — and their .gitignore
+    # negations went with the files, which means durable() would now REFUSE them (the exact
+    # trap v8's deletion sprang: the rebuild the deletion rests on could not complete).
+    # Neither is a RELOCATED_PREFIXES entry, so bulk() resolves them in-tree at the same
+    # path every reader already opens, merely untracked.
+    for rel, rws in ((PLAN_OUT, plan_rows), (CACHE_MANIFEST_OUT, cm_rows)):
+        p = paths.bulk(rel)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("w", encoding="utf-8") as f:
+            for row in rws:
+                f.write(json.dumps(row) + "\n")
     amend_metadata(recipe_block, a.measure_marginal)
 
     print(f"WROTE {ROSTER_OUT}")

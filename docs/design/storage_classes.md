@@ -280,12 +280,18 @@ locations keep naming `data/v9/aug_cache`, 1,267 appended ones render into `data
 the legitimacy of reusing those 170,760 tiles rests on GATE A in
 `tools/v10/build_plan.py::assert_recipe_parity`: every prefix plan row must be byte-identical
 to its **v9** row. So the pair that arms the live recipe-parity gate is now **v9's**, not
-v8's. `data/v9/plan.jsonl` has three live readers and none is absence-tolerant — that gate
-(an unguarded `read_text`), `tools/v10/prereg.py`, and the `slow`
-`test_v10_build.py::test_prefix_plan_rows_are_byte_identical_to_v9s`. **It is no longer a
-deletion candidate at all**: it is the referent the current training generation is verified
-against. `data/v9/cache_manifest.jsonl` (96 MB) is read only by `train_v9`/`eval_v9`/v9's
-own `verify_cache_alignment`, all v9-scoped.
+v8's. **It is no longer a deletion candidate at all**: it is the referent the current
+training generation is verified against. `data/v9/cache_manifest.jsonl` (96 MB) is read only
+by `train_v9`/`eval_v9`/v9's own `verify_cache_alignment`, all v9-scoped.
+
+**[SUPERSEDED 2026-08-08 — the v9 pair is DELETED and the gate is RETIRED.]** See the next
+section. One correction to the paragraph above, because the miscount is the reusable part:
+it said `data/v9/plan.jsonl` had **three** non-absence-tolerant readers. It had **eight** —
+`tools/v10/{build_plan (the gate),prereg,verify_cache_alignment}.py`, the `slow`
+`test_v10_build.py::test_prefix_plan_rows_are_byte_identical_to_v9s`, and
+`tools/v9/{render_cache,verify_cache_alignment,measure_cap_effect,estimate_cap_cost}.py`.
+The three were the readers of the *gate's* concern, not the readers of the path; the
+one-line grep that finds all eight is the same one the 2026-08-02 re-check ran for v8.
 
 **[2026-08-03] Both preconditions met, plus one the list did not name.**
 
@@ -316,8 +322,107 @@ own `verify_cache_alignment`, all v9-scoped.
 merely could not authenticate, the one condition under which you must not prune). It was
 **not run**. Any actual `.git/lfs` reclaim goes through the batch-API + sha256 procedure in
 [`artifacts_resolver.md`](artifacts_resolver.md) §5.
+
+### The v9 + v10 aug caches, and v9's `plan` + `cache_manifest` — TAKEN 2026-08-08
+
+**What went.** `data/v{9,10}/aug_cache` under `ARTIFACTS_ROOT` — **201,216 tiles /
+15,353,500,833 B (14.299 GiB)**, measured immediately before the delete so that the trees
+removed were provably the trees classified (170,808 / 12.090 GiB and 30,408 / 2.209 GiB).
+No backup copies. And `data/v9/{plan,cache_manifest}.jsonl` — **146.0 MB**, de-tracked and
+deleted. `[measured 2026-08-08, scratch/storage_cleanup/aug_cache_deletion.json]`
+
+**Why the KEEP verdict of 2026-08-02 does not survive.** It rested on "deleting v9's tree
+blocks any v10 retrain". Under ACTIVE + PREVIOUS (the section above) **v10 will never
+retrain**: a rollback to v10 uses its *weights*, and v11 is a fresh crop-batch build whose
+manifest/plan/cache are all `bulk()` with no chain to either tree. A cache kept to enable a
+retrain nobody will run is the "keep the machinery" failure this doc opens with.
+
+**Liveness was checked two ways before anything was removed, because one way misses the
+readers that build their paths from data.**
+
+  * *Path-literal grep over source.* Every non-doc hit on `data/v{9,10}/aug_cache` is v9- or
+    v10-scoped machinery, a synthetic resolver test (`tmp_path`, no disk dependency), or
+    `tools/v11/eval_v11.py::tile_path_diagnostic` — the one cross-version reader, and it is
+    **absence-tolerant**: it returns `{"error": "...v10 cache tiles are not on disk"}` rather
+    than raising. Its verdict is already banked in `data/v11/eval_results_v11.json`, so what
+    the deletion costs is the ability to *re-run* v11's instrument check, not the check.
+  * *Which committed RECORDS dereference into the trees.* Grep over all 1,108 tracked
+    `data/**`+`labels/**` JSON/JSONL: exactly six files, all of them v9's and v10's own build
+    artifacts (`v{9,10}/plan.jsonl`, `v{9,10}/cache_manifest.jsonl`, `v10/aug_roster.json`,
+    `v10/build_metadata.json`). No label batch, no discovery ledger, no classifier config
+    names a tile. This is the method that catches `classifier/data_v4.py`, which opens
+    `row["path"]` and contains no `aug_cache` literal at all.
+
+**The pair's rebuild is byte-identical, and it was measured with the caches already
+deleted.** `uv run python tools/v9/build_plan.py` regenerates `plan.jsonl`
+(56,424,452 B) and `cache_manifest.jsonl` (96,018,396 B) sha256-equal to the committed
+originals. Two things the run also established:
+
+  * **It is a TWO-STEP rebuild, and the first step is v8's.** v9's parity gate compares
+    against `data/v8/{plan,cache_manifest}.jsonl`, themselves deleted 2026-08-03, so
+    `tools/v8/build_plan.py` (~15 s) runs first or `_require_v8` raises. v8's three tracked
+    outputs came back byte-identical in the same run, which re-proves the 2026-08-03 record.
+  * **The other three v9 outputs are NOT byte-reproducible, and that is why they stay
+    tracked.** A plain re-run rewrites `aug_roster.json` and `build_metadata.json` with a
+    different `reuse_audit`: `v8_tree_retained_as_rollback` flips `true` → `false` and
+    `prior_cache_trees_on_disk` empties, because that block is a **live disk probe frozen
+    into a record** and the disk moved under it. Same shape as `marginal_cost`, which
+    `carry_marginal` already protects; `reuse_audit` has no such guard, so a rebuild must
+    restore these two from git (`git checkout -- data/v9/`) or it falsifies what was true on
+    2026-07-31. `[measured 2026-08-08, scratch/storage_cleanup/v9_rebuild_parity.json]`
+
+**The gate is retired, not weakened.** GATE A in
+`tools/v10/build_plan.py::assert_recipe_parity` proved every prefix plan row byte-identical
+to its v9 row — the claim that made reusing 170,760 v9 tiles legitimate. With both trees
+gone it can only compare a plan against a plan, and arming it was the whole reason the v9
+pair was tracked. GATE B (colormap library identity, two committed files) is untouched.
+Retired alongside, and **deleted rather than left to skip**: the `slow`
+`test_v10_build.py::test_prefix_plan_rows_are_byte_identical_to_v9s` and the `slow`
+`test_frozen_record_writes.py::test_prereg_build_still_reproduces_the_committed_record`
+(it re-ran `prereg.build()`, which reads v9's plan). A guard that goes green because its
+input vanished is the failure both files exist to catch.
+
+**The machinery went with the data.** Seven modules deleted, each one either a driver of a
+render into a deleted tree or a measurement of one: `tools/v{9,10}/render_cache.py`,
+`tools/v{9,10}/verify_cache_alignment.py`, `tools/v9/{estimate_cap_cost,measure_cap_effect}.py`,
+`tools/v10/estimate_extend_cost.py`. `tools/v9/build_plan.py` **stays** — it is what makes
+the pair `bulk()` rather than lost.
+
+**Deliberately NOT done.** `data/v10/{plan,cache_manifest}.jsonl` (179 MB, LFS) stay
+tracked: the same argument applies to them, but their producer's inputs are v10's own
+manifest and the demotion was not in scope. `data/v9/aug_cache` keeps its
+`RELOCATED_PREFIXES` literal even though `render_cache.py` is gone — `_is_aug_cache` matches
+it as a *class* regardless, so dropping the literal changes no behaviour and removing it
+would only make an accidental in-tree rebuild depend on one predicate instead of two.
+`git lfs prune` was **not** run, for the reason in the v8 section above.
 `[measured: 298,820,096 B across the four files, 2026-07-31, `ls -l data/v8 data/v9`;
 146,377,248 B of that removed 2026-08-03]`
+
+## The 20 MB gate is a sanity cutoff; the test is future usefulness — SET 2026-08-08
+
+**The principle, stated once:**
+
+> **The 20 MB commit gate is a sanity cutoff, not the test. The test is future usefulness.
+> Labels, and the generative provenance of what was rendered, are the critical record;
+> most else is optional scaffolding toward an eventual compact repo.**
+
+It is the operational form of "the first question is usefulness, not cost" at the top of
+this doc, and it settles the case that section leaves open: what to do when something is
+*small enough to keep* and *has no named future use*. Under a size test it stays, because
+nothing complains. Under this one it goes, and its machinery — index, manifest, plan,
+registry line — goes with it.
+
+Two corollaries, both exercised on 2026-08-08:
+
+- **A record can outlive the thing it records and still be worth keeping**, when it is the
+  provenance of a render someone may want to explain: `data/v9/aug_roster.json` stays after
+  its 170,808 tiles are deleted, because it is the recipe those tiles were drawn under.
+- **The scaffolding around a record does not inherit that.** `data/v9/{plan,cache_manifest}.jsonl`
+  are 146 MB of per-tile rows that the roster plus `tools/v9/build_plan.py` regenerate
+  byte-identically, so they are `bulk()` — the minimum needed to regenerate is what gets kept,
+  and that minimum is the recipe, not the expansion of it.
+
+`[verdict: Matt, 2026-08-08]`
 
 ## Weights retention: ACTIVE + PREVIOUS per model family — SET 2026-08-08
 

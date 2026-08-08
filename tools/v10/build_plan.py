@@ -24,20 +24,27 @@ So the plan spans TWO trees, and each stays self-describing:
 
 `v4-render-batch` skips any row whose output exists, so the full 201,168-row plan is
 itself the resume: the first pass skips the 170,760 tiles already on disk and renders the
-30,408 new ones. GATE A below proves the prefix rows are byte-identical to v9's, which is
-what makes "extend" a checked claim rather than an intention.
+30,408 new ones.
+
+GATE A IS RETIRED — 2026-08-08, and this is the record of what it was for. It proved every
+prefix plan row byte-identical to its v9 row, which is what made reusing 170,760 v9 tiles
+legitimate. Both trees are now GONE (`data/v{9,10}/aug_cache`, 201,216 tiles / 14.30 GiB,
+deleted 2026-08-08 under the ACTIVE+PREVIOUS weights-retention policy: a rollback to v10
+uses its WEIGHTS, and v11 is a fresh crop-batch build with no chain to either). There is
+nothing on disk left for a row to be identical *to*, so the gate can no longer make its
+claim — and holding `data/v9/plan.jsonl` tracked to arm a gate over deleted tiles is the
+"keep the machinery for reproducing something nobody will run again" failure the durability
+contract names. GATE B (the colormap library) is untouched: it compares two committed files
+and is unaffected by the tiles. `[docs/design/storage_classes.md]`
 
 TWO PREFIX LOCATIONS ARE GONE. v10's manifest displaces two v8 TRAIN rows (loc_id 2849 and
 4354 — an appended location bridged each into a forced-eval group; see
-build_manifest.py GATE 11). Their 48 v9 tiles stay on disk and are simply not named by the
-v10 plan. `verify_cache_alignment.py` names them as EXPECTED orphans rather than counting
-the tree complete, because a location dir the manifest does not name is exactly how a tile
-count can exceed a plan and still read as done.
+build_manifest.py GATE 11). Their 48 v9 tiles were simply not named by the v10 plan.
 
   uv run python tools/v10/build_plan.py [--dry-run]
 
-READS `data/v10/manifest.jsonl` (the population) and `data/v9/{plan,aug_roster,
-colormaps}.json*` (the recipe, asserted unchanged).
+READS `data/v10/manifest.jsonl` (the population) and `data/v9/{aug_roster,colormaps}.json`
+(the recipe, asserted unchanged). It no longer reads `data/v9/plan.jsonl` — see GATE A above.
 
 Writes (all `paths.durable()`):
   data/v10/colormaps.json       the merged render library (asserted == v9's, byte for byte)
@@ -73,7 +80,6 @@ MANIFEST = "data/v10/manifest.jsonl"
 V10_META_SRC = "data/v10/build_metadata.json"
 V9_ROSTER = "data/v9/aug_roster.json"
 V9_COLORMAPS = "data/v9/colormaps.json"
-V9_PLAN = "data/v9/plan.jsonl"
 META_PATH = "data/v10/build_metadata.json"
 COLORMAPS_OUT = "data/v10/colormaps.json"
 ROSTER_OUT = "data/v10/aug_roster.json"
@@ -100,16 +106,20 @@ def emit_location(r, drawable, cache_dir, plan_rows, cm_rows):
         v9p.V9_CACHE_DIR = saved
 
 
-def assert_recipe_parity(plan_rows, prefix_ids, library) -> dict:
+def assert_recipe_parity(library) -> dict:
     """Prove against the committed v9 artifacts that the RECIPE did not move.
 
-    Two claims, both load-bearing:
-      A. every plan row of a PREFIX location is byte-identical to its v9 row — same cap,
-         same palette, same geometry, same `out` path. This is what makes reusing the v9
-         tiles legitimate; if it fails, the tiles on disk are not the tiles the plan asks
-         for and the whole extension is unsound.
+    ONE claim survives:
       B. the colormap library rebuilds byte-identically from the same committed sources.
-    Any failure aborts before a byte is written."""
+
+    GATE A — every PREFIX plan row byte-identical to its v9 row — was RETIRED 2026-08-08
+    with the tiles it protected. It existed so that reusing 170,760 v9 tiles was a checked
+    claim; `data/v{9,10}/aug_cache` are deleted, so there is no tile for a row to be
+    identical to and the gate could only ever compare a plan against another plan. Keeping
+    it would mean keeping `data/v9/plan.jsonl` tracked (146 MB across the pair) to arm a
+    check with no subject. See the module docstring.
+
+    Failure aborts before a byte is written."""
     out = {}
     v9_cm = ROOT / V9_COLORMAPS
     built = json.dumps(library, indent=1)
@@ -117,28 +127,9 @@ def assert_recipe_parity(plan_rows, prefix_ids, library) -> dict:
         raise SystemExit(f"colormap library differs from {V9_COLORMAPS} — the palette "
                          f"sources moved under the recipe")
     out["colormaps_identical_to_v9"] = True
-
-    v9_rows = [json.loads(l) for l in
-               (ROOT / V9_PLAN).read_text(encoding="utf-8").splitlines() if l.strip()]
-    v9_by_out = {r["out"]: r for r in v9_rows}
-    prefix = [r for r in plan_rows if int(Path(r["out"]).parent.name) in prefix_ids]
-    missing = [r for r in prefix if r["out"] not in v9_by_out]
-    if missing:
-        raise SystemExit(
-            f"{len(missing)} prefix plan rows name a tile v9's plan never had — the seeded "
-            f"draw moved. e.g. {[m['out'] for m in missing[:3]]}")
-    drift = []
-    for r in prefix:
-        o = v9_by_out[r["out"]]
-        if r != o:
-            drift.append((r["out"], {k: (o.get(k), r.get(k))
-                                     for k in set(r) | set(o) if r.get(k) != o.get(k)}))
-    if drift:
-        raise SystemExit(f"GATE A FAIL: {len(drift)} prefix plan rows differ from v9's — "
-                         f"the tiles on disk are not the tiles this plan asks for. "
-                         f"e.g. {drift[:3]}")
-    out["prefix_plan_rows_byte_identical_to_v9"] = len(prefix)
-    out["v9_plan_rows_not_reused"] = len(v9_rows) - len(prefix)
+    out["gate_a_prefix_plan_parity"] = (
+        "RETIRED 2026-08-08 with data/v{9,10}/aug_cache; the committed "
+        "data/v10/aug_roster.json keeps the counts it passed on")
     return out
 
 
@@ -199,7 +190,7 @@ def main() -> None:
     if mit_hi >= ac.MAXITER_MAX:
         raise SystemExit(f"cap clamp {ac.MAXITER_MAX} is BINDING at {mit_hi} — the deep "
                          f"tail is being truncated; re-read docs/design/auto_maxiter.md")
-    parity = assert_recipe_parity(plan_rows, prefix_ids, library)
+    parity = assert_recipe_parity(library)
 
     print("\n--- RECIPE PARITY vs the committed v9 artifacts ---")
     for k, v in parity.items():
@@ -243,8 +234,7 @@ def main() -> None:
             "and v10's tree holds exactly the extension."),
         "displaced_prefix_locations": (
             "2 v8 loc_ids (2849, 4354) are no longer in the manifest; their 48 v9 tiles "
-            "stay on disk unnamed by this plan and are declared EXPECTED orphans by "
-            "verify_cache_alignment.py."),
+            "were unnamed by this plan (EXPECTED orphans while the tree existed)."),
         "single_variable": (
             "the LABELS are this retrain's only variable. The wider palette set stays "
             "PARKED for a second consecutive build and is still wanted for the rebuild "
