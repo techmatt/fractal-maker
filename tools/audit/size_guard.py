@@ -207,14 +207,21 @@ REGISTRY: list[Entry] = [
     Entry("data/v10/", KEEP, None, "tracked",
           "v10 classifier build — v8's manifest APPENDED with 1,267 maneuver-view "
           "locations from the 2026-08 supply crawl and label-seeded harvest. Same shape "
-          "and same reason as data/v8/ and data/v9/ above: plan/cache_manifest are 201,168 "
-          "rows each (~63/108 MB, LFS) and are the ONLY thing mapping a cached tile back "
-          "to a location. Unlike v9 it DOES carry its own manifest.jsonl (2.2 MB) and "
-          "eval_slice.jsonl, because the population moved: a third forced-eval instrument "
-          "(maneuver_uniform_v1, 90 loc) joins the census and the mandelbrot floor, and a "
-          "split assignment that exists only as a diff against another file is one nobody "
-          "can read. The aug_cache JPGs are bulk() and out-of-tree. durable() + canaried. "
-          "CANARY.", canary=True),
+          "and same reason as data/v8/ and data/v9/ above. What is over threshold here now "
+          "is manifest.jsonl (2.2 MB) — and unlike v9 it HAS one, because the population "
+          "moved: a third forced-eval instrument (maneuver_uniform_v1, 90 loc) joins the "
+          "census and the mandelbrot floor, and a split assignment that exists only as a "
+          "diff against another file is one nobody can read. plan.jsonl + "
+          "cache_manifest.jsonl (179 MB) were DELETED 2026-08-08, last of the three: "
+          "byte-reproducible from data/v10/manifest.jsonl plus v9's committed roster and "
+          "colormaps by tools/v10/build_plan.py (proved by rebuild + sha256), and their "
+          "reason to be tracked — the only map from a cached tile back to a location — went "
+          "with data/v{9,10}/aug_cache (14.30 GiB) earlier the same day. FORWARD: the live "
+          "writer is tools/v10/build_plan.py, which still writes the 179 MB pair back to "
+          "data/v10/{plan,cache_manifest}.jsonl (bulk(), in-tree, untracked); this line is "
+          "the disposition that write lands under. aug_roster.json and build_metadata.json "
+          "stay tracked and are NOT reproducible — they hold retired GATE A's frozen counts. "
+          "CANARY.", canary=True, forward=True),
     Entry("data/library_embeddings/", KEEP, None, "mixed",
           "prospect-library CLIP embeddings (embeddings.npz, tracked): unregenerable "
           "except value-approximate under a verdict-sensitive threshold. CANARY.",

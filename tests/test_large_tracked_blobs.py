@@ -181,10 +181,15 @@ ALLOWLIST = [
     # The line went because assertion 2 (no dead entry) is what removes a spent exception,
     # and it took v9's LFS rule with it: eval_scores_v9.jsonl is 281 KB, was LFS only for
     # uniformity with v10's, and had nothing over 1 MiB left under data/v9/ to sit under.
+    # v10's plan.jsonl + cache_manifest.jsonl (179 MB, LFS) were de-tracked 2026-08-08, last
+    # of the v8/v9/v10 set to make the same move for the same reason: byte-reproducible from
+    # the manifest, and the tiles they mapped are gone. Unlike v9's, THIS entry survives it —
+    # manifest.jsonl is 2.2 MB, so assertion 2 (no dead entry) still finds over-threshold
+    # content here, which is also what lets eval_scores_v10.jsonl keep its LFS rule at 293 KB.
     Entry("data/v10/", EXCEPTION,
           "v10 build record: v8's manifest appended with 1,267 maneuver-view locations "
-          "(8,382 x 24 slots, ~180 MB, LFS). Carries the split assignment for the third "
-          "eval instrument (maneuver_uniform_v1), which exists nowhere else."),
+          "(manifest.jsonl, 2.2 MB). Carries the split assignment for the third eval "
+          "instrument (maneuver_uniform_v1), which exists nowhere else."),
     Entry("data/v11/", EXCEPTION,
           "v11 build record — and it is ONE file, which is the difference from v8/v9/v10 "
           "above. v11's manifest, plan and cache_manifest are all bulk and out-of-tree "

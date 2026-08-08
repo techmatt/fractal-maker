@@ -46,13 +46,26 @@ build_manifest.py GATE 11). Their 48 v9 tiles were simply not named by the v10 p
 READS `data/v10/manifest.jsonl` (the population) and `data/v9/{aug_roster,colormaps}.json`
 (the recipe, asserted unchanged). It no longer reads `data/v9/plan.jsonl` — see GATE A above.
 
-Writes (all `paths.durable()`):
-  data/v10/colormaps.json       the merged render library (asserted == v9's, byte for byte)
-  data/v10/aug_roster.json      the recipe + the extension block
-  data/v10/plan.jsonl           one row per render, for `v4-render-batch`
-  data/v10/cache_manifest.jsonl one row per cached tile, for the trainer's loader
-  data/v10/build_metadata.json  the manifest's build block + `aug_recipe`
-The JPGs themselves are `paths.bulk()` -> ARTIFACTS_ROOT/data/v{9,10}/aug_cache/.
+Writes:
+  data/v10/colormaps.json       durable() — the merged render library (asserted == v9's)
+  data/v10/aug_roster.json      durable() — the recipe + the extension block
+  data/v10/build_metadata.json  durable() — the manifest's build block + `aug_recipe`
+  data/v10/plan.jsonl           bulk()    — one row per render, for `v4-render-batch`
+  data/v10/cache_manifest.jsonl bulk()    — one row per cached tile, for the loader
+The JPGs are gone: `data/v{9,10}/aug_cache` (201,216 tiles / 14.30 GiB) was deleted
+2026-08-08 under the ACTIVE+PREVIOUS weights-retention policy.
+
+WHY THE PAIR IS bulk() AND THE OTHER THREE ARE durable(), 2026-08-08. The pair was tracked
+(LFS, 179 MB) because it is the only thing mapping a cached tile back to a location — an
+argument that died with the tiles. It is a byte-identical function of
+`data/v10/manifest.jsonl` + v9's committed roster and colormaps: measured, not argued —
+rebuilt over the originals and sha256-equal on both (65,741,076 B and 113,162,392 B). The
+other three are NOT byte-reproducible, and it is not a disk probe this time but a RETIRED
+GATE: `recipe_parity` inside the roster and build_metadata still holds GATE A's counts
+(`prefix_plan_rows_byte_identical_to_v9: 170760`, `v9_plan_rows_not_reused: 48`) and a
+re-run replaces them with the retirement note, because the gate no longer runs. Those stay
+tracked and frozen — the roster keeps the counts it passed on. RESTORE THEM after any
+rebuild (`git checkout -- data/v10/aug_roster.json data/v10/build_metadata.json`).
 """
 from __future__ import annotations
 
@@ -246,12 +259,27 @@ def main() -> None:
 
     paths.durable(ROSTER_OUT, mkparents=True).write_text(
         json.dumps(recipe_block, indent=2), encoding="utf-8")
-    with paths.durable(PLAN_OUT, mkparents=True).open("w", encoding="utf-8") as f:
-        for row in plan_rows:
-            f.write(json.dumps(row) + "\n")
-    with paths.durable(CACHE_MANIFEST_OUT, mkparents=True).open("w", encoding="utf-8") as f:
-        for row in cm_rows:
-            f.write(json.dumps(row) + "\n")
+    # PLAN_OUT and CACHE_MANIFEST_OUT are bulk(), not durable(), as of 2026-08-08 — the same
+    # move v8's pair made on 2026-08-03 and v9's earlier the same day, for the same reason and
+    # on the same kind of proof: this very function reproduces both BYTE-IDENTICALLY from
+    # data/v10/manifest.jsonl plus v9's committed roster and colormaps (rebuilt over the
+    # originals and sha256-equal on both, 2026-08-08). Their .gitignore negations went with the
+    # files, so durable() would now REFUSE them — the trap v8's deletion sprang, where the
+    # rebuild the deletion's argument rests on could not itself complete. Neither is a
+    # RELOCATED_PREFIXES entry, so bulk() resolves them IN-TREE at the same path every reader
+    # already opens (tools/v10/{eval_v10,prereg,diagnose_selection}.py), merely untracked.
+    #
+    # The other three outputs stay durable() and stay tracked: `aug_roster.json` and
+    # `build_metadata.json` are NOT byte-reproducible — they carry GATE A's frozen counts
+    # (`prefix_plan_rows_byte_identical_to_v9: 170760`), which this builder deliberately no
+    # longer computes now that the gate is retired, so a re-run rewrites the record with the
+    # retirement note instead. Restore them after any rebuild; the roster is the record.
+    for rel, rws in ((PLAN_OUT, plan_rows), (CACHE_MANIFEST_OUT, cm_rows)):
+        p = paths.bulk(rel)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("w", encoding="utf-8") as f:
+            for row in rws:
+                f.write(json.dumps(row) + "\n")
 
     meta_path = paths.durable(META_PATH, mkparents=True)
     meta = json.loads(meta_path.read_text(encoding="utf-8"))

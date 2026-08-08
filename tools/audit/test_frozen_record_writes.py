@@ -87,15 +87,28 @@ def test_both_recipe_writers_are_gated_on_the_measure_flag(ver, rel, meta):
     assert "def amend_metadata(recipe_block: dict, measured: bool)" in src
 
 
-def test_the_v8_derived_pair_is_not_declared_durable():
-    """`data/v8/{plan,cache_manifest}.jsonl` were deleted 2026-08-03 and their .gitignore
-    negations went with them. `durable()` asserts its target is not ignored, so leaving the
-    pair declared durable made THIS SCRIPT — the rebuild the deletion's argument rests on —
-    raise before it could finish. Class follows the decision: byte-reproducible and
-    deliberately untracked is bulk()."""
-    src = (ROOT / "tools/v8/build_plan.py").read_text(encoding="utf-8")
-    assert "paths.durable(PLAN_OUT" not in src and "paths.durable(CACHE_MANIFEST_OUT" not in src
-    assert "paths.bulk(rel)" in src
+# Every version whose {plan,cache_manifest} pair has been de-tracked, with the date. All
+# three went for the same reason — byte-reproducible from the manifest, and the aug_cache the
+# pair mapped is gone — so the guard is one parametrized assertion rather than three copies.
+DETRACKED_PAIRS = [
+    ("tools/v8/build_plan.py", "2026-08-03"),
+    ("tools/v9/build_plan.py", "2026-08-08"),
+    ("tools/v10/build_plan.py", "2026-08-08"),
+]
+
+
+@pytest.mark.parametrize("rel,when", DETRACKED_PAIRS)
+def test_a_detracked_derived_pair_is_not_declared_durable(rel, when):
+    """`data/v{8,9,10}/{plan,cache_manifest}.jsonl` were deleted and their .gitignore
+    negations went with them. `durable()` asserts its target is not ignored, so leaving a
+    pair declared durable makes THAT BUILDER — the rebuild the deletion's argument rests on —
+    raise before it can finish. v8 sprang the trap first (2026-08-03); the guard is
+    parametrized so v9's and v10's de-tracks cannot re-spring it. Class follows the decision:
+    byte-reproducible and deliberately untracked is bulk()."""
+    src = (ROOT / rel).read_text(encoding="utf-8")
+    assert "paths.durable(PLAN_OUT" not in src and "paths.durable(CACHE_MANIFEST_OUT" not in src, \
+        f"{rel}: the pair was de-tracked {when}; durable() would refuse an ignored path"
+    assert "paths.bulk(rel)" in src, f"{rel}: the pair must be written through bulk()"
 
 
 # --------------------------------------------------------------------------- #

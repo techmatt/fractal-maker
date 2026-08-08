@@ -219,7 +219,8 @@ again produce this*. `[verdict: Matt]`
 
 `data/v8/{plan,cache_manifest}.jsonl`, **139.6 MiB** (53,391,652 + 92,985,596 B), one row per
 augmentation tile, are **gone**. What follows is the record of the preconditions and how each
-was met; v9's and v10's pairs are NOT in the same position and are covered at the end.
+was met. v9's and v10's pairs were NOT in the same position when this was written; both
+reached it on 2026-08-08 and are covered at the end.
 
 **The rebuild is byte-identical, and that was measured, not argued.** `uv run python
 tools/v8/build_plan.py` (~15 s) regenerates the pair from `data/v8/manifest.jsonl` plus the
@@ -388,15 +389,64 @@ render into a deleted tree or a measurement of one: `tools/v{9,10}/render_cache.
 `tools/v10/estimate_extend_cost.py`. `tools/v9/build_plan.py` **stays** — it is what makes
 the pair `bulk()` rather than lost.
 
-**Deliberately NOT done.** `data/v10/{plan,cache_manifest}.jsonl` (179 MB, LFS) stay
-tracked: the same argument applies to them, but their producer's inputs are v10's own
-manifest and the demotion was not in scope. `data/v9/aug_cache` keeps its
+**NOT done here — CLOSED the same day, see the next section.** `data/v10/{plan,
+cache_manifest}.jsonl` (179 MB, LFS) stayed tracked through this pass: the same argument
+applied to them, but their producer's inputs are v10's own manifest and the demotion was not
+in scope. `data/v9/aug_cache` keeps its
 `RELOCATED_PREFIXES` literal even though `render_cache.py` is gone — `_is_aug_cache` matches
 it as a *class* regardless, so dropping the literal changes no behaviour and removing it
 would only make an accidental in-tree rebuild depend on one predicate instead of two.
 `git lfs prune` was **not** run, for the reason in the v8 section above.
 `[measured: 298,820,096 B across the four files, 2026-07-31, `ls -l data/v8 data/v9`;
 146,377,248 B of that removed 2026-08-03]`
+
+### v10's `plan` + `cache_manifest` — TAKEN 2026-08-08, closing the item above
+
+**What went.** `data/v10/{plan,cache_manifest}.jsonl` — **178,903,468 B (170.6 MiB)**,
+de-tracked and deleted. That is the last of the three de-tracks; **v8, v9 and v10 have now
+all made the same move for the same reason**, which makes it the rule and not three
+coincidences: *a DERIVED row file is not a record — the manifest it derives from is.*
+
+**Why the "not in scope" of the section above closes rather than persists.** The reason to
+keep the pair was that it is the only map from a cached tile back to a location. The tiles
+went earlier the same day. Nothing else changed and nothing else needed to.
+
+**The rebuild is byte-identical, proved before the delete.** `uv run python
+tools/v10/build_plan.py` regenerates `plan.jsonl` (65,741,076 B) and `cache_manifest.jsonl`
+(113,162,392 B) sha256-equal to the committed originals — **and it does NOT chain**, unlike
+v9's. v9's rebuild needed `tools/v8/build_plan.py` to run first because its parity gate read
+v8's deleted pair; v10's GATE A was retired in this same pass, so its inputs are
+`data/v10/manifest.jsonl` plus v9's committed `aug_roster.json`/`colormaps.json`, all three
+tracked and present. One command, ~50 s.
+
+**Two v10 outputs are NOT byte-reproducible, and it is a different mechanism from v9's.**
+v9's `reuse_audit` is a live disk probe frozen into a record. v10's `aug_roster.json` and
+`build_metadata.json` differ for a reason that is *upstream of the disk*: their
+`recipe_parity` block still carries retired GATE A's counts
+(`prefix_plan_rows_byte_identical_to_v9: 170760`, `v9_plan_rows_not_reused: 48`) and the
+builder deliberately no longer computes them, so a re-run replaces the counts with the
+retirement note. Same remedy, different cause: **restore both from git after any rebuild**
+(`git checkout -- data/v10/aug_roster.json data/v10/build_metadata.json`) — the roster keeps
+the counts it passed on. `[measured 2026-08-08, scratch/tau_h_enl/v10_{before,after}.sha256]`
+
+**Liveness, checked the same two ways.** Source: four readers, all v10-scoped —
+`tools/v10/{eval_v10,prereg,diagnose_selection}.py` read for real and are NOT
+absence-tolerant; `test_v10_build.py` names `cache_manifest.jsonl` only as a string handed to
+`artifacts.is_relocated`, so it exercises the predicate and never opens the file. Since
+`bulk()` resolves in-tree at the same path, the three real readers work again after one
+rebuild command. Committed records: over all 1,106 tracked `data/**`+`labels/**` JSON, one
+file names the pair — `data/classifier/v10/config.json`'s `cache_manifest` field, a build
+record naming a path, not a dereference, and the path it names stays correct.
+
+**A stale reader found and NOT fixed.** `tools/v10/prereg.py` reads `data/v9/plan.jsonl`,
+deleted in the section above — so it was already broken before this pass and this pass does
+not worsen it. It is a post-hoc script over a frozen record (`data/v10/prereg_v10.json`
+exists and is what anything reads), and its `slow` test was deleted for exactly this reason.
+
+**The guard generalized.** `test_frozen_record_writes.test_a_detracked_derived_pair_is_not_
+declared_durable` was v8-only ("the pair must not be `durable()`, or the rebuild the deletion
+rests on cannot run"). It is now parametrized over all three de-tracked versions, so v9's and
+v10's cannot re-spring the trap v8's sprang.
 
 ## The 20 MB gate is a sanity cutoff; the test is future usefulness — SET 2026-08-08
 

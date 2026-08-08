@@ -454,13 +454,19 @@ __pycache__/
 #
 # Re-included BY EXACT PATH, not by directory, for the v8 reason: a bare `!/data/v10/`
 # would also re-include an accidental in-tree aug_cache/ rebuild.
+#   v10's plan.jsonl + cache_manifest.jsonl had negations here (and LFS rules in
+#   .gitattributes) until 2026-08-08, when both were deleted: 179 MB of rows that
+#   `tools/v10/build_plan.py` reproduces BYTE-IDENTICALLY from data/v10/manifest.jsonl plus
+#   v9's committed roster and colormaps (proved by rebuilding over the originals and
+#   comparing sha256, 2026-08-08). They were tracked as the only map from a cached tile back
+#   to a location; data/v{9,10}/aug_cache was deleted earlier the same day. The pair is
+#   bulk() now — deliberately untracked, byte-reproducible, and NOT a RELOCATED_PREFIXES
+#   entry, so it resolves in-tree at the same path every reader already opens.
 !/data/v10/
 /data/v10/*
 !/data/v10/manifest.jsonl
 !/data/v10/eval_slice.jsonl
 !/data/v10/build_metadata.json
-!/data/v10/plan.jsonl
-!/data/v10/cache_manifest.jsonl
 !/data/v10/aug_roster.json
 !/data/v10/colormaps.json
 # v10 EVAL products — the frozen per-location eval slice, the acceptance battery, and the
