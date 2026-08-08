@@ -111,18 +111,29 @@ def sweep_tmp() -> int:
 
 
 def run_chunk(i: int, chunk: Path, recipe: dict, timeout: int) -> tuple[bool, float, str]:
-    """One chunk through `crop-batch`. Returns (ok, seconds, tail-of-stderr)."""
+    """One chunk through `crop-batch`. Returns (ok, seconds, tail-of-its-log).
+
+    The engine's output goes to a FILE, not a pipe. `capture_output=True` is a pipe, and
+    CLAUDE.md's rule is explicit about what that costs: the engine's per-N-location progress
+    lines are buffered until the process exits, so a chunk in flight shows nothing at all and
+    a wedged one is indistinguishable from a slow one until the timeout fires. Redirecting
+    means `tail -f scratch/v11_render/chunkNNN.log` works while it runs. (The pipe would also
+    deadlock the engine outright if it ever filled — 283 locations of progress cannot fill
+    64 KB, but that is a property of today's `--log-every`, not a guarantee.)"""
     cmd = list(recipe["render_command"])
     for flag, val in (("--locations", str(chunk)), ("--manifest", str(part_path(i)))):
         cmd[cmd.index(flag) + 1] = val
+    log = LOG_DIR / f"chunk{i:03d}.log"
     t0 = time.time()
-    try:
-        pr = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
-                            env=cc.default_engine_env(),
-                            creationflags=cc.default_creationflags())
-    except subprocess.TimeoutExpired:
-        return False, time.time() - t0, f"TIMEOUT after {timeout}s"
-    tail = "\n".join((pr.stderr or "").strip().splitlines()[-4:])
+    with log.open("w", encoding="utf-8") as fh:
+        try:
+            pr = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, timeout=timeout,
+                                env=cc.default_engine_env(),
+                                creationflags=cc.default_creationflags())
+        except subprocess.TimeoutExpired:
+            return False, time.time() - t0, f"TIMEOUT after {timeout}s (see {log})"
+    tail = "\n".join(log.read_text(encoding="utf-8", errors="replace")
+                     .strip().splitlines()[-4:])
     return pr.returncode == 0, time.time() - t0, tail
 
 
