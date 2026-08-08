@@ -38,18 +38,28 @@ def _load(name, rel):
     return mod
 
 
+def _committed(path: Path, rebuild: str) -> dict:
+    """Read a COMMITTED record, or fail loudly naming the rebuild.
+
+    Not `pytest.skip` — `verification_practice.md` §2 is explicit that an absence-tolerant
+    guard un-guards exactly when its subject is removed, and these two files are the whole
+    reason the bulk manifest/plan/cache are allowed to live out-of-tree. If one is gone, the
+    guard must say so, not go quiet."""
+    assert path.exists(), (
+        f"{path.relative_to(ROOT)} is MISSING. It is a committed record, not an output — "
+        f"either it was never re-added after a rebuild (`{rebuild}`, then `git add` it) or "
+        f"it was deleted. The bulk artifacts it describes are unverifiable without it.")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 @pytest.fixture(scope="module")
 def recipe():
-    if not RECIPE.exists():
-        pytest.skip(f"{RECIPE} not built yet")
-    return json.loads(RECIPE.read_text(encoding="utf-8"))
+    return _committed(RECIPE, "uv run python tools/v11/build_plan.py")
 
 
 @pytest.fixture(scope="module")
 def record():
-    if not RECORD.exists():
-        pytest.skip(f"{RECORD} not built yet")
-    return json.loads(RECORD.read_text(encoding="utf-8"))
+    return _committed(RECORD, "uv run python tools/v11/build_manifest.py")
 
 
 @pytest.fixture(scope="module")
