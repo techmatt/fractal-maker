@@ -219,6 +219,48 @@ repointed; each now goes through a `require_ckpt` that raises naming the missing
 pass `--model` explicitly or resolve through `ACTIVE_CKPT`
 (`tools/mining/test_require_ckpt.py`).
 
+## Standing prompt contract
+
+The rules every claude.ai session prompt used to restate. They hold for **every** prompt whether
+or not it repeats them; a prompt overrides one only by saying so explicitly.
+
+**The report is a file, written once.** Every non-trivial prompt ends in a markdown report at
+**`scratch/<prompt-name>_report.md`** — never the repo root, never console-only. Target **~60
+lines, SOFT**: write it once, allow at most one trim pass, then stop. Running over is fine;
+iterating to squeeze under is not — the target buys density, not a word count. The test for a
+line is *does it change what claude.ai decides next?*
+- Per work item: outcome + commit, ≤1 line each.
+- **Every correction to the prompt** — a wrong premise, a stale path, a claim that didn't hold —
+  one line each. These are the highest-value lines in the report.
+- Decisions taken that the prompt didn't ask for and that need attention.
+- Numbers carry **population and basis** (`43/512 eval rows`, not `8.4%`).
+- The test suite in two lines.
+- What was **NOT** done, one line each.
+
+No process narration, no restating the prompt back, no defensive completeness. Overflow goes to
+**appendix files beside the report** (JSON preferred over prose), one pointer line each. A
+deliberately comprehensive deliverable is the *prompt's* job to declare — it states its own
+larger target there. **Trivial tasks** (a single commit, a file move) get one console line and
+no file at all.
+
+**Report delivery.** After writing the report, copy it and its appendices to
+**`C:\Code\fractal-drive-sync\reports\`**, creating the directory if absent — that tree is
+disposable sync scratch and may have been wiped. Best-effort: a failed copy is one noted line at
+the end of the report, never fatal. The `scratch/` copy stays canonical.
+
+**Runtime discipline.** Estimate a step's runtime *before* running it; anything over ~30 s goes
+to the background, and long runs launch **detached** — the reaper kills waited-on and shelled
+tasks, so a foregrounded hour-long run dies mid-flight. Pair with the log-file rule under
+Commands above: detached *and* redirected to `scratch/<job>.log`, never piped.
+
+**Engine subprocesses** go through the committed thread/priority helpers
+(`corpus_common.DEFAULT_ENGINE_THREADS` / `default_engine_env()` / `default_creationflags()`) —
+see the process-cap bullet under Conventions. Never restate the constants.
+
+**Commit gate.** No commit ≥20 MB tree bytes — single or aggregated across the whole prompt —
+without Matt's explicit prior confirmation. The full rule (what counts as tree bytes, why not
+remote/packed bytes, why not to split) is the first block under Conventions immediately below.
+
 ## Conventions
 
 > **No commit ≥20 MB without Matt's explicit prior confirmation.** The threshold is per
