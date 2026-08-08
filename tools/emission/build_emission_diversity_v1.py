@@ -349,8 +349,6 @@ class EmissionDiversity:
         self.release_dir = self.out / "release"
         self.field_cache = self.out / "fields"
         self.embs_path = self.out / "morph_embs.npz"
-        self.ranker_feats_path = self.out / "ranker_feats.npz"
-        self.ranker_tiles = self.out / "ranker_tiles"
         self.intake_path = self.out / "intake.json"
         # The released library this run's intake is deduplicated AGAINST (its per-type medoids
         # seed the clustering). None -> `descriptor.DEFAULT_LIBRARY_DIR`. There is NO opt-out:
@@ -376,7 +374,6 @@ class EmissionDiversity:
                 ("release_wallpaper", self.release_floor, F.WALLPAPER_RELEASE.value),
                 ("release_mining", self.mining_release_floor, F.MINING_RELEASE.value))
             if v != own}
-        self.intake_floor = None if args.intake_floor is None else float(args.intake_floor)
         self.release_n = int(args.release_n)
         self.strange_frac = float(args.strange_frac)   # target strange share of the release
         # release render geometry — default = wallpaper canon (REL_W/H/SS/FILT); overridable
@@ -427,9 +424,19 @@ class EmissionDiversity:
             d.mkdir(parents=True, exist_ok=True)
         self.rng = np.random.default_rng(self.seed)
         self.pool = Pool(self.out)
-        self.ranker_score: dict = {}     # location_id -> pref_loc_v0 rank score
-        self.ranker_pct: dict = {}       # location_id -> percentile within the intake set
-        self.ranker_mode = "unavailable"
+        # THE LOCATION RANKER IS GONE, PERMANENTLY (2026-08-08, Matt). `pref_loc_v1` never
+        # existed on this checkout and its rebuild was DELETED rather than left blocked: the
+        # blind-read manifest keys that joined its 379 labels to locations were wiped from
+        # `scratch/` and are not re-derivable (deferred_recalibration.md § "Ranker rebuild —
+        # DELETED"). These stay as empty dicts because they are WRITTEN into every emission
+        # row's provenance block (`ranker_score` / `ranker_pct`), and a row schema that
+        # changes shape depending on which era wrote it is worse than a null.
+        #
+        # Not to be confused with the PALETTE ranker (pref-v3-gvo, `colorize(..., ranker, ...)`)
+        # which is live, deployed and untouched by this.
+        self.ranker_score: dict = {}     # permanently empty — no location ranker is deployed
+        self.ranker_pct: dict = {}       # permanently empty
+        self.ranker_mode = "none"        # was "unavailable" when a head was still expected
         # within-round colorize order (pick_location): the round currently being served and
         # the id queue for it. Derived from the DURABLE pool counts, so a resume rebuilds
         # rather than restores.
@@ -526,47 +533,6 @@ class EmissionDiversity:
         self.embs = embs
         self.fields = fields
         self.cluster_tags = tags
-        self._score_intake_with_ranker()
-
-    def _score_intake_with_ranker(self):
-        """Score every admitted location with the pref_loc_v0 ranker (v7 + colored on the
-        canonical render — cache hits for run2/dive via features.npz, else rendered once).
-        The ranker ORDERS the colorize queue (order, don't filter — see pick_location); it
-        never gates admission or steers discovery (scorer.py HARD SCOPE). With --intake-floor
-        set, locations below that ranker percentile are dropped from the queue (opt-in)."""
-        from tools.ranker.score_locations import LocationRanker, rank_percentiles, DEFAULT_FEATURES
-        try:
-            # Also feed the run's OWN persisted feature cache: on a resume it covers every
-            # location embedded last pass, so scoring is a pure cache hit instead of
-            # re-embedding all ~1.4k tiles. (Output-identical — features are deterministic;
-            # missing/first-run cache is silently skipped by _load_cache.)
-            lr = LocationRanker(feature_caches=(DEFAULT_FEATURES, self.ranker_feats_path))
-            self.ranker_score = lr.score_rows(self.rows, self.ranker_tiles,
-                                              persist_npz=self.ranker_feats_path)
-            self.ranker_pct = rank_percentiles(self.ranker_score)
-            self.ranker_mode = f"{lr.scorer.head}:{'+'.join(lr.sets)}"
-            print(f"[intake] ranker scored {len(self.ranker_score)} locations "
-                  f"({self.ranker_mode})", flush=True)
-        except Exception as e:                               # noqa: BLE001
-            # Name the artifact, not just the exception class. `FileNotFoundError(2, 'No such
-            # file or directory')` reprs WITHOUT its filename, so this line reported a missing
-            # file and refused to say which one — and the answer (`data/ranker/` has never
-            # existed on this checkout) is the difference between "a cache is cold" and "the
-            # deployed head is gone and every run since has been unranked".
-            from tools.ranker.scorer import DEFAULT_MODEL     # noqa: PLC0415
-            missing = getattr(e, "filename", None) or (
-                str(DEFAULT_MODEL) if not Path(DEFAULT_MODEL).exists() else "?")
-            print(f"[intake] ranker unavailable ({type(e).__name__}: {e}; missing "
-                  f"{missing}); colorize queue stays coverage-order (unranked) and "
-                  f"--intake-floor would be a silent no-op", flush=True)
-            self.ranker_score, self.ranker_pct, self.ranker_mode = {}, {}, "unavailable"
-        if self.intake_floor is not None and self.ranker_pct:
-            keep = [r for r in self.rows if self.ranker_pct.get(r["id"], 1.0) >= self.intake_floor]
-            dropped = len(self.rows) - len(keep)
-            print(f"[intake] --intake-floor {self.intake_floor}: dropped {dropped} locations "
-                  f"below ranker pct {self.intake_floor}; {len(keep)} remain", flush=True)
-            self.rows = keep
-            self.by_id = {r["id"]: r for r in keep}
 
     # ---- axes + deficit model ------------------------------------------- #
     def build_axes(self, dt, cell_to_names: dict, lib):
@@ -599,9 +565,13 @@ class EmissionDiversity:
 
     # ---- location pick (coverage round-robin, ranker-ordered within a round) --------- #
     def _round_order(self, rows, round_idx: int) -> list:
-        """The order ONE round is served in: seeded round-robin ACROSS partitions, and inside
-        a partition ranker-descending when the ranker artifact resolved, seeded shuffle when it
-        did not. Returns a list of location ids.
+        """The order ONE round is served in: seeded round-robin ACROSS partitions and a
+        seeded shuffle WITHIN one. Returns a list of location ids.
+
+        The within-partition shuffle is the plain behaviour, not a fallback. It used to be
+        "ranker-descending when the ranker artifact resolved, seeded shuffle when it did not"
+        — and the artifact never resolved on any run this checkout has ever made. Any future
+        within-partition ordering is a new decision, not the absence of an old one.
 
         The partition set is DERIVED from `rows` (`self.partition_of`), never a literal — the
         ten base partitions are already a moving set (`descriptor.cell_partition` splits
@@ -613,13 +583,9 @@ class EmissionDiversity:
             by_part.setdefault(self.partition_of[r["id"]], []).append(r["id"])
         parts = sorted(by_part)
         rng = np.random.default_rng([self.seed, int(round_idx)])
-        ranked = bool(self.ranker_score)
         for p in parts:
-            ids = sorted(by_part[p])                 # canonical base order: the shuffle and the
-            if ranked:                               # rank sort must not inherit ledger order
-                ids.sort(key=lambda i: (-self.ranker_score.get(i, float("-inf")), i))
-            else:
-                rng.shuffle(ids)
+            ids = sorted(by_part[p])     # canonical base order: the shuffle must not inherit
+            rng.shuffle(ids)             # ledger order
             by_part[p] = ids
         rng.shuffle(parts)                           # no partition is systematically first
         out = []
@@ -644,10 +610,9 @@ class EmissionDiversity:
         proportionately across every partition that has admitted rows instead of exhausting the
         alphabetically-first one.
 
-        Inside a partition the pref_loc ranker orders (higher-quality first, so a budget that
-        runs out mid-partition has already spent on the good ones — order, don't filter); with
-        no ranker artifact it is a seeded shuffle, which is unbiased rather than alphabetical.
-        `--intake-floor` is the only place the ranker may FILTER, and only when asked."""
+        Inside a partition it is a seeded shuffle — unbiased rather than alphabetical. There
+        is no location ranker and there will not be one (deferred_recalibration.md § "Ranker
+        rebuild — DELETED"), so this is the whole rule rather than the fallback half of it."""
         counts = self.pool.attempts_per_location()
         cand = {r["id"]: r for r in self.rows if r["id"] not in exhausted}
         if not cand:
@@ -1255,10 +1220,6 @@ def main():
                     help=f"mining-head RELEASE floor (default = the "
                          f"{DEFAULT_MINING_RELEASE_FLOOR} production gate; ENFORCING since "
                          f"2026-08-06 — strange below it is pooled but cannot ship)")
-    ap.add_argument("--intake-floor", type=float, default=None,
-                    help="OPTIONAL ranker percentile [0,1]; drop admitted locations below it "
-                         "from the colorize queue. Default OFF (deliberate — the ranker ORDERS "
-                         "the queue, it does not filter diversity supply; this is a later knob).")
     ap.add_argument("--release-w", type=int, default=None,
                     help=f"release render width (default wallpaper canon {REL_W})")
     ap.add_argument("--release-h", type=int, default=None,

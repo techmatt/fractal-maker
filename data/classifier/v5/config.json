@@ -1,0 +1,55 @@
+{
+  "_extracted": "lifted verbatim out of data/classifier/v5/model_best.pt['config'] on 2026-08-08, before that weight de-tracked under the ACTIVE+PREVIOUS weights retention policy. The recipe is the record; the weight is not.",
+  "amp": "off",
+  "backbone": "mobilenetv4_conv_medium.e250_r384_in12k",
+  "backbone_lr": 0.0002,
+  "batch_size": 32,
+  "best_epoch": 36,
+  "beta_biased": 0.4,
+  "black_thresh": 0.3,
+  "cache_manifest": "data/v5/cache_manifest.jsonl",
+  "class_balance": "sqrt",
+  "drop_path_rate": 0.1,
+  "drop_rate": 0.2,
+  "epochs": 40,
+  "eval_split_is_val": true,
+  "geometry": "stretch",
+  "grad_clip": 1.0,
+  "head_lr": 0.001,
+  "init": "imagenet_backbone_fresh (NOT warm-started)",
+  "input_size": [
+    3,
+    384,
+    384
+  ],
+  "interpolation": "bicubic",
+  "loss": "CORN ordinal (K-1=2)",
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "no_jpeg_aug": false,
+  "num_workers": 4,
+  "patience": 40,
+  "recipe_vs_v4": "IDENTICAL recipe (reuses train_v4.train); only data = unified Mandelbrot+Julia cache",
+  "sampler": "per-location WeightedRandomSampler(w_class[sqrt] x w_group[1/group] x w_source[beta])",
+  "seed": 0,
+  "selection": "max eval not-bad AP (rank by sigma(logit0)); early stop patience",
+  "src_dims": [
+    512,
+    288
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "target": "ordinal",
+  "target_dims": [
+    384,
+    224
+  ],
+  "train_unit": "base location; __getitem__ draws 1 of 42 cached renders uniformly (epoch-varying)",
+  "weight_decay": 0.05
+}

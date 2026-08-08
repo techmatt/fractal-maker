@@ -36,51 +36,66 @@ PALETTE = "twilight_shifted"           # v4/v5 deploy-canonical palette
 # checkpoint from here. Flip ACTIVE_CKPT and the whole gate moves; nothing else hardcodes
 # a version. The load path is version-agnostic (score_lib.Scorer reads mean/std/head from
 # the checkpoint's own config), so only this string changes between versions.
-ACTIVE_CKPT = "data/classifier/v10/model_best.pt"   # v10 unified location classifier (LIVE)
-# ADOPTED 2026-08-02 (the v10 flip). v10 is v8's recipe on a re-rendered corpus at the raised
-# iteration cap plus 1,267 appended maneuver-view locations; K=4, same three cutpoint logits.
-# It CERTIFIED non-inferior on both pre-registered gating arms (census-144 q3 Δ−0.0090 p=0.79;
-# floor-526 q3 Δ+0.0042 p=0.84) and gained nothing measurable on any arm — adoption is on the
-# certified bar, not on a win. The load path stays version-agnostic (score_lib.Scorer reads
-# num_classes/mean/std/geometry off the checkpoint's own config).
+ACTIVE_CKPT = "data/classifier/v11/model_best.pt"   # v11 unified location classifier (LIVE)
+# ADOPTED 2026-08-08 (the v11 flip). v11 is v10's recipe — 30 behavioural keys read verbatim
+# off v10's own checkpoint config — retrained on a FULL crop-batch rebuild: 11,303 labeled
+# locations (v10: 8,382) under a randomized location-GROUPED split rather than v8's frozen
+# appended prefix. K=4, same three cutpoint logits.
+# It CERTIFIED non-inferior on all three pre-registered gating arms (census-144 q3
+# 0.7422→0.7710 p=0.437; floor-526 q3 0.8715→0.8479 p=0.099; uniform-90 q2 0.8289→0.8369
+# p=0.855, which also SEPARATES at CI_lo 0.749). The motivating 3|4 cutpoint tightened —
+# correction-87 precision 0.745→0.756 with the predicted class-4 rate landing on the
+# observed base rate (0.4713) — without ordering damage. Adoption is on the certified bar.
+# THE CONTRAST IS THREE CHANGES AT ONCE (corpus, split rule, aug recipe); no arm attributes
+# a difference to one of the three. Bars + results: data/v11/{prereg_v11,eval_results_v11}.json.
+# The load path stays version-agnostic (score_lib.Scorer reads num_classes/mean/std/geometry
+# off the checkpoint's own config).
 #
 # ============================ THE REVERT-TOGETHER SET ============================
 # Rolling back the pin ALONE leaves live thresholds calibrated to a head that is no longer
 # serving — cuts on a specific head's p_good are numbers about nothing on another's. The
-# ladder is `data/v10/build_metadata.json:rollback_ladder` — v10 -> v8 -> v7 -> v6 -> v5 (v9
-# is NOT a rung: built, staged, never deployed). Reverting one rung means reverting ALL of:
+# ladder is `data/v11/adoption_record.json:rollback_ladder` and it is TWO RUNGS: v11 -> v10.
+# It shortened at this flip, not by attrition: the standing weights-retention policy
+# (docs/design/storage_classes.md) tracks ACTIVE + PREVIOUS per model family and de-tracks
+# everything older, so v5/v6/v7/v8/v9 left the index on 2026-08-08 and the ladder names only
+# rungs whose weight a fresh clone actually gets. Reverting the one rung means reverting ALL of:
 #
 #   1. ACTIVE_CKPT (here)                          — ACTIVE_VERSION and every decode stamp
 #                                                    (corpus_common.is_current_decoded,
 #                                                    production_seeder.SCORER_VERSION) follow it
-#   2. production_seeder.T_GOOD_OVERRIDES          — v10: mandelbrot 0.03 / j:mb{3,4,5}
-#                                                    0.27/0.03/0.06 (was 0.85/0.39/0.14/0.20)
-#   3. data/atlas/keeper_cuts.json                 — stamped model="v10"
+#   2. production_seeder.T_GOOD_OVERRIDES          — v11: mandelbrot 0.90 / j:mandelbrot 0.85 /
+#                                                    phoenix 0.77 / j:mb{3,4,5} 0.26/0.10/0.39
+#                                                    (v10: 0.03 / — / — / 0.27/0.03/0.06). The
+#                                                    POPULATION moved too, not just the head —
+#                                                    see the block above T_GOOD_OVERRIDES.
+#   3. data/atlas/keeper_cuts.json                 — stamped model="v11"
 #   4. steered_frontier.TAU_H_FIDELITY_BASE
-#      + TAU_H_FIDELITY_BASE_MODEL                 — vendored base, stamped "v10"
-#   5. data/atlas/tau_h_base_v10.json              — provenance for (4)
-#   6. tools/v10/derive_t_good_v10.py's output
-#      data/v10/t_good_derivation.json             — derivation half of (2)
+#      + TAU_H_FIDELITY_BASE_MODEL                 — vendored base, stamped "v11"
+#   5. data/atlas/tau_h_base_v11.json              — provenance for (4)
+#   6. tools/v11/derive_t_good_v11.py's output
+#      data/v11/t_good_derivation.json             — derivation half of (2)
 #
-# Items 2-6 are the v10-stamped threshold files this flip wrote; 1-5 are the four the build
-# metadata already named as coupled. The list above is PROSE — `COUPLED_ARTIFACTS` at the
+# Items 2-6 are the v11-stamped threshold files this flip wrote; 1-5 are the four the build
+# record names as coupled. The list above is PROSE — `COUPLED_ARTIFACTS` at the
 # bottom of this module is the same enumeration as DATA, walked by
 # tools/scoring/test_coupled_artifacts.py, which is what makes each entry's stamp actually
 # checked rather than remembered. Keep the two in step; the test asserts the count matches.
 #
-# ROLLING BACK TO v8 MUST RE-DERIVE ITS TABLE, NOT COPY IT. data/v8/t_good_derivation.json
-# was cut when the sweep's admission predicate was an AND, which is not the rule corn_decode
-# serves on a K=4 head; re-derived through the aligned estimator (2026-08-02) v8's mandelbrot
-# t_good is 0.14, not the committed 0.85. The artifact is left as the record of what v8
-# actually served, so a rollback that copies it reinstates a threshold chosen against the
-# wrong predicate — and test_t_good_adoption's drift gate will go red on mandelbrot the
-# moment ACTIVE_VERSION is v8. v10's table is unaffected (byte-identical under both rules);
-# the divergence and its 8 causal rows are pinned by tools/v8/test_t_good_sweep_decode.py.
+# THE v8 t_good RECORD STAYS, AND IT IS A RECORD, NOT A RUNG. v8 is no longer on the ladder,
+# but `data/v8/t_good_derivation.json` is kept: it was cut when the sweep's admission
+# predicate was an AND, which is not the rule corn_decode serves on a K=4 head; re-derived
+# through the aligned estimator (2026-08-02) v8's mandelbrot t_good is 0.14, not the
+# committed 0.85. It is left as the record of what v8 actually served — the hazard it
+# documents (a rollback that COPIES a table instead of re-deriving it) is general and
+# outlives v8's rung. The divergence and its 8 causal rows stay pinned by
+# tools/v8/test_t_good_sweep_decode.py.
 # ================================================================================
-V8_CKPT_ROLLBACK = "data/classifier/v8/model_best.pt"   # one-flip rollback anchor
-V7_CKPT_ROLLBACK = "data/classifier/v7/model_best.pt"   # also the frozen pref_loc_v1 ranker pin
-V6_CKPT_ROLLBACK = "data/classifier/v6/model_best.pt"
-V5_CKPT_ROLLBACK = "data/classifier/v5/model_best.pt"
+# The one rollback anchor. v5/v6/v7/v8's constants were deleted at the v11 flip together with
+# their weights: a named rung whose .pt a fresh clone does not receive is a rollback you
+# cannot perform, which is worse than an absent one because it reads as a plan. Emergency
+# copies of all five sit UNREFERENCED outside the repo (storage_classes.md § weights
+# retention) — deliberately not resolvable from here.
+V10_CKPT_ROLLBACK = "data/classifier/v10/model_best.pt"   # one-flip rollback anchor
 DEFAULT_MODEL = ACTIVE_CKPT             # unified location-quality model (== ACTIVE_CKPT)
 # Version token of the live checkpoint, parsed off the checkpoint dir. This is the SINGLE
 # SOURCE OF TRUTH for what "current" means: corpus_common.is_current_decoded and
@@ -174,13 +189,13 @@ COUPLED_ARTIFACTS = (
         "what": "tools/atlas/steered_frontier.TAU_H_CAMPAIGN_FLOOR",
         "why": "the campaign floor is the same cut, at the campaign's own bar",
         "stamp": ("attr", "steered_frontier", "TAU_H_CAMPAIGN_FLOOR_MODEL"),
-        "guard": "tools/v10/test_v10_flip.py",
+        "guard": "tools/scoring/test_flip_coherence.py",
     },
     {
         "what": "data/atlas/tau_h_base_{v}.json",
         "why": "the provenance record behind the vendored TAU_H_FIDELITY_BASE",
         "stamp": ("json", "data/atlas/tau_h_base_{v}.json", "model"),
-        "guard": "tools/v10/test_v10_flip.py",
+        "guard": "tools/scoring/test_flip_coherence.py",
     },
 )
 

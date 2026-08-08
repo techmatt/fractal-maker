@@ -391,42 +391,66 @@ def julia_partition(fam: str) -> str:
 # =========================================================================== #
 T_GOOD_BASELINE = 0.50    # conservative default for every unswept / undecidable partition
 T_GOOD_OVERRIDES = {
-    "mandelbrot": 0.03,        # v10 F0.5-argmax, loose0_v3 floor (n=526, pos=26) — supply abundant
-    "julia:multibrot3": 0.27,  # v10 F2-argmax, census slice (n=54, pos=19) — supply scarce
-    "julia:multibrot4": 0.03,  # v10 F2-argmax, census slice (n=51, pos=24) — supply scarce
-    "julia:multibrot5": 0.06,  # v10 F2-argmax, census slice (n=39, pos=22) — supply scarce
+    "mandelbrot": 0.90,        # v11 F0.5-argmax, grouped holdout (n=797, pos=90) — abundant
+    "julia:mandelbrot": 0.85,  # v11 F0.5-argmax, grouped holdout (n=254, pos=70) — NEW, abundant
+    "phoenix": 0.77,           # v11 F0.5-argmax, grouped holdout (n=113, pos=55) — NEW, abundant
+    "julia:multibrot3": 0.26,  # v11 F2-argmax, census fallback (n=54, pos=19) — supply scarce
+    "julia:multibrot4": 0.10,  # v11 F2-argmax, grouped holdout (n=44, pos=28) — supply scarce
+    "julia:multibrot5": 0.39,  # v11 F2-argmax, grouped holdout (n=58, pos=28) — supply scarce
 }
+# MIRRORED from data/v11/t_good_derivation.json at the 2026-08-08 flip; test_t_good_adoption
+# holds the two equal and re-runs the estimator against the artifact as a drift gate.
+#
+# THE POPULATION CHANGED AT THIS FLIP AND THE HEAD DID TOO — read every move below as both.
+# v10 cut each partition on ONE FROZEN INSTRUMENT; v11 cuts on the randomized location-GROUPED
+# holdout (derive_t_good.select_population), with the instrument as a per-partition fallback
+# that exactly one partition takes (julia:multibrot3, 3 holdout positives vs 19 in the
+# census — the same census v10 cut it on, so that one number IS readable as a head change).
+# For the rest, `0.03 -> 0.90` on mandelbrot is not a statement about v11's scale: the cut
+# moved from 526 loose0_v3-floor rows at a 4.9% keeper base rate to 797 holdout rows at
+# 11.3%, and an F_beta argmax moves with prevalence. What the new population bought is that
+# mandelbrot's F0.5 curve is DECIDABLE again — under v10 it was flat and low and the argmax
+# fell to the grid floor (deferred_recalibration.md, "undecidable at the top of the range");
+# under v11 it has an interior argmax at precision 0.781 / recall 0.633 (OOF F0.5 0.731).
+#
+# THE HOLDOUT IS BIASED EXACTLY AS TRAINING IS, by design (v11 build_record § eval_roles), so
+# these precisions are NOT the precision the gate will deliver on a discovery frontier and the
+# keeper base rate it argmaxed against is higher than a frontier draw's. That is the accepted
+# cost of calibrating at all on six partitions that had no eval row of any kind; the first
+# v11-era run's per-partition admitted precision is the read that checks it.
+#
+# KNIFE-EDGES, stamped: mandelbrot t=0.90 and julia:multibrot4 t=0.10 each sit on a 1-step
+# plateau and julia:multibrot5 t=0.39 on a 2-step one — re-derive rather than nudge. The two
+# NEW partitions are NOT knife-edged (julia:mandelbrot plateau [0.83,0.85], phoenix
+# [0.73,0.77]), which is the opposite of what the first read on the biased draw suggested.
 
-# UNCALIBRATED — these partitions RUN at T_GOOD_BASELINE but were never DERIVED under v10.
+# UNCALIBRATED — these partitions RUN at T_GOOD_BASELINE but are not DERIVED under v11.
 # A baseline 0.50 and a derived 0.50 are indistinguishable as a bare number, and six months
 # from now nobody remembers which is which — so the distinction lives here explicitly rather
-# than in absence-from-a-table. Their v7 overrides (julia:mandelbrot 0.22, phoenix 0.45) are
-# RETIRED, not carried: they were cuts on v7's p_good scale.
+# than in absence-from-a-table.
 #
-# THE SET IS UNCHANGED FROM v8 BUT TWO OF THE REASONS ARE NOT, and the difference matters.
-# v10 is the first version with an unbiased NATIVE-plane eval instrument (maneuver_uniform_v1,
-# 90 rows): multibrot3/4/5 now have 24/25/29 base-rate draws each and are uncalibrated because
-# **not one of the 78 was a keeper**, not because nobody has looked. julia:mandelbrot and
-# phoenix are still the never-looked case. `data/v10/t_good_derivation.json` carries the two
-# reasons verbatim per partition.
+# THE SET SHRANK BY TWO AT THE v11 FLIP AND THE REMAINING FOUR SPLIT INTO TWO KINDS.
+# julia:mandelbrot and phoenix left it: the grouped-holdout population rule reaches 70 and 55
+# keeper positives for them where every frozen instrument through v10 reached none, so both
+# are DERIVED for the first time since v7 (whose 0.22 / 0.45 were cuts on v7's scale and are
+# retired, not carried). What is left:
 #
-# PHOENIX IS THE ONE TO WATCH: 573 training locations and the only partition where
-# class 4 outnumbers class 3, yet no unbiased eval whatsoever. It is running on a
-# conservative default, not on evidence.
+#   * WITHHELD (3) — derivable and deliberately not adopted. The native multibrots clear
+#     MIN_POS on the holdout for the first time (49/32/38 positives, against 0 keepers in
+#     v10's uniform instrument) and would take 0.61/0.85/0.61. A native multibrot tightening
+#     is FORK-SCHEDULED — decided at the next fork launch together with tau_h, not as a side
+#     effect of a checkpoint flip (deferred_recalibration.md § "Related"). The derived values
+#     are preserved in data/v11/t_good_derivation.json § withheld so that decision is a read,
+#     not a re-derivation.
+#   * BELOW MIN_POS (1) — phoenix:classic, and it is now the ONLY partition the population
+#     rule cannot reach: 8 holdout rows with 1 positive and no instrument rows at all. Split
+#     off `phoenix` on 2026-08-04 (partitions.CLASSIC_PHOENIX). NOT the never-looked case — a
+#     human has labeled every one of its rows; the eval side simply draws too few.
 T_GOOD_UNCALIBRATED = frozenset({
-    "julia:mandelbrot",   # v7 had 0.22 (n=178, pos=25); no unbiased eval rows in v8 or v10
-    "multibrot3",         # v10: n=24 unbiased draws, 0 keepers — looked, undecidable
-    "multibrot4",         # v10: n=25 unbiased draws, 0 keepers
-    "multibrot5",         # v10: n=29 unbiased draws, 0 keepers
-    "phoenix",            # v7 had 0.45 (Phase-B grid); no unbiased eval rows in v8 or v10
-    # Split off `phoenix` on 2026-08-04 (partitions.CLASSIC_PHOENIX). Stamped UNCALIBRATED at
-    # the 0.50 baseline with NO derivation in this pass: the v7 0.45 it ran under was a cut on
-    # v7's p_good scale AND was derived on the pooled phoenix population, so it is retired
-    # twice over. It has 73 human labels of its own (49/17/6/1 over classes 1..4) and zero
-    # eval rows — the deriver's `MIN_POS = 15` is not met at 7 positives, which is why this is
-    # a registration and not a number. It is also NOT the never-looked case: a human has
-    # looked at all 73.
-    "phoenix:classic",
+    "multibrot3",         # v11: derivable at 0.61 on 196 holdout rows — WITHHELD, fork-scheduled
+    "multibrot4",         # v11: derivable at 0.85 on 151 holdout rows — WITHHELD
+    "multibrot5",         # v11: derivable at 0.61 on 164 holdout rows — WITHHELD
+    "phoenix:classic",    # v11: 8 holdout rows / 1 positive, 0 instrument rows — below MIN_POS
 })
 
 
@@ -770,20 +794,30 @@ def build_cloud(rows: list[dict], family: str, k=DEDUP_K, scale=DEDUP_SCALE) -> 
     return cloud
 
 
-# ---- WATCH (not a gate) raised at the v10 flip, 2026-08-02 -------------------------------- #
-# v10's class-4 descriptive AP fell 0.813 -> 0.728 versus v8 on the census leg. It carries NO
-# pre-registered bar and n=22 positives on one family (julia:multibrot) puts the move inside
-# label noise, so it is deliberately NOT a gate and NOT a threshold: nothing here changes any
-# decision. What it earns is an EYE on the first v10-era run's q4 yield — if class-4 emission
-# is visibly thin, that number stops being noise and becomes evidence.
+# ---- WATCH (not a gate) raised at the v11 flip, 2026-08-08 -------------------------------- #
+# THE v10 WATCH RETIRED ITSELF AND ITS SUBJECT RESOLVED. v10 carried a watch on class-4
+# descriptive AP (0.813 -> 0.728 on the census); under v11 the same arm reads 0.7273 -> 0.7664
+# and by P(>=4) 0.6315 -> 0.6759, so the fall did not persist. The key below moving to "v11" is
+# what retires it — a watch nobody has to remember to drop.
 #
-# It lives in `cloud_diagnostic` because that is the run's first eyeball of the decode
-# distribution, and it is keyed on SCORER_VERSION so it appears for v10-era runs and vanishes
-# by itself when the head moves on — a watch nobody has to remember to retire.
-Q4_WATCH_VERSION = "v10"
-Q4_WATCH = ("class-4 descriptive AP moved 0.813 -> 0.728 at the v10 flip "
-            "(n=22, julia:multibrot, no bar, inside label noise). Not a gate — give this "
-            "run's class-4 yield a qualitative look before trusting it.")
+# THE v11 WATCH IS ABOUT THE POPULATION, NOT THE HEAD. Six of nine live partitions are now cut
+# on the randomized location-GROUPED HOLDOUT rather than on a score-unconditioned instrument,
+# and the holdout is biased exactly as training is (v11 build_record § eval_roles). Every
+# precision in data/v11/t_good_derivation.json is therefore measured on a training-like draw
+# and is NOT the precision this gate will deliver on a discovery frontier. mandelbrot is the
+# sharp end: its cut moved 0.03 -> 0.90 across a population whose keeper base rate went 4.9%
+# -> 11.3%, and an F_beta argmax moves with prevalence.
+#
+# NOT a gate and NOT a threshold — nothing here changes a decision. What it earns is an EYE on
+# the first v11-era run's per-partition ADMITTED precision. It lives in `cloud_diagnostic`
+# because that is the run's first eyeball of the decode distribution, and it is keyed on
+# SCORER_VERSION so it vanishes by itself when the head moves on.
+Q4_WATCH_VERSION = "v11"
+Q4_WATCH = ("t_good was re-derived at the v11 flip on the location-grouped HOLDOUT, which is "
+            "biased like training — mandelbrot moved 0.03 -> 0.90 across a base-rate change "
+            "of 4.9% -> 11.3%, and julia:mandelbrot/phoenix are calibrated for the first time. "
+            "Not a gate — read this run's per-partition admitted precision against "
+            "data/v11/t_good_derivation.json before trusting the cuts.")
 
 
 def cloud_diagnostic(rows: list[dict], cloud: list[dict], family: str) -> dict:

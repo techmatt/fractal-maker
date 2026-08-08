@@ -319,6 +319,57 @@ merely could not authenticate, the one condition under which you must not prune)
 `[measured: 298,820,096 B across the four files, 2026-07-31, `ls -l data/v8 data/v9`;
 146,377,248 B of that removed 2026-08-03]`
 
+## Weights retention: ACTIVE + PREVIOUS per model family — SET 2026-08-08
+
+**The policy, stated once:**
+
+> **Tracked weights = the ACTIVE head plus the PREVIOUS one, per model family. Everything
+> older, and everything REJECTED, de-tracks at the next flip. An emergency copy may sit
+> unreferenced in the artifacts store.**
+
+A model family is a pin, not a directory: `data/classifier/` (the location head,
+`production_pins.ACTIVE_CKPT`), `data/wallpaper_head/` (`wallpaper_pins.HEAD_CKPT`),
+`data/render_mode_head/`, `data/queries/scorer/`. Each keeps two.
+
+**Why two and not one.** One rung is not a rollback — it is a hope. Two is the smallest
+number that lets a bad flip be undone by an edit rather than by a retrain, and the retrain is
+the thing that cannot be done: none of these weights is GPU-reproducible, because in every
+case the corpus or the split that produced it has moved on.
+
+**Why two and not five.** The five-rung ladder v10 carried was a *fiction that read as a
+plan*. Rolling back to v7 means reverting `t_good`, the keeper cut and τ_h to v7's `p_good`
+scale — and v7's own eval slice was gitignored and is gone, so its table cannot be re-derived
+and copying it forward reinstates a cut chosen against a predicate that is no longer served
+(`production_pins`, the v8 t_good record). A rung you could not correctly take is worse than
+an absent one: it costs 34 MB, and it invites a rollback that silently serves numbers about
+nothing.
+
+**A REJECTED candidate is not a rung at any age.** `render_mode_head/v2` lost its winner rule
+on 2026-08-06 and de-tracked the same day; `classifier/v9` was built, evaluated, staged and
+never deployed. Neither was ever a rollback target, because a rollback to a version that was
+never served restores a gate that never ran. Their **run record and report stay tracked** —
+those are small, and they are the reason the rejection does not get re-litigated.
+
+**The emergency copy is deliberately unreferenced.** De-tracked weights are copied to
+`C:\Code\fractal-maker-artifacts\retired_weights\<name>\` and verified by SHA-256 against the
+LFS pointer's own `oid` — the strongest available check, since it compares against what git
+had rather than against what happens to be on the disk that did the de-tracking. Nothing in
+the repo resolves, registers or documents that path *as a path*: no resolver entry, no size
+guard registry line, no pin. That is the point. A referenced backup is a rung with extra
+steps, and the policy above is only meaningful if the tree cannot quietly grow a sixth one.
+
+**What de-tracking a weight touches**, all five, or the guards go red — and they are the
+checklist because each was found the hard way: `.gitattributes` (the LFS rule),
+`tests/test_large_tracked_blobs.py` (`ALLOWLIST` + `BINARY_ALLOWLIST`; a dead entry fails
+just as loudly as an undeclared blob), `tools/audit/size_guard.py` (the working-tree
+registry), `tests/test_tracked_artifacts.py` (the canaries), and the exact-path `.gitignore`
+negations. `git rm --cached` leaves the file in the working tree, which is why every
+rung-existence assertion in this repo now reads the **index**, not `Path.exists()`: on the
+machine that did the de-tracking those are the same answer, and on a fresh clone they are not.
+
+`[code: tools/scoring/production_pins.V10_CKPT_ROLLBACK; test_production_pins.LADDER;
+data/v11/adoption_record.json:rollback_ladder]` `[verdict: Matt, 2026-08-08]`
+
 ## Git history is a durability tier too, and this repo's floor is 2026-07-24
 
 `fractal-maker` begins at a **single squashed import commit** (`ff88da4`, 1247 tracked files,

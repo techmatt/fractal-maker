@@ -1,0 +1,68 @@
+{
+  "adoption": "v11",
+  "adopted_on": "2026-08-08",
+  "checkpoint": "data/classifier/v11/model_best.pt",
+  "certified": "non-inferior on all three pre-registered gating arms (census-144, floor-526, uniform-90); bars in data/v11/prereg_v11.json, results in data/v11/eval_results_v11.json",
+  "wrote": {
+    "t_good": "data/v11/t_good_derivation.json (+ production_seeder.T_GOOD_OVERRIDES)",
+    "keeper_cuts": "data/atlas/keeper_cuts.json",
+    "tau_h": "data/atlas/tau_h_base_v11.json (+ steered_frontier.TAU_H_FIDELITY_BASE / TAU_H_CAMPAIGN_FLOOR)"
+  },
+  "known_flip_cost": "The emission LIBRARY SEED is unreconstructable until the next real run. It is built from run-local counts and embeddings under the head that produced them, so a head flip retires it and only a v11-era run can rebuild it. Known cost of any flip, not a defect of this one.",
+  "rollback_ladder": {
+    "adopted_on": "2026-08-08",
+    "note": "The v11 ADOPTION record. Unlike data/v10/build_metadata.json:rollback_ladder \u2014 which was a build-time note about a flip that had not happened \u2014 this is written by the flip itself.",
+    "deployed_now": "v11",
+    "ladder": [
+      "v11",
+      "v10"
+    ],
+    "why_two_rungs": "The rollback ladder names only rungs whose weight a fresh clone receives. The standing weights-retention policy (docs/design/storage_classes.md) tracks ACTIVE + PREVIOUS per model family and de-tracks everything older or rejected, so v5/v6/v7/v8/v9 left the index at this flip and left the ladder with them. Emergency copies of all five sit unreferenced outside the repo; they are not resolvable from any pin, on purpose.",
+    "why_not_v9": "v9 was built, evaluated and STAGED but never adopted, so it was never a rung even while it was tracked: a rollback to a version that was never deployed restores a gate that never ran.",
+    "must_revert_together": [
+      {
+        "what": "tools/scoring/production_pins.ACTIVE_CKPT",
+        "why": "ACTIVE_VERSION derives from it, and with it every decode stamp",
+        "now": "v11",
+        "guard": "tools/scoring/test_production_pins.py"
+      },
+      {
+        "what": "tools/atlas/production_seeder.T_GOOD_OVERRIDES",
+        "why": "per-partition t_good is calibrated to ONE head's p_good scale (protocol \u00a74)",
+        "now": null,
+        "guard": "tools/scoring/test_t_good_adoption.py"
+      },
+      {
+        "what": "data/{v}/t_good_derivation.json",
+        "why": "the derivation half of T_GOOD_OVERRIDES \u2014 the numbers' provenance",
+        "now": "v11",
+        "guard": "tools/scoring/test_t_good_adoption.py"
+      },
+      {
+        "what": "data/atlas/keeper_cuts.json",
+        "why": "same scale-bound argument, on the report-time keeper bar",
+        "now": "v11",
+        "guard": "tools/atlas/test_steered_frontier.py"
+      },
+      {
+        "what": "tools/atlas/steered_frontier.TAU_H_FIDELITY_BASE + TAU_H_FIDELITY_BASE_MODEL",
+        "why": "tau_h is a cut on a specific head's cheap p_good",
+        "now": "v11",
+        "guard": "tools/atlas/test_steered_frontier.py"
+      },
+      {
+        "what": "tools/atlas/steered_frontier.TAU_H_CAMPAIGN_FLOOR",
+        "why": "the campaign floor is the same cut, at the campaign's own bar",
+        "now": "v11",
+        "guard": "tools/scoring/test_flip_coherence.py"
+      },
+      {
+        "what": "data/atlas/tau_h_base_{v}.json",
+        "why": "the provenance record behind the vendored TAU_H_FIDELITY_BASE",
+        "now": "v11",
+        "guard": "tools/scoring/test_flip_coherence.py"
+      }
+    ],
+    "coherence": "all stamped entries agree on 'v11'"
+  }
+}

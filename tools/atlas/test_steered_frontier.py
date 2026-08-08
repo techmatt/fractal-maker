@@ -134,8 +134,13 @@ def test_keeper_positive_is_label_ge_3_not_eq_3():
     assert any(r["label"] == 4 for r in rows), "no class-4 rows — this test would be vacuous"
     triples = kc.load_triples()
     n_pos = sum(1 for rs in triples.values() for _, _, pos in rs if pos)
-    n_ge3 = sum(1 for r in rows if r["label"] >= 3 and kc.FT2FAM.get(r["fractal_type"]))
-    assert n_pos == n_ge3 > sum(1 for r in rows if r["label"] == 3)
+    # Counted over the SAME population `load_triples` cut, not over the whole slice: since
+    # v11 that population is the grouped holdout with an instrument fallback, so "every row
+    # whose fractal_type maps" is a different and larger set. The invariant under test is the
+    # PREDICATE (`>= 3`, not `== 3`), and it is only visible if both sides count the same rows.
+    kept, _ = kc._select_population(rows, instrument=kc.INSTRUMENT)         if all("eval_role" in r for r in rows) else (rows, None)
+    n_ge3 = sum(1 for r in kept if r["label"] >= 3)
+    assert n_pos == n_ge3 > sum(1 for r in kept if r["label"] == 3)
 
 
 @pytest.mark.version_pinned
@@ -160,9 +165,13 @@ def test_keeper_cuts_committed_shape_partitions_and_provenance():
         if not row["calibrated"]:
             assert float(t) == kc.T_GOOD_BASELINE, part   # uncalibrated => discovery baseline
 
-    # (2) partition coverage — the live set is FT2FAM's targets (derived from code, not hardcoded,
-    # so adding a family to the derivation without recutting keeper_cuts.json fails loudly here).
-    live = set(kc.FT2FAM.values())
+    # (2) partition coverage — the live set is `partitions.ALL_FAMS` (derived from code, not
+    # hardcoded, so adding a family to the derivation without recutting keeper_cuts.json fails
+    # loudly here). ALL_FAMS, not `FT2FAM.values()`: a DERIVED partition has no fractal_type of
+    # its own, so the value list silently omitted `phoenix:classic` — which then read as "not a
+    # partition" rather than "uncalibrated". Fixed 2026-08-08 with the v11 recut, which is the
+    # first slice to carry rows for it.
+    live = set(kc.ALL_FAMS)
     assert set(cuts) == live, f"keeper_cuts partitions {set(cuts)} != live {live}"
 
     # (3) provenance — must carry a stamp naming the model + population the cuts came from. A stamp

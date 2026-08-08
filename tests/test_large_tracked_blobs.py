@@ -138,15 +138,19 @@ class Entry:
 ALLOWLIST = [
     # ---- sanctioned: critical final trained weights (the policy's "essentially only") --
     Entry("data/classifier/", WEIGHTS,
-          "CORN ordinal heads v5..v10: the live deployed scorer (whichever "
-          "production_pins.ACTIVE_CKPT names — v10 since 2026-08-02) plus its rollback "
-          "rungs, and v9, built and staged but never adopted. Not GPU-reproducible, so "
-          "there is no rebuild path for any of them."),
+          "CORN ordinal heads — and since the 2026-08-08 retention pass this covers exactly "
+          "TWO weights, not six: the live deployed scorer (whichever "
+          "production_pins.ACTIVE_CKPT names — v11 since 2026-08-08) and the one rung below "
+          "it (v10). v5..v9 de-tracked that day under ACTIVE+PREVIOUS retention "
+          "(docs/design/storage_classes.md); their config.json/metrics.json records stay and "
+          "are text, so they never reach this allowlist. Not GPU-reproducible, so there is "
+          "no rebuild path for either of the two."),
     Entry("data/wallpaper_head/v3/model_best.pt", WEIGHTS,
           "LIVE cross-location wallpaper-quality head."),
-    Entry("data/wallpaper_head/v4/model_best.pt", WEIGHTS,
-          "Wallpaper head v4: the five-batch retrain (three July batches + the two "
-          "2026-08-05 fresh-era batches). STAGED — wallpaper_pins still points at v3."),
+    # data/wallpaper_head/v4/model_best.pt had a line here while it was a STAGED candidate.
+    # It de-tracked on 2026-08-08: wallpaper_pins still points at v3, so under ACTIVE+PREVIOUS
+    # retention v4 is a never-adopted candidate and not a critical final weight. Same shape as
+    # render_mode_head/v2 above. Its run record is untracked working-tree data and unchanged.
     Entry("data/render_mode_head/v1/model_best.pt", WEIGHTS,
           "LIVE strange-mode (mining_v1) gate."),
     # data/render_mode_head/v2/model_best.pt had a line here while it was a live candidate.
@@ -229,10 +233,12 @@ class BinaryEntry:
 # Every tracked extension that is NOT text-by-nature must match one of these.
 BINARY_ALLOWLIST = [
     BinaryEntry("data/classifier/", ".pt",
-                "CORN ordinal head weights (v5..v10) — the live scorer + rollback anchors; "
-                "not GPU-reproducible."),
+                "CORN ordinal head weights — the live scorer (v11) + the one rollback rung "
+                "(v10). v5..v9 de-tracked 2026-08-08 (ACTIVE+PREVIOUS retention). Not "
+                "GPU-reproducible."),
     BinaryEntry("data/wallpaper_head/", ".pt",
-                "Wallpaper-quality head weights (v3 live, v4 staged)."),
+                "Wallpaper-quality head weight — v3, the live head (wallpaper_pins). v4 was "
+                "staged and de-tracked 2026-08-08 under ACTIVE+PREVIOUS retention."),
     BinaryEntry("data/render_mode_head/", ".pt",
                 "Render-mode (strange-mode) gate weight — v1, whose training corpus is "
                 "gone, so it cannot be retrained at all."),

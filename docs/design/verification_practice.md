@@ -72,13 +72,17 @@ that no longer exists (that file now skips nothing; its docstring says so) and c
 `test_v9_staging.py` with two `skipif`s where it has one, which does not fire here. A list of
 tolerated absences that is itself unchecked is the §5 rotted-allowlist defect aimed at §2.
 
-Exactly **two** tests skip in the default lane on this checkout:
+Exactly **one** test skips in the default lane on this checkout. There were two until
+2026-08-08, and how the other one ended is the more useful record: it was
+`test_location_ranker_cache_hit_matches_direct_scoring`, skipping on absent
+`data/ranker/pref_loc_v0/{model,features}.npz`, and it was called **legitimate** here on the
+grounds that `pref_loc_v0` was "live (≈10 importers)" and its path a declared durable. Both
+grounds were wrong in the same direction: the importers were real but every one of them took
+the degrade-to-unranked branch, and no head had ever existed on this checkout. **A skip
+justified by "the artifact is live" needs the liveness checked, not asserted** — a
+conditionally-skipped test is exactly where a dead subject hides longest. The ranker was
+deleted with its rebuild path (`retired.md`) and the test went with it.
 
-- `tools/emission/test_emission_diversity.py::test_location_ranker_cache_hit_matches_direct_scoring`
-  — needs `data/ranker/pref_loc_v0/{model,features}.npz`. **Legitimate**: `pref_loc_v0` is
-  live (≈10 importers) and the path is a declared durable in `tools/audit/durability_map.py`,
-  so this is *not fetched*, not *deleted on purpose*. It is the PRESENCE-FROM-DISK arm of §6's
-  two-test pairing; the absence arm runs unconditionally.
 - `tools/atlas/test_julia_seed_pool.py::test_committed_file_is_what_the_filter_reproduces`
   — needs `build_julia_seed_pool.VIABLE_DEFAULT`, which is **`scratch/`-class, the one class
   whose contract guarantees deletion**. It has therefore skipped since the wipe and will skip

@@ -283,16 +283,15 @@ REGISTRY: list[Entry] = [
           "`guided-descend --out` defaults to data/guided_descend/run4 (src/guided_descend.rs) "
           "and `enrich --pool` reads data/guided_descend/run5/pool.jsonl (src/enrich.rs). "
           "The next run repopulates it in-tree.", forward=True),
-    Entry("data/ranker/", RELOCATE, ARTIFACTS, "ignored",
-          "frozen-feature location-ranker fits + feature caches. NOT regenerable, and this "
-          "line said it was: the frozen features are NOT committed (this path is ignored and "
-          "has zero commits in history) and the blind reads' tile->location manifest keys "
-          "lived in scratch/ and were wiped, so the 379 surviving labels cannot be re-joined "
-          "(docs/design/deferred_recalibration.md, 'Ranker rebuild — BLOCKED'). FORWARD: "
-          "empty today AND no head is deployed, but tools/ranker/train_eval{,_v1}.py write "
-          "pref_loc_v0/v1 {model,metrics,features}.npz there and tools/atlas/"
-          "campaign1_manifest.py persists data/ranker/campaign1/features.npz.",
-          forward=True),
+    # `data/ranker/` had a FORWARD entry here — "empty today, but train_eval{,_v1}.py and
+    # campaign1_manifest.py write into it". That forward declaration is now false in the only
+    # way that matters: those three writers were DELETED on 2026-08-08 with the pref_loc_v1
+    # rebuild path (docs/design/deferred_recalibration.md § "Ranker growth — CLOSED"), so
+    # nothing in the tree can ever populate the directory. A forward entry whose writer is
+    # gone is a standing permission for a path that will not appear — the exact fossil shape
+    # the note below this block was written about — so it goes out rather than being kept
+    # "in case". `data/ranker/` stays ignored by the blanket /data/* rule like any other
+    # untracked path.
     # NOTE — the four `data/v4/`..`data/v7/` build-cache lines that used to sit here are
     # DELETED, not left stale. Those caches are gone and will never exist again (the
     # manifests/plans they covered were wiped 2026-07-25 and are unrebuildable; the v8 build
@@ -350,27 +349,37 @@ REGISTRY: list[Entry] = [
           "data/v10/prereg_v10.json). Declared by exact-path .gitignore negation, so a plain "
           "`git add` reaches it. model_last.pt is deliberately untracked (selection is on "
           "best). CANARY.", canary=True),
-    Entry("data/classifier/v9/", RELOCATE, PRECIOUS, "tracked",
-          "v9 model_best.pt — the v8 recipe retrained verbatim on the corpus re-rendered "
-          "at the raised iteration cap (docs/design/auto_maxiter.md). BUILT, STAGED, NEVER "
-          "ADOPTED, and NOT a rollback rung: the v10 adoption went straight past it "
-          "(data/v10/build_metadata.json:rollback_ladder.why_not_v9). Kept because a "
-          "not-GPU-reproducible weight cannot be rebuilt if the judgement is revisited. "
-          "Unlike v2..v8 these weights are declared by an exact-path .gitignore negation "
-          "rather than a force-add, so a plain `git add` reaches them. model_last.pt is "
-          "deliberately untracked (selection is on best). CANARY.", canary=True),
-    Entry("data/classifier/v8/", RELOCATE, PRECIOUS, "tracked",
-          "v8 model_best.pt — the ONE-FLIP rollback anchor (K=4 ordinal head; the first "
-          "version that could decode class 4, and the live gate until v10). CANARY.",
+    # ---- retired heads: RECORDS TRACKED, WEIGHT NOT (2026-08-08 retention pass) ----
+    # One entry for all five, because after the de-track they are one thing: a directory
+    # holding a kilobyte of config.json (+ metrics.json where the version shipped one) and
+    # an untracked 34 MB .pt that only this machine has. The old per-version entries each
+    # justified a TRACKED weight; none of those justifications survives the policy, and
+    # five stale rationales are worse than one accurate line.
+    Entry("data/classifier/v5/", RELOCATE, PRECIOUS, "mixed",
+          "v5..v9 model_best.pt were DE-TRACKED on 2026-08-08 under the ACTIVE+PREVIOUS "
+          "weights-retention policy (docs/design/storage_classes.md); the ladder is v11 -> "
+          "v10 and these are no longer rungs. The .pt files remain in the WORKING TREE on "
+          "this machine and are precious there — not GPU-reproducible, and the corpus or "
+          "split behind each has moved on. Verified emergency copies sit unreferenced at "
+          "<artifacts>/retired_weights/. What stays TRACKED is each version's config.json "
+          "(the recipe — v5/v6/v7 had none until extract_retired_config.py lifted it out of "
+          "the checkpoint) plus v8/v9's metrics.json. CANARY on the records.", canary=True),
+    Entry("data/classifier/v6/", RELOCATE, PRECIOUS, "mixed",
+          "see data/classifier/v5/ — same 2026-08-08 retention pass.", canary=True),
+    Entry("data/classifier/v7/", RELOCATE, PRECIOUS, "mixed",
+          "see data/classifier/v5/. v7 was ALSO the frozen penultimate the pref_loc_v1 "
+          "ranker's features were pinned to; that pin was deleted with the ranker on the "
+          "same day (deferred_recalibration.md), which is what freed the weight.",
           canary=True),
-    Entry("data/classifier/v7/", RELOCATE, PRECIOUS, "tracked",
-          "v7 model_best.pt — two-flip rollback rung; ALSO the frozen penultimate the "
-          "pref_loc_v1 ranker's features are pinned to, so this weight is load-bearing "
-          "beyond rollback. CANARY.", canary=True),
-    Entry("data/classifier/v6/", RELOCATE, PRECIOUS, "tracked",
-          "v6 model_best.pt — deeper rollback rung. CANARY.", canary=True),
-    Entry("data/classifier/v5/", RELOCATE, PRECIOUS, "tracked",
-          "v5 model_best.pt — deepest rollback rung. CANARY.", canary=True),
+    Entry("data/classifier/v8/", RELOCATE, PRECIOUS, "mixed",
+          "see data/classifier/v5/. v8 was the one-flip rollback anchor until the v11 flip "
+          "shortened the ladder to two rungs. Its t_good RECORD "
+          "(data/v8/t_good_derivation.json) stays tracked and is unaffected: it is a record "
+          "of what v8 served, not a rung.", canary=True),
+    Entry("data/classifier/v9/", RELOCATE, PRECIOUS, "mixed",
+          "see data/classifier/v5/. v9 was BUILT, STAGED and NEVER ADOPTED, so it was never "
+          "a rollback rung even while tracked — a rejected candidate is not a critical "
+          "final weight.", canary=True),
     Entry("data/wallpaper_head/", RELOCATE, PRECIOUS, "ignored",
           "trained wallpaper-quality heads (v1/v2/v3 .pt) — not GPU-reproducible; "
           "active + rollback -> precious-store, older versions curate to trash at move"),

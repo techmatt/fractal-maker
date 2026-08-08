@@ -33,6 +33,7 @@ this alignment turned up, not a side effect of it.
 Run:  uv run python -m pytest tools/v8/test_t_good_sweep_decode.py -q
 """
 import json
+from collections import Counter
 import sys
 from pathlib import Path
 
@@ -130,27 +131,69 @@ def test_sweep_and_served_agree_on_every_row_of_the_live_slice():
         assert np.array_equal(vec, ref), f"twin diverges from corn_decode at t={t}"
 
 
-def test_the_alignment_changes_no_admission_on_the_live_slice_and_says_so():
-    """The stated claim in the commit — 'the gap is measured 0 at current cuts' — as a test.
+# The measured served-vs-AND gap on the LIVE slice, per version. THE POINT OF THIS NUMBER IS
+# THAT IT IS NOT ZERO ANY MORE, and it stopped being zero for a reason worth writing down.
+#
+# Under v10 it WAS zero, and this test asserted that. That was a fact about v10's ADOPTED
+# CUTS, not about the rules: v10's table was very loose (mandelbrot t=0.03, julia:multibrot4
+# t=0.03), so essentially every row that met `p_ge4 >= 0.5` had already met `p_ge3 >= t`, and
+# the counting rule and the AND could not come apart. v11's table is strict (mandelbrot 0.90,
+# julia:mandelbrot 0.85, phoenix 0.77), so there is now real room between the two legs.
+#
+# EVERY DIVERGENCE IS `served_only` — admitted by the SERVED rule, refused by the AND — and
+# that is the expected direction: counting reaches 2 via `p_ge4 >= 0.5` without the `p_ge3`
+# leg. These are locations the head is confident are class 4 while being unsure they are
+# class 3, which CORN's cumulative probabilities do not forbid. The served rule is
+# `corn_decode`, so these 34 rows admit in production; the sweep that chose the thresholds
+# swept the same rule, so the cuts already account for them.
+LIVE_ALIGNMENT_GAP = {
+    "v10": {"total": 0, "by_partition": {}},
+    "v11": {"total": 34, "by_partition": {
+        "mandelbrot": 13, "julia:mandelbrot": 8, "phoenix": 5, "multibrot3": 4,
+        "julia:multibrot3": 2, "multibrot4": 2}},
+}
 
-    If a future head or slice makes it non-zero this goes red with the count, which is the
-    right time to re-read the adopted thresholds rather than to discover it afterwards. The
-    assertion is on the ADOPTED cuts only: the two rules genuinely differ as predicates
-    (proved above), so this is a fact about this population, not about the rules."""
+
+def test_the_alignment_gap_on_the_live_slice_is_the_recorded_one():
+    """The served-vs-AND gap, MEASURED and pinned per version rather than asserted zero.
+
+    A moving number pinned to its measurement is the honest instrument here. Asserting zero
+    was right while it was a live invariant; keeping that assertion after v11's cuts tightened
+    would have meant either a red build for a correct change, or quietly deleting the check.
+    What must not move without someone looking is the COUNT and its DIRECTION — a divergence
+    in the other direction (`and_only`: refused by the served rule, admitted by the AND) would
+    mean a row met `p_ge3 >= t` and `p_ge2 >= 0.5` and still decoded under 3, which cannot
+    happen and would indicate the twin has drifted from `corn_decode`."""
     rows = _live_rows()
     doc = json.loads((ROOT / "data" / ACTIVE_VERSION / "t_good_derivation.json")
                      .read_text(encoding="utf-8"))
     adopted, baseline = doc["adopted"], doc["baseline"]
-    n_diff = 0
+    served_only, and_only = Counter(), Counter()
     for r in rows:
-        fam = partition_of(r["fractal_type"], r["fractal_type"])
+        fam = est.fam_of(r)
         t = adopted.get(fam, baseline)
         nb, gd = r[f"{ACTIVE_VERSION}_p_ge2"], r[f"{ACTIVE_VERSION}_p_ge3"]
         gr = r[f"{ACTIVE_VERSION}_p_ge4"]
-        n_diff += int(_served(nb, gd, gr, t) != bool(nb >= est.NB_GATE and gd >= t))
-    assert n_diff == 0, (
-        f"{n_diff}/{len(rows)} rows now decode differently under the served rule than under "
-        f"the superseded AND — the alignment is no longer free, re-read the adopted table")
+        a, b = _served(nb, gd, gr, t), bool(nb >= est.NB_GATE and gd >= t)
+        if a and not b:
+            served_only[fam] += 1
+        elif b and not a:
+            and_only[fam] += 1
+
+    assert not and_only, (
+        f"{sum(and_only.values())} rows are admitted by the superseded AND and REFUSED by the "
+        f"served counting rule ({dict(and_only)}) — that direction is impossible if the twin "
+        f"still tracks corn_decode, so read this as the twin having drifted, not as a "
+        f"threshold question")
+
+    expected = LIVE_ALIGNMENT_GAP.get(ACTIVE_VERSION)
+    assert expected is not None, (
+        f"no recorded alignment gap for {ACTIVE_VERSION} — measure it and add a "
+        f"LIVE_ALIGNMENT_GAP entry rather than deleting this check")
+    assert (sum(served_only.values()), dict(served_only)) ==            (expected["total"], expected["by_partition"]), (
+        f"{ACTIVE_VERSION} served-vs-AND gap is {sum(served_only.values())} "
+        f"{dict(served_only)}, recorded {expected['total']} {expected['by_partition']} — "
+        f"the adopted table or the slice moved; re-read both, then update the record")
 
 
 # --------------------------------------------------------------------------- #

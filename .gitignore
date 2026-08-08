@@ -477,53 +477,72 @@ __pycache__/
 !/data/v11/eval_results_v11.json
 !/data/v11/eval_scores_v11.jsonl
 !/data/v11/eval_canon_record.json
+# The ADOPTED discovery t_good table at the v11 flip (tools/v11/derive_t_good_v11.py) —
+# the derivation half of production_seeder.T_GOOD_OVERRIDES and a member of
+# production_pins.COUPLED_ARTIFACTS, so it must be a tracked artifact and not a scratch one.
+!/data/v11/t_good_derivation.json
+# The v11 flip's own record: the rollback ladder (two rungs, v11 -> v10) and what the
+# adoption wrote. Separate from build_record.json because the build adopted nothing.
+!/data/v11/adoption_record.json
 /data/v11/aug_cache/
 /data/v11/eval_canon/
 /data/v11/plan.jsonl
 
 # ---------------------------------------------------------------------------
-# v9 classifier weights — DURABLE by exact path, and by NEGATION rather than by
-# force-add. data/classifier/v2..v8 are ignored by the blanket /data/* rule and were
-# force-added (`git add -f`), which works but leaves no rule saying they belong: a
-# fresh clone's `git add -A` would not re-add them and nothing would notice. v9
-# declares them the way data/v8 and data/v9 declare theirs — by exact path, checkable
-# with `git check-ignore --no-index`, and picked up by the derived canary in
-# tests/test_tracked_artifacts.py (BUILD_PREFIX_RE matches data/classifier/v<N>/ too).
+# Classifier weights — DURABLE by exact path, and by NEGATION rather than by force-add.
+# Force-adding (`git add -f`) works but leaves no rule saying a file belongs: a fresh clone's
+# `git add -A` would not re-add it and nothing would notice. Every version below declares
+# itself by exact path, checkable with `git check-ignore --no-index` and picked up by the
+# derived canary in tests/test_tracked_artifacts.py (BUILD_PREFIX_RE matches
+# data/classifier/v<N>/ too).
 #
-# The re-include chain has to walk down: git cannot re-include a file whose parent
-# directory is still excluded, so each level is opened and then re-narrowed. The
-# `/data/classifier/*` line keeps v2..v8 exactly as ignored as they are today — they
-# are already tracked, and ignore rules do not touch tracked files.
+# The re-include chain has to walk down: git cannot re-include a file whose parent directory
+# is still excluded, so each level is opened and then re-narrowed. Ordering is load-bearing —
+# LAST MATCHING RULE WINS, so every per-version block MUST sit after the
+# `/data/classifier/*` re-exclusion (a v10 negation placed earlier was silently undone by it
+# on the first attempt).
+#
+# ================== WEIGHTS RETENTION, SET 2026-08-08 ==================
+# TRACKED WEIGHTS = ACTIVE + PREVIOUS, per model family. Everything older or rejected
+# de-tracks at the flip (docs/design/storage_classes.md § weights retention). At the v11 flip
+# that de-tracked FIVE `.pt` files — v5, v6, v7, v8, v9 — and left the ladder at v11 -> v10.
+#
+# THE RECORDS STAY AND THE WEIGHTS DO NOT. Each retired version keeps its small
+# `config.json` (and `metrics.json` where it has one): those are the RECIPE, they cost a
+# kilobyte, and losing them was the real hazard — v5/v6/v7 shipped the .pt and nothing else,
+# and `classifier/train_v8.py` names v7's checkpoint config as "the only surviving copy of
+# the v7 recipe". `tools/scoring/extract_retired_config.py` lifted all three out before the
+# weights left. Emergency copies of the weights themselves sit UNREFERENCED at
+# <artifacts>/retired_weights/, verified against the LFS pointer oid; nothing here resolves
+# that path, on purpose.
 !/data/classifier/
 /data/classifier/*
-# v5 is force-added AND carries its own literal .gitattributes LFS line, which made the
-# wiring incoherent once the canary started reading `data/classifier/v<N>/` paths: LFS was
-# configured for a path no rule re-included, so git would never have been handed the
-# content on a fresh add. v5 is a documented rollback anchor (active_ckpt.V5_CKPT_ROLLBACK),
-# it is already tracked, and this negation just makes the rule match the reality.
+# --- retired heads: RECORDS ONLY, no weight (v5, v6, v7, v8, v9) ---
 !/data/classifier/v5/
 /data/classifier/v5/*
-!/data/classifier/v5/model_best.pt
+!/data/classifier/v5/config.json
+!/data/classifier/v6/
+/data/classifier/v6/*
+!/data/classifier/v6/config.json
+!/data/classifier/v7/
+/data/classifier/v7/*
+!/data/classifier/v7/config.json
+!/data/classifier/v8/
+/data/classifier/v8/*
+!/data/classifier/v8/config.json
+!/data/classifier/v8/metrics.json
 !/data/classifier/v9/
 /data/classifier/v9/*
-# The trained head itself (LFS), plus the two small records that say what produced it.
-# model_last.pt is deliberately NOT tracked: selection is on best, and a second 34 MB
-# LFS object per version buys nothing.
-!/data/classifier/v9/model_best.pt
 !/data/classifier/v9/config.json
 !/data/classifier/v9/metrics.json
-# v10 weights — identical wiring. This block MUST sit after the `/data/classifier/*`
-# re-exclusion above: last matching rule wins, so a v10 negation placed earlier in the
-# file is silently undone by that line (it was, on the first attempt).
+# --- the ladder: PREVIOUS (v10) and ACTIVE (v11) — weight + records ---
+# model_last.pt is deliberately NOT tracked on either: selection is on best, and a second
+# 34 MB LFS object per version buys nothing.
 !/data/classifier/v10/
 /data/classifier/v10/*
 !/data/classifier/v10/model_best.pt
 !/data/classifier/v10/config.json
 !/data/classifier/v10/metrics.json
-# v11 weights — identical wiring, and the same ordering constraint: this block sits after
-# the `/data/classifier/*` re-exclusion above, because last matching rule wins. STAGED, not
-# deployed: production_pins.ACTIVE_CKPT still resolves to v10, and the flip is a separate
-# prompt judged against data/v11/prereg_v11.json. Same position v9 held.
 !/data/classifier/v11/
 /data/classifier/v11/*
 !/data/classifier/v11/model_best.pt

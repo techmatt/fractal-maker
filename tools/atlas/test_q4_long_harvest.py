@@ -79,13 +79,50 @@ def test_the_uniform_leg_does_not_contradict_the_biased_registry():
     assert bm.registration_contradictions(rows) == []
 
 
-def test_the_uniform_leg_targets_the_partitions_with_no_unbiased_eval():
-    """The leg exists for `T_GOOD_UNCALIBRATED`, so that set is what its priority order is
-    drawn from. If a partition ever leaves that set, this goes red and the leg's target list
-    is re-decided rather than silently covering a partition that no longer needs it."""
-    import production_seeder as ps
-    assert {"phoenix", "multibrot3", "multibrot4", "multibrot5",
-            "julia:mandelbrot"} <= set(ps.T_GOOD_UNCALIBRATED)
+# The five partitions the uniform leg draws for. RE-DECIDED 2026-08-08, and the criterion
+# changed under it rather than the list: this used to be spelled `T_GOOD_UNCALIBRATED`, and at
+# the v11 flip `phoenix` and `julia:mandelbrot` LEFT that set — calibrated for the first time
+# on the randomized location-grouped holdout. Which is exactly the red this test was written
+# to produce, and re-deciding gives the same five, because the leg was never really about
+# calibratedness:
+#
+#   the leg exists for partitions with NO UNBIASED INSTRUMENT reaching MIN_POS.
+#
+# That is a stricter and more stable criterion, and post-flip it matters MORE, not less: the
+# holdout is biased exactly as training is, so `phoenix` and `julia:mandelbrot` now have a cut
+# and still have no population anyone may read a base rate from. The native multibrots are
+# withheld pending the fork decision, which will want unbiased rows to take it on.
+UNIFORM_LEG_TARGETS = {"phoenix", "julia:mandelbrot",
+                       "multibrot3", "multibrot4", "multibrot5"}
+
+
+def test_the_uniform_leg_targets_the_partitions_with_no_unbiased_instrument():
+    """The leg's target list, checked against the criterion rather than against a mood.
+
+    Derived from the live eval slice, not asserted: a partition belongs iff its
+    `eval_role="instrument"` rows carry fewer than `MIN_POS` keeper positives. If a target
+    ever crosses that line the leg has done its job there and this goes red so the list is
+    re-decided — which is what happened on 2026-08-08 to the criterion itself."""
+    import json
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+    import derive_t_good as est
+    import eval_slice
+
+    rows = eval_slice.load()
+    if not all("eval_role" in r for r in rows):
+        pytest.skip("eval slice predates the instrument/holdout split")
+    inst_pos = {}
+    for r in rows:
+        if r["eval_role"] == "instrument":
+            fam = est.fam_of(r)
+            inst_pos[fam] = inst_pos.get(fam, 0) + int(r["label"] >= 3)
+    short = {f for f, n in inst_pos.items() if n < est.MIN_POS}
+    short |= {f for f in est.ALL_FAMS if f not in inst_pos}
+    assert UNIFORM_LEG_TARGETS <= short, (
+        f"the uniform leg targets {sorted(UNIFORM_LEG_TARGETS - short)} which now HAVE an "
+        f"unbiased instrument at MIN_POS={est.MIN_POS} — re-decide the target list rather "
+        f"than drawing rows a partition no longer needs")
 
 
 # =========================================================================== #

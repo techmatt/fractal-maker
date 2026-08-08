@@ -51,8 +51,17 @@ sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 
 import location as loc_mod                                    # noqa: E402
 from active_ckpt import (                                     # noqa: E402
-    BIN, PALETTE, JPG_Q, auto_maxiter, make_scorer, ACTIVE_CKPT, V6_CKPT_ROLLBACK,
+    BIN, PALETTE, JPG_Q, auto_maxiter, make_scorer, ACTIVE_CKPT,
 )
+
+# The v6 sanity anchor's checkpoint. Spelled here rather than imported, because it is no
+# longer a PIN: `production_pins.V6_CKPT_ROLLBACK` was deleted at the 2026-08-08 v11 flip
+# together with v6's weight (storage_classes.md § weights retention — tracked weights are
+# ACTIVE + PREVIOUS). This study re-scores a frozen 2026-07 sample under the head that
+# produced it, so the constant belongs to the STUDY and not to the live pin set; a fresh
+# clone does not receive the weight and the anchor arm will refuse to start, which is
+# correct — it cannot be recomputed and its published numbers stand as the record.
+V6_CKPT_RETIRED = "data/classifier/v6/model_best.pt"
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -422,7 +431,7 @@ def compute_anchor(samples, v6_scorer, canonical_scores):
     d_g = [abs(t[2] - st[1]) for t, st in zip(triples, stored)]
     rho_nb = spearman([t[1] for t in triples], [st[0] for st in stored])
     rho_g = spearman([t[2] for t in triples], [st[1] for st in stored])
-    return (f"Re-scored {len(ids)} canonical renders with **v6** ({V6_CKPT_ROLLBACK}) vs the "
+    return (f"Re-scored {len(ids)} canonical renders with **v6** ({V6_CKPT_RETIRED}) vs the "
             f"stored v6 reward-pass scores: "
             f"mean|Δp_notbad|={np.mean(d_nb):.4f} (max {np.max(d_nb):.4f}), "
             f"mean|Δp_good|={np.mean(d_g):.4f} (max {np.max(d_g):.4f}), "
@@ -474,7 +483,7 @@ def run_full(args):
           f"{len(scores['parentcrop'])} parent-crop", flush=True)
 
     print("  loading v6 for the sanity anchor...", flush=True)
-    v6 = make_scorer(V6_CKPT_ROLLBACK)
+    v6 = make_scorer(V6_CKPT_RETIRED)
     anchor = compute_anchor(samples, v6, scores["canonical"])
     print("  " + anchor, flush=True)
 

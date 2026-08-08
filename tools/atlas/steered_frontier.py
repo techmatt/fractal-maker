@@ -615,7 +615,7 @@ def loc_of(partition: str, c, cx, cy, fw):
 #
 # It would be a no-op even if applied — every re-derived v8 base (0.199..0.704) is already
 # far above every v7 floor (0.216..0.269) — but "harmless today" is not why it is empty.
-TAU_H_CAMPAIGN_FLOOR_MODEL = "v10"
+TAU_H_CAMPAIGN_FLOOR_MODEL = "v11"
 TAU_H_CAMPAIGN_FLOOR: dict = {}
 # The v7 table, kept for the record only. NEVER read by the code path.
 TAU_H_CAMPAIGN_FLOOR_V7_RETIRED = {
@@ -652,35 +652,39 @@ TAU_H_CAMPAIGN_FLOOR_V7_RETIRED = {
 # harvest_log.jsonl). Until then the loud failure is the correct state — emission is dark
 # after a flip anyway, so nothing is blocked that was not already waiting on a discovery run.
 #
-# RE-DERIVED UNDER v10 on 2026-08-02 by `tools/atlas/tau_h_rederive.py`, which is the
+# RE-DERIVED UNDER v11 on 2026-08-08 by `tools/atlas/tau_h_rederive.py`, which is the
 # regeneration path this comment's failure message points at. Provenance artifact:
-# `data/atlas/tau_h_base_v10.json` (per-partition n, t_good, both population estimates,
-# and `arms_used`). 3,492 rows re-rendered at both presentations and re-scored.
+# `data/atlas/tau_h_base_v11.json` (per-partition n, t_good, both population estimates,
+# and `arms_used`). 3,492 rows re-rendered at both presentations and re-scored — the same
+# 2,400 harvest + 1,092 walk sample sizes v10 used.
 # Method — the fidelity study's estimator verbatim, on a population the harvest logs make
 # re-renderable: each sampled harvest-check geometry is re-rendered at BOTH presentations
 # (384x216 ss1 cheap / 640x360 ss2 canonical) and re-scored under the ACTIVE head, then
 # tau_h = the 10th percentile of cheap p_good among frames whose canonical p_good clears
 # the family's t_good.
 #
-# EVERY PARTITION IS CUT ON ITS OWN POPULATION — the pooled cross-family fallback is gone,
-# and its removal changed two numbers. Under v10 the native multibrot partitions run at the
-# 0.50 UNCALIBRATED baseline while v10's canonical p_good sits lower than v8's, so their
-# WALK-arm pass counts collapsed (multibrot3 12 -> 1, multibrot5 11 -> 3, both under the
-# min_n=5 floor). The old code would have handed both the pooled quantile 0.0393 — a cut
-# derived mostly from OTHER families' frames, ~9x looser than their own harvest estimates
-# (0.369 / 0.351) — and `combine=min` would have served it. A pooled cut on a partition is
-# the same category error as a v8 threshold on a v10 gate. Those two arms are now recorded
-# UNAVAILABLE and the minimum is taken over the arms that exist.
+# THE HARVEST POPULATION IS NO LONGER THE PINNED FIVE, and that is by design rather than by
+# drift. `harvest_log_registry` DISCOVERS runs (the five-entry hand list it replaced went
+# stale silently — nine runs written after it was typed were never looked at, and a hand list
+# reports that as "settled"). At the v10 derivation the registry offered 5 pinned runs; at
+# v11 it offers 22, of which the seventeen discovered ones contribute real rows. The sample
+# SIZE is unchanged, the pool it is drawn from is wider, so a v10 -> v11 tau_h move is a head
+# change AND a population change. `harvest_runs` in the artifact names all 22.
 #
-# CONSEQUENCE, STATED: multibrot3 and multibrot5 have NO untruncated cross-check under v10.
-# Their tau_h rests on the harvest arm alone, which is left-truncated, so for those two the
-# value is an upper bound with nothing bounding it from below. Read `arms_used` before
-# comparing either against a prior version.
+# EVERY PARTITION IS CUT ON ITS OWN POPULATION — no pooled cross-family fallback. Under v11
+# both arms are AVAILABLE for all eight partitions, which they were not under v10 (multibrot3
+# and multibrot5 had no walk arm there, so their cuts rested on the left-truncated harvest
+# side alone with nothing bounding them from below). That gap is closed.
 #
-# The values move a LOT versus v8 (mandelbrot 0.704 -> 0.0229) and that is the point: v10's
-# per-partition t_good is a different, far looser bar (mandelbrot 0.85 -> 0.03), so the
-# frames that clear it reach much further down the cheap axis. Serving the v8 numbers to a
-# v10 gate would have rendered confirmations for a tiny fraction of what v10 calls q3.
+# THE VALUES MOVE A LOT versus v10 (mandelbrot 0.0229 -> 0.633) and the reason is t_good, not
+# the head: v11's mandelbrot t_good is 0.90 against v10's 0.03, so the canonical bar this
+# estimator conditions on is ~30x stricter and only frames far up the cheap axis clear it.
+#
+# MANDELBROT'S ARM IS THIN AND IT IS THIN BECAUSE OF THAT BAR: 23 of 300 harvest rows and 6
+# of 300 walk rows pass canonical p_good >= 0.90, so its 10th percentile rests on 23 frames.
+# That clears the min_n=5 floor and it is the weakest number in the table — read
+# `harvest_detail`/`walk_detail` before treating a mandelbrot tau_h move as signal. The
+# other seven partitions pass 159-287 harvest rows each.
 #
 # ONE BIAS, STATED. The harvest log only holds checks that already cleared a PREVIOUS head's
 # tau_h, so it is left-truncated and its quantile is an UPPER bound. The untruncated
@@ -688,18 +692,17 @@ TAU_H_CAMPAIGN_FLOOR_V7_RETIRED = {
 # re-derived alongside it as a cross-check, and the committed value is the per-partition
 # MINIMUM over the available arms — the conservative side, since a too-high cut sheds
 # admissions. Campaign1's harvest rows carry no geometry and are permanently not
-# re-scoreable (37,853 of 66,864 checks, 56.6%); they are EXCLUDED, never approximated, so
-# the harvest arm rests on campaign2 + the julia parent probe alone.
-TAU_H_FIDELITY_BASE_MODEL = "v10"
+# re-scoreable; they are EXCLUDED, never approximated.
+TAU_H_FIDELITY_BASE_MODEL = "v11"
 TAU_H_FIDELITY_BASE = {
-    "mandelbrot": 0.02286625504493713,
-    "multibrot3": 0.36908935904502865,
-    "multibrot4": 0.408690321445465,
-    "multibrot5": 0.3513681888580322,
-    "julia:mandelbrot": 0.412648469209671,
-    "julia:multibrot3": 0.28186094164848324,
-    "julia:multibrot4": 0.05198849514126777,
-    "julia:multibrot5": 0.07040942013263703,
+    "mandelbrot": 0.632919943332672,
+    "multibrot3": 0.5123799264430999,
+    "multibrot4": 0.4743058800697326,
+    "multibrot5": 0.4674594938755035,
+    "julia:mandelbrot": 0.8434584259986877,
+    "julia:multibrot3": 0.24066436141729353,
+    "julia:multibrot4": 0.18013863265514374,
+    "julia:multibrot5": 0.4022993206977844,
 }
 
 

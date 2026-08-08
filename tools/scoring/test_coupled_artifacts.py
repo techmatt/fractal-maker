@@ -40,7 +40,20 @@ for _p in (ROOT / "tools" / "atlas", ROOT / "tools" / "mining", ROOT / "tools" /
 import production_pins as pins  # noqa: E402
 from production_pins import ACTIVE_VERSION, COUPLED_ARTIFACTS  # noqa: E402
 
-BUILD_META = ROOT / "data" / ACTIVE_VERSION / "build_metadata.json"
+def _ladder_record() -> dict:
+    """The live version's `rollback_ladder` block, wherever that version keeps it.
+
+    Two homes on purpose: v10's BUILD wrote a "what a future adoption would have to revert"
+    note into `build_metadata.json`, and v11's ADOPTION writes the real thing into
+    `adoption_record.json` — a different object with a different date. Resolved rather than
+    branched on a version literal, which is what this whole file exists to avoid."""
+    for name in ("adoption_record.json", "build_metadata.json"):
+        p = ROOT / "data" / ACTIVE_VERSION / name
+        if p.exists():
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            if "rollback_ladder" in doc:
+                return doc["rollback_ladder"]
+    raise AssertionError(f"no rollback_ladder record for the live head {ACTIVE_VERSION}")
 
 STAMPED = [e for e in COUPLED_ARTIFACTS if e.get("stamp") is not None]
 
@@ -75,11 +88,13 @@ def test_the_unstamped_entries_are_the_ones_that_genuinely_carry_no_stamp():
 def test_the_build_metadata_record_is_a_subset_of_the_registry():
     """The JSON record and the code must name the same things.
 
-    `must_revert_together` is a frozen build record — it keeps the four items that were
-    known when the build ran, and it may lag the registry (the registry has since added the
-    t_good derivation, the campaign floor and the tau_h provenance file). What it may NOT do
-    is name something the registry has forgotten, and that is the direction asserted."""
-    meta = json.loads(BUILD_META.read_text(encoding="utf-8"))["rollback_ladder"]
+    `must_revert_together` is a frozen record — through v10 it kept the four items that were
+    known when the BUILD ran and could lag the registry (which has since added the t_good
+    derivation, the campaign floor and the tau_h provenance file). From v11 the record is
+    written BY the adoption off `COUPLED_ARTIFACTS` itself, so it is the whole set rather than
+    a lagging subset. Either way what it may NOT do is name something the registry has
+    forgotten, and that is the direction asserted."""
+    meta = _ladder_record()
     known = {e["what"] for e in COUPLED_ARTIFACTS}
     for item in meta["must_revert_together"]:
         what = item["what"]

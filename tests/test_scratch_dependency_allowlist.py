@@ -108,12 +108,6 @@ ALLOWLIST = [
           INPUT, "same FRAMES table.", "until q4_sweep_validation retires"),
     Entry("scratch/deep_centers/ladder_p35/fw_8p07e_10.png", "tools/sourcing/deep_center_finder.py",
           INPUT, "same FRAMES table.", "until q4_sweep_validation retires"),
-    Entry("scratch/dive_manifest/manifest_key.json", "tools/atlas/dive_manifest.py", INPUT,
-          "the ranker's feature build joins its dive tiles through this key.",
-          "until the ranker features are rebuilt from a durable manifest"),
-    Entry("scratch/dive_manifest/tiles", "tools/atlas/dive_manifest.py", INPUT,
-          "the tiles that key addresses.",
-          "until the ranker features are rebuilt from a durable manifest"),
     Entry("scratch/mining/deploy_tail/report.json", "tools/mining/deploy_tail.py", INPUT,
           "library_records_build reads the deploy-tail report to build data/library/"
           "library_records.jsonl — a durable artifact with a scratch input.",
@@ -128,6 +122,17 @@ ALLOWLIST = [
     Entry("scratch/present/run4_present/manifest.json", "present (src/, Rust)", INPUT,
           "build_rev4_batch's --manifest default.",
           "regenerable by re-running present over run4"),
+    # SEVEN RANKER ROWS LEFT THIS LEDGER ON 2026-08-08 — `dive_manifest/{manifest_key.json,
+    # tiles}`, `steered_run2_manifest/{manifest_key.json,tiles}`, `campaign1_blind`,
+    # `pref_loc_v0_report.md` and `ranker_next_read`. Not because the hazard was resolved:
+    # every one of those paths was already WIPED, and the campaign1_blind row is the single
+    # most expensive entry this ledger ever carried (its loss is why 379 human labels are
+    # permanently unattributable). They are gone because their referent is: `tools/ranker/`
+    # and `tools/atlas/campaign1_manifest.py` were DELETED with the pref_loc_v1 rebuild path
+    # (docs/design/deferred_recalibration.md § "Ranker growth — CLOSED"), so the entries
+    # named producers that no longer exist and `test_no_dead_ledger_entry` said so. The
+    # LESSON does not leave with them — it is written up in storage_classes.md §
+    # "`scratch/` is about liveness" and in the closure record itself.
     # `scratch/q4_stage1/fields` and its `<mb_id>.bin` registry key were the two INPUT rows
     # here until 2026-08-04. They are gone because the hazard is: the fields were classified
     # DURABLE and now live at `data/q4_stage1/fields` (LFS), reached through
@@ -138,11 +143,6 @@ ALLOWLIST = [
           "keeper_calibrate's --manifest default: the blind manifest the keeper calibration "
           "in docs/design/ is derived against.",
           "until the keeper calibration is re-derived"),
-    Entry("scratch/steered_run2_manifest/manifest_key.json",
-          "tools/atlas/steered_run2_manifest.py", INPUT,
-          "the ranker's run2 join key.", "until the ranker features are rebuilt"),
-    Entry("scratch/steered_run2_manifest/tiles", "tools/atlas/steered_run2_manifest.py", INPUT,
-          "the tiles that key addresses.", "until the ranker features are rebuilt"),
     Entry("scratch/wallpaper/emit_v1/manifest.jsonl", "tools/wallpaper/emit_v1.py", INPUT,
           "deploy_tail's EMIT_MANIFEST — the emission it scores the tail of.",
           "until deploy_tail is re-run from a durable emission record"),
@@ -162,16 +162,6 @@ ALLOWLIST = [
     # These are on the list because the literal is hardcoded rather than routed through
     # paths.scratch() — the form that cannot be found by a refactor. They are NOT wipe
     # hazards, and saying so is the point of the `kind` column.
-    # NOT an OUTPUT, which is what this line said until 2026-08-05 and what it cost: the
-    # directory holds `manifest_key.json`, the tile->location join for campaign1's 298 blind
-    # labels, and `tools/ranker/train_eval_v1.py` READS it (as `ROOT / "scratch" /
-    # "campaign1_blind" / ...`, the segmented form the scanner below cannot see — so the
-    # consumer never showed up here and the row was classified from the writer alone).
-    Entry("scratch/campaign1_blind", "tools/atlas/campaign1_manifest.py", INPUT,
-          "campaign1_manifest's --out-dir default AND train_eval_v1's C1_KEY: the join "
-          "without which the campaign-1 half of the ranker's 379 labels is unattributable.",
-          "DEAD — already wiped; the labels survive and the join does not, which is why the "
-          "pref_loc_v1 rebuild is blocked (docs/design/deferred_recalibration.md)"),
     Entry("scratch/coarse_gate", "tools/queries/validate_coarse_score.py", OUTPUT,
           "the validator's own scratch dir.", "wipeable"),
     Entry("scratch/deep_centers", "tools/sourcing/emit_deep_pool.py", OUTPUT,
@@ -190,14 +180,8 @@ ALLOWLIST = [
           "archived study's output dir.", "wipeable"),
     Entry("scratch/palette_preview/v2-batch", "tools/studies/archive/render_v2_batch.py",
           OUTPUT, "archived study's output dir.", "wipeable"),
-    Entry("scratch/pref_loc_v0_report.md", "tools/ranker/report.py", OUTPUT,
-          "the report it writes.", "wipeable"),
     Entry("scratch/present/scale_2x2", "tools/eda/scale_2x2_cap_locations.py", OUTPUT,
           "PRESENT_BASE, its own output tree.", "wipeable"),
-    Entry("scratch/ranker_next_read", "tools/ranker/report.py", OUTPUT,
-          "the next-read tile set report.py rmtree's and rebuilds every run. The 2026-08-03 "
-          "inventory listed this as READ-side; it is not — report.py is its only toucher "
-          "and it writes it.", "wipeable"),
     Entry("scratch/render_mode_pilot/exp_vs_smooth",
           "tools/studies/archive/exp_vs_smooth_rankcorr.py", OUTPUT,
           "archived study's output dir.", "wipeable"),

@@ -139,20 +139,22 @@ TRACKED_CANARIES = [
     "data/label_corpus/batches/2026-08-01_supply_crawl_uniform_v1/rule_labels_interior_gt30_v1.json",
     "data/label_corpus/batches/2026-08-01_supply_crawl_strat_a_v1/rule_labels_interior_gt30_v1.json",
     "data/label_corpus/batches/2026-08-01_supply_crawl_strat_b_v1/rule_labels_interior_gt30_v1.json",
-    # Committed classifier weights (force-tracked; not reproducible under GPU float
-    # nondeterminism, so no rebuild path). v10 is the LIVE deployed model (flipped
-    # 2026-08-02); v8 is the one-flip rollback anchor (the role v7 held before the v10
-    # promotion); v7 is a deeper rung AND the frozen penultimate the pref_loc_v1 ranker is
-    # pinned to; v6/v5 are the deepest rollbacks. v9 is deliberately NOT here: it was built,
-    # staged and never deployed, so it is not a rung of the ladder
-    # (data/v10/build_metadata.json:rollback_ladder.why_not_v9) — it is covered by the
-    # relational data/classifier/v<N>/ guard instead.
+    # Committed classifier weights (not reproducible under GPU float nondeterminism, so no
+    # rebuild path). SINCE 2026-08-08 THIS IS THE LADDER AND NOTHING ELSE: v11 is the LIVE
+    # deployed model and v10 is the one rung below it. v5/v6/v7/v8/v9 were canaried here
+    # until that day and were DE-TRACKED under the ACTIVE+PREVIOUS weights-retention policy
+    # (docs/design/storage_classes.md § weights retention); v9 was never in this list anyway,
+    # because it was built, staged and never deployed. Their `config.json` records are
+    # canaried instead — small, text, and the thing that would actually be lost (v5/v6/v7
+    # shipped no config.json at all until it was lifted out of the checkpoint).
     # Every other v{2..4} weight is gitignored under data/*.
+    "data/classifier/v11/model_best.pt",
     "data/classifier/v10/model_best.pt",
-    "data/classifier/v8/model_best.pt",
-    "data/classifier/v7/model_best.pt",
-    "data/classifier/v6/model_best.pt",
-    "data/classifier/v5/model_best.pt",
+    "data/classifier/v9/config.json",
+    "data/classifier/v8/config.json",
+    "data/classifier/v7/config.json",
+    "data/classifier/v6/config.json",
+    "data/classifier/v5/config.json",
     # The wallpaper-quality label sidecars — 3,638 human tier verdicts across the five
     # batches the head trains on, as a SET. Added 2026-08-05 with the v4 retrain, and the
     # three July files are in here retroactively rather than "when they landed" because
@@ -191,12 +193,11 @@ TRACKED_CANARIES = [
     # rebuild path. Only the LATEST canonical weight of each is kept (no v1/v2 history,
     # no seed variants) — see docs/design/storage_classes.md, "Git history is a durability tier".
     "data/wallpaper_head/v3/model_best.pt",       # LIVE cross-location wallpaper-quality head
-    # v4 — the five-batch retrain, STAGED not deployed. Kept here rather than under the
-    # "only the LATEST canonical weight" rule because v3 is still the LIVE pin: this is a
-    # live/rollback PAIR, not v1/v2-style history, and the pair is the whole point until
-    # the adoption decision lands. If v4 is adopted, v3 stays as the one-flip rollback
-    # anchor (the shape data/classifier/ already has with v10/v8).
-    "data/wallpaper_head/v4/model_best.pt",
+    # v4 — the five-seed retrain — was canaried here as a STAGED candidate on the argument
+    # that v3+v4 were a live/rollback PAIR. The 2026-08-08 retention policy says otherwise:
+    # a pair is ACTIVE + PREVIOUS, and v4 is neither — `wallpaper_pins` still pins v3, so v4
+    # is a candidate that was never adopted, and the policy de-tracks those. Removed with the
+    # weight, same shape as render_mode_head/v2 in 2026-08-06.
     "data/render_mode_head/v1/model_best.pt",     # LIVE strange-mode (mining_v1) gate
     # The gate lock: the frozen ladder + operating point the LIVE 0.50 release floor is set
     # against. Unregenerable in the strict sense — `lock_mining_gate.py` rebuilds it from
@@ -436,11 +437,12 @@ def test_v8_durability_wiring_coherent():
 # `git add -f` at a gitignored path (the `durable(force-add)` class in
 # tools/audit/durability_map.py). `tools/paths.durable()` refuses to write into these dirs,
 # which is why they are called out rather than negated — and why the set must not grow.
-FORCE_ADDED_UNNEGATED = {
-    "data/classifier/v6/model_best.pt",
-    "data/classifier/v7/model_best.pt",
-    "data/classifier/v8/model_best.pt",
-}
+# EMPTY SINCE 2026-08-08, and that is a resolution rather than an omission: the three
+# force-added weights that lived here (v6/v7/v8 model_best.pt) were de-tracked under the
+# ACTIVE+PREVIOUS weights-retention policy, and the config.json records that replaced them
+# are declared by exact-path negation like everything else. The set is kept — with the rule
+# it enforces — because "must not grow" is the assertion, and an empty set asserts it best.
+FORCE_ADDED_UNNEGATED: set[str] = set()
 
 
 def test_every_tracked_build_artifact_is_covered_by_a_negation():

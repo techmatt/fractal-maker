@@ -1,12 +1,17 @@
-data/classifier/v5/model_best.pt filter=lfs diff=lfs merge=lfs -text
+# Location-head weights. ONE glob, and it covers the ladder (v10 + v11) — v5's redundant
+# literal line above it went out with v5's weight on 2026-08-08. The glob is deliberately
+# left broad rather than narrowed to the two live versions: an LFS rule on a path with no
+# file is inert, and the failure it prevents (a 34 MB .pt committed as a raw blob because
+# someone added a version before editing this file) is the one that cannot be undone cheaply.
 data/classifier/*/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/wallpaper_head/v3/model_best.pt filter=lfs diff=lfs merge=lfs -text
-# v4: the five-batch retrain (2026-08-05 sitting folded in). STAGED, not deployed —
-# wallpaper_pins still pins v3, which stays the live head and the rollback rung. Both are
-# force-added (the blanket /data/* ignore covers data/wallpaper_head/, and unlike
-# data/classifier/ there is no negation block here), so this rule is what puts the weight
-# in LFS when it is: `git add -f data/wallpaper_head/v4/model_best.pt`.
-data/wallpaper_head/v4/model_best.pt filter=lfs diff=lfs merge=lfs -text
+# v4 (the five-seed retrain, 2026-08-05 sitting folded in) had a rule here while it was a
+# STAGED candidate. It was DE-TRACKED on 2026-08-08: `wallpaper_pins` still pins v3, so
+# under ACTIVE+PREVIOUS retention v4 is neither — it is a staged candidate that was never
+# adopted, and the policy de-tracks those (storage_classes.md § weights retention). Its
+# per-seed run record, `metrics.json` and `eval_scores.jsonl` are untracked working-tree
+# files as they always were; a verified emergency copy of the whole v4 tree, all five seeds
+# included, sits unreferenced at <artifacts>/retired_weights/wallpaper_head_v4/.
 data/render_mode_head/v1/model_best.pt filter=lfs diff=lfs merge=lfs -text
 # v2 (the 2026-08-06 finetune of v1 on the 960-row rebuilt correction sheet) had an LFS rule
 # here while it was a live candidate. It LOST the winner rule the same day — significantly

@@ -296,10 +296,12 @@ re-probing them re-derives the same nucleus at full Newton cost. The cache beats
 (a cached cell is skipped whatever the coin says) and both survive a resume.
 `[code: minibrot_maneuvers.ProbeGovernor]`
 
-**`pref_loc_v1` stays out of frontier priority.** The ranks-never-steers seam is untouched:
-a slot reservation is not a ranker change, and the preference ranker is absent from
-`_split_reserved` exactly as it is absent from `pop_batch_scheduled`. Said so in a comment
-at the seam. `[code: steered_frontier._split_reserved docstring]`
+**No ordering model touches frontier priority.** The ranks-never-steers seam is untouched: a
+slot reservation is not a ranker change, and no preference ranker appears in `_split_reserved`
+any more than in `pop_batch_scheduled`. Written as `pref_loc_v1` until 2026-08-08, when that
+ranker was deleted outright (`retired.md`); the seam is the invariant, not the model that used
+to be excluded by it, and anything that ever replaces it inherits the same exclusion.
+`[code: steered_frontier._split_reserved docstring]`
 
 ### 3.1 The richness screen, and what may select on it (v1.4)
 

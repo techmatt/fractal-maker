@@ -74,7 +74,9 @@ from production_seeder import T_GOOD_BASELINE         # noqa: E402
 # re-deriving the previous head's cut. Was a literal "v8" until the v10 flip.
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 import eval_slice                                # noqa: E402
-from partitions import FT2FAM                    # noqa: E402  THE map, one copy (was mirrored here)
+from derive_t_good import fam_of                 # noqa: E402  THE per-row partition reader
+from derive_t_good import select_population as _select_population  # noqa: E402
+from partitions import ALL_FAMS                  # noqa: E402  THE list, one copy (was mirrored here)
 from production_pins import ACTIVE_VERSION       # noqa: E402
 
 EVAL_VERSION = ACTIVE_VERSION
@@ -114,22 +116,40 @@ def load_triples(eval_path: Path = EVAL, version: str = None) -> dict:
     re-render produces carries its own version's columns, and a copied deriver is how two
     thresholds that are supposed to be comparable stop being comparable.
 
-    THE PHOENIX SPLIT IS NOT RESOLVED HERE, and that is a limitation of the SLICE, not an
-    omission: an eval row carries `fractal_type` and no parameter axes at all, so it cannot
-    tell `phoenix:classic` from `phoenix` (`partitions.partition_of_row` refuses such a row
-    rather than guessing). The token map is therefore the honest resolver here and both halves
-    pool into `phoenix`. Costs nothing today — the v10 slice carries ZERO phoenix rows of
-    either kind — but a slice that ever carries phoenix must gain the axes before a keeper cut
-    on either half means anything.
+    THE PHOENIX SPLIT IS RESOLVED FROM THE ROW, since v11. This block used to say the split
+    could not be resolved here at all — an eval row carried `fractal_type` and no parameter
+    axes, so `FT2FAM` folded `phoenix:classic` into `phoenix` and the note ended "a slice that
+    ever carries phoenix must gain the axes before a keeper cut on either half means
+    anything." The v11 slice is that slice (211 phoenix rows across both eval roles), and it
+    resolves the split at the FREEZE instead: `tools/<v>/eval_<v>.py` writes the partition per
+    row. `derive_t_good.fam_of` is the one reader of that column and is taken here rather than
+    re-deriving it, so the discovery table and the keeper cut cannot end up grouping the same
+    slice two different ways.
     """
     ver = version or EVAL_VERSION
+    rows = eval_slice.load(ver, path=eval_path)
+    if all("eval_role" in r for r in rows):
+        # v11 on: the SAME population rule the discovery table uses — the grouped holdout,
+        # `INSTRUMENT` as the per-partition fallback source, never pooled. Taken from the
+        # shared estimator rather than re-implemented, because the keeper cut is defined as
+        # the discovery table's precision-weighted TWIN: same rows, beta=0.5 instead of the
+        # per-family choice. Re-implementing it is how the two stop being twins.
+        #
+        # THIS MATTERS MORE UNDER v11 THAN IT READS. The rule below (a partition absent from
+        # `INSTRUMENT` "takes every row it has") was safe only while those partitions had NO
+        # rows. The v11 slice gives them rows on both eval roles, so the same line silently
+        # became a POOLED cut — julia:mandelbrot on 302 rows = 254 holdout + 48 instrument,
+        # phoenix on 211 = 113 + 98 — which is the one thing this module forbids.
+        kept, _ = _select_population(rows, instrument=INSTRUMENT)
+    else:
+        # v10 and earlier: the frozen one-instrument-per-partition rule, unchanged, so those
+        # slices still recut to their committed numbers.
+        kept = [r for r in rows
+                if INSTRUMENT.get(fam_of(r)) in (None, r.get("source"))]
     parts: dict = defaultdict(list)
-    for r in eval_slice.load(ver, path=eval_path):
-        part = FT2FAM.get(r["fractal_type"])
+    for r in kept:
+        part = fam_of(r)
         if part is None:
-            continue
-        want = INSTRUMENT.get(part)
-        if want is not None and r.get("source") != want:
             continue
         p_nb, p_gd, _ = eval_slice.probs(r, ver)
         parts[part].append((p_nb, p_gd, r["label"] >= 3))
@@ -189,7 +209,10 @@ def derive(eval_path: Path = EVAL, version: str = None) -> dict:
     """{partition: {t, calibrated, n, pos, prec, rec, f, oof_f}}. Uncalibrated => baseline, flagged."""
     parts = load_triples(eval_path, version)
     out = {}
-    for part in sorted(set(list(parts) + list(FT2FAM.values()))):
+    # ALL_FAMS, not FT2FAM.values(): a DERIVED partition has no fractal_type of its own, so
+    # the value list silently omits every one of them — `phoenix:classic` would never be
+    # stamped at all, which reads as "not a partition" rather than "uncalibrated".
+    for part in sorted(set(list(parts) + list(ALL_FAMS))):
         rows = parts.get(part, [])
         n = len(rows); pos = sum(1 for _, _, x in rows if x)
         if pos < MIN_POS:
@@ -260,8 +283,10 @@ def provenance_stamp(eval_path: Path = None, version: str = None) -> dict:
         verified=True,
         population=eval_rel,
         durable_population=True,
-        detail=("frozen eval slice (paths.durable, committed); ONE INSTRUMENT PER PARTITION "
-                f"({INSTRUMENT}) — never pooled; keeper positive = label >= 3"),
+        detail=("frozen eval slice (paths.durable, committed); the DISCOVERY TABLE'S OWN "
+                "population rule (derive_t_good.select_population — grouped holdout, "
+                f"instrument fallback {INSTRUMENT}) — never pooled; keeper positive = "
+                "label >= 3; the only difference from the discovery table is beta=0.5"),
         basis=(f"model + population named by the derivation code path: keeper_cut.load_triples reads "
                f"{EVAL_MODEL_VERSION}_p_ge2/{EVAL_MODEL_VERSION}_p_ge3 from EVAL ({eval_rel}); "
                f"not inferred from history. The population is committed, so `derive()` re-runs and "

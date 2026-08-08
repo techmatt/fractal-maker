@@ -5,14 +5,64 @@ Distilled from the v7 build line (`v7_retrain_scope`, `v7_t_good`, and the
 specific v7 numbers live in code (`data/classifier/*`, `production_seeder.T_GOOD_OVERRIDES`);
 this is the durable method. Companion: `aesthetic_scoring.md` (how to read `p_good`).
 
-## 1. Append, never rebuild — freeze the prior-version manifest prefix
+## 1. Full crop-batch rebuild — SUPERSEDES "append, never rebuild" (2026-08-08, at the v11 flip)
 
-Retrain by **appending post-freeze labels to a byte-frozen prior-version manifest
-prefix**. Freezing every prior location's `split` / `group_id` / row-order preserves
-the version-to-version eval-comparability chain and carries the large working classes
-(mandelbrot, J0) forward on an **identical eval set**, so "did it regress?" is
-answerable by a **paired** test. Enforce a **frozen-prefix byte gate** on both the
-manifest and the cache-manifest rows.
+**Build by rebuilding the whole manifest from the committed label corpus, under a seeded
+randomized location-GROUPED split.** `tools/v11/build_manifest.py` is the reference
+implementation. `loc_id` is dense over the build and carries no cross-version meaning.
+
+### What it replaced, and why that rule ended
+
+The rule here through v10 was *append, never rebuild*: retrain by appending post-freeze
+labels to a **byte-frozen prior-version manifest prefix**, freezing every prior location's
+`split` / `group_id` / row-order, enforced by a frozen-prefix byte gate on both the manifest
+and the cache-manifest rows. Its purpose was **eval comparability**: an identical eval set
+makes "did it regress?" a *paired* test.
+
+It ended because the frozen prefix and a re-randomized split cannot both hold, and **the
+split rule is the thing that had to change**. v10's eval side WAS the four score-unconditioned
+instruments — 1,050 locations, none of them `julia:mandelbrot`, `phoenix`, `phoenix:classic`
+or the native multibrots. So six of ten partitions had **no eval row of any kind** while the
+corpus held 809 julia:mandelbrot and 375 phoenix keeper positives, and `derive_t_good`'s
+`MIN_POS` gate reported "no data" about a corpus that had plenty. Under the append rule that
+was not fixable: an instrument is registered before it is drawn, and the partitions in
+question had never had one. Six partitions permanently uncalibratable is a larger cost than a
+paired eval, so the frozen prefix went.
+
+### What carries comparability now that the prefix does not
+
+**The instruments, reproduced location-for-location.** The four score-unconditioned draws are
+forced 100% eval in every build and are re-registered by identity, not by row position — v11's
+build gate pins the census-144 that way. Version-over-version verdicts read off those and only
+those, which is what they were always for; what changed is that they are now the *whole* of
+the comparability argument rather than a subset of a frozen prefix.
+
+### The two eval roles — and they are not interchangeable
+
+    eval_role = "instrument"   the score-unconditioned draws, forced 100% eval. UNBIASED.
+                               Base rates and version-over-version non-regression read off
+                               these and ONLY these.
+    eval_role = "holdout"      a stratified random draw over the remaining split groups.
+                               BIASED exactly as training is — a held-out sample of the
+                               population the model is trained on. THE calibration
+                               population (§4), and a base rate must NEVER be read from it.
+
+**Calibration = randomized location-grouped splits** (Matt, 2026-08-06). `derive_t_good.
+select_population` is the shared implementation: per partition the grouped holdout where it
+clears `MIN_POS`, the frozen instrument as the fallback, **never their union**. See §4.
+
+### What a rebuild must still enforce
+
+Grouping is the part that has to be right, because it is what a frozen prefix used to do for
+free. Group by neighborhood AND by the relations that make two locations the same thing —
+`shared_minibrot_atom`, `shared_seed_c` (the dynamical plane), `shared_parent_oid` — union-find
+them into split groups, and draw the holdout over GROUPS, never over locations. Stratify the
+draw on `fractal_type` (so a small partition is not underserved by luck) and on
+`group_has_label_ge3` (so the eval positive rate is the population's rather than the draw's).
+Every location's split is then a fact about its group.
+
+**A re-split renumbers `loc_id` and invalidates the render cache**, which is keyed on it. That
+is the standing cost of this rule and it is why a rebuild is a build, not a tweak.
 
 ## 2. Split assignment — the cardinal sin is biased-in-eval
 
@@ -99,8 +149,26 @@ Per-partition `t_good` thresholds are **calibrated to a specific score scale**. 
 head's `p_good` distribution shifts, so **reusing old cuts silently starves recall**.
 Re-derive every version:
 
+- **The population is the randomized location-GROUPED HOLDOUT** (Matt, 2026-08-06), with the
+  partition's frozen instrument as the fallback where the holdout is short — one or the
+  other, **never their union**. `derive_t_good.select_population` is the shared
+  implementation and `MIN_POS` is applied to whichever it picks. The holdout is biased
+  exactly as training is, which is what a calibration cut wants; the instrument stays
+  reserved for base rates and version-over-version verdicts (§1). Through v10 the rule was
+  "one frozen instrument per partition", which starved six of ten partitions — see §1 for
+  why that ended.
 - **F_beta-argmax** over a `p_good` grid, tie-break toward higher `t`, only where the
-  slice has **≥15 positives**. `beta` is chosen per partition — see below.
+  chosen population has **≥15 positives**. `beta` is chosen per partition — see below.
+- **Read a threshold move as population + head, not head alone, whenever the population
+  rule changed.** An F_beta argmax moves with prevalence: at the v11 flip mandelbrot went
+  0.03 → 0.90 across a keeper base rate of 4.9% → 11.3%, and no part of that is attributable
+  to v11's scale. Where a partition's population is unchanged the move IS readable as a head
+  change — v11 kept `julia:multibrot3` on the same census v10 cut it on, for exactly that.
+- **A partition the estimator CAN cut and the pass does not adopt gets `withhold`, not a
+  dropped row.** The number is derived, printed and written to the artifact's `withheld`
+  block with a reason naming the decision's owner, and the partition runs at the baseline.
+  Dropping the rows would print "no data" about data there is; adopting silently makes a
+  threshold move nobody asked for a side effect of a flip.
 - Expose in-sample optimism with **leave-one-out / OOF**, and report the argmax
   **plateau width**: tie-breaking high puts the adopted `t` at the plateau's upper edge by
   construction, so the plateau is the only honest read on how knife-edged the pick is.

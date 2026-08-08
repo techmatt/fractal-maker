@@ -327,34 +327,14 @@ def test_pool_resume_no_loss_no_dup(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# ranker (pref_loc_v0) — percentiles + cache-only scoring parity (render-free).
+# The location-ranker tests LIVED HERE and were deleted on 2026-08-08 with their subject.
+# `tools/ranker/` is gone: `pref_loc_v1` never existed on this checkout and its rebuild was
+# DELETED permanently, not left blocked (deferred_recalibration.md § "Ranker rebuild —
+# DELETED"). What they covered — `rank_percentiles` ties, and cache-hit/direct scoring parity
+# — is not behaviour this tree has any more. The within-partition SEEDED SHUFFLE that
+# replaced the ranker ordering is covered by `test_round_order_*` below, which is the live
+# rule now rather than the fallback half of one.
 # --------------------------------------------------------------------------- #
-from tools.ranker.score_locations import rank_percentiles, LocationRanker, DEFAULT_FEATURES  # noqa: E402
-
-
-def test_rank_percentiles_ties_share_higher_rank():
-    pct = rank_percentiles({"a": 1.0, "b": 2.0, "c": 2.0})
-    assert pct["a"] == pytest.approx(1 / 3)      # smallest → bottom third
-    assert pct["b"] == pct["c"] == 1.0           # ties both count each other as <= → top
-    assert rank_percentiles({}) == {}
-    assert rank_percentiles({"solo": 5.0})["solo"] == 1.0
-
-
-@pytest.mark.skipif(not (ROOT / "data/ranker/pref_loc_v0/model.npz").exists()
-                    or not DEFAULT_FEATURES.exists(),
-                    reason="pref_loc_v0 artifacts absent")
-def test_location_ranker_cache_hit_matches_direct_scoring():
-    from tools.ranker.scorer import RankerScorer
-    z = np.load(DEFAULT_FEATURES, allow_pickle=True)
-    s = RankerScorer.load()
-    direct = {str(z["ids"][k]): float(v)
-              for k, v in enumerate(s.score_matrix({b: z[b] for b in s.sets}))}
-    lr = LocationRanker()
-    rows = [{"id": str(i)} for i in z["ids"]]
-    mine = lr.score_rows(rows, ROOT / "scratch" / "_test_ranker_tiles")   # all cache hits
-    assert lr._stack is None                     # torch feature stack never loaded
-    assert max(abs(mine[i] - direct[i]) for i in direct) < 1e-9
-
 
 # --------------------------------------------------------------------------- #
 # driver — per-head release floors + short-fill + multi-ledger intake dedup.
@@ -368,7 +348,6 @@ def _args(tmp_path, **over):
         ledger=["x.jsonl"], out=str(tmp_path / "scratch"), report=None, release_n=5,
         target_gated=0, floor=B.DEFAULT_FLOOR, mining_floor=B.DEFAULT_MINING_FLOOR,
         release_floor=B.DEFAULT_RELEASE_FLOOR, mining_release_floor=B.DEFAULT_MINING_RELEASE_FLOOR,
-        intake_floor=None,
         strange_frac=B.DEFAULT_STRANGE_FRAC,
         max_attempts=240, time_budget_min=45.0, seed=0)
     for k, v in over.items():
@@ -709,7 +688,7 @@ class _FakePool:
         self.counts[rid] = self.counts.get(rid, 0) + 1
 
 
-def _driver(sizes: dict, ranker=None, seed=7):
+def _driver(sizes: dict, seed=7):
     """A bare EmissionDiversity carrying only what pick_location touches (no sinks, no heads,
     no intake) — `object.__new__` deliberately, so this stays torch-free and render-free."""
     from tools.emission.build_emission_diversity_v1 import EmissionDiversity
@@ -720,7 +699,7 @@ def _driver(sizes: dict, ranker=None, seed=7):
             rid = f"{p}_{k:04d}"
             d.rows.append({"id": rid})
             d.partition_of[rid] = p
-    d.ranker_score = dict(ranker or {})
+    d.ranker_score = {}      # permanently empty since the ranker was deleted (2026-08-08)
     d.seed = seed
     d.pool = _FakePool()
     d._round_idx = None
@@ -788,23 +767,20 @@ def test_partitions_are_derived_from_the_rows_not_a_literal():
     assert got["a_brand_new_partition_v9"] == 10 and got["mandelbrot"] == 10
 
 
-def test_within_a_partition_the_ranker_orders_when_it_resolves():
-    """Order, don't filter: inside each partition the picks come out ranker-descending, so a
-    budget that runs out mid-partition already spent on its best rows."""
-    sizes = {"aaa": 12, "bbb": 12}
-    # score DESCENDING in reverse-alphabetical id order, so ranker order != id order
-    ranker = {f"{p}_{k:04d}": float(k) for p in sizes for k in range(12)}
-    d = _driver(sizes, ranker=ranker)
-    picked = _run(d, 24)
-    for p in sizes:
-        seq = [ranker[i] for i in picked if d.partition_of[i] == p]
-        assert seq == sorted(seq, reverse=True), (p, seq)
-    assert len(set(picked)) == 24
+# `test_within_a_partition_the_ranker_orders_when_it_resolves` stood here until 2026-08-08.
+# It asserted that a populated `ranker_score` made the within-partition order
+# ranker-descending — true of the code and true of nothing else: the ranker artifact never
+# resolved on this checkout, so the branch it covered ran zero times in production while the
+# test kept it green. Deleted with the ranker (deferred_recalibration.md § "Ranker growth —
+# CLOSED"). The seeded shuffle below is no longer "the absent-artifact branch"; it is the rule.
 
 
-def test_without_a_ranker_the_within_partition_order_is_a_seeded_shuffle():
-    """The absent-artifact branch must be UNBIASED, not alphabetical — the ranker has never
-    resolved on this checkout, so this is the branch production actually runs."""
+def test_the_within_partition_order_is_a_seeded_shuffle():
+    """The within-partition order must be UNBIASED, not alphabetical.
+
+    This was named `test_without_a_ranker_...` and described the fallback half of a two-branch
+    rule. There is one branch now, and the properties it has to hold are the same three: not
+    id-order, reproducible under a seed, and different under a different one."""
     d = _driver(SIZES, seed=7)
     picked = _run(d, 60)
     for p in SIZES:

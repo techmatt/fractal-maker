@@ -1,0 +1,641 @@
+{
+  "objective": "per-partition F_beta-argmax, tie-break higher t",
+  "objective_principle": "Weight recall where supply is SCARCE, weight precision where supply is ABUNDANT. A false admit costs the same everywhere; the cost of a MISS is what differs by family. Mandelbrot is effectively unlimited (a miss costs nothing, the next hunt finds more) -> F0.5. julia:multibrot supply saturates (a miss costs real money) -> F2.",
+  "objective_by_partition": {
+    "mandelbrot": "F0.5",
+    "julia:mandelbrot": "F0.5",
+    "phoenix": "F0.5",
+    "multibrot3": "F0.5",
+    "multibrot4": "F0.5",
+    "multibrot5": "F0.5",
+    "julia:multibrot3": "F2",
+    "julia:multibrot4": "F2",
+    "julia:multibrot5": "F2"
+  },
+  "default_objective": "F2",
+  "decode": "keeper(label>=3) iff score_lib.corn_decode(P(>=2), P(>=3), t, P(>=4), t_great=0.5) >= 3 \u2014 the SERVED rule, which COUNTS thresholds met rather than chaining them",
+  "baseline": 0.5,
+  "min_pos": 15,
+  "no_class4_threshold": true,
+  "class4_decode": "natural cutpoint P(>=4) >= 0.5, no per-family calibration",
+  "native_multibrot_tightening": "NOT adopted (fork-scheduled proposals left on record)",
+  "eval_slice": "data/v11/eval_scores_v11.jsonl",
+  "model": "v11",
+  "derived": {
+    "julia:mandelbrot": {
+      "n": 254,
+      "pos": 70,
+      "objective": "F0.5",
+      "beta": 0.5,
+      "objective_rationale": "precision-weighted (supply abundant)",
+      "t_good": 0.85,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.85,
+          "precision": 0.8814,
+          "recall": 0.7429,
+          "fbeta": 0.8497,
+          "tp": 52,
+          "fp": 7,
+          "fn": 18,
+          "plateau": [
+            0.83,
+            0.85
+          ],
+          "plateau_steps": 3,
+          "beta": 0.5,
+          "fbeta_oof": 0.8333
+        },
+        "F2": {
+          "t": 0.57,
+          "precision": 0.7531,
+          "recall": 0.8714,
+          "fbeta": 0.8449,
+          "tp": 61,
+          "fp": 20,
+          "fn": 9,
+          "plateau": [
+            0.57,
+            0.57
+          ],
+          "plateau_steps": 1,
+          "beta": 2.0,
+          "fbeta_oof": 0.8217
+        }
+      }
+    },
+    "julia:multibrot3": {
+      "n": 54,
+      "pos": 19,
+      "objective": "F2",
+      "beta": 2.0,
+      "objective_rationale": "recall-weighted (supply scarce)",
+      "t_good": 0.26,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.82,
+          "precision": 0.6923,
+          "recall": 0.4737,
+          "fbeta": 0.6338,
+          "tp": 9,
+          "fp": 4,
+          "fn": 10,
+          "plateau": [
+            0.8,
+            0.82
+          ],
+          "plateau_steps": 3,
+          "beta": 0.5,
+          "fbeta_oof": 0.597
+        },
+        "F2": {
+          "t": 0.26,
+          "precision": 0.4872,
+          "recall": 1.0,
+          "fbeta": 0.8261,
+          "tp": 19,
+          "fp": 20,
+          "fn": 0,
+          "plateau": [
+            0.24,
+            0.26
+          ],
+          "plateau_steps": 3,
+          "beta": 2.0,
+          "fbeta_oof": 0.8261
+        }
+      }
+    },
+    "julia:multibrot4": {
+      "n": 44,
+      "pos": 28,
+      "objective": "F2",
+      "beta": 2.0,
+      "objective_rationale": "recall-weighted (supply scarce)",
+      "t_good": 0.1,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.76,
+          "precision": 0.9091,
+          "recall": 0.7143,
+          "fbeta": 0.8621,
+          "tp": 20,
+          "fp": 2,
+          "fn": 8,
+          "plateau": [
+            0.76,
+            0.76
+          ],
+          "plateau_steps": 1,
+          "beta": 0.5,
+          "fbeta_oof": 0.8621
+        },
+        "F2": {
+          "t": 0.1,
+          "precision": 0.7368,
+          "recall": 1.0,
+          "fbeta": 0.9333,
+          "tp": 28,
+          "fp": 10,
+          "fn": 0,
+          "plateau": [
+            0.1,
+            0.1
+          ],
+          "plateau_steps": 1,
+          "beta": 2.0,
+          "fbeta_oof": 0.906
+        }
+      }
+    },
+    "julia:multibrot5": {
+      "n": 58,
+      "pos": 28,
+      "objective": "F2",
+      "beta": 2.0,
+      "objective_rationale": "recall-weighted (supply scarce)",
+      "t_good": 0.39,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.61,
+          "precision": 0.7576,
+          "recall": 0.8929,
+          "fbeta": 0.7812,
+          "tp": 25,
+          "fp": 8,
+          "fn": 3,
+          "plateau": [
+            0.58,
+            0.61
+          ],
+          "plateau_steps": 4,
+          "beta": 0.5,
+          "fbeta_oof": 0.7692
+        },
+        "F2": {
+          "t": 0.39,
+          "precision": 0.5833,
+          "recall": 1.0,
+          "fbeta": 0.875,
+          "tp": 28,
+          "fp": 20,
+          "fn": 0,
+          "plateau": [
+            0.38,
+            0.39
+          ],
+          "plateau_steps": 2,
+          "beta": 2.0,
+          "fbeta_oof": 0.7962
+        }
+      }
+    },
+    "mandelbrot": {
+      "n": 797,
+      "pos": 90,
+      "objective": "F0.5",
+      "beta": 0.5,
+      "objective_rationale": "precision-weighted (supply abundant)",
+      "t_good": 0.9,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.9,
+          "precision": 0.7808,
+          "recall": 0.6333,
+          "fbeta": 0.7461,
+          "tp": 57,
+          "fp": 16,
+          "fn": 33,
+          "plateau": [
+            0.9,
+            0.9
+          ],
+          "plateau_steps": 1,
+          "beta": 0.5,
+          "fbeta_oof": 0.7308
+        },
+        "F2": {
+          "t": 0.37,
+          "precision": 0.539,
+          "recall": 0.9222,
+          "fbeta": 0.8074,
+          "tp": 83,
+          "fp": 71,
+          "fn": 7,
+          "plateau": [
+            0.37,
+            0.37
+          ],
+          "plateau_steps": 1,
+          "beta": 2.0,
+          "fbeta_oof": 0.7495
+        }
+      }
+    },
+    "phoenix": {
+      "n": 113,
+      "pos": 55,
+      "objective": "F0.5",
+      "beta": 0.5,
+      "objective_rationale": "precision-weighted (supply abundant)",
+      "t_good": 0.77,
+      "status": "DERIVED",
+      "by_objective": {
+        "F0.5": {
+          "t": 0.77,
+          "precision": 0.8333,
+          "recall": 0.7273,
+          "fbeta": 0.8097,
+          "tp": 40,
+          "fp": 8,
+          "fn": 15,
+          "plateau": [
+            0.73,
+            0.77
+          ],
+          "plateau_steps": 5,
+          "beta": 0.5,
+          "fbeta_oof": 0.8097
+        },
+        "F2": {
+          "t": 0.04,
+          "precision": 0.6795,
+          "recall": 0.9636,
+          "fbeta": 0.8893,
+          "tp": 53,
+          "fp": 25,
+          "fn": 2,
+          "plateau": [
+            0.02,
+            0.04
+          ],
+          "plateau_steps": 3,
+          "beta": 2.0,
+          "fbeta_oof": 0.8754
+        }
+      }
+    }
+  },
+  "uncalibrated": {
+    "multibrot3": {
+      "n": 196,
+      "pos": 49,
+      "t_good": 0.5,
+      "status": "UNCALIBRATED",
+      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
+      "withheld_t_good": 0.61
+    },
+    "multibrot4": {
+      "n": 151,
+      "pos": 32,
+      "t_good": 0.5,
+      "status": "UNCALIBRATED",
+      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
+      "withheld_t_good": 0.85
+    },
+    "multibrot5": {
+      "n": 164,
+      "pos": 38,
+      "t_good": 0.5,
+      "status": "UNCALIBRATED",
+      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
+      "withheld_t_good": 0.61
+    },
+    "phoenix:classic": {
+      "n": 0,
+      "pos": 0,
+      "t_good": 0.5,
+      "status": "UNCALIBRATED",
+      "reason": "8 holdout rows / 1 positive and 0 instrument rows \u2014 below MIN_POS=15 on both eval roles, the only partition still short of it under the grouped-holdout rule"
+    }
+  },
+  "withheld": {
+    "multibrot3": {
+      "n": 196,
+      "pos": 49,
+      "objective": "F0.5",
+      "beta": 0.5,
+      "would_adopt": 0.61,
+      "by_objective": {
+        "F0.5": {
+          "t": 0.61,
+          "precision": 0.5833,
+          "recall": 0.5714,
+          "fbeta": 0.5809,
+          "tp": 28,
+          "fp": 20,
+          "fn": 21,
+          "plateau": [
+            0.61,
+            0.61
+          ],
+          "plateau_steps": 1,
+          "beta": 0.5,
+          "fbeta_oof": 0.515
+        },
+        "F2": {
+          "t": 0.12,
+          "precision": 0.395,
+          "recall": 0.9592,
+          "fbeta": 0.746,
+          "tp": 47,
+          "fp": 72,
+          "fn": 2,
+          "plateau": [
+            0.12,
+            0.12
+          ],
+          "plateau_steps": 1,
+          "beta": 2.0,
+          "fbeta_oof": 0.6774
+        }
+      },
+      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block."
+    },
+    "multibrot4": {
+      "n": 151,
+      "pos": 32,
+      "objective": "F0.5",
+      "beta": 0.5,
+      "would_adopt": 0.85,
+      "by_objective": {
+        "F0.5": {
+          "t": 0.85,
+          "precision": 0.7037,
+          "recall": 0.5938,
+          "fbeta": 0.6786,
+          "tp": 19,
+          "fp": 8,
+          "fn": 13,
+          "plateau": [
+            0.81,
+            0.85
+          ],
+          "plateau_steps": 5,
+          "beta": 0.5,
+          "fbeta_oof": 0.6786
+        },
+        "F2": {
+          "t": 0.4,
+          "precision": 0.4746,
+          "recall": 0.875,
+          "fbeta": 0.7487,
+          "tp": 28,
+          "fp": 31,
+          "fn": 4,
+          "plateau": [
+            0.38,
+            0.4
+          ],
+          "plateau_steps": 3,
+          "beta": 2.0,
+          "fbeta_oof": 0.7258
+        }
+      },
+      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block."
+    },
+    "multibrot5": {
+      "n": 164,
+      "pos": 38,
+      "objective": "F0.5",
+      "beta": 0.5,
+      "would_adopt": 0.61,
+      "by_objective": {
+        "F0.5": {
+          "t": 0.61,
+          "precision": 0.6667,
+          "recall": 0.5789,
+          "fbeta": 0.6471,
+          "tp": 22,
+          "fp": 11,
+          "fn": 16,
+          "plateau": [
+            0.61,
+            0.61
+          ],
+          "plateau_steps": 1,
+          "beta": 0.5,
+          "fbeta_oof": 0.6471
+        },
+        "F2": {
+          "t": 0.28,
+          "precision": 0.4111,
+          "recall": 0.9737,
+          "fbeta": 0.7645,
+          "tp": 37,
+          "fp": 53,
+          "fn": 1,
+          "plateau": [
+            0.28,
+            0.28
+          ],
+          "plateau_steps": 1,
+          "beta": 2.0,
+          "fbeta_oof": 0.7469
+        }
+      },
+      "reason": "DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block."
+    }
+  },
+  "adopted": {
+    "julia:mandelbrot": 0.85,
+    "julia:multibrot3": 0.26,
+    "julia:multibrot4": 0.1,
+    "julia:multibrot5": 0.39,
+    "mandelbrot": 0.9,
+    "phoenix": 0.77
+  },
+  "notes": [
+    "julia:mandelbrot: F0.5 picks t=0.85 vs F2 t=0.57 \u2014 objective choice is load-bearing, not cosmetic",
+    "julia:multibrot3: F0.5 picks t=0.82 vs F2 t=0.26 \u2014 objective choice is load-bearing, not cosmetic",
+    "julia:multibrot4: F0.5 picks t=0.76 vs F2 t=0.10 \u2014 objective choice is load-bearing, not cosmetic",
+    "julia:multibrot4: adopted F2 in-sample 0.933 vs OOF 0.906 (gap +0.027) \u2014 threshold overfit at n=44, pos=28; the OOF value is the honest one",
+    "julia:multibrot4: adopted t=0.10 sits on a 1-step plateau \u2014 knife-edge, re-derive rather than nudge",
+    "julia:multibrot5: F0.5 picks t=0.61 vs F2 t=0.39 \u2014 objective choice is load-bearing, not cosmetic",
+    "julia:multibrot5: adopted F2 in-sample 0.875 vs OOF 0.796 (gap +0.079) \u2014 threshold overfit at n=58, pos=28; the OOF value is the honest one",
+    "julia:multibrot5: adopted t=0.39 sits on a 2-step plateau \u2014 knife-edge, re-derive rather than nudge",
+    "mandelbrot: F0.5 picks t=0.90 vs F2 t=0.37 \u2014 objective choice is load-bearing, not cosmetic",
+    "mandelbrot: adopted t=0.90 sits on a 1-step plateau \u2014 knife-edge, re-derive rather than nudge",
+    "multibrot3: DERIVABLE at t=0.61 and WITHHELD \u2014 DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
+    "multibrot4: DERIVABLE at t=0.85 and WITHHELD \u2014 DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
+    "multibrot5: DERIVABLE at t=0.61 and WITHHELD \u2014 DERIVABLE under v11's grouped holdout (first time \u2014 v10's uniform instrument carried 0 keeper positives) and WITHHELD from adoption: a native multibrot tightening is fork-scheduled, decided at the next fork launch together with tau_h, not as a side effect of a checkpoint flip (deferred_recalibration.md \u00a7 'Related, but not part of this cluster'). The derived value is in the `withheld` block.",
+    "phoenix: F0.5 picks t=0.77 vs F2 t=0.04 \u2014 objective choice is load-bearing, not cosmetic"
+  ],
+  "note": "ADOPTED \u2014 production_seeder.T_GOOD_OVERRIDES mirrors `adopted`, and the `uncalibrated` partitions are named in production_seeder.T_GOOD_UNCALIBRATED (they RUN at the baseline but were never derived; the two 0.50s must stay distinguishable). tools/scoring/test_t_good_adoption.py holds the ACTIVE version's artifact and the adopted table in agreement.",
+  "population_rule": "THE RANDOMIZED LOCATION-GROUPED HOLDOUT, frozen instrument as the per-partition fallback, NEVER pooled (derive_t_good.select_population \u2014 the shared default from v11 on; Matt, 2026-08-06). Replaces v10's one-frozen-instrument-per-partition rule, which left six of ten partitions with no eval row of any kind while the corpus held 809 julia:mandelbrot and 375 phoenix positives.",
+  "population_detail": {
+    "julia:mandelbrot": {
+      "population": "holdout",
+      "n": 254,
+      "pos": 70,
+      "holdout": {
+        "n": 254,
+        "pos": 70
+      },
+      "instrument": {
+        "n": 48,
+        "pos": 8,
+        "source": null
+      }
+    },
+    "julia:multibrot3": {
+      "population": "instrument",
+      "n": 54,
+      "pos": 19,
+      "holdout": {
+        "n": 25,
+        "pos": 3
+      },
+      "instrument": {
+        "n": 54,
+        "pos": 19,
+        "source": "prospect_census"
+      }
+    },
+    "julia:multibrot4": {
+      "population": "holdout",
+      "n": 44,
+      "pos": 28,
+      "holdout": {
+        "n": 44,
+        "pos": 28
+      },
+      "instrument": {
+        "n": 51,
+        "pos": 24,
+        "source": "prospect_census"
+      }
+    },
+    "julia:multibrot5": {
+      "population": "holdout",
+      "n": 58,
+      "pos": 28,
+      "holdout": {
+        "n": 58,
+        "pos": 28
+      },
+      "instrument": {
+        "n": 39,
+        "pos": 22,
+        "source": "prospect_census"
+      }
+    },
+    "mandelbrot": {
+      "population": "holdout",
+      "n": 797,
+      "pos": 90,
+      "holdout": {
+        "n": 797,
+        "pos": 90
+      },
+      "instrument": {
+        "n": 526,
+        "pos": 26,
+        "source": "loose0_v3_floor"
+      }
+    },
+    "multibrot3": {
+      "population": "holdout",
+      "n": 196,
+      "pos": 49,
+      "holdout": {
+        "n": 196,
+        "pos": 49
+      },
+      "instrument": {
+        "n": 24,
+        "pos": 0,
+        "source": "maneuver_uniform_v1"
+      }
+    },
+    "multibrot4": {
+      "population": "holdout",
+      "n": 151,
+      "pos": 32,
+      "holdout": {
+        "n": 151,
+        "pos": 32
+      },
+      "instrument": {
+        "n": 25,
+        "pos": 0,
+        "source": "maneuver_uniform_v1"
+      }
+    },
+    "multibrot5": {
+      "population": "holdout",
+      "n": 164,
+      "pos": 38,
+      "holdout": {
+        "n": 164,
+        "pos": 38
+      },
+      "instrument": {
+        "n": 29,
+        "pos": 0,
+        "source": "maneuver_uniform_v1"
+      }
+    },
+    "phoenix": {
+      "population": "holdout",
+      "n": 113,
+      "pos": 55,
+      "holdout": {
+        "n": 113,
+        "pos": 55
+      },
+      "instrument": {
+        "n": 98,
+        "pos": 6,
+        "source": null
+      }
+    },
+    "phoenix:classic": {
+      "population": null,
+      "n": 0,
+      "pos": 0,
+      "holdout": {
+        "n": 8,
+        "pos": 1
+      },
+      "instrument": {
+        "n": 0,
+        "pos": 0,
+        "source": null
+      }
+    }
+  },
+  "objective_basis": "Re-read from the label-corpus draw since the v10 table was cut (batches dated 2026-08-03+): julia:mandelbrot 814, phoenix 525, multibrot3 419, julia:multibrot5 281, multibrot5 269, julia:multibrot4 266, julia:multibrot3 198, multibrot4 191, mandelbrot 155. mandelbrot's small draw is a DEFICIT artifact \u2014 it is the anchor partition at +0.0 deficit, so the scheduler steered elsewhere \u2014 not scarcity. The julia:multibrot leg's F2 is re-affirmed on CHANGED evidence: v10 read a hard zero julia-plane supply and that zero is gone, but the three remain the smallest parameter-plane families and every row came through a gate, not an exhaustion test.",
+  "withheld_note": "`withheld` holds partitions the estimator CAN cut and this pass does not adopt. They appear in `uncalibrated` at the baseline with a reason naming the owner of the decision, and their derived value is preserved so the owner is not re-deriving it.",
+  "vs_v10": {
+    "julia:mandelbrot": {
+      "v10": null,
+      "v11": 0.85
+    },
+    "julia:multibrot3": {
+      "v10": 0.27,
+      "v11": 0.26
+    },
+    "julia:multibrot4": {
+      "v10": 0.03,
+      "v11": 0.1
+    },
+    "julia:multibrot5": {
+      "v10": 0.06,
+      "v11": 0.39
+    },
+    "mandelbrot": {
+      "v10": 0.03,
+      "v11": 0.9
+    },
+    "phoenix": {
+      "v10": null,
+      "v11": 0.77
+    }
+  }
+}

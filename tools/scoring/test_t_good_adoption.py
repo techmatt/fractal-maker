@@ -139,8 +139,12 @@ def test_the_derivation_reruns_to_the_committed_numbers():
         pytest.skip(f"{mod.EVAL} absent")
     rows = [json.loads(l) for l in mod.EVAL.read_text(encoding="utf-8").splitlines() if l.strip()]
     kept, _ = mod.select_population(rows)
+    # Every knob the deriver declares is passed through. `WITHHOLD` is optional (v8/v10 have
+    # none) but it is NOT ignorable: a re-run that dropped it would re-adopt exactly the
+    # partitions the pass deliberately withheld and then report the difference as drift.
     fresh = est.build_table(kept, version=mod.VERSION, eval_slice=mod.EVAL_REL,
-                            objective=mod.OBJECTIVE, uncal_reason=mod.UNCAL_REASON)
+                            objective=mod.OBJECTIVE, uncal_reason=mod.UNCAL_REASON,
+                            withhold=getattr(mod, "WITHHOLD", None))
     assert fresh["adopted"] == _doc()["adopted"], (
         f"re-derived {fresh['adopted']} != committed {_doc()['adopted']} — "
         f"re-run tools/{ACTIVE_VERSION}/{modname}.py")

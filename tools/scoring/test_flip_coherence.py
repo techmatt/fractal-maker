@@ -1,5 +1,12 @@
 #!/usr/bin/env python
-r"""The v10 flip, checked where it can be checked WITHOUT a model or a GPU.
+r"""THE checkpoint flip, checked where it can be checked WITHOUT a model or a GPU.
+
+WAS `tools/v10/test_v10_flip.py`. It was already written against `ACTIVE_VERSION` rather
+than a literal, so it was never v10's test — only v10's file, and the v11 flip would have
+had to copy it to a `tools/v11/test_v11_flip.py` that differed in nothing. Moved here, beside
+the pins it reads, so the next flip edits `FLIP_HISTORY` and this file stays put. The two
+places it still had to learn a version-shaped fact — where a version keeps its rollback
+ladder, and where its manifest resolves — are resolved rather than spelled.
 
 Three things, none of which needs a render (the rendered end-to-end proof is the slow
 `tools/scoring/test_flip_end_to_end.py`):
@@ -47,10 +54,35 @@ from tools.emission import descriptor as D       # noqa: E402
 pytestmark = pytest.mark.version_pinned
 
 
+import paths                                    # noqa: E402
+
 EVAL = eval_slice.path_for(ACTIVE_VERSION)
-MANIFEST = ROOT / "data" / ACTIVE_VERSION / "manifest.jsonl"
+# The manifest is BULK from v11 on (a deterministic function of the committed corpus, so it
+# rebuilds rather than being restored) and was in-tree through v10. `paths.bulk` resolves the
+# relocated copy and returns the in-tree path unchanged where nothing was relocated, so one
+# expression covers both eras.
+MANIFEST = paths.bulk(f"data/{ACTIVE_VERSION}/manifest.jsonl")
 KEEPER_CUTS = ROOT / "data" / "atlas" / "keeper_cuts.json"
-BUILD_META = ROOT / "data" / ACTIVE_VERSION / "build_metadata.json"
+
+
+def _ladder_record() -> dict:
+    """The live version's `rollback_ladder` block, wherever that version keeps it.
+
+    Two homes, because the two versions wrote it for two different reasons: v10's build
+    emitted a "what a future adoption would have to revert" note into `build_metadata.json`,
+    and v11's ADOPTION writes the real thing into `adoption_record.json` (tools/v11/
+    adopt_v11.py). Resolved, not branched on a version literal — a literal here is what made
+    this file v10's in the first place. Raises naming both candidates rather than skipping:
+    a live head with no ladder record anywhere is the failure, not a gap in the test."""
+    for name in ("adoption_record.json", "build_metadata.json"):
+        p = ROOT / "data" / ACTIVE_VERSION / name
+        if p.exists():
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            if "rollback_ladder" in doc:
+                return doc["rollback_ladder"]
+    raise AssertionError(
+        f"no rollback_ladder for the live head {ACTIVE_VERSION}: looked in "
+        f"data/{ACTIVE_VERSION}/adoption_record.json and .../build_metadata.json")
 
 # A committed v8-era discovery ledger: real production rows, written before the flip, left
 # untouched by it. Any of the five 2026-08 v8 ledgers would do; this is the largest.
@@ -87,15 +119,19 @@ def test_a_forgetful_rollback_goes_red(monkeypatch):
     """The coherence guard above, proved NON-VACUOUS by injection.
 
     A guard that only ever sees a coherent set cannot distinguish "coherent" from "not
-    looking". This simulates the failure it exists for — the pin rolled back to v8 while the
-    threshold files stay on v10 — and asserts each of the three checks fires. Injection, not
-    a real rollback: nothing on disk moves.
+    looking". This simulates the failure it exists for — the pin rolled back ONE rung while
+    the threshold files stay on the live head — and asserts each of the three checks fires.
+    The rung is read off the ladder, not spelled, so this keeps testing the real one-flip
+    rollback after the ladder shortens. Injection, not a real rollback: nothing on disk moves.
     """
     import active_ckpt
     import steered_frontier as sf
 
-    monkeypatch.setattr(active_ckpt, "ACTIVE_VERSION", "v8")
-    monkeypatch.setattr(active_ckpt, "ACTIVE_CKPT", "data/classifier/v8/model_best.pt")
+    meta = _ladder_record()
+    ladder = meta["ladder"] if "ladder" in meta else meta["ladder_after_a_v10_adoption"]
+    prev = ladder[1]
+    monkeypatch.setattr(active_ckpt, "ACTIVE_VERSION", prev)
+    monkeypatch.setattr(active_ckpt, "ACTIVE_CKPT", f"data/classifier/{prev}/model_best.pt")
     rolled_back = active_ckpt.ACTIVE_VERSION
 
     keeper_model = json.loads(KEEPER_CUTS.read_text(encoding="utf-8"))["provenance"]["model"]
@@ -105,18 +141,28 @@ def test_a_forgetful_rollback_goes_red(monkeypatch):
     live_tgood = ROOT / "data" / rolled_back / "t_good_derivation.json"
     adopted = json.loads(live_tgood.read_text(encoding="utf-8"))["adopted"]
     assert adopted != {k: float(v) for k, v in ps.T_GOOD_OVERRIDES.items()}, (
-        "the adopted t_good table equals v8's — the t_good guard would NOT fire on a "
-        "forgetful rollback")
+        f"the adopted t_good table equals {rolled_back}'s — the t_good guard would NOT fire "
+        f"on a forgetful rollback")
 
 
-def test_the_rollback_ladder_is_readable_and_its_rungs_exist():
-    """A ladder naming a weight that is not on disk is a rollback plan that cannot run."""
-    meta = json.loads(BUILD_META.read_text(encoding="utf-8"))["rollback_ladder"]
-    ladder = meta["ladder_after_a_v10_adoption"]
+def test_the_rollback_ladder_is_readable_and_its_rungs_are_tracked():
+    """A ladder naming a weight a fresh clone does not receive is a plan that cannot run.
+
+    Asserted against the INDEX, not the working tree. `git rm --cached` leaves the .pt on the
+    machine that de-tracked it, so an `exists()` check keeps passing exactly where the policy
+    that de-tracked it would bite — on the next clone, which is the only place a rollback is
+    ever actually attempted."""
+    import subprocess
+    meta = _ladder_record()
+    ladder = meta["ladder"] if "ladder" in meta else meta["ladder_after_a_v10_adoption"]
     assert ladder[0] == ACTIVE_VERSION, f"ladder head {ladder[0]!r} != live {ACTIVE_VERSION!r}"
+    tracked = set(subprocess.run(["git", "ls-files", "data/classifier"], cwd=ROOT,
+                                 capture_output=True, text=True, check=True).stdout.split())
     for rung in ladder:
-        w = ROOT / f"data/classifier/{rung}/model_best.pt"
-        assert w.exists(), f"rollback rung {rung} has no weight on disk ({w})"
+        rel = f"data/classifier/{rung}/model_best.pt"
+        assert rel in tracked, (
+            f"rollback rung {rung} is on the ladder but {rel} is not tracked — the ladder "
+            f"names only rungs that exist (storage_classes.md § weights retention)")
 
 
 # --------------------------------------------------------------------------- #
@@ -189,13 +235,15 @@ def test_a_class4_location_decodes_to_4_and_admits_under_the_new_t_good():
     assert cc.is_current_decoded(row)
 
 
-def test_the_class4_watch_is_attached_to_the_readout_that_shows_class_4():
-    """The v10 flip records a WATCH (class-4 descriptive 0.813 -> 0.728), not a gate.
+def test_the_flip_watch_is_attached_to_the_readout_that_shows_class_4():
+    """Every flip records a WATCH — a thing to look at on the first run under the new head —
+    and a watch is never a gate.
 
-    A watch written only in prose is a watch nobody sees, so it rides on `cloud_diagnostic`
-    — the run's first eyeball of the decode distribution. Asserted here: it is PRESENT while
-    v10 is live, it is keyed on the scorer version (so it retires itself at the next flip),
-    and it changes no verdict — the diagnostic's counts are identical with and without it."""
+    A watch written only in prose is a watch nobody sees, so it rides on `cloud_diagnostic`,
+    the run's first eyeball of the decode distribution. Asserted here: it is PRESENT while
+    the head it was raised for is live, it is KEYED on the scorer version (so it retires
+    itself at the next flip rather than outliving its subject), and it changes no verdict —
+    the diagnostic's counts are identical with and without it."""
     rows = [{"family": "mandelbrot", "guard_pass": True, "decoded_class": c,
              "outcome_cx": 0.1 * i, "outcome_cy": 0.2 * i, "outcome_fw": 1e-3}
             for i, c in enumerate((1, 2, 3, 4))]

@@ -41,9 +41,14 @@ requiring >=15 positives; tie-break toward higher t.
     not a derivation: a baseline 0.50 and a derived 0.50 are indistinguishable as a bare
     number in a config file, so the distinction is carried explicitly (`status`) here and
     by `production_seeder.T_GOOD_UNCALIBRATED` there.
-  * A version's eval slice calibrates only the partitions it carries unbiased data for
-    (v8/v10: julia:multibrot{3,4,5} from the census, mandelbrot from the loose0_v3 floor).
-    Everything else -> UNCALIBRATED, named individually.
+  * A version's eval slice calibrates only the partitions its POPULATION RULE reaches
+    `MIN_POS` positives on. Through v10 that rule was "one FROZEN INSTRUMENT per partition",
+    and it starved six partitions: v10's eval side was the four score-unconditioned draws and
+    nothing else, so julia:mandelbrot, phoenix and the three native multibrots had no eval
+    rows of any kind while the corpus held 809 and 375 positives for the first two.
+    **From v11 the default is `select_population` below — the randomized location-GROUPED
+    holdout, with the frozen instrument as the per-partition fallback** (Matt, 2026-08-06).
+    Everything the rule still cannot reach -> UNCALIBRATED, named individually.
 
 `production_seeder.T_GOOD_OVERRIDES` is the ADOPTED copy of a run's `adopted` block;
 tools/scoring/test_t_good_adoption.py holds the ACTIVE version's derivation and that table
@@ -146,6 +151,105 @@ def adopted_statuses(version: str | None = None) -> dict:
             f"partition in partitions.ALL_FAMS, so this artifact predates their registration "
             f"— re-derive it rather than reading around the gap.")
     return out
+
+
+# =========================================================================== #
+# THE POPULATION RULE — the randomized location-grouped default (v11 on)
+# =========================================================================== #
+# WHAT CHANGED AND WHY. Through v10 a partition was calibrated iff its own FROZEN INSTRUMENT
+# — a score-unconditioned draw registered for verdicts — carried MIN_POS positives. That rule
+# is unimpeachable for a base rate and wrong for a calibration cut, and the difference was not
+# academic: v10's eval side WAS the four instruments, so six of ten partitions had no eval row
+# of any kind and ran at the 0.50 baseline while the corpus held 809 julia:mandelbrot and 375
+# phoenix positives. The gate was reporting "we have no data" about a corpus that had plenty.
+#
+# v11's build draws a stratified random holdout over the location-GROUPED split (build_record
+# .json § eval_roles), which is biased exactly as training is — a held-out sample of the
+# population the model is trained on. That is what a calibration cut wants and what a base
+# rate must never be read from, so the two populations keep their two jobs:
+#
+#     eval_role="instrument"  UNBIASED. Base rates, version-over-version verdicts.
+#     eval_role="holdout"     BIASED-like-training. THE calibration population.
+#
+# NEVER POOLED, and that is inherited unchanged from v10's rule rather than relaxed with it:
+# a partition is cut on ONE population. Folding a second population into a precision
+# denominator is a different cut, not a bigger one (on v10's mandelbrot it moved the argmax
+# five grid steps and collapsed the LOO-OOF F0.5 from 0.357 to 0.100). So the holdout is
+# taken WHERE IT SUFFICES and the frozen instrument is the fallback where it does not —
+# never their union. Under v11 exactly one partition takes the fallback (julia:multibrot3,
+# 3 holdout positives against 19 in the census), which is also the partition v10 cut on that
+# same census, so its number stays comparable across the flip.
+HOLDOUT_ROLE = "holdout"
+INSTRUMENT_ROLE = "instrument"
+ROLE_KEY = "eval_role"
+
+
+def _positives(rows) -> int:
+    return sum(1 for r in rows if r["label"] >= KEEPER_CLASS)
+
+
+def fam_of(row) -> str:
+    """THE partition of one eval row — its own `partition` column if it carries one.
+
+    `FT2FAM` maps a `fractal_type` and a DERIVED partition has no fractal_type of its own
+    (partitions.DERIVED_FAMS), so an FT2FAM-only read silently FOLDS every derived partition
+    back into its base. That was harmless through v10 only because the frozen instruments
+    carried no rows for any of them; the moment the grouped holdout did, the fold appeared as
+    phoenix cut on 121 rows instead of 113 — its own 8 classic rows pooled into the cut that
+    is supposed to exclude them — while `phoenix:classic` printed n=0 and was stamped
+    "no eval rows" about rows sitting in the same file. `tools/<v>/eval_<v>.py` writes the
+    resolved `partition` per row precisely so the resolver runs once, at the freeze."""
+    return row.get("partition") or FT2FAM.get(row["fractal_type"], row["fractal_type"])
+
+
+def select_population(rows, *, instrument: dict = None, min_pos: int = MIN_POS,
+                      role_key: str = ROLE_KEY) -> tuple[list, dict]:
+    """THE default population rule from v11 on. Returns `(kept_rows, report)`.
+
+    Per partition: the grouped HOLDOUT if it carries >= `min_pos` positives, else that
+    partition's frozen INSTRUMENT if that does, else nothing (the partition falls to
+    `build_table`'s UNCALIBRATED stamping, which is where the reason is recorded).
+
+    `instrument` optionally names ONE source per partition (`{partition: source}`), the same
+    map v10's deriver used; without it every `eval_role="instrument"` row of the partition is
+    the fallback candidate. A row missing `role_key` raises rather than defaulting: a slice
+    that cannot say which side of the split a row is on cannot be cut on either, and the
+    lenient reading silently calibrates on training-adjacent rows.
+
+    The `report` is per partition and names BOTH candidate populations with their counts, so
+    the artifact records what the rule chose *and what it passed over* — a fallback that is
+    invisible reads as a holdout cut on the next person to open the file."""
+    by_fam = defaultdict(list)
+    for r in rows:
+        if role_key not in r:
+            raise SystemExit(
+                f"eval row {r.get('location_id')!r} carries no {role_key!r} — this slice "
+                f"predates the randomized location-grouped split and cannot be cut under "
+                f"this rule. Pass the version's own population rule instead.")
+        by_fam[fam_of(r)].append(r)
+
+    kept, report = [], {}
+    for fam in sorted(by_fam):
+        grp = by_fam[fam]
+        hold = [r for r in grp if r[role_key] == HOLDOUT_ROLE]
+        inst = [r for r in grp if r[role_key] == INSTRUMENT_ROLE
+                and (instrument is None or fam not in instrument
+                     or r.get("source") == instrument[fam])]
+        if _positives(hold) >= min_pos:
+            picked, name = hold, HOLDOUT_ROLE
+        elif _positives(inst) >= min_pos:
+            picked, name = inst, INSTRUMENT_ROLE
+        else:
+            picked, name = [], None
+        kept.extend(picked)
+        report[fam] = {
+            "population": name,
+            "n": len(picked), "pos": _positives(picked),
+            "holdout": {"n": len(hold), "pos": _positives(hold)},
+            "instrument": {"n": len(inst), "pos": _positives(inst),
+                           "source": (instrument or {}).get(fam)},
+        }
+    return kept, report
 
 
 def beta_name(beta: float) -> str:
@@ -271,7 +375,7 @@ def derive_partition(grp, version: str, betas=(0.5, 2.0)) -> dict:
 
 
 def build_table(rows, version: str, eval_slice: str, objective: dict = None,
-                uncal_reason: dict = None) -> dict:
+                uncal_reason: dict = None, withhold: dict = None) -> dict:
     """The whole per-partition table for ONE eval slice — the derivation, not a report of it.
 
     Callers supply the rows (so a population rule — e.g. one instrument per partition — is
@@ -285,14 +389,24 @@ def build_table(rows, version: str, eval_slice: str, objective: dict = None,
     `uncal_reason` lets a caller state a MORE specific reason than "no unbiased eval slice"
     for a partition it knows something about — the difference between "we have never looked"
     and "we looked and there were no keepers" is real and is lost if both print the same
-    string."""
+    string.
+
+    `withhold` is `{partition: reason}` for a partition that the estimator CAN derive and
+    that this pass deliberately does not adopt — the number is computed, printed and written
+    to a `withheld` block, and the partition stays at the baseline in `adopted`/`uncalibrated`
+    with `reason` naming who owns the decision. It exists because the alternative shapes are
+    both lies: dropping the rows prints "we have no data" about data we have, and adopting
+    silently makes a threshold move that nobody asked for a side effect of a flip. The v11
+    case is the three native multibrots, derivable for the first time under the grouped
+    holdout and fork-scheduled for adoption (deferred_recalibration.md § Related)."""
     obj = OBJECTIVE if objective is None else objective
     uncal_reason = uncal_reason or {}
+    withhold = withhold or {}
     by_fam = defaultdict(list)
     for r in rows:
-        by_fam[FT2FAM.get(r["fractal_type"], r["fractal_type"])].append(r)
+        by_fam[fam_of(r)].append(r)
 
-    derived, uncal, adopted, notes = {}, {}, {}, []
+    derived, uncal, adopted, notes, withheld = {}, {}, {}, [], {}
     print("=" * 104)
     print(f"{version} t_good — PER-FAMILY objective (recall where supply is scarce, precision "
           "where it is abundant)")
@@ -322,6 +436,24 @@ def build_table(rows, version: str, eval_slice: str, objective: dict = None,
         beta = obj.get(fam, DEFAULT_BETA)
         blocks = derive_partition(grp, version)
         chosen = blocks[beta_name(beta)]
+
+        if fam in withhold:
+            # Derivable, deliberately NOT adopted. The number is kept where the owner of the
+            # decision can read it; the partition runs at the baseline like any other
+            # uncalibrated one, but its `reason` says "withheld", not "no data".
+            withheld[fam] = {"n": n, "pos": pos, "objective": beta_name(beta), "beta": beta,
+                             "would_adopt": chosen["t"], "by_objective": blocks,
+                             "reason": withhold[fam]}
+            uncal[fam] = {"n": n, "pos": pos, "t_good": BASELINE, "status": "UNCALIBRATED",
+                          "reason": withhold[fam], "withheld_t_good": chosen["t"]}
+            print(f"  {fam:20s} {beta_name(beta):>5} {n:>4} {pos:>4}  {chosen['t']:>7.2f} "
+                  f"{chosen['precision']:>6.3f} {chosen['recall']:>6.3f} {chosen['fbeta']:>6.3f} "
+                  f"{chosen['fbeta_oof']:>7.3f} "
+                  f"{'[%.2f,%.2f]' % tuple(chosen['plateau']):>13}  WITHHELD -> runs {BASELINE}")
+            notes.append(f"{fam}: DERIVABLE at t={chosen['t']:.2f} and WITHHELD — "
+                         f"{withhold[fam]}")
+            continue
+
         derived[fam] = {"n": n, "pos": pos, "objective": beta_name(beta), "beta": beta,
                         "objective_rationale": ("precision-weighted (supply abundant)" if beta < 1
                                                 else "recall-weighted (supply scarce)"),
@@ -382,6 +514,7 @@ def build_table(rows, version: str, eval_slice: str, objective: dict = None,
         "model": version,
         "derived": derived,
         "uncalibrated": uncal,
+        "withheld": withheld,
         "adopted": adopted,
         "notes": notes,
         "note": ("ADOPTED — production_seeder.T_GOOD_OVERRIDES mirrors `adopted`, and the "

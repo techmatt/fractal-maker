@@ -59,7 +59,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))   # sibling production_
 # importers of this name get exactly what they got before the split.
 from production_pins import (  # noqa: E402,F401
     ROOT, BIN, PALETTE, ACTIVE_CKPT,
-    V8_CKPT_ROLLBACK, V7_CKPT_ROLLBACK, V6_CKPT_ROLLBACK, V5_CKPT_ROLLBACK,
+    V10_CKPT_ROLLBACK,
     DEFAULT_MODEL, ACTIVE_VERSION, JPG_Q, DEFAULT_SS,
     FW_HOME, MAXITER_BASE, MAXITER_K, MAXITER_MIN, MAXITER_MAX,
     auto_maxiter, make_scorer,

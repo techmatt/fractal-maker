@@ -40,7 +40,8 @@ import pytest
 pytestmark = [pytest.mark.slow, pytest.mark.version_pinned]
 
 ROOT = Path(__file__).resolve().parents[2]
-for sub in ("", "tools/mining", "tools/atlas", "tools/scoring", "tools/reframe", "tools/corpus"):
+for sub in ("", "tools", "tools/mining", "tools/atlas", "tools/scoring", "tools/reframe",
+            "tools/corpus"):
     sys.path.insert(0, str(ROOT / sub) if sub else str(ROOT))
 
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
@@ -49,7 +50,13 @@ from partitions import FT2FAM  # noqa: E402  ledger partition key for a fractal_
 from production_pins import ACTIVE_VERSION  # noqa: E402
 
 EVAL_SCORES = eval_slice.path_for(ACTIVE_VERSION)
-MANIFEST = ROOT / "data" / ACTIVE_VERSION / "manifest.jsonl"
+# BULK from v11 on (a deterministic function of the committed corpus, so it rebuilds rather
+# than being restored) and in-tree through v10. `paths.bulk` resolves the relocated copy and
+# returns the in-tree path unchanged where nothing was relocated, so one expression covers
+# both eras — the same fix test_flip_coherence.py took at the v11 flip.
+import paths  # noqa: E402
+
+MANIFEST = paths.bulk(f"data/{ACTIVE_VERSION}/manifest.jsonl")
 BIN = ROOT / "target/release/fractal-generator.exe"
 # Rust render-family token for a manifest fractal_type (julia_multibrotN -> julia_multibrotN).
 RENDER_FAMILY = {"julia_multibrot3": "julia_multibrot3", "julia_multibrot4": "julia_multibrot4",

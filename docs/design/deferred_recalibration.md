@@ -6,14 +6,14 @@ it, and where to start.
 
 | item | state |
 |---|---|
-| location-head retrain | **DONE — no longer parked.** v8 shipped, v9 was staged and skipped, v10 is live (record below). |
-| ranker growth (`pref_loc_v1`) | parked — and the **rebuild is BLOCKED**: no head exists on this checkout and the labels' location join was wiped (record below) |
+| location-head retrain | **DONE — no longer parked.** v8 shipped, v9 was staged and skipped, v10 shipped, **v11 is live** (records below). |
+| ranker growth (`pref_loc_v1`) | **CLOSED — DELETED 2026-08-08.** Not parked, not blocked: the rebuild path is gone and the code with it (closure below). |
 | location blind reads | parked |
 | mining-head calibration | parked |
 
-## The gate: what unparks the remaining three
+## The gate: what unparks the remaining two
 
-All three are gated on the **release review**, which has exactly two outcomes:
+Both are gated on the **release review**, which has exactly two outcomes:
 
 - **Distribution off** → dictate new ratios in `tools/scoring/release_mix.RATIO`, the one
   place the intended mix is expressed; the emission measure is derived from it at intake and
@@ -26,7 +26,7 @@ distribution the *measure produced* — not if it's a selection- or gate-stage a
 reweight off a broken gauge; fix the gauge, then re-judge. (Precedent: an early run's
 phoenix-heavy / all-smooth shares were selection artifacts, not measure output.)
 
-As of the last release review: judged fine → the three remaining items stay parked.
+As of the last release review: judged fine → the two remaining items stay parked.
 
 ## Record: the location-head recalibration, flipped 2026-08-02
 
@@ -93,77 +93,119 @@ partition that sets the target anchor (the uniform level then; the max-ratio anc
 2026-08-04 — mandelbrot sets both). Every other partition's deficit narrowed and the
 target did not move.
 
-## Ranker growth (`pref_loc_v1`)
+## Record: the v11 flip, 2026-08-08 — and it moved the POPULATION, not just the head
 
-- **Why parked:** the growth loop is paused alongside the blind-read deferral — it feeds on
-  reads that aren't currently happening.
-- **Trigger:** the next location blind read.
-- **Loop:** rank → blind-read the top-K → refit on the new labels.
-- **Constraints (hold across any growth):**
-  - No corpus prior — labels are distribution-bound and pooling eras degrades the fit.
-  - The morph-CLIP feature adds nothing; don't re-add it.
-  - Scope is fixed: the ranker orders admitted locations only (keeper ordering, emission-intake
-    ordering, dive-result sorting). It is never wired into frontier priority, dive-start
-    selection, scheduling, or any discovery decision. Role detail in `aesthetic_scoring.md`.
-  - Its feature extractor is pinned to a **frozen v7** (`ranker/scorer.PENULTIMATE_CKPT`), not
-    to `ACTIVE_CKPT`. Head flips do not move it, and the v10 flip did not.
+**v11 is the live head** (`production_pins.ACTIVE_CKPT`). Certified **non-inferior on all
+three pre-registered gating arms** (census-144 q3 0.7422→0.7710 p=0.437; floor-526 q3
+0.8715→0.8479 p=0.099; uniform-90 q2 0.8289→0.8369 p=0.855, which also SEPARATES at CI_lo
+0.749). Bars: `data/v11/prereg_v11.json`; results: `data/v11/eval_results_v11.json`.
 
-### Ranker rebuild — BLOCKED (2026-08-05)
+The flip re-derived the whole scale-bound cluster together, as v10's did:
 
-Matt ordered a rebuild + recertification of `pref_loc_v1` on 2026-08-05, after the emission
-smoke found that `data/ranker/pref_loc_v1/model.npz` **has never existed on this checkout** and
-every emission run has therefore been unranked. The rebuild did not run. It is blocked on inputs,
-not on a failed bar, and **no weight was fit and none was committed**.
+| artifact | what it is | where |
+|---|---|---|
+| discovery `t_good` | per-partition q3 operating point, per-family objective | `data/v11/t_good_derivation.json` ← `tools/v11/derive_t_good_v11.py`; adopted copy in `production_seeder.T_GOOD_OVERRIDES` |
+| keeper cut | report-only F0.5 twin of `t_good`; nothing gates on it | `data/atlas/keeper_cuts.json` ← `tools/atlas/keeper_cut.py` |
+| τ_h | per-partition cheap-render harvest cut | `data/atlas/tau_h_base_v11.json` ← `tools/atlas/tau_h_rederive.py`; vendored into `steered_frontier.TAU_H_FIDELITY_BASE` |
+| the coupling itself | what must revert together, and the ladder | the block beside `ACTIVE_CKPT` in `production_pins.py`; `data/v11/adoption_record.json:rollback_ladder` |
 
-**The pre-registered bar, recorded here before any training** so a later fit cannot be tuned
-toward it. The rebuilt head certifies **iff**, under the SAME 3-batch LOBO protocol on the SAME
-batches (`tools/ranker/train_eval_v1.py`: run2 + dive + campaign1, folds = each read held out
-once, winner = max mean-LOBO Spearman, tie-break mean AUC):
+What outlives this pass:
 
-1. pooled percentile-normalized Spearman is **positive**, and
-2. its 95% bootstrap CI **excludes the canonical `p_good` baseline** measured on the same folds
-   — not merely excludes 0, which is what `train_eval_v1.main` actually tests today, and
-3. the per-family LOBO Spearman is **positive in every family**.
+- **The population rule changed, and every threshold move must be read as both.** v10 cut
+  each partition on one frozen INSTRUMENT; v11 cuts on the randomized location-GROUPED
+  HOLDOUT, with the instrument as a per-partition fallback and still never their union. That
+  is the whole point of the flip — six of ten partitions had no eval row of any kind under
+  v10 — but it means `mandelbrot 0.03 → 0.90` says nothing about v11's scale: the keeper base
+  rate went 4.9% → 11.3% and an F_beta argmax moves with prevalence. Exactly one partition
+  kept its v10 population (`julia:multibrot3`, on the census), and that one number IS a clean
+  head read: 0.27 → 0.26.
+- **Mandelbrot's `t_good` became decidable again.** Under v10 the F0.5 curve was flat and low
+  and the argmax fell to the grid floor. Under v11's holdout it has an interior argmax at
+  precision 0.781 / recall 0.633 (OOF F0.5 0.731). The v10 entry's "label more, not nudge"
+  prescription was right and it is what happened.
+- **The holdout is biased exactly as training is**, so those precisions are not what the gate
+  will deliver on a discovery frontier. Accepted cost of calibrating six partitions at all;
+  the first v11-era run's per-partition admitted precision is the read that checks it, and
+  that is what the flip's WATCH (`production_seeder.Q4_WATCH`) is attached to.
+- **The v10 WATCH resolved and retired itself.** Class-4 descriptive AP on the census went
+  0.7273 → 0.7664 (by P≥4, 0.6315 → 0.6759); the 0.813 → 0.728 fall v10 flagged did not
+  persist.
+- **Three partitions are derivable and deliberately NOT adopted.** The native multibrots clear
+  `MIN_POS` for the first time (49/32/38 holdout positives) and would take 0.61/0.85/0.61.
+  Adoption is fork-scheduled (see § "Related" below), so they went through the estimator's new
+  `withhold` path: derived, recorded in the artifact's `withheld` block, running at the
+  baseline. **This is the fork decision's input and it no longer needs re-deriving.**
+- **The library seed is unreconstructable until the next real run.** It is built from
+  run-local counts and embeddings under the head that produced them, so any flip retires it.
+  Known cost of a flip, not a defect of this one.
+- **`phoenix:classic` is now the ONLY partition the rule cannot reach** — 8 holdout rows, 1
+  positive, no instrument rows at all. It was one of six; it is one of one.
 
-Criteria 2 and 3 are STRICTER than the code: `train_eval_v1` certifies on (beats canon_pgood on
-mean-LOBO Spearman) ∧ (CI excludes 0), and pref_loc_v1's own per-family table had a family
-reading negative on n=7 at the v0 stage. Anything rebuilt has to clear the stricter form.
+**Open, carried forward:** the objective for `julia:multibrot{3,4,5}` stayed F2 on CHANGED
+evidence. v10's read rested on a hard zero (both 2026-08 supply efforts were 100%
+native-plane); 198/266/281 rows have since been drawn, so the zero is gone. They remain the
+smallest parameter-plane families and every row came through a gate rather than an exhaustion
+test, so the verdict held — but the next version should re-read this with a supply measurement
+that is not label-batch counts.
 
-**Why it is blocked.** The 379 labels survive; the join that says WHICH LOCATION each label
-belongs to does not.
+## Ranker growth (`pref_loc_v1`) — CLOSED, DELETED 2026-08-08
+
+**Matt's decision, taken at the v11 flip: the rebuild path is deleted permanently.** This
+section used to carry a parked growth loop and, under it, a BLOCKED rebuild with a
+pre-registered certification bar. Both are gone. What is kept below is the *history* — why
+the object could not be rebuilt — because that is the part a future reader needs and the part
+that cost something to establish. The plan is not kept, because a plan nobody may execute is
+indistinguishable from an intention.
+
+**What was deleted with it**, in the same commit:
+
+| removed | was |
+|---|---|
+| `tools/ranker/` (`scorer.py`, `score_locations.py`, `build_features.py`, `train_eval.py`, `train_eval_v1.py`, `report.py`, `test_ranker.py`) | the whole fit-and-serve path, including `PENULTIMATE_CKPT` — the pin that made `data/classifier/v7/model_best.pt` load-bearing |
+| `tools/atlas/campaign1_manifest.py` | un-runnable by its own construction: it scored every admission with `LocationRanker()` before sampling, so reproducing its 298-tile key required the head being rebuilt |
+| `build_emission_diversity_v1._score_intake_with_ranker` + `--intake-floor` | the live consumer, which caught its own exception on every run this checkout ever made |
+| `phoenix_label_diversity` §4b, `steered_run2_report`'s keeper ordering | report/analysis consumers of the same absent head |
+
+**The unranked path is now the plain behaviour, not a fallback.** Emission's colorize queue is
+a seeded round-robin across partitions and a **seeded shuffle within one** — unbiased rather
+than alphabetical — and that is the whole rule. Selection is unchanged by this closure: it is
+what every run has actually done. **Any future within-partition ordering is a new decision**,
+re-registered against its own batches; it is not the restoration of this one.
+
+### The history: why it could not be rebuilt
+
+`data/ranker/pref_loc_v1/model.npz` **never existed on this checkout**
+(`git log --all --full-history -- data/ranker*` is empty), so every emission run has been
+unranked. The rebuild ordered on 2026-08-05 never ran, and was blocked on inputs rather than
+on a failed bar: **the 379 labels survive; the join that says which LOCATION each label
+belongs to does not.**
 
 | input | state |
 |---|---|
 | `labels/{steered_run2,steered_v1_2_dive,campaign1}_blind*_scores.json` | present — 60 + 21 + 298 = **379**, keyed by blind tile (`blind_037.jpg`) |
 | `scratch/{steered_run2_manifest,dive_manifest,campaign1_blind}/manifest_key.json` | **GONE** — tile → location id. Lived in `scratch/`, never tracked, wiped |
-| `data/ranker/**` (v0/v1 `features.npz`, `model.npz`, `metrics.json`, `campaign1/features.npz`) | **GONE** — gitignored, zero commits in history |
+| `data/ranker/**` (v0/v1 `features.npz`, `model.npz`, `metrics.json`) | **GONE** — gitignored, zero commits in history |
 | `data/discovery/steered_run2/morph_admissions.npz` | **GONE** |
-| ledgers, `outcome_feats.npz`, `data/classifier/v7/model_best.pt` (the pinned extractor) | present |
 
-Neither wiped manifest is re-derivable. `steered_run2_manifest.py` needs the missing
-`morph_admissions.npz` (its stratified pick is round-robin over morph clusters), and
-`campaign1_manifest.py` scores every admission with `LocationRanker()` before sampling — i.e.
-reproducing campaign1's 298-tile key requires the very head being rebuilt. Searched and empty:
-git history for `data/ranker*` and `*manifest_key.json`, `docs/`, `data/atlas/`, the artifacts
-root (`C:\Code\fractal-maker-artifacts`), the holding and trash trees.
+Neither wiped manifest was re-derivable: `steered_run2_manifest.py` needed the missing
+`morph_admissions.npz`, and `campaign1_manifest.py` scored every admission with the very head
+being rebuilt. Searched and empty: git history for `data/ranker*` and `*manifest_key.json`,
+`docs/`, `data/atlas/`, the artifacts root, the holding and trash trees. **The certification
+record is gone too** — `metrics.json` was never tracked, so any quoted pooled Spearman / CI
+for pref_loc_v1 (the surviving header claimed "3-batch LOBO meanSp +0.436, certified") is
+unverifiable against this tree and always will be.
 
-**The certification record is gone too.** No file in this checkout carries pref_loc_v1's numbers.
-`metrics.json` was the record and was never tracked; what survives is the `scorer.py` header
-("3-batch LOBO meanSp +0.436, certified") and the criteria in `train_eval_v1.py`. Treat any
-quoted pooled Spearman / CI for pref_loc_v1 as unverifiable against this tree.
+This is the canonical instance of the `scratch/`-liveness rule in
+[`storage_classes.md`](storage_classes.md): a join file in `scratch/` was the only thing
+standing between 379 human labels and a usable dataset, and its loss was silent for months.
 
-**What unparks it.** A fresh blind read that writes its manifest key to `data/` — not `scratch/` —
-is the only route, and it re-bases the protocol rather than continuing it: the batches would be
-new, so the bar above is re-registered against them, not inherited. The cheap half is to make the
-next read durable by construction; the expensive half is that 379 labels have to be re-collected
-to get back to where the LOBO protocol stood.
+### What this closure does NOT license
 
-**Scope, unchanged and restated:** the ranker orders within admitted/eligible only — keeper
-ranking, emission-intake ordering, dive-result sorting. Never frontier priority, dive-start,
-scheduling, or any discovery decision (`scorer.py` HARD SCOPE). The emission colorize order was
-changed on 2026-08-05 to a seeded partition round-robin with the ranker ordering only WITHIN a
-partition, so the ranker branch going live later cannot move budget between partitions — it can
-only reorder inside one.
+The **HARD SCOPE** that governed the ranker still governs anything that replaces it: a model
+that both selects and ranks degrades on its own selections. Any future ordering model ranks an
+already-produced set — keeper ranking, emission-intake ordering, dive-result sorting — and is
+**never** wired into frontier priority, dive-start selection, scheduling, or any discovery
+decision (`aesthetic_scoring.md` §2).
 
 ## Location blind reads
 

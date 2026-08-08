@@ -438,3 +438,67 @@ an item's evidence, the line points at it rather than restating it.
   tools/atlas/test_production_seeder.py::{test_no_module_declares_a_coordinate_gate_constant_of_its_own,
   test_the_emission_selector_c_plane_branch_resolves_the_owners_pair};
   tools/wallpaper/test_emission_selector.py; docs/design/morphology_dedup.md §6]`
+
+- **2026-08-08 — the `pref_loc_v1` LOCATION RANKER, and its rebuild path.** Retired as an
+  object, not merely unbuilt: `tools/ranker/` (scorer, feature build, both trainers, the
+  report, its tests) and `tools/atlas/campaign1_manifest.py` are DELETED. The head never
+  existed on this checkout — every emission run in this repo's history has been unranked and
+  logged so — and the rebuild was blocked on inputs that cannot come back: the three blind
+  reads' `manifest_key.json` tile→location joins lived in `scratch/` and were wiped, so 379
+  human labels are permanently unattributable, and `campaign1_manifest.py` needed the very
+  head being rebuilt to reproduce its own 298-tile key. **What replaces it is what was already
+  running:** the emission colorize queue's within-partition order is a seeded shuffle, now the
+  plain documented rule rather than the `except` branch of a ranker attempt. **NOT retired:**
+  the HARD SCOPE that governed it — an ordering model ranks an already-produced set and is
+  never wired into frontier priority, dive-start, scheduling or any discovery decision — which
+  binds anything that ever replaces it. Also NOT retired and easy to confuse with it: the
+  PALETTE preference ranker (`pref-v3-gvo`, `data/queries/scorer/v3_gvo/`), which is live.
+  Deleting this freed `data/classifier/v7/model_best.pt`, whose only remaining pin was the
+  ranker's frozen penultimate.
+  `[decision: prompts/v11_adoption.md §5, Matt, 2026-08-08]`
+  `[code: docs/design/deferred_recalibration.md § "Ranker growth (`pref_loc_v1`) — CLOSED";
+  tools/emission/build_emission_diversity_v1.py::DiversityEngine._round_order]`
+
+- **2026-08-08 — "append, never rebuild" as the classifier build rule** (retrain protocol §1,
+  live v7→v10). Retired because the frozen manifest prefix and a re-randomized split cannot
+  both hold, and the split rule is what had to change: v10's eval side WAS the four
+  score-unconditioned instruments, so six of ten partitions had no eval row of ANY kind while
+  the corpus held 809 julia:mandelbrot and 375 phoenix keeper positives — `derive_t_good`'s
+  `MIN_POS` gate reporting "no data" about a corpus that had plenty. Not fixable under the
+  append rule, since an instrument is registered before it is drawn and those partitions never
+  had one. **NOT retired: the reason it existed.** Version-over-version comparability is still
+  a hard requirement; it is now carried by reproducing the four instruments location-for-
+  location (v11's build gate pins the census-144 by identity) rather than by a byte-frozen
+  prefix. The cost is stated where it bites: a re-split renumbers `loc_id` and invalidates the
+  render cache keyed on it.
+  `[decision: prompts/v11_adoption.md §7, Matt; split rule Matt 2026-08-06]`
+  `[code: docs/design/classifier_retrain_protocol.md §1; tools/v11/build_manifest.py]`
+
+- **2026-08-08 — "one FROZEN INSTRUMENT per partition" as the `t_good` calibration
+  population** (v8/v10's rule). Superseded by the randomized location-GROUPED holdout with the
+  instrument as a per-partition fallback (`derive_t_good.select_population`). The instrument is
+  unimpeachable for a base rate and wrong for a calibration cut — a cut wants a population
+  biased like training, which is exactly what the holdout is. **NOT retired: never pooled.**
+  That half is inherited verbatim and is why the rule is holdout-OR-instrument and not their
+  union; the v10 measurement behind it stands (pooling 12 zero-positive rows into mandelbrot's
+  526 moved the argmax five grid steps and collapsed LOO-OOF F0.5 from 0.357 to 0.100). Under
+  v11 exactly one partition takes the fallback — `julia:multibrot3`, 3 holdout positives
+  against 19 in the census — and it lands on the population v10 cut it on, which is what keeps
+  that one number comparable across the flip.
+  `[decision: Matt, 2026-08-06; adopted at the v11 flip 2026-08-08]`
+  `[code: tools/scoring/derive_t_good.py::select_population; tools/v11/derive_t_good_v11.py;
+  docs/design/classifier_retrain_protocol.md §4]`
+
+- **2026-08-08 — the five-rung classifier rollback ladder** (v10→v8→v7→v6→v5). Replaced by a
+  two-rung ladder under the ACTIVE+PREVIOUS weights-retention policy. The long ladder was a
+  fiction that read as a plan: rolling back to v7 means reverting `t_good`, the keeper cut and
+  τ_h to v7's `p_good` scale, and v7's own eval slice was gitignored and is gone — so its
+  table cannot be re-derived and copying it forward reinstates a cut chosen against a
+  predicate that is no longer served. A rung you could not correctly take costs 34 MB and
+  invites a rollback that silently serves numbers about nothing. **NOT retired:** the coupled
+  revert-together set, which is what makes even a one-rung rollback correct, and the v8
+  `t_good` RECORD (`data/v8/t_good_derivation.json`) — kept precisely because the hazard it
+  documents is general.
+  `[decision: prompts/v11_adoption.md §6, Matt, 2026-08-08]`
+  `[code: docs/design/storage_classes.md § "Weights retention";
+  tools/scoring/test_production_pins.py::LADDER; data/v11/adoption_record.json]`

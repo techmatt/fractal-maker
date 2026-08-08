@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-r"""Phoenix grid labels — §3 theme diversity + §4 ranker transfer (render/CLIP side).
+r"""Phoenix grid labels — §3 theme diversity (render/CLIP side).
 
 Complements phoenix_label_analysis.py (the compute-only §0/§1/§2/§4a pass). This pass needs
 renders + CLIP, so it is separate:
@@ -13,8 +13,10 @@ renders + CLIP, so it is separate:
       (v7 + colored_clip), held-out by construction (zero phoenix in its training), and report
       held-out Spearman vs human labels.
 
-Analysis only. Reuses the exact library morph recipe (library_annotate) + the ranker scorer;
-retrains nothing. Writes data/discovery/phoenix_grid/diversity_ranker.json + the medoid sheet.
+Analysis only. Reuses the exact library morph recipe (library_annotate); retrains nothing.
+Writes data/discovery/phoenix_grid/diversity_ranker.json + the medoid sheet. The §4b ranker
+transfer half was deleted 2026-08-08 with the ranker; the artifact keeps its filename so the
+existing committed record is not orphaned by a rename.
 
   uv run python tools/phoenix/phoenix_label_diversity.py
 """
@@ -32,7 +34,7 @@ from scipy import stats
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 for p in ("tools/corpus", "tools/mining", "tools/scoring", "tools/wallpaper",
-          "tools/curation", "tools/studies", "tools/ranker"):
+          "tools/curation", "tools/studies"):
     sys.path.insert(0, str(ROOT / p))
 
 import label_store as ls                              # noqa: E402
@@ -40,7 +42,6 @@ import location as loc_mod                            # noqa: E402
 import library_annotate as la                         # noqa: E402
 from colored_clip import load_clip, embed_clip        # noqa: E402
 from active_ckpt import auto_maxiter, PALETTE, BIN, JPG_Q  # noqa: E402
-from tools.ranker.scorer import RankerScorer          # noqa: E402
 
 RUN = ROOT / "data" / "discovery" / "phoenix_grid" / "grid"
 BATCH_ID = "2026-07-21_phoenix_grid"
@@ -210,34 +211,16 @@ def diversity(rows, model, tf):
 
 
 # --------------------------------------------------------------------------- #
-# §4b  ranker transfer
+# §4b RANKER TRANSFER — DELETED 2026-08-08 with its subject.
+# This section scored the phoenix grid with `pref_loc_v1` (held out by construction:
+# the ranker was fit on run2+dive+campaign1, zero phoenix) and reported
+# Spearman(rank, human) beside Spearman(p_good, human). The head never existed on this
+# checkout and its rebuild is now permanently deleted (deferred_recalibration.md §
+# "Ranker rebuild — DELETED"), so the section could not run and cannot be made to.
+# §3 theme diversity, which is what this module is for, is untouched.
 # --------------------------------------------------------------------------- #
-def ranker_transfer(rows, model, tf):
-    feats = np.load(RUN / "outcome_feats.npz", allow_pickle=False)
-    have_v7 = [r for r in rows if r["id"] in feats.files and r["score"] is not None]
-    tiles = colored_tiles(have_v7)
-    scored = [r for r in have_v7 if tiles[r["id"]] is not None]
-    V7 = np.stack([feats[r["id"]] for r in scored]).astype(np.float64)
-    COL = embed_clip(model, tf, [tiles[r["id"]] for r in scored]).astype(np.float64)
-    scorer = RankerScorer.load()
-    rank = scorer.score_matrix({"v7": V7, "colored": COL})
-    human = np.array([r["score"] for r in scored], float)
-    pg = np.array([r["p_good"] for r in scored], float)
-    sp = stats.spearmanr(rank, human)
-    sp_pg = stats.spearmanr(pg, human)
-    y = (human == 3).astype(int)
-    r1 = stats.rankdata(rank)
-    auc = float((r1[y == 1].sum() - y.sum() * (y.sum() + 1) / 2) / (y.sum() * (len(y) - y.sum())))
-    return {
-        "n_scored": len(scored), "sets": list(scorer.sets), "head": scorer.head,
-        "spearman_rank_vs_human": {"rho": float(sp.statistic), "p": float(sp.pvalue)},
-        "spearman_pgood_vs_human": {"rho": float(sp_pg.statistic), "p": float(sp_pg.pvalue)},
-        "auc_rank_good_vs_rest": auc,
-        "note": "held-out by construction: pref_loc_v1 trained on run2+dive+campaign1, zero phoenix.",
-    }
 
 
-# --------------------------------------------------------------------------- #
 def build_sheet(ok, grays, medoids, colored_by_id):
     from PIL import Image, ImageDraw
     meds = [m for m in medoids]
@@ -284,15 +267,7 @@ def main():
     sheet = build_sheet(ok, grays, medoids, col)
     print(f"  medoid sheet -> {sheet}")
 
-    rk = ranker_transfer(rows, model, tf)
-    print("\n=== §4b ranker transfer (pref_loc_v1) ===")
-    print(f"  n_scored={rk['n_scored']} sets={rk['sets']}")
-    print(f"  Spearman(rank, human)={rk['spearman_rank_vs_human']['rho']:.3f} "
-          f"(p={rk['spearman_rank_vs_human']['p']:.2e})")
-    print(f"  Spearman(p_good, human)={rk['spearman_pgood_vs_human']['rho']:.3f}  "
-          f"AUC(rank)={rk['auc_rank_good_vs_rest']:.3f}")
-
-    OUT.write_text(json.dumps({"diversity": div, "ranker": rk,
+    OUT.write_text(json.dumps({"diversity": div,
                                "sheet": str(sheet.relative_to(ROOT))}, indent=2,
                               default=lambda o: int(o) if isinstance(o, np.integer)
                               else float(o) if isinstance(o, np.floating) else str(o)),

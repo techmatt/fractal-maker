@@ -116,18 +116,30 @@ REGISTRY = [
      "and the reappearance tripwire (test_relocated_artifacts.py) holds it there. The "
      "v4..v7 caches were DELETED (commit 7068839) and their RELOCATED_PREFIXES literals "
      "dropped — dead machinery for caches that will never exist again."),
-    ("data/classifier/v{5,6,7}/model_best.pt", "classifier/train_v{5,6,7}.py", DUR_F,
-     "a full GPU retrain — which needs the v7 manifest above (gone)", N,
-     "MISMATCH (fragile). Tracked via LFS force-add, but the PATH is gitignored, so "
-     "durable() REFUSES it and every new sibling. (Until 2026-08-03 it gave a false OK on "
-     "the existing file — `check-ignore` without `--no-index` answers about the index, not "
-     "the rules; see tools/paths._is_gitignored.) The live discovery gate's weights are in "
-     "a directory the contract cannot extend."),
+    ("data/classifier/v{5,6,7,8,9}/config.json (+ v8/v9 metrics.json)",
+     "the trainers, via tools/scoring/extract_retired_config.py for v5..v7", DUR, "n/a", Y,
+     "RESOLVED 2026-08-08 — and the resolution is that the MISMATCH's SUBJECT LEFT. These "
+     "rows used to read `data/classifier/v{5,6,7}/model_best.pt`, tracked by LFS force-add "
+     "at a gitignored path, so `durable()` refused them and every new sibling: the live "
+     "discovery gate's weights sat in a directory the contract could not extend. The weights "
+     "de-tracked under the ACTIVE+PREVIOUS retention policy (storage_classes.md); what "
+     "replaces them here is the RECORD — each retired version's config.json, declared by "
+     "exact-path .gitignore negation, so durable() accepts it. Small, and the only thing that "
+     "was actually at risk (v5/v6/v7 shipped no config at all until it was lifted out of the "
+     "checkpoints ahead of the de-track). The weights themselves are now working-tree-only on "
+     "one machine plus a verified unreferenced copy in the artifacts store, which is what the "
+     "policy says they should be."),
     ("data/classifier/v7/eval_scores_v7.jsonl", "classifier/train_v7.py (eval-freeze)", UND,
      "a full GPU eval-freeze over the frozen eval slice — whose manifest is gone", Y,
      "MISMATCH. .gitattributes documents it as the frozen input the keeper-calibration "
      "gate derives and tests against, and says it must be force-added. It never was: not "
      "tracked, not on disk, in-tree or out."),
+    ("data/classifier/v{10,11}/model_best.pt", "classifier/train_v{10,11}.py", DUR, "n/a", Y,
+     "RESOLVED 2026-08-08, by the same pass. The LADDER's two weights are declared by "
+     "exact-path .gitignore negation (the v9/v10/v11 blocks always were), not by force-add, "
+     "so durable() accepts them and a fresh clone's `git add -A` would re-add them. This is "
+     "the shape every weight in the tree now has; the force-add class is empty for "
+     "data/classifier/."),
     ("data/wallpaper_head/v3/model_best.pt", "classifier/train_wallpaper_v3.py", DUR_F,
      "a full GPU retrain from the wallpaper corpus (committed)", N,
      "MISMATCH (fragile). Same force-add shape as the classifier weights."),
@@ -251,11 +263,12 @@ REGISTRY = [
     ("data/mining/run1/descent/pool.jsonl", "tools/mining/harvest.py", UND,
      "NOTHING — another stochastic descent pool", Y,
      "MISMATCH. Same shape as the guided-descend pool; gone in-tree and out."),
-    ("data/ranker/{pref_loc_v0,campaign1}/{model.npz,features.npz}",
-     "tools/ranker/build_features.py, report.py", UND,
-     "re-derivable from the discovery ledgers (committed) + the corpus", N,
-     "Regenerable, not population-defining -> the ignored class is defensible. Listed "
-     "because the artifacts are absent, so nothing currently depends on them."),
+    # data/ranker/{pref_loc_v0,campaign1}/{model.npz,features.npz} was a row here, classed
+    # "regenerable from the discovery ledgers + the corpus". That was wrong twice over — the
+    # tile->location manifest keys it needed were wiped, and as of 2026-08-08 its producers
+    # (tools/ranker/, campaign1_manifest.py) are DELETED with the pref_loc_v1 rebuild path.
+    # Removed rather than re-classed: this map answers "what produces X and can it be
+    # rebuilt", and for a path with no producer at all the honest answer is not a row.
     ("data/render_mode_corpus/batches/*/images.jsonl, rms_split_map.json",
      "tools/render_mode_pilot/*", UND,
      "NOTHING for the labels; the split map re-derives from them", Y,

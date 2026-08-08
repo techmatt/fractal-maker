@@ -185,19 +185,24 @@ They are **not interchangeable**, and the ±1 prefix bound is a **check each cal
 order it built**, not a theorem: it is tight for two cells and reaches 1.495 on a skewed 13-cell
 population. A source scan in `test_apportion.py` fails on a second copy of either rule.
 
-**The classifier** (`classifier/`, pkg). Weights/metrics in `data/classifier/v5…v10/`,
-**git-LFS tracked in-tree — NOT gitignored** (`.gitattributes` + exact-path `.gitignore`
-negation; guarded by `tests/test_tracked_artifacts.py` and the size-guard registry). A weight
-file is a tracked artifact, not scratch. **Never hardcode a version** — the live pin is
-`tools/scoring/production_pins.ACTIVE_CKPT` (v10 since 2026-08-02; v8 is the one-flip rollback
-anchor, v9 was built and staged but never adopted and is NOT a rollback rung), read
+**The classifier** (`classifier/`, pkg). **TRACKED WEIGHTS = ACTIVE + PREVIOUS, per model
+family** — the retention policy set 2026-08-08 (`docs/design/storage_classes.md § weights
+retention`). For the location head that is `data/classifier/{v10,v11}/model_best.pt` and
+nothing else: v5…v9 de-tracked at the v11 flip, and their weights survive only as verified
+UNREFERENCED copies outside the repo. The two live weights are **git-LFS tracked in-tree —
+NOT gitignored** (`.gitattributes` + exact-path `.gitignore` negation; guarded by
+`tests/test_tracked_artifacts.py` and the size-guard registry). A weight file is a tracked
+artifact, not scratch. **Never hardcode a version** — the live pin is
+`tools/scoring/production_pins.ACTIVE_CKPT` (v11 since 2026-08-08; **the ladder is two rungs,
+v11 → v10**, and v9 was built and staged but never adopted so it was never a rung), read
 by ~41 modules — most of them still through the `active_ckpt` re-export, which is an alias, not
 a copy (`test_production_pins.py`). Every version is a CORN **ordinal** head on
 `mobilenetv4_conv_medium.e250_r384_in12k` emitting K−1 rank-consistent logits; **K is
 per-version** — K=3 through v7 (labels 1–3), **K=4 from v8 onward** (labels 1–4; v8 is the
-first K=4 head, not v9). Read it from `data/classifier/<v>/config.json` **where that file
-exists, which is v8+ only** — v5/v6/v7 ship the LFS weight and nothing else, so on all three
-rollback rungs the documented read fails and the K=3 above is the record. Deploy transform = `classifier.data.Transform(train=False)`: the
+first K=4 head, not v9). Read it from `data/classifier/<v>/config.json`, which **every**
+version now has: v5/v6/v7 shipped the weight and nothing else until
+`tools/scoring/extract_retired_config.py` lifted their recipes out of the checkpoints ahead of
+the de-track — the record is small and stays, the weight is large and went. Deploy transform = `classifier.data.Transform(train=False)`: the
 deterministic **1280×720 → 384×224 bicubic stretch + normalize** mirror of `present.rs`'s JPG
 path (no jitter/flips). `model.score_from_logits` returns `Σ σ(logit_k)` ∈ [0,K−1] — the
 monotone rank score used for AP. **P(not-bad) = σ(logit₀)** (= P(rank≥1) = P(label≥2)).
