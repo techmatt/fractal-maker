@@ -69,6 +69,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import paths as _paths                   # noqa: E402  (storage-class helper: bulk() -> out-of-tree)
 import apportion                         # noqa: E402  (THE two apportionment rules; stdlib-only)
 import run_record                        # noqa: E402  (THE segmented run-record layer; stdlib-only)
+import discovery_sinks as dsinks         # noqa: E402  (THE sink paths + the feats bulk() class)
 
 # production_seeder wires its own sub-imports (prescreen / reframe / guard / score_lib /
 # active_ckpt) and owns the constants, root pipeline, near-dup machinery, guard, and the
@@ -1112,7 +1113,10 @@ class RunLedger:
     def __init__(self, run_dir: Path):
         self.dir = run_dir
         self.path = run_dir / "outcome_ledger.jsonl"
-        self.feats_path = run_dir / "outcome_feats.npz"
+        # bulk() since 2026-08-08 — the feature store resolves OUT of the tree for a
+        # run under data/discovery/, and stays beside the ledger for a tmp_path or
+        # scratch store (discovery_sinks.feats_path).
+        self.feats_path = dsinks.feats_path(run_dir)
         self.rows: list[dict] = []
         self.feats: dict = {}
         if self.path.exists():
@@ -1136,6 +1140,8 @@ class RunLedger:
     def save_feats(self):
         if not self.feats:
             return
+        # The parent is NOT self.dir any more (see __init__): make the FILE's parent.
+        self.feats_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.feats_path.parent / (self.feats_path.stem + "_tmp.npz")
         np.savez_compressed(tmp, **self.feats)
         os.replace(tmp, self.feats_path)

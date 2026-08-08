@@ -265,6 +265,19 @@ __pycache__/
 # (58bec40) without a rule to stop it coming back, and it came back.
 /data/discovery/**/STOP
 /data/discovery/**/scratch/
+# The outcome-FEATURE store — demoted from committed to bulk() on 2026-08-08 and moved
+# out-of-tree (artifacts._is_discovery_feats). It is the derived sidecar of
+# outcome_ledger.jsonl: one 1280-D penultimate vector per admitted q3, recomputable from
+# the ledger's own coordinates by re-rendering and re-embedding. The ledger STAYS
+# committed — it records a population that cannot be re-walked and carries the label
+# provenance — and this does not. Measured before the move: 10.88 MB across 27 banked
+# runs, and 3.23 of steady_state_v2_20260807's 10.77 MB of tree bytes, i.e. 30% of a
+# modern run's committed footprint for a store production_seeder.py itself describes as
+# "logged, never gates". The `_v7_t45` re-decode subset (redecode_grid.py) is the same
+# class and matched by the same prefix. The existing files were MOVED, not deleted: a
+# recompute embeds through the head active TODAY, and each banked vector was pulled
+# through the head named by its own ledger row's scorer_version.
+/data/discovery/**/outcome_feats*.npz
 /data/discovery/**/*.log
 /data/discovery/**/morph_mem.npz
 /data/discovery/**/morph_admissions.npz

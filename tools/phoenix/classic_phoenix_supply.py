@@ -88,6 +88,7 @@ import reframe                            # noqa: E402
 from score_lib import corn_decode         # noqa: E402
 from step0_reanalysis import load_frames_by_walk  # noqa: E402
 from deficit_scheduler import DistinctLookTally    # noqa: E402
+import discovery_sinks as _dsinks     # noqa: E402  (the feats bulk() class)
 import corpus_common as cc            # noqa: E402  THE current-decode predicate
 import partitions as _P               # noqa: E402  THE partition registry
 
@@ -344,7 +345,9 @@ def main(argv=None):
     scorer = guard.make_guarded_scorer(ps.SCORER_PATH)
     embedder = pg.MorphEmbedder(SCRATCH)
     rescored_path = run_dir / "rescored.jsonl"
-    feats_path = run_dir / "outcome_feats.npz"
+    # bulk() since 2026-08-08 (tools/atlas/discovery_sinks.feats_path): out-of-tree for a
+    # run under data/discovery/, beside the ledger anywhere else.
+    feats_path = _dsinks.feats_path(run_dir)
     looks_path = run_dir / "distinct_looks.npz"
     # Stale-decode purge BEFORE the tally/feats load, so neither is built from an old head's
     # admissions (both files are deleted by the purge when anything is dropped).

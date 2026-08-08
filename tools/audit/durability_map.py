@@ -195,6 +195,24 @@ REGISTRY = [
     ("data/discovery/**/{outcome_ledger,probe_rejects}.jsonl", "tools/atlas/production_seeder.py", DUR,
      "NOTHING — append-only record of one run's admissions", Y,
      "OK. Negated, committed (18 tracked), disk_audit NEVER. The reference case."),
+    ("data/discovery/**/outcome_feats*.npz",
+     "production_seeder / steered_frontier / phoenix_grid, via discovery_sinks.feats_path", BULK,
+     "the ledger beside it: tools/atlas/recompute_outcome_feats.py re-renders each row's "
+     "outcome frame at v5 search fidelity and re-embeds it (the exact two functions "
+     "production_seeder.outcome_feature calls). NOT bit-identical — each banked vector came "
+     "from the head its row's scorer_version names, and those weights are de-tracked",
+     N,
+     "OK as of 2026-08-08, and the row exists to record that the class MOVED. It was "
+     "committed and disk_audit-NEVER, sitting beside outcome_ledger.jsonl as if the two "
+     "were one artifact. They are a record and a FUNCTION of that record: the ledger holds "
+     "a population that cannot be re-walked, the npz is that population plus a forward "
+     "pass, and production_seeder's own header says the 1280-D feature is 'logged, never "
+     "gates'. Measured before the move: 10.88 MB across 28 files, and 3.23 of "
+     "steady_state_v2_20260807's 10.77 MB of committed tree bytes — 30% of a modern run's "
+     "footprint. MOVED out-of-tree rather than deleted, precisely because the recompute is "
+     "not a byte-restore. Relocated as a CLASS (artifacts._is_discovery_feats), so a new "
+     "run's store is born out-of-tree; it is the one relocated family that is a FILE, so "
+     "the reappearance tripwire's discovery walk had to grow a `files` branch."),
     # `<stem>.jsonl` here names the STREAM, not one file: since 2026-08-07 the four LFS
     # streams rotate into `<stem>.<nnn>.jsonl.gz` segments (tools/run_record.py) and a
     # finished run has no plain file at all. Read them with `run_record.iter_rows`.

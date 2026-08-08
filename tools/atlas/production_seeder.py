@@ -730,7 +730,12 @@ class Ledgers:
     def save_feats(self):
         if not self.feats:
             return
-        DISCOVERY_DIR.mkdir(parents=True, exist_ok=True)
+        # OUTCOME_FEATS is `bulk()` since 2026-08-08 (discovery_sinks.feats_path), so its
+        # parent is NOT DISCOVERY_DIR for a production run — it resolves under
+        # ARTIFACTS_ROOT. Make the parent of the file, not the store root, or the first
+        # save of a fresh run raises FileNotFoundError on a directory that was never
+        # created.
+        OUTCOME_FEATS.parent.mkdir(parents=True, exist_ok=True)
         # numpy auto-appends .npz unless the name already ends in it, so keep the
         # temp name .npz-suffixed (else savez writes elsewhere and the rename fails).
         tmp = OUTCOME_FEATS.parent / (OUTCOME_FEATS.stem + "_tmp.npz")

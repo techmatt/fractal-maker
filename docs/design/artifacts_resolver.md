@@ -109,14 +109,23 @@ sentence — the list here goes stale between edits and did (`tau_h_rederive` wa
 without it).
 `[code: tools/corpus/artifacts.py::RELOCATED_PREFIXES, is_relocated]`
 
-**Classes — a predicate over the path.** Four families are matched by *shape* rather than
-by registration: discovery scratch (`data/discovery/**/scratch`), label-corpus crops
+**Classes — a predicate over the path.** Families are matched by *shape* rather than by
+registration: discovery scratch (`data/discovery/**/scratch`), the discovery
+outcome-FEATURE store (`data/discovery/**/outcome_feats*.npz`), label-corpus crops
 (`data/label_corpus/batches/*/{crops,vivid}`), descent-harness images
 (`data/descent_harness/{crops,vivid,thumbs}`) and minibrot source bulk
-(`data/minibrot_sources/{tiles,sheets}`). All four are component-exact, so
+(`data/minibrot_sources/{tiles,sheets}`). All are component-exact, so
 `.../crops_staging` does not match.
-`[code: tools/corpus/artifacts.py::{_is_discovery_scratch, _is_label_corpus_crop,
-_is_descent_harness_crop, _is_minibrot_source_bulk}]`
+`[code: tools/corpus/artifacts.py::{_is_discovery_scratch, _is_discovery_feats,
+_is_label_corpus_crop, _is_descent_harness_crop, _is_minibrot_source_bulk}]`
+
+**One of them is a FILE, and that is the interesting case.** Every other class names a
+directory, so the reappearance tripwire could scan `dirs` and be complete.
+`_is_discovery_feats` matches `outcome_feats.npz` beside the ledger it derives from, and a
+dirs-only scan would have relocated it correctly and never checked it — exactly the gap
+this section warns about. The tripwire's discovery walk therefore checks `files` too.
+`[code: tools/audit/test_relocated_artifacts.py::_scan_in_tree_offenders]`
+`[added 2026-08-08]`
 
 **Why the class form is preferred: it fails in the safe direction.** A new campaign, a new
 label batch, a new descent emit relocates with *no registry edit at all*. Forgetting to

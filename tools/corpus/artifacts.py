@@ -190,6 +190,40 @@ def _is_discovery_scratch(r: str) -> bool:
     )
 
 
+def _is_discovery_feats(r: str) -> bool:
+    """True iff ``r`` (normalized repo-relative) is a discovery run's outcome-FEATURE
+    store: ``data/discovery/**/outcome_feats*.npz``.
+
+    The 1280-D penultimate vector of the scoring head for each admitted q3, one entry per
+    ledger row. It is the derived SIDECAR of ``outcome_ledger.jsonl``, and the two are not
+    the same class: the ledger records a population that cannot be re-walked, while the
+    npz is a function of that population plus a forward pass. Demoted from tracked to
+    bulk() on 2026-08-08 — 10.88 MB across 27 banked runs, and 30.0% of a modern run's
+    committed tree bytes (3.23 of 10.77 MB on steady_state_v2_20260807), for a store
+    whose own module docstring records that ``the 1280-D feature is logged, never gates``.
+
+    Matched as a CLASS by pattern, not a per-run literal, so a new run's store is born
+    out-of-tree with no registry edit — the same argument ``_is_discovery_scratch``
+    records. The prefix rather than the exact name because the family has a second member:
+    ``outcome_feats_v7_t45.npz``, the re-decode subset ``tools/phoenix/redecode_grid.py``
+    writes beside it.
+
+    ONE CAVEAT, recorded at the predicate because this is where someone will look: the
+    recompute is not bit-identical to what is banked. Each vector was pulled through the
+    head that was ACTIVE when its run walked (each ledger row records its own
+    ``scorer_version``), and those weights are de-tracked under ACTIVE+PREVIOUS. Re-running
+    the recompute embeds through the head that is active TODAY — a faithful feature, not
+    this one. The existing files were therefore MOVED out-of-tree, never deleted."""
+    parts = r.split("/")
+    return (
+        len(parts) >= 3
+        and parts[0] == "data"
+        and parts[1] == "discovery"
+        and parts[-1].startswith("outcome_feats")
+        and parts[-1].endswith(".npz")
+    )
+
+
 def _is_label_corpus_crop(r: str) -> bool:
     """True iff ``r`` (normalized repo-relative) is a label-corpus batch's ``crops/`` or
     ``vivid/`` tree — the regenerable label-crop bulk (a pure function of each row's
@@ -332,13 +366,14 @@ def _norm(rel) -> str:
 def is_relocated(rel) -> bool:
     """True iff ``rel`` (repo-relative) belongs to a relocated family: a literal
     aug-cache prefix, any versioned ``data/v<N>/aug_cache`` or ``eval_canon`` tree, any
-    discovery-scratch
-    tree, any label-corpus crop/vivid tree, any descent-harness image tree, or the
-    minibrot source-sheet tiles/sheets bulk (all but the literals matched by class)."""
+    discovery-scratch tree, any discovery outcome-FEATURE store, any label-corpus
+    crop/vivid tree, any descent-harness image tree, or the minibrot source-sheet
+    tiles/sheets bulk (all but the literals matched by class)."""
     r = _norm(rel)
     if any(r == p or r.startswith(p + "/") for p in RELOCATED_PREFIXES):
         return True
     return (_is_aug_cache(r) or _is_eval_canon(r) or _is_discovery_scratch(r)
+            or _is_discovery_feats(r)
             or _is_label_corpus_crop(r) or _is_descent_harness_crop(r)
             or _is_minibrot_source_bulk(r) or _is_v11_build_rows(r))
 

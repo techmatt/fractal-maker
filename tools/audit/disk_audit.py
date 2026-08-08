@@ -83,7 +83,6 @@ RULES: list[Rule] = [
     # -- provenance files, wherever they live: non-reproducible, tiny, keep ----
     Rule(r"(^|/)pool\.jsonl$", NEVER, "guided-descend location pool (stochastic, non-reproducible provenance)"),
     Rule(r"(^|/)(outcome_ledger|probe_rejects)\.jsonl$", NEVER, "append-only discovery ledger"),
-    Rule(r"(^|/)outcome_feats\.npz$", NEVER, "discovery q3 outcome-feature cloud"),
     Rule(r"(^|/)[^/]*(manifest|ledger)[^/]*\.jsonl?$", NEVER, "run manifest / ledger (provenance)"),
     Rule(r"(^|/)scores\.json$", NEVER, "exported human label scores"),
     Rule(r"(^|/)images\.jsonl$", NEVER, "batch image manifest / label rows"),
@@ -154,6 +153,15 @@ RULES: list[Rule] = [
     Rule(r"^data/atlas/", AMBIG, "atlas-era data (superseded discovery approach?)"),
     Rule(r"^data/atlas_probe/", AMBIG, "atlas probe-era data"),
     Rule(r"^data/label_crops/", AMBIG, "early loose label-crop feed (superseded by label_corpus?)"),
+    # The outcome-FEATURE store. It sat in the NEVER block beside `outcome_ledger` until
+    # 2026-08-08 — which is what made the two read as one artifact. They are a record and
+    # a FUNCTION of that record: demoted to bulk() and moved out-of-tree, rebuildable from
+    # the ledger. Placed HERE, above the gather rule and below every NEVER, because rules
+    # are first-match-wins: it must not be reached by `^data/discovery/gather/`, and it
+    # must not precede `^labels/` (test_disk_audit pins that ordering).
+    Rule(r"(^|/)outcome_feats[^/]*\.npz$", REGEN, "discovery q3 outcome-feature cloud "
+         "(the ledger's derived sidecar; bulk() since 2026-08-08)",
+         "uv run python tools/atlas/recompute_outcome_feats.py --run <run_dir>"),
     Rule(r"^data/discovery/gather/", AMBIG, "raw gather crops beyond the label corpus (keep-for-mining?)"),
 
     # -- REGENERABLE: aug caches for the ACTIVE v5/v6 (rebuild = compute) ------

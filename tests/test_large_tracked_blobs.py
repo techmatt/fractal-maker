@@ -253,8 +253,11 @@ BINARY_ALLOWLIST = [
                 "Prospect-library CLIP embeddings — the immutable base store; regenerable "
                 "only value-approximately."),
     BinaryEntry("data/discovery/", ".npz",
-                "Per-run `outcome_feats.npz` — the outcome feature matrix for a walk that "
-                "cannot be re-walked. Float arrays, so JSONL would be lossy AND larger."),
+                "Per-run `distinct_looks.npz` — the order-dependent near-dup look tally. "
+                "Float arrays, so JSONL would be lossy AND larger. `outcome_feats*.npz` "
+                "was the entry's original subject and LEFT on 2026-08-08: it is the "
+                "ledger's derived sidecar, not the record, so it is bulk() and "
+                "out-of-tree (tools/atlas/recompute_outcome_feats.py rebuilds it)."),
     BinaryEntry("data/atlas/", ".npz",
                 "Round-1/2 arm embeddings + `distinct_looks.npz`: the frozen vectors the "
                 "atlas arms' distinctness verdicts were taken on."),

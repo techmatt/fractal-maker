@@ -276,7 +276,9 @@ REGISTRY: list[Entry] = [
           "(src/root_field.rs CACHE_DIR) — needs the Rust-side artifacts resolver first"),
     Entry("data/discovery/", RELOCATE, ARTIFACTS, "mixed",
           "regenerable run-state overlays (campaign*/steered*/shakeout* renders, "
-          "logs); tracked ledgers/pools/outcome_feats provenance stays in-tree"),
+          "logs); tracked ledgers/pools stay in-tree. outcome_feats*.npz LEFT on "
+          "2026-08-08 — demoted to bulk() and moved out-of-tree (10.88 MB / 28 files), "
+          "rebuildable by tools/atlas/recompute_outcome_feats.py"),
     Entry("dramatic_palettes/", RELOCATE, ARTIFACTS, "mixed",
           "viz_render + viz_render_winners render sheets (regenerable); tracked "
           "palette definitions stay. FORWARD: only the 20 tracked palette definitions are "

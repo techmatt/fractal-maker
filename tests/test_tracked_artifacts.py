@@ -72,6 +72,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 #     outcome_feats.npz — machine features with committed producers; regenerable
 #     at compute cost. (Called out because "unregenerable" could be read to sweep
 #     them in — they stay out. If any lacks a live producer, promote it.)
+#     outcome_feats.npz went further on 2026-08-08: the reasoning above was already
+#     the bulk() argument, so it is no longer TRACKED at all and its producer is now
+#     explicit (tools/atlas/recompute_outcome_feats.py) rather than implied.
 TRACKED_CANARIES = [
     # Hand-picked reference fixtures (the test locations + palette selection).
     "data/test_renders.json",

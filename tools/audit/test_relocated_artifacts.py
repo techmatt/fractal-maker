@@ -68,9 +68,14 @@ def _scan_in_tree_offenders(repo_root: Path) -> list[str]:
         if n:
             offenders.append(f"{prefix} has {n}+ files in-tree at {in_tree}")
     # discovery-scratch class: walk data/discovery for any in-tree `scratch` dir with files.
+    # The same walk carries the outcome-FEATURE class, which is the one relocated family
+    # that is a FILE and not a directory — so it is checked on `files`, not on `dirs`. A
+    # dirs-only scan would have relocated it correctly and never checked it, which is the
+    # gap artifacts_resolver.md §3 names ("a class added to the resolver but not to the
+    # tripwire is never checked").
     disc = repo_root / "data" / "discovery"
     if disc.exists():
-        for root, dirs, _files in os.walk(disc):
+        for root, dirs, files in os.walk(disc):
             for d in dirs:
                 full = Path(root) / d
                 rel = full.relative_to(repo_root).as_posix()
@@ -78,6 +83,11 @@ def _scan_in_tree_offenders(repo_root: Path) -> list[str]:
                     n = _count_files(full)
                     if n:
                         offenders.append(f"{rel} has {n}+ files in-tree at {full}")
+            for fn in files:
+                full = Path(root) / fn
+                rel = full.relative_to(repo_root).as_posix()
+                if A._is_discovery_feats(rel):
+                    offenders.append(f"{rel} is an in-tree outcome-feature store at {full}")
     # label-corpus crop class: walk data/label_corpus/batches for in-tree crops/vivid dirs
     # with files. Same conservative rule — a crop tree that reappears in-tree (a batch
     # builder that bypassed corpus_common.crops_dir/vivid_dir) is caught here even for a
@@ -385,6 +395,54 @@ def test_discovery_scratch_class_maps_under_artifacts_root():
         assert A._is_discovery_scratch(A._norm(rel)), rel
         assert A.is_relocated(rel), rel
         assert A.resolve(rel) == root / rel, rel
+
+
+def test_discovery_feats_class_maps_under_artifacts_root():
+    """The outcome-FEATURE store relocates by pattern, for any run and both members of the
+    family (the store and redecode_grid's `_v7_t45` subset) — no registry line required,
+    including a run never seen before."""
+    root = A.artifacts_root()
+    for rel in [
+        "data/discovery/steady_state_v2_20260807/outcome_feats.npz",
+        "data/discovery/campaign2/breadth/outcome_feats.npz",
+        "data/discovery/phoenix_grid/grid/outcome_feats_v7_t45.npz",
+        "data/discovery/a_run_that_does_not_exist_yet/outcome_feats.npz",
+    ]:
+        assert A._is_discovery_feats(A._norm(rel)), rel
+        assert A.is_relocated(rel), rel
+        assert A.resolve(rel) == root / rel, rel
+
+
+def test_discovery_feats_lookalikes_stay_in_tree():
+    """The ledger the feature store is derived FROM must not follow it out of the tree, and
+    neither must the other per-run .npz overlays — they are gitignored, not relocated, and
+    conflating the two is how a durable record leaves by accident."""
+    for rel in [
+        "data/discovery/campaign2/breadth/outcome_ledger.jsonl",
+        "data/discovery/phoenix_grid/grid/distinct_looks.npz",
+        "data/discovery/campaign2/breadth/morph_mem.npz",
+        "data/discovery/campaign2/breadth/node_embs.npz",
+        "data/outcome_feats.npz",                      # not under data/discovery/
+        "data/discovery/campaign2/breadth/outcome_feats.jsonl",   # not an .npz
+    ]:
+        assert not A._is_discovery_feats(A._norm(rel)), rel
+        assert A.resolve(rel) == A.REPO_ROOT / rel, rel
+
+
+def test_tripwire_fires_on_synthetic_discovery_feats(tmp_path):
+    """The tripwire FIRES on a feature store written in-tree by a writer that bypassed
+    `discovery_sinks.feats_path` — for a run with NO registry line naming it. Fires on a
+    FILE, which is what makes this branch different from every other family here."""
+    assert _scan_in_tree_offenders(tmp_path) == []
+    victim = tmp_path / "data/discovery/campaign7/breadth/outcome_feats.npz"
+    victim.parent.mkdir(parents=True)
+    victim.write_bytes(b"x")
+    offenders = _scan_in_tree_offenders(tmp_path)
+    assert any("campaign7" in o and "outcome_feats" in o for o in offenders), offenders
+    # the ledger beside it is durable and must NOT trip the wire
+    victim.unlink()
+    (victim.parent / "outcome_ledger.jsonl").write_bytes(b"x")
+    assert _scan_in_tree_offenders(tmp_path) == []
 
 
 def test_discovery_non_scratch_stays_in_tree():

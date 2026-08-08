@@ -45,6 +45,7 @@ for p in (ROOT / "tools", ROOT / "tools" / "atlas", ROOT / "tools" / "mining",
         sys.path.insert(0, str(p))
 
 import production_seeder as ps          # noqa: E402  (t_good_for)
+import discovery_sinks as _dsinks       # noqa: E402  (the feats bulk() class + its raise)
 from score_lib import corn_decode        # noqa: E402
 
 try:
@@ -99,15 +100,20 @@ def main(argv=None):
             f.write(json.dumps(r) + "\n")
 
     # subset the 1280-D features to the surviving ids (keep the intake unit self-consistent)
+    #
+    # `_require_feats` rather than `if feats_src.exists()`: the store is bulk() since
+    # 2026-08-08 and so absent BY DESIGN, and this is the one reader that would have gone
+    # QUIET about it — the old guard wrote an EMPTY subset and recorded `n_feats: 0` in the
+    # readout, which reads as "this intake unit has no surviving features" rather than as
+    # "the input was missing". The raise names the rebuild command.
     kept_ids = {r["id"] for r in kept}
-    feats_src = run / "outcome_feats.npz"
-    out_feats = run / "outcome_feats_v7_t45.npz"
-    n_feats = 0
-    if feats_src.exists():
-        with np.load(feats_src, allow_pickle=False) as z:
-            sub = {k: z[k] for k in z.files if k in kept_ids}
-        np.savez_compressed(out_feats, **sub)
-        n_feats = len(sub)
+    feats_src = _dsinks._require_feats(_dsinks.feats_path(run))
+    out_feats = _dsinks.feats_path(run, "outcome_feats_v7_t45.npz")
+    with np.load(feats_src, allow_pickle=False) as z:
+        sub = {k: z[k] for k in z.files if k in kept_ids}
+    out_feats.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(out_feats, **sub)
+    n_feats = len(sub)
 
     readout = {
         "run_dir": str(run.relative_to(ROOT)),

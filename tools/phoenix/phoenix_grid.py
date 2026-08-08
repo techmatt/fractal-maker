@@ -72,6 +72,7 @@ from score_lib import corn_decode           # noqa: E402
 from step0_reanalysis import load_frames_by_walk  # noqa: E402
 from deficit_scheduler import DistinctLookTally    # noqa: E402  (cos-0.974 tally)
 import location as loc_mod                   # noqa: E402
+import discovery_sinks as _dsinks            # noqa: E402  (the feats bulk() class)
 
 # =========================================================================== #
 # Config
@@ -380,7 +381,10 @@ def run(args):
     p_records = run_dir / "descent_records.jsonl"
     p_all = run_dir / "all_outcomes.jsonl"
     p_ledger = run_dir / "outcome_ledger.jsonl"
-    p_feats = run_dir / "outcome_feats.npz"
+    # bulk() since 2026-08-08 — resolves out-of-tree for a run under data/discovery/
+    # (tools/atlas/discovery_sinks.feats_path). The store is the ledger's derived
+    # sidecar; the backfill below is what already treats it as rebuildable.
+    p_feats = _dsinks.feats_path(run_dir)
     p_looks = run_dir / "distinct_looks.npz"
 
     # seeds.jsonl is rewritten each start (deterministic from --seed); records/ledger append.

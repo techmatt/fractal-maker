@@ -475,6 +475,69 @@ machine that did the de-tracking those are the same answer, and on a fresh clone
 `[code: tools/scoring/production_pins.V10_CKPT_ROLLBACK; test_production_pins.LADDER;
 data/v11/adoption_record.json:rollback_ladder]` `[verdict: Matt, 2026-08-08]`
 
+## `outcome_feats.npz` is the ledger's SIDECAR, not a second ledger — TAKEN 2026-08-08
+
+The two files sat side by side in every run dir, in the same `.gitignore` re-include, under
+the same `disk_audit` `NEVER` neighbourhood, and that adjacency was doing the classifying.
+They are not the same class. `outcome_ledger.jsonl` records a population that cannot be
+re-walked. `outcome_feats.npz` is that population plus a forward pass — one 1280-D
+penultimate vector per admitted q3 — and `production_seeder.py`'s own header says the
+feature is *"logged, never gates"*. It is `bulk()` as of 2026-08-08, matched as a class by
+`artifacts._is_discovery_feats`, and the 28 existing files (10.88 MB) were **moved**
+out-of-tree, not deleted.
+
+**The committed byte split, per banked run** (tree bytes, `git ls-files data/discovery` +
+`stat`, 2026-08-08; full table in `scratch/storage_cleanup/feats_split.json`):
+
+| | bytes | share |
+|---|---:|---:|
+| all tracked `data/discovery/` (215 run dirs, 586 files) | 485,835,461 | |
+| — `outcome_ledger*` | 15,721,887 | 3.2% |
+| — `outcome_feats*` | 10,878,152 | **2.2%** |
+| — everything else (the four LFS `.jsonl.gz` streams, pools, walks, summaries) | 459,235,422 | 94.5% |
+
+The 2.2% is the misleading number and is why the per-run figure is the one to quote: the
+485 MB total is dominated by a handful of pre-segmentation campaign runs. On a **modern**
+run the sidecar is the largest single file — `steady_state_v2_20260807` (363.63 active
+minutes, clean close) is 10,765,771 tree bytes, of which **3,234,169 is the npz (30.0%)**
+against 2,725,616 for the ledger.
+
+**An 8 h run's committed tree bytes, projected linearly off that run** (×1.32):
+
+| | bytes | vs the 20 MB gate |
+|---|---:|---:|
+| as it stood | 14,211,066 | 71% |
+| with the npz out | 9,941,889 | 50% |
+| the ledger alone | 3,597,876 | 18% |
+
+**So the ledger alone does not approach 20 MB, and segmentation stays a separate
+decision.** The demotion buys back 30% of the per-run footprint and moves an 8 h run from
+71% of the gate to 50%. `[measured 2026-08-08, scratch/storage_cleanup/feats_split.py;
+consistent with `discovery_pipeline.md`'s independently-projected 17.0 MB worst case]`
+
+**The recompute is named, and it is not a byte-restore.**
+`tools/atlas/recompute_outcome_feats.py` rebuilds a run's store from its own ledger,
+reaching `prescreen._render` / `prescreen.embed_paths` by import so there is no second copy
+of the recipe, over exactly the `distinct: true` rows (derived, and verified against two
+banked stores: 2,244 == 2,244 and 311 == 311). But each banked vector was pulled through the
+head that was ACTIVE when its run walked — every ledger row records that in
+`scorer_version` — and those weights are de-tracked under ACTIVE+PREVIOUS. A rebuild embeds
+through today's head and stamps which one into the npz's `__meta__` key. **That is why the
+existing files were moved rather than deleted**, and it is the "producer reads live
+constants" hazard in its exact form: the producer survives, and re-running it measures
+something else.
+
+**The reader that would have gone quiet.** `redecode_grid.py` subset the store under an
+`if feats_src.exists():` and, absent it, wrote an empty subset with `n_feats: 0` into its
+readout — which reads as *"this intake unit has no surviving features"*, not as *"the input
+was missing"*. It now routes through `discovery_sinks._require_feats`, which raises naming
+the rebuild. `[code: tools/atlas/discovery_sinks.py::{feats_path,_require_feats}]`
+
+**One relocated family is a FILE.** Every other class names a directory, so the reappearance
+tripwire scanned `dirs` and was complete. This one sits beside the ledger it derives from, so
+the tripwire's discovery walk grew a `files` branch — otherwise the class would relocate
+correctly and never be checked, which is the gap `artifacts_resolver.md` §3 warns about.
+
 ## Git history is a durability tier too, and this repo's floor is 2026-07-24
 
 `fractal-maker` begins at a **single squashed import commit** (`ff88da4`, 1247 tracked files,

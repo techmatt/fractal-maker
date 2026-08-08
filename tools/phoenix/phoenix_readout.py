@@ -28,11 +28,14 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
 sys.path.insert(0, str(ROOT / "tools" / "scoring"))
+sys.path.insert(0, str(ROOT / "tools" / "atlas"))
+sys.path.insert(0, str(ROOT / "tools"))
 
 import phoenix_decomp as decomp                # noqa: E402
 import location as loc_mod                      # noqa: E402
 import corpus_common as cc                      # noqa: E402
 from active_ckpt import auto_maxiter, PALETTE   # noqa: E402
+import discovery_sinks as _dsinks                # noqa: E402  (the feats bulk() class)
 
 BIN = ROOT / "target" / "release" / "fractal-generator.exe"
 SCORE3 = ROOT / "data" / "palettes" / "score3_colormaps.json"
@@ -246,7 +249,7 @@ def main(argv=None):
               f"**intake-ready: {intake['n_intake_ready']}/{intake['n_ledger']}**.")
     md.append(f"- Non-ready breakdown: `{intake['reject_breakdown'] or 'none'}`.")
     md.append(f"- Ledger: `{run / 'outcome_ledger.jsonl'}`  |  features: "
-              f"`{run / 'outcome_feats.npz'}` (1280-D v7)  |  distinct-look tally: "
+              f"`{_dsinks.feats_path(run)}` (1280-D v7, bulk/out-of-tree)  |  distinct-look tally: "
               f"`{run / 'distinct_looks.npz'}`. **Confirmed intake-ready.**\n")
 
     md.append("## Visual sheets (standing habit)\n")

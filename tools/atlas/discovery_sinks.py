@@ -11,12 +11,20 @@ ephemeral scratch path; a bare `--smoke` had no such redirect. This module lifts
 decision into one shared, testable place so a throwaway run PHYSICALLY cannot resolve a
 sink under `data/`.
 
-Deliberately dependency-free (pathlib only): both the seeder and its guard test import
-this, and the guard test must stay in the light `pytest` lane (no numpy/torch/GPU).
+Deliberately light: stdlib plus `tools/paths.py` (itself stdlib-only). Both the seeder and
+its guard test import this, and the guard test must stay in the light `pytest` lane — no
+numpy, no torch, no GPU. `paths` is here because ONE of the five sinks is `bulk()` and the
+class has to be declared at the write site, not guessed by the caller (see `feats_path`).
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT / "tools") not in sys.path:
+    sys.path.insert(0, str(_ROOT / "tools"))
+import paths as _paths  # noqa: E402  (storage-class helper: bulk() -> out-of-tree)
 
 
 def default_discovery_dir(root: Path) -> Path:
@@ -59,15 +67,75 @@ def resolve_discovery_dir(root: Path, *, smoke: bool, time_only: bool,
     return default_discovery_dir(root).resolve()
 
 
+FEATS_NAME = "outcome_feats.npz"
+
+# The one command that puts an absent feature store back. Named here rather than at each
+# reader so there is a single string to keep true (`_require_feats` below quotes it).
+FEATS_RECOMPUTE = (
+    "uv run python tools/atlas/recompute_outcome_feats.py --run <run_dir>")
+
+
+def feats_path(discovery_dir: Path, name: str = FEATS_NAME) -> Path:
+    """The outcome-FEATURE store for a run — `bulk()`, so OUT-OF-TREE when the run lives
+    under `data/discovery/`.
+
+    Demoted from committed on 2026-08-08: the npz is the derived sidecar of
+    `outcome_ledger.jsonl`, recomputable from the ledger's own coordinates, and it was 30%
+    of a modern run's committed tree bytes. The ledger stays committed; this does not.
+
+    The routing is conditional on purpose. A run dir may be a scratch smoke store or an
+    explicit `--discovery-dir` under `tmp_path`, and `paths.bulk` only relocates paths it
+    recognizes as repo-relative members of a declared family
+    (`artifacts._is_discovery_feats`). So: convert to repo-relative and route when the run
+    is inside the repo, and otherwise leave the path exactly where the caller put it — a
+    smoke run's feature store belongs beside its own ledger, not in the artifacts root."""
+    d = Path(discovery_dir)
+    p = d / name
+    try:
+        rel = p.resolve().relative_to(_ROOT).as_posix()
+    except ValueError:
+        return p                      # outside the repo (tmp_path, an absolute store)
+    return _paths.bulk(rel)
+
+
+def _require_feats(p: Path) -> Path:
+    """A feature store a reader cannot proceed without — MISSING IS FATAL, and the raise
+    names the rebuild.
+
+    The `_require_field` shape (`tools/studies/q4_stage1_labelset.LS`, `_require_v8`): a
+    demoted artifact is absent BY DESIGN, so every reader that would silently do less
+    without it has to say so and say what to run. `redecode_grid` is the one that would
+    have gone quiet — it wrote a `n_feats: 0` subset under an `if feats_src.exists()`.
+
+    NOT bit-identical on recompute, and the message says so: each banked vector came from
+    the head that was active when its run walked (the row's own `scorer_version`), and
+    those weights are de-tracked. A recompute is a faithful feature, not that one."""
+    if p.exists():
+        return p
+    raise SystemExit(
+        f"outcome feature store missing: {p}\n"
+        f"    It is bulk() as of 2026-08-08 — recomputable from the ledger, so absent by\n"
+        f"    design rather than lost. Rebuild it:\n"
+        f"      {FEATS_RECOMPUTE}\n"
+        f"    NOTE: the recompute embeds through the head active TODAY. Each banked vector\n"
+        f"    was pulled through the head its ledger row names in `scorer_version`, so a\n"
+        f"    rebuilt store is a faithful feature set, not a byte-restore of the old one.")
+
+
 def derive_sinks(discovery_dir: Path) -> dict[str, Path]:
     """Every durable sink derived from a discovery-store root — the COMPLETE set a run
     may write. Keep in lockstep with production_seeder's module-level globals; the
     `gather` entry is the one the old `--discovery-dir` rebind silently missed (it was
-    frozen at module-load time against the production `data/discovery`)."""
+    frozen at module-load time against the production `data/discovery`).
+
+    `outcome_feats` is the one member that is NOT durable — it is `bulk()` and resolves
+    out-of-tree (see `feats_path`). It stays in this dict because the dict's job is "the
+    complete set a run may write", and the sink-isolation guard below has to see it: a
+    smoke run must not reach the production feature store either."""
     d = Path(discovery_dir)
     return {
         "outcome_ledger": d / "outcome_ledger.jsonl",
-        "outcome_feats": d / "outcome_feats.npz",
+        "outcome_feats": feats_path(d),
         "probe_rejects": d / "probe_rejects.jsonl",
         "runs": d / "runs",
         "gather": d / "gather",
