@@ -140,12 +140,34 @@ REGISTRY = [
      "so durable() accepts them and a fresh clone's `git add -A` would re-add them. This is "
      "the shape every weight in the tree now has; the force-add class is empty for "
      "data/classifier/."),
-    ("data/wallpaper_head/v3/model_best.pt", "classifier/train_wallpaper_v3.py", DUR_F,
-     "a full GPU retrain from the wallpaper corpus (committed)", N,
-     "MISMATCH (fragile). Same force-add shape as the classifier weights."),
-    ("data/queries/scorer/v3_gvo/model_best.pt", "tools/queries/scorer/*", DUR_F,
-     "a retrain from the committed query labels", N,
-     "MISMATCH (fragile). Same force-add shape."),
+    ("data/wallpaper_head/v{3/model_best.pt,4/{config,metrics}.json}",
+     "classifier/train_wallpaper_v{3,4}.py", DUR,
+     "a full GPU retrain from the wallpaper corpus (committed) — recipe-reproducible, not "
+     "bit-identical", N,
+     "RESOLVED 2026-08-08. Was the force-add shape — v3's weight AND v4's two records "
+     "tracked by `git add -f` at a gitignored path, so durable() refused them and every new "
+     "sibling. .gitignore now carries the walk-down chain and an exact-path negation per "
+     "file, so durable() accepts them and a fresh clone's `git add -A` re-adds them. v3 is "
+     "the LIVE head (wallpaper_pins.HEAD_CKPT); v4 was staged, never adopted, and its 34 MB "
+     "weight de-tracked the same day under ACTIVE+PREVIOUS — what stays is the record of "
+     "what was staged. NOT re-included, deliberately: v4's weight, its five per-seed dirs, "
+     "eval_scores.jsonl, the eval montage and train.log."),
+    ("data/queries/scorer/v3_gvo/model_best.pt", "tools/queries/scorer/*", DUR,
+     "NOTHING, and this row used to say otherwise. 'A retrain from the committed query "
+     "labels' is false: the labels ARE tracked but they key their tiers by candidate id "
+     "alone, and the records/ that join an id to its (location, palette, coloring) are gone "
+     "— see the PREF-HEAD JOIN row below, which is the same loss stated from the other "
+     "side. There is no retrain path from what survives.", Y,
+     "RESOLVED 2026-08-08 as a CLASS, and re-classed as unregenerable and "
+     "population-defining while the wiring was being fixed. Was tracked by `git add -f` at "
+     "a gitignored path; now declared by an exact-path .gitignore negation (never a "
+     "directory negation — v3_gvo also holds untracked training state), so durable() "
+     "accepts it. This was the LAST force-add in the tree: with data/classifier/ (2026-08-08), "
+     "data/render_mode_head/v1 (2026-08-06) and data/wallpaper_head/ above, the DUR_F class "
+     "is now empty of model weights, and tests/test_tracked_artifacts.py::"
+     "test_no_model_family_artifact_survives_by_force_add is what stops it coming back — "
+     "the versioned-build coverage assertion could not see these families, because "
+     "`v3_gvo` is not `v<N>`."),
     ("data/render_mode_head/v1/model_best.pt", "tools/render_mode_pilot/*", DUR,
      "NOTHING — its training corpus (data/render_mode_corpus/dataset_v1/) is gone, so "
      "'retrain' would produce a different head, not this one", Y,

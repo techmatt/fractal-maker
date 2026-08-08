@@ -265,7 +265,22 @@ REGISTRY: list[Entry] = [
           "crops here, which is the condition it was declared against."),
     Entry("data/queries/", RELOCATE, ARTIFACTS, "mixed",
           "query-assembler field/colormap renders + scorer caches (regenerable via "
-          "tools/queries); tracked queries/labels/*.json preference tiers stay"),
+          "tools/queries); tracked queries/labels/*.json preference tiers stay. FORWARD as "
+          "of 2026-08-08: the only over-threshold thing under this prefix was the ranker "
+          "weight, and it now has its own narrower line below (longest-prefix coverage), so "
+          "this one covers nothing TODAY. It is live, not dead — tools/queries/"
+          "diversity_diagnostic.py writes data/queries/diagnostics/ and "
+          "launch_query_label_server.py reads/writes data/queries/<batch_id>/, and a "
+          "re-assembled batch's images land back here.", forward=True),
+    Entry("data/queries/scorer/", RELOCATE, PRECIOUS, "mixed",
+          "the palette-preference RANKER weight (pref-v3-gvo, 10.2 MB, LFS) — not "
+          "GPU-reproducible, and its retrain input is worse than that: the labels are "
+          "tracked but the records/ that join a candidate id to its (location, palette, "
+          "coloring) are gone, so it cannot be retrained from what survives at all. A "
+          "NARROWER prefix than data/queries/ above on purpose (longest-prefix coverage): "
+          "the parent is regenerable render bulk and this is the opposite. Tracked by "
+          "force-add at a gitignored path until 2026-08-08, now declared by exact-path "
+          ".gitignore negation. CANARY.", canary=True),
     Entry("data/library/", RELOCATE, ARTIFACTS, "mixed",
           "field_cache render bulk (regenerable); tracked library_records.jsonl stays. "
           "FORWARD: only the one tracked record is there today, but "
@@ -388,9 +403,16 @@ REGISTRY: list[Entry] = [
           "see data/classifier/v5/. v9 was BUILT, STAGED and NEVER ADOPTED, so it was never "
           "a rollback rung even while tracked — a rejected candidate is not a critical "
           "final weight.", canary=True),
-    Entry("data/wallpaper_head/", RELOCATE, PRECIOUS, "ignored",
-          "trained wallpaper-quality heads (v1/v2/v3 .pt) — not GPU-reproducible; "
-          "active + rollback -> precious-store, older versions curate to trash at move"),
+    Entry("data/wallpaper_head/", RELOCATE, PRECIOUS, "mixed",
+          "trained wallpaper-quality heads — not GPU-reproducible (the corpus that produced "
+          "each has moved on). v3 is the LIVE head (wallpaper_pins.HEAD_CKPT) and, under "
+          "ACTIVE+PREVIOUS retention, the only weight tracked here: v4 was staged and never "
+          "adopted, so its 34 MB weight de-tracked 2026-08-08 and only its config.json + "
+          "metrics.json stay — the record of what was staged, which is what stops the "
+          "rejection being re-litigated. Was 'ignored': v3's weight and v4's two records "
+          "were tracked by force-add at a gitignored path until 2026-08-08 and are now "
+          "declared by exact-path .gitignore negation, so durable() accepts them. CANARY.",
+          canary=True),
     Entry("data/render_mode_head/", RELOCATE, PRECIOUS, "ignored",
           "trained render-mode (strange-mode gate) head .pt — not GPU-reproducible. v1 is "
           "the LIVE gate and its training corpus is gone, so it cannot be retrained at all; "

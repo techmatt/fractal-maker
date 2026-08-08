@@ -484,6 +484,53 @@ def test_every_tracked_build_artifact_is_covered_by_a_negation():
         f"rather than leaving an exemption for a file that does not exist")
 
 
+# The four MODEL FAMILY roots of the ACTIVE+PREVIOUS retention policy
+# (docs/design/storage_classes.md § weights retention). A family is a pin, not a directory,
+# but every pin resolves under one of these.
+MODEL_FAMILY_ROOTS = (
+    "data/classifier/",         # the location head        (production_pins.ACTIVE_CKPT)
+    "data/wallpaper_head/",     # the wallpaper head       (wallpaper_pins.HEAD_CKPT)
+    "data/render_mode_head/",   # the render-mode gate
+    "data/queries/scorer/",     # the palette-preference ranker
+)
+
+
+def test_no_model_family_artifact_survives_by_force_add():
+    """The force-add shape must not come back, and the assertion has to be from GIT's side.
+
+    `test_every_tracked_build_artifact_is_covered_by_a_negation` above is the same check for
+    `data/v<N>/` and `data/classifier/v<N>/`, and its regex is why this one exists: the
+    stage-2 heads are not versioned that way (`v3_gvo` is not `v\\d+`), so they sat outside
+    every coverage assertion and kept the shape for months — `data/wallpaper_head/v3/
+    model_best.pt`, `v4/{config,metrics}.json` and `data/queries/scorer/v3_gvo/
+    model_best.pt` were all tracked by `git add -f` at a gitignored path until 2026-08-08.
+
+    Why that is worth a test rather than a fix: a force-add WORKS. Nothing is red, the file
+    is in the index, and the three ways it bites are all silent — `paths.durable()` refuses
+    the path and every new sibling, a fresh clone's `git add -A` would not re-add it, and
+    `git check-ignore` (without `--no-index`) reports it not-ignored, which is how a real
+    false accept got through on the v7 checkpoint. A negation is a RULE; a force-add is an
+    EVENT that left no rule behind.
+
+    `--no-index` is load-bearing here for exactly that reason: with the index consulted,
+    every path below would pass whether or not a single rule re-includes it."""
+    tracked = subprocess.run(["git", "ls-files", *MODEL_FAMILY_ROOTS], cwd=REPO_ROOT,
+                             capture_output=True, text=True)
+    assert tracked.returncode == 0, tracked.stderr
+    files = [p.strip() for p in tracked.stdout.split("\n") if p.strip()]
+    assert len(files) > 8, (
+        f"only {len(files)} tracked files under {MODEL_FAMILY_ROOTS} — the walk broke, or a "
+        f"root was renamed. A vacuous pass here is the failure this test guards against.")
+    forced = sorted(p for p in files if _rules_ignore(p))
+    assert not forced, (
+        f"{len(forced)} tracked model-family artifact(s) survive only by `git add -f` at a "
+        f"gitignored path:\n    {forced}\n"
+        f"Declare each by an EXACT-PATH .gitignore negation (never a directory negation — "
+        f"that sweeps in the untracked training state beside it), walking the re-include "
+        f"chain down from data/. Then `paths.durable()` accepts the path and a fresh "
+        f"clone's `git add -A` re-adds it.")
+
+
 @pytest.mark.parametrize("path", V8_DURABLE)
 def test_v8_durable_declared_paths_tracked(path):
     """A data/v8/ path declared durable by an exact-path .gitignore negation must be

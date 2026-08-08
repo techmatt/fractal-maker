@@ -6,12 +6,17 @@
 data/classifier/*/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/wallpaper_head/v3/model_best.pt filter=lfs diff=lfs merge=lfs -text
 # v4 (the five-seed retrain, 2026-08-05 sitting folded in) had a rule here while it was a
-# STAGED candidate. It was DE-TRACKED on 2026-08-08: `wallpaper_pins` still pins v3, so
-# under ACTIVE+PREVIOUS retention v4 is neither — it is a staged candidate that was never
-# adopted, and the policy de-tracks those (storage_classes.md § weights retention). Its
-# per-seed run record, `metrics.json` and `eval_scores.jsonl` are untracked working-tree
-# files as they always were; a verified emergency copy of the whole v4 tree, all five seeds
-# included, sits unreferenced at <artifacts>/retired_weights/wallpaper_head_v4/.
+# STAGED candidate. Its WEIGHT was DE-TRACKED on 2026-08-08: `wallpaper_pins` still pins v3,
+# so under ACTIVE+PREVIOUS retention v4 is neither — it is a staged candidate that was never
+# adopted, and the policy de-tracks those (storage_classes.md § weights retention). A
+# verified emergency copy of the whole v4 tree, all five seeds included, sits unreferenced
+# at <artifacts>/retired_weights/wallpaper_head_v4/.
+#   CORRECTION (2026-08-08): this note used to say `metrics.json` was untracked "as it
+#   always was". It is tracked, and so is `config.json` — they are the RUN RECORD the
+#   retention policy explicitly keeps, which is what stops the rejection being
+#   re-litigated. Both were force-added at a gitignored path and now carry exact-path
+#   .gitignore negations. What IS untracked working state: the weight, the five per-seed
+#   dirs, `eval_scores.jsonl`, `per_seed.json`, `inference.py`, the eval montage, train.log.
 data/render_mode_head/v1/model_best.pt filter=lfs diff=lfs merge=lfs -text
 # v2 (the 2026-08-06 finetune of v1 on the 960-row rebuilt correction sheet) had an LFS rule
 # here while it was a live candidate. It LOST the winner rule the same day — significantly

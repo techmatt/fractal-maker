@@ -228,6 +228,18 @@ __pycache__/
 !/data/queries/sampler_eval/*/
 /data/queries/sampler_eval/*/*
 !/data/queries/sampler_eval/*/records.json
+# The palette-preference RANKER weight (pref-v3-gvo), `tools/queries/scorer/*`. It was
+# tracked by `git add -f` at a gitignored path from the repo import until 2026-08-08 —
+# which works, and leaves nothing saying it belongs: a fresh clone's `git add -A` would
+# not re-add it, `paths.durable()` REFUSED it and every new sibling, and nothing goes red
+# if it silently drops out. A negation is a RULE where a force-add is an EVENT. Exact path,
+# never the directory: v3_gvo also holds untracked training state, and a bare
+# `!/data/queries/scorer/v3_gvo/` would sweep it in.
+!/data/queries/scorer/
+/data/queries/scorer/*
+!/data/queries/scorer/v3_gvo/
+/data/queries/scorer/v3_gvo/*
+!/data/queries/scorer/v3_gvo/model_best.pt
 
 # Mandelbrot seed atlas (tools/atlas/build_atlas.py): the fitted theta_hat/conf
 # artifact is a tiny (~12KB) load-bearing object the proposer reloads (atlas.py) --
@@ -582,6 +594,28 @@ __pycache__/
 # committed corpus batch and the recipe recorded in config.json reproduce it per-seed. Its
 # RUN RECORD stays tracked (config/metrics/per_seed/report.{md,json}); only the ~10 MB of
 # weights, and the per-seed dirs that were always ignored, are working state.
+# Wallpaper-quality head (classifier/train_wallpaper_v*.py; the pin is
+# tools/wallpaper/wallpaper_pins.HEAD_CKPT). Declared by exact-path negation as of
+# 2026-08-08; before that v3's weight and v4's two records were tracked by `git add -f` at
+# a gitignored path — the same force-add shape data/classifier/ and data/render_mode_head/
+# already closed, and the last two instances of it in the tree.
+#
+# v3 is the LIVE head and the only weight here: under ACTIVE+PREVIOUS retention v4 was a
+# staged candidate that was never adopted, so its weight de-tracked on 2026-08-08 and is
+# NOT re-included below. What stays of v4 is the record of what was staged — config.json
+# (the recipe) and metrics.json (what it scored) — because that is the reason the rejection
+# does not get re-litigated. Its 34 MB weight, the five per-seed dirs, eval_scores.jsonl,
+# the eval montage and train.log are working state and stay ignored.
+!/data/wallpaper_head/
+/data/wallpaper_head/*
+!/data/wallpaper_head/v3/
+/data/wallpaper_head/v3/*
+!/data/wallpaper_head/v3/model_best.pt
+!/data/wallpaper_head/v4/
+/data/wallpaper_head/v4/*
+!/data/wallpaper_head/v4/config.json
+!/data/wallpaper_head/v4/metrics.json
+
 !/data/render_mode_head/
 /data/render_mode_head/*
 !/data/render_mode_head/v1/

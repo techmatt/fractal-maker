@@ -475,6 +475,47 @@ machine that did the de-tracking those are the same answer, and on a fresh clone
 `[code: tools/scoring/production_pins.V10_CKPT_ROLLBACK; test_production_pins.LADDER;
 data/v11/adoption_record.json:rollback_ladder]` `[verdict: Matt, 2026-08-08]`
 
+### The force-add class is empty — CLOSED 2026-08-08
+
+Every model-family artifact in the tree is now declared by an **exact-path `.gitignore`
+negation**. The last four were `data/wallpaper_head/v3/model_best.pt`,
+`data/wallpaper_head/v4/{config,metrics}.json` and
+`data/queries/scorer/v3_gvo/model_best.pt`, closed the same way `data/classifier/`
+(2026-08-08) and `data/render_mode_head/v1` (2026-08-06) were. `durability_map` MISMATCHes
+went **16 → 14 of 50**.
+
+**A force-add WORKS, which is the problem.** Nothing is red and the file is in the index;
+all three ways it bites are silent. `paths.durable()` refuses the path *and every new
+sibling*, so the contract cannot extend a directory the live head lives in. A fresh clone's
+`git add -A` would not re-add it, and nothing would notice. And a bare `git check-ignore`
+reports a force-added path as not-ignored regardless of the rules — how a real false accept
+got through on the v7 checkpoint. A negation is a **rule**; a force-add is an **event** that
+leaves no rule behind.
+
+**Never a directory negation.** `!/data/queries/scorer/v3_gvo/` would sweep in the untracked
+training state beside the weight; `!/data/wallpaper_head/v4/` would re-include the 34 MB
+weight the retention policy just de-tracked, plus five per-seed dirs and an eval montage.
+Walk the chain down and negate each file.
+
+**Why these two families outlived the others**, and the reusable part:
+`test_every_tracked_build_artifact_is_covered_by_a_negation` asserts the same invariant from
+git's side — but only over `BUILD_PREFIX_RE = ^data/(?:classifier/)?v\d+/`. The stage-2 heads
+are not versioned that way (`v3_gvo` is not `v<N>`), so they sat outside every coverage
+assertion. The fix is a second assertion over the four **model-family roots** of the
+retention policy rather than a wider regex, since a family is a pin, not a path shape.
+`[code: tests/test_tracked_artifacts.py::{MODEL_FAMILY_ROOTS,
+test_no_model_family_artifact_survives_by_force_add} — proved red by removing one negation
+while its file stayed tracked]`
+
+**Two corrections found while doing it.** `.gitattributes` claimed
+`data/wallpaper_head/v4/metrics.json` was untracked "as it always was"; it is tracked, and
+so is `config.json` — they are the run record the policy keeps on purpose. And the
+`durability_map` row for the query ranker said it was regenerable by "a retrain from the
+committed query labels": it is not. The labels are tracked but key their tiers by candidate
+id alone, and the `records/` that join an id to its (location, palette, coloring) are gone —
+the same loss the PREF-HEAD JOIN row states from the other side. Re-classed unregenerable
+and population-defining.
+
 ## `outcome_feats.npz` is the ledger's SIDECAR, not a second ledger — TAKEN 2026-08-08
 
 The two files sat side by side in every run dir, in the same `.gitignore` re-include, under
