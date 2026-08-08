@@ -1,0 +1,19 @@
+{
+  "build": "v11-eval-canon",
+  "what": "the deploy-canonical view (twilight_shifted / identity framing / antialiased:lanczos3 / q85) for every location the v11 certification battery scores \u2014 the eval slice plus the correction sitting's train-side rows (the pre-registered CONTAMINATED companion read). The one cell the independent-draw cache does not guarantee.",
+  "rebuild": "uv run python tools/v11/build_eval_canon.py",
+  "verify": "uv run python tools/v11/build_eval_canon.py --verify",
+  "path": {
+    "tiles": "data/v11/eval_canon",
+    "manifest": "data/v11/eval_canon_manifest.jsonl",
+    "class": "bulk"
+  },
+  "rows": 3273,
+  "produced_by": "crop-batch --replay off the cache's own tile-0 rows",
+  "overrides": {
+    "aa.level": "antialiased",
+    "aa.mode": "lanczos3",
+    "jpg_quality": 85
+  },
+  "batch_incomplete": false
+}

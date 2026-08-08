@@ -176,6 +176,16 @@ ALLOWLIST = [
           "v10 build record: v8's manifest appended with 1,267 maneuver-view locations "
           "(8,382 x 24 slots, ~180 MB, LFS). Carries the split assignment for the third "
           "eval instrument (maneuver_uniform_v1), which exists nowhere else."),
+    Entry("data/v11/", EXCEPTION,
+          "v11 build record — and it is ONE file, which is the difference from v8/v9/v10 "
+          "above. v11's manifest, plan and cache_manifest are all bulk and out-of-tree "
+          "(artifacts._is_v11_build_rows), because the split is a SEEDED randomized draw "
+          "and so rebuilds from the committed corpus rather than being restored. What is "
+          "tracked is eval_scores_v11.jsonl (1.4 MB, LFS): 2,860 eval locations x the v11 "
+          "and v10 cutpoint probabilities on identical tiles. It is a GPU eval's frozen "
+          "output, not derived rows — a later keeper cut or t_good derivation re-cuts from "
+          "it without re-scoring, and re-scoring it needs both checkpoints and the "
+          "out-of-tree canonical tiles."),
     Entry("data/palettes/", EXCEPTION,
           "pool_colormaps.json (20 MB) + palette_features.json (1.8 MB): the harvested "
           "palette pool and its feature table."),

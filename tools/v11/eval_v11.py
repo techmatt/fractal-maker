@@ -104,6 +104,12 @@ def noninferior(block, margin):
         block["delta_cand_minus_base"] < 0 and block["delong_p"] < 0.05)
 
 
+def _r(x, nd=4):
+    """Round for the record. An AUC printed to 16 digits is not more precise than one
+    printed to 4 — it is a bootstrap-width claim the number cannot support."""
+    return None if x is None else round(float(x), nd)
+
+
 def separates(auc, ci_lo, bar):
     return bool(auc >= bar and ci_lo > 0.50)
 
@@ -398,10 +404,10 @@ def main() -> int:
     y4 = (labels[cm] == 4).astype(int)
     results["class4_census_descriptive"] = {
         "n_census": int(cm.sum()), "n_class4": int(y4.sum()),
-        "auc_v11_q4_vs_rest": q_auc(y4, s11[cm]),
-        "auc_v11_q4_by_pnext": (None if K11 < 4 else q_auc(y4, p11[cm][:, 2])),
-        "auc_v10_q4_vs_rest": q_auc(y4, s10[cm]),
-        "auc_v10_q4_by_pnext": (None if K10 < 4 else q_auc(y4, p10[cm][:, 2])),
+        "auc_v11_q4_vs_rest": _r(q_auc(y4, s11[cm])),
+        "auc_v11_q4_by_pnext": (None if K11 < 4 else _r(q_auc(y4, p11[cm][:, 2]))),
+        "auc_v10_q4_vs_rest": _r(q_auc(y4, s10[cm])),
+        "auc_v10_q4_by_pnext": (None if K10 < 4 else _r(q_auc(y4, p10[cm][:, 2]))),
         "class4_by_family": dict(Counter(np.array([l.fractal_type for l in locs])[cm]
                                          [y4.astype(bool)].tolist())),
         "note": "DESCRIPTIVE, no bar."}
@@ -514,7 +520,8 @@ def class4_arm(locs, labels, p10, p11, s10, s11, K10, K11, arms):
     cut10, cut11 = cutpoint_read(y4, p10[m][:, 2], t), cutpoint_read(y4, p11[m][:, 2], t)
     ordering = paired_block("correction-87 class-4 ordering", labels[m], s10[m], s11[m],
                             4, "v10", "v11", eq=True)
-    ordering["by_pnext"] = {"v10": q_auc(y4, p10[m][:, 2]), "v11": q_auc(y4, p11[m][:, 2])}
+    ordering["by_pnext"] = {"v10": _r(q_auc(y4, p10[m][:, 2])),
+                            "v11": _r(q_auc(y4, p11[m][:, 2]))}
     tighter = (cut11["precision"] is not None and cut10["precision"] is not None
                and cut11["precision"] > cut10["precision"]
                and abs(cut11["predicted_rate"] - obs) < abs(cut10["predicted_rate"] - obs))
@@ -589,11 +596,11 @@ def partition_calibration(locs, man, labels, p11, p10, K11, arms):
         block = {"n": int(m.sum()), "n_pos_ge3": int(y3.sum()),
                  "clears_min_pos": bool(int(y3.sum()) >= a["min_pos"]),
                  "v11": {"reliability": reliability(y3, p3_11),
-                         "auc_ge3": q_auc(y3, p3_11),
+                         "auc_ge3": _r(q_auc(y3, p3_11)),
                          "fbeta": {"F0.5": fbeta_argmax(y3, p3_11, 0.5),
                                    "F2": fbeta_argmax(y3, p3_11, 2.0)}},
                  "v10_CONTAMINATED": {"reliability": reliability(y3, p3_10),
-                                      "auc_ge3": q_auc(y3, p3_10),
+                                      "auc_ge3": _r(q_auc(y3, p3_10)),
                                       "note": "v10 trained on much of this population — "
                                               "printed for orientation, NOT a comparison"}}
         if K11 >= 4:

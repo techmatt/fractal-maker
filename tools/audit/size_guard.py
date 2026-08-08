@@ -190,6 +190,14 @@ REGISTRY: list[Entry] = [
           "its own on purpose — it reads v8's and records that file's sha256, so 'same "
           "corpus' is a checked claim rather than a copy that can drift. The aug_cache "
           "JPGs are bulk() and out-of-tree. durable() + canaried. CANARY.", canary=True),
+    Entry("data/v11/", KEEP, None, "tracked",
+          "v11 classifier build — ONE tracked row file, unlike v8/v9/v10. The manifest, "
+          "plan and cache_manifest are bulk and out-of-tree (the split is a seeded "
+          "randomized draw, so they rebuild from the committed corpus); what stays in-tree "
+          "is the small record that makes them checkable (build_record / aug_recipe / "
+          "prereg / eval_canon_record) plus eval_scores_v11.jsonl (1.4 MB, LFS) — the "
+          "frozen eval slice tools/scoring/eval_slice resolves IN-TREE and a later cut "
+          "re-cuts from without re-scoring.",),
     Entry("data/v10/", KEEP, None, "tracked",
           "v10 classifier build — v8's manifest APPENDED with 1,267 maneuver-view "
           "locations from the 2026-08 supply crawl and label-seeded harvest. Same shape "
@@ -331,10 +339,10 @@ REGISTRY: list[Entry] = [
           "reaches it; model_last.pt is deliberately untracked (selection is on best). "
           "NOT a canary: canary status belongs to the deployed head and the rollback rungs, "
           "and a staged candidate is neither (test_tracked_artifacts.py's note on v9). "
-          "FORWARD while the run is in flight: the live writer is classifier/train_v11.py, "
-          "which lands model_best.pt/model_last.pt (~34 MB each) plus config/metrics at the "
-          "end of its 40 epochs. The flag comes off when the weight is committed.",
-          canary=False, forward=True),
+          "Written by classifier/train_v11.py; model_best.pt is 34.2 MB, and the "
+          "committing of it crossed CLAUDE.md's 20 MB rule and was confirmed by Matt "
+          "2026-08-08 before the commit.",
+          canary=False),
     Entry("data/classifier/v10/", RELOCATE, PRECIOUS, "tracked",
           "v10 model_best.pt — the v9 recipe (itself v8's, verbatim) retrained on the "
           "corpus EXTENDED with 1,267 maneuver-view locations. This is what "
