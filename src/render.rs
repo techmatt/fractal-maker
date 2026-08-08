@@ -446,9 +446,9 @@ impl DownsampleFilter {
 
 /// One output sample's separable kernel: the contiguous run of source samples
 /// `[start, start+w.len())` and their (already normalized) weights.
-struct FilterTaps {
-    start: usize,
-    w: Vec<f64>,
+pub struct FilterTaps {
+    pub start: usize,
+    pub w: Vec<f64>,
 }
 
 /// Precompute the per-output-coordinate kernel taps for a 1-D `src_len → dst_len`
@@ -458,11 +458,37 @@ struct FilterTaps {
 /// support radius in source units is `radius()·ss`. Weights are normalized to sum
 /// to 1 (kernels integrate to ≈1, but edge clamping + discreteness drift).
 fn build_taps(dst_len: usize, src_len: usize, ss: u32, filter: DownsampleFilter) -> Vec<FilterTaps> {
-    let ssf = ss as f64;
-    let r = filter.radius() * ssf;
+    // `src_lo = 0.0` and `ratio = ss` recover this function's original arithmetic
+    // **bit-for-bit** (`0.0 + x == x` exactly for finite `x`), so every existing
+    // downsample stays byte-identical. See `build_taps_scaled`.
+    build_taps_scaled(dst_len, 0.0, ss as f64, src_len, filter)
+}
+
+/// [`build_taps`] generalized to an arbitrary **source origin** and **non-integer
+/// ratio** — the tap builder for resampling a sub-window of a larger source grid.
+///
+/// Output coordinate `d` is centered at source position `src_lo + (d + 0.5)·ratio`;
+/// everything else (source sample at `sx + 0.5`, destination-unit tap argument
+/// `t = ((sx+0.5) − center)/ratio`, support radius `radius()·ratio`, weights
+/// normalized to sum 1, clamping at the source bounds) is unchanged.
+///
+/// This is what lets the `crop-batch` executor derive a tile from an **extended
+/// field**: a crop at scale `s` from a field rendered at `field_ss` subpixels per
+/// canonical pixel is a `ratio = s·field_ss` minification starting at a fractional
+/// `src_lo`. Both are irrational-in-general, which is exactly the case the integer-`ss`
+/// form could not express. Clamping at the bounds is now a real edge case only at the
+/// extended field's own border, which no in-range crop reaches.
+pub fn build_taps_scaled(
+    dst_len: usize,
+    src_lo: f64,
+    ratio: f64,
+    src_len: usize,
+    filter: DownsampleFilter,
+) -> Vec<FilterTaps> {
+    let r = filter.radius() * ratio;
     (0..dst_len)
         .map(|d| {
-            let center = (d as f64 + 0.5) * ssf;
+            let center = src_lo + (d as f64 + 0.5) * ratio;
             let lo = (center - r).floor() as isize;
             let hi = (center + r).ceil() as isize;
             let mut start = None;
@@ -475,7 +501,7 @@ fn build_taps(dst_len: usize, src_len: usize, ss: u32, filter: DownsampleFilter)
                 if start.is_none() {
                     start = Some(sx as usize);
                 }
-                let t = (sx as f64 + 0.5 - center) / ssf;
+                let t = (sx as f64 + 0.5 - center) / ratio;
                 let wt = filter.eval(t);
                 w.push(wt);
                 sum += wt;

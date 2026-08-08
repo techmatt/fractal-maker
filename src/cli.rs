@@ -244,6 +244,14 @@ pub enum Command {
     /// every row in-process (parallel, resumable, JPEG q85). The plan owns the
     /// augmentation scheme; this just executes it. See `v4_cache::run_v4_render_batch`.
     V4RenderBatch(crate::v4_cache::V4RenderBatchArgs),
+
+    /// Extended-field crop executor (v11 prep). Renders ONE iteration pass per
+    /// location over a `--extend`-times-larger field, then derives every training
+    /// tile from it as crop + resample + colormap — instead of one iterate+shade per
+    /// tile. Emits a per-tile manifest carrying each tile's realized geometry, so any
+    /// tile regenerates from its row via `--replay`. Fields are stream-and-discard;
+    /// nothing is written into a field cache. See `crop_batch::run_crop_batch`.
+    CropBatch(crate::crop_batch::CropBatchArgs),
 }
 
 /// Parse a `re,im` pair into a complex number.

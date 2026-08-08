@@ -13,6 +13,7 @@ use num_complex::Complex;
 
 use fractal_generator::backend::{F64Backend, JuliaBackend, PerturbationBackend, Trap};
 use fractal_generator::cli::{BackendChoice, Cli, Command, LocationArgs, ShadeArgs};
+use fractal_generator::crop_batch;
 use fractal_generator::energy;
 use fractal_generator::enrich;
 use fractal_generator::generate;
@@ -339,6 +340,7 @@ fn run() -> Result<(), String> {
         Some(Command::PaletteProbe(args)) => palette_probe::run_palette_probe(args),
         Some(Command::Enrich(args)) => enrich::run_enrich(args),
         Some(Command::V4RenderBatch(args)) => v4_cache::run_v4_render_batch(args),
+        Some(Command::CropBatch(args)) => crop_batch::run_crop_batch(args),
         None => run_render(&cli),
     }
 }

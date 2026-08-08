@@ -38,28 +38,6 @@ use crate::{coloring, jsonl};
 /// Escape radius — identical to render-one/present/enrich.
 const BAILOUT: f64 = 1e6;
 
-/// Phoenix `c`/`p` defaults — mirror `render-one`'s `FamilyChoice::Phoenix` arm
-/// (the classic real-valued Ushiki spot). A plan phoenix row omits `c_re`/`p_re`,
-/// so the cache must apply the identical fallback the labeled crop was rendered at.
-const PHOENIX_C_DEFAULT: (f64, f64) = (0.5667, 0.0);
-const PHOENIX_P_DEFAULT: (f64, f64) = (-0.5, 0.0);
-/// Phoenix slice coordinate `z_{-1}` default — the legacy pinned value. A plan row
-/// predating the axis omits `zm1_re`/`zm1_im`, so its cached tile resolves to this
-/// (byte-identical to the pre-axis render).
-const PHOENIX_ZM1_DEFAULT: (f64, f64) = (0.0, 0.0);
-
-/// Which fractal family a plan row renders. Degree-2 `Mandelbrot`/`Julia` keep the
-/// settled location-profile path (byte-identical to today); the new families
-/// (`Multibrot`, Julia-multibrot `d ≥ 3`, `Phoenix`) render through the beautiful
-/// smooth pipeline, exactly as `render-one` routes them.
-enum FamilyKind {
-    Mandelbrot,
-    /// `degree == 2` ⇒ quadratic Julia (location-profile); `3/4/5` ⇒ Julia-multibrot.
-    Julia { degree: u32 },
-    Multibrot { degree: u32 },
-    Phoenix,
-}
-
 /// One render row parsed from the plan.
 struct Spec {
     cx: String,
@@ -75,8 +53,9 @@ struct Spec {
     /// row, so a cache tile and its deploy-time crop resolve the SAME cap — see
     /// `docs/design/auto_maxiter.md`.
     maxiter: Option<u32>,
-    /// Render family (from `fractal_type`; absent ⇒ Mandelbrot).
-    kind: FamilyKind,
+    /// Corpus `fractal_type` token (absent ⇒ `"mandelbrot"`), validated at parse and
+    /// resolved to a [`Family`] per render by [`Family::from_type_token`].
+    kind: String,
     /// Fixed parameter `c` (decimal strings) for the dynamical families
     /// (`julia*`, and optionally `phoenix`). Required for `julia*`.
     c: Option<(String, String)>,
@@ -108,44 +87,24 @@ fn parse_spec(line: &str) -> Result<Spec, String> {
         Some(n) => Some(n as u32),
         None => None,
     };
-    // Family coupling from `fractal_type` (absent ⇒ Mandelbrot). Dynamical families
-    // carry `c_re`/`c_im` (fixed parameter); a `julia*` row missing `c` is a loud
-    // error, not a silent fallback (would poison the cache with mis-rendered tiles).
-    // Phoenix's `c`/`p` are optional — absent ⇒ the Rust default spot (the same
-    // fallback `render-one` applies), so a phoenix plan row needs only its viewport.
-    let c = || -> Result<(String, String), String> {
-        let c_re = jsonl::field_str(line, "c_re").ok_or("dynamical row missing c_re")?;
-        let c_im = jsonl::field_str(line, "c_im").ok_or("dynamical row missing c_im")?;
-        Ok((c_re, c_im))
-    };
-    let phoenix_c = match (jsonl::field_str(line, "c_re"), jsonl::field_str(line, "c_im")) {
+    // Family coupling from `fractal_type` (absent ⇒ Mandelbrot). The token→family
+    // dispatch — and the rule that a `julia*` row missing `c` is a LOUD error rather
+    // than a silent fallback (a mis-rendered dynamical tile poisons the cache), and
+    // that phoenix's constants fall back to the Rust default spot — is owned once by
+    // [`Family::from_type_token`]. Parsing here only carries the decimal strings; the
+    // per-render f64 parse needs `prec_bits`, which is geometry-dependent.
+    let kind = jsonl::field_str(line, "fractal_type")
+        .unwrap_or_else(|| "mandelbrot".to_string());
+    let pair = |a: &str, b: &str| match (jsonl::field_str(line, a), jsonl::field_str(line, b)) {
         (Some(re), Some(im)) => Some((re, im)),
         _ => None,
     };
-    let phoenix_p = match (jsonl::field_str(line, "p_re"), jsonl::field_str(line, "p_im")) {
-        (Some(re), Some(im)) => Some((re, im)),
-        _ => None,
-    };
-    let phoenix_z1 = match (jsonl::field_str(line, "zm1_re"), jsonl::field_str(line, "zm1_im")) {
-        (Some(re), Some(im)) => Some((re, im)),
-        _ => None,
-    };
-    let (kind, c, p, z1) = match jsonl::field_str(line, "fractal_type").as_deref() {
-        None | Some("mandelbrot") => (FamilyKind::Mandelbrot, None, None, None),
-        Some("julia") => (FamilyKind::Julia { degree: 2 }, Some(c()?), None, None),
-        Some("julia_multibrot3") => (FamilyKind::Julia { degree: 3 }, Some(c()?), None, None),
-        Some("julia_multibrot4") => (FamilyKind::Julia { degree: 4 }, Some(c()?), None, None),
-        Some("julia_multibrot5") => (FamilyKind::Julia { degree: 5 }, Some(c()?), None, None),
-        Some("multibrot3") => (FamilyKind::Multibrot { degree: 3 }, None, None, None),
-        Some("multibrot4") => (FamilyKind::Multibrot { degree: 4 }, None, None, None),
-        Some("multibrot5") => (FamilyKind::Multibrot { degree: 5 }, None, None, None),
-        Some("phoenix") => (FamilyKind::Phoenix, phoenix_c, phoenix_p, phoenix_z1),
-        Some(other) => {
-            return Err(format!(
-                "unknown fractal_type '{other}' (mandelbrot|julia|julia_multibrot{{3,4,5}}|multibrot{{3,4,5}}|phoenix)"
-            ))
-        }
-    };
+    let (c, p, z1) = (pair("c_re", "c_im"), pair("p_re", "p_im"), pair("zm1_re", "zm1_im"));
+    // Validate the token (and the dynamical-`c` requirement) at PARSE time, so a bad
+    // plan fails before the first render rather than 170k rows in. `c` is passed as a
+    // presence sentinel; the real constants are parsed per render.
+    let sentinel = c.as_ref().map(|_| Complex::new(0.0, 0.0));
+    Family::from_type_token(&kind, sentinel, None, None)?;
     Ok(Spec { cx, cy, fw, palette, ss, filter, out, maxiter, kind, c, p, z1 })
 }
 
@@ -298,18 +257,31 @@ fn render_one_spec(
     }
 
     let ss = spec.ss.max(1);
-    let parse_c = |s: &str| -> Result<f64, String> {
-        Ok(hp::to_f64(&hp::parse_decimal(s, prec_bits)?))
+    let parse_pair = |v: &Option<(String, String)>| -> Result<Option<Complex<f64>>, String> {
+        match v {
+            Some((re, im)) => Ok(Some(Complex::new(
+                hp::to_f64(&hp::parse_decimal(re, prec_bits)?),
+                hp::to_f64(&hp::parse_decimal(im, prec_bits)?),
+            ))),
+            None => Ok(None),
+        }
     };
-    // Family dispatch mirrors `render-one` EXACTLY:
+    let family = Family::from_type_token(
+        &spec.kind,
+        parse_pair(&spec.c)?,
+        parse_pair(&spec.p)?,
+        parse_pair(&spec.z1)?,
+    )?;
+    // Family dispatch mirrors `render-one` EXACTLY, on the shared
+    // [`Family::has_location_profile`] predicate:
     //   * degree-2 Mandelbrot/Julia → the settled location-profile path
     //     (`color_params` + `shade_and_downsample_filtered`), byte-identical to today.
     //   * the new families (Multibrot, Julia-multibrot d≥3, Phoenix) have no
     //     location-profile backend, so they render through the beautiful smooth field
     //     (`render_beautiful` with `beautiful(Smooth)`) — the same path the labeled
     //     gather_v6 crop was rendered through, so the cache tile matches its crop.
-    let img = match &spec.kind {
-        FamilyKind::Mandelbrot => {
+    let img = match family {
+        Family::Mandelbrot => {
             let backend = F64Backend::new(maxiter, BAILOUT, trap);
             let buf = render::iterate_samples_f64_pattern(
                 &backend, &frame, ss, channels, SubsamplePattern::Grid, 0,
@@ -319,11 +291,8 @@ fn render_one_spec(
                 pixel_spacing, spec.filter,
             )
         }
-        FamilyKind::Julia { degree: 2 } => {
-            let (c_re, c_im) = spec.c.as_ref().ok_or("julia row missing c")?;
-            let backend = JuliaBackend::new(
-                Complex::new(parse_c(c_re)?, parse_c(c_im)?), maxiter, BAILOUT, trap,
-            );
+        Family::Julia { c, degree: 2 } => {
+            let backend = JuliaBackend::new(c, maxiter, BAILOUT, trap);
             let buf = render::iterate_samples_julia_pattern(
                 &backend, &frame, ss, SubsamplePattern::Grid, 0,
             );
@@ -334,34 +303,8 @@ fn render_one_spec(
         }
         // --- beautiful smooth pipeline: the new families ---
         other => {
-            let family = match other {
-                FamilyKind::Multibrot { degree } => Family::Multibrot { degree: *degree },
-                FamilyKind::Julia { degree } => {
-                    let (c_re, c_im) = spec.c.as_ref().ok_or("julia_multibrot row missing c")?;
-                    Family::Julia {
-                        c: Complex::new(parse_c(c_re)?, parse_c(c_im)?),
-                        degree: *degree,
-                    }
-                }
-                FamilyKind::Phoenix => {
-                    let c = match &spec.c {
-                        Some((re, im)) => Complex::new(parse_c(re)?, parse_c(im)?),
-                        None => Complex::new(PHOENIX_C_DEFAULT.0, PHOENIX_C_DEFAULT.1),
-                    };
-                    let p = match &spec.p {
-                        Some((re, im)) => Complex::new(parse_c(re)?, parse_c(im)?),
-                        None => Complex::new(PHOENIX_P_DEFAULT.0, PHOENIX_P_DEFAULT.1),
-                    };
-                    let z_m1 = match &spec.z1 {
-                        Some((re, im)) => Complex::new(parse_c(re)?, parse_c(im)?),
-                        None => Complex::new(PHOENIX_ZM1_DEFAULT.0, PHOENIX_ZM1_DEFAULT.1),
-                    };
-                    Family::Phoenix { c, p, z_m1 }
-                }
-                FamilyKind::Mandelbrot => unreachable!("degree-2 handled above"),
-            };
             let cp = render_modes::ColoringParams::beautiful(Field::Smooth);
-            render_modes::render_beautiful(&frame, ss, maxiter, family, &cp, palette, spec.filter)
+            render_modes::render_beautiful(&frame, ss, maxiter, other, &cp, palette, spec.filter)
         }
     };
     crate::ensure_parent_dir(&spec.out)?;

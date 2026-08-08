@@ -155,7 +155,72 @@ impl Family {
             Family::Phoenix { .. } => "phoenix",
         }
     }
+
+    /// **THE** corpus `fractal_type` token → [`Family`] mapping — the inverse of
+    /// [`Family::kind_str`], and the single owner of that dispatch (`v4_cache`'s plan
+    /// reader and `crop_batch`'s location reader both route through here rather than
+    /// each re-listing the nine tokens).
+    ///
+    /// The constants are supplied already parsed, because their decimal→f64 parse needs
+    /// a `prec_bits` the caller derives from its own geometry. A `julia*` token with no
+    /// `c` is a **loud error**, not a silent fallback — a mis-rendered dynamical tile
+    /// looks plausible and poisons a cache. Phoenix's three constants are optional and
+    /// fall back to [`PHOENIX_C_DEFAULT`] / [`PHOENIX_P_DEFAULT`] / [`PHOENIX_ZM1_DEFAULT`],
+    /// which is the fallback `render-one`'s `--family phoenix` applies, so a plan row
+    /// carrying only a viewport renders the tile its labeled crop was rendered at.
+    pub fn from_type_token(
+        token: &str,
+        c: Option<Complex<f64>>,
+        p: Option<Complex<f64>>,
+        z_m1: Option<Complex<f64>>,
+    ) -> Result<Family, String> {
+        let need_c = |degree: u32| -> Result<Family, String> {
+            let c = c.ok_or_else(|| {
+                format!("fractal_type '{token}' is dynamical and requires c_re/c_im")
+            })?;
+            Ok(Family::Julia { c, degree })
+        };
+        match token {
+            "mandelbrot" => Ok(Family::Mandelbrot),
+            "julia" => need_c(2),
+            "julia_multibrot3" => need_c(3),
+            "julia_multibrot4" => need_c(4),
+            "julia_multibrot5" => need_c(5),
+            "multibrot3" => Ok(Family::Multibrot { degree: 3 }),
+            "multibrot4" => Ok(Family::Multibrot { degree: 4 }),
+            "multibrot5" => Ok(Family::Multibrot { degree: 5 }),
+            "phoenix" => Ok(Family::Phoenix {
+                c: c.unwrap_or(Complex::new(PHOENIX_C_DEFAULT.0, PHOENIX_C_DEFAULT.1)),
+                p: p.unwrap_or(Complex::new(PHOENIX_P_DEFAULT.0, PHOENIX_P_DEFAULT.1)),
+                z_m1: z_m1.unwrap_or(Complex::new(PHOENIX_ZM1_DEFAULT.0, PHOENIX_ZM1_DEFAULT.1)),
+            }),
+            other => Err(format!(
+                "unknown fractal_type '{other}' (mandelbrot|julia|julia_multibrot{{3,4,5}}|\
+                 multibrot{{3,4,5}}|phoenix)"
+            )),
+        }
+    }
+
+    /// True for the two degree-2 families that have a **settled location-profile
+    /// backend** (`F64Backend` / `JuliaBackend` through [`crate::coloring::shade`]).
+    /// The rest (Multibrot, Julia-multibrot `d ≥ 3`, Phoenix) render through the
+    /// beautiful smooth pipeline. `render-one`, `v4-render-batch` and `crop-batch` all
+    /// route on this one predicate, so a family cannot pick up a different profile in
+    /// one executor than in another.
+    pub fn has_location_profile(self) -> bool {
+        matches!(self, Family::Mandelbrot | Family::Julia { degree: 2, .. })
+    }
 }
+
+/// Phoenix `c` default — the classic real-valued Ushiki spot, mirroring
+/// `render-one`'s `--family phoenix` fallback. A plan/location row that omits
+/// `c_re`/`c_im` resolves here.
+pub const PHOENIX_C_DEFAULT: (f64, f64) = (0.5667, 0.0);
+/// Phoenix `p` (the `z_{n-1}` coefficient / Ushiki's `q`) default.
+pub const PHOENIX_P_DEFAULT: (f64, f64) = (-0.5, 0.0);
+/// Phoenix slice coordinate `z_{-1}` default — the legacy pinned value, so a row
+/// predating the axis renders byte-identically to the pre-axis tile.
+pub const PHOENIX_ZM1_DEFAULT: (f64, f64) = (0.0, 0.0);
 
 /// The coloring method / "style" — the field stage (doc §4). Each maps an orbit
 /// to a scalar, then percentile-stretch + transform.
@@ -1936,6 +2001,52 @@ impl FieldNorm {
     }
 }
 
+/// The smooth-mode **colour map** — `raw field scalar → linear RGB` — as a value:
+/// the global normalization ([`FieldNorm`]) plus the transform / gamma / palette-cycle
+/// tail that [`render_smooth_f64_fast`] applies per subpixel.
+///
+/// Extracted so a consumer that colours a **subset** of a larger field (the
+/// `crop-batch` executor, which iterates one extended field per location and derives
+/// every tile from it) applies the identical chain, normalized over exactly the
+/// subpixels of *its* crop — the same population a whole-frame render of that crop
+/// would have normalized over. Arithmetic is unchanged from the inline form it
+/// replaces, so `render_smooth_f64_fast`'s bytes are preserved.
+///
+/// `NaN` (interior / non-escaped) maps to black, matching the render path's seam.
+pub struct SmoothFieldColorer {
+    norm: FieldNorm,
+    transform: Transform,
+    gamma: f64,
+    cycles: f64,
+    offset: f64,
+}
+
+impl SmoothFieldColorer {
+    /// Build from the **valid (finite) raw values** of the region being coloured and
+    /// the coloring params. `valids` is consumed (sorted / partially reordered).
+    pub fn new(valids: Vec<f64>, params: &ColoringParams) -> Self {
+        SmoothFieldColorer {
+            norm: FieldNorm::build(valids, params.transform),
+            transform: params.transform,
+            gamma: params.gamma,
+            cycles: params.palette_cycles,
+            offset: params.palette_offset,
+        }
+    }
+
+    /// One raw field scalar → linear RGB. Non-finite (interior) → black.
+    #[inline]
+    pub fn linear(&self, v: f32, palette: &Palette) -> [f64; 3] {
+        if !v.is_finite() {
+            return [0.0, 0.0, 0.0];
+        }
+        let x = self.norm.map01(v as f64);
+        let gray = apply_transform(x, self.transform, self.gamma);
+        let tt = (gray * self.cycles + self.offset).rem_euclid(1.0);
+        palette.lookup_linear(tt)
+    }
+}
+
 /// A per-subpixel reduction of an orbit: the raw field scalar (if valid) and the
 /// emboss vector. Kept small so the supersample buffer stays modest.
 #[derive(Clone, Copy)]
@@ -2047,52 +2158,15 @@ fn render_smooth_f64_fast(
             .expect("render_smooth_f64_fast gated to families with an escape-time backend");
 
     // --- global normalization over valid (escaped, finite) values ---
-    // NaN encodes interior / non-escaped, exactly as `render_beautiful_single`.
-    let mut valids: Vec<f64> =
-        field.iter().filter(|v| v.is_finite()).map(|&v| v as f64).collect();
-
-    // Smooth is never an iteration Color-By field, so no `direct_map` branch — this is
-    // strictly `render_beautiful_single`'s histeq-or-stretch reduction.
-    let histeq = params.transform == Transform::Histeq;
-    let (lo, span, sorted) = if histeq {
-        valids.sort_unstable_by(f64::total_cmp);
-        (0.0, 1.0, Some(valids))
-    } else {
-        let lo = percentile(&mut valids, PCT_LO);
-        let hi = percentile(&mut valids, PCT_HI);
-        let span = if hi > lo { hi - lo } else { 1.0 };
-        (lo, span, None)
-    };
-
-    let cycles = params.palette_cycles;
-    let offset = params.palette_offset;
-    let transform = params.transform;
-    let gamma = params.gamma;
+    // NaN encodes interior / non-escaped, exactly as `render_beautiful_single`. Smooth
+    // is never an iteration Color-By field, so no `direct_map` branch — this is strictly
+    // `render_beautiful_single`'s histeq-or-stretch reduction, owned by
+    // [`SmoothFieldColorer`] so the crop executor normalizes identically.
+    let valids: Vec<f64> = field.iter().filter(|v| v.is_finite()).map(|&v| v as f64).collect();
+    let colorer = SmoothFieldColorer::new(valids, params);
 
     // --- shade each subpixel to linear RGB (no emboss — gated out) ---
-    let linear: Vec<[f64; 3]> = field
-        .par_iter()
-        .map(|&v| {
-            if !v.is_finite() {
-                return [0.0, 0.0, 0.0];
-            }
-            let value = v as f64;
-            let x = match &sorted {
-                Some(tab) => {
-                    if tab.len() <= 1 {
-                        0.0
-                    } else {
-                        let rank = tab.partition_point(|&t| t < value);
-                        rank as f64 / (tab.len() - 1) as f64
-                    }
-                }
-                None => ((value - lo) / span).clamp(0.0, 1.0),
-            };
-            let gray = apply_transform(x, transform, gamma);
-            let tt = (gray * cycles + offset).rem_euclid(1.0);
-            palette.lookup_linear(tt)
-        })
-        .collect();
+    let linear: Vec<[f64; 3]> = field.par_iter().map(|&v| colorer.linear(v, palette)).collect();
 
     crate::render::downsample_linear_filtered(
         &linear,
