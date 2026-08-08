@@ -1614,3 +1614,316 @@ class Runner:
     fixed = src.replace("    def run_dive(self):\n        return self.shared",
                         "    def run_dive(self):\n        return self.shared and self.bound_s")
     assert _crawl_only_attributes(fixed, "Runner", "run", "run_dive") == set()
+
+
+# =========================================================================== #
+# Scratch teardown (2026-08-08). A 6 h steady-state run leaves ~118 GB / 138k files under
+# `<run_dir>/scratch`; two same-day runs were 86% of a 178 GB bulk store that nothing
+# guards, and cleanup was manual, therefore 8 h late. Teardown now hangs off the CLEAN close
+# and nothing else — the load-bearing half of that sentence is "and nothing else", so it
+# gets a behavioural abort test AND a reachability gate, each proved red.
+# =========================================================================== #
+def _scratch_run(tmp_path, *, retain=False, n_files=7, size=1024):
+    """A run dir with a populated scratch subtree and the REAL close methods bound. Returns
+    (stub, run_dir, scratch, expected_bytes). The files beside the scratch are the control:
+    teardown must take the subtree and nothing else."""
+    import types
+    run_dir = tmp_path / "run"
+    scratch = run_dir / "scratch"
+    (scratch / "reframe_n0" / "tiles").mkdir(parents=True)
+    for i in range(n_files):
+        (scratch / "reframe_n0" / "tiles" / f"t{i}.jpg.field.bin").write_bytes(b"\x00" * size)
+    (run_dir / "keep.txt").write_text("the ledger and summary live here", encoding="utf-8")
+    (run_dir / "outcome_ledger.jsonl").write_text('{"guard_pass": 1}\n', encoding="utf-8")
+
+    stub = types.SimpleNamespace(run_dir=run_dir, scratch=scratch, retain_scratch=retain)
+    stub.finalize_streams = lambda: None
+    for m in ("teardown_scratch", "_close_summary"):
+        setattr(stub, m, types.MethodType(getattr(sf.SteeredFrontier, m), stub))
+    return stub, run_dir, scratch, n_files * size
+
+
+def _teardown_rec(run_dir):
+    return json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))[
+        sf.SCRATCH_TEARDOWN_KEY]
+
+
+def test_teardown_fires_on_a_clean_close_and_takes_ONLY_the_scratch(tmp_path):
+    stub, run_dir, scratch, nbytes = _scratch_run(tmp_path)
+    stub._close_summary(dict(run_ts="mini", mode="steered"))
+
+    assert not scratch.exists(), "the scratch subtree survived a clean close"
+    # the control: everything else in the run dir is untouched.
+    assert (run_dir / "keep.txt").read_text(encoding="utf-8").startswith("the ledger")
+    assert (run_dir / "outcome_ledger.jsonl").exists()
+    rec = _teardown_rec(run_dir)
+    assert rec["outcome"] == "scratch_deleted"
+    # COUNTED, not asserted-to-exist: a smoke that asserts "it ran" passes on zero.
+    assert (rec["files"], rec["bytes"]) == (7, nbytes)
+    assert rec["path"] == str(scratch) and rec["retain_flag"] is False
+
+
+def test_retain_scratch_keeps_the_tree_and_SAYS_it_kept_it(tmp_path):
+    stub, run_dir, scratch, _ = _scratch_run(tmp_path, retain=True)
+    stub._close_summary(dict(run_ts="mini", mode="steered"))
+
+    assert scratch.exists() and len(list(scratch.rglob("*.bin"))) == 7
+    rec = _teardown_rec(run_dir)
+    assert rec["outcome"] == "scratch_retained" and rec["reason"] == "--retain-scratch"
+    assert rec["retain_flag"] is True
+
+
+# --------------------------------------------------------------------------- #
+# The abort case, proved red by injecting the defect into the CONTROL FLOW while the
+# teardown code under it stays real. The defect is the obvious wrong implementation — close
+# the run from a `finally:` so it "always cleans up" — and it is wrong precisely because an
+# interrupted run's scratch is the state you may still need to read.
+# --------------------------------------------------------------------------- #
+def _drive(stub, *, abort, shape):
+    """A miniature `run()`: a loop, then the close. `shape="plain"` is the shipped control
+    flow; `shape="finally"` is the injected defect."""
+    def loop():
+        for i in range(3):
+            if abort and i == 1:
+                raise KeyboardInterrupt("killed mid-run")
+
+    summary = dict(run_ts="mini", mode="steered")
+    if shape == "finally":
+        try:
+            loop()
+        finally:
+            stub._close_summary(summary)
+    else:
+        loop()
+        stub._close_summary(summary)
+
+
+@pytest.mark.parametrize("shape", ["plain", "finally"])
+def test_a_CLEAN_close_tears_down_under_EITHER_shape(tmp_path, shape):
+    """Non-vacuity for the pair below: the injected defect is not "teardown broken", so the
+    abort asymmetry is the only thing that distinguishes the two shapes."""
+    stub, run_dir, scratch, _ = _scratch_run(tmp_path)
+    _drive(stub, abort=False, shape=shape)
+    assert not scratch.exists() and (run_dir / "summary.json").exists()
+
+
+def test_the_INJECTED_finally_shape_tears_down_an_ABORTED_run(tmp_path):
+    """RED. This is what the gate below exists to keep out of the module: an interrupted
+    run's fields — the only copy of what it was doing — deleted on the way out."""
+    stub, run_dir, scratch, _ = _scratch_run(tmp_path)
+    with pytest.raises(KeyboardInterrupt):
+        _drive(stub, abort=True, shape="finally")
+    assert not scratch.exists(), "the injection did not reproduce the defect"
+
+
+def test_an_ABORTED_run_keeps_its_scratch_AND_writes_no_summary(tmp_path):
+    """GREEN — same abort, same teardown code, shipped shape."""
+    stub, run_dir, scratch, _ = _scratch_run(tmp_path)
+    with pytest.raises(KeyboardInterrupt):
+        _drive(stub, abort=True, shape="plain")
+    assert scratch.exists() and len(list(scratch.rglob("*.bin"))) == 7
+    assert not (run_dir / "summary.json").exists(), "an aborted run closed its record"
+
+
+# --------------------------------------------------------------------------- #
+# ...and the same asymmetry bound to the REAL module, so the miniature cannot drift away
+# from what steered_frontier.py actually does.
+# --------------------------------------------------------------------------- #
+def _self_call_contexts(source: str, name: str) -> list:
+    """`[(enclosing function, context)]` for every `self.<name>(...)`, where context is
+    `finally` / `except` / `body`. Pure AST — no import, no execution."""
+    import ast
+
+    def calls_in(node):
+        return [c for c in ast.walk(node)
+                if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+                and isinstance(c.func.value, ast.Name) and c.func.value.id == "self"
+                and c.func.attr == name]
+
+    out = []
+    for fn in ast.walk(ast.parse(source)):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        guarded = {}
+        for t in ast.walk(fn):
+            if isinstance(t, ast.Try):
+                for blk, ctx in ((t.finalbody, "finally"), (t.handlers, "except")):
+                    for s in blk:
+                        for c in calls_in(s):
+                            guarded[id(c)] = ctx
+        out += [(fn.name, guarded.get(id(c), "body")) for c in calls_in(fn)]
+    return sorted(out)
+
+
+# The close chain, innermost out. Checking only `teardown_scratch`'s own call site is not
+# enough: the same defect introduced one level up (`try: loop() finally: self.finish()`)
+# reaches teardown just as surely and leaves every inner call site in a plain body.
+CLOSE_CHAIN = ("teardown_scratch", "_close_summary", "finish", "finish_dive")
+
+
+def _guarded_close_calls(source: str) -> list:
+    """`[(enclosing function, ctx, attr)]` for every call to a close-chain method sitting in
+    an `except`/`finally` block — on ANY receiver, not just `self`."""
+    import ast
+    out = []
+    for fn in ast.walk(ast.parse(source)):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        for t in ast.walk(fn):
+            if not isinstance(t, ast.Try):
+                continue
+            for blk, ctx in ((t.finalbody, "finally"), (t.handlers, "except")):
+                for s in blk:
+                    for c in ast.walk(s):
+                        if (isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+                                and c.func.attr in CLOSE_CHAIN):
+                            out.append((fn.name, ctx, c.func.attr))
+    return sorted(set(out))
+
+
+def test_teardown_is_reachable_ONLY_from_the_clean_close_path():
+    """THE gate. Teardown hangs off the summary write and nothing else: one call site, in a
+    plain body, under the two entry points' close methods."""
+    import inspect
+    src = inspect.getsource(sf)
+    assert _self_call_contexts(src, "teardown_scratch") == [("_close_summary", "body")], \
+        _self_call_contexts(src, "teardown_scratch")
+    assert _self_call_contexts(src, "_close_summary") == \
+        [("finish", "body"), ("finish_dive", "body")], _self_call_contexts(src, "_close_summary")
+    # ...and no link of the chain is reached from an except/finally ANYWHERE in the module,
+    # which is the same defect introduced one level up where the checks above cannot see it.
+    assert _guarded_close_calls(src) == [], _guarded_close_calls(src)
+    # ...and nothing closes the run behind the driver's back on the way out. Over the AST,
+    # not the text: the first version of this line was a substring scan and it went red on
+    # the module comment that says there is no atexit hook.
+    import ast
+    tree = ast.parse(src)
+    imported = {a.name.split(".")[0] for n in ast.walk(tree)
+                if isinstance(n, ast.Import) for a in n.names}
+    imported |= {n.module.split(".")[0] for n in ast.walk(tree)
+                 if isinstance(n, ast.ImportFrom) and n.module}
+    dotted = {f"{c.func.value.id}.{c.func.attr}" for c in ast.walk(tree)
+              if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+              and isinstance(c.func.value, ast.Name)}
+    assert "shutil" in imported and "shutil.rmtree" in dotted, \
+        "the import/call analysis is not seeing the module it is scanning"
+    assert "atexit" not in imported, "an atexit hook would close the run on ANY exit path"
+    assert "signal.signal" not in dotted, "a signal handler would close an INTERRUPTED run"
+
+
+def test_the_reachability_GATE_catches_the_finally_shape():
+    """The injection proof for the gate itself: an analysis that cannot see the defect in
+    miniature cannot see it in 4,900 lines."""
+    bad = ("class Runner:\n"
+           "    def _close_summary(self, s): self.teardown_scratch()\n"
+           "    def run(self):\n"
+           "        try:\n"
+           "            self._loop()\n"
+           "        finally:\n"
+           "            self._close_summary({})\n")
+    assert _self_call_contexts(bad, "_close_summary") == [("run", "finally")]
+    assert _self_call_contexts(bad, "teardown_scratch") == [("_close_summary", "body")]
+    # ...and the fix drops back to `body` under the same analysis, so the preferred shape is
+    # visible to it rather than merely un-flagged.
+    ok = ("class Runner:\n"
+          "    def _close_summary(self, s): self.teardown_scratch()\n"
+          "    def run(self):\n"
+          "        self._loop()\n"
+          "        self._close_summary({})\n")
+    assert _self_call_contexts(ok, "_close_summary") == [("run", "body")]
+    assert _guarded_close_calls(bad) == [("run", "finally", "_close_summary")]
+    assert _guarded_close_calls(ok) == []
+    # The one-level-up variant, which the call-site equalities above CANNOT see: every inner
+    # call site is still a plain body, and teardown still runs on an abort.
+    up = ("class Runner:\n"
+          "    def finish(self): self._close_summary({})\n"
+          "    def _close_summary(self, s): self.teardown_scratch()\n"
+          "    def run(self):\n"
+          "        try:\n"
+          "            self._loop()\n"
+          "        finally:\n"
+          "            self.finish()\n")
+    assert _self_call_contexts(up, "teardown_scratch") == [("_close_summary", "body")]
+    assert _self_call_contexts(up, "_close_summary") == [("finish", "body")]
+    assert _guarded_close_calls(up) == [("run", "finally", "finish")]
+
+
+# --------------------------------------------------------------------------- #
+# The remaining outcomes, and the flag's path from parse to attribute.
+# --------------------------------------------------------------------------- #
+def test_an_interrupted_TEARDOWN_leaves_a_summary_that_says_not_reached(tmp_path):
+    """The third outcome is a STATE, not a missing key. The summary lands before the delete
+    starts, so a kill mid-rmtree stays distinguishable from a run that predates teardown —
+    and that is exactly the case where the scratch is half gone."""
+    stub, run_dir, scratch, _ = _scratch_run(tmp_path)
+
+    def _killed():
+        raise KeyboardInterrupt("killed mid-rmtree")
+
+    stub.teardown_scratch = _killed
+    with pytest.raises(KeyboardInterrupt):
+        stub._close_summary(dict(run_ts="mini"))
+    rec = _teardown_rec(run_dir)
+    assert rec["outcome"] == "not_reached" and "partially deleted" in rec["note"]
+
+
+def test_a_target_that_is_not_a_scratch_subtree_is_REFUSED_not_deleted(tmp_path):
+    stub, run_dir, scratch, _ = _scratch_run(tmp_path)
+    stub.scratch = run_dir                     # as if _bulk_scratch moved under us
+    rec = stub.teardown_scratch()
+    assert rec["outcome"] == "scratch_retained" and rec["reason"].startswith("REFUSED")
+    assert run_dir.exists() and (run_dir / "keep.txt").exists()
+
+
+def test_a_failed_delete_is_RECORDED_not_raised(tmp_path, monkeypatch):
+    """The summary is already on disk when teardown runs, so a Windows file lock must degrade
+    to a recorded outcome — not turn a closed 6 h run into a traceback."""
+    stub, run_dir, scratch, _ = _scratch_run(tmp_path)
+
+    def _locked(p):
+        raise PermissionError("locked by serve.py")
+
+    monkeypatch.setattr(sf.shutil, "rmtree", _locked)
+    stub._close_summary(dict(run_ts="mini"))
+    rec = _teardown_rec(run_dir)
+    assert rec["outcome"] == "scratch_delete_failed" and "PermissionError" in rec["error"]
+    assert rec["still_present"] is True and scratch.exists()
+
+
+def test_a_run_that_made_no_scratch_reports_absent_not_deleted(tmp_path):
+    """Fourth outcome, beyond the three the prompt named: "deleted 0 files" and "there was
+    nothing there" are different facts about a run and a record must not merge them."""
+    import shutil as _sh
+    stub, run_dir, scratch, _ = _scratch_run(tmp_path)
+    _sh.rmtree(scratch)
+    rec = stub.teardown_scratch()
+    assert rec["outcome"] == "scratch_absent" and rec["files"] == 0
+
+
+def test_the_flag_reaches_the_constructor_attribute(monkeypatch, tmp_path):
+    """Parse -> args -> `self.retain_scratch`. A flag that parses and then no-ops is the
+    `--wall-budget` failure this file already carries three tests for."""
+    import inspect
+    seen = []
+
+    class _Sentinel:
+        def __init__(self, args):
+            seen.append(args)
+
+        def run(self):
+            pass
+
+    monkeypatch.setattr(sf, "SteeredFrontier", _Sentinel)
+    monkeypatch.setattr(sys, "argv", ["steered_frontier.py", "--run-dir",
+                                      str(tmp_path / "run"), "--retain-scratch"])
+    sf.main()
+    assert seen and seen[0].retain_scratch is True
+    # ...and the default is OFF, i.e. teardown is what an unflagged run gets. That direction
+    # is the one that matters: a flag defaulting to retain would ship the old behaviour.
+    seen.clear()
+    monkeypatch.setattr(sys, "argv", ["steered_frontier.py", "--run-dir", str(tmp_path / "run")])
+    sf.main()
+    assert seen[0].retain_scratch is False
+    # and the constructor really reads it (__init__ loads the scorer, too heavy to run here).
+    init = inspect.getsource(sf).split("def __init__(self, args):", 1)[1]
+    assert 'self.retain_scratch = bool(getattr(args, "retain_scratch"' in init[:8000]

@@ -47,6 +47,7 @@ import argparse
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -1141,6 +1142,30 @@ class RunLedger:
 
 
 # --------------------------------------------------------------------------- #
+# Scratch teardown.
+#
+# A run's own scratch (`<run_dir>/scratch`, routed under ARTIFACTS_ROOT by `_bulk_scratch`)
+# is THE byte and file-count bomb: one 6 h steady-state run left 118.07 GB / 138,567 files,
+# ~18 GB per engine-hour, and on 2026-08-07 two runs from that single day were 86% of a
+# 178 GB bulk store (`scratch/artifacts_audit_report.md`). Nothing guards that store's size
+# — `tools/audit/size_guard.py` walks REPO_ROOT only, and its rule (c) exists to push bulk
+# out to exactly here, where no registry, threshold or test looks.
+#
+# The tree is residue the moment the run closes: every verdict it carries is already in the
+# tracked `outcome_ledger.jsonl` (`guard_pass`/`guard_fail` beside `outcome_cx/cy/fw`, so any
+# field is re-renderable), and the two post-run readers of any run scratch both default to a
+# run dir that no longer exists. So it was deleted by hand — which is why the 154 GB above
+# was 8 h late.
+#
+# CLEAN CLOSE ONLY, and that is the whole safety argument. Teardown hangs off the summary
+# write and nothing else: no `finally`, no `atexit`, no signal handler (pinned by
+# `test_steered_frontier.py`'s teardown-reachability gate). An interrupted, killed or crashed
+# run keeps its scratch, because that is precisely the run whose intermediate state you may
+# still need to read — a closed run can be asked its summary, a dead one cannot.
+SCRATCH_TEARDOWN_KEY = "scratch_teardown"
+
+
+# --------------------------------------------------------------------------- #
 # The driver.
 # --------------------------------------------------------------------------- #
 class SteeredFrontier:
@@ -1176,6 +1201,81 @@ class SteeredFrontier:
         if q is not None and getattr(q, "_trace_writer", None) is not None:
             q._trace_writer.finalize()
 
+    def teardown_scratch(self) -> dict:
+        """Delete this run's own scratch subtree; return the record stamped into
+        `summary.json`. See the SCRATCH_TEARDOWN_KEY block above for why, and for why this is
+        reachable ONLY from the clean-close path.
+
+        NEVER RAISES. The summary is already on disk when this runs, so a Windows file lock
+        (the label servers hold handles under this tree) must degrade to a recorded
+        `scratch_delete_failed`, not turn a closed 6 h run into a traceback."""
+        target = self.scratch
+        rec = dict(path=str(target), retain_flag=bool(self.retain_scratch))
+        if self.retain_scratch:
+            rec.update(outcome="scratch_retained", reason="--retain-scratch")
+            return rec
+        # The target is `<run_dir>/scratch` or its bulk() image. Anything else means
+        # `_bulk_scratch` moved under us, and a recursive delete is the wrong response to
+        # that: refuse and say so rather than guess. Derived here, not asserted at
+        # construction, because this is the line that does the deleting.
+        if (target.name != "scratch" or target == self.run_dir
+                or target in self.run_dir.parents):
+            rec.update(outcome="scratch_retained",
+                       reason=f"REFUSED: {target} is not a run scratch subtree")
+            return rec
+        if not target.exists():
+            rec.update(outcome="scratch_absent", files=0, bytes=0)
+            return rec
+        # Measured before the delete, because "how much did this free" is the number the next
+        # run's disk budget is sized from and it is unrecoverable afterwards. One metadata
+        # pass over ~140k files; a stat that fails is skipped, never fatal.
+        n_files, n_bytes = 0, 0
+        for dirpath, _dirs, names in os.walk(target):
+            for nm in names:
+                n_files += 1
+                try:
+                    n_bytes += os.path.getsize(os.path.join(dirpath, nm))
+                except OSError:
+                    pass
+        try:
+            shutil.rmtree(target)
+        except OSError as e:
+            rec.update(outcome="scratch_delete_failed", files=n_files, bytes=n_bytes,
+                       error=f"{type(e).__name__}: {e}", still_present=target.exists())
+            return rec
+        rec.update(outcome="scratch_deleted", files=n_files, bytes=n_bytes,
+                   gb=round(n_bytes / 2**30, 3))
+        return rec
+
+    def _close_summary(self, summary: dict) -> dict:
+        """THE close path, shared by `finish` (crawl) and `finish_dive`. Compress the live
+        tails, land `summary.json`, tear the scratch down, restamp the outcome.
+
+        TWO WRITES, deliberately. The summary lands FIRST carrying `outcome="not_reached"`,
+        so (a) the run is durably closed before a 140k-file delete begins, and (b) the
+        third outcome is an OBSERVABLE STATE rather than a missing key: a summary still
+        saying `not_reached` is a run interrupted *during* teardown, whose scratch may be
+        half-gone — which reads identically to a pre-teardown summary if absence is the only
+        signal. Both writes derive the value from what teardown actually did."""
+        self.finalize_streams()
+        path = self.run_dir / "summary.json"
+        summary[SCRATCH_TEARDOWN_KEY] = dict(
+            outcome="not_reached", path=str(self.scratch),
+            note="teardown had not returned when this summary was written; a summary that "
+                 "STILL says this was interrupted mid-teardown and its scratch may be "
+                 "partially deleted")
+        path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        summary[SCRATCH_TEARDOWN_KEY] = rec = self.teardown_scratch()
+        path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        if rec["outcome"] == "scratch_deleted":
+            print(f"[teardown] scratch deleted: {rec['files']} files / {rec['gb']:.2f} GB "
+                  f"-> {rec['path']}", flush=True)
+        else:
+            print(f"[teardown] scratch {rec['outcome']}: {rec['path']}"
+                  + (f" — {rec['reason']}" if rec.get("reason") else "")
+                  + (f" — {rec['error']}" if rec.get("error") else ""), flush=True)
+        return summary
+
     def __init__(self, args):
         self.args = args
         self.run_dir = Path(args.run_dir).resolve()
@@ -1186,6 +1286,10 @@ class SteeredFrontier:
         # single resolver, so a new campaign needs no registry line at all; a run whose
         # run_dir is already out-of-tree (or under scratch/) keeps <run_dir>/scratch.
         self.scratch = self._bulk_scratch()
+        # ...and it is torn down again on a clean close unless this is set (see
+        # SCRATCH_TEARDOWN_KEY). Read on BOTH entry points (finish / finish_dive both close
+        # through `_close_summary`), so it needs no DIVE_IGNORES exemption.
+        self.retain_scratch = bool(getattr(args, "retain_scratch", False))
         self._stream_writers: dict = {}          # path -> run_record.SegmentWriter (see _writer)
         self.state_path = self.run_dir / "state.json"
         self.stop_path = self.run_dir / "STOP"
@@ -4041,9 +4145,10 @@ class SteeredFrontier:
                 source=str(dsched.library_seed_paths()[0]),
                 source_exists=dsched.library_seed_paths()[0].exists())
         # Compress every live tail BEFORE the summary lands, so a finished run's committed
-        # record is entirely `.jsonl.gz` segments (run_record.SegmentWriter.finalize).
-        self.finalize_streams()
-        (self.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        # record is entirely `.jsonl.gz` segments (run_record.SegmentWriter.finalize) — then
+        # land the summary and tear the run's scratch down. Both halves live in
+        # `_close_summary`, shared with the crawl path.
+        self._close_summary(summary)
         print("\n=== DIVE SUMMARY ===")
         print(f"  {done_idx}/{len(plan)} dives, active {self.active_s/60:.1f}m")
         print(f"  ADMITTED distinct q3={self.totals['admitted']} q3_dup={self.totals['q3_dup']} "
@@ -4393,9 +4498,10 @@ class SteeredFrontier:
                 source_exists=dsched.library_seed_paths()[0].exists(),
                 resolved_from=dsched.resolve_seed_source()[0])
         # Compress every live tail BEFORE the summary lands, so a finished run's committed
-        # record is entirely `.jsonl.gz` segments (run_record.SegmentWriter.finalize).
-        self.finalize_streams()
-        (self.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        # record is entirely `.jsonl.gz` segments (run_record.SegmentWriter.finalize) — then
+        # land the summary and tear the run's scratch down. Both halves live in
+        # `_close_summary`, shared with the dive path.
+        self._close_summary(summary)
         print("\n=== STEERED FRONTIER SUMMARY ===")
         print(f"  active {self.active_s/60:.1f}m over {self.batch_i} batches")
         print(f"  expanded={self.totals['expanded']} candidates={self.totals['candidates']} "
@@ -4861,6 +4967,12 @@ def main():
                     help="run this process (and every engine child it spawns) at "
                          "BELOW_NORMAL priority so a long run yields to interactive work")
     ap.add_argument("--resume", action="store_true", help="continue from state.json / dive_state.json")
+    ap.add_argument("--retain-scratch", action="store_true",
+                    help="keep <run_dir>/scratch after a clean close. Default is to delete "
+                         "it: a 6h run leaves ~118 GB / 138k render+field files whose "
+                         "verdicts are already in the ledger. Pass this only when you intend "
+                         "to re-read the run's own tiles/fields. An interrupted or crashed "
+                         "run keeps its scratch either way (see SCRATCH_TEARDOWN_KEY).")
     args = ap.parse_args()
     if args.below_normal:
         print(f"[priority] {set_below_normal_priority()}", flush=True)

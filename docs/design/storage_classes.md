@@ -106,6 +106,22 @@ there again, so the line goes with the data.
    *class* by pattern) **before** the first run, not after it has already materialized
    170k files in the tree. `[code: docs/design/artifacts_resolver.md §3]`
 
+6. **`bulk()` bounds *where*, not *how much* — a producer of per-run bulk owns its own
+   teardown.** Nothing guards the artifacts root's size: `tools/audit/size_guard.py`
+   walks `REPO_ROOT` only, and rule 5 above exists to push bulk out to exactly the place
+   no registry, threshold or test looks. A discovery run's scratch is ~18 GB per
+   engine-hour, so on 2026-08-07 two same-day `steered_frontier` runs were 154 GB — 86% of
+   a 178 GB store — while their conclusions already sat in the tracked
+   `outcome_ledger.jsonl`. `steered_frontier` therefore deletes its own scratch subtree on
+   a **clean close** (`--retain-scratch` opts out) and stamps the outcome into
+   `summary.json`. Two properties are load-bearing and both are guarded: teardown hangs off
+   the summary write and **nothing else** — no `finally`, no `atexit`, no signal handler,
+   so an interrupted run keeps the intermediate state you may still need to read; and the
+   summary lands *before* the delete begins, so a kill mid-teardown is distinguishable
+   (`outcome="not_reached"`) from a run that predates the feature.
+   `[measured: 2026-08-07, scratch/artifacts_audit_report.md; code:
+   steered_frontier.SCRATCH_TEARDOWN_KEY, tools/atlas/test_steered_frontier.py]`
+
 ## `scratch/` is about liveness, not just recovery cost
 
 Rules 1–3 read as if cheapness of rebuild were the test. It is not the whole test. A
