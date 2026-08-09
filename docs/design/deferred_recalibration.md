@@ -106,7 +106,7 @@ The flip re-derived the whole scale-bound cluster together, as v10's did:
 |---|---|---|
 | discovery `t_good` | per-partition q3 operating point, per-family objective | `data/v11/t_good_derivation.json` ← `tools/v11/derive_t_good_v11.py`; adopted copy in `production_seeder.T_GOOD_OVERRIDES` |
 | keeper cut | report-only F0.5 twin of `t_good`; nothing gates on it | `data/atlas/keeper_cuts.json` ← `tools/atlas/keeper_cut.py` |
-| τ_h | per-partition cheap-render harvest cut | `data/atlas/tau_h_base_v11.json` ← `tools/atlas/tau_h_rederive.py`; vendored into `steered_frontier.TAU_H_FIDELITY_BASE` |
+| τ_h | per-partition cheap-render harvest cut | `data/atlas/tau_h_base_v11.json` ← `tools/atlas/tau_h_rederive.py`; vendored into `steered_frontier.TAU_H_FIDELITY_BASE`. **Derived twice on 2026-08-08** — the flip's 3,492-row version is superseded and kept as `tau_h_base_v11_adoption.json`; the live table is the 64,365-row enlargement |
 | the coupling itself | what must revert together, and the ladder | the block beside `ACTIVE_CKPT` in `production_pins.py`; `data/v11/adoption_record.json:rollback_ladder` |
 
 What outlives this pass:
@@ -262,3 +262,14 @@ in-sample→OOF gap (0.581 → 0.515). And the holdout is biased exactly as trai
 v11-era run's per-partition admitted precision is the read that checks it.
 
 `production_seeder.T_GOOD_UNCALIBRATED` is now a **one-element set** (`phoenix:classic`).
+
+**A cost nobody scheduled: the tightening took multibrot4's τ_h cross-check.** τ_h conditions
+on canonical `p_good >= t_good`, so raising multibrot4's bar 0.50 → 0.85 cut its walk-arm
+passing rows from **15 of 169 to 2**, below `min_n=5`. The walk ledger is the *untruncated*
+population — the only thing bounding the left-truncated harvest estimate from below — so
+multibrot4 is now cut on the harvest arm alone. That is precisely the condition v10's
+multibrot3/multibrot5 were in and which the v11 flip had recorded as closed; it reopened for
+one partition, for a different reason, on the same day. multibrot4 also took the largest τ_h
+move in the table (0.4743 → 0.8245), and the two facts are not independent — read it as the
+number to distrust first, not as a measurement. Enlarging the walk ledger for
+`multibrot4` is the fix, and it is **not** scheduled.

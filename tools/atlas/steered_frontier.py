@@ -656,8 +656,14 @@ TAU_H_CAMPAIGN_FLOOR_V7_RETIRED = {
 # RE-DERIVED UNDER v11 on 2026-08-08 by `tools/atlas/tau_h_rederive.py`, which is the
 # regeneration path this comment's failure message points at. Provenance artifact:
 # `data/atlas/tau_h_base_v11.json` (per-partition n, t_good, both population estimates,
-# and `arms_used`). 3,492 rows re-rendered at both presentations and re-scored — the same
-# 2,400 harvest + 1,092 walk sample sizes v10 used.
+# `arms_used`, and `harvest_truncation`).
+#
+# DERIVED TWICE ON THAT DAY, AND THESE ARE THE SECOND SET. The first ran at the flip over
+# 3,492 rows (v10's 2,400 harvest + 1,092 walk sample sizes, reused); the second re-derived
+# the same head over the FULL discovered pool — 63,217 harvest + 1,148 walk = 64,365 rows,
+# `--per-partition` uncapped, ~6 h. The superseded first artifact is kept as
+# `data/atlas/tau_h_base_v11_adoption.json`: it is the record of what production served
+# between the two, and it is NOT the live table.
 # Method — the fidelity study's estimator verbatim, on a population the harvest logs make
 # re-renderable: each sampled harvest-check geometry is re-rendered at BOTH presentations
 # (384x216 ss1 cheap / 640x360 ss2 canonical) and re-scored under the ACTIVE head, then
@@ -672,38 +678,57 @@ TAU_H_CAMPAIGN_FLOOR_V7_RETIRED = {
 # SIZE is unchanged, the pool it is drawn from is wider, so a v10 -> v11 tau_h move is a head
 # change AND a population change. `harvest_runs` in the artifact names all 22.
 #
-# EVERY PARTITION IS CUT ON ITS OWN POPULATION — no pooled cross-family fallback. Under v11
-# both arms are AVAILABLE for all eight partitions, which they were not under v10 (multibrot3
-# and multibrot5 had no walk arm there, so their cuts rested on the left-truncated harvest
-# side alone with nothing bounding them from below). That gap is closed.
+# EVERY PARTITION IS CUT ON ITS OWN POPULATION — no pooled cross-family fallback. Seven of
+# eight partitions have BOTH arms available. **multibrot4 has only the harvest arm**, and the
+# reason is not a thin pool: its walk arm passed 15 of 169 at t_good 0.50 and passes 2 at
+# 0.85, below min_n=5. The native-multibrot tightening adopted hours earlier the same day
+# bought a stricter gate and COST multibrot4 its untruncated cross-check. So its 0.8245 —
+# the largest move in the table — rests on the left-truncated harvest side alone with nothing
+# bounding it from below, which is exactly the condition v10's multibrot3/multibrot5 were in
+# and which this comment previously recorded as closed. It is the number to distrust first.
 #
-# THE VALUES MOVE A LOT versus v10 (mandelbrot 0.0229 -> 0.633) and the reason is t_good, not
+# THE VALUES MOVE A LOT versus v10 (mandelbrot 0.0229 -> 0.626) and the reason is t_good, not
 # the head: v11's mandelbrot t_good is 0.90 against v10's 0.03, so the canonical bar this
 # estimator conditions on is ~30x stricter and only frames far up the cheap axis clear it.
 #
-# MANDELBROT'S ARM IS THIN AND IT IS THIN BECAUSE OF THAT BAR: 23 of 300 harvest rows and 6
-# of 300 walk rows pass canonical p_good >= 0.90, so its 10th percentile rests on 23 frames.
-# That clears the min_n=5 floor and it is the weakest number in the table — read
-# `harvest_detail`/`walk_detail` before treating a mandelbrot tau_h move as signal. The
-# other seven partitions pass 159-287 harvest rows each.
+# THE ENLARGEMENT'S OWN DELTAS SPLIT CLEANLY IN TWO, and reading them as one number is the
+# mistake to avoid. Five partitions ran at IDENTICAL t_good across both derivations, so their
+# moves are pure population and they are tiny: julia:mandelbrot +0.0049, julia:multibrot3
+# +0.0000, julia:multibrot4 +0.0197, julia:multibrot5 -0.0410, mandelbrot -0.0073. The three
+# NATIVE multibrots moved 10-40x more (multibrot3 +0.0829, multibrot4 +0.3502, multibrot5
+# +0.1391) and are CONFOUNDED — t_good went 0.50 -> 0.61/0.85/0.61 between the two runs, so
+# population and bar moved together and neither effect is separable from this pair of
+# artifacts. Do not attribute those three to the larger sample.
 #
-# ONE BIAS, STATED. The harvest log only holds checks that already cleared a PREVIOUS head's
-# tau_h, so it is left-truncated and its quantile is an UPPER bound. The untruncated
-# walk-outcome ledger (prospect_run1: uniform-random gate survivors, never tau-selected) is
-# re-derived alongside it as a cross-check, and the committed value is the per-partition
-# MINIMUM over the available arms — the conservative side, since a too-high cut sheds
-# admissions. Campaign1's harvest rows carry no geometry and are permanently not
+# MANDELBROT'S ARM WAS THE WEAK ONE AND THE ENLARGEMENT IS WHAT FIXED IT: 23 of 300 harvest
+# rows passed canonical p_good >= 0.90 at the flip, so its 10th percentile rested on 23
+# frames; over the full pool it rests on 885, and the value barely moved (0.6329 -> 0.6257),
+# which is the reassurance the thin arm could not previously give. The walk arm stayed thin
+# (6 passing) because that ledger has only 356 mandelbrot rows in total. Passing harvest rows
+# now run 609-11,705 per partition; `multibrot4` (609) is the smallest.
+#
+# ONE BIAS, STATED — AND IT IS A MIXTURE, NOT A LEVEL. The harvest log only holds checks that
+# already cleared a PREVIOUS head's tau_h, so it is left-truncated and its quantile is an
+# UPPER bound. It is not truncated at ONE level: every row carries the tau_h that was live for
+# its OWN run, and the 22-run pool mixes four tau eras (mandelbrot alone spans 0.0229 to
+# 0.7041, a 30x range), so the bound's TIGHTNESS varies by partition with how its rows split
+# across eras. Read `harvest_truncation` in the artifact — per-partition levels, row counts
+# and the row-weighted mean — before treating any single harvest number as near-unbiased.
+# The untruncated walk-outcome ledger (prospect_run1: uniform-random gate survivors, never
+# tau-selected) is re-derived alongside as a cross-check, and the committed value is the
+# per-partition MINIMUM over the AVAILABLE arms — the conservative side, since a too-high cut
+# sheds admissions. Campaign1's harvest rows carry no geometry and are permanently not
 # re-scoreable; they are EXCLUDED, never approximated.
 TAU_H_FIDELITY_BASE_MODEL = "v11"
 TAU_H_FIDELITY_BASE = {
-    "mandelbrot": 0.632919943332672,
-    "multibrot3": 0.5123799264430999,
-    "multibrot4": 0.4743058800697326,
-    "multibrot5": 0.4674594938755035,
-    "julia:mandelbrot": 0.8434584259986877,
+    "mandelbrot": 0.6256668567657471,
+    "multibrot3": 0.5953161120414734,
+    "multibrot4": 0.8245467185974121,
+    "multibrot5": 0.606533396244049,
+    "julia:mandelbrot": 0.848319911956787,
     "julia:multibrot3": 0.24066436141729353,
-    "julia:multibrot4": 0.18013863265514374,
-    "julia:multibrot5": 0.4022993206977844,
+    "julia:multibrot4": 0.1998696699738502,
+    "julia:multibrot5": 0.36127737164497375,
 }
 
 

@@ -1,0 +1,440 @@
+{
+  "model": "v11",
+  "ckpt": "data/classifier/v11/model_best.pt",
+  "keep": 0.9,
+  "seed": 0,
+  "combine": "min",
+  "per_partition": 300,
+  "n_rows_harvest": 2400,
+  "n_rows_walk": 1092,
+  "harvest_runs": [
+    "campaign1/breadth",
+    "campaign1/dive",
+    "campaign2/breadth",
+    "campaign2/dive",
+    "julia_parent_probe/breadth",
+    "continuous_v1_20260803",
+    "harvest_v2_proving_20260803",
+    "label_run_20260807",
+    "maneuver_degree_probe",
+    "maneuver_shakedown",
+    "maneuver_v14_exploration",
+    "maneuver_v14_shakedown",
+    "popquota_v2_20260804",
+    "q4_long_harvest_20260803",
+    "shakeout_legacy",
+    "shakeout_recency",
+    "steady_state_v1_20260805",
+    "steady_state_v1_20260805_dive",
+    "steady_state_v2_20260807",
+    "steered_run2",
+    "steered_v1_2_dive",
+    "supply_crawl_v15_20260801"
+  ],
+  "harvest_registry": {
+    "stores": [
+      {
+        "name": "discovery",
+        "path": "C:\\Code\\fractal-maker\\data\\discovery",
+        "exists": true
+      }
+    ],
+    "pinned": [
+      "campaign1/breadth",
+      "campaign1/dive",
+      "campaign2/breadth",
+      "campaign2/dive",
+      "julia_parent_probe/breadth"
+    ],
+    "max_run_depth": 2,
+    "discovered": [
+      {
+        "name": "campaign1/breadth",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\campaign1\\breadth\\harvest_log.jsonl",
+        "pinned": true
+      },
+      {
+        "name": "campaign1/dive",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\campaign1\\dive\\harvest_log.jsonl",
+        "pinned": true
+      },
+      {
+        "name": "campaign2/breadth",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\campaign2\\breadth\\harvest_log.jsonl",
+        "pinned": true
+      },
+      {
+        "name": "campaign2/dive",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\campaign2\\dive\\harvest_log.jsonl",
+        "pinned": true
+      },
+      {
+        "name": "julia_parent_probe/breadth",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\julia_parent_probe\\breadth\\harvest_log.jsonl",
+        "pinned": true
+      },
+      {
+        "name": "continuous_v1_20260803",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\continuous_v1_20260803\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "harvest_v2_proving_20260803",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\harvest_v2_proving_20260803\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "label_run_20260807",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\label_run_20260807\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "maneuver_degree_probe",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\maneuver_degree_probe\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "maneuver_shakedown",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\maneuver_shakedown\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "maneuver_v14_exploration",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\maneuver_v14_exploration\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "maneuver_v14_shakedown",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\maneuver_v14_shakedown\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "popquota_v2_20260804",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\popquota_v2_20260804\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "q4_long_harvest_20260803",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\q4_long_harvest_20260803\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "shakeout_legacy",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\shakeout_legacy\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "shakeout_recency",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\shakeout_recency\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "steady_state_v1_20260805",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\steady_state_v1_20260805\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "steady_state_v1_20260805_dive",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\steady_state_v1_20260805_dive\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "steady_state_v2_20260807",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\steady_state_v2_20260807\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "steered_run2",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\steered_run2\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "steered_v1_2_dive",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\steered_v1_2_dive\\harvest_log.jsonl",
+        "pinned": false
+      },
+      {
+        "name": "supply_crawl_v15_20260801",
+        "store": "discovery",
+        "log": "C:\\Code\\fractal-maker\\data\\discovery\\supply_crawl_v15_20260801\\harvest_log.jsonl",
+        "pinned": false
+      }
+    ],
+    "n_pinned": 5,
+    "n_unpinned": 17
+  },
+  "walk_ledger": "C:\\Code\\fractal-maker\\data\\discovery\\fresh_runs\\prospect_run1\\outcome_ledger.jsonl",
+  "t_good": {
+    "julia:mandelbrot": 0.85,
+    "julia:multibrot3": 0.26,
+    "julia:multibrot4": 0.1,
+    "julia:multibrot5": 0.39,
+    "mandelbrot": 0.9,
+    "multibrot3": 0.5,
+    "multibrot4": 0.5,
+    "multibrot5": 0.5
+  },
+  "t_good_status": {
+    "julia:mandelbrot": "DERIVED",
+    "julia:multibrot3": "DERIVED",
+    "julia:multibrot4": "DERIVED",
+    "julia:multibrot5": "DERIVED",
+    "mandelbrot": "DERIVED",
+    "multibrot3": "UNCALIBRATED",
+    "multibrot4": "UNCALIBRATED",
+    "multibrot5": "UNCALIBRATED"
+  },
+  "tau_h_base": {
+    "julia:mandelbrot": 0.8434584259986877,
+    "julia:multibrot3": 0.24066436141729353,
+    "julia:multibrot4": 0.18013863265514374,
+    "julia:multibrot5": 0.4022993206977844,
+    "mandelbrot": 0.632919943332672,
+    "multibrot3": 0.5123799264430999,
+    "multibrot4": 0.4743058800697326,
+    "multibrot5": 0.4674594938755035
+  },
+  "harvest_estimate": {
+    "julia:mandelbrot": 0.8434584259986877,
+    "julia:multibrot3": 0.3224684804677963,
+    "julia:multibrot4": 0.18013863265514374,
+    "julia:multibrot5": 0.4022993206977844,
+    "mandelbrot": 0.632919943332672,
+    "multibrot3": 0.5123799264430999,
+    "multibrot4": 0.5509997487068177,
+    "multibrot5": 0.4674594938755035
+  },
+  "walk_estimate": {
+    "julia:mandelbrot": 0.8518295884132385,
+    "julia:multibrot3": 0.24066436141729353,
+    "julia:multibrot4": 0.20995521545410156,
+    "julia:multibrot5": 0.44960589110851285,
+    "mandelbrot": 0.8686084747314453,
+    "multibrot3": 0.5449502170085907,
+    "multibrot4": 0.4743058800697326,
+    "multibrot5": 0.5378899842500686
+  },
+  "harvest_detail": {
+    "julia:mandelbrot": {
+      "n_rows": 300,
+      "n_pass": 167,
+      "t_good": 0.85,
+      "value": 0.8434584259986877,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot3": {
+      "n_rows": 300,
+      "n_pass": 254,
+      "t_good": 0.26,
+      "value": 0.3224684804677963,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot4": {
+      "n_rows": 300,
+      "n_pass": 287,
+      "t_good": 0.1,
+      "value": 0.18013863265514374,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot5": {
+      "n_rows": 300,
+      "n_pass": 188,
+      "t_good": 0.39,
+      "value": 0.4022993206977844,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "mandelbrot": {
+      "n_rows": 300,
+      "n_pass": 23,
+      "t_good": 0.9,
+      "value": 0.632919943332672,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot3": {
+      "n_rows": 300,
+      "n_pass": 162,
+      "t_good": 0.5,
+      "value": 0.5123799264430999,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot4": {
+      "n_rows": 300,
+      "n_pass": 204,
+      "t_good": 0.5,
+      "value": 0.5509997487068177,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot5": {
+      "n_rows": 300,
+      "n_pass": 159,
+      "t_good": 0.5,
+      "value": 0.4674594938755035,
+      "source": "own",
+      "pooled_would_have_been": null
+    }
+  },
+  "walk_detail": {
+    "julia:mandelbrot": {
+      "n_rows": 102,
+      "n_pass": 39,
+      "t_good": 0.85,
+      "value": 0.8518295884132385,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot3": {
+      "n_rows": 54,
+      "n_pass": 42,
+      "t_good": 0.26,
+      "value": 0.24066436141729353,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot4": {
+      "n_rows": 54,
+      "n_pass": 51,
+      "t_good": 0.1,
+      "value": 0.20995521545410156,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "julia:multibrot5": {
+      "n_rows": 39,
+      "n_pass": 28,
+      "t_good": 0.39,
+      "value": 0.44960589110851285,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "mandelbrot": {
+      "n_rows": 300,
+      "n_pass": 6,
+      "t_good": 0.9,
+      "value": 0.8686084747314453,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot3": {
+      "n_rows": 239,
+      "n_pass": 12,
+      "t_good": 0.5,
+      "value": 0.5449502170085907,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot4": {
+      "n_rows": 169,
+      "n_pass": 15,
+      "t_good": 0.5,
+      "value": 0.4743058800697326,
+      "source": "own",
+      "pooled_would_have_been": null
+    },
+    "multibrot5": {
+      "n_rows": 135,
+      "n_pass": 8,
+      "t_good": 0.5,
+      "value": 0.5378899842500686,
+      "source": "own",
+      "pooled_would_have_been": null
+    }
+  },
+  "arms_used": {
+    "julia:mandelbrot": {
+      "picked": "harvest",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "julia:multibrot3": {
+      "picked": "walk",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "julia:multibrot4": {
+      "picked": "harvest",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "julia:multibrot5": {
+      "picked": "harvest",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "mandelbrot": {
+      "picked": "harvest",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "multibrot3": {
+      "picked": "harvest",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "multibrot4": {
+      "picked": "walk",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    },
+    "multibrot5": {
+      "picked": "harvest",
+      "available": [
+        "harvest",
+        "walk"
+      ]
+    }
+  },
+  "pooled_harvest": {
+    "pooled": 0.35274785459041597,
+    "n_pooled": 1444
+  },
+  "pooled_walk": {
+    "pooled": 0.31320965290069575,
+    "n_pooled": 201
+  },
+  "pooled_fallback_allowed": false,
+  "caveat": "The harvest population is LEFT-TRUNCATED at the previous head's tau_h, so its quantile is an UPPER bound on the untruncated value; the walk-outcome population is untruncated but off-distribution (walk outcomes, not frontier candidates). combine=min takes the conservative side.",
+  "no_pooling": "EVERY partition is cut on its OWN population. An arm with fewer than min_n=5 own passing rows is UNAVAILABLE and contributes nothing; the pooled cross-family quantile is computed and reported but NEVER served. `arms_used` names, per partition, which arms existed and which was taken \u2014 read it before comparing a partition against a prior version.",
+  "record_status": "SUPERSEDED 2026-08-08 by data/atlas/tau_h_base_v11.json, which re-derives the same v11 head over the FULL discovered population (64,365 rows) where this one sampled 300 per (population, partition) for 3,492 \u2014 v10's sample sizes reused over the 22-run pool. This file is kept UNCHANGED apart from this line: it is the record of what the v11 flip actually served between the 2026-08-08 adoption and the enlargement the same day. Its numbers are NOT the live tau_h; steered_frontier.TAU_H_FIDELITY_BASE follows the unsuffixed artifact."
+}
