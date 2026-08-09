@@ -274,6 +274,51 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
                  f"(strange_slots = round(N·strange_frac)), so 3N does not imply 3×(strange "
                  f"slots) strange either; the realized split below is where the mix is read.\n")
 
+    budget = dict(getattr(eng, "attempt_budget", {}) or {})
+    realized = eng.realized_fills() if hasattr(eng, "realized_fills") else {}
+    if budget:
+        from tools.emission import attempt_budget as AB
+        L.append("### The colorize attempt budget (planned → realized)\n")
+        L.append(f"Attempts are budgeted from RELEASE NEED, head first: "
+                 f"`attempts_head = {budget.get('attempt_multiplier')} × that head's release "
+                 f"slots`, both heads scaled down proportionally if the total budget "
+                 f"(**{budget.get('total_budget')}** attempts) cannot cover the pair — never "
+                 f"one head starved to keep the other whole. Within a head the attempts split "
+                 f"per partition by the same `release_mix` apportionment the release SLOTS "
+                 f"use, and fill in rank order from the ranked intake. This replaced the "
+                 f"deficit model as the volume rule on 2026-08-09: that model spread over a "
+                 f"style axis carrying one smooth style against "
+                 f"{max(0, n_styles - 1)} strange ones, so smooth drew ~1/{max(1, n_styles)} "
+                 f"of the attempts whatever the release asked for.\n")
+        if budget.get("scaled_to_budget"):
+            L.append(f"**Scaled down**: the two heads wanted "
+                     f"{budget.get('head_want')} = "
+                     f"{sum((budget.get('head_want') or {}).values())} attempts against a "
+                     f"budget of {budget.get('total_budget')}, so both were truncated "
+                     f"proportionally to {budget.get('head_attempts')}.\n")
+        for line in AB.fill_lines(budget, realized):
+            L.append(f"- {line}")
+        L.append("")
+        L.append("| head | partition | planned | realized |")
+        L.append("|---|---|--:|--:|")
+        for h in AB.HEADS:
+            planned = (budget.get("planned_by_partition") or {}).get(h, {})
+            real = (realized or {}).get(h, {})
+            for p in sorted(set(planned) | set(real)):
+                if not planned.get(p, 0) and not real.get(p, 0):
+                    continue
+                L.append(f"| {h} | {p} | {planned.get(p, 0)} | {real.get(p, 0)} |")
+        L.append("")
+        L.append(f"A short-fill is attributable off these four numbers alone: *wanted > "
+                 f"budgeted* is the attempt budget binding, *budgeted > scheduled* is supply "
+                 f"at plan time (a partition with fewer floor-passing locations than "
+                 f"attempts), *scheduled > realized* is a render error or an attempt-capped "
+                 f"cell, and a short release with none of those is the caps downstream. "
+                 f"Supply-short at plan time: "
+                 f"**{budget.get('supply_short_total', 0)}** attempt(s) "
+                 f"{budget.get('supply_short_by_partition') or ''}. "
+                 f"`--target-gated` no longer stops the colorize loop; it reports.\n")
+
     if supply_lines:
         L.append("### Per-partition supply (the thin-supply rule's input)\n")
         L.append(f"`emit <= floor(passing_supply / {F.THIN_SUPPLY_DIVISOR})` per partition. A "
@@ -472,7 +517,14 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         "capped_cells": occ["capped"],
         "attempts": n_att, "gated": n_pass, "pass_rate": round(pass_rate, 4),
         "gated_also_090": also_090, "render_errors": n_err,
-        "release_eligible": n_rel, "release_n": len(selected), "release_rendered": len(rel_paths),
+        # `n_rel` is the count above the RETIRED per-head release floors — it was release
+        # eligibility until 2026-08-09 and has not been since, so it is spelled as what it
+        # counts. The real eligible population (every scored row) comes from the accounting,
+        # which is what `release_candidate_sheet` already joins on. The old key reported 10 of
+        # a 30-row eligible pool under its own name, which is a measurement of nothing.
+        "above_retired_release_floors": n_rel,
+        "release_eligible": acct.get("release_eligible", n_rel),
+        "release_n": len(selected), "release_rendered": len(rel_paths),
         "junk_floor": F.JUNK_FLOOR, "thin_supply_divisor": F.THIN_SUPPLY_DIVISOR,
         "passing_supply": dict(getattr(eng, "passing_supply", {}) or {}),
         "mined_supply": dict(getattr(eng, "mined_supply", {}) or {}),
@@ -480,6 +532,9 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         "pool_floor": eng.floor, "mining_pool_floor": eng.mining_floor,
         "release_floor": eng.release_floor, "mining_release_floor": eng.mining_release_floor,
         "loc_ranker": eng.ranker_mode, "ranker_reach": reach, "short_fill": short,
+        # planned beside realized, so a short-fill is attributable to supply vs budget without
+        # re-deriving either from the pool.
+        "attempt_budget": budget, "attempt_realized": realized,
         "target_accounting": acct,
         "floors": {f.name: {"value": f.value, "head": f.head, "stamp": f.stamp,
                             "acts": f.acts} for f in F.ALL_FLOORS},

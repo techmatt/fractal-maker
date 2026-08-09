@@ -152,6 +152,28 @@ THIN_SUPPLY_DIVISOR = 4
 # a quota: a cluster with one strong row still ships one.
 CLUSTER_CAP = 2
 
+# COLORIZE ATTEMPTS PER RELEASE SLOT — the size of the surplus each head is asked to build
+# (2026-08-09, prompts/selection_restructure_2.md). A head's attempt budget is
+# `ATTEMPT_MULTIPLIER × that head's release slots`, so the two heads are sized against RELEASE
+# NEED and never against each other. Read by `tools/emission/attempt_budget.py`.
+#
+# THE FAILURE IT FIXES. Colorize volume used to fall out of the joint deficit model, which
+# spreads over (partition × cluster × flavor × STYLE) with one smooth style against N promoted
+# strange ones — so smooth drew ~1/N of the attempts whatever the release asked for. The
+# selrestruct_1 smoke got 3 smooth rows out of 30 attempts against 6 smooth slots and
+# short-filled 3 of them: a release the supply could have filled, starved by an allocation
+# rule that had no opinion about the release.
+#
+# 4 IS THE SAME KIND OF COARSE AS THE THREE ABOVE — not derived from a pass rate, not per head
+# and not per partition. It says "colorize four candidates for every slot you mean to fill",
+# which is the same shape of statement as THIN_SUPPLY_DIVISOR's "show me one only if there were
+# four to choose from". The two 4s meeting is not a coincidence worth collapsing into one
+# constant: they are about different populations (attempts spent vs candidates available), and
+# a partition whose slot allocation respects its emit cap has `4·slots <= 4·floor(supply/4) <=
+# supply`, i.e. the attempt budget fits inside the floor-passing supply exactly when the two
+# rules agree. Moving either one alone is a real change and reads as one.
+ATTEMPT_MULTIPLIER = 4
+
 
 def passes_junk_floor(score) -> bool:
     """THE junk-floor comparison. `score >= JUNK_FLOOR`, with a missing score reading as NOT

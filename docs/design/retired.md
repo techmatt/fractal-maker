@@ -552,3 +552,24 @@ an item's evidence, the line points at it rather than restating it.
   `[decision: prompts/selection_restructure_1.md §3-4, Matt, 2026-08-09]`
   `[code: tools/emission/selection.py::rank_select;
   tools/emission/build_emission_diversity_v1.py::select_release]`
+
+- **2026-08-09 — the deficit model as the colorize VOLUME rule**, and `--target-gated` as the
+  break that ended a colorize run. Colorize volume and the smooth/strange mix used to fall out
+  of `cells.choose_option`: the joint deficit spread over (partition × cluster × flavor ×
+  STYLE), and the style axis carries ONE smooth style against N registry-promoted strange ones,
+  so the wallpaper head drew ~1/(N+1) of the attempts whatever the release asked for. Measured
+  at retirement, on the selrestruct_1 smoke: **3 smooth rows of 30 attempts against 6 smooth
+  slots**, short-filling 3 of them off a 314-location floor-passing smooth supply. Replaced by
+  `tools/emission/attempt_budget.py` — attempts split HEAD-FIRST at `floors.ATTEMPT_MULTIPLIER`
+  (4) × that head's release slots, both heads scaled down proportionally when the total budget
+  (`--max-attempts`) cannot cover the pair, then per partition by the same `release_mix`
+  apportionment the release SLOTS use, filled in rank order from the ranked intake. **NOT
+  retired: the deficit model itself** — it still picks the (palette flavor, render style) pair,
+  now INSIDE the head that paid for the attempt, so the strange style spread is untouched. **NOT
+  retired: `--cover-all`**, an explicit one-pass sweep of the intake with no release need to be
+  sized against; it is the one live caller left of the coverage round-robin (`pick_location`).
+  **What it costs:** `--target-gated` no longer stops the loop (it reports), because a
+  scored-row target knows nothing about the head budgets it would truncate.
+  `[decision: prompts/selection_restructure_2.md, Matt, 2026-08-09]`
+  `[code: tools/emission/attempt_budget.py; tools/emission/test_attempt_budget.py;
+  tools/emission/build_emission_diversity_v1.py::_run_budgeted]`

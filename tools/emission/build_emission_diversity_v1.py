@@ -13,14 +13,22 @@ current). The flow:
                 and the stamp that guards it deleted the whole intake at the last head flip.
                 Each admitted location gets a canonical morph-CLIP embedding and a within-type
                 morph-cluster id, as before.
-  2. DEFICIT  — joint counts over (partition × morph_cluster × palette_flavor × render_style)
-                for the gated pool; the target measure is DERIVED at intake from the canonical
-                release-mix ratio table (tools/scoring/release_mix.py) re-solved against the
-                live feasible cells, and yields a per-cell deficit (cells.py).
-  3. COLORIZE — for each location (type + cluster fixed), pick the (palette flavor, render
-                style) that maximizes the joint deficit (softmax tie-break), pick the best
-                palette in that flavor (pref ranker), render the wallpaper, and score it
-                with the wallpaper head.
+  2. BUDGET   — the colorize attempt budget is split HEAD-FIRST against release need
+                (tools/emission/attempt_budget.py, 2026-08-09): `4 × that head's release
+                slots`, both heads scaled down proportionally if the total budget cannot cover
+                the pair, then split per partition by the same release-mix apportionment the
+                release SLOTS use, and filled in rank order from the ranked intake. It used to
+                fall out of the deficit model below, which spreads over a style axis carrying
+                one smooth style against N strange ones — so smooth drew ~1/(N+1) of the
+                attempts whatever the release asked for (3 of 30 in the selrestruct_1 smoke,
+                against 6 smooth slots).
+  3. COLORIZE — for each planned attempt the HEAD fixes the style set; within it the (palette
+                flavor, render style) that maximizes the joint deficit is picked as before
+                (softmax tie-break) over the joint counts of (partition × morph_cluster ×
+                palette_flavor × render_style), whose target measure is DERIVED at intake from
+                the canonical release-mix ratio table (tools/scoring/release_mix.py) re-solved
+                against the live feasible cells (cells.py). Then the best palette in that
+                flavor (pref ranker), render, and score with that head.
   4. POOL     — every SCORED candidate enters the append-only, resume-safe pool with full
                 descriptor, head scores, realized palette statistics and provenance (pool.py).
                 The permissive per-head POOL floor no longer admits or rejects; it rides along
@@ -66,6 +74,7 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "min
         sys.path.insert(0, str(p))
 
 import release_mix as RM                          # noqa: E402  THE release-mix ratio table
+from tools.emission import attempt_budget as AB   # noqa: E402  THE colorize attempt budget
 from tools.emission import emission_sinks as ESINKS  # noqa: E402  central sink-isolation
 from tools.emission import floors as F           # noqa: E402  THE stage-2 cut owner
 from tools.emission import descriptor as D       # noqa: E402
@@ -463,6 +472,11 @@ class EmissionDiversity:
         self.mined_supply: dict = {}
         self.passing_supply: dict = {}
         self.emit_caps: dict = {}
+        # the colorize attempt budget (`attempt_budget.plan`), filled by `plan_attempts()`.
+        # Declared here for the same reason as the census above: `--select-only` and a report
+        # rebuild never plan, and every reader takes the empty dict rather than a getattr.
+        self.attempt_plan: list = []
+        self.attempt_budget: dict = {}
 
     # ---- intake ---------------------------------------------------------- #
     @staticmethod
@@ -635,7 +649,57 @@ class EmissionDiversity:
               f"{len(self.styles)} styles = {len(feasible)} feasible cells "
               f"| resumed attempts={self.pool.n_attempts()} gated={len(self.pool.gated())}", flush=True)
 
+    # ---- the colorize attempt budget (§1, prompts/selection_restructure_2.md) --------- #
+    def styles_for_head(self, head: str | None) -> list:
+        """The render styles a head's budget may spend an attempt on. `None` = every style.
+
+        This is what makes the head budget REAL rather than an accounting fiction: the deficit
+        model still picks the (flavor, style) pair, but it picks it inside the head that paid
+        for the attempt. `None` is the `--cover-all` path, which is explicitly not budgeted."""
+        if head is None:
+            return list(self.styles)
+        return [s for s in self.styles if head_for_style(s) == head]
+
+    def plan_attempts(self) -> list:
+        """Build (and record) THIS run's colorize plan — `attempt_budget.plan`.
+
+        The plan is over the RANKED INTAKE (`self.ranked`, floor-passing, best-first per
+        partition), so a location is only ever planned for if it is in this run's supply. Its
+        length is the run's colorize volume: `--max-attempts` is the total attempt budget the
+        4x-per-slot want is scaled against, and the loop no longer stops on `--target-gated`
+        (see `run_colorize`).
+
+        A RESUME re-derives the same plan (it is a pure function of the intake, the release
+        split and the budget) and then subtracts what the DURABLE pool already did, matched on
+        (location, head). Nothing is restored from a checkpoint and nothing is re-colorized."""
+        ranked_ids = {p: [r["id"] for r in rows] for p, rows in self.ranked.items()}
+        plan, budget = AB.plan(release_n=self.release_n, strange_frac=self.strange_frac,
+                               total_budget=self.max_attempts, ranked_ids=ranked_ids)
+        done = Counter((r["location_id"], head_for_style(r["render_style"]))
+                       for r in self.pool.rows)
+        todo = []
+        for att in plan:
+            key = (att.location_id, att.head)
+            if done.get(key, 0) > 0:
+                done[key] -= 1
+                continue
+            todo.append(att)
+        budget["resumed_attempts"] = len(plan) - len(todo)
+        self.attempt_plan, self.attempt_budget = todo, budget
+        return todo
+
+    def realized_fills(self) -> dict:
+        """`{head: {partition: attempts}}` actually made, DERIVED from the durable pool."""
+        return AB.realized_fills(self.pool.rows, head_for_style)
+
     # ---- location pick (coverage round-robin, ranker-ordered within a round) --------- #
+    #
+    # RETIRED FROM THE BUDGETED PATH on 2026-08-09 (prompts/selection_restructure_2.md).
+    # `_round_order`/`pick_location` are the coverage round-robin that decided colorize order
+    # while volume was a deficit-model side effect; `--cover-all` (an explicit one-pass over
+    # every admitted location, which has no release budget to be sized against) still runs
+    # them, and they are otherwise superseded by `plan_attempts`. Not deleted: dead-code
+    # removal is a later pass, and `--cover-all` is a live flag.
     def _round_order(self, rows, round_idx: int) -> list:
         """The order ONE round is served in: seeded round-robin ACROSS partitions and RANK
         ORDER WITHIN one. Returns a list of location ids.
@@ -937,6 +1001,13 @@ class EmissionDiversity:
             "released": sum(1 for r in release_rows if r["decision"] == "selected"),
             "released_by_partition": by_part(release_rows, lambda r: r["decision"] == "selected"),
             "release_n_requested": self.release_n,
+            # THE COLORIZE BUDGET, planned beside realized (2026-08-09). It belongs in `counts`
+            # for the same reason the per-partition breakdowns do: it is the colorize stage's
+            # DENOMINATOR. Without it a later reader can see that a head shipped 3 of 6 slots
+            # and cannot tell whether it was given 3 attempts or 15 — which is exactly the
+            # question the selrestruct_1 smoke could not answer about itself.
+            "colorize_budget": dict(self.attempt_budget or {}),
+            "colorize_realized_by_head": self.realized_fills(),
         }
 
     def write_release_record(self, selected):
@@ -993,11 +1064,20 @@ class EmissionDiversity:
                 selected=(r["id"] in sel_ids), selection_stage="release"))
         return GR.write_gate_report("emission_diversity_v1", rows)
 
-    def colorize(self, dt, cm, ranker, heads, row, tracker=None) -> dict | None:
+    def colorize(self, dt, cm, ranker, heads, row, tracker=None,
+                 budget_head=None) -> dict | None:
+        """One colorize attempt. `budget_head` is the head whose attempt budget paid for it and
+        fixes the STYLE SET the deficit model chooses within (`styles_for_head`); `None` (the
+        `--cover-all` path) offers every style, which is the pre-2026-08-09 behaviour.
+
+        Spelled `budget_head`, not `head`: `head` is this function's local for the SCORE dict
+        the head returned, and a parameter of that name would be silently overwritten by it
+        half way down — the log line would then report the score dict as the paying head."""
         loc_id = row["id"]
         ftype = self.partition_of[loc_id]
         cluster = self.cluster_tags[loc_id]
-        choice = C.choose_option(self.model, ftype, cluster, self.flavors, self.styles, self.rng)
+        choice = C.choose_option(self.model, ftype, cluster, self.flavors,
+                                 self.styles_for_head(budget_head), self.rng)
         if choice is None:
             return None                              # all cells for this (type,cluster) capped
         flavor, style, deficit, n_opts, _probs = choice
@@ -1062,6 +1142,10 @@ class EmissionDiversity:
         with open(self.colorize_log, "a", encoding="utf-8") as f:
             f.write(json.dumps({
                 "id": emid, "location_id": loc_id, "type": ftype, "cluster": cluster,
+                # which head's attempt budget paid for this render. `None` on the --cover-all
+                # path (unbudgeted); the style→head routing recovers it either way, and this is
+                # the direct read.
+                "budget_head": budget_head,
                 "chosen_flavor": flavor, "chosen_style": style, "palette": palette,
                 "deficit": round(deficit, 6), "n_options": n_opts,
                 "p_ge3": (head or {}).get("p_ge3"), "passed": passed,
@@ -1117,27 +1201,97 @@ class EmissionDiversity:
             print(f"[colorize] --cover-all: one colorize per location over "
                   f"{len(self.rows)} admitted locations (target/attempt/time cutoffs bypassed)",
                   flush=True)
+            return self._run_cover_all(dt, cm, ranker, heads, tracker)
+        return self._run_budgeted(dt, cm, ranker, heads, tracker)
+
+    def _log_attempt(self, rec) -> None:
+        """Persist the resume state and print the one-line progress for a completed attempt."""
+        self.pool.save_state({"seed": self.seed, "rng": self.rng.bit_generator.state,
+                              "n_attempts": self.pool.n_attempts()})
+        acct = self.target_accounting()
+        print(f"  [{self.pool.n_attempts()}] {rec['id']} {rec['type']}/{rec['morph_cluster']} "
+              f"{rec['palette_flavor']}/{rec['render_style']} p_ge3="
+              f"{rec['p_ge3'] if rec['p_ge3'] is not None else 'ERR'} "
+              f"{'SCORED' if rec['passed'] else 'ERR'}"
+              f"{'' if rec.get('would_pass_release_floor') else ' (below retired floor)'}"
+              f" | pooled={len(self.pool.gated())} "
+              f"scored={acct['post_floor']}/{self.target_gated} "
+              f"({acct['would_pass_release_floor']} above the retired release floors)",
+              flush=True)
+
+    def _run_budgeted(self, dt, cm, ranker, heads, tracker):
+        """THE colorize loop since 2026-08-09: run the budgeted plan, in plan order.
+
+        The plan (`plan_attempts`) IS the volume decision — `--max-attempts` is the total
+        attempt budget it is sized against, and it is spent in a near-proportional interleave
+        across (head, partition) so a run the time backstop cuts short has still spent its
+        prefix in the planned mix.
+
+        `--target-gated` NO LONGER STOPS THIS LOOP. It was the old volume rule (build a 3xN
+        surplus of scored rows, whatever the mix), and leaving it in as a break would silently
+        truncate the head budgets it knows nothing about — a run that stops at 3N scored has
+        spent ~3N/2 per head regardless of what the release asked for, which is the failure
+        this restructure removes one level down. The target still computes and is still
+        reported (`target_accounting`); it just does not decide when to stop.
+
+        The time budget stays a HARD-KILL BACKSTOP and is reported as one when it fires."""
         t0 = time.time()
+        plan = self.plan_attempts()
+        print(f"[budget] colorize attempt budget from release need "
+              f"(x{self.attempt_budget['attempt_multiplier']} per slot, total budget "
+              f"{self.attempt_budget['total_budget']}"
+              + (", SCALED DOWN proportionally — both heads"
+                 if self.attempt_budget["scaled_to_budget"] else "") + "):", flush=True)
+        for line in AB.fill_lines(self.attempt_budget, self.realized_fills()):
+            print(f"  [budget] {line}", flush=True)
+        for h in AB.HEADS:
+            print(f"  [budget] {h} per partition: "
+                  f"{ {p: k for p, k in self.attempt_budget['planned_by_partition'][h].items() if k} }",
+                  flush=True)
+        if self.attempt_budget.get("resumed_attempts"):
+            print(f"  [budget] {self.attempt_budget['resumed_attempts']} planned attempt(s) "
+                  f"already in the durable pool (resume) — {len(plan)} left to run", flush=True)
+        n_capped = 0
+        for k, att in enumerate(plan):
+            if time.time() - t0 > self.time_budget_s:
+                acct = self.target_accounting()
+                print(f"[colorize] hit the time-budget backstop with {len(plan) - k} of "
+                      f"{len(plan)} planned attempt(s) unspent (scored={acct['post_floor']}, "
+                      f"below-retired-release-floor={acct['below_retired_release_floor']})",
+                      flush=True)
+                break
+            row = self.by_id.get(att.location_id)
+            if row is None:
+                continue           # planned off the ranked intake; cannot happen for a served row
+            rec = self.colorize(dt, cm, ranker, heads, row, tracker=tracker,
+                                budget_head=att.head)
+            if rec is None:
+                # every cell for this (partition, cluster) x this head's styles is attempt-capped.
+                n_capped += 1
+                continue
+            self._log_attempt(rec)
+        acct = self.target_accounting()
+        realized = self.realized_fills()
+        self.attempt_budget["realized_by_partition"] = realized
+        self.attempt_budget["realized_total"] = sum(sum(v.values()) for v in realized.values())
+        self.attempt_budget["capped_cell_skips"] = n_capped
+        print(f"[budget] realized: "
+              + " · ".join(AB.fill_lines(self.attempt_budget, realized))
+              + (f" · {n_capped} attempt(s) had no uncapped cell" if n_capped else ""),
+              flush=True)
+        return acct["post_floor"]
+
+    def _run_cover_all(self, dt, cm, ranker, heads, tracker):
+        """`--cover-all`: one colorize per admitted location, then stop. UNBUDGETED by design —
+        it is a full sweep of the intake, so there is no release need to size it against, and it
+        is the one live caller of the coverage round-robin (`pick_location`) the attempt budget
+        replaced on the normal path."""
         exhausted: set = set()
         while True:
+            # no target / attempt / TIME cutoff here — `--cover-all` is one pass over the whole
+            # intake by definition, and it stops when `pick_location` wraps. Unchanged.
             acct = self.target_accounting()
             n_post, n_below = acct["post_floor"], acct["below_retired_release_floor"]
-            if not self.cover_all:
-                if self.target_met():
-                    print(f"[colorize] reached target: {n_post} scored "
-                          f"(smooth {acct['post_floor_smooth']} + strange "
-                          f"{acct['post_floor_strange']}) ≥ {self.target_gated}; "
-                          f"{acct['would_pass_release_floor']} of them would also have "
-                          f"cleared the retired release floors", flush=True)
-                    break
-                if self.pool.n_attempts() >= self.max_attempts:
-                    print(f"[colorize] hit max attempts {self.max_attempts} "
-                          f"(scored={n_post}, below-retired-release-floor={n_below})", flush=True)
-                    break
-                if time.time() - t0 > self.time_budget_s:
-                    print(f"[colorize] hit time budget (scored={n_post}, "
-                          f"below-retired-release-floor={n_below})", flush=True)
-                    break
             row = self.pick_location(exhausted)
             if row is None:
                 print(f"[colorize] all locations exhausted (scored={n_post}, "
@@ -1145,7 +1299,7 @@ class EmissionDiversity:
                 break
             # cover-all stops the instant pick_location wraps to a 2nd pass: it returns
             # fewest-attempts-first, so an already-attempted row means every location has one.
-            if self.cover_all and self.pool.attempts_per_location().get(row["id"], 0) >= 1:
+            if self.pool.attempts_per_location().get(row["id"], 0) >= 1:
                 # `n_rel` was a bare name that has never existed in this scope: the one
                 # branch that reads it is `--cover-all`'s stop, so the flag documented as
                 # "explicit one-pass semantics" raised NameError the moment it did its job.
@@ -1157,19 +1311,7 @@ class EmissionDiversity:
             if rec is None:
                 exhausted.add(row["id"])
                 continue
-            self.pool.save_state({"seed": self.seed, "rng": self.rng.bit_generator.state,
-                                  "n_attempts": self.pool.n_attempts()})
-            n_gated = len(self.pool.gated())
-            acct = self.target_accounting()
-            print(f"  [{self.pool.n_attempts()}] {rec['id']} {rec['type']}/{rec['morph_cluster']} "
-                  f"{rec['palette_flavor']}/{rec['render_style']} p_ge3="
-                  f"{rec['p_ge3'] if rec['p_ge3'] is not None else 'ERR'} "
-                  f"{'SCORED' if rec['passed'] else 'ERR'}"
-                  f"{'' if rec.get('would_pass_release_floor') else ' (below retired floor)'}"
-                  f" | pooled={n_gated} "
-                  f"scored={acct['post_floor']}/{self.target_gated} "
-                  f"({acct['would_pass_release_floor']} above the retired release floors)",
-                  flush=True)
+            self._log_attempt(rec)
         return self.target_accounting()["post_floor"]
 
     def ranker_reach(self) -> dict:
@@ -1382,10 +1524,11 @@ def main():
                          "smooth = N − strange. Heads are selected by DISJOINT within-head "
                          "greedy passes (never compared in one step).")
     ap.add_argument("--target-gated", type=int, default=0,
-                    help="0 → 3×release-n SCORED rows. The per-head release floors are "
-                         "annotation-only since 2026-08-09, so the surplus is denominated in "
-                         "candidates that rendered and scored; how many of them would also "
-                         "have cleared the retired 0.90/0.50 is reported beside it.")
+                    help="0 → 3×release-n SCORED rows. REPORTING ONLY since 2026-08-09: the "
+                         "colorize volume is the attempt budget (--max-attempts, split 4× per "
+                         "release slot per head), and this no longer stops the loop. It is "
+                         "still computed and reported — how many scored rows a run built, and "
+                         "how many would also have cleared the retired 0.90/0.50.")
     ap.add_argument("--cover-all", action="store_true",
                     help="colorize every admitted location exactly once, then stop (explicit "
                          "one-pass; bypasses --target-gated/--max-attempts/--time-budget-min)")
@@ -1414,8 +1557,14 @@ def main():
                     help=f"release supersample (default wallpaper canon {REL_SS})")
     ap.add_argument("--release-filt", default=None,
                     help=f"release downsample filter (default {REL_FILT})")
-    ap.add_argument("--max-attempts", type=int, default=240, help="hard-kill backstop")
-    ap.add_argument("--time-budget-min", type=float, default=45.0, help="hard-kill backstop")
+    ap.add_argument("--max-attempts", type=int, default=240,
+                    help="THE TOTAL COLORIZE ATTEMPT BUDGET (2026-08-09). Each head asks for "
+                         f"{F.ATTEMPT_MULTIPLIER}× its release slots; if the pair exceeds this "
+                         "budget BOTH scale down proportionally. The default is far above "
+                         f"{F.ATTEMPT_MULTIPLIER}×N for any usual N, so it binds only when set "
+                         "low (a smoke) — and then it binds on both heads, never one.")
+    ap.add_argument("--time-budget-min", type=float, default=45.0,
+                    help="hard-kill backstop; unspent planned attempts are reported when it fires")
     ap.add_argument("--palette-pick", choices=["pref", "deficit"], default="pref",
                     help="within-flavor palette pick: 'pref' = v3-gvo argmax (batch-stable "
                          "default); 'deficit' = serve the running realized chroma×hue deficit "

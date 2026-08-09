@@ -188,8 +188,16 @@ class _Engine:
                  head=None, floor=0.75, error="RuntimeError('render died')"),
         ])
 
+        # the colorize attempt budget the funnel records beside the counts (2026-08-09). Empty
+        # here: this fixture is about the DECISION rows, and a `--select-only` run reaches
+        # `_record_counts` with exactly this — no plan, and realized read off the pool.
+        self.attempt_budget = {}
+
     # borrow the real implementations
     RECORD_SITE = SITE
+
+    def realized_fills(self):
+        return self.ED.realized_fills(self)
 
     def _run_id(self):
         return self.ED._run_id(self)

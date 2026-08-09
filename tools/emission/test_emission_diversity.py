@@ -997,3 +997,81 @@ def test_exhausted_locations_are_skipped_without_stalling_the_round():
     assert _counts_by_partition(d, picked) == {"aaa": 2, "bbb": 6}
     d.pick_location(dead)                       # the round advances rather than ending
     assert d.pick_location(dead)["id"] not in dead
+
+
+# --------------------------------------------------------------------------- #
+# The colorize attempt budget on the DRIVER (2026-08-09, selection_restructure_2).
+#
+# `test_attempt_budget.py` pins the rule; these pin the driver's use of it — the head-scoped
+# style set (which is what makes the head budget real rather than an accounting fiction), the
+# plan built off the ranked intake, and the resume subtraction.
+# --------------------------------------------------------------------------- #
+def _budget_driver(sizes: dict, release_n=12, strange_frac=0.5, max_attempts=240,
+                   styles=("smooth", "tia", "stripe"), pool_rows=()):
+    """A bare EmissionDiversity carrying only what `plan_attempts`/`styles_for_head` touch."""
+    from tools.emission.build_emission_diversity_v1 import EmissionDiversity
+    d = object.__new__(EmissionDiversity)
+    d.release_n, d.strange_frac, d.max_attempts = release_n, strange_frac, max_attempts
+    d.styles = list(styles)
+    d.ranked = {p: [{"id": f"{p}_{k:03d}"} for k in range(n)] for p, n in sizes.items()}
+    d.pool = type("_P", (), {"rows": list(pool_rows)})()
+    return d
+
+
+def test_the_head_budget_fixes_the_style_set_the_deficit_model_chooses_within():
+    """THE mechanism. A wallpaper-budgeted attempt may only spend on smooth; a mining-budgeted
+    one only on the promoted strange modes. Without this the budget is bookkeeping — the
+    deficit model would still spread across the whole style axis and smooth would still draw
+    ~1/N of the attempts, which is the failure being fixed."""
+    d = _budget_driver({"mandelbrot": 40})
+    assert d.styles_for_head("wallpaper") == ["smooth"]
+    assert d.styles_for_head("mining") == ["tia", "stripe"]
+    assert d.styles_for_head(None) == ["smooth", "tia", "stripe"]   # --cover-all, unbudgeted
+
+
+def test_the_plan_is_built_off_the_ranked_intake_not_the_admitted_rows():
+    """Only floor-passing, best-first, and never a location the intake did not rank."""
+    d = _budget_driver({"mandelbrot": 40, "phoenix": 30})
+    plan = d.plan_attempts()
+    known = {r["id"] for v in d.ranked.values() for r in v}
+    assert plan and {a.location_id for a in plan} <= known
+    assert d.attempt_budget["head_attempts"] == {"wallpaper": 24, "mining": 24}
+
+
+def test_a_smoke_sized_budget_no_longer_starves_smooth():
+    """THE regression, at the numbers that produced it: 12 slots, 30 attempts. The old rule
+    gave smooth 3 of 30 (one style of ten on the deficit axis); the budget gives it 15 — more
+    than the 6 slots it has to fill, which is what 4x per slot is for."""
+    d = _budget_driver({"mandelbrot": 300, "phoenix": 200}, max_attempts=30)
+    plan = d.plan_attempts()
+    n_smooth = sum(1 for a in plan if a.head == "wallpaper")
+    assert n_smooth == 15 and len(plan) == 30
+    assert n_smooth >= 4 * d.attempt_budget["head_slots"]["wallpaper"] // 2
+
+
+def test_a_resume_subtracts_what_the_durable_pool_already_did():
+    """The plan is a pure function of the intake and the budget, so a resume re-derives it and
+    then removes the (location, head) pairs the pool already holds. Nothing is restored from a
+    checkpoint and nothing is colorized twice."""
+    fresh = _budget_driver({"mandelbrot": 300}, max_attempts=30).plan_attempts()
+    done = [{"location_id": a.location_id,
+             "render_style": ("smooth" if a.head == "wallpaper" else "tia")}
+            for a in fresh[:7]]
+    d = _budget_driver({"mandelbrot": 300}, max_attempts=30, pool_rows=done)
+    todo = d.plan_attempts()
+    assert d.attempt_budget["resumed_attempts"] == 7
+    assert [(a.head, a.location_id) for a in todo] == \
+           [(a.head, a.location_id) for a in fresh[7:]]
+
+
+def test_the_budget_record_carries_planned_and_supply_short_for_attribution():
+    """A short-fill has to be attributable off the record alone: the want, the budget, the
+    schedule and what supply could not cover."""
+    d = _budget_driver({"mandelbrot": 300, "phoenix:classic": 2}, max_attempts=240)
+    d.plan_attempts()
+    b = d.attempt_budget
+    assert b["head_want"] == {"wallpaper": 24, "mining": 24}
+    assert b["total_budget"] == 240 and b["scaled_to_budget"] is False
+    assert b["supply_short_total"] >= 0
+    assert set(b["planned_by_partition"]) == {"wallpaper", "mining"}
+    assert b["supply_partitions"] == {"mandelbrot": 300, "phoenix:classic": 2}
