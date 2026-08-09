@@ -220,6 +220,20 @@ ALLOWLIST = [
           "label nobody can join."),
     Entry("data/orbital/screen_pool.jsonl", EXCEPTION,
           "Orbital screen pool: the scored candidate population behind the mode gates."),
+    # Added 2026-08-08 to match the size-guard REGISTRY entry that landed with the file in
+    # decdfc2. The two registries answer different questions — may it be TRACKED (here) vs
+    # may it sit in the WORKING TREE (size_guard) — and a file needs both; this one shipped
+    # with only the second, so the blob guard was red at HEAD until this line.
+    Entry("data/sourcing/newton_parity_ref.json", EXCEPTION,
+          "Newton divergence-abort parity table (1.87 MB, 31,616 rows of "
+          "[converged, iters, digest16]): the pinned outcome of the PRE-ABORT reference "
+          "solver, an INPUT to test_newton_divergence_abort.py rather than an output. "
+          "Re-deriving it was 80.6% of the entire `slow` lane (~55 of 61 min), which is now "
+          "2.5 min. Safe to pin because what it holds is a MATHEMATICAL CONSTANT — the "
+          "reference reimplements code deleted when the abort landed, so for a fixed "
+          "(seed, period, degree, max_steps, dps) its outcome cannot change, which is what "
+          "makes this lossless rather than a staleness risk. Text and diffable; rebuildable "
+          "by tools/sourcing/build_newton_parity_ref.py (~4.4 min at 8 workers)."),
 ]
 
 
