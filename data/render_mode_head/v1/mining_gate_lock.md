@@ -10,8 +10,8 @@ Frozen operating point of the render-mode (strange) quality gate. Written by `to
 
 | cut | value | site | acts | fires | pass rate | precision | 95% CI | recall |
 |---|--:|---|:-:|--:|--:|--:|--:|--:|
-| `mining_pool` | 0.25 | pool | YES | 70/422 | 16.6% | 75.7% | 64.5%–84.2% | 84.1% |
-| `mining_release` | 0.50 | release | YES | 33/422 | 7.8% | 97.0% | 84.7%–99.5% | 50.8% |
+| `mining_pool` | 0.25 | pool | no | 70/422 | 16.6% | 75.7% | 64.5%–84.2% | 84.1% |
+| `mining_release` | 0.50 | release | no | 33/422 | 7.8% | 97.0% | 84.7%–99.5% | 50.8% |
 
 Both are on the gate signal — p_ge3 (marginal P(label>=3)). Precision is of PASSERS and carries a Wilson interval: the top of the ladder is estimated from a handful of rows, and a bare 1.000 over 3 and a 0.90 over 90 are the same column otherwise.
 

@@ -51,7 +51,13 @@ import paths  # noqa: E402   the durability-class declaration
 from tools.emission import emission_sinks as esinks  # noqa: E402  central sink-isolation
 
 RECORD_DIR_REL = "data/emission/release_records"
-SCHEMA_VERSION = 1
+# v2 (2026-08-09): adds `would_pass_floor`, the retired per-head floor's verdict on the row.
+# The four stage-2 floors stopped enforcing on that date (`tools/emission/floors.py`) and this
+# column is where their value survives — every row now records what the old cut WOULD have
+# said, so "was the 0.90 bar buying anything" stays answerable off the accumulating record
+# instead of only off runs made while it enforced. Additive: every v1 field is unchanged, and
+# a v1 row read back simply has no `would_pass_floor`.
+SCHEMA_VERSION = 2
 
 STAGE_GATE = "gate"
 STAGE_RELEASE = "release"
@@ -88,7 +94,7 @@ def _key(run_id: str, stage: str, join_key: str) -> str:
 
 def decision_row(*, run_id, stage, join_key, location_id, location, partition,
                  morph_cluster, decision, score=None, reason=None, head=None,
-                 floor=None, style=None, palette=None) -> dict:
+                 floor=None, would_pass_floor=None, style=None, palette=None) -> dict:
     """One gate-time or release-time decision.
 
     `join_key`  the candidate's identity within the run (location_id|style|palette) — the join
@@ -99,6 +105,12 @@ def decision_row(*, run_id, stage, join_key, location_id, location, partition,
                 (a render error is a decision with a reason and no score — recording it as 0.0
                 would make a crash indistinguishable from a bad wallpaper).
     `reason`    why, in the cases where the score alone does not say it.
+    `floor`     the head's RETIRED floor at this stage. It named the cut that produced
+                `decision` until 2026-08-09; it is now the annotation's threshold.
+    `would_pass_floor`  ANNOTATION (schema v2): would `score` have cleared `floor`? `None`
+                when there is no score to compare, which is why this is a tri-state and not a
+                bool — `False` means "the old cut would have removed this row" and must not be
+                the value a render error gets.
     """
     return {
         "schema_version": SCHEMA_VERSION,
@@ -116,6 +128,7 @@ def decision_row(*, run_id, stage, join_key, location_id, location, partition,
         "decision": decision,
         "score": None if score is None else round(float(score), 6),
         "floor": None if floor is None else float(floor),
+        "would_pass_floor": None if would_pass_floor is None else bool(would_pass_floor),
         "reason": reason,
     }
 

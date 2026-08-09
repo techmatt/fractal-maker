@@ -50,6 +50,35 @@ reads as a policy somebody chose, and gets re-tuned by the next person who finds
 cut that remains in stage 2 lives in **`tools/emission/floors.py`** carrying the head and the
 head *version* it was set against, and refuses to gate when the live pin disagrees.
 
+### And the q3 gate went with it, on the intake path (2026-08-09)
+
+`descriptor.load_admitted` is unchanged and still enforces `current-decode ∧ admit_quality`;
+what changed is that **the emission driver no longer calls it that way**. Stage-2 intake now
+goes through `tools/emission/ranked_intake.py`, which hands `load_admitted` its own predicate:
+`guard_pass ∧ distinct ∧ (raw P(>=3) >= floors.JUNK_FLOOR, or a floor-admit source)`, with
+candidates ranked best-first per partition on that raw probability. No decode-version
+predicate, no stored `decoded_class`.
+
+The argument is the one above, one level up. `decoded_class` is `corn_decode(p_notbad, p_good,
+t_good_p)` — a **per-partition derived threshold frozen into the row at harvest time**, so
+moving `t_good` for a partition moves nothing already written; and the currency stamp that
+guards it discards every row an older head scored, which is how the v10 flip took this intake
+to 16 rows. Reading the stored probability instead makes the threshold a read-time choice and
+makes a head flip a degradation in rank quality rather than a deletion of the population.
+
+**The floor-admit bypass is unchanged and is why it had to be re-argued rather than inherited.**
+The junk floor would be `FLOOR_PNOTBAD` again — the same veto at 0.20 instead of 0.5 — if it
+applied to a `human_q3plus` row. It does not: floor-admit rows pass the floor, are ranked with
+everything else, and are counted separately (`bypass_by_partition`) so a partition's supply
+never silently becomes "however many humans labelled". Pinned by
+`test_ranked_intake.test_a_floor_admit_row_bypasses_the_junk_floor`, with its own non-vacuity
+mirror (the bypass is of the HEAD's verdict only — a guard-failing floor-admit row is still
+rejected).
+
+Measured at the switch over the seven intake ledgers: **1470 mined** (guard ∧ distinct),
+**1270 above the 0.20 floor**, against **751** admitted by the old predicate with the v11
+re-score siblings already in place.
+
 ### Where the branch lives (`descriptor.py`)
 
 `load_admitted` factors the quality predicate through `admit_quality(row)`, which is

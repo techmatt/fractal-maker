@@ -39,7 +39,7 @@
     "mining_pool": {
       "value": 0.25,
       "site": "pool",
-      "acts": true,
+      "acts": false,
       "head": "render_mode_head/v1",
       "basis": "CAPACITY ORDERING, not curation: strange colorizes are cheap to make and expensive to carry, so the bottom quarter of the mining scale is dropped before it reaches the pool. It was already a hard cut through the period when the release floor above it was report-only, and its value is unchanged by that floor's 2026-08-06 flip \u2014 the would-cut verdict accrues at this site too (gate_report.py). Measured at the flip: fires 70/422 (16.6%) at precision 75.7% [64.5%-84.2%], keeping 84.1% of the good rows, which is the retention the pool cut is for.",
       "boundary": "p_ge3 (marginal P(label>=3))",
@@ -57,7 +57,7 @@
     "mining_release": {
       "value": 0.5,
       "site": "release",
-      "acts": true,
+      "acts": false,
       "head": "render_mode_head/v1",
       "basis": "IS the mining head's production gate (mining_pins.MINING_GATE_THRESHOLD), imported not copied. ENFORCING since 2026-08-06 (prompts/mining_adoption_prompt.md); it was report-only from prompts/mining_gate_report_only.md until the head had a measured operating point on strange renders. It now has one: 33/422 (7.8%) at precision 97.0% [84.7%-99.5%], recall 50.8%, base rate 14.9%, frozen in data/render_mode_head/v1/mining_gate_lock.json. The value did not move; only whether it cuts.",
       "boundary": "p_ge3 (marginal P(label>=3))",

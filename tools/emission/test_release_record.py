@@ -178,8 +178,10 @@ class _Engine:
             dict(id="e0", location_id="L0", type="julia:mandelbrot", morph_cluster="j#0",
                  render_style="smooth", palette="viridis", p_ge3=0.95, passed=True,
                  head="wallpaper", floor=0.75, error=None),
+            # `passed` means SCORED since 2026-08-09 (the pool floor annotates), so a 0.60 row
+            # below the retired 0.75 is pooled like any other.
             dict(id="e1", location_id="L1", type="julia:mandelbrot", morph_cluster="j#1",
-                 render_style="smooth", palette="magma", p_ge3=0.60, passed=False,
+                 render_style="smooth", palette="magma", p_ge3=0.60, passed=True,
                  head="wallpaper", floor=0.75, error=None),
             dict(id="e2", location_id="L2", type="phoenix", morph_cluster="p#0",
                  render_style="smooth", palette="cubehelix", p_ge3=None, passed=False,
@@ -200,6 +202,15 @@ class _Engine:
 
     def release_floor_for(self, style):
         return self.ED.release_floor_for(self, style)
+
+    def floor_for(self, style):
+        return self.ED.floor_for(self, style)
+
+    def above_pool_floor(self, r):
+        return self.ED.above_pool_floor(self, r)
+
+    def would_pass_release_floor(self, r):
+        return self.ED.would_pass_release_floor(self, r)
 
     def release_eligible(self):
         return self.ED.release_eligible(self)
@@ -230,17 +241,27 @@ def test_driver_end_to_end_records_gate_and_release(store, monkeypatch):
 
     assert len(gate) == 3, "every colorized candidate is gated, including the crashed one"
     assert gate["L0|smooth|viridis"]["decision"] == "admitted"
-    assert gate["L1|smooth|magma"]["decision"] == "rejected"
-    assert gate["L1|smooth|magma"]["reason"] == "below pool floor"
+    # SCORED IS ADMITTED since 2026-08-09: the 0.60 row is below the retired 0.75 pool floor
+    # and is pooled anyway, with the retired cut's verdict recorded beside it.
+    assert gate["L1|smooth|magma"]["decision"] == "admitted"
+    assert gate["L1|smooth|magma"]["would_pass_floor"] is False
+    assert gate["L0|smooth|viridis"]["would_pass_floor"] is True
     # a render error is a decision with a REASON and NO score — not a zero, which would be
     # indistinguishable from a genuinely bad wallpaper.
     assert gate["L2|smooth|cubehelix"]["decision"] == "rejected"
     assert gate["L2|smooth|cubehelix"]["score"] is None
     assert "render_error" in gate["L2|smooth|cubehelix"]["reason"]
+    # ...and it gets NO floor verdict. `False` there would say "the old cut would have removed
+    # this", which is a different claim from "there was nothing to compare".
+    assert gate["L2|smooth|cubehelix"]["would_pass_floor"] is None
 
-    # only L0 clears the 0.90 wallpaper RELEASE floor, and it was selected
-    assert list(rel) == ["L0|smooth|viridis"]
+    # both SCORED rows are release-eligible and recorded; only L0 was selected, and the
+    # passed-over row carries the retired floor's verdict so the old cut stays inspectable.
+    assert sorted(rel) == ["L0|smooth|viridis", "L1|smooth|magma"]
     assert rel["L0|smooth|viridis"]["decision"] == "selected"
+    assert rel["L0|smooth|viridis"]["would_pass_floor"] is True
+    assert rel["L1|smooth|magma"]["decision"] == "not_selected"
+    assert rel["L1|smooth|magma"]["would_pass_floor"] is False     # 0.60 < the retired 0.90
     assert all(r["run_id"] == "run_smoke" for r in rows)
     assert all(r["partition"] and r["morph_cluster"] for r in rows)
 
@@ -251,13 +272,13 @@ def test_driver_end_to_end_records_gate_and_release(store, monkeypatch):
     # the funnel is keyed by the CELL PARTITION, so the classic-phoenix row is counted under
     # `phoenix:classic` and not folded into `phoenix` — the split it is owed a share for.
     assert c["intake_by_partition"] == {"julia:mandelbrot": 2, "phoenix:classic": 1}
-    assert (c["colorized"], c["gate_admitted"], c["release_eligible"], c["released"]) == (3, 1, 1, 1)
-    assert c["gate_admitted_by_partition"] == {"julia:mandelbrot": 1}
+    assert (c["colorized"], c["gate_admitted"], c["release_eligible"], c["released"]) == (3, 2, 2, 1)
+    assert c["gate_admitted_by_partition"] == {"julia:mandelbrot": 2}
 
     # ...and a second run of the same shape accumulates rather than replacing it
     eng2 = _Engine(store)
     eng2.out = store / "run_smoke_2"
     eng2.out.mkdir(parents=True, exist_ok=True)
     _, n_total2, n_new2, _ = eng2.write_release_record(selected)
-    assert n_new2 == 4 and n_total2 == n_total + 4
+    assert n_new2 == 5 and n_total2 == n_total + 5
     assert {r["run_id"] for r in RR.read_decisions(SITE)} == {"run_smoke", "run_smoke_2"}

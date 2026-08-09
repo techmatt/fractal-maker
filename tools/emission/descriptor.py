@@ -307,7 +307,15 @@ def resolve_rows(ledger_path, version: str | None = None) -> list:
 # --------------------------------------------------------------------------- #
 # Admitted-location loader (current-decode ENFORCED).
 # --------------------------------------------------------------------------- #
-def load_admitted(ledger_path: Path, require_current: bool = False) -> list:
+def guard_and_distinct(row: dict) -> bool:
+    """The POPULATION half of admission: the run's own degenerate-outcome guard and its own
+    morphology dedup. Neither is a head verdict — they are properties of the location and of
+    the cloud it was found in — so they hold on EVERY intake path, including the read-time
+    ranked one that takes no decode-version predicate (`ranked_intake`)."""
+    return bool(row.get("guard_pass")) and bool(row.get("distinct"))
+
+
+def load_admitted(ledger_path: Path, require_current: bool = False, admit=None) -> list:
     """Yield admitted rows from a run-scoped ledger: current-decode ∧ <quality> ∧
     guard_pass ∧ distinct, where <quality> is source-aware (`admit_quality`): the q3 gate
     `decoded_class>=3` for a normal discovery source, and NO machine quality cut at all for a
@@ -319,9 +327,23 @@ def load_admitted(ledger_path: Path, require_current: bool = False) -> list:
 
     Rows come through `resolve_rows`, so a ledger carrying a sibling re-score record for the
     ACTIVE head is admitted on the re-scored decode. Without one the original rows are read
-    verbatim and the current-decode predicate judges them as it always has."""
+    verbatim and the current-decode predicate judges them as it always has.
+
+    `admit` REPLACES the whole predicate (decode currency AND quality AND guard/distinct) with
+    a caller-supplied `row -> bool`. It exists so the READ-TIME ranked intake
+    (`ranked_intake.py`, 2026-08-09) shares this one reader — and therefore `resolve_rows`, the
+    namespacing, the location dedup and the diagnostics — instead of growing a second union
+    walker that could disagree with this one about what the population is. `require_current` is
+    refused alongside it: the two are contradictory instructions about the same rows."""
+    if admit is not None and require_current:
+        raise ValueError("load_admitted: `admit` replaces the built-in predicate and "
+                         "`require_current` strengthens it — pass one, not both.")
     rows = []
     for row in resolve_rows(ledger_path):
+        if admit is not None:
+            if admit(row):
+                rows.append(row)
+            continue
         if require_current:
             cc.require_current(row)       # raises on stale decode
         elif not cc.is_current_decoded(row):
@@ -399,8 +421,11 @@ class LedgerNamespaceCollision(RuntimeError):
     failure the namespacing exists to prevent, one level up."""
 
 
-def load_union_admitted(ledger_paths, keep_row_id: bool = True) -> tuple:
+def load_union_admitted(ledger_paths, keep_row_id: bool = True, admit=None) -> tuple:
     """`(rows, diag)` — the admitted union over `ledger_paths`, in ledger order.
+
+    `admit` is passed straight through to `load_admitted` (see there): the read-time ranked
+    intake supplies its own predicate so both intake paths are THE same union reader.
 
     Each returned row is the ledger row with its `id` replaced by the ledger-namespaced id
     (the original kept under `_ledger_row_id`) plus `_source_ledger` / `_ledger_ns`. The
@@ -432,7 +457,7 @@ def load_union_admitted(ledger_paths, keep_row_id: bool = True) -> tuple:
         except ValueError:
             label = str(lp)
         n = 0
-        for row in load_admitted(lp):
+        for row in load_admitted(lp, admit=admit):
             rid, key = row["id"], loc_key(row)
             prev = bare_ids.get(rid)
             if prev is not None and prev != key:

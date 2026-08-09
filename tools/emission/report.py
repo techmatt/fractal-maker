@@ -67,28 +67,65 @@ def _thumb(jpg_rel: str, tw: int, th: int):
 # --------------------------------------------------------------------------- #
 # Contact sheets.
 # --------------------------------------------------------------------------- #
-def release_sheet(selected: list, sel_log: list, out_png: Path, cols: int = 4):
-    tw, th, pad, lh, head = 300, 169, 8, 30, 34
-    n = len(selected)
+def sheet_order(selected: list) -> list:
+    """The release sheet's row order: GOOD -> BAD by the head's own score, head-grouped.
+
+    Grouped by head first because the two heads' `p_ge3` are on incommensurable
+    train-prior-calibrated scales — one global sort by score would interleave them and read as
+    a ranking that nobody computed. Within a head it is a straight score descent, tie-broken on
+    id so a re-render of the same release lays the tiles out the same way."""
+    return sorted(selected,
+                  key=lambda e: ((e["_rec"].get("head") or ""),
+                                 -float(e["_rec"].get("p_ge3") or 0.0),
+                                 str(e["_rec"]["id"])))
+
+
+def release_sheet(selected: list, sel_log: list, out_png: Path, cols: int = 4,
+                  supply_lines: list | None = None):
+    tw, th, pad, lh, head = 300, 169, 8, 42, 52
+    ordered = sheet_order(selected)
+    n = len(ordered)
     rows = (n + cols - 1) // cols
     W = pad + cols * (tw + pad)
-    H = head + rows * (th + lh + pad) + pad
+    H = head + rows * (th + lh + pad) + pad + (14 * len(supply_lines or []))
     sheet = Image.new("RGB", (W, H), (18, 18, 20))
     d = ImageDraw.Draw(sheet)
-    d.text((pad, 8), f"emission v1 — release ({n} wallpapers), greedy max-marginal-gain",
-           fill=(235, 235, 235), font=_font(15))
-    logi = {l["id"]: l for l in sel_log}
-    for i, e in enumerate(selected):
+    d.text((pad, 6), f"emission — release ({n} wallpapers), rank order under the "
+                     f"partition/supply/cluster caps", fill=(235, 235, 235), font=_font(15))
+    # ASCII markers, not ✓/✗: the fallback fonts `_font` walks have no U+2713/2717 and PIL
+    # draws a tofu box, so the one annotation this sheet exists to carry rendered as □.
+    d.text((pad, 26), "sorted good->bad by the HEAD's own score (heads grouped — the two "
+                      "scales are incommensurable); BELOW = under the RETIRED release floor",
+           fill=(150, 150, 165), font=_font(11))
+    logi = {l["id"]: l for l in (sel_log or [])}
+    for i, e in enumerate(ordered):
         r = e["_rec"]
         cx = pad + (i % cols) * (tw + pad)
         cy = head + (i // cols) * (th + lh + pad)
         sheet.paste(_thumb(r["jpg"], tw, th), (cx, cy))
         L = logi.get(r["id"], {})
+        # the retired floor's verdict, off the row's own annotation when the driver wrote one
+        # (a re-run over an older pool falls back to today's owner values).
+        rf = r.get("release_floor")
+        if rf is None:
+            rf = (F.WALLPAPER_RELEASE.value if r.get("render_style") == "smooth"
+                  else F.MINING_RELEASE.value)
+        ok = r.get("would_pass_release_floor")
+        if ok is None:
+            ok = (r.get("p_ge3") or 0.0) >= rf
         d.text((cx + 2, cy + th + 2),
                f"{i+1}. {r['type']} {r['morph_cluster']}", fill=(220, 220, 160), font=_font(11))
         d.text((cx + 2, cy + th + 15),
-               f"{r['palette_flavor']}/{r['render_style']} p3={r['p_ge3']:.2f} "
-               f"niche%={L.get('niche_pct', 0):.2f}", fill=(200, 210, 220), font=_font(10))
+               f"{r['palette_flavor']}/{r['render_style']} · {r.get('head', '?')} head "
+               f"p3={r['p_ge3']:.3f}", fill=(200, 210, 220), font=_font(10))
+        d.text((cx + 2, cy + th + 28),
+               (f"rank {L.get('rank_in_partition', '?')} in {L.get('partition', r['type'])}"
+                f" · {'ok' if ok else 'BELOW'} retired floor {rf:g}"),
+               fill=((150, 200, 150) if ok else (215, 140, 120)), font=_font(10))
+    y = head + rows * (th + lh + pad) + 2
+    for line in (supply_lines or []):
+        d.text((pad, y), line, fill=(150, 150, 165), font=_font(11))
+        y += 14
     out_png.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(out_png)
 
@@ -122,6 +159,28 @@ def pool_sheet(gated: list, out_png: Path, max_per_niche: int = 6):
 # --------------------------------------------------------------------------- #
 # Report body.
 # --------------------------------------------------------------------------- #
+def _supply_lines(eng) -> list:
+    """One line per partition: mined, above-floor, and the emit cap those imply.
+
+    EVERY partition the intake saw gets a line, including the ones that emit nothing. A
+    partition that ships zero because its supply was thin and a partition that ships zero
+    because nobody looked for it are different failures, and only the mined count separates
+    them (§3 — "classic: 24 mined, 0 above floor")."""
+    # `eng.mined_supply`, NOT `intake_diag["mined_by_partition"]`: the diag is over the whole
+    # union and `passing_supply` is over the population this run serves, so pairing them prints
+    # two different denominators on one line.
+    mined = getattr(eng, "mined_supply", {}) or {}
+    passing = getattr(eng, "passing_supply", {}) or {}
+    caps = getattr(eng, "emit_caps", {}) or {}
+    out = []
+    for part in sorted(set(mined) | set(passing)):
+        n_pass = passing.get(part, 0)
+        cap = caps.get(part, 0)
+        out.append(f"{part}: {mined.get(part, 0)} mined, {n_pass} above floor"
+                   + ("" if cap else " → emits 0 (thin supply)"))
+    return out
+
+
 def write_report(eng, selected: list, sel_log: list, rel_paths: list):
     out = eng.out
     gated = eng.pool.gated()
@@ -132,7 +191,8 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
     # sheets
     rel_png = out / "release_sheet.png"
     pool_png = out / "pool_sheet.png"
-    release_sheet(selected, sel_log, rel_png)
+    supply_lines = _supply_lines(eng)
+    release_sheet(selected, sel_log, rel_png, supply_lines=supply_lines)
     pool_sheet(gated, pool_png)
 
     # morph-cluster count among admitted
@@ -140,8 +200,13 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
     for i, r in eng.by_id.items():
         clusters[r["family"]] += 0
     n_clusters_by_type = defaultdict(set)
+    # `.get`, not `[]`: the driver narrows `cluster_tags` to the admitted rows, and this is the
+    # LAST statement of a run that has already paid for every render. A report is not the place
+    # to enforce that invariant — it is the place least able to afford enforcing it.
     for lid, tag in eng.cluster_tags.items():
-        n_clusters_by_type[eng.by_id[lid]["family"]].add(tag)
+        row = eng.by_id.get(lid)
+        if row is not None:
+            n_clusters_by_type[row["family"]].add(tag)
     total_clusters = len({t for t in eng.cluster_tags.values()})
 
     # realized vs nominal surplus (per head — smooth via wallpaper head, strange via mining)
@@ -169,49 +234,61 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
     short = getattr(eng, "release_short_fill", {})
 
     L = []
-    L.append("# Emission — diversity-aware emission (deficit colorize + ranker-ordered intake "
-             "+ per-head release floors)\n")
+    L.append("# Emission — read-time ranked intake + rank release selection\n")
     L.append("Source ledger(s): " + ", ".join(f"`{x}`" for x in ledger_labels) + ".\n")
-    L.append(f"Location ranker (pref_loc_v0, **{eng.ranker_mode}**) ORDERS the colorize queue "
-             f"(order, not filter — diversity supply untouched). Pool floors (permissive): "
-             f"wallpaper **{eng.floor}** / mining **{eng.mining_floor}**. **Release floors** "
-             f"(per head, distinct): wallpaper **{eng.release_floor}** / mining "
-             f"**{eng.mining_release_floor}** (enforcing since 2026-08-06). Release "
-             f"N=**{eng.release_n}** · target **{eng.target_gated}** POST-FLOOR rows.\n")
-    L.append(f"Every cut above is owned by `tools/emission/floors.py` and stamped with the head "
-             f"version it was set against — {F.summary()}. A run whose live head pin disagrees "
-             f"with a stamp refuses to gate rather than gating on the wrong scale.\n")
+    L.append(f"**One cut enforces**: the **{F.JUNK_FLOOR}** junk floor, at the one site where "
+             f"the colorize pool is drawn (`ranked_intake`). Everything else is a read-time "
+             f"choice. The four stamped per-head floors — pool wallpaper **{eng.floor}** / "
+             f"mining **{eng.mining_floor}**, release wallpaper **{eng.release_floor}** / "
+             f"mining **{eng.mining_release_floor}** — are **ANNOTATION-ONLY** since "
+             f"2026-08-09; they are recorded against every row and gate nothing. Release "
+             f"N=**{eng.release_n}** · colorize target **{eng.target_gated}** SCORED rows.\n")
+    L.append(f"Cuts, from the one owner (`tools/emission/floors.py`) — {F.summary()}. Each "
+             f"annotation-only floor still carries the head version it was set against, "
+             f"because an annotation on the wrong probability scale is as unreadable as a gate "
+             f"on one.\n")
 
     acct = eng.target_accounting() if hasattr(eng, "target_accounting") else {}
     if acct:
-        L.append("### What `--target-gated` counted\n")
-        L.append(f"**{acct['post_floor']}** post-floor rows against a target of "
-                 f"**{acct['target_gated']}** — smooth **{acct['post_floor_smooth']}** "
-                 f"(≥ {eng.release_floor}) + strange **{acct['post_floor_strange']}** "
-                 f"(≥ {eng.mining_release_floor}). A further "
-                 f"**{acct.get('cut_by_release_floor_strange', 0)}** pool-admitted strange "
-                 f"rows sit BELOW the mining release floor: that floor enforces as of "
-                 f"2026-08-06, so they stay in the pool as inventory and cannot be selected. "
-                 f"Draw pool = **{acct['release_eligible']}** "
-                 f"(release-eligible-but-below-floor: **{acct.get('ungated_eligible', 0)}** — "
-                 f"non-zero only if some floor has gone report-only again).\n")
-        L.append(f"**What the default 3×N surplus now means for a mixed `--strange-frac` run.** "
-                 f"The target is a POOLED count across both heads, not a per-head one, while "
+        L.append("### What `--target-gated` counted, and what the retired floors would have\n")
+        L.append(f"**{acct['post_floor']}** scored rows against a target of "
+                 f"**{acct['target_gated']}** — smooth **{acct['post_floor_smooth']}** + "
+                 f"strange **{acct['post_floor_strange']}**. Of those, "
+                 f"**{acct.get('would_pass_release_floor', 0)}** would also have cleared the "
+                 f"RETIRED release floors (smooth "
+                 f"**{acct.get('would_pass_release_floor_smooth', 0)}** ≥ {eng.release_floor}, "
+                 f"strange **{acct.get('would_pass_release_floor_strange', 0)}** ≥ "
+                 f"{eng.mining_release_floor}), and "
+                 f"**{acct.get('above_retired_pool_floor', 0)}** would have cleared the retired "
+                 f"POOL floors.\n")
+        L.append(f"**{acct.get('below_retired_release_floor', 0)}** rows "
+                 f"(**{acct.get('cut_by_release_floor_strange', 0)}** of them strange) sit "
+                 f"BELOW the retired release floors and are in the draw anyway — that count is "
+                 f"exactly what the 2026-08-09 restructure turned on, so it is the first number "
+                 f"to read when the release looks worse or more varied than it used to.\n")
+        L.append(f"**The surplus target is weaker than it was, on purpose.** It counted rows "
+                 f"above 0.90/0.50 until the floors were retired and now counts rows that "
+                 f"rendered and scored, so hitting 3×N no longer implies 3×N release-grade "
+                 f"material by the old bar. It is also a POOLED count across both heads while "
                  f"selection is two disjoint per-head passes with fixed slot budgets "
-                 f"(strange_slots = round(N·strange_frac)). So 3N post-floor rows does NOT "
-                 f"imply 3×(strange slots) post-floor strange — a run can hit the target on "
-                 f"smooth alone and still short-fill the strange half, and vice versa. The "
-                 f"surplus guarantees quantity of release-GRADE material, not its render-mode "
-                 f"mix; the realized split below is where the mix is actually read. Before this "
-                 f"change the target counted every scored strange row, so the report-only "
-                 f"mining gate could satisfy a 'post-floor' target with rows no floor had "
-                 f"vouched for.\n")
+                 f"(strange_slots = round(N·strange_frac)), so 3N does not imply 3×(strange "
+                 f"slots) strange either; the realized split below is where the mix is read.\n")
+
+    if supply_lines:
+        L.append("### Per-partition supply (the thin-supply rule's input)\n")
+        L.append(f"`emit <= floor(passing_supply / {F.THIN_SUPPLY_DIVISOR})` per partition. A "
+                 f"partition with fewer than {F.THIN_SUPPLY_DIVISOR} floor-passing candidates "
+                 f"emits nothing rather than shipping its own least-bad row.\n")
+        for line in supply_lines:
+            L.append(f"- {line}")
+        L.append("")
 
     L.append("## Intake — morph clusters among admitted locations\n")
     L.append(f"- **{len(eng.rows)}** admitted locations "
-             f"(current-decode ∧ guard_pass ∧ distinct ∧ source-aware quality: "
-             f"`decoded_class>=3` for a discovery source, NO machine quality cut for a "
-             f"floor-admit source — {sorted(D.FLOOR_ADMIT_SOURCES)})")
+             f"(guard_pass ∧ distinct ∧ raw P(≥3) ≥ {F.JUNK_FLOOR}, with the floor-admit "
+             f"sources {sorted(D.FLOOR_ADMIT_SOURCES)} bypassing the floor). NO "
+             f"decode-version predicate and no stored-`decoded_class` q3 gate since "
+             f"2026-08-09 — the raw probability is read, not the frozen verdict.")
     L.append(f"- **{total_clusters}** morph clusters (within-type, cos>{D.NEAR_DUP_THRESHOLD}) "
              f"across **{len(n_clusters_by_type)}** fractal types:")
     for t in sorted(n_clusters_by_type):
@@ -247,29 +324,30 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
     mn_rel = sum(1 for r in mn_gated if (r["p_ge3"] or 0) >= eng.mining_release_floor)
     n_rel = wp_rel + mn_rel
 
-    L.append("## Pool inventory + per-head release floors\n")
-    L.append(f"Render styles route to two heads: **smooth → wallpaper head** "
-             f"(pool floor {eng.floor}, **release floor {eng.release_floor}**); "
-             f"**strange → mining head** (pool floor {eng.mining_floor}, **release floor "
-             f"{eng.mining_release_floor}**). Quality is only compared within a niche, which "
-             f"pins the style/head, so the heads never mix. Pool admission is permissive "
-             f"(weak wallpapers persist as inventory); SELECTION only draws above the release "
-             f"floor.\n")
-    L.append(f"- attempts: **{n_att}** · pool-admitted (gated): **{n_pass}** → pool pass rate "
+    L.append("## Pool inventory + the RETIRED per-head floors\n")
+    L.append(f"Render styles route to two heads: **smooth → wallpaper head**; **strange → "
+             f"mining head**. Every SCORED candidate is pooled and every pooled candidate is in "
+             f"the release draw — the per-head pool ({eng.floor} / {eng.mining_floor}) and "
+             f"release ({eng.release_floor} / {eng.mining_release_floor}) floors annotate and "
+             f"do not admit. The two heads are still never compared in one step; their scales "
+             f"are incommensurable.\n")
+    L.append(f"- attempts: **{n_att}** · scored (pooled): **{n_pass}** → scoring rate "
              f"**{pass_rate:.1%}** · render errors: {n_err}")
     L.append("")
-    L.append("| head | pool-admitted | release-eligible | inventory (below release floor) |")
+    L.append("| head | pooled (scored) | would pass retired release floor | below it (shipped "
+             "anyway if it ranks) |")
     L.append("|---|--:|--:|--:|")
-    L.append(f"| wallpaper (smooth, rel≥{eng.release_floor}) | {len(wp_gated)} | {wp_rel} | "
-             f"{len(wp_gated) - wp_rel} |")
-    L.append(f"| mining (strange, rel≥{eng.mining_release_floor}) | {len(mn_gated)} | {mn_rel} | "
-             f"{len(mn_gated) - mn_rel} |")
+    L.append(f"| wallpaper (smooth, retired floor {eng.release_floor}) | {len(wp_gated)} | "
+             f"{wp_rel} | {len(wp_gated) - wp_rel} |")
+    L.append(f"| mining (strange, retired floor {eng.mining_release_floor}) | {len(mn_gated)} | "
+             f"{mn_rel} | {len(mn_gated) - mn_rel} |")
     L.append(f"| **total** | **{n_pass}** | **{n_rel}** | **{n_pass - n_rel}** |")
     L.append("")
-    L.append(f"**{n_pass - n_rel}/{n_pass}** pool wallpapers are banked as inventory below their "
-             f"head's release floor — exactly the weak tiles the v1 permissive-only bar would "
-             f"have let compete for a release slot. The colorize targeted **{eng.target_gated}** "
-             f"release-eligible (post-floor) and reached **{n_rel}**.\n")
+    L.append(f"**{n_pass - n_rel}/{n_pass}** pooled wallpapers sit below their head's RETIRED "
+             f"release floor and compete for a slot anyway. Under the pre-2026-08-09 rule they "
+             f"were inventory that could not ship; that population is the whole delta of the "
+             f"restructure, and the sheet marks each one with a ✗ so the old cut's value can "
+             f"be judged by eye. The colorize targeted **{eng.target_gated}** scored rows.\n")
 
     if reach:
         L.append("## Ranker reach — did ranked intake concentrate budget on good locations?\n")
@@ -303,37 +381,52 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
 
     fill_note = ""
     if short.get("short_by"):
-        fill_note = (f" — **SHORT-FILL {len(selected)}/{eng.release_n}**: only "
-                     f"{short['eligible']} pool rows clear the release floors; shipping fewer "
-                     f"rather than dipping below the floor")
-    L.append(f"## Release selection — {len(selected)} picks (greedy max-marginal-gain){fill_note}\n")
+        fill_note = (f" — **SHORT-FILL {len(selected)}/{eng.release_n}**: the partition slot "
+                     f"budgets, the thin-supply caps and the cluster cap left "
+                     f"{short['short_by']} slot(s) unfilled out of {short['eligible']} eligible "
+                     f"rows; shipping fewer rather than filling past a cap")
+    L.append(f"## Release selection — {len(selected)} picks (rank under caps){fill_note}\n")
     split = getattr(eng, "release_split", {})
     if split:
         L.append(f"**Render-mode split (heads never compared in one step).** Smooth slots are "
                  f"filled from the wallpaper head, strange from the mining head, by two DISJOINT "
-                 f"within-head greedy passes. Target strange frac **{split['strange_frac_target']}** "
+                 f"within-head rank passes. Target strange frac **{split['strange_frac_target']}** "
                  f"→ slots smooth **{split['smooth_slots']}** / strange **{split['strange_slots']}**. "
                  f"Eligible: smooth **{split['smooth_eligible']}** / strange **{split['strange_eligible']}**. "
                  f"Realized: smooth **{split['smooth_selected']}** / strange **{split['strange_selected']}** "
                  f"(strange frac **{split['strange_frac_realized']:.2f}**). Strange modes: "
                  + ", ".join(f"{s}×{c}" for s, c in sorted(split['strange_modes'].items(),
                                                            key=lambda kv: -kv[1])) + ".\n")
-    L.append("Each head's pass draws ONLY from its release-eligible subset and tie-breaks on its "
-             "OWN `p_ge3`. Marginal gain = niche-relative quality (within-niche p_ge3 percentile) "
-             "× coverage gain (1 − max morph-CLIP cos to already-selected; the strange pass adds a "
-             f"same-mode floor of {split.get('style_weight', '—')}). `rk%` = the location's "
-             "pref_loc_v0 percentile among admitted; `nearest` = the closest already-selected "
-             "wallpaper (displacement).\n")
-    L.append("| # | id | type/cluster | flavor/style | p_ge3 | niche% | rk% | cov.gain | nearest (sim) |")
-    L.append("|--:|---|---|---|--:|--:|--:|--:|---|")
-    for i, (e, l) in enumerate(zip(selected, sel_log), 1):
+        L.append(f"**The caps.** Per partition, `emit = min(slots, floor(passing_supply / "
+                 f"{F.THIN_SUPPLY_DIVISOR}))`, filled by score rank; slots are `release_mix` "
+                 f"re-solved over the partitions the pass actually has candidates for. Plus at "
+                 f"most **{split.get('cluster_cap')}** picks per morph cluster PER RUN — one "
+                 f"counter across both head passes, so a look cannot be taken twice by each. "
+                 f"**{split.get('n_cluster_cap_skips', 0)}** candidate(s) were passed over by "
+                 f"the cluster cap. Slots: smooth "
+                 f"`{ {k: v for k, v in (split.get('partition_slots', {}).get('smooth', {}) or {}).items() if v} }` "
+                 f"strange "
+                 f"`{ {k: v for k, v in (split.get('partition_slots', {}).get('strange', {}) or {}).items() if v} }`.\n")
+    L.append("Each head's pass ranks on its OWN `p_ge3` (the two scales are incommensurable). No "
+             "floor gates the draw; `retired floor` below is the annotation the 0.90/0.50 cuts "
+             "became — a ✗ row is one that could not have shipped before 2026-08-09.\n")
+    L.append("| # | id | type/cluster | flavor/style | p_ge3 | rank in partition | retired floor |")
+    L.append("|--:|---|---|---|--:|--:|---|")
+    logi = {l["id"]: l for l in (sel_log or [])}
+    for i, e in enumerate(sheet_order(selected), 1):
         r = e["_rec"]
-        near = f"{l['nearest_selected']} ({l['nearest_sim']:.2f})" if l["nearest_selected"] else "—"
-        rkp = eng.ranker_pct.get(r["location_id"])
-        rkp_s = f"{rkp:.2f}" if rkp is not None else "—"
+        l = logi.get(r["id"], {})
+        rf = r.get("release_floor")
+        if rf is None:
+            rf = (F.WALLPAPER_RELEASE.value if r.get("render_style") == "smooth"
+                  else F.MINING_RELEASE.value)
+        ok = r.get("would_pass_release_floor")
+        if ok is None:
+            ok = (r.get("p_ge3") or 0.0) >= rf
         L.append(f"| {i} | {r['id']} | {r['type']}/{r['morph_cluster']} | "
                  f"{r['palette_flavor']}/{r['render_style']} | {r['p_ge3']:.3f} | "
-                 f"{l['niche_pct']:.2f} | {rkp_s} | {l['coverage_gain']:.2f} | {near} |")
+                 f"{l.get('rank_in_partition', '—')} | "
+                 f"{'✓' if ok else '✗'} {rf:g} |")
     L.append("")
 
     # v1 side-by-side: reconstruct the v1 release (no release floors) from its durable pool.
@@ -341,9 +434,12 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
     if v1 and eng.out.name != "emission_v1":
         L.append("### vs the v1 release (no release floors) — side-by-side\n")
         L.append("v1 selected from ALL gated pool rows (permissive floor only). Reconstructed "
-                 "here by the same greedy select over the durable v1 pool, annotated with which "
-                 "picks would now fall BELOW their head's release floor (→ inventory, not a "
-                 "release).\n")
+                 "here by the ORIGINAL greedy select over the durable v1 pool — the retired "
+                 "rule, deliberately, so this stays a reconstruction of what v1 shipped rather "
+                 "than of what today's rank rule would ship. Annotated with which picks fall "
+                 "below their head's release floor; that floor is annotation-only again as of "
+                 "2026-08-09, so a ✗ row would ship today and would not have between "
+                 "2026-08-06 and then.\n")
         wp_rf, mn_rf = eng.release_floor, eng.mining_release_floor
         n_below = 0
         L.append("| v1 pick | type/style | p_ge3 | ≥ release floor? |")
@@ -355,11 +451,12 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
             p = r["p_ge3"] or 0.0
             ok = p >= rf
             n_below += 0 if ok else 1
-            verdict = f"✓ ({p:.2f} ≥ {rf})" if ok else f"✗ {p:.2f} BELOW {rf} → inventory"
+            verdict = f"✓ ({p:.2f} ≥ {rf})" if ok else f"✗ {p:.2f} BELOW {rf}"
             L.append(f"| {iid} | {r['type']}/{style} | {p:.3f} | {verdict} |")
         L.append("")
-        L.append(f"**{n_below}/{len(v1['selected'])}** v1 picks now drop to inventory under the "
-                 f"release floors — the sub-floor tiles the v1 permissive-only bar shipped.\n")
+        L.append(f"**{n_below}/{len(v1['selected'])}** v1 picks sit below the (now retired) "
+                 f"release floors — the sub-floor tiles the v1 permissive-only bar shipped, and "
+                 f"that the current rule would let compete again.\n")
     L.append("## Contact sheets\n")
     L.append(f"- `{rel_png.relative_to(ROOT)}` — the {len(selected)}-wallpaper release")
     L.append(f"- `{pool_png.relative_to(ROOT)}` — the gated pool grouped by niche\n")
@@ -376,6 +473,10 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         "attempts": n_att, "gated": n_pass, "pass_rate": round(pass_rate, 4),
         "gated_also_090": also_090, "render_errors": n_err,
         "release_eligible": n_rel, "release_n": len(selected), "release_rendered": len(rel_paths),
+        "junk_floor": F.JUNK_FLOOR, "thin_supply_divisor": F.THIN_SUPPLY_DIVISOR,
+        "passing_supply": dict(getattr(eng, "passing_supply", {}) or {}),
+        "mined_supply": dict(getattr(eng, "mined_supply", {}) or {}),
+        "emit_caps": dict(getattr(eng, "emit_caps", {}) or {}),
         "pool_floor": eng.floor, "mining_pool_floor": eng.mining_floor,
         "release_floor": eng.release_floor, "mining_release_floor": eng.mining_release_floor,
         "loc_ranker": eng.ranker_mode, "ranker_reach": reach, "short_fill": short,

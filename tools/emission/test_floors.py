@@ -140,26 +140,61 @@ def test_style_routes_to_the_head_that_was_trained_on_it():
         F.for_style("smooth", "somewhere_else")
 
 
-def test_the_liveness_census_finds_no_report_only_cut_left():
-    """THE census: `acts` is the record of which cuts remove rows, and the set that do not
-    is now EMPTY. The mining RELEASE floor was the only member; it went enforcing on
-    2026-08-06 once it had a measured operating point on strange renders
-    (data/render_mode_head/v1/mining_gate_lock.json), at the same value it always carried.
+def test_the_liveness_census_finds_no_ACTING_cut_left():
+    """THE census: `acts` is the record of which cuts remove rows, and the set that DO is now
+    empty. All four went annotation-only on 2026-08-09
+    (prompts/selection_restructure_1.md) — they keep their values and their stamps and are
+    read to say what the retired cut would have done.
 
-    An empty census is exactly what a census reading the wrong field also returns, so the
-    mirror below injects a report-only cut and requires the same expression to name it."""
-    assert [f.name for f in F.ALL_FLOORS if not f.acts] == []
-    assert all(f.acts for f in F.ALL_FLOORS)
-    assert "report-only" not in F.summary()
+    An all-False census is exactly what a census reading the wrong field also returns, so the
+    mirror below injects an acting cut and requires the same expression to name it."""
+    assert [f.name for f in F.ALL_FLOORS if f.acts] == []
+    assert not any(f.acts for f in F.ALL_FLOORS)
+    assert F.summary().count("annotation-only") == len(F.ALL_FLOORS)
 
 
-def test_the_census_still_names_a_report_only_cut(monkeypatch):
+def test_the_census_still_names_an_acting_cut(monkeypatch):
     """NON-VACUITY for the census above, both in the list and in the run-banner summary."""
     ghost = F.Floor(name="ghost_release", value=0.99, head=F.MINING_HEAD,
-                    stamp=MP.HEAD_VERSION, site="release", acts=False, basis="injected")
+                    stamp=MP.HEAD_VERSION, site="release", acts=True, basis="injected")
     monkeypatch.setattr(F, "ALL_FLOORS", F.ALL_FLOORS + (ghost,))
-    assert [f.name for f in F.ALL_FLOORS if not f.acts] == ["ghost_release"]
-    assert "ghost_release 0.99 (render_mode_head/v1, report-only)" in F.summary()
+    assert [f.name for f in F.ALL_FLOORS if f.acts] == ["ghost_release"]
+    assert "ghost_release 0.99 (render_mode_head/v1)" in F.summary()
+    assert F.summary().count("annotation-only") == len(F.ALL_FLOORS) - 1
+
+
+# --------------------------------------------------------------------------- #
+# 4. the ONE enforcing cut (2026-08-09)
+# --------------------------------------------------------------------------- #
+def test_the_junk_floor_is_the_only_enforcing_cut_and_it_is_semantic():
+    """It is a bare float, not a `Floor`, and that is the design: it reads on THREE different
+    heads (stage-1 at emission intake, mining at deploy_tail) and a stamp names one. What
+    keeps it honest across a head flip is the volume-matched restatement rule documented
+    beside it, not a stamp check."""
+    assert F.JUNK_FLOOR == 0.20
+    assert not any(f.value == F.JUNK_FLOOR for f in F.ALL_FLOORS)
+    assert "ENFORCING" in F.summary() and str(F.JUNK_FLOOR) in F.summary()
+    # it is below every retired floor — the retirement widened the funnel, it did not narrow it
+    assert all(F.JUNK_FLOOR < f.value for f in F.ALL_FLOORS)
+
+
+def test_passes_junk_floor_treats_a_missing_score_as_failing():
+    """An unscored candidate has no verdict to spend colorize compute on. `None` must not
+    compare as 0.0-and-therefore-fail-anyway by accident, nor pass."""
+    assert F.passes_junk_floor(0.20) is True          # inclusive at the boundary
+    assert F.passes_junk_floor(0.199) is False
+    assert F.passes_junk_floor(None) is False
+    assert F.passes_junk_floor(0.0) is False
+
+
+def test_the_thin_supply_divisor_and_cluster_cap_live_beside_the_floor():
+    """Both are coarse volume constants and both are declared here, so the three numbers this
+    restructure introduced move together and none of them is re-typed downstream."""
+    assert F.THIN_SUPPLY_DIVISOR == 4 and F.CLUSTER_CAP == 2
+    from tools.emission import ranked_intake as RI     # noqa: PLC0415
+    from tools.emission import selection as SEL        # noqa: PLC0415
+    assert RI.emit_cap(F.THIN_SUPPLY_DIVISOR * 3 + 3) == 3     # floor(15/4)
+    assert SEL.CLUSTER_CAP is F.CLUSTER_CAP
 
 
 if __name__ == "__main__":

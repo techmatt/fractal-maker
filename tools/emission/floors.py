@@ -1,5 +1,15 @@
 """floors.py — THE stage-2 emission cuts. One owner, head-stamped, imported everywhere.
 
+THE FOUR STAMPED CUTS ARE ANNOTATION-ONLY AS OF 2026-08-09 (prompts/selection_restructure_1.md).
+Nothing in stage 2 removes a row on a stamped per-head floor any more. What removes rows is
+ONE semantic constant, `JUNK_FLOOR` below, at ONE site (drawing the colorize pool). The four
+Floor objects keep their values, their stamps and their `gate()` — they are read to ANNOTATE
+("this row would have failed the retired 0.90 wallpaper release floor") on release records and
+sheets, so the value of the old cut stays inspectable instead of being deleted and argued about
+from memory. `acts` is False on all four and that is the census (`test_floors.py`), not a
+transitional state. The gate-lock records (`data/render_mode_head/v1/mining_gate_lock.json`)
+stay tracked as provenance of what those cuts were measured to buy.
+
 Matt, 2026-08-04. Every number that removes a row between "a location was admitted" and "a
 wallpaper shipped" is declared here, once, carrying the head it reads and the head VERSION it
 was set against. Before this file the same four numbers were re-typed in six places — the
@@ -28,10 +38,14 @@ on the paths that most need it.
 THE FOUR CUTS
 -------------
                        value  head                  acts?
-  wallpaper pool        0.75  wallpaper_head/v3     YES — smooth below this is not pooled
-  wallpaper release     0.90  wallpaper_head/v3     YES — smooth below this cannot ship
-  mining pool           0.25  render_mode_head/v1   YES — capacity ordering (see below)
-  mining release        0.50  render_mode_head/v1   YES — since 2026-08-06 (was report-only)
+  wallpaper pool        0.75  wallpaper_head/v3     no — annotation only since 2026-08-09
+  wallpaper release     0.90  wallpaper_head/v3     no — annotation only since 2026-08-09
+  mining pool           0.25  render_mode_head/v1   no — annotation only since 2026-08-09
+  mining release        0.50  render_mode_head/v1   no — annotation only since 2026-08-09
+
+The paragraphs below are the record of what each cut WAS and what it was measured to buy. They
+are kept verbatim rather than rewritten in the past tense: the numbers are still the ones the
+annotations report, and a cut whose basis has been paraphrased away cannot be un-retired.
 
 THE MINING RELEASE FLOOR STOPPED BEING REPORT-ONLY ON 2026-08-06. It went report-only
 because nobody could say what 0.50 bought on strange renders — the head was uncalibrated on
@@ -97,6 +111,58 @@ MINING_HEAD = _mn.HEAD_NAME             # "render_mode_head"     — promoted st
 LOCATION_HEAD = "location_head"         # the ACTIVE_CKPT quality head (intake-side)
 
 
+# --------------------------------------------------------------------------- #
+# THE ONE ENFORCING CUT (2026-08-09) — the junk floor.
+# --------------------------------------------------------------------------- #
+# ONE semantic constant, not a per-partition derivation and not one value per head. It says
+# the same thing everywhere it is read: **a candidate the judging head is confident is junk
+# must not spend colorize compute**. The judging head is whichever head owns the score at that
+# site — the stage-1 location head for emission intake, the mining head for `deploy_tail`'s
+# allocation draw — and the constant does not change when the head does.
+#
+# ONE SITE. It applies where the COLORIZE POOL IS DRAWN and nowhere else. Not at pool
+# admission, not at release: those are the four stamped cuts above and they annotate now.
+# Two readers today, both drawing a colorize pool:
+#     tools/emission/ranked_intake.py   (stage-1 head `p_good`, the emission intake draw)
+#     tools/mining/deploy_tail.py       (mining head `p_ge3`, the allocation input draw)
+#
+# 0.20 IS DELIBERATELY COARSE. It is not an operating point and no eval derived it; it is the
+# "confidently junk" end of a CORN P(>=3) scale, chosen so it removes the obvious waste and
+# leaves every judgement of quality to the human at the sheet. Do not re-derive it against an
+# eval and do not make it per-partition — a per-partition derivation is exactly the frozen
+# enforcing state this restructure removed.
+#
+# HEAD-FLIP RULE. A CORN probability scale is train-prior-calibrated, so a raw float does NOT
+# transfer across heads: 0.20 on v11 is not 0.20 on v12. At a head flip, RESTATE the floor
+# VOLUME-MATCHED — recompute the score that passes the same FRACTION of a fixed reference pool
+# under the new head, and move this constant to that score. Volume-matching is the only
+# restatement that keeps the thing the floor was chosen for (how much obvious waste it removes)
+# invariant; keeping the float would silently move the volume, and re-deriving from an eval
+# would turn a coarse waste cut back into an operating point.
+JUNK_FLOOR = 0.20
+
+# THE THIN-SUPPLY DIVISOR, beside the floor because it is the same kind of number: coarse, not
+# derived, and about volume rather than quality. A partition emits at most
+# `floor(passing_supply / THIN_SUPPLY_DIVISOR)` — so a partition whose floor-passing supply is
+# thin ships nothing rather than shipping its own least-bad row. r=4 says "show me one only if
+# there were four to choose from". Read by `ranked_intake.emit_cap`.
+THIN_SUPPLY_DIVISOR = 4
+
+# At most this many release picks per morph cluster PER RUN (release selection, §4). A cap, not
+# a quota: a cluster with one strong row still ships one.
+CLUSTER_CAP = 2
+
+
+def passes_junk_floor(score) -> bool:
+    """THE junk-floor comparison. `score >= JUNK_FLOOR`, with a missing score reading as NOT
+    passing — an unscored candidate has no verdict to spend compute on.
+
+    A function rather than a bare `>=` at each site for the same reason `Floor.gate` is one:
+    the floor-admit bypass (`ranked_intake`) and the head-flip restatement above both have to
+    be reasoned about against one comparison, not two spellings of it."""
+    return score is not None and float(score) >= JUNK_FLOOR
+
+
 class HeadStampMismatch(RuntimeError):
     """A stage-2 cut was asked to gate while its head's live pin disagrees with the version
     the cut's value was set against. The value is a point on a probability scale that no
@@ -124,9 +190,11 @@ def active_head_version(head: str) -> str:
 class Floor:
     """One stage-2 cut: a threshold on one head's `p_ge3`, stamped with that head's version.
 
-    `acts` records whether this cut actually removes rows today. A report-only cut still
-    carries its value and its stamp — the counterfactual it logs (`tools/mining/gate_report.py`)
-    is only readable as calibration signal if the scale it was computed on is pinned."""
+    `acts` records whether this cut actually removes rows today. It is FALSE on all four as of
+    2026-08-09 — they annotate. An annotation-only cut still carries its value and its stamp,
+    for the same reason a report-only one did: the counterfactual it logs
+    (`tools/mining/gate_report.py`, the release record's `would_pass_floor` column) is only
+    readable as calibration signal if the scale it was computed on is pinned."""
     name: str
     value: float
     head: str
@@ -163,21 +231,21 @@ class Floor:
 # --------------------------------------------------------------------------- #
 WALLPAPER_POOL = Floor(
     name="wallpaper_pool", value=0.75, head=WALLPAPER_HEAD, stamp=_wp.HEAD_VERSION,
-    site="pool", acts=True,
+    site="pool", acts=False,
     basis="permissive inventory bar, set below the v3 gate (0.90) so a weak-but-real smooth "
           "wallpaper stays available to a later re-selection instead of being discarded at "
           "colorize time. Not a quality claim; the release floor is.")
 
 WALLPAPER_RELEASE = Floor(
     name="wallpaper_release", value=_wp.GATE_THRESHOLD, head=WALLPAPER_HEAD,
-    stamp=_wp.HEAD_VERSION, site="release", acts=True,
+    stamp=_wp.HEAD_VERSION, site="release", acts=False,
     basis="IS the wallpaper head's production gate (wallpaper_pins.GATE_THRESHOLD), imported "
           "not copied. v3 eval precision of passers 0.68@0.90 vs 0.58@0.50; retuned with the "
           "head (prompts/prompt_gate_retune_v3.md).")
 
 MINING_POOL = Floor(
     name="mining_pool", value=0.25, head=MINING_HEAD, stamp=_mn.HEAD_VERSION,
-    site="pool", acts=True,
+    site="pool", acts=False,
     basis="CAPACITY ORDERING, not curation: strange colorizes are cheap to make and expensive "
           "to carry, so the bottom quarter of the mining scale is dropped before it reaches "
           "the pool. It was already a hard cut through the period when the release floor "
@@ -188,7 +256,7 @@ MINING_POOL = Floor(
 
 MINING_RELEASE = Floor(
     name="mining_release", value=_mn.MINING_GATE_THRESHOLD, head=MINING_HEAD,
-    stamp=_mn.HEAD_VERSION, site="release", acts=True,
+    stamp=_mn.HEAD_VERSION, site="release", acts=False,
     basis="IS the mining head's production gate (mining_pins.MINING_GATE_THRESHOLD), imported "
           "not copied. ENFORCING since 2026-08-06 (prompts/mining_adoption_prompt.md); it was "
           "report-only from prompts/mining_gate_report_only.md until the head had a measured "
@@ -262,9 +330,11 @@ def check_stamps(floors=None) -> None:
 
 
 def summary() -> str:
-    """One line per cut — for a run banner or a readout header."""
-    return " · ".join(
-        f"{f.name} {f.value:g} ({f.head}/{f.stamp}{'' if f.acts else ', report-only'})"
+    """One line per cut — for a run banner or a readout header. The enforcing junk floor is
+    named first because it is the only line that removes a row; the four stamped cuts follow
+    with their annotation-only marker."""
+    return f"junk_floor {JUNK_FLOOR:g} (ENFORCING, colorize-pool draw) · " + " · ".join(
+        f"{f.name} {f.value:g} ({f.head}/{f.stamp}{'' if f.acts else ', annotation-only'})"
         for f in ALL_FLOORS)
 
 

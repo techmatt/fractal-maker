@@ -22,6 +22,8 @@ for p in (ROOT, ROOT / "tools" / "corpus"):
 from tools.emission import cells as C          # noqa: E402
 from tools.emission import selection as SEL     # noqa: E402
 from tools.emission import descriptor as D     # noqa: E402
+from tools.emission import floors as FL        # noqa: E402
+from tools.emission import ranked_intake as RI  # noqa: E402
 from tools.emission.pool import Pool           # noqa: E402
 import corpus_common as cc                     # noqa: E402
 
@@ -216,6 +218,43 @@ def test_greedy_prefers_distinct_cells():
     assert {e["id"] for e in selected} == {"a", "c"}
 
 
+def _rentry(id, part, cluster, score):
+    """A `rank_select` entry (the greedy one above is `_entry`, with the coverage kernel's
+    extra axes)."""
+    return {"id": id, "type": part, "cluster": cluster, "flavor": "k16:1",
+            "style": "smooth", "score": score}
+
+
+def test_rank_select_takes_the_slot_map_as_the_authority_on_partitions():
+    """A partition with candidates but NO slot emits nothing. The slot map is the allocation,
+    and a selector that quietly served an unallocated partition would make the release-mix
+    apportionment advisory."""
+    entries = [_rentry("a", "mandelbrot", "m#0", 0.9), _rentry("b", "phoenix", "p#0", 0.95)]
+    sel, _log = SEL.rank_select(entries, {"mandelbrot": 1}, {})
+    assert [e["id"] for e in sel] == ["a"]
+
+
+def test_rank_select_treats_an_absent_cap_as_uncapped_and_a_present_one_as_binding():
+    """Both directions. A caller with no supply census must not be silently capped to zero;
+    a caller that passes one must be held to it."""
+    entries = [_rentry(f"e{k}", "mandelbrot", f"m#{k}", 0.9 - k * 0.01) for k in range(5)]
+    assert len(SEL.rank_select(entries, {"mandelbrot": 3}, {})[0]) == 3
+    assert len(SEL.rank_select(entries, {"mandelbrot": 3}, {"mandelbrot": 1})[0]) == 1
+    assert SEL.rank_select(entries, {"mandelbrot": 3}, {"mandelbrot": 0})[0] == []
+
+
+def test_rank_select_cluster_counter_is_shared_across_calls():
+    """The per-RUN cap, as the pure property: one dict threaded through two calls."""
+    used: dict = {}
+    e1 = [_rentry("a", "mandelbrot", "m#0", 0.9), _rentry("b", "mandelbrot", "m#0", 0.8)]
+    e2 = [_rentry("c", "mandelbrot", "m#0", 0.7)]
+    assert len(SEL.rank_select(e1, {"mandelbrot": 2}, {}, used)[0]) == 2
+    assert SEL.rank_select(e2, {"mandelbrot": 2}, {}, used)[0] == []
+    assert used["m#0"] == SEL.CLUSTER_CAP
+    # a fresh counter takes it again — the cap is state, not a property of the entries
+    assert len(SEL.rank_select(e2, {"mandelbrot": 2}, {}, {})[0]) == 1
+
+
 def test_niche_percentile_singleton_is_one():
     a = _entry("a", "mandelbrot", "m#0", "k16:1", "smooth", 0.5, [1.0])
     pct = SEL.niche_percentiles([a])
@@ -258,20 +297,26 @@ def test_location_of_partition_mapping():
 # --------------------------------------------------------------------------- #
 # ACCEPTANCE — current-decode rejects an old-ledger v6 row.
 # --------------------------------------------------------------------------- #
-def _row(id, ver=None, dc=3, guard=True, distinct=True, cx=None):
+def _row(id, ver=None, dc=3, guard=True, distinct=True, cx=None, p_good=0.7, **extra):
     """A ledger row. `ver=None` means the CURRENT scorer version, resolved from the single
     source of truth (tools/scoring/active_ckpt) rather than hardcoded — these tests are about
     stale-decode semantics, so pinning the live version in them just breaks the suite at every
-    flip for no signal."""
+    flip for no signal.
+
+    `p_good` is the STORED RAW P(>=3) the read-time ranked intake reads (`ranked_intake`); it
+    defaults comfortably above the junk floor so a fixture that is not about the floor is not
+    silently emptied by it."""
     # Distinct ids get distinct COORDINATES by default: the cross-ledger union dedups by
     # location identity, so a fixture that gives every row the same viewport is a fixture in
     # which every row is the same location.
     if cx is None:
         cx = -0.5 - sum(ord(ch) for ch in str(id)) * 1e-6
-    return {"id": id, "family": "mandelbrot", "outcome_cx": cx, "outcome_cy": 0.1,
-            "outcome_fw": 0.03, "decoded_class": dc, "guard_pass": guard,
-            "distinct": distinct,
-            "scorer_version": cc.active_scorer_version() if ver is None else ver}
+    row = {"id": id, "family": "mandelbrot", "outcome_cx": cx, "outcome_cy": 0.1,
+           "outcome_fw": 0.03, "decoded_class": dc, "guard_pass": guard,
+           "distinct": distinct, "p_good": p_good,
+           "scorer_version": cc.active_scorer_version() if ver is None else ver}
+    row.update(extra)
+    return row
 
 
 def test_stale_scorer_version_rows_rejected(tmp_path):
@@ -361,46 +406,130 @@ def _gate_rec(id, loc, style, p_ge3, cell):
             "p_ge3": p_ge3, "passed": True, "head": B.head_for_style(style)}
 
 
-def test_release_floors_exclude_subfloor_and_short_fill(tmp_path):
-    # BOTH release floors CUT: the wallpaper head's 0.90 removes em_1, and the mining head's
-    # 0.50 removes em_3 — which it did NOT do between b515017 and the 2026-08-06 adoption,
-    # when the mining gate was report-only and a 0.30 strange row was release-eligible anyway.
-    # prompts/mining_adoption_prompt.md / release_eligible().
-    eng = B.EmissionDiversity(_args(tmp_path))
+def _supply(eng, **per_partition):
+    """Give a hand-built engine the intake supply census `select_release` reads. A pool-only
+    fixture never ran `intake()`, and the thin-supply cap has to come from somewhere."""
+    eng.passing_supply = dict(per_partition)
+    eng.emit_caps = {p: RI.emit_cap(n) for p, n in per_partition.items()}
+    return eng
+
+
+def test_sub_floor_rows_are_eligible_now_and_the_retired_floors_annotate(tmp_path):
+    """THE restructure, at the eligibility boundary. Both per-head release floors are
+    ANNOTATION-ONLY as of 2026-08-09: a 0.80 smooth (below the retired 0.90) and a 0.30 strange
+    (below the retired 0.50) are release-eligible and can ship, and the run still REPORTS what
+    those cuts would have done.
+
+    This is the inverse of the assertion that stood here from 2026-08-06, and it is written as
+    a pair on purpose — eligibility widened AND the counterfactual survived. Widening alone
+    would have deleted the old cut's value rather than retiring it."""
+    eng = _supply(B.EmissionDiversity(_args(tmp_path)), mandelbrot=40)
     eng.embs = {}
-    # 4 pool-admitted rows in distinct cells; one row cut per head, so neither floor can be
-    # the only one doing the work.
     recs = [
-        _gate_rec("em_0", "l0", "smooth", 0.95, ("mandelbrot", "m#0", "k16:1", "smooth")),  # ≥0.90 ✓
-        _gate_rec("em_1", "l1", "smooth", 0.80, ("mandelbrot", "m#1", "k16:2", "smooth")),  # <0.90 CUT
-        _gate_rec("em_2", "l2", "tia",    0.60, ("mandelbrot", "m#2", "k16:3", "tia")),     # ≥0.50 ✓
-        _gate_rec("em_3", "l3", "tia",    0.30, ("mandelbrot", "m#3", "k16:4", "tia")),     # <0.50 CUT
+        _gate_rec("em_0", "l0", "smooth", 0.95, ("mandelbrot", "m#0", "k16:1", "smooth")),
+        _gate_rec("em_1", "l1", "smooth", 0.80, ("mandelbrot", "m#1", "k16:2", "smooth")),
+        _gate_rec("em_2", "l2", "tia",    0.60, ("mandelbrot", "m#2", "k16:3", "tia")),
+        _gate_rec("em_3", "l3", "tia",    0.30, ("mandelbrot", "m#3", "k16:4", "tia")),
     ]
     for r in recs:
         eng.pool.append(r)
-    elig = {r["id"] for r in eng.release_eligible()}
-    assert elig == {"em_0", "em_2"}                      # one survivor per head
-    selected, _log = eng.select_release()
-    sel_ids = {e["_rec"]["id"] for e in selected}
-    assert sel_ids == {"em_0", "em_2"}                   # both heads short-fill below their floor
-    sf = eng.release_short_fill
-    assert (sf["requested"], sf["eligible"], sf["selected"], sf["short_by"]) == (5, 2, 2, 3)
-    # head-split: one smooth (wallpaper) + one strange (mining), never compared in one step
-    assert eng.release_split["smooth_selected"] == 1 and eng.release_split["strange_selected"] == 1
-    # the cut strange row is still POOLED — the release floor decides what ships, not what is
-    # kept as inventory — and the run reports how many it removed.
+    assert {r["id"] for r in eng.release_eligible()} == {"em_0", "em_1", "em_2", "em_3"}
     acct = eng.target_accounting()
-    assert acct["cut_by_release_floor_strange"] == 1 and acct["ungated_eligible"] == 0
-    assert {r["id"] for r in eng.pool.rows} == {"em_0", "em_1", "em_2", "em_3"}
+    assert acct["post_floor"] == 4
+    # the retired floors' verdict, kept as a number: 0.95 smooth and 0.60 strange clear them.
+    assert acct["would_pass_release_floor"] == 2
+    assert acct["would_pass_release_floor_smooth"] == 1
+    assert acct["would_pass_release_floor_strange"] == 1
+    assert acct["below_retired_release_floor"] == 2
+    assert acct["cut_by_release_floor_strange"] == 1          # the 0.30 tia
+    # and the annotation is per row, per head
+    by_id = {r["id"]: r for r in eng.pool.rows}
+    assert eng.would_pass_release_floor(by_id["em_1"]) is False   # 0.80 smooth, retired 0.90
+    assert eng.would_pass_release_floor(by_id["em_2"]) is True    # 0.60 tia,    retired 0.50
 
 
-def test_release_floor_per_head_boundary(tmp_path):
-    # a mining tile at exactly 0.50 is eligible; a smooth at 0.50 is NOT (its floor is 0.90).
-    eng = B.EmissionDiversity(_args(tmp_path))
+def test_a_release_now_ships_rows_the_retired_floors_would_have_cut(tmp_path):
+    """The consequence at SELECTION, not just at eligibility: with 4 slots and one partition
+    with ample supply, all four rows ship — including the two below the retired floors. Under
+    the pre-2026-08-09 rule this release was 2 tiles."""
+    eng = _supply(B.EmissionDiversity(_args(tmp_path, release_n=4)), mandelbrot=40)
     eng.embs = {}
-    eng.pool.append(_gate_rec("em_0", "l0", "tia", 0.50, ("mandelbrot", "m#0", "k16:1", "tia")))
-    eng.pool.append(_gate_rec("em_1", "l1", "smooth", 0.50, ("mandelbrot", "m#1", "k16:2", "smooth")))
-    assert {r["id"] for r in eng.release_eligible()} == {"em_0"}
+    for r in (_gate_rec("em_0", "l0", "smooth", 0.95, ("mandelbrot", "m#0", "k16:1", "smooth")),
+              _gate_rec("em_1", "l1", "smooth", 0.80, ("mandelbrot", "m#1", "k16:2", "smooth")),
+              _gate_rec("em_2", "l2", "tia",    0.60, ("mandelbrot", "m#2", "k16:3", "tia")),
+              _gate_rec("em_3", "l3", "tia",    0.30, ("mandelbrot", "m#3", "k16:4", "tia"))):
+        eng.pool.append(r)
+    selected, _log = eng.select_release()
+    assert {e["_rec"]["id"] for e in selected} == {"em_0", "em_1", "em_2", "em_3"}
+    # head split intact — two per head, never compared in one step
+    assert eng.release_split["smooth_selected"] == 2
+    assert eng.release_split["strange_selected"] == 2
+
+
+def test_a_thin_partition_emits_nothing(tmp_path):
+    """§3. `emit = min(slots, floor(passing_supply / 4))`. A partition with 3 floor-passing
+    candidates mined emits ZERO even though it has a 0.99 row sitting in the pool — the point
+    of the rule is that it refuses to ship a partition's least-bad row. Paired with the ample
+    case above, which is the same code path with supply 40."""
+    eng = _supply(B.EmissionDiversity(_args(tmp_path, release_n=4)), mandelbrot=3)
+    eng.embs = {}
+    eng.pool.append(_gate_rec("em_0", "l0", "smooth", 0.99,
+                              ("mandelbrot", "m#0", "k16:1", "smooth")))
+    selected, _log = eng.select_release()
+    assert selected == []
+    assert eng.release_short_fill["short_by"] == 4
+    # ...and one more mined-and-passing row flips it on: 4 // 4 == 1
+    eng2 = _supply(B.EmissionDiversity(_args(tmp_path / "b", release_n=4)), mandelbrot=4)
+    eng2.embs = {}
+    eng2.pool.append(_gate_rec("em_0", "l0", "smooth", 0.99,
+                               ("mandelbrot", "m#0", "k16:1", "smooth")))
+    assert len(eng2.select_release()[0]) == 1
+
+
+def test_at_most_two_picks_per_morph_cluster_per_run(tmp_path):
+    """§4. Three smooth rows in ONE morph cluster, four slots, ample supply: two ship and the
+    third is passed over by the cluster cap, with the skip named in the log. The fourth slot
+    goes unfilled rather than being handed back to the saturated cluster."""
+    eng = _supply(B.EmissionDiversity(_args(tmp_path, release_n=8, strange_frac=0.0)),
+                  mandelbrot=40)
+    eng.embs = {}
+    for k, p in enumerate((0.9, 0.8, 0.7)):
+        eng.pool.append(_gate_rec(f"em_{k}", f"l{k}", "smooth", p,
+                                  ("mandelbrot", "m#0", f"k16:{k}", "smooth")))
+    selected, log = eng.select_release()
+    assert [e["_rec"]["id"] for e in selected] == ["em_0", "em_1"]      # best two, by rank
+    skips = [l for l in log if l.get("skip") == "cluster_cap"]
+    assert [l["id"] for l in skips] == ["em_2"]
+    assert eng.release_split["n_cluster_cap_skips"] == 1
+
+
+def test_the_cluster_cap_is_per_run_not_per_head_pass(tmp_path):
+    """The counter is threaded through BOTH head passes. Two smooth and two strange rows share
+    one morph cluster; without a shared counter each pass would take its own two and the run
+    would ship four tiles of one look."""
+    eng = _supply(B.EmissionDiversity(_args(tmp_path, release_n=8, strange_frac=0.5)),
+                  mandelbrot=40)
+    eng.embs = {}
+    for k, (style, p) in enumerate((("smooth", 0.9), ("smooth", 0.8),
+                                    ("tia", 0.7), ("tia", 0.6))):
+        eng.pool.append(_gate_rec(f"em_{k}", f"l{k}", style, p,
+                                  ("mandelbrot", "m#0", f"k16:{k}", style)))
+    selected, _log = eng.select_release()
+    assert len(selected) == 2, [e["_rec"]["id"] for e in selected]
+    assert {e["_rec"]["id"] for e in selected} == {"em_0", "em_1"}
+
+
+def test_selection_is_rank_order_within_a_partition(tmp_path):
+    """Top-N by the head's own score. Not the greedy coverage rule, which could prefer a
+    lower-scoring row for being unlike what was already picked."""
+    eng = _supply(B.EmissionDiversity(_args(tmp_path, release_n=2, strange_frac=0.0)),
+                  mandelbrot=40)
+    eng.embs = {}
+    for k, p in enumerate((0.30, 0.95, 0.60)):
+        eng.pool.append(_gate_rec(f"em_{k}", f"l{k}", "smooth", p,
+                                  ("mandelbrot", f"m#{k}", "k16:1", "smooth")))
+    selected, _log = eng.select_release()
+    assert [e["_rec"]["id"] for e in selected] == ["em_1", "em_2"]      # 0.95 then 0.60
 
 
 def test_multi_ledger_intake_dedups_by_location_and_namespaces_ids(tmp_path):
@@ -516,56 +645,50 @@ def _target_pool(tmp_path, **over):
     return eng
 
 
-def test_sub_floor_strange_is_neither_eligible_nor_counted(tmp_path):
-    """The enforcing floor's version of D: the three sub-0.50 strange rows are no longer
-    release-eligible at all, so `--target-gated` sees 2 — and the count of what the floor
-    removed is REPORTED rather than lost at the eligibility boundary.
+def test_the_target_counts_every_scored_row_now(tmp_path):
+    """What `--target-gated` counts moved with the floors. All five rows scored, so all five
+    count — and the accounting still says how many of them the RETIRED floors would have kept
+    (the 0.95 smooth and the 0.70 tia), which is the number that makes the weaker surplus
+    readable instead of invisible.
 
-    Red before the flip on the first assert (`release_eligible()` returned all 5) and before
-    the accounting change on the last (there was no key naming what the floor cut)."""
+    The inverse assertion (`post_floor == 2`) stood here from 2026-08-06 to 2026-08-09."""
     eng = _target_pool(tmp_path)
-    assert {r["id"] for r in eng.release_eligible()} == {"em_0", "em_1"}
+    assert {r["id"] for r in eng.release_eligible()} == {f"em_{k}" for k in range(5)}
     acct = eng.target_accounting()
-    assert acct["post_floor"] == 2
-    assert acct["post_floor_smooth"] == 1 and acct["post_floor_strange"] == 1
-    assert acct["release_eligible"] == 2
-    assert acct["cut_by_release_floor_strange"] == 3          # 0.30 / 0.26 / 0.40, all pooled
-    assert acct["ungated_eligible"] == 0                      # nothing eligible below a floor
-    assert {r["id"] for r in eng.post_floor()} == {"em_0", "em_1"}
+    assert acct["post_floor"] == 5 and acct["release_eligible"] == 5
+    assert acct["post_floor_smooth"] == 1 and acct["post_floor_strange"] == 4
+    assert acct["would_pass_release_floor"] == 2              # 0.95 smooth + 0.70 tia
+    assert acct["below_retired_release_floor"] == 3
+    assert acct["cut_by_release_floor_strange"] == 3          # 0.30 / 0.26 / 0.40
+    assert {r["id"] for r in eng.post_floor()} == {f"em_{k}" for k in range(5)}
 
 
-def test_post_floor_is_an_identity_on_eligible_while_every_floor_acts(tmp_path):
-    """The identity `post_floor() == release_eligible()` holds BECAUSE eligibility applies
-    the same per-head floor — asserted, not assumed, since it is the property that makes
-    `--target-gated`'s post-floor claim true by construction today."""
+def test_post_floor_is_an_identity_on_eligible(tmp_path):
+    """`post_floor() == release_eligible()`. It was an identity maintained by two separately
+    computed floor predicates until 2026-08-09; it is now the same list, and the divergence
+    that identity was watching for is reported by name (`would_pass_release_floor`)."""
     eng = _target_pool(tmp_path)
     assert [r["id"] for r in eng.post_floor()] == [r["id"] for r in eng.release_eligible()]
 
 
-def test_a_report_only_floor_would_reopen_the_gap_and_be_reported(tmp_path):
-    """NON-VACUITY for the identity above. Simulate the report-only shape (eligibility that
-    admits every scored strange row regardless of floor) and the accounting must split again:
-    2 post-floor, 3 eligible-but-below-floor. If it could not, `ungated_eligible` would be a
-    constant 0 dressed as a measurement and the next report-only flip would silently restore
-    the "3x anything that rendered" bug."""
-    eng = _target_pool(tmp_path)
-    eng.release_eligible = lambda: list(eng.pool.rows)        # the pre-2026-08-06 behaviour
-    acct = eng.target_accounting()
-    assert acct["release_eligible"] == 5
-    assert acct["post_floor"] == 2
-    assert acct["ungated_eligible"] == 3
-    assert eng.target_met() is False                          # default target 15 (3×5)
+def test_an_unscored_row_is_not_eligible(tmp_path):
+    """NON-VACUITY for "every scored row is eligible": the absence of a verdict is still not a
+    verdict. A render error must not enter a draw ordered by score."""
+    eng = B.EmissionDiversity(_args(tmp_path))
+    eng.embs = {}
+    ok = _gate_rec("em_0", "l0", "smooth", 0.10, ("mandelbrot", "m#0", "k16:1", "smooth"))
+    bad = _gate_rec("em_1", "l1", "smooth", None, ("mandelbrot", "m#1", "k16:2", "smooth"))
+    bad["passed"], bad["error"] = False, "render failed"
+    eng.pool.append(ok)
+    eng.pool.append(bad)
+    assert {r["id"] for r in eng.release_eligible()} == {"em_0"}   # 0.10 is BELOW every floor
+    assert eng.target_accounting()["post_floor"] == 1
 
 
-def test_a_target_of_three_is_not_met_by_sub_floor_strange(tmp_path):
-    """THE break condition (`target_met`, which `run_colorize` reads verbatim): with 2
-    post-floor rows and 3 sub-floor strange ones, a target of 3 is NOT met and a target of 2
-    IS.
-
-    Red before the fix on both halves — the old condition counted all 5 release-eligible
-    rows, so a target of 3 (and of 5) read as met."""
-    assert _target_pool(tmp_path, target_gated=3).target_met() is False
-    assert _target_pool(tmp_path / "b", target_gated=5).target_met() is False
+def test_a_target_of_six_is_not_met_by_five_scored_rows(tmp_path):
+    """THE break condition (`target_met`, which `run_colorize` reads verbatim)."""
+    assert _target_pool(tmp_path, target_gated=6).target_met() is False
+    assert _target_pool(tmp_path / "b", target_gated=5).target_met() is True
     assert _target_pool(tmp_path / "c", target_gated=2).target_met() is True
 
 
@@ -575,15 +698,19 @@ def test_the_default_target_is_three_times_release_n(tmp_path):
     assert eng.target_gated == 36
 
 
-def test_post_floor_uses_the_owner_floors_per_head(tmp_path):
-    """Non-vacuity: the split is by HEAD, not a single global floor. A strange row at 0.70
-    is post-floor (mining 0.50); a smooth row at 0.70 is not (wallpaper 0.90)."""
+def test_the_retired_floor_annotation_is_per_head(tmp_path):
+    """Non-vacuity for the annotation: it is by HEAD, not one global number. A strange row at
+    0.70 clears the retired mining 0.50; a smooth row at 0.70 does not clear the retired
+    wallpaper 0.90. Both are eligible either way — that is the difference from before."""
     eng = B.EmissionDiversity(_args(tmp_path))
     eng.embs = {}
     for r in (_gate_rec("em_a", "la", "smooth", 0.70, ("mandelbrot", "a#0", "k16:1", "smooth")),
               _gate_rec("em_b", "lb", "tia",    0.70, ("mandelbrot", "b#0", "k16:1", "tia"))):
         eng.pool.append(r)
-    assert {r["id"] for r in eng.post_floor()} == {"em_b"}
+    by_id = {r["id"]: r for r in eng.pool.rows}
+    assert eng.would_pass_release_floor(by_id["em_a"]) is False
+    assert eng.would_pass_release_floor(by_id["em_b"]) is True
+    assert {r["id"] for r in eng.post_floor()} == {"em_a", "em_b"}
 
 
 # --------------------------------------------------------------------------- #
@@ -688,22 +815,32 @@ class _FakePool:
         self.counts[rid] = self.counts.get(rid, 0) + 1
 
 
-def _driver(sizes: dict, seed=7):
+def _driver(sizes: dict, seed=7, scores=None):
     """A bare EmissionDiversity carrying only what pick_location touches (no sinks, no heads,
-    no intake) — `object.__new__` deliberately, so this stays torch-free and render-free."""
+    no intake) — `object.__new__` deliberately, so this stays torch-free and render-free.
+
+    `scores` is `{id: raw p_good}`; the rank index is built from it exactly as `_index_ranks`
+    does. Default: score DESCENDING in id order, so "rank order" and "id order" coincide and a
+    test that means to distinguish them has to say so (the shuffle tests used to rely on the
+    opposite convention, which is why this is spelled out)."""
     from tools.emission.build_emission_diversity_v1 import EmissionDiversity
     d = object.__new__(EmissionDiversity)
     d.rows, d.partition_of = [], {}
     for p in sorted(sizes):
         for k in range(sizes[p]):
             rid = f"{p}_{k:04d}"
-            d.rows.append({"id": rid})
+            d.rows.append({"id": rid, "p_good": (scores or {}).get(rid, 1.0 - k * 1e-4)})
             d.partition_of[rid] = p
     d.ranker_score = {}      # permanently empty since the ranker was deleted (2026-08-08)
     d.seed = seed
     d.pool = _FakePool()
     d._round_idx = None
     d._round_queue = None
+    # no supply census here: `_index_ranks` also builds one, and these fixtures use invented
+    # partition names that `cell_partition` would (correctly) refuse. These tests are about
+    # the ORDER; the census is exercised in test_ranked_intake.py.
+    d.mined_rows, d.intake_scope = [], None
+    d._index_ranks()
     return d
 
 
@@ -772,25 +909,52 @@ def test_partitions_are_derived_from_the_rows_not_a_literal():
 # ranker-descending — true of the code and true of nothing else: the ranker artifact never
 # resolved on this checkout, so the branch it covered ran zero times in production while the
 # test kept it green. Deleted with the ranker (deferred_recalibration.md § "Ranker growth —
-# CLOSED"). The seeded shuffle below is no longer "the absent-artifact branch"; it is the rule.
+# CLOSED").
+#
+# `test_the_within_partition_order_is_a_seeded_shuffle` stood here until 2026-08-09. The
+# shuffle was replaced by READ-TIME RANK (raw P(>=3) descending) once the intake stopped
+# discarding the probability in favour of the frozen `decoded_class`; the two tests below are
+# the shuffle test's three properties restated for the rule that replaced it.
 
 
-def test_the_within_partition_order_is_a_seeded_shuffle():
-    """The within-partition order must be UNBIASED, not alphabetical.
-
-    This was named `test_without_a_ranker_...` and described the fallback half of a two-branch
-    rule. There is one branch now, and the properties it has to hold are the same three: not
-    id-order, reproducible under a seed, and different under a different one."""
-    d = _driver(SIZES, seed=7)
+def test_the_within_partition_order_is_rank_order():
+    """Best-first on the stored raw P(>=3), inside each partition. Deliberately scored so rank
+    order is the REVERSE of id order — the two coincide under the fixture default, and a test
+    that cannot tell them apart is the one that would have passed under the old shuffle too."""
+    scores = {f"{p}_{k:04d}": k * 1e-3 for p in SIZES for k in range(SIZES[p])}
+    d = _driver(SIZES, scores=scores)
     picked = _run(d, 60)
     for p in SIZES:
         seq = [i for i in picked if d.partition_of[i] == p]
         if len(seq) >= 4:
-            assert seq != sorted(seq), f"{p} came out in id order — that is the old behaviour"
-    same = _run(_driver(SIZES, seed=7), 60)
-    other = _run(_driver(SIZES, seed=8), 60)
-    assert picked == same, "same seed must reproduce the order (batch reproducibility)"
-    assert picked != other, "a different seed must give a different order"
+            assert seq == sorted(seq, reverse=True), f"{p} was not served best-first"
+
+
+def test_the_within_partition_rank_order_is_deterministic_and_seed_independent():
+    """Reproducibility, and the half that CHANGED: the within-partition order no longer moves
+    with the seed, because it is not random any more. The seed still shuffles which partition
+    leads each round, so the interleaved sequence may differ — the per-partition subsequence
+    must not."""
+    def per_partition(seed):
+        d = _driver(SIZES, seed=seed)
+        picked = _run(d, 60)
+        return {p: [i for i in picked if d.partition_of[i] == p] for p in SIZES}
+    a, b = per_partition(7), per_partition(7)
+    assert a == b, "same seed must reproduce the run (batch reproducibility)"
+    c = per_partition(8)
+    for p in SIZES:
+        n = min(len(a[p]), len(c[p]))
+        assert a[p][:n] == c[p][:n], f"{p}'s rank order moved with the seed"
+
+
+def test_an_unranked_location_goes_to_the_tail_not_the_front():
+    """A row the rank index does not know (a resume against a pool whose intake snapshot has
+    moved on) must sort LAST. Sorting an unknown to the front would let a location with no
+    score outrank every scored one, silently, on exactly the path a resume takes."""
+    d = _driver({"aaa": 4})
+    d.rank_of.pop("aaa_0000")                      # the best-ranked row loses its rank
+    picked = _run(d, 4)
+    assert picked[-1] == "aaa_0000"
 
 
 def test_coverage_still_comes_before_any_second_colorize():

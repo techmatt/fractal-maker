@@ -152,12 +152,20 @@ def test_colorize_behavior_reports_a_render_span_not_a_run_time(tmp_path):
         import os
         os.utime(p, (1_700_000_000 + i * 10, 1_700_000_000 + i * 10))
     out = RCS.colorize_behavior(tmp_path, [prow("a"), prow("b"), prow("c")],
-                                {"target_accounting": {"target_gated": 60, "post_floor": 12,
-                                                       "ungated_strange": 5,
-                                                       "release_eligible": 17}})
+                                {"target_accounting": {
+                                    "target_gated": 60, "post_floor": 17,
+                                    "would_pass_release_floor": 12,
+                                    "below_retired_release_floor": 5,
+                                    "cut_by_release_floor_strange": 5,
+                                    "release_eligible": 17}})
     assert out["render_span_s"] == 20.0 and out["attempts"] == 3
     assert out["s_per_attempt"] == 10.0
-    assert out["ungated_strange"] == 5 and out["post_floor"] == 12
+    assert out["post_floor"] == 17
+    # the RETIRED floors' counterfactual, which is what this readout is for now. It read
+    # `ungated_strange` — a key `target_accounting` had already stopped emitting — so it
+    # reported 0 for every run it described.
+    assert out["would_pass_release_floor"] == 12
+    assert out["below_retired_release_floor"] == 5
     assert "run_time_s" not in out
 
 

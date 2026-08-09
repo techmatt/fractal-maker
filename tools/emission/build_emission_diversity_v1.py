@@ -5,8 +5,14 @@ Deficit-driven colorize + resume-safe persistent pool + greedy release selection
 against a steered-frontier run's run-scoped ledger (the first ledger whose rows decode as
 current). The flow:
 
-  1. INTAKE   — admitted locations (current-decode ∧ q3 ∧ guard ∧ distinct), each given a
-                canonical morph-CLIP embedding and a within-type morph-cluster id.
+  1. INTAKE   — READ-TIME RANKED (tools/emission/ranked_intake.py, 2026-08-09). Admitted
+                locations are `guard ∧ distinct ∧ (raw P(>=3) >= the 0.20 junk floor, or a
+                floor-admit source)`, ranked best-first per partition on the stage-1 head's
+                stored raw probability. NOT `current-decode ∧ q3` any more: a stored
+                `decoded_class` is a per-partition derived threshold frozen at harvest time,
+                and the stamp that guards it deleted the whole intake at the last head flip.
+                Each admitted location gets a canonical morph-CLIP embedding and a within-type
+                morph-cluster id, as before.
   2. DEFICIT  — joint counts over (partition × morph_cluster × palette_flavor × render_style)
                 for the gated pool; the target measure is DERIVED at intake from the canonical
                 release-mix ratio table (tools/scoring/release_mix.py) re-solved against the
@@ -15,22 +21,26 @@ current). The flow:
                 style) that maximizes the joint deficit (softmax tie-break), pick the best
                 palette in that flavor (pref ranker), render the wallpaper, and score it
                 with the wallpaper head.
-  4. POOL     — the head's permissive POOL floor (floors.py, below its production gate)
-                admits the wallpaper to an append-only, resume-safe pool with full descriptor,
-                head scores, realized palette statistics, and provenance (pool.py).
-  5. SELECT   — greedy max-marginal-gain selection of N from the RELEASE-eligible pool
-                (select.py): niche-relative quality × coverage gain under a per-axis
-                similarity kernel.
+  4. POOL     — every SCORED candidate enters the append-only, resume-safe pool with full
+                descriptor, head scores, realized palette statistics and provenance (pool.py).
+                The permissive per-head POOL floor no longer admits or rejects; it rides along
+                as the `above_pool_floor` annotation.
+  5. SELECT   — RANK selection (selection.rank_select): top-N by the head's own p_ge3, per
+                partition, under the partition's release_mix slot allocation crossed with the
+                thin-supply emit cap `floor(passing_supply / 4)`, and a run-wide cap of 2 picks
+                per morph cluster. Two disjoint per-head passes, sharing one cluster counter.
 
-Every cut in stages 4-5 is owned by `tools/emission/floors.py` and stamped with the head
-version it was set against; a run whose live head pin disagrees refuses to gate. All four
-cuts now ACT — the mining release floor (0.50) stopped being report-only on 2026-08-06 —
-so `--target-gated`'s POST-FLOOR count and the release-eligible draw are the same set, and
-the run reports how many pooled strange rows that floor removed rather than letting them
-disappear at the eligibility boundary.
+The four stamped cuts in `tools/emission/floors.py` are ANNOTATION-ONLY as of 2026-08-09
+(prompts/selection_restructure_1.md): nothing in stages 4-5 removes a row on a per-head floor.
+The one enforcing cut is the 0.20 junk floor at stage 1, where the colorize pool is drawn. The
+retired floors' verdicts are recorded on every pool row, every release-record row and every
+sheet tile (`would_pass_release_floor`), so what the old cut would have removed stays a number
+in the record rather than a memory.
 
-Admissibility is routed through `corpus_common.is_current_decoded` — a v6/v5/unstamped row
-is never consumed. See prompts/build_emission_diversity_v1.md.
+`--target-gated` therefore counts SCORED rows now, not rows above 0.90/0.50 — a weaker surplus
+in exactly the way those floors were strong, and the counterfactual count is reported beside it.
+
+See prompts/build_emission_diversity_v1.md and prompts/selection_restructure_1.md.
 
   # smoke: build to ≥3×N gated, select N=12, write report + sheets:
   uv run python tools/emission/build_emission_diversity_v1.py \
@@ -61,6 +71,7 @@ from tools.emission import floors as F           # noqa: E402  THE stage-2 cut o
 from tools.emission import descriptor as D       # noqa: E402
 from tools.emission import cells as C            # noqa: E402
 from tools.emission import selection as SEL       # noqa: E402
+from tools.emission import ranked_intake as RI    # noqa: E402  read-time ranked intake
 from tools.emission.pool import Pool             # noqa: E402
 
 try:
@@ -86,10 +97,10 @@ JPG_Q = 95
 # head it reads and the head version it was set against, and refuses to gate when the live
 # pin disagrees. This module used to declare all four as its own literals while three
 # readouts declared them again — six copies of four numbers, none checked against each other.
-# All four CUT: the mining RELEASE floor went enforcing on 2026-08-06 at the value it always
-# carried (prompts/mining_adoption_prompt.md), so `release_eligible()` applies one rule to
-# both heads. `write_gate_report` still logs the mining head's verdict at both sites; what it
-# can no longer observe is a would-cut row shipping anyway.
+# NONE OF THE FOUR CUT since 2026-08-09 — they annotate (floors.py). They are still resolved
+# here, still written onto every row, and still stamped, because the annotation is only
+# readable if the scale it was computed on is pinned. The one enforcing cut is `F.JUNK_FLOOR`,
+# applied where the colorize pool is drawn (`ranked_intake`).
 DEFAULT_FLOOR = F.WALLPAPER_POOL.value                    # 0.75  wallpaper-head POOL floor
 DEFAULT_MINING_FLOOR = F.MINING_POOL.value                # 0.25  mining-head POOL floor
 DEFAULT_RELEASE_FLOOR = F.WALLPAPER_RELEASE.value         # 0.90  smooth  → wallpaper gate
@@ -442,6 +453,16 @@ class EmissionDiversity:
         # rather than restores.
         self._round_idx = None
         self._round_queue = None
+        # read-time rank + supply census, filled by `intake()` -> `_index_ranks`. Declared
+        # here so the attributes exist for the paths that never intake (a report rebuild, a
+        # pool-only test) rather than each reader guarding with getattr.
+        self.ranked: dict = {}
+        self.rank_of: dict = {}
+        self.mined_rows: list = []
+        self.intake_scope = None      # None = the whole union; a set = the snapshot's ids
+        self.mined_supply: dict = {}
+        self.passing_supply: dict = {}
+        self.emit_caps: dict = {}
 
     # ---- intake ---------------------------------------------------------- #
     @staticmethod
@@ -452,18 +473,32 @@ class EmissionDiversity:
         return row.get("mix_source") or row.get("_source_tag")
 
     def _load_all_admitted(self) -> list:
-        """Admitted rows across every ledger — `descriptor.load_union_admitted`, which is THE
-        union reader (the census in `ledger_rescore` takes the same one, so "what stage 2
-        would intake" and "what stage 2 intakes" cannot drift).
+        """Admitted rows across every ledger, READ-TIME RANKED (`ranked_intake`, 2026-08-09).
 
-        Row identity is namespaced by ledger there, so the 11 run-scoped id collisions across
-        campaign1/campaign2 no longer alias distinct locations and no longer abort the run;
-        deduplication is by LOCATION identity across ledgers. See `descriptor.loc_key`."""
-        rows, diag = D.load_union_admitted(self.ledgers)
+        Still `descriptor.load_union_admitted` underneath — THE union reader, so row identity
+        is namespaced by ledger (the 11 run-scoped campaign1/campaign2 id collisions do not
+        alias) and deduplication is by LOCATION identity (`descriptor.loc_key`). What changed
+        is the PREDICATE it is given: guard ∧ distinct ∧ (junk floor ∨ floor-admit), with no
+        decode-version predicate and no stored-`decoded_class` q3 gate. See `ranked_intake`.
+
+        Returns the rows in UNION ORDER, not rank order, and that is deliberate: ledger order
+        is the stable incremental order `assign_morph_clusters` clusters in, so ranking here
+        would silently re-index every in-batch morph cluster. The rank lives beside the rows
+        (`self.ranked`, `self.rank_of`) and is consumed by `pick_location`."""
+        # ONE union walk. `mined_rows` is the PRE-FLOOR population and is kept, because it is
+        # the denominator of every supply line and cannot be recovered from the passing subset.
+        self.mined_rows, mdiag = RI.load_mined(self.ledgers)
+        ranked, diag = RI.ranked_from_mined(self.mined_rows, mdiag)
+        rows = [r for r in self.mined_rows if RI.passes(r)]     # union order, not rank order
         self.intake_diag = diag
-        print(f"[intake] union over {len(self.ledgers)} ledger(s): {diag['n_union']} admitted "
+        self.ranked = ranked
+        print(f"[intake] union over {len(self.ledgers)} ledger(s): {diag['n_mined']} mined "
+              f"(guard ∧ distinct), {diag['n_passing']} above the {diag['junk_floor']} junk "
+              f"floor across {len(ranked)} partition(s) "
               f"({diag['n_location_overlaps']} cross-ledger same-location overlaps dropped; "
               f"{diag['n_id_collisions']} run-scoped id collisions namespaced apart)", flush=True)
+        for line in RI.supply_lines(diag):
+            print(f"  [supply] {line}", flush=True)
         return rows
 
     def intake(self):
@@ -500,9 +535,24 @@ class EmissionDiversity:
             snap = set(tags)
             n_new = sum(1 for r in rows if r["id"] not in snap)
             rows = [r for r in rows if r["id"] in snap]
+            # ...and the snapshot is restricted BACK to the admitted rows. The intersection
+            # used to be one-sided — every snapshot id was admitted, because the snapshot was
+            # written by a run under the same predicate — and the read-time intake broke that:
+            # a snapshot row now below the junk floor stays in `cluster_tags` while dropping
+            # out of `rows`. Every reader that walks the tags and joins to `by_id` then dies on
+            # the last statement of the run (`report.write_report` did, after 30 colorizes and
+            # 9 full-res release renders). The tags/fields ARE the population's, so they are
+            # narrowed here rather than defended against at each reader.
+            self.intake_scope = set(snap)     # the census population is the SNAPSHOT's
+            kept = {r["id"] for r in rows}
+            n_dropped = len(snap - kept)
+            tags = {i: t for i, t in tags.items() if i in kept}
+            fields = {i: f for i, f in fields.items() if i in kept}
             print(f"[intake] reused {len(rows)} admitted locations (snapshot), "
                   f"{len(set(tags.values()))} morph clusters"
-                  + (f"; {n_new} newer admits deferred (rerun fresh to include)" if n_new else ""),
+                  + (f"; {n_new} newer admits deferred (rerun fresh to include)" if n_new else "")
+                  + (f"; {n_dropped} snapshot location(s) no longer admitted, dropped"
+                     if n_dropped else ""),
                   flush=True)
         else:
             print(f"[intake] {len(rows)} admitted locations — embedding morph + clustering ...", flush=True)
@@ -533,6 +583,28 @@ class EmissionDiversity:
         self.embs = embs
         self.fields = fields
         self.cluster_tags = tags
+        self._index_ranks()
+
+    def _index_ranks(self):
+        """Rank position per location id, and the per-partition supply census — all three
+        numbers (mined / passing / emit cap) over the rows this run will ACTUALLY serve.
+
+        `self.intake_scope` is that restriction: `None` for a fresh intake (the whole union),
+        and the SNAPSHOT's id set when a run resumes against pre-staged embeddings. Both halves
+        of the census come from `RI.supply_census` in one walk over the same scoped population,
+        because taking the mined count from the ledgers and the passing count from the served
+        subset is how the sheet printed "81 mined, 18 above floor" for a partition whose real
+        served numbers were 33 and 18."""
+        by_part: dict = {}
+        for r in self.rows:
+            by_part.setdefault(self.partition_of[r["id"]], []).append(r)
+        self.ranked = {p: RI.rank_rows(v) for p, v in by_part.items()}
+        self.rank_of = {r["id"]: k for v in self.ranked.values()
+                        for k, r in enumerate(v)}
+        mined, passing = RI.supply_census(self.mined_rows, self.intake_scope)
+        self.mined_supply = mined
+        self.passing_supply = passing
+        self.emit_caps = {p: RI.emit_cap(n) for p, n in passing.items()}
 
     # ---- axes + deficit model ------------------------------------------- #
     def build_axes(self, dt, cell_to_names: dict, lib):
@@ -565,13 +637,21 @@ class EmissionDiversity:
 
     # ---- location pick (coverage round-robin, ranker-ordered within a round) --------- #
     def _round_order(self, rows, round_idx: int) -> list:
-        """The order ONE round is served in: seeded round-robin ACROSS partitions and a
-        seeded shuffle WITHIN one. Returns a list of location ids.
+        """The order ONE round is served in: seeded round-robin ACROSS partitions and RANK
+        ORDER WITHIN one. Returns a list of location ids.
 
-        The within-partition shuffle is the plain behaviour, not a fallback. It used to be
-        "ranker-descending when the ranker artifact resolved, seeded shuffle when it did not"
-        — and the artifact never resolved on any run this checkout has ever made. Any future
-        within-partition ordering is a new decision, not the absence of an old one.
+        The within-partition order was a seeded shuffle until 2026-08-09 and is now the
+        read-time rank — raw P(>=3) descending (`ranked_intake.rank_key`, tie-broken on id).
+        The shuffle was the honest thing to do while every admitted row carried the same
+        binary verdict (`decoded_class >= 3`) and nothing distinguished them; ranking on the
+        stored probability is only available because the intake stopped throwing that
+        probability away in favour of the verdict. Under a budget smaller than the union the
+        within-round order IS the selection, so this is where the ranking actually pays.
+
+        The ACROSS-partition round-robin is UNCHANGED and is still seeded, including the
+        partition shuffle: a bounded budget must still reach every partition (a rank-ordered
+        global queue would spend the whole budget on whichever partition scores highest), and
+        no partition may be systematically first.
 
         The partition set is DERIVED from `rows` (`self.partition_of`), never a literal — the
         ten base partitions are already a moving set (`descriptor.cell_partition` splits
@@ -583,10 +663,11 @@ class EmissionDiversity:
             by_part.setdefault(self.partition_of[r["id"]], []).append(r["id"])
         parts = sorted(by_part)
         rng = np.random.default_rng([self.seed, int(round_idx)])
+        rank_of = getattr(self, "rank_of", {})
         for p in parts:
-            ids = sorted(by_part[p])     # canonical base order: the shuffle must not inherit
-            rng.shuffle(ids)             # ledger order
-            by_part[p] = ids
+            # rank ascending (best first); an id the rank index does not know goes to the tail
+            # rather than to the front, so a missing rank can never outrank a scored row.
+            by_part[p] = sorted(by_part[p], key=lambda i: (rank_of.get(i, 1 << 30), i))
         rng.shuffle(parts)                           # no partition is systematically first
         out = []
         for k in range(max(len(v) for v in by_part.values())):
@@ -610,9 +691,11 @@ class EmissionDiversity:
         proportionately across every partition that has admitted rows instead of exhausting the
         alphabetically-first one.
 
-        Inside a partition it is a seeded shuffle — unbiased rather than alphabetical. There
-        is no location ranker and there will not be one (deferred_recalibration.md § "Ranker
-        rebuild — DELETED"), so this is the whole rule rather than the fallback half of it."""
+        Inside a partition it is RANK ORDER — the read-time ranked intake's best-first list
+        (`_round_order`). It was a seeded shuffle until 2026-08-09; there is still no location
+        ranker (deferred_recalibration.md § "Ranker rebuild — DELETED") and this is not one:
+        the key is the stage-1 head's own stored P(>=3), read at intake rather than frozen
+        into a class."""
         counts = self.pool.attempts_per_location()
         cand = {r["id"]: r for r in self.rows if r["id"] not in exhausted}
         if not cand:
@@ -635,89 +718,105 @@ class EmissionDiversity:
 
     # ---- one colorize ---------------------------------------------------- #
     def floor_for(self, style: str) -> float:
-        """POOL admission floor (permissive; weak wallpapers persist as inventory)."""
+        """The head's RETIRED pool floor — an ANNOTATION since 2026-08-09. Still resolved and
+        still written onto every pool row (`floor`), so "would this row have been pooled under
+        the old bar" stays answerable off the durable log; it admits nothing and rejects
+        nothing."""
         return self.floor if head_for_style(style) == "wallpaper" else self.mining_floor
 
     def release_floor_for(self, style: str) -> float:
-        """RELEASE eligibility floor (per head; distinct from and above the pool floor)."""
+        """The head's RETIRED release floor — an ANNOTATION since 2026-08-09 (same as
+        `floor_for`). Read by `would_pass_release_floor` and by the sheets; it gates nothing."""
         return self.release_floor if head_for_style(style) == "wallpaper" \
             else self.mining_release_floor
 
+    def above_pool_floor(self, r) -> bool:
+        """Annotation: would this row have cleared its head's retired POOL floor?"""
+        return (r.get("p_ge3") or 0.0) >= self.floor_for(r["render_style"])
+
+    def would_pass_release_floor(self, r) -> bool:
+        """Annotation: would this row have cleared its head's retired RELEASE floor (0.90
+        wallpaper / 0.50 mining)? Recorded as a column on every release record row and marked
+        on every sheet tile — the old cut's value stays inspectable, which is the whole reason
+        the four `Floor` objects were retired rather than deleted."""
+        return (r.get("p_ge3") or 0.0) >= self.release_floor_for(r["render_style"])
+
     def release_eligible(self) -> list:
-        """Pool rows eligible for release selection: pool-admitted ∧ clears its head's
-        RELEASE floor. One rule, both heads, since 2026-08-06.
+        """Pool rows eligible for release selection: every row that got a head SCORE.
 
-        The mining half used to be the exception: while the mining release floor was
-        report-only, every successfully-scored strange row was release-eligible regardless of
-        either floor, drawn straight from `self.pool.rows` rather than `gated()`, and the
-        would-cut verdict was logged instead of acted on. The floor is now ENFORCING
-        (prompts/mining_adoption_prompt.md, `floors.MINING_RELEASE.acts`), so the special
-        case is gone rather than parameterised — a branch that reads "if this head is the
-        report-only one" is how the exception survives its own reason.
+        No floor is applied here any more. Until 2026-08-09 this was "pool-admitted ∧ clears
+        its head's RELEASE floor" — two enforcing per-head cuts — and the whole point of the
+        restructure is that a threshold is a read-time choice, not frozen enforcing state. The
+        cut that does remain is upstream and coarse: a location only reached colorize at all if
+        it cleared the junk floor at the colorize-pool draw (`ranked_intake`). What decides the
+        release now is RANK plus the two caps (`select_release`), and the retired floors ride
+        along as annotation (`would_pass_release_floor`).
 
-        `write_gate_report` still logs every scored strange candidate at BOTH sites; it reads
-        `self.pool.rows` directly and is unaffected by this. What it can no longer observe is
-        a would-cut row being selected anyway (see floors.py)."""
+        A row with no score is still not eligible — a render or scoring error is an absence of
+        a verdict, not a bad one, and ranking on a missing number is not a choice anybody made.
+
+        `write_gate_report` still logs every scored strange candidate at BOTH sites. With the
+        mining floor annotating again, its `would_cut ∧ selected` join is no longer zero by
+        construction — the free false-cut signal the 2026-08-06 flip cost comes back."""
         return [r for r in self.pool.rows
-                if r.get("passed")
-                and (r["p_ge3"] or 0.0) >= self.release_floor_for(r["render_style"])]
+                if r.get("passed") and r.get("p_ge3") is not None]
 
     def post_floor(self, rows=None) -> list:
-        """The release-eligible rows that CLEAR their head's release floor — what
-        `--target-gated` counts.
+        """What `--target-gated` counts: the release-eligible rows, i.e. every SCORED row.
 
-        Since the mining flip this is an IDENTITY on `release_eligible()`: eligibility
-        applies the same per-head floor, so every eligible row is post-floor by construction.
-        It is kept, and kept separately computed, for two reasons. It is the single predicate
-        `target_met` reads, so the surplus contract has one testable owner; and the identity
-        is ASSERTED by a test rather than assumed, so if any release floor ever goes
-        report-only again the two sets diverge and the accounting below reports the gap
-        instead of silently counting rows no floor vouched for.
+        This used to be "eligible ∧ clears its head's release floor", and while both floors
+        enforced it was an identity on `release_eligible()` maintained by a separately-computed
+        predicate so the two would visibly diverge if a floor ever went report-only. Both
+        floors are now ANNOTATION-ONLY, so the identity is real rather than coincidental and
+        the divergence it was watching for is reported by name instead:
+        `would_pass_release_floor_*` in the accounting below.
 
-        That is not hypothetical history: while the mining floor was report-only,
-        `--target-gated` read `release_eligible()` and the "3x post-floor surplus" contract
-        silently became "3x anything that rendered" — a `--strange-frac 0.5` run could hit
-        its target on ungated strange alone while the smooth half had no surplus at all."""
-        return [r for r in (self.release_eligible() if rows is None else rows)
-                if (r.get("p_ge3") or 0.0) >= self.release_floor_for(r["render_style"])]
+        WHAT THAT COSTS, SAID PLAINLY. The default surplus target is 3xN, and it now counts
+        3xN *scored* candidates rather than 3xN candidates above 0.90/0.50. That is a weaker
+        surplus in exactly the way the floors were strong: a run reaching its target no longer
+        implies it has 3xN release-grade rows by the retired bar. The counterfactual counts are
+        in the accounting so the difference is a number in the report, not a surprise."""
+        return list(self.release_eligible() if rows is None else rows)
 
     def target_accounting(self) -> dict:
-        """What the surplus target sees, and what the enforcing release floor removed.
+        """What the surplus target sees, and what the RETIRED release floors would have cut.
 
-        `post_floor` counts toward `--target-gated`. `ungated_eligible` is the release-
-        ELIGIBLE-but-below-floor set, which is EMPTY while every floor acts — it is reported
-        because a non-zero value is the visible signature of a floor having gone report-only,
-        and reading zero from a computation is different from not computing it.
-
-        `cut_by_release_floor_strange` is the number the flip actually costs: scored,
-        pool-admitted strange rows that the 0.50 release floor now removes from the draw.
-        Under report-only these were `ungated_strange` and could still be selected; they are
-        counted here from the POOL, so the run still reports the size of the population it
-        stopped shipping instead of losing it at the eligibility boundary."""
+        `post_floor` counts toward `--target-gated` and is now every scored row (see above).
+        `would_pass_release_floor` / `_smooth` / `_strange` are the counterfactual: how much of
+        that population the 0.90 / 0.50 cuts would have left. `below_retired_release_floor` is
+        its complement — the rows this restructure made shippable, which is the number the
+        change actually turns on, and `cut_by_release_floor_strange` is the strange half of it
+        (kept under its old name because the readouts and the run banner join on it)."""
         elig = self.release_eligible()
-        post = self.post_floor(elig)
-        post_ids = {r["id"] for r in post}
-        ungated = [r for r in elig if r["id"] not in post_ids]
-        cut_strange = [r for r in self.pool.rows
-                       if head_for_style(r["render_style"]) == "mining"
-                       and r.get("passed") and r.get("p_ge3") is not None
-                       and r["p_ge3"] < self.release_floor_for(r["render_style"])]
+        would = [r for r in elig if self.would_pass_release_floor(r)]
+        would_ids = {r["id"] for r in would}
+        below = [r for r in elig if r["id"] not in would_ids]
+        cut_strange = [r for r in below if head_for_style(r["render_style"]) == "mining"]
         return {
             "target_gated": self.target_gated,
-            "post_floor": len(post),
-            "post_floor_smooth": sum(1 for r in post
+            "post_floor": len(elig),
+            "post_floor_smooth": sum(1 for r in elig
                                      if head_for_style(r["render_style"]) == "wallpaper"),
-            "post_floor_strange": sum(1 for r in post
+            "post_floor_strange": sum(1 for r in elig
                                       if head_for_style(r["render_style"]) == "mining"),
-            "ungated_eligible": len(ungated),
+            "would_pass_release_floor": len(would),
+            "would_pass_release_floor_smooth": sum(
+                1 for r in would if head_for_style(r["render_style"]) == "wallpaper"),
+            "would_pass_release_floor_strange": sum(
+                1 for r in would if head_for_style(r["render_style"]) == "mining"),
+            "below_retired_release_floor": len(below),
+            # retained name: the strange rows the retired 0.50 would have removed. Non-zero
+            # now means "shippable that would not have been", the opposite sign of what it
+            # meant while the floor enforced — the key is the same population either way.
             "cut_by_release_floor_strange": len(cut_strange),
+            "ungated_eligible": 0,
             "release_eligible": len(elig),
+            "above_retired_pool_floor": sum(1 for r in elig if self.above_pool_floor(r)),
         }
 
     def target_met(self) -> bool:
         """THE `--target-gated` break condition, as one testable predicate rather than an
-        expression buried in the colorize loop — the loop reads exactly this, so a test can
-        prove ungated strange cannot satisfy the target without spinning up two heads."""
+        expression buried in the colorize loop."""
         return self.target_accounting()["post_floor"] >= self.target_gated
 
     # ---- durable gate/release record ------------------------------------- #
@@ -750,7 +849,8 @@ class EmissionDiversity:
         return "|".join(str(x) for x in (r["location_id"], r["render_style"], r["palette"]))
 
     def _gate_decision_rows(self):
-        """One row per colorized candidate: did it clear its head's POOL floor, and why not."""
+        """One row per colorized candidate. The only rejection left at this stage is the
+        absence of a verdict; the retired pool floor is recorded as `would_pass_floor`."""
         from tools.emission import release_record as RR
         run_id = self._run_id()
         rows = []
@@ -759,10 +859,8 @@ class EmissionDiversity:
                 decision, reason = "rejected", f"render_error: {r['error'][:120]}"
             elif r.get("p_ge3") is None:
                 decision, reason = "rejected", "unscored (no head result)"
-            elif r.get("passed"):
-                decision, reason = "admitted", None
             else:
-                decision, reason = "rejected", "below pool floor"
+                decision, reason = "admitted", None
             rows.append(RR.decision_row(
                 run_id=run_id, stage=RR.STAGE_GATE,
                 join_key=self._record_join_key(r), location_id=r["location_id"],
@@ -770,27 +868,46 @@ class EmissionDiversity:
                 partition=r.get("type"), morph_cluster=r.get("morph_cluster"),
                 decision=decision, score=r.get("p_ge3"), reason=reason,
                 head=r.get("head"), floor=r.get("floor"),
+                would_pass_floor=(None if r.get("p_ge3") is None
+                                  else self.above_pool_floor(r)),
                 style=r.get("render_style"), palette=r.get("palette")))
         return rows
 
     def _release_decision_rows(self, selected):
         """One row per RELEASE-ELIGIBLE candidate: selected, or eligible-and-passed-over. The
-        not_selected rows are the point — a released row alone cannot say what it beat."""
+        not_selected rows are the point — a released row alone cannot say what it beat — and
+        they are recorded exactly as before. What is new is `would_pass_floor`: the retired
+        0.90 / 0.50 verdict on every row, selected or not, so the cut this restructure stopped
+        applying stays inspectable on the record it stopped applying to.
+
+        `reason` names WHICH cap passed a row over, not just that one did — the rank, the
+        cluster cap and the partition budget fail differently and a bare "not picked" cannot
+        tell a thin partition from a saturated cluster."""
         from tools.emission import release_record as RR
         run_id = self._run_id()
         sel_ids = {e["_rec"]["id"] for e in selected}
+        skips = {l["id"]: l for l in (getattr(self, "release_log", None) or [])
+                 if not l.get("picked")}
         rows = []
         for r in self.release_eligible():
             chosen = r["id"] in sel_ids
+            if chosen:
+                reason = None
+            elif r["id"] in skips:
+                reason = (f"passed over: {skips[r['id']]['skip']} "
+                          f"(rank {skips[r['id']]['rank_in_partition']} in "
+                          f"{skips[r['id']]['partition']})")
+            else:
+                reason = "eligible; outranked within its partition's slot/supply budget"
             rows.append(RR.decision_row(
                 run_id=run_id, stage=RR.STAGE_RELEASE,
                 join_key=self._record_join_key(r), location_id=r["location_id"],
                 location=self._record_location(r["location_id"]),
                 partition=r.get("type"), morph_cluster=r.get("morph_cluster"),
                 decision=("selected" if chosen else "not_selected"),
-                score=r.get("p_ge3"),
-                reason=None if chosen else "eligible; not picked by greedy release selection",
+                score=r.get("p_ge3"), reason=reason,
                 head=r.get("head"), floor=self.release_floor_for(r["render_style"]),
+                would_pass_floor=self.would_pass_release_floor(r),
                 style=r.get("render_style"), palette=r.get("palette")))
         return rows
 
@@ -904,7 +1021,12 @@ class EmissionDiversity:
                 tracker.ingest(stats)                # running deficit reflects TRUE output
         except Exception as e:                       # noqa: BLE001
             err = repr(e)[:300]
-        passed = bool(head and head["p_ge3"] >= floor)
+        # POOL ADMISSION IS NO LONGER A FLOOR (2026-08-09). `passed` means "this candidate got
+        # a head score" — a render/scoring error is the only thing that keeps a row out of the
+        # pool. The retired pool floor rides along as `above_pool_floor`, computed at the write
+        # site off the same score, so the durable log can still answer what the old bar did.
+        passed = bool(head and head.get("p_ge3") is not None)
+        above_pool = bool(passed and head["p_ge3"] >= floor)
         capped = self.model.record_attempt(cell)
         if passed:
             self.model.record_fill(cell)
@@ -917,6 +1039,11 @@ class EmissionDiversity:
             "p_ge2": (head or {}).get("p_ge2"), "p_ge3": (head or {}).get("p_ge3"),
             "score": (head or {}).get("ssum"),
             "floor": floor, "passed": passed, "error": err,
+            # the two retired cuts, as annotation on the durable row.
+            "above_pool_floor": above_pool,
+            "release_floor": self.release_floor_for(style),
+            "would_pass_release_floor": bool(
+                passed and head["p_ge3"] >= self.release_floor_for(style)),
             "realized_palette": stats,
             "render": {"w": POOL_W, "h": POOL_H, "ss": POOL_SS},
             "jpg": str(jpg.relative_to(ROOT)) if jpg.exists() else None,
@@ -938,6 +1065,7 @@ class EmissionDiversity:
                 "chosen_flavor": flavor, "chosen_style": style, "palette": palette,
                 "deficit": round(deficit, 6), "n_options": n_opts,
                 "p_ge3": (head or {}).get("p_ge3"), "passed": passed,
+                "above_pool_floor": above_pool,
                 "capped_cell": bool(capped), "error": err,
             }) + "\n")
         return rec
@@ -964,25 +1092,27 @@ class EmissionDiversity:
                   f"green_boost={self.deficit_green_boost}); tracker resumed from "
                   f"{tracker.n} logged renders", flush=True)
         heads = Heads()
-        print(f"[colorize] floors: {F.summary()}", flush=True)
+        print(f"[colorize] cuts: {F.summary()}", flush=True)
         if self.floor_overrides:
             print(f"[colorize] CLI floor OVERRIDE (unstamped — no head version vouches for "
                   f"these): {self.floor_overrides}", flush=True)
-        print(f"[colorize] pool-floors: wallpaper={self.floor} mining={self.mining_floor} · "
-              f"release-floors: wallpaper={self.release_floor} (gate {heads.wp_gate}) "
-              f"mining={self.mining_release_floor} (gate {heads.mining_gate}, enforcing) · "
-              f"target={self.target_gated} POST-FLOOR · palette-ranker={ranker.mode} · "
+        print(f"[colorize] ANNOTATION-ONLY floors: pool wallpaper={self.floor} "
+              f"mining={self.mining_floor} · release wallpaper={self.release_floor} "
+              f"(gate {heads.wp_gate}) mining={self.mining_release_floor} "
+              f"(gate {heads.mining_gate}) · the one enforcing cut is the "
+              f"{F.JUNK_FLOOR} junk floor, already applied at intake · "
+              f"target={self.target_gated} scored rows · palette-ranker={ranker.mode} · "
               f"loc-ranker={self.ranker_mode}", flush=True)
-        # The mining release floor now CUTS, so the run states what that cut is measured to
-        # buy — read from the frozen record, which refuses if the pin has moved off the head
-        # it was measured on. A number that removes rows should not be printed as a bare
-        # threshold once it has an operating point.
+        # The retired mining release floor still carries its measured operating point, and the
+        # run still states it — that is what the annotation MEANS. Read from the frozen record,
+        # which refuses if the pin has moved off the head it was measured on.
         from tools.mining.lock_mining_gate import read_lock       # noqa: PLC0415 (torch-free)
         _rel = read_lock()["cuts"]["mining_release"]
-        print(f"[colorize] mining release floor {_rel['value']} is measured: fires "
+        print(f"[colorize] retired mining release floor {_rel['value']} was measured: fires "
               f"{_rel['fires']}/{_rel['n']} at precision {_rel['precision']:.3f} "
               f"[{_rel['precision_ci95'][0]:.3f}-{_rel['precision_ci95'][1]:.3f}], recall "
-              f"{_rel['recall']:.3f} — OPTIMISTIC (mining_gate_lock.json caveats)", flush=True)
+              f"{_rel['recall']:.3f} — OPTIMISTIC (mining_gate_lock.json caveats). It now "
+              f"annotates; rows below it ship if they rank.", flush=True)
         if self.cover_all:
             print(f"[colorize] --cover-all: one colorize per location over "
                   f"{len(self.rows)} admitted locations (target/attempt/time cutoffs bypassed)",
@@ -991,27 +1121,27 @@ class EmissionDiversity:
         exhausted: set = set()
         while True:
             acct = self.target_accounting()
-            n_post, n_cut = acct["post_floor"], acct["cut_by_release_floor_strange"]
+            n_post, n_below = acct["post_floor"], acct["below_retired_release_floor"]
             if not self.cover_all:
                 if self.target_met():
-                    print(f"[colorize] reached target: {n_post} POST-FLOOR "
+                    print(f"[colorize] reached target: {n_post} scored "
                           f"(smooth {acct['post_floor_smooth']} + strange "
                           f"{acct['post_floor_strange']}) ≥ {self.target_gated}; "
-                          f"{n_cut} pooled strange cut by the {self.mining_release_floor} "
-                          f"release floor", flush=True)
+                          f"{acct['would_pass_release_floor']} of them would also have "
+                          f"cleared the retired release floors", flush=True)
                     break
                 if self.pool.n_attempts() >= self.max_attempts:
                     print(f"[colorize] hit max attempts {self.max_attempts} "
-                          f"(post-floor={n_post}, strange-cut-at-release={n_cut})", flush=True)
+                          f"(scored={n_post}, below-retired-release-floor={n_below})", flush=True)
                     break
                 if time.time() - t0 > self.time_budget_s:
-                    print(f"[colorize] hit time budget (post-floor={n_post}, "
-                          f"strange-cut-at-release={n_cut})", flush=True)
+                    print(f"[colorize] hit time budget (scored={n_post}, "
+                          f"below-retired-release-floor={n_below})", flush=True)
                     break
             row = self.pick_location(exhausted)
             if row is None:
-                print(f"[colorize] all locations exhausted (post-floor={n_post}, "
-                      f"strange-cut-at-release={n_cut})", flush=True)
+                print(f"[colorize] all locations exhausted (scored={n_post}, "
+                      f"below-retired-release-floor={n_below})", flush=True)
                 break
             # cover-all stops the instant pick_location wraps to a 2nd pass: it returns
             # fewest-attempts-first, so an already-attempted row means every location has one.
@@ -1034,9 +1164,11 @@ class EmissionDiversity:
             print(f"  [{self.pool.n_attempts()}] {rec['id']} {rec['type']}/{rec['morph_cluster']} "
                   f"{rec['palette_flavor']}/{rec['render_style']} p_ge3="
                   f"{rec['p_ge3'] if rec['p_ge3'] is not None else 'ERR'} "
-                  f"{'PASS' if rec['passed'] else 'floor-rej'} | gated={n_gated} "
-                  f"post-floor={acct['post_floor']}/{self.target_gated} "
-                  f"({acct['cut_by_release_floor_strange']} strange cut at release)",
+                  f"{'SCORED' if rec['passed'] else 'ERR'}"
+                  f"{'' if rec.get('would_pass_release_floor') else ' (below retired floor)'}"
+                  f" | pooled={n_gated} "
+                  f"scored={acct['post_floor']}/{self.target_gated} "
+                  f"({acct['would_pass_release_floor']} above the retired release floors)",
                   flush=True)
         return self.target_accounting()["post_floor"]
 
@@ -1068,8 +1200,10 @@ class EmissionDiversity:
 
     # ---- release selection ---------------------------------------------- #
     def _release_entries(self, rows: list) -> list:
-        """Pool rows → greedy_select entries, with the location's morph-CLIP embedding
-        attached as a plain list (the coverage kernel's continuous-cos input)."""
+        """Pool rows → selector entries. `emb` (the location's morph-CLIP embedding as a plain
+        list) is the RETIRED `greedy_select` coverage kernel's input and is not read by
+        `rank_select`; it is still attached so a side-by-side against the old rule needs no
+        second builder."""
         entries = [{
             "id": r["id"], "type": r["type"], "cluster": r["morph_cluster"],
             "flavor": r["palette_flavor"], "style": r["render_style"],
@@ -1081,37 +1215,75 @@ class EmissionDiversity:
             e["emb"] = emb.tolist() if emb is not None else None
         return entries
 
+    def _slot_plan(self, entries: list, n_slots: int) -> tuple:
+        """`(slots, caps)` for ONE head pass: the partition slot allocation and the
+        thin-supply emit cap it is crossed with.
+
+        Slots come from `release_mix` — the canonical ratio table — re-solved over the
+        partitions THIS PASS actually has candidates for, then apportioned to `n_slots` through
+        `apportion.sequence_by_deficit` (the truncating-consumer rule; `ranked_intake
+        .partition_slots`). Solving over the pass's own partitions rather than over the whole
+        registry is deliberate: a partition with nothing to offer this head must not hold a
+        slot hostage, and the honest place to see that it offered nothing is the supply line,
+        not a silently-unfilled slot.
+
+        Caps come from the INTAKE supply census (`self.emit_caps`), which is per partition and
+        head-agnostic — the mined population is the mined population. The cap is therefore
+        applied to each head pass independently and is a CEILING, not a budget being split."""
+        parts = sorted({e["type"] for e in entries})
+        shares = RM.shares(parts) if parts else {}
+        slots = RI.partition_slots(shares, n_slots)
+        # A partition with no supply census entry is UNCAPPED, not capped to zero. Zero would
+        # be a silent kill on the one path where the census can be short of the pool — a
+        # `--select-only` resume against a pool built from a larger intake — and a cap nobody
+        # measured must not remove rows. It is printed, because "uncapped" is a decision.
+        caps = {p: self.emit_caps[p] for p in parts if p in self.emit_caps}
+        missing = [p for p in parts if p not in self.emit_caps]
+        if missing:
+            print(f"[select] no intake supply census for {missing} — UNCAPPED by the "
+                  f"thin-supply rule (their slot budget still applies)", flush=True)
+        return slots, caps
+
     def select_release(self):
-        """Head-split release selection — the two heads are NEVER compared in one step.
+        """Head-split RANK release selection — the two heads are NEVER compared in one step.
 
-        Smooth slots are filled from the wallpaper head (rel ≥ release_floor), strange slots
-        from the mining head (rel ≥ mining_release_floor), by two DISJOINT within-head greedy
-        passes. Slot budget: strange_slots = round(N·strange_frac), smooth = N − strange.
-        Each pass draws ONLY above ITS head's release floor and tie-breaks on its own
-        (within-head, commensurable) `p_ge3`; the previous single cross-head greedy compared
-        the wallpaper and mining heads' absolute scores on incommensurable scales and shut
-        strange out entirely (82 eligible → 0 slots).
+        Per head: `top-N by that head's own p_ge3`, taken per partition under two caps —
+        the partition's slot allocation (release_mix, apportioned) crossed with its
+        thin-supply emit cap `floor(passing_supply / 4)` — and a run-wide cap of
+        `floors.CLUSTER_CAP` picks per MORPH CLUSTER. `selection.rank_select` is the rule; the
+        cluster counter is threaded through BOTH passes, so the cap is per run and two disjoint
+        head passes cannot each take two tiles of the same look.
 
-        The strange pass runs with a `style_weight` coverage floor so it spreads across the
-        promoted modes rather than filling with one. Coverage in both passes is continuous
-        morph-CLIP cos (no categorical gate), so a second near-identical look is discounted
-        across cells.
+        NO FLOOR GATES THIS. Until 2026-08-09 each pass drew only above its head's release
+        floor (0.90 / 0.50); those floors annotate now and every scored row is in the draw.
+        What replaced them is the pair of caps above plus the junk floor already applied
+        upstream at the colorize-pool draw.
 
-        Honest short-fill: if a head can't fill its quota above its floor, ship fewer of that
-        head — never dip below a floor, never pad, never backfill from the other head. The
-        realized split is reported."""
+        The head split is UNCHANGED and is not optional: `score` is compared directly inside a
+        pass and the two heads' `p_ge3` are on incommensurable train-prior-calibrated scales.
+        One pass over both shuts the smaller-scaled head out entirely — that is how 82
+        release-eligible strange tiles lost every slot to smooth in the v1 release. Slot
+        budget: strange_slots = round(N·strange_frac), smooth = N − strange.
+
+        Honest short-fill: a head that cannot fill its quota under the caps ships fewer. Never
+        pad, never backfill from the other head, and never redistribute a slot a thin partition
+        could not use — a redistributed slot is the thin-supply rule undone one level up."""
         eligible = self.release_eligible()
         smooth = [r for r in eligible if head_for_style(r["render_style"]) == "wallpaper"]
         strange = [r for r in eligible if head_for_style(r["render_style"]) == "mining"]
         strange_slots = int(round(self.release_n * self.strange_frac))
         smooth_slots = self.release_n - strange_slots
 
-        # disjoint within-head passes — heads never enter the same greedy comparison.
-        sm_sel, sm_log = SEL.greedy_select(self._release_entries(smooth), smooth_slots)
-        st_sel, st_log = SEL.greedy_select(self._release_entries(strange), strange_slots,
-                                           style_weight=STRANGE_STYLE_WEIGHT)
+        # ONE cluster counter across both passes — the cap is per RUN (§4).
+        cluster_used: dict = {}
+        sm_entries, st_entries = self._release_entries(smooth), self._release_entries(strange)
+        sm_slots, sm_caps = self._slot_plan(sm_entries, smooth_slots)
+        st_slots, st_caps = self._slot_plan(st_entries, strange_slots)
+        sm_sel, sm_log = SEL.rank_select(sm_entries, sm_slots, sm_caps, cluster_used)
+        st_sel, st_log = SEL.rank_select(st_entries, st_slots, st_caps, cluster_used)
         selected = sm_sel + st_sel
         log = sm_log + st_log
+        self.release_log = log
 
         self.release_split = {
             "strange_frac_target": self.strange_frac,
@@ -1120,7 +1292,11 @@ class EmissionDiversity:
             "smooth_selected": len(sm_sel), "strange_selected": len(st_sel),
             "strange_frac_realized": (len(st_sel) / len(selected)) if selected else 0.0,
             "strange_modes": dict(Counter(e["_rec"]["render_style"] for e in st_sel)),
-            "style_weight": STRANGE_STYLE_WEIGHT,
+            "cluster_cap": SEL.CLUSTER_CAP,
+            "n_cluster_cap_skips": sum(1 for l in log if l.get("skip") == "cluster_cap"),
+            "partition_slots": {"smooth": sm_slots, "strange": st_slots},
+            "emit_caps": dict(self.emit_caps),
+            "passing_supply": dict(self.passing_supply),
         }
         self.release_short_fill = {
             "requested": self.release_n, "eligible": len(eligible), "selected": len(selected),
@@ -1128,13 +1304,20 @@ class EmissionDiversity:
             "smooth_short_by": max(0, smooth_slots - len(sm_sel)),
             "strange_short_by": max(0, strange_slots - len(st_sel)),
         }
+        thin = [p for p, n in sorted(self.passing_supply.items()) if not self.emit_caps.get(p)]
+        if thin:
+            print(f"[select] thin supply — emit 0 (floor(passing/"
+                  f"{F.THIN_SUPPLY_DIVISOR}) == 0): "
+                  + ", ".join(f"{p} {self.passing_supply[p]} above floor" for p in thin),
+                  flush=True)
         if len(selected) < self.release_n:
             print(f"[select] SHORT-FILL {len(selected)}/{self.release_n}: smooth "
-                  f"{len(sm_sel)}/{smooth_slots} (elig {len(smooth)}, ≥{self.release_floor}) + "
-                  f"strange {len(st_sel)}/{strange_slots} (elig {len(strange)}, "
-                  f"≥{self.mining_release_floor}). Shipping fewer rather than dipping below a "
-                  f"floor (no cross-head backfill).", flush=True)
-        print(f"[select] head-split: smooth {len(sm_sel)} (wallpaper head) + strange "
+                  f"{len(sm_sel)}/{smooth_slots} (elig {len(smooth)}) + strange "
+                  f"{len(st_sel)}/{strange_slots} (elig {len(strange)}). Shipping fewer rather "
+                  f"than filling past a partition's slot/supply cap or a cluster cap "
+                  f"({self.release_split['n_cluster_cap_skips']} cluster-cap skips).",
+                  flush=True)
+        print(f"[select] head-split rank: smooth {len(sm_sel)} (wallpaper head) + strange "
               f"{len(st_sel)} (mining head) = {len(selected)}; realized strange frac "
               f"{self.release_split['strange_frac_realized']:.2f} (target {self.strange_frac}); "
               f"strange modes {self.release_split['strange_modes']}", flush=True)
@@ -1199,27 +1382,30 @@ def main():
                          "smooth = N − strange. Heads are selected by DISJOINT within-head "
                          "greedy passes (never compared in one step).")
     ap.add_argument("--target-gated", type=int, default=0,
-                    help="0 → 3×release-n POST-FLOOR rows (release-eligible AND above their "
-                         "head's release floor). Every floor enforces, so only floor-clearing "
-                         "rows exist to count; strange rows the release floor cut are reported "
-                         "and never satisfy the target.")
+                    help="0 → 3×release-n SCORED rows. The per-head release floors are "
+                         "annotation-only since 2026-08-09, so the surplus is denominated in "
+                         "candidates that rendered and scored; how many of them would also "
+                         "have cleared the retired 0.90/0.50 is reported beside it.")
     ap.add_argument("--cover-all", action="store_true",
                     help="colorize every admitted location exactly once, then stop (explicit "
                          "one-pass; bypasses --target-gated/--max-attempts/--time-budget-min)")
     ap.add_argument("--floor", type=float, default=DEFAULT_FLOOR,
-                    help=f"wallpaper-head POOL floor for smooth (default {DEFAULT_FLOOR}, "
-                         f"permissive; below the {DEFAULT_RELEASE_FLOOR} gate). An override is "
-                         f"UNSTAMPED — no head version vouches for it.")
+                    help=f"wallpaper-head POOL floor for smooth, ANNOTATION-ONLY since "
+                         f"2026-08-09 (default {DEFAULT_FLOOR}). It admits and rejects "
+                         f"nothing; it is the threshold the `above_pool_floor` column "
+                         f"compares against. An override is UNSTAMPED.")
     ap.add_argument("--mining-floor", type=float, default=DEFAULT_MINING_FLOOR,
-                    help=f"mining-head POOL floor for strange styles (default "
-                         f"{DEFAULT_MINING_FLOOR}; below the {DEFAULT_MINING_RELEASE_FLOOR} gate)")
+                    help=f"mining-head POOL floor for strange styles, ANNOTATION-ONLY since "
+                         f"2026-08-09 (default {DEFAULT_MINING_FLOOR})")
     ap.add_argument("--release-floor", type=float, default=DEFAULT_RELEASE_FLOOR,
-                    help=f"wallpaper-head RELEASE floor (default = the {DEFAULT_RELEASE_FLOOR} "
-                         f"production gate)")
+                    help=f"wallpaper-head RELEASE floor, ANNOTATION-ONLY since 2026-08-09 "
+                         f"(default = the {DEFAULT_RELEASE_FLOOR} production gate). Recorded "
+                         f"as `would_pass_release_floor`; it gates nothing.")
     ap.add_argument("--mining-release-floor", type=float, default=DEFAULT_MINING_RELEASE_FLOOR,
-                    help=f"mining-head RELEASE floor (default = the "
-                         f"{DEFAULT_MINING_RELEASE_FLOOR} production gate; ENFORCING since "
-                         f"2026-08-06 — strange below it is pooled but cannot ship)")
+                    help=f"mining-head RELEASE floor, ANNOTATION-ONLY since 2026-08-09 "
+                         f"(default = the {DEFAULT_MINING_RELEASE_FLOOR} production gate; it "
+                         f"enforced from 2026-08-06 to 2026-08-09). Strange below it now "
+                         f"ships if it ranks.")
     ap.add_argument("--release-w", type=int, default=None,
                     help=f"release render width (default wallpaper canon {REL_W})")
     ap.add_argument("--release-h", type=int, default=None,
@@ -1277,16 +1463,19 @@ def main():
           f"accumulated → {rpath.relative_to(ROOT)} (population → {runs_path.relative_to(ROOT)})",
           flush=True)
     gpath, n_tot, n_cut, n_cut_sel, pool_c = eng.write_gate_report(selected)
-    acting = "ACTING" if F.MINING_RELEASE.acts else "REPORT-ONLY"
+    acting = "ACTING" if F.MINING_RELEASE.acts else "ANNOTATION-ONLY"
+    # The `would_cut ∧ selected` join is NON-ZERO again. It was zero by construction from
+    # 2026-08-06 (enforcing implies selection implies passing); with the floor annotating, a
+    # row below 0.50 can be selected on rank, so the log recovers the free labelled false-cut
+    # signal enforcing cost — named here because that recovery is the readable half of the
+    # retirement, and a reader who remembers "always 0" would otherwise mistrust it.
     print(f"[gate-report] RELEASE site ({eng.mining_release_floor} floor, {acting}): {n_tot} "
-          f"strange candidate(s) logged, {n_cut} cut ({n_cut_sel} of those selected anyway — "
-          f"0 by construction while the floor acts) → {gpath.relative_to(ROOT)}", flush=True)
-    print(f"[gate-report] POOL site ({eng.mining_floor} floor, ACTING): "
-          f"{pool_c['n_would_cut_pool']}/{pool_c['n_with_pool_site']} would-cut, of those "
-          f"{pool_c['n_would_cut_pool_pooled']} pooled anyway and "
-          f"{pool_c['n_would_cut_pool_selected']} selected anyway (also 0 by construction now "
-          f"that release ≥ pool is enforced — the free false-cut count was report-only's)",
-          flush=True)
+          f"strange candidate(s) logged, {n_cut} below it ({n_cut_sel} of those selected "
+          f"anyway — no longer 0 by construction) → {gpath.relative_to(ROOT)}", flush=True)
+    print(f"[gate-report] POOL site ({eng.mining_floor} floor, ANNOTATION-ONLY): "
+          f"{pool_c['n_would_cut_pool']}/{pool_c['n_with_pool_site']} below it, of those "
+          f"{pool_c['n_would_cut_pool_pooled']} pooled and "
+          f"{pool_c['n_would_cut_pool_selected']} selected", flush=True)
     rel_paths = eng.render_release(selected, skip_render=args.no_release_render)
     R.write_report(eng, selected, sel_log, rel_paths)
 

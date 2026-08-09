@@ -502,3 +502,53 @@ an item's evidence, the line points at it rather than restating it.
   `[decision: prompts/v11_adoption.md §6, Matt, 2026-08-08]`
   `[code: docs/design/storage_classes.md § "Weights retention";
   tools/scoring/test_production_pins.py::LADDER; data/v11/adoption_record.json]`
+
+- **2026-08-09 — ENFORCING per-head stage-2 floors** (wallpaper pool 0.75 / release 0.90,
+  mining pool 0.25 / release 0.50). All four became ANNOTATION-ONLY: they keep their values,
+  their head stamps and their measured operating points, and every pool row, release-record
+  row and sheet tile now carries what each cut WOULD have said (`would_pass_floor`). Retired
+  because a derived per-partition threshold frozen into enforcing state is the failure mode
+  this whole restructure is about — the same shape as the intake's stored `decoded_class`.
+  What removes rows instead is ONE coarse semantic constant, `floors.JUNK_FLOOR` = 0.20, at
+  ONE site (drawing the colorize pool: `ranked_intake` on the stage-1 head, `deploy_tail` on
+  the mining head). **NOT retired: the stamp.** An annotation on a probability scale the live
+  head does not produce is as unreadable as a gate on one, so `Floor.gate` still refuses on a
+  pin mismatch. **What it costs, said once:** `--target-gated` now counts SCORED rows, so
+  hitting 3xN no longer implies 3xN rows above 0.90/0.50. **What it gives back:** the mining
+  gate report's `would_cut ∧ selected` join is a real labelled false-cut count again instead
+  of 0 by construction.
+  `[decision: prompts/selection_restructure_1.md §2, Matt, 2026-08-09]`
+  `[code: tools/emission/floors.py; tools/emission/test_floors.py;
+  data/render_mode_head/v1/mining_gate_lock.json (re-derived, `acts` false, measurements
+  unchanged)]`
+
+- **2026-08-09 — the current-decode ∧ q3 intake predicate** (`corpus_common.is_current_decoded`
+  ∧ `decoded_class >= 3`) as stage 2's admission rule. Replaced by READ-TIME RANKED intake
+  (`tools/emission/ranked_intake.py`): raw stored P(>=3) descending per partition, cut only at
+  the junk floor. Retired because both halves enforce frozen state — `decoded_class` is a
+  per-partition derived threshold baked in at harvest, and the stamp discards every row an
+  older head scored, which took the intake from ~1.4k locations to **16** at the v10 flip and
+  cost a multi-hour re-score to undo. Measured at retirement on the seven intake ledgers:
+  1470 mined (guard ∧ distinct), 1270 above the 0.20 floor, against 751 under the old
+  predicate WITH the v11 re-score siblings in place. **NOT retired:** guard, distinct, and the
+  floor-admit bypass for `q4_harvest` / `human_q3plus` — none of the three is a head verdict.
+  The re-score machinery (`ledger_rescore.py`) is NOT retired either; it is simply no longer
+  load-bearing for admission.
+  `[decision: prompts/selection_restructure_1.md §1, Matt, 2026-08-09]`
+  `[code: tools/emission/ranked_intake.py; tools/emission/test_ranked_intake.py;
+  tools/emission/descriptor.py::load_admitted(admit=)]`
+
+- **2026-08-09 — greedy max-marginal-gain release selection** on the live path
+  (`selection.greedy_select`: within-niche quality percentile x morph-CLIP coverage gain).
+  Replaced by `selection.rank_select` — top-N by the head's own score under a per-partition
+  slot allocation crossed with the thin-supply cap `floor(passing_supply / 4)`, plus at most
+  2 picks per morph cluster per run. Retired in favour of caps a human can read off a sheet
+  ("no more than two from one look", "a partition with fewer than four candidates ships
+  none") rather than a marginal-gain number nobody can check by eye. **NOT retired: the head
+  split.** The two passes stay disjoint and the cluster counter is shared across them; a
+  single cross-head pass is separately retired above ("Cross-head absolute-score selection")
+  and that retirement still holds. `greedy_select` and its tests remain in the tree — it is
+  what `report._v1_release_reconstruction` reads to reconstruct what the v1 release shipped.
+  `[decision: prompts/selection_restructure_1.md §3-4, Matt, 2026-08-09]`
+  `[code: tools/emission/selection.py::rank_select;
+  tools/emission/build_emission_diversity_v1.py::select_release]`

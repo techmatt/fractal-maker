@@ -56,7 +56,10 @@ def test_the_lock_quotes_the_owner_cuts_and_their_measured_operating_points(lock
     assert lock["cuts"]["mining_pool"]["value"] == F.MINING_POOL.value
     assert lock["cuts"]["mining_release"]["value"] == F.MINING_RELEASE.value
     rel = lock["cuts"]["mining_release"]
-    assert rel["acts"] is True and rel["site"] == "release"
+    # `acts` is DERIVED from the owner, so the record tracks the retirement instead of
+    # outliving it: the cut went annotation-only on 2026-08-09 and the frozen MEASUREMENT
+    # beside it is unchanged, which is the whole reason the record survives the retirement.
+    assert rel["acts"] is F.MINING_RELEASE.acts and rel["site"] == "release"
     assert (rel["fires"], rel["tp"], rel["n"]) == (33, 32, 422)
     lo, hi = rel["precision_ci95"]
     assert lo < rel["precision"] < hi                       # a Wilson interval, not a point

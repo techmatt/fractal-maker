@@ -50,9 +50,10 @@ SITE = "emission_diversity_v1"
 # page reads top-down as the funnel and a set would not.
 FATES = [
     ("selected", "SELECTED — in the release"),
-    ("eligible_not_selected", "eligible, passed over by the greedy release selection"),
-    ("pooled_below_release_floor", "pooled as inventory, below its head's RELEASE floor"),
-    ("below_pool_floor", "rejected at its head's POOL floor"),
+    ("eligible_not_selected", "eligible, passed over by rank / a slot, supply or cluster cap"),
+    ("pooled_below_release_floor", "pooled, below its head's RETIRED release floor "
+                                   "(annotation — did not stop it competing)"),
+    ("below_pool_floor", "pooled, below its head's RETIRED pool floor (annotation)"),
     ("render_error", "render or scoring error (no head verdict)"),
 ]
 
@@ -69,7 +70,13 @@ def _jsonl(path: Path) -> list:
 def assign_fates(pool_rows: list, selected_ids: set, eligible_ids: set,
                  release_floor_of) -> dict:
     """`id -> fate`. Read off the durable pool log plus the release record's decisions, so the
-    sheet's strata are the run's actual decisions and not this tool's re-derivation of them."""
+    sheet's strata are the run's actual decisions and not this tool's re-derivation of them.
+
+    The two floor strata are now ANNOTATION strata: since 2026-08-09 nothing is removed by a
+    per-head floor, so a row lands in one of them only if it was ALSO not selected and not
+    recorded as eligible — i.e. the run's own record is still the authority on the fate, and
+    the floor names only say which side of the retired cut the row sat on. A run made while
+    those floors enforced reads exactly as it did."""
     out = {}
     for r in pool_rows:
         rid = r["id"]
@@ -79,7 +86,9 @@ def assign_fates(pool_rows: list, selected_ids: set, eligible_ids: set,
             out[rid] = "eligible_not_selected"
         elif r.get("error") or r.get("p_ge3") is None:
             out[rid] = "render_error"
-        elif r.get("passed"):
+        elif (r["p_ge3"] or 0.0) >= release_floor_of(r["render_style"]):
+            out[rid] = "eligible_not_selected"
+        elif r.get("above_pool_floor", r.get("passed")):
             out[rid] = "pooled_below_release_floor"
         else:
             out[rid] = "below_pool_floor"
@@ -133,12 +142,18 @@ def colorize_behavior(run_dir: Path, pool_rows: list, summary: dict) -> dict:
         "post_floor": acct.get("post_floor"),
         "post_floor_smooth": acct.get("post_floor_smooth"),
         "post_floor_strange": acct.get("post_floor_strange"),
-        "ungated_strange": acct.get("ungated_strange"),
+        # the retired floors' counterfactual on this run's population (annotation-only since
+        # 2026-08-09) — the number that says how much the restructure actually changed.
+        "would_pass_release_floor": acct.get("would_pass_release_floor"),
+        "below_retired_release_floor": acct.get("below_retired_release_floor"),
         "release_eligible": acct.get("release_eligible"),
         "n_strange_attempts": len(strange),
         "n_strange_scored": len(scored_strange),
-        "ungated_share_of_scored_strange": (
-            round(acct.get("ungated_strange", 0) / len(scored_strange), 4)
+        # share of scored strange that sits BELOW the retired 0.50 — was `ungated_strange`,
+        # a key `target_accounting` stopped emitting, so this read 0 for every run it was
+        # supposed to describe.
+        "below_retired_share_of_scored_strange": (
+            round((acct.get("cut_by_release_floor_strange") or 0) / len(scored_strange), 4)
             if scored_strange else None),
         "short_fill": summary.get("short_fill", {}),
     }
@@ -279,10 +294,34 @@ def build(run_dir: Path, record_root: Path, out_html: Path) -> dict:
              f"on a human label with <i>no machine quality cut</i> at intake; they still face "
              f"both stage-2 head floors like anything else. They are marked wherever they "
              f"appear so the two supplies can be compared by eye.</p>")
-    P.append(f"<p class=note><b>Cuts in force:</b> {escape(F.summary())}. All four act as of "
-             f"2026-08-06, when the mining RELEASE floor stopped being report-only. Fates are "
-             f"read from the run's own release RECORD, not re-derived from today's floors, so "
-             f"a run made while that floor was report-only still reads as what it did.</p>")
+    P.append(f"<p class=note><b>Cuts:</b> {escape(F.summary())}. Since 2026-08-09 the four "
+             f"per-head floors ANNOTATE and the only enforcing cut is the junk floor, applied "
+             f"one stage earlier where the colorize pool is drawn — so a tile marked "
+             f"<b>✗ retired floor</b> below competed for a slot and may well have won one. "
+             f"Fates are read from the run's own release RECORD, not re-derived from today's "
+             f"floors, so a run made while those floors enforced still reads as what it did.</p>")
+
+    # --- per-partition supply, the thin-supply rule's input ------------------ #
+    mined = summary.get("mined_supply", {}) or {}
+    passing = summary.get("passing_supply", {}) or {}
+    caps = summary.get("emit_caps", {}) or {}
+    if mined or passing:
+        div = summary.get("thin_supply_divisor", "?")
+        P.append("<h2>Per-partition supply</h2>")
+        P.append(f"<p><code>emit &le; floor(passing_supply / {div})</code>. A partition with "
+                 f"too few floor-passing candidates emits nothing rather than shipping its own "
+                 f"least-bad row — one line each, including the ones that emit zero, because a "
+                 f"partition that vanishes from a readout when its supply dies is the failure "
+                 f"this list exists to prevent.</p>")
+        P.append('<div class="scroll"><table><tr><th>partition</th><th>mined</th>'
+                 '<th>above junk floor</th><th>emit cap</th></tr>')
+        for part in sorted(set(mined) | set(passing)):
+            n_pass = passing.get(part, 0)
+            cap = caps.get(part, 0)
+            note = "" if cap else " <span class=note>(thin supply → 0)</span>"
+            P.append(f"<tr><td>{escape(part)}</td><td>{mined.get(part, 0)}</td>"
+                     f"<td>{n_pass}</td><td>{cap}{note}</td></tr>")
+        P.append("</table></div>")
 
     # readout tables
     P.append("<h2>Realized vs target — per-partition, over the selection</h2>")
@@ -322,7 +361,11 @@ def build(run_dir: Path, record_root: Path, out_html: Path) -> dict:
                 if not src.exists():
                     continue
                 rf = release_floor_of(r["render_style"])
-                note = (f"(pool floor {r.get('floor')}, release floor {rf})")
+                ok = r.get("would_pass_release_floor")
+                if ok is None:
+                    ok = (r.get("p_ge3") or 0.0) >= rf
+                note = (f"· {'✓' if ok else '✗'} retired release floor {rf:g} "
+                        f"(retired pool floor {r.get('floor')})")
                 P.append(tile(r, src.relative_to(ROOT).as_posix(), key, ledger, tag, note))
             P.append("</div>")
 

@@ -20,15 +20,17 @@ INHERITED approved palette, score each with the LOCKED `mining_v1` gate
 (`tools/mining/mining_gate.MiningScorer`, threshold 0.50 on marginal p_ge3), and keep
 a diversity-allocated set as alternate wallpapers.
 
-WHETHER THE GATE CUTS IS READ FROM THE OWNER, not decided here: `floors.MINING_RELEASE.acts`
-(`tools/emission/floors.py`). It was report-only from prompts/mining_gate_report_only.md and
-is ENFORCING again as of 2026-08-06 (prompts/mining_adoption_prompt.md), so the diversity
-allocation runs over gate-PASSERS — the shape it had before the report-only period. The
-would-cut verdict is still RECORDED per candidate in the committed log
-`data/emission/mining_gate_reports/deploy_tail.jsonl` (`tools/mining/gate_report.py`), paired
-with the keep decision; while the gate acts, "cut but kept anyway" is 0 by construction, which
-is the calibration signal report-only bought and enforcing gives back. The head/threshold stay
-LOCKED (we still never retrain or re-threshold here).
+WHAT FILTERS THE ALLOCATION INPUT IS THE JUNK FLOOR (`floors.JUNK_FLOOR`, 0.20), as of
+2026-08-09. Drawing this allocation IS drawing a colorize pool, which is the one site that
+constant applies at, so this pass and the emission intake read the same number on their own
+judging head. The 0.50 mining release floor filtered it from 2026-08-06 to 2026-08-09 and is
+now ANNOTATION-ONLY along with the other three stage-2 cuts (`tools/emission/floors.py`);
+`gate_acts` survives as a report field only. Its verdict is still RECORDED per candidate in the
+committed log `data/emission/mining_gate_reports/deploy_tail.jsonl`
+(`tools/mining/gate_report.py`), paired with the keep decision — and "below the floor but kept
+anyway" is a REAL count again rather than 0 by construction, which is the labelled false-cut
+signal enforcing cost. The head/threshold stay LOCKED (we still never retrain or re-threshold
+here).
 
 Incremental / idempotent state (the load-bearing production delta over the pilot):
   * The durable state is `alternates.jsonl` (the kept strange alternates). On each run
@@ -62,10 +64,10 @@ Load-bearing (see prompts/deploy_tail_emit_wirein_prompt.md + the memories):
   * normal_map OFF for all modes (none of the specs enable it; `shade:none` composites).
 
 Keep / diversity allocation (tail_alloc.allocate_strange):
-  * The p_ge3 >= 0.50 cut filters the allocation input while `floors.MINING_RELEASE.acts`
-    (it does, since 2026-08-06); under report-only every scored candidate was eligible
-    instead. AT MOST ONE strange alternate per location. The p_ge3 quality ORDER within
-    the allocation is the same either way — the gate decides the input set, not the order.
+  * The p_ge3 >= `floors.JUNK_FLOOR` (0.20) cut filters the allocation input; it was
+    p_ge3 >= 0.50 until 2026-08-09. AT MOST ONE strange alternate per location. The p_ge3
+    quality ORDER within the allocation is unchanged by which cut is used — the filter
+    decides the input set, not the order.
   * Strange budget B = round(0.25 * n_emitted) is a CEILING across the batch.
   * Keepers are SPREAD across modes for diversity (not abundance-biased): each mode
     gets a floor ~B/(n+2), the surplus (~2/(n+2)*B) lands on the abundant modes by
@@ -546,18 +548,24 @@ def main():
     #    modes for diversity. A location may pass in several modes -> batch-level (each
     #    location fills at most one mode's slot).
     #
-    #    WHETHER THE GATE CUTS IS DERIVED, NOT DECIDED HERE. `floors.MINING_RELEASE` is the
-    #    one owner of the mining release cut; this pass applies the SAME head at the SAME
-    #    threshold to the same question (may this strange render ship — a kept alternate is
-    #    durable product), so it reads `.acts` rather than carrying its own answer. Enforcing
-    #    since 2026-08-06 (prompts/mining_adoption_prompt.md): allocation runs over the
-    #    passers again, which is the shape it had before the report-only period. Were the
-    #    floor ever set back to report-only, allocation would flow over every scored candidate
-    #    again with no edit here — and the two branches differ only in the input set, so the
-    #    budget and per-mode floors are untouched either way.
-    passers = [c for c in cands if c.get("passed")]
-    gate_acts = F.MINING_RELEASE.acts
-    alloc_input = passers if gate_acts else cands
+    #    WHAT FILTERS THE ALLOCATION INPUT IS THE JUNK FLOOR (2026-08-09). Drawing this
+    #    allocation IS drawing a colorize pool — the same question the emission intake asks
+    #    one stage earlier — so it reads the SAME semantic constant, `floors.JUNK_FLOOR`, on
+    #    the mining head's p_ge3. Confident junk does not spend the render budget; everything
+    #    above 0.20 competes on rank inside the per-mode allocation.
+    #
+    #    IT USED TO BE THE 0.50 MINING RELEASE FLOOR, via `floors.MINING_RELEASE.acts`. That
+    #    floor is ANNOTATION-ONLY now (floors.py), and reading `.acts` here would have silently
+    #    turned this site into "no filter at all" the moment it flipped — which is why the
+    #    `.acts` read is replaced rather than left to resolve to False. The 0.50 verdict is
+    #    still logged per candidate in the gate report below, where it is now a genuine
+    #    counterfactual again.
+    passers = [c for c in cands if c.get("passed")]          # the retired 0.50 verdict
+    gate_acts = F.MINING_RELEASE.acts                        # False — for the report only
+    alloc_input = [c for c in cands if F.passes_junk_floor(c.get("p_ge3"))]
+    print(f"[gate] junk floor {F.JUNK_FLOOR}: {len(alloc_input)}/{len(cands)} candidates "
+          f"enter the allocation ({len(passers)} would also clear the retired "
+          f"{F.MINING_RELEASE.value} release floor)")
     keepers, alloc = allocate_strange(alloc_input, n_emit, modes, STRANGE_BUDGET_FRAC,
                                       existing=existing_list)
     keepers.sort(key=lambda c: -c["p_ge3"])   # render/report in quality order
@@ -589,9 +597,9 @@ def main():
         selection_stage="keeper") for c in cands]
     # deploy_tail has no pool stage, so it logs no pool floor and `pool_c` is all zeros.
     gpath, n_tot, n_cut, n_cut_sel, _pool_c = GR.write_gate_report("deploy_tail", gr_rows)
-    print(f"[gate-report] strange mining gate {'ENFORCING' if gate_acts else 'REPORT-ONLY'}: "
-          f"{n_tot} candidate(s) logged, {n_cut} cut ({n_cut_sel} kept anyway — 0 by "
-          f"construction while the gate acts) → {gpath.relative_to(REPO)}")
+    print(f"[gate-report] retired mining release floor ({scorer.threshold}, ANNOTATION-ONLY): "
+          f"{n_tot} candidate(s) logged, {n_cut} below it ({n_cut_sel} kept anyway — a real "
+          f"count again, not 0 by construction) → {gpath.relative_to(REPO)}")
 
     # 6. Full-res render the NEW keepers alongside the smooth wallpaper (skip-if-exists so
     #    a re-run / adopted pilot keeper never re-renders), + side-by-side for eyeball.
@@ -671,7 +679,8 @@ def main():
 
     # 10. Report.
     write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passer,
-                 scorer, parity, checks, thr_bite, floors_engaged, args, gate_acts)
+                 scorer, parity, checks, thr_bite, floors_engaged, args, gate_acts,
+                 alloc_input, passers)
 
 
 def run_checks(smooth_before, smooth_paths, emit_fields_before, emit_field_dir,
@@ -749,7 +758,8 @@ def run_parity(keepers):
 
 
 def write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passer,
-                 scorer, parity, checks, thr_bite, floors_engaged, args, gate_acts):
+                 scorer, parity, checks, thr_bite, floors_engaged, args, gate_acts,
+                 considered_above_junk, passers_retired_floor):
     keep_ids = {c["cid"] for c in keepers}
     n_total_alt = len(existing_alts) + len(keepers)
     degenerate = not floors_engaged
@@ -760,7 +770,12 @@ def write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passe
         # taken — not re-read here, where it could disagree with what the run did.
         "gate": {"version": MINING_GATE_VERSION, "threshold": scorer.threshold,
                  "acts": bool(gate_acts),
-                 "cut_owner": f"floors.MINING_RELEASE ({F.MINING_RELEASE})"},
+                 "cut_owner": f"floors.MINING_RELEASE ({F.MINING_RELEASE})",
+                 # what ACTUALLY filtered this run's allocation input, and the retired
+                 # threshold's counterfactual on the same population.
+                 "alloc_filter": "floors.JUNK_FLOOR", "junk_floor": F.JUNK_FLOOR,
+                 "n_above_junk_floor": len(considered_above_junk),
+                 "n_above_retired_release_floor": len(passers_retired_floor)},
         "curation_pass": {
             "score_only": bool(args.score_only),
             "n_existing_alternates": len(existing_alts),
@@ -827,8 +842,14 @@ def write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passe
     ck = checks
     L.append(f"**Gate** `{rep['gate']['version']}` (LOCKED) · threshold "
              f"`{scorer.threshold}` on marginal p_ge3 · "
-             f"**{'ENFORCING' if gate_acts else 'REPORT-ONLY'}** "
+             f"**{'ENFORCING' if gate_acts else 'ANNOTATION-ONLY'}** "
              f"(owner: {rep['gate']['cut_owner']})\n")
+    L.append(f"**Allocation input** filtered at the junk floor "
+             f"`{rep['gate']['junk_floor']}` — **{rep['gate']['n_above_junk_floor']}** of "
+             f"{len(cands)} candidates, of which "
+             f"**{rep['gate']['n_above_retired_release_floor']}** would also have cleared the "
+             f"retired {scorer.threshold} release floor. That floor filtered this input from "
+             f"2026-08-06 until 2026-08-09; it now annotates.\n")
     L.append(f"**Corpus** N=**{q['n_emitted']}** emitted · budget "
              f"B=round({q['budget_frac']:.0%}×{q['n_emitted']})=**{q['budget_B']}** · "
              f"floor=**{q['floor_per_mode']}**/mode (n={q['n_modes']}) · floor-bite at "
