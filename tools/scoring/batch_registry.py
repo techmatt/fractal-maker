@@ -251,6 +251,33 @@ REGISTRY: dict[str, tuple[Registration, ...]] = {
                          "because it is a separate run, and because 'this row is here "
                          "because the label run could not fill its bucket' is a selection "
                          "story that has to survive into the corpus."),),
+    # ---- the 2026-08-10 (27) sittings: two STAGE-2 correction sheets, two heads ----
+    # Registered BEFORE either was built (prompts/sittings_27.md). Neither is a location-head
+    # batch — the first lives under `data/wallpaper_corpus/`, the second under
+    # `data/render_mode_corpus/` — and they are here for the same reason the label-corpus
+    # batches are: the classification is a fact about how the POPULATION was selected, and a
+    # corpus that keeps its own table would be the second authority this module exists to end.
+    "2026-08-10_wallpaper_correction_v2": (
+        Registration(source="wallpaper_correction_sitting", biased=True,
+                     why="the bucketed stage-2 intake sitting. Biased three ways and each is "
+                         "load-bearing: the intake it draws from is admitted on the LOCATION "
+                         "head's floors.GOOD_FLOOR; two of its six buckets (below_retired_"
+                         "floor, top_slice) are cut on the WALLPAPER head's own screen score; "
+                         "and every row is the head's argmax palette, served with the head's "
+                         "own suggested tier prefilled and ordered by its continuous score, "
+                         "so the labels are ANCHORED as well as selected. A tier rate measured "
+                         "on it is a statement about agreement with v3 and never a base rate — "
+                         "which is exactly what a v4b retrain wants from it, and exactly what "
+                         "makes it unusable on the eval side."),),
+    "2026-08-10_render_mode_correction_v2": (
+        Registration(source="mining_correction_sitting", biased=True,
+                     why="the mode x mining-score correction sheet. Biased at the source (its "
+                         "locations are the wallpaper head's own gate passers), in the draw "
+                         "(the fancy/composite modes are deliberately OVER-drawn at high "
+                         "mining score, where run 25's era gate found the busy false "
+                         "positives) and at the page (mining-v1 suggestion prefilled, sorted "
+                         "by its score). Its whole purpose is a non-representative slice, so "
+                         "no rate on it is a base rate."),),
 }
 
 UNREGISTERED = Registration(

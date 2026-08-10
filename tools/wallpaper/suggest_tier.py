@@ -84,6 +84,126 @@ DERIVATION = {
 
 K_TIERS = 4
 
+# --------------------------------------------------------------------------- #
+# THE STAGE-2 INTAKE CUTS (2026-08-10) — the re-derivation the block above asked for.
+# --------------------------------------------------------------------------- #
+# "Re-derive with `fit_cuts` when a labeled slice from the new population exists." It does
+# now. `CUTS` above was fitted on the dramatic+humanq3 eval slice, which is curated and
+# top-heavy; the two 2026-08-05 sheets drew from the STAGE-2 ADMITTED INTAKE and Matt labeled
+# all 1,140 of their rows. That is the population a fresh sitting draws from, so a sitting
+# over it gets cuts fitted on it.
+#
+# THE TWO PRIORS ARE NOT CLOSE, which is the whole reason for the second set:
+#   dramatic+humanq3 (n=686):  {1: 17%, 2: 43%, 3: 27%, 4: 13%}
+#   stage-2 intake  (n=1140):  {1: 43%, 2: 38%, 3: 14%, 4:  5%}
+# Prior-matching to the second means ~43% of an intake sitting is suggested tier 1 — which is
+# the anchoring hazard the `corn_0.5` rejection describes ONLY when the suggestion overstates
+# how bad the population is. Here it matches it.
+#
+# STATED PLAINLY: the old cuts score HIGHER on exact agreement over this same slice — 0.707
+# against 0.687 — and that is not an argument for keeping them. Exact agreement is not the
+# objective (see WHY NOT THE ACCURACY-MAXIMIZING CUT above); reproducing the label
+# distribution is, and only these cuts do it here — {495, 429, 163, 53} against a true
+# {493, 431, 163, 53}, i.e. matched up to the ROUNDING of the frozen cuts (two rows sit on the
+# tier-1/2 quantile tie), against the old cuts' {519, 426, 131, 64}.
+#
+# THEY ARE STILL ABSOLUTE. Fitted once on a labeled slice, then applied unchanged to a new
+# batch — never re-quantiled per batch. A stratified sitting that deliberately over-draws the
+# good end MUST come out with more tier-3/4 suggestions than a uniform draw would, and that
+# is exactly what an absolute cut preserves and a per-batch quantile destroys.
+#
+# CIRCULARITY, NAMED. Both source batches were CORRECTION sheets: their rows were served with
+# a suggestion prefilled from `CUTS`, so the labels are anchored to it. Agreement with what
+# was served was 0.733 (fresh sheet) and 0.567 (colorize path) — i.e. Matt corrected 27% and
+# 43% of the rows, so the slice is anchored but far from a copy of the rule. A future
+# re-derivation off a BLIND slice of the same population would be strictly better evidence and
+# there is no reason it cannot exist.
+INTAKE_CUTS = (1.0119, 2.4663, 3.0012)
+
+INTAKE_DERIVATION = {
+    "rule": "tier = 1 + #{c in cuts : expected_tier >= c}; "
+            "expected_tier = 1 + sum_k marginal_k",
+    "cuts": list(INTAKE_CUTS),
+    "cut_method": "quantiles of expected_tier at the derivation slice's own tier prior "
+                  "(prior-matched) via fit_cuts — ABSOLUTE, applied unchanged to new batches",
+    "derived": "2026-08-10",
+    "head": "data/wallpaper_head/v3/model_best.pt",
+    "deriver": "tools/wallpaper/suggest_tier.derive_intake_cuts()",
+    "slice": "the two 2026-08-05 stage-2 intake correction sheets, whole: "
+             "2026-08-05_wallpaper_fresh_sheet_v1 (960) + "
+             "2026-08-05_wallpaper_colorize_path_v1 (180), pred = head_v3.pred stamped on the "
+             "stored label crop, tier = the merged human sidecar",
+    "n": 1140,
+    "tier_prior": {"1": 493, "2": 431, "3": 163, "4": 53},
+    "accuracy_on_slice": {"exact": 0.687, "within_one": 0.994, "mae": 0.319,
+                          "suggested_hist": {"1": 495, "2": 429, "3": 163, "4": 53},
+                          "hist_note": "the REALIZED histogram under the frozen 4-dp cuts; "
+                                       "the exact-prior fit is {493, 431, 163, 53} and two "
+                                       "rows sit on the tier-1/2 quantile tie"},
+    "vs_the_dramatic_cuts": {
+        "cuts": list(CUTS),
+        "exact": 0.707, "suggested_hist": {"1": 519, "2": 426, "3": 131, "4": 64},
+        "why_not_kept": "higher exact agreement, but it is not the objective — these cuts "
+                        "reproduce the intake prior exactly and the dramatic ones do not",
+    },
+    "anchoring": {
+        "both_sources_were_correction_sheets": True,
+        "agreement_with_what_was_served": {"fresh_sheet": 0.733, "colorize_path": 0.567},
+        "note": "the slice is anchored to CUTS, not a copy of it — 27% and 43% of the rows "
+                "were corrected. A blind slice of the same population would be better "
+                "evidence and nothing prevents one.",
+    },
+    "scope": "derived on the stage-2 admitted intake, applied to sittings drawn from it; "
+             "a suggestion, never a label",
+}
+
+# (batch dir under data/wallpaper_corpus/batches, labels sidecar under labels/)
+INTAKE_SLICE_SOURCES = (
+    ("2026-08-05_wallpaper_fresh_sheet_v1", "wallpaper_fresh_sheet_v1"),
+    ("2026-08-05_wallpaper_colorize_path_v1", "wallpaper_colorize_path_v1"),
+)
+
+
+def intake_slice(root=None, sources=INTAKE_SLICE_SOURCES):
+    """`(pred, tiers)` — the labeled stage-2 intake slice `INTAKE_CUTS` was fitted on.
+
+    Derived from the batches and sidecars at call time, never restated as literals: a
+    hardcoded pair beside the paths it summarizes outlives the files the moment one changes
+    (`storage_classes.md`, "derive state in code"). Raises on an absent source rather than
+    fitting cuts to half the record — a prior read off part of a slice is not visibly wrong."""
+    import json
+    from pathlib import Path
+
+    root = Path(root) if root else Path(__file__).resolve().parents[2]
+    pred, tiers = [], []
+    for batch, sidecar in sources:
+        images = root / "data" / "wallpaper_corpus" / "batches" / batch / "images.jsonl"
+        labels = root / "labels" / f"{sidecar}.json"
+        for p in (images, labels):
+            if not p.exists():
+                raise FileNotFoundError(
+                    f"suggest_tier: derivation source absent: {p}. INTAKE_CUTS was fitted on "
+                    f"the whole of {[b for b, _s in sources]}; a re-derivation over the "
+                    f"remainder would be a different number, not a smaller one.")
+        lab = json.loads(labels.read_text(encoding="utf-8"))
+        for line in images.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            t = lab.get(row["image_id"])
+            if t is None:
+                continue
+            pred.append(float(row["head_v3"]["pred"]))
+            tiers.append(int(t))
+    return pred, tiers
+
+
+def derive_intake_cuts(root=None, ndigits: int = 4) -> tuple:
+    """Re-derive `INTAKE_CUTS` from the live artifacts. Kept live so the frozen constant is
+    checkable rather than remembered (`test_suggest_tier.py` asserts the two agree)."""
+    pred, tiers = intake_slice(root)
+    return tuple(round(c, ndigits) for c in fit_cuts(pred, tiers, K_TIERS))
+
 
 def expected_tier(marg) -> float:
     """`1 + Σ_k marginal_k` — the head's continuous quality readout in [1, K_TIERS].

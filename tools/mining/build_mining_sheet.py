@@ -324,14 +324,19 @@ def _run(cmd, timeout_s: float):
         raise RuntimeError(r.stderr[-700:])
 
 
-def _render_pure(entry, loc, crop_path, fields_dir, timeout_s):
+def _render_pure(entry, loc, crop_path, fields_dir, timeout_s, geom=None):
     """dump-field -> python recolor with the FULL approved colour params. Bit-faithful:
-    `transfer=grad` survives, which the Rust coloring path cannot express."""
+    `transfer=grad` survives, which the Rust coloring path cannot express.
+
+    `geom` is `(w, h, ss)`, defaulting to the FROZEN corpus pins. It exists so a SCORING-ONLY
+    screen can drive this exact render path at a smaller geometry instead of a second copy of
+    it (`build_mining_correction.py`); a keeper crop never passes it."""
     cm = _CM
+    w, h, ss = geom or (W, H, SS)
     binp = fields_dir / f"{entry['image_id']}.bin"
     try:
         _run([EXE, "render-one"] + _locflags(loc)
-             + ["--width", str(W), "--height", str(H), "--supersample", str(SS),
+             + ["--width", str(w), "--height", str(h), "--supersample", str(ss),
                 "--coloring", json.dumps(MR.spec_for(entry["mode"])),
                 "--dump-field", str(binp)], timeout_s)
         fld = cm.load_field(str(binp))
@@ -358,11 +363,14 @@ def _render_pure(entry, loc, crop_path, fields_dir, timeout_s):
     return False
 
 
-def _render_rust(entry, loc, crop_path, fields_dir, timeout_s):
+def _render_rust(entry, loc, crop_path, fields_dir, timeout_s, geom=None):
     """`render-one --coloring <spec>`. Honors reverse/log_premap/gamma/cycles/offset but
-    CANNOT express `transfer=grad`, so that knob is dropped and the row stamps it."""
+    CANNOT express `transfer=grad`, so that knob is dropped and the row stamps it.
+
+    `geom` — see `_render_pure`."""
     from PIL import Image
 
+    w, h, ss = geom or (W, H, SS)
     mode = entry["mode"]
     spec = MR.spec_for(mode, entry.get("mode_params"))
     p = entry["color_params"]
@@ -381,7 +389,7 @@ def _render_rust(entry, loc, crop_path, fields_dir, timeout_s):
     tmp_png = fields_dir / f"{entry['image_id']}.png"
     try:
         _run([EXE, "render-one"] + _locflags(loc)
-             + ["--width", str(W), "--height", str(H), "--supersample", str(SS),
+             + ["--width", str(w), "--height", str(h), "--supersample", str(ss),
                 "--filter", FILT, "--palette", entry["palette"],
                 "--colormaps", POOL_CMAPS, "--coloring", json.dumps(spec),
                 "--out", str(tmp_png)], timeout_s)
@@ -394,16 +402,20 @@ def _render_rust(entry, loc, crop_path, fields_dir, timeout_s):
 
 def render_one(job):
     """One raster. `job` carries the batch paths so the worker holds no module state beyond
-    the library/colormap globals its initializer loads."""
-    entry, crops_s, fields_s, timeout_s = job
+    the library/colormap globals its initializer loads.
+
+    A 5th job element is an optional `(w, h, ss)` geometry (see `_render_pure`); absent, the
+    frozen corpus pins apply, which is what every keeper crop uses."""
+    entry, crops_s, fields_s, timeout_s = job[:4]
+    geom = job[4] if len(job) > 4 else None
     t0 = time.time()
     crops, fields_dir = Path(crops_s), Path(fields_s)
     loc = _LOC.from_render_block(entry["render"])
     crop_path = crops / f"{entry['image_id']}.jpg"
     if entry["kind"] == "pure":
-        transfer_dropped = _render_pure(entry, loc, crop_path, fields_dir, timeout_s)
+        transfer_dropped = _render_pure(entry, loc, crop_path, fields_dir, timeout_s, geom)
     else:
-        transfer_dropped = _render_rust(entry, loc, crop_path, fields_dir, timeout_s)
+        transfer_dropped = _render_rust(entry, loc, crop_path, fields_dir, timeout_s, geom)
     return {"image_id": entry["image_id"], "mode": entry["mode"], "family": entry["family"],
             "transfer_dropped": transfer_dropped, "secs": time.time() - t0}
 
