@@ -8,11 +8,17 @@ composition, so the only instrument is Matt, and the only way to point him at th
 to over-draw the cell it lives in.
 
 THE CELL IS (mode kind) x (mining score), AND THE OVERSAMPLE IS AT ITS TOP-RIGHT.
-Measured on the 960 labeled rows of `2026-08-06_render_mode_fresh_sheet_v1`: of the 148 rows
-v1 put in its top tier, 15 carry a human 2 — and 12 of those 15 are composite/direct modes
-(`composite_c7` 2, `composite_c13` 1, `direct_trap_*` 6, `smooth_angle_min` 2, `trap_circle`
-1). That is the population. It is thin BY CONSTRUCTION — a false positive at the top of a
-scale is rare — so a proportional draw would put ~15 of them in front of Matt again.
+Measured on the 960 labeled rows of `2026-08-06_render_mode_fresh_sheet_v1`, binned by the
+FROZEN cuts this sheet serves under: of the 148 rows in v1's top tier, **15 carry a human
+below 3, and 11 of those 15 are composite/direct** (`direct_trap_multiply` 3,
+`direct_trap_screen` 2, `smooth_angle_min` 2, `composite_c7` 2, `composite_c13` 1,
+`direct_trap_lines` 1; the pure four are `exp_smoothing` 3 and `trap_circle` 1). The RATE is
+the number that matters: **11/61 = 18.0% of fancy top-tier rows against 4/87 = 4.6% of pure
+ones**, a 3.9x difference on exactly the axis nothing machine-measurable sees.
+
+It is thin BY CONSTRUCTION — a false positive at the top of a scale is rare — so a
+proportional draw would put ~15 of them in front of Matt again, which is not enough to train
+on and not enough to read.
 
 WHAT THIS SHEET DOES INSTEAD. It takes EVERY high-scoring row it can find, fancy modes first,
 then spends the rest of the page on the mid band with a declared 60% share to the fancy modes.

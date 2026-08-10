@@ -492,9 +492,14 @@ def select(spec: SittingSpec, screen_recs, target_rows=None, seed=None):
                            partition_available=sizes, partition_alloc=alloc,
                            by_vein=dict(sorted(Counter(r["vein"] for r in take).items()))))
 
-    # 3. below the retired release floor.
-    lo, hi = F.GOOD_FLOOR, F.WALLPAPER_RELEASE.value
-    pool = [r for r in avail() if lo <= r["score"] < hi]
+    # 3. below the retired release floor. The upper edge goes through `Floor.annotates`, not
+    # through `.value`: the comparison carries a HEAD STAMP CHECK, and 0.90 is a point on v3's
+    # probability scale that means nothing on v4b's. Reading `.value` here would silently
+    # define the band against a head nobody is using.
+    lo = F.GOOD_FLOOR
+    hi = F.WALLPAPER_RELEASE.value
+    pool = [r for r in avail()
+            if r["score"] >= lo and not F.WALLPAPER_RELEASE.annotates(r["score"])]
     n = min(spec.below_floor_target, room(), len(pool))
     take, alloc, sizes = _draw_apportioned(pool, n, rng)
     claim(take, "below_retired_floor")
