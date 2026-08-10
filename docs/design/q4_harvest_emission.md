@@ -52,19 +52,26 @@ head *version* it was set against, and refuses to gate when the live pin disagre
 
 ### And the q3 gate went with it, on the intake path (2026-08-09)
 
-`descriptor.load_admitted` is unchanged and still enforces `current-decode ∧ admit_quality`;
-what changed is that **the emission driver no longer calls it that way**. Stage-2 intake now
-goes through `tools/emission/ranked_intake.py`, which hands `load_admitted` its own predicate:
-`guard_pass ∧ distinct ∧ (raw P(>=3) >= floors.JUNK_FLOOR, or a floor-admit source)`, with
-candidates ranked best-first per partition on that raw probability. No decode-version
-predicate, no stored `decoded_class`.
+Stage-2 intake goes through `tools/emission/ranked_intake.py`, which hands `load_admitted`
+its own predicate: `guard_pass ∧ distinct ∧ (raw P(>=3) >= floors.JUNK_FLOOR, or a floor-admit
+source)`, with candidates ranked best-first per partition on that raw probability. No
+decode-version predicate, no stored `decoded_class`.
 
-The argument is the one above, one level up. `decoded_class` is `corn_decode(p_notbad, p_good,
-t_good_p)` — a **per-partition derived threshold frozen into the row at harvest time**, so
-moving `t_good` for a partition moves nothing already written; and the currency stamp that
-guards it discards every row an older head scored, which is how the v10 flip took this intake
+**And `load_admitted`'s OWN predicate followed it a day later (2026-08-09,
+`prompts/selection_restructure_3.md`).** It enforced `current-decode ∧ admit_quality`; it now
+enforces `guard_pass ∧ distinct ∧ (raw P(>=3) >= floors.GOOD_FLOOR, or a floor-admit source)`.
+Same shape, one height up — `GOOD_FLOOR` 0.50 is what a run KEEPS, `JUNK_FLOOR` 0.20 is what
+stage 2 spends compute on, and there is now exactly one quality definition in the pipeline.
+Both `admit_quality` and the decode-version family were deleted. **Measured:** the seven-ledger
+union went 779 -> 862 admitted with not a row added.
+
+The argument is the one above, one level up. `decoded_class` was `corn_decode(p_notbad,
+p_good, t_good_p)` — a **per-partition derived threshold frozen into the row at harvest time**,
+so moving `t_good` for a partition moved nothing already written; and the currency stamp that
+guarded it discarded every row an older head scored, which is how the v10 flip took this intake
 to 16 rows. Reading the stored probability instead makes the threshold a read-time choice and
-makes a head flip a degradation in rank quality rather than a deletion of the population.
+makes a head flip a degradation in rank quality rather than a deletion of the population. The
+per-partition table and its estimator are gone entirely; the run side cuts on `GOOD_FLOOR` too.
 
 **The floor-admit bypass is unchanged and is why it had to be re-argued rather than inherited.**
 The junk floor would be `FLOOR_PNOTBAD` again — the same veto at 0.20 instead of 0.5 — if it
@@ -81,16 +88,18 @@ re-score siblings already in place.
 
 ### Where the branch lives (`descriptor.py`)
 
-`load_admitted` factors the quality predicate through `admit_quality(row)`, which is
-**source-aware**:
+`load_admitted` applies the cut inline and it is **source-aware**:
 
 - `source_tag_of(row) in FLOOR_ADMIT_SOURCES` → **admitted** (no machine quality cut).
-- otherwise → the q3 gate: `decoded_class >= 3`. (`>=`, not `==`: since v8 the head is K=4
-  and a row can decode to class 4, which `== 3` would have rejected — silently, and precisely
-  the best material.)
+- otherwise → `floors.passes_good_floor(row["p_good"])`.
 
-`guard_pass`, `distinct` and current-decode still apply to **every** source alike — the
-bypass is of the *quality verdict*, not of the intake. That distinction is what
+It went through a named predicate, `admit_quality`, until 2026-08-09; that read the stored
+`decoded_class >= 3` (`>=`, not `==`: since v8 the head is K=4 and a row can decode to class 4,
+which `== 3` would have rejected silently and precisely the best material) and was deleted with
+the frozen class it read.
+
+`guard_pass` and `distinct` still apply to **every** source alike — the bypass is of the
+*quality verdict*, not of the intake. That distinction is what
 `test_intake_fail_closed.test_load_admitted_admits_the_seed_row_end_to_end` pins (a
 guard-failing and a non-distinct floor-admit row are both still rejected).
 
@@ -104,11 +113,21 @@ never judged — with `human_q3plus` it would be vetoing Matt's own verdicts. Pi
 
 **What it moved.** `q4_harvest` 57 → **108** admitted (of 108 guard-passing rows); the
 seven-ledger stage-2 union 700 → **751** (`tools/emission/test_intake_union.py`). The other
-six ledgers admit on the q3 gate and did not move, so the whole delta is attributable.
+six ledgers admitted on the q3 gate and did not move, so the whole delta is attributable.
+(The union has since gone 751 → 779 at the v11 flip and 779 → **862** when the q3 gate itself
+became `floors.GOOD_FLOOR` on 2026-08-09.)
 
-> **The `current-decode` conjunct is a firewall, not bookkeeping.** `is_current_decoded`
-> (`scorer_version == active_ckpt.ACTIVE_VERSION`) is what makes a stale ledger *unreachable*
-> rather than merely old, and that has already absorbed one real defect for free. When
+> **THE `current-decode` CONJUNCT IS GONE (2026-08-09), and the paragraph below is why it
+> was worth keeping for as long as it was.** It was a firewall: `is_current_decoded`
+> (`scorer_version == ACTIVE_VERSION`) made a stale ledger *unreachable* rather than merely
+> old, and it absorbed the defect described here for free. It was deleted because the same
+> property made the v10 flip delete 99% of the intake silently — a firewall that cannot tell
+> "this verdict is old" from "this location is bad" is the wrong instrument at an admission
+> site. The julia-resolver defect it caught is now caught by `julia_ledger_schema`'s ASSERTED
+> tag, which raises on an untagged row instead of relying on a version accident. Kept in the
+> past tense below because the evidence is the reason the replacement had to be a real one:
+>
+> When
 > `descriptor.location_of` was found to resolve **walk-era julia rows** wrongly — reading the
 > viewport from `outcome_*` when for a walk row `outcome_*` IS the parameter `c`, producing a
 > degenerate location with no julia `c` at all — the blast radius was **zero**: all 1644 walk

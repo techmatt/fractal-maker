@@ -27,24 +27,30 @@ for p in (ROOT, ROOT / "tools" / "corpus", ROOT / "tools" / "scoring"):
 
 from tools.emission import descriptor as D          # noqa: E402
 from tools.emission import ledger_rescore as LR     # noqa: E402
-import corpus_common as cc                          # noqa: E402
+from tools.emission import floors as F              # noqa: E402  THE cut owner
 
-# The live census, 2026-08-08, head v11 (`uv run python tools/emission/ledger_rescore.py
-# status`). 779 admitted rows over the seven intake ledgers, 0 cross-ledger same-location
-# overlaps, 16 bare-id collisions that the namespacing keeps apart.
+# The live census, 2026-08-09, head v11. 862 admitted rows over the seven intake ledgers,
+# 0 cross-ledger same-location overlaps, 16 bare-id collisions that the namespacing keeps
+# apart. Per ledger: c1_breadth 149, c1_dive 140, c2_breadth 157, c2_dive 157,
+# phoenix_grid 147, classic_phoenix 4, q4_harvest 108.
 #
-# 751 (v10) -> 779 (v11), and the composition moved more than the total: the six q3-gated
-# ledgers moved with the head and the new per-partition t_good together, and `classic_phoenix`
-# went to ZERO (see KNOWN_EMPTY in test_liveness_census.py — the head, not a stale decode).
-# Earlier: 700 -> 751 on 2026-08-04 when the v7-era badness floor was deleted from the
-# floor-admit path (emission_floors_prompt.md §B), `q4_harvest` 57 -> 108 of its 108
-# guard-passing rows.
+# 779 -> 862 (+83) ON 2026-08-09, and it is a PREDICATE change, not a corpus change: not a row
+# was added. `load_admitted` cut on `is_current_decoded ∧ decoded_class >= 3` — a frozen class
+# against a per-partition `t_good`, plus a version firewall — and now cuts on the row's raw
+# P(>=3) against the flat `floors.GOOD_FLOOR` (prompts/selection_restructure_3.md). Both halves
+# push the same way here: the four partitions whose t_good sat above 0.50 loosen, and rows an
+# older head stamped stop being discarded. `classic_phoenix` 0 -> 4 is the visible end of it
+# (its rows decoded class 1-2 under the old rule and four of them clear 0.50).
+#
+# Earlier: 751 (v10) -> 779 (v11), the head and the per-partition table moving together;
+# 700 -> 751 on 2026-08-04 when the v7-era badness floor was deleted from the floor-admit path
+# (emission_floors_prompt.md §B), `q4_harvest` 57 -> 108 of its 108 guard-passing rows.
 #
 # THIS PIN IS SUPPOSED TO BREAK ON A RE-SCORE. It is a census — "what the union IS" — and its
 # job is to make a change in the intake population an explicit edit. The standing ALIVE check
 # is the relational floor in test_liveness_census.py, which a legitimate re-score leaves green.
-UNION_ADMITTED = 779
-Q4_HARVEST_ADMITTED = 108        # the floor-admit ledger, whole (guard ∧ distinct ∧ current)
+UNION_ADMITTED = 862
+Q4_HARVEST_ADMITTED = 108        # the floor-admit ledger, whole (guard ∧ distinct)
 ID_COLLISIONS = 16
 LOCATION_OVERLAPS = 0
 
@@ -70,17 +76,22 @@ def test_the_union_is_reachable_and_matches_the_per_ledger_census(union):
 
 def test_the_floor_admit_ledger_admits_whole(union):
     """§B, in the one number it moved: `q4_harvest` is a floor-admit source, so its admitted
-    count IS its guard∧distinct∧current-decode count — no machine quality cut remains to
-    subtract. It was 57/108 under the v7-era badness floor read on the v10 scale (and 75/108
-    when that floor was set, under v7): a cut that moved by 18 rows with nobody deciding it,
-    which is what an unstamped floor does."""
+    count IS its guard∧distinct count — no machine quality cut applies to it at all, not the
+    v7-era badness floor (deleted 2026-08-04) and not `floors.GOOD_FLOOR` (the bypass). It was
+    57/108 under that badness floor read on the v10 scale, and 75/108 when the floor was set
+    under v7: a cut that moved by 18 rows with nobody deciding it, which is what an unstamped
+    floor does.
+
+    NON-VACUITY matters more than it used to: the bypass now has to hold against a cut that
+    would genuinely bite, so the count of rows BELOW the good floor is asserted non-zero."""
     rows, diag = union
     q4 = [p for p in LEDGERS if "q4_harvest" in p.as_posix()]
     assert len(q4) == 1, q4
     resolved = D.resolve_rows(q4[0])
-    eligible = [r for r in resolved
-                if r.get("guard_pass") and r.get("distinct") and cc.is_current_decoded(r)]
+    eligible = [r for r in resolved if D.guard_and_distinct(r)]
     assert len(D.load_admitted(q4[0])) == len(eligible) == Q4_HARVEST_ADMITTED
+    n_below = sum(1 for r in eligible if not F.passes_good_floor(r.get("p_good")))
+    assert n_below > 0, "the bypass is vacuous if every floor-admit row clears the floor anyway"
     assert sum(1 for r in rows if r["_source_ledger"].endswith(
         "q4_harvest/outcome_ledger.jsonl")) == Q4_HARVEST_ADMITTED
     # ...and it is the ONLY floor-admit ledger in the union, so the +51 is attributable.

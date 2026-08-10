@@ -186,34 +186,8 @@ def test_prereg_refuses_a_rewritten_amendment_but_allows_an_appended_one(prereg,
 # because its input vanished is that failure in test form. The refusal half of the contract
 # is untouched and still fast — `--adopt` will not rewrite an existing record, proved above
 # with `build()` pinned.
-
-
-# --------------------------------------------------------------------------- #
-# tools/v10/derive_t_good_v10.py — the durable write takes --adopt              #
-# --------------------------------------------------------------------------- #
-TGOOD_REC = ROOT / "data/v10/t_good_derivation.json"
-
-
-@pytest.mark.skipif(not TGOOD_REC.exists(), reason="no committed v10 t_good table")
-def test_derive_t_good_v10_writes_the_committed_table_only_under_adopt(monkeypatch, tmp_path,
-                                                                      capsys):
-    """v10 being the ACTIVE head is the reason for the gate, not an exemption from it: the
-    committed table is what production_seeder.T_GOOD_OVERRIDES was mirrored from."""
-    d = _load("_tgood_v10", "tools/v10/derive_t_good_v10.py")
-    durable = tmp_path / "durable.json"
-    scratch = tmp_path / "scratch.json"
-    monkeypatch.setattr(d.paths, "durable", lambda rel, **kw: durable)
-    monkeypatch.setattr(d.paths, "scratch", lambda *parts: scratch)
-
-    before = _sha(TGOOD_REC)
-    assert d.main([]) == 0
-    assert not durable.exists(), "the default run wrote the durable table"
-    assert scratch.exists()
-    assert "UNTOUCHED" in capsys.readouterr().out
-
-    assert d.main(["--adopt"]) == 0
-    assert durable.exists(), "--adopt did not write — the gate is stuck closed"
-    # The derivation is unchanged by the gate: what --adopt writes is what the record holds.
-    assert json.loads(durable.read_text(encoding="utf-8"))["adopted"] == \
-        json.loads(TGOOD_REC.read_text(encoding="utf-8"))["adopted"]
-    assert _sha(TGOOD_REC) == before
+#
+# THE derive_t_good_v10 CASE WENT THE SAME WAY on 2026-08-09. It proved that the durable
+# t_good table was written only under `--adopt`; the estimator and all five per-version
+# drivers were deleted with the per-partition machinery, and `data/v10/t_good_derivation.json`
+# is now a record nothing writes. There is no write left to gate.

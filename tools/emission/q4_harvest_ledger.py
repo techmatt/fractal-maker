@@ -10,7 +10,7 @@ This tool renders + guarded-v7-decodes each harvest candidate at reframe/deploy 
 (640x360 ss2, mandelbrot, no reframe search — the harvest already fixed the framing) and
 writes a source-tagged (`mix_source="q4_harvest"`) intake-ready ledger. It is the mandelbrot
 analogue of `tools/phoenix/classic_phoenix_supply.py`; it reuses that path's exact
-primitives (reframe guard-field render, `guard.make_guarded_scorer`, `score_lib.corn_decode`).
+primitives (reframe guard-field render, `guard.make_guarded_scorer`, `floors.good_class`).
 
 The head does not gate here. `decoded_class` and `p_notbad` are COMPUTED and stored (for the
 readout, and as a diagnostic of where the head and the goodness field disagree), but admission
@@ -63,7 +63,7 @@ except Exception:
 import guard                                    # noqa: E402
 import reframe                                  # noqa: E402
 import production_seeder as ps                  # noqa: E402
-from score_lib import corn_decode               # noqa: E402
+from tools.emission import floors as F          # noqa: E402  THE cut owner
 from colormap import load_field                 # noqa: E402
 
 CANDIDATES = ROOT / "scratch" / "q4_stage1" / "harvest_tight" / "candidates.json"
@@ -109,14 +109,18 @@ def _decode_candidate(scorer, c: dict, tile: Path):
     return guard_pass, reason, nb, g, float(stats.interior_frac), float(stats.field_std)
 
 
-def _row(i: int, c: dict, gp, reason, nb, g, t, interior_frac, field_std) -> dict:
-    decoded = corn_decode(nb, g, t) if gp else None
+def _row(i: int, c: dict, gp, reason, nb, g, interior_frac, field_std) -> dict:
+    # The CLASS column is an annotation (`floors.good_class`: None below the good floor,
+    # else 3, or 4 when P(>=4) clears `GREAT_CUT`). Nothing admits on it — this is a
+    # FLOOR-ADMIT source, so the head's verdict never vetoes a row here at all; the raw
+    # probabilities beside it are what any reader applies a floor to.
+    decoded = F.good_class(g) if gp else None
     return {
         "id": _cand_id(i), "family": FAMILY,
         "outcome_cx": str(c["cx_win"]), "outcome_cy": str(c["cy_win"]),
         "outcome_fw": str(c["fw_win"]), "maxiter": int(c["maxiter"]),
         "reached_depth": 0,
-        "decoded_class": decoded, "p_notbad": nb, "p_good": g, "t_good": t,
+        "decoded_class": decoded, "p_notbad": nb, "p_good": g,
         "canon_pgood": g, "guard_pass": bool(gp), "guard_fail": reason,
         # distinct: True for every guard survivor — morphology dedup is the emission
         # driver's intake clustering (incremental medoid within type), not this ledger.
@@ -129,7 +133,7 @@ def _row(i: int, c: dict, gp, reason, nb, g, t, interior_frac, field_std) -> dic
     }
 
 
-def rescore(cands, scorer, t, rescored_path: Path, limit=None):
+def rescore(cands, scorer, rescored_path: Path, limit=None):
     done = set()
     if rescored_path.exists():
         for line in rescored_path.read_text(encoding="utf-8").splitlines():
@@ -150,7 +154,7 @@ def rescore(cands, scorer, t, rescored_path: Path, limit=None):
             log(f"  WARN {cid} render/score failed: {type(e).__name__}: {str(e)[:140]}")
             shutil.rmtree(dwork, ignore_errors=True)
             continue
-        row = _row(i, c, gp, reason, nb, g, t, ifrac, fstd)
+        row = _row(i, c, gp, reason, nb, g, ifrac, fstd)
         fh.write(json.dumps(row) + "\n")
         fh.flush()
         shutil.rmtree(dwork, ignore_errors=True)
@@ -162,7 +166,7 @@ def rescore(cands, scorer, t, rescored_path: Path, limit=None):
     fh.close()
 
 
-def finalize(rescored_path: Path, man: dict, t: float):
+def finalize(rescored_path: Path, man: dict):
     rows = [json.loads(l) for l in rescored_path.read_text(encoding="utf-8").splitlines() if l.strip()]
     guard_pass = [r for r in rows if r.get("guard_pass")]
     # DIAGNOSTIC, never a cut (see the module docstring): the fraction of guard-passing
@@ -176,7 +180,7 @@ def finalize(rescored_path: Path, man: dict, t: float):
     decoded_hist = Counter(r.get("decoded_class") for r in guard_pass)
     stats = {
         "source_tag": SOURCE_TAG, "family": FAMILY, "scorer_version": ps.SCORER_VERSION,
-        "t_good": t, "floor_pnotbad": 0.5,
+        "good_floor": F.GOOD_FLOOR, "floor_pnotbad": 0.5,
         "harvest_gate": man.get("gate_used"), "harvest_cutoff":
             man.get(man.get("gate_used", "tight"), {}).get("cutoff"),
         "n_candidates": len(man["candidates"]),
@@ -207,9 +211,8 @@ def main(argv=None):
     cands = man["candidates"]
     RUN_DIR.mkdir(parents=True, exist_ok=True)
     SCRATCH.mkdir(parents=True, exist_ok=True)
-    t = ps.t_good_for(FAMILY)
-
-    log(f"=== q4 harvest → v7-decoded ledger  (source={SOURCE_TAG}, t_good={t}) ===")
+    log(f"=== q4 harvest → ledger  (source={SOURCE_TAG}, "
+        f"good_floor={F.GOOD_FLOOR:g}) ===")
     log(f"[collect] {len(cands)} harvest candidates over "
         f"{man.get('n_minibrots_covered')} minibrots ({man.get('gate_used')} gate)")
 
@@ -218,8 +221,8 @@ def main(argv=None):
     scorer = guard.make_guarded_scorer(ps.SCORER_PATH)
     rescored_path = RUN_DIR / "rescored.jsonl"
 
-    rescore(cands, scorer, t, rescored_path, limit=args.limit)
-    stats = finalize(rescored_path, man, t)
+    rescore(cands, scorer, rescored_path, limit=args.limit)
+    stats = finalize(rescored_path, man)
 
     log("\n=== Q4 HARVEST LEDGER ===")
     log(f"  candidates {stats['n_candidates']} → rendered {stats['n_rendered']} "

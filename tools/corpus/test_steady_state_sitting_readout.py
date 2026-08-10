@@ -97,15 +97,17 @@ def test_sheet_partitions_are_read_off_the_sheet_not_listed():
     assert all(sel["read"]["statuses"][p] == "UNCALIBRATED" for p in parts)
 
 
-def test_the_staged_table_cannot_be_read_as_an_adopted_one():
-    """If the staged file exists it must NOT carry an `adopted` block. Every mirror check and
-    every per-version deriver reads that key; a staged table that answers to it is a set of
-    train-side numbers that looks exactly like the live cut."""
-    if not ro.STAGED.exists():
-        pytest.skip(f"{ro.STAGED} not built in this checkout (readout stage not run)")
-    doc = json.loads(ro.STAGED.read_text(encoding="utf-8"))
-    assert "adopted" not in doc
-    assert doc["would_be_cut"] and doc["STAGED_NOT_ADOPTED"]
+def test_the_readout_no_longer_stages_a_t_good_table_at_all():
+    """It used to build one off this sitting's 490 TRAIN-side labels and rename its `adopted`
+    key so no mirror check could read staged numbers as the live cut. Both the table and the
+    hazard went on 2026-08-09: there is no per-partition threshold to stage, and what a
+    re-scored head needs instead is a volume-matched restatement of the two floors
+    (classifier_retrain_protocol.md §5a). The absence is asserted so the stage cannot quietly
+    come back without its guard."""
+    assert not hasattr(ro, "STAGED")
+    src = (ROOT / "tools/corpus/steady_state_sitting_readout.py").read_text(encoding="utf-8")
+    assert "import derive_t_good" not in src and "est." not in src
+    assert "STAGED t_good — REMOVED" in src
 
 
 @pytest.mark.parametrize("stage", ["score", "morph", "readout"])

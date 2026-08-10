@@ -72,7 +72,6 @@ BATCHES = (RANKED, DIVE)
 WORK = paths.scratch("steady_state_readout")
 DECODE = WORK / "v10_decode_490.jsonl"
 EMB = WORK / "morph_emb_490.npz"
-STAGED = WORK / "t_good_STAGED_NOT_ADOPTED.json"
 REPORT = WORK / "readout.txt"
 
 # The five partitions the sheet's ranked leg was SCOPED to — every one stamped UNCALIBRATED in
@@ -287,14 +286,9 @@ def dive_units() -> list[dict]:
 
 
 def stage_readout(args) -> int:
-    import derive_t_good as est
     from production_pins import ACTIVE_VERSION
+    import sitting_cutter as sc                  # THE sufficiency floor's owner
     SHEET_PARTITIONS = _sheet_partitions()
-    # The ACTIVE version's own objective map, imported from its deriver rather than restated:
-    # the objective is a supply read that was re-argued at the flip, and a staged table that
-    # quietly picked a different beta would not be comparable to anything.
-    sys.path.insert(0, str(ROOT / "tools" / ACTIVE_VERSION))
-    v10 = __import__(f"derive_t_good_{ACTIVE_VERSION}")
 
     rows = [json.loads(l) for l in open(DECODE, encoding="utf-8")]
     Z = np.load(EMB, allow_pickle=True)
@@ -391,15 +385,15 @@ def stage_readout(args) -> int:
     w("\n[3] CORPUS POSITIVES (human >=3, amendment overlay) vs MIN_POS — before/after.")
     w("    `before` is DERIVED as after minus this sitting's own positives, not restated from")
     w("    a pre-merge snapshot: the census is a live read and a frozen copy would rot.")
-    import sitting_cutter as sc
     after = sc.positives_census()
     added = Counter(r["partition"] for r in rows if (r["human"] or 0) >= 3)
-    w(f"    {'partition':20s} {'before':>7} {'+sitting':>9} {'after':>7}  vs MIN_POS={est.MIN_POS}")
+    min_pos = sc.min_pos()
+    w(f"    {'partition':20s} {'before':>7} {'+sitting':>9} {'after':>7}  vs MIN_POS={min_pos}")
     for p_ in sorted(after, key=lambda x: (x not in SHEET_PARTITIONS, x)):
         a, d = after[p_], added.get(p_, 0)
         mark = "sheet" if p_ in SHEET_PARTITIONS else ""
         w(f"    {p_:20s} {a - d:>7} {d:>9} {a:>7}  "
-          f"{'CLEARS' if a >= est.MIN_POS else 'BELOW ':6s} {mark}")
+          f"{'CLEARS' if a >= min_pos else 'BELOW ':6s} {mark}")
 
     # ---------------- [5] descriptive yield on the ranked leg ----------------
     w("\n[5] RANKED LEG — per-partition human >=3 rate. POPULATION: model-selected ranked")
@@ -415,47 +409,15 @@ def stage_readout(args) -> int:
     w(f"    {'ALL (mix-weighted)':20s} n={n:3d}  >=3 {k:3d}/{n}={pr:6.1%} [{lo:.1%},{hi:.1%}] "
       f"1pc {opc:6.1%} ({nc} cl)")
 
-    # ---------------- [4] STAGED derivation ----------------
-    w("\n[4] STAGED t_good — BUILT, NOT ADOPTED. Population is THIS SITTING'S 490 labels,")
-    w("    which are TRAIN-side and biased; the live table is derived on the frozen UNBIASED")
-    w("    eval slice and this merge added nothing to it. These are not comparable numbers.")
-    srows = [dict(fractal_type=r["fractal_type"], label=r["human"],
-                  **{k: r[k] for k in (f"{ACTIVE_VERSION}_p_ge2", f"{ACTIVE_VERSION}_p_ge3",
-                                       f"{ACTIVE_VERSION}_p_ge4")})
-             for r in rows if r["human"] is not None]
-    # `build_table` PRINTS the table (t, precision, recall, F, F_OOF, plateau per partition)
-    # and returns only the structured form. Captured into the report so the readout file is
-    # the whole read and not a pointer to a terminal nobody kept.
-    import contextlib
-    import io
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        table = est.build_table(srows, version=ACTIVE_VERSION,
-                                eval_slice=f"STAGED — {SHEET} (490 train-side labels), NOT an "
-                                           f"eval slice",
-                                objective=v10.OBJECTIVE)
-    for ln in buf.getvalue().rstrip("\n").splitlines():
-        w(ln)
-    # THE STAMP IS STRUCTURAL, NOT A COMMENT. `build_table` emits an `adopted` block and a
-    # `note` that says production_seeder mirrors it — true of a real derivation and false of
-    # this one. A reader that takes `doc["adopted"]` (the mirror check, the vs-previous
-    # comparison in every per-version deriver) would read staged numbers and go green, so the
-    # key is RENAMED: those readers now KeyError, which is the only failure mode that cannot
-    # be missed. Same reason the file is named ..._STAGED_NOT_ADOPTED.json.
-    table["would_be_cut"] = table.pop("adopted")
-    table["note"] = ("STAGED. `adopted` is deliberately absent — see would_be_cut and "
-                     "STAGED_NOT_ADOPTED below. Nothing mirrors this file.")
-    table["STAGED_NOT_ADOPTED"] = (
-        "THIS IS NOT A t_good TABLE. It is derived on 490 TRAIN-side, model-selected labels "
-        "from the 2026-08-05 steady-state sitting, not on an unbiased eval instrument. The "
-        f"adopted table is data/{ACTIVE_VERSION}/t_good_derivation.json and this merge did "
-        "not move it. Adoption is Matt's separate decision and would additionally require an "
-        "unbiased instrument for these partitions, which does not exist.")
-    table["population"] = dict(sheet=SHEET, batches=list(BATCHES), n=len(srows),
-                               registration="both legs biased=True -> train (batch_registry)")
-    WORK.mkdir(parents=True, exist_ok=True)
-    STAGED.write_text(json.dumps(table, indent=2), encoding="utf-8")
-    w(f"    wrote {STAGED} (scratch, stamped STAGED_NOT_ADOPTED)")
+    # ---------------- [4] STAGED derivation — REMOVED 2026-08-09 ----------------
+    w("\n[4] STAGED t_good — REMOVED. There is no per-partition threshold to stage: the run")
+    w("    side cuts on the flat floors.GOOD_FLOOR and the estimator this stage called")
+    w("    (tools/scoring/derive_t_good.py) was deleted with the rest of that machinery")
+    w("    (prompts/selection_restructure_3.md). It built a table off THIS SITTING'S 490")
+    w("    train-side labels, stamped STAGED_NOT_ADOPTED so no reader could mistake it for")
+    w("    the live cut. Nothing replaces it: one flat cut has nothing per-partition to stage,")
+    w("    and what a re-scored head needs instead is a VOLUME-MATCHED restatement of the two")
+    w("    floors against a fixed reference pool (classifier_retrain_protocol.md §5a).")
 
     REPORT.write_text("\n".join(L) + "\n", encoding="utf-8")
     print(f"\nwrote {REPORT}")

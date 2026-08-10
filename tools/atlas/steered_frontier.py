@@ -14,7 +14,7 @@ steering signal is nearly free.
 Everything downstream of "which node to expand" is REUSED verbatim from the production
 seeder — the gates (black-cap 0.30 -> band -> occ-floor 0.321, node 384 / sigma-band), the
 root pipeline (native depth-1 seeds + q3-density rejection + depth-2 probe), the julia hook,
-the harvest (reframe + CORN decode at the per-partition t_good), the near-dup cloud, the
+the harvest (reframe + the raw P(>=3) good floor), the near-dup cloud, the
 guard, and the ledger schema. Only the trajectory POLICY is new; the current walk path is
 byte-untouched.
 
@@ -72,16 +72,17 @@ import run_record                        # noqa: E402  (THE segmented run-record
 import discovery_sinks as dsinks         # noqa: E402  (THE sink paths + the feats bulk() class)
 
 # production_seeder wires its own sub-imports (prescreen / reframe / guard / score_lib /
-# active_ckpt) and owns the constants, root pipeline, near-dup machinery, guard, and the
-# per-partition t_good table. Reuse it wholesale.
+# active_ckpt) and owns the constants, root pipeline, near-dup machinery and guard. Reuse it
+# wholesale.
 import production_seeder as ps          # noqa: E402
 import prescreen                        # noqa: E402
 import reframe                          # noqa: E402
 import guard                            # noqa: E402
 import location as loc_mod              # noqa: E402
 import julia_ledger_schema as jls       # noqa: E402  (campaign/walk julia schema tag)
-from score_lib import corn_decode       # noqa: E402
 from active_ckpt import ACTIVE_CKPT, auto_maxiter  # noqa: E402
+from tools.emission import floors as F  # noqa: E402  THE cut owner (GOOD_FLOOR)
+import tau_h_rederive as _thr           # noqa: E402  THE tau_h deriver (MIN_N, the fail-open n)
 import partitions as P                   # noqa: E402  (THE partition registry + phoenix split)
 import deficit_scheduler as dsched       # noqa: E402  (pure; torch-free scheduling logic)
 import pop_quota as pquota               # noqa: E402  (harvest v2 allocator; pure, torch-free)
@@ -590,9 +591,9 @@ def loc_of(partition: str, c, cx, cy, fw):
 
 
 # --------------------------------------------------------------------------- #
-# tau_h — per-partition cheap p_good harvest cut from the fidelity study's paired scores.
-# The cheap p_good cut that RETAINS ~90% of frames whose canonical p_good clears the
-# family's t_good (= the 10th percentile of cheap p_good among those frames).
+# tau_h — per-partition CHEAP p_good harvest cut: the cut that RETAINS ~90% of the frames a
+# canonical render would have kept (= the 10th percentile of cheap p_good among the frames
+# whose CANONICAL p_good clears `floors.GOOD_FLOOR`).
 # --------------------------------------------------------------------------- #
 # Prospective per-family floors raised from the campaign harvest logs (2026-07-25
 # closeout). For these three c-plane families the fidelity-derived cut (~0.201) sits
@@ -607,12 +608,12 @@ def loc_of(partition: str, c, cx, cy, fw):
 #
 # RETIRED AT THE v8 FLIP, NOT CARRIED. The three values above were cuts on **v7's** cheap
 # p_good, raised from v7-era campaign harvest logs, exactly like the `julia:mandelbrot`
-# / `phoenix` t_good overrides that `production_seeder.T_GOOD_UNCALIBRATED` retires by
-# name. A v7 floor on a v8 base is the same category error the version stamp below exists
-# to stop, so it is not applied — and it cannot be re-derived yet: the floor's definition
+# / `phoenix` per-partition t_good overrides that retired with the whole t_good table on
+# 2026-08-09. A v7 floor on a v8 base is the same category error the version stamp below
+# exists to stop, so it is not applied — and it cannot be re-derived: the floor's definition
 # ("raise the cut to where it starts costing admits") needs ADMISSIONS under the active
-# head, and no v8-era discovery run has happened. The mechanism stays live and tested; the
-# table is empty on purpose, with its own stamp so an unstamped re-add is visible.
+# head, and no post-v7 discovery run has produced the curve. The mechanism stays live and
+# tested; the table is empty on purpose, with its own stamp so an unstamped re-add is visible.
 #
 # It would be a no-op even if applied — every re-derived v8 base (0.199..0.704) is already
 # far above every v7 floor (0.216..0.269) — but "harmless today" is not why it is empty.
@@ -653,83 +654,75 @@ TAU_H_CAMPAIGN_FLOOR_V7_RETIRED = {
 # harvest_log.jsonl). Until then the loud failure is the correct state — emission is dark
 # after a flip anyway, so nothing is blocked that was not already waiting on a discovery run.
 #
-# RE-DERIVED UNDER v11 on 2026-08-08 by `tools/atlas/tau_h_rederive.py`, which is the
+# RE-DERIVED UNDER v11 on 2026-08-09 by `tools/atlas/tau_h_rederive.py`, which is the
 # regeneration path this comment's failure message points at. Provenance artifact:
-# `data/atlas/tau_h_base_v11.json` (per-partition n, t_good, both population estimates,
-# `arms_used`, and `harvest_truncation`).
+# `data/atlas/tau_h_base_v11.json` (per-partition n_rows / n_good / value / source).
 #
-# DERIVED TWICE ON THAT DAY, AND THESE ARE THE SECOND SET. The first ran at the flip over
-# 3,492 rows (v10's 2,400 harvest + 1,092 walk sample sizes, reused); the second re-derived
-# the same head over the FULL discovered pool — 63,217 harvest + 1,148 walk = 64,365 rows,
-# `--per-partition` uncapped, ~6 h. The superseded first artifact is kept as
-# `data/atlas/tau_h_base_v11_adoption.json`: it is the record of what production served
-# between the two, and it is NOT the live table.
-# Method — the fidelity study's estimator verbatim, on a population the harvest logs make
-# re-renderable: each sampled harvest-check geometry is re-rendered at BOTH presentations
-# (384x216 ss1 cheap / 640x360 ss2 canonical) and re-scored under the ACTIVE head, then
-# tau_h = the 10th percentile of cheap p_good among frames whose canonical p_good clears
-# the family's t_good.
+# THIS IS THE THIRD v11 TABLE AND THE FIRST UNDER THE FIXED CUT. All three are kept, because
+# each is the record of what production served for a stretch of 2026-08-08/09:
+#   `tau_h_base_v11_adoption.json`  — the flip's derivation, 3,492 rows, two arms.
+#   `tau_h_base_v11_two_arm.json`   — the same-day enlargement, 64,365 rows, two arms.
+#   `tau_h_base_v11.json`           — THIS one (prompts/selection_restructure_3.md).
 #
-# THE HARVEST POPULATION IS NO LONGER THE PINNED FIVE, and that is by design rather than by
-# drift. `harvest_log_registry` DISCOVERS runs (the five-entry hand list it replaced went
-# stale silently — nine runs written after it was typed were never looked at, and a hand list
-# reports that as "settled"). At the v10 derivation the registry offered 5 pinned runs; at
-# v11 it offers 22, of which the seventeen discovered ones contribute real rows. The sample
-# SIZE is unchanged, the pool it is drawn from is wider, so a v10 -> v11 tau_h move is a head
-# change AND a population change. `harvest_runs` in the artifact names all 22.
+# WHAT CHANGED, AND BOTH CHANGES REMOVE A CONFOUND RATHER THAN ADD PRECISION.
 #
-# EVERY PARTITION IS CUT ON ITS OWN POPULATION — no pooled cross-family fallback. Seven of
-# eight partitions have BOTH arms available. **multibrot4 has only the harvest arm**, and the
-# reason is not a thin pool: its walk arm passed 15 of 169 at t_good 0.50 and passes 2 at
-# 0.85, below min_n=5. The native-multibrot tightening adopted hours earlier the same day
-# bought a stricter gate and COST multibrot4 its untruncated cross-check. So its 0.8245 —
-# the largest move in the table — rests on the left-truncated harvest side alone with nothing
-# bounding it from below, which is exactly the condition v10's multibrot3/multibrot5 were in
-# and which this comment previously recorded as closed. It is the number to distrust first.
+#   1. THE BAR IS `floors.GOOD_FLOOR`, NOT `t_good_for(partition)`. The run side admits on
+#      the fixed floor now, so conditioning this estimator on a per-partition table would
+#      derive a harvest cut for a gate that no longer exists. It also ends the reading
+#      problem the two-arm era never solved: the v10 -> v11 move was described as "the head"
+#      and was really t_good (mandelbrot's bar went 0.03 -> 0.90, ~30x stricter, and the cut
+#      followed it 0.0229 -> 0.6257). With one bar for every partition and every version, a
+#      future move is a move in the head or in the population and nothing else.
 #
-# THE VALUES MOVE A LOT versus v10 (mandelbrot 0.0229 -> 0.626) and the reason is t_good, not
-# the head: v11's mandelbrot t_good is 0.90 against v10's 0.03, so the canonical bar this
-# estimator conditions on is ~30x stricter and only frames far up the cheap axis clear it.
+#   2. THE HARVEST ARM IS GONE — with it the two-arm minimum, `harvest_log_registry` and the
+#      per-run truncation record. The harvest log holds only checks that already cleared a
+#      PREVIOUS head's tau_h, at a level that differed per run: a left-truncated sample at a
+#      MIXTURE of levels (mandelbrot's rows alone spanned 0.0229 to 0.7041 across four tau
+#      eras), whose quantile is an upper bound of unknown tightness. Every derivation had to
+#      carry a paragraph naming its own least trustworthy number — v11's multibrot4 0.8245
+#      rested on that arm alone with nothing bounding it from below. The walk-outcome ledger
+#      is a uniform-random gate survivor per rung, never tau-selected, so it is untruncated;
+#      a smaller unbiased sample beats a larger one with an unquantifiable bias.
 #
-# THE ENLARGEMENT'S OWN DELTAS SPLIT CLEANLY IN TWO, and reading them as one number is the
-# mistake to avoid. Five partitions ran at IDENTICAL t_good across both derivations, so their
-# moves are pure population and they are tiny: julia:mandelbrot +0.0049, julia:multibrot3
-# +0.0000, julia:multibrot4 +0.0197, julia:multibrot5 -0.0410, mandelbrot -0.0073. The three
-# NATIVE multibrots moved 10-40x more (multibrot3 +0.0829, multibrot4 +0.3502, multibrot5
-# +0.1391) and are CONFOUNDED — t_good went 0.50 -> 0.61/0.85/0.61 between the two runs, so
-# population and bar moved together and neither effect is separable from this pair of
-# artifacts. Do not attribute those three to the larger sample.
+# METHOD, unchanged in shape: each walk-outcome geometry is re-rendered at BOTH presentations
+# (384x216 ss1 cheap / 640x360 ss2 canonical) and re-scored under the ACTIVE head; tau_h is
+# the 10th percentile of cheap p_good among the frames whose canonical p_good clears
+# GOOD_FLOOR. The whole ledger is used (`--per-partition 0`), 1,148 rows over 8 partitions.
 #
-# MANDELBROT'S ARM WAS THE WEAK ONE AND THE ENLARGEMENT IS WHAT FIXED IT: 23 of 300 harvest
-# rows passed canonical p_good >= 0.90 at the flip, so its 10th percentile rested on 23
-# frames; over the full pool it rests on 885, and the value barely moved (0.6329 -> 0.6257),
-# which is the reassurance the thin arm could not previously give. The walk arm stayed thin
-# (6 passing) because that ledger has only 356 mandelbrot rows in total. Passing harvest rows
-# now run 609-11,705 per partition; `multibrot4` (609) is the smallest.
+# THE VALUES ARE FLATTER THAN THE TWO-ARM TABLE and that is the point: the spread was
+# 0.20..0.82, it is now 0.20..0.55. Both effects push the same way — the bar fell for the
+# partitions that had been tightened (multibrot4 0.85 -> 0.50), and the arm that used to
+# supply the high numbers was the truncated one.
 #
-# ONE BIAS, STATED — AND IT IS A MIXTURE, NOT A LEVEL. The harvest log only holds checks that
-# already cleared a PREVIOUS head's tau_h, so it is left-truncated and its quantile is an
-# UPPER bound. It is not truncated at ONE level: every row carries the tau_h that was live for
-# its OWN run, and the 22-run pool mixes four tau eras (mandelbrot alone spans 0.0229 to
-# 0.7041, a 30x range), so the bound's TIGHTNESS varies by partition with how its rows split
-# across eras. Read `harvest_truncation` in the artifact — per-partition levels, row counts
-# and the row-weighted mean — before treating any single harvest number as near-unbiased.
-# The untruncated walk-outcome ledger (prospect_run1: uniform-random gate survivors, never
-# tau-selected) is re-derived alongside as a cross-check, and the committed value is the
-# per-partition MINIMUM over the AVAILABLE arms — the conservative side, since a too-high cut
-# sheds admissions. Campaign1's harvest rows carry no geometry and are permanently not
-# re-scoreable; they are EXCLUDED, never approximated.
+# THE THIN END IS NAMED, because the fail-open rule means thinness costs render time rather
+# than supply and is therefore easy to stop looking at. Good-row counts: julia:mandelbrot 59,
+# julia:multibrot3 34, julia:multibrot4 32, julia:multibrot5 23, mandelbrot 23, multibrot4 15,
+# multibrot3 12, **multibrot5 8** — three above min_n=5 by single digits. A 10th percentile on
+# 8 rows is the second-smallest value; read multibrot5, multibrot3 and multibrot4 as "roughly
+# half" rather than as four significant figures.
+#
+# THE ONE BIAS THAT REMAINS, STATED. The walk population is off-distribution in the other
+# direction: walk outcomes are not frontier candidates, so the cheap/canonical relationship
+# is measured on a rung survivor rather than on a maneuver push. That is not corrected for and
+# there is nothing in the tree to correct it with — the only alternative population is the
+# truncated one this derivation just dropped.
 TAU_H_FIDELITY_BASE_MODEL = "v11"
 TAU_H_FIDELITY_BASE = {
-    "mandelbrot": 0.6256668567657471,
-    "multibrot3": 0.5953161120414734,
-    "multibrot4": 0.8245467185974121,
-    "multibrot5": 0.606533396244049,
-    "julia:mandelbrot": 0.848319911956787,
-    "julia:multibrot3": 0.24066436141729353,
-    "julia:multibrot4": 0.1998696699738502,
-    "julia:multibrot5": 0.36127737164497375,
+    "mandelbrot": 0.3145107567310333,
+    "multibrot3": 0.5449502170085907,
+    "multibrot4": 0.4743058800697326,
+    "multibrot5": 0.5378899842500686,
+    "julia:mandelbrot": 0.200508177280426,
+    "julia:multibrot3": 0.4735631048679352,
+    "julia:multibrot4": 0.5339927613735199,
+    "julia:multibrot5": 0.46945214867591856,
 }
+
+
+# Below this many GOOD frames a partition is not cut at all and harvests everything (0.0).
+# IMPORTED from the deriver rather than restated: the live record-derived path here and the
+# regeneration path there must not disagree about which partitions are cuttable.
+TAU_H_MIN_N = _thr.MIN_N
 
 
 def _apply_campaign_floor(part: str, val: float) -> float:
@@ -741,32 +734,24 @@ def _apply_campaign_floor(part: str, val: float) -> float:
 def _derive_tau_h_base_from_records(partitions: list[str], keep: float) -> dict:
     """Per-partition cheap-p_good cut from the fidelity study records (PRE campaign floor).
 
-    The cut RETAINS ~`keep` of frames whose canonical p_good clears the family's t_good (= the
-    (1-keep) quantile of cheap p_good among those frames), with a pooled cross-family fallback
-    for partitions too thin to cut on their own."""
+    The cut RETAINS ~`keep` of the frames whose CANONICAL p_good clears `floors.GOOD_FLOOR`
+    (= the (1-keep) quantile of cheap p_good among those frames). Same estimator, same bar and
+    same fail-open rule as `tools/atlas/tau_h_rederive.derive`, which is the path that actually
+    produces the vendored table — two estimators that disagreed about the bar or about what a
+    thin partition gets would be the second quality definition this restructure removed.
+
+    A partition with fewer than `TAU_H_MIN_N` good rows gets 0.0 and harvests everything: a
+    too-high cut sheds admissions invisibly, a too-low one shows up as GPU-minutes."""
     rec = json.loads(FIDELITY_RECORDS.read_text(encoding="utf-8"))
     can, cheap = rec["scores"]["canonical"], rec["scores"]["cheap"]
     fam_of = {s["id"]: s["family"] for s in rec["samples"]}
     q = 1.0 - keep
 
-    def cut(ids):
-        vals = [cheap[i][2] for i in ids if i in cheap and i in can]  # cheap p_good
-        return float(np.quantile(vals, q)) if len(vals) >= 5 else None
-
-    # pooled fallback over every frame clearing its own family's t_good.
-    pooled_pass = [i for i in can
-                   if can[i][2] >= ps.t_good_for(fam_of.get(i, "mandelbrot"))]
-    pooled = cut(pooled_pass)
-    if pooled is None:
-        pooled = 0.5
-
     base = {}
     for part in partitions:
-        tg = ps.t_good_for(part)
-        ids = [i for i in can if fam_of.get(i) == part and can[i][2] >= tg]
-        base[part] = cut(ids)
-        if base[part] is None:
-            base[part] = pooled
+        vals = [cheap[i][2] for i in can                      # cheap p_good
+                if fam_of.get(i) == part and i in cheap and can[i][2] >= F.GOOD_FLOOR]
+        base[part] = float(np.quantile(vals, q)) if len(vals) >= TAU_H_MIN_N else 0.0
     return base
 
 
@@ -802,18 +787,19 @@ def derive_tau_h(partitions: list[str], keep=0.90) -> dict:
                 f"p_good of a SPECIFIC head — a {TAU_H_FIDELITY_BASE_MODEL} cut on a {active} "
                 f"gate is a number about nothing, and TAU_H_CAMPAIGN_FLOOR is "
                 f"{TAU_H_FIDELITY_BASE_MODEL}-era too.\n"
-                f"  Re-derive at campaign launch from the harvest logs "
-                f"(tools/atlas/tau_h_retained_readout.py builds both axes of the curve), or "
-                f"re-run tools/studies/descent_score_fidelity.py under {active} to regenerate "
-                f"{FIDELITY_RECORDS.name}. Then update TAU_H_FIDELITY_BASE + "
-                f"TAU_H_FIDELITY_BASE_MODEL together — never one without the other.")
+                f"  Re-derive with tools/atlas/tau_h_rederive.py (walk-outcome ledger, "
+                f"canonical p_good >= floors.GOOD_FLOOR), then update TAU_H_FIDELITY_BASE + "
+                f"TAU_H_FIDELITY_BASE_MODEL together — never one without the other. Or re-run "
+                f"tools/studies/descent_score_fidelity.py under {active} to regenerate "
+                f"{FIDELITY_RECORDS.name}, which overrides the vendored table.")
         base = {p: TAU_H_FIDELITY_BASE.get(p) for p in partitions}
         missing = sorted(p for p, v in base.items() if v is None)
         if missing:
             raise SystemExit(
                 f"tau_h derivation: {FIDELITY_RECORDS} absent and no vendored base for "
-                f"{missing} — regenerate via tools/studies/descent_score_fidelity.py, or add "
-                f"the partition to TAU_H_FIDELITY_BASE")
+                f"{missing} — regenerate via tools/atlas/tau_h_rederive.py (or "
+                f"tools/studies/descent_score_fidelity.py), or add the partition to "
+                f"TAU_H_FIDELITY_BASE")
     return {p: _apply_campaign_floor(p, base[p]) for p in partitions}
 
 
@@ -1559,7 +1545,7 @@ class SteeredFrontier:
         # stamped, deliberately CONSERVATIVE value instead.
         #
         # Conservative in a direction that costs recall and not correctness: the default is
-        # the partition's own `t_good` (0.50), i.e. "only pay for a canonical confirmation
+        # `floors.GOOD_FLOOR`, i.e. "only pay for a canonical confirmation
         # when the CHEAP score already clears the canonical bar". Fewer confirmations, never
         # wrong ones — and no phoenix material is lost from the deliverable, because the
         # recording floor still keeps everything from 0.25 up in the record-and-rank store.
@@ -1574,13 +1560,13 @@ class SteeredFrontier:
         self.tau_h_uncalibrated = {}
         for part in phoenix_parts:
             v = getattr(args, "tau_h_phoenix", None)
-            v = ps.t_good_for(part) if v is None else float(v)
+            v = F.GOOD_FLOOR if v is None else float(v)
             self.tau_h[part] = v
             self.tau_h_uncalibrated[part] = (
                 f"UNCALIBRATED: no v10 cheap-p_good population exists for {part} "
                 f"(fidelity records absent; vendored base has no phoenix row; the phoenix "
-                f"ledgers are v7 and carry no cheap column). Serving t_good_for({part!r})"
-                f"={v} as a conservative cheap cut.")
+                f"ledgers are v7 and carry no cheap column). Serving GOOD_FLOOR={v} as a "
+                f"conservative cheap cut.")
         # The RECORDING floor, derived from the harvest cut rather than configured beside it:
         # a second independent constant would drift off tau_h the first time tau_h moved.
         self.tau_rec = derive_tau_rec(self.tau_h)
@@ -3106,7 +3092,12 @@ class SteeredFrontier:
             pg4 = row[3] if len(row) > 3 else None
             c["canon_nb"], c["canon_pg"], c["canon_eord"] = float(nb), float(pg), float(eord)
             c["canon_pge4"] = None if pg4 is None else float(pg4)
-            c["canon_decoded"] = corn_decode(nb, pg, ps.t_good_for(c["partition"]), pg4)
+            # The frame's CLASS under the fixed cut: None below `floors.GOOD_FLOOR`, else 3,
+            # or 4 when P(>=4) also clears `floors.GREAT_CUT`. Same column, same meaning as
+            # the retired per-partition `corn_decode` produced ("the head's class for this
+            # frame, None if it is not good") — what changed is that the bar is one number
+            # for every partition and is read from the floor owner, not frozen per row.
+            c["canon_decoded"] = F.good_class(pg, pg4)
 
         # 2. reframe + admit the canonical-q3 confirmations. Cheap pre-reframe dedup:
         # reframe only nudges the center by <=0.25*fw and fw by <=1.41x, so a candidate
@@ -3125,7 +3116,7 @@ class SteeredFrontier:
                                   precanon_dup=c["precanon_dup_of"])
                 self._q4_record(c, fate="precanon_dup")
                 continue
-            if c["canon_decoded"] >= 3:          # q3+ — a canonical class-4 confirms too
+            if c["canon_decoded"] is not None:      # good — a class 4 confirms too
                 self.totals["canonical_q3"] += 1
                 pre_distinct, _ = ps.is_distinct(c["cx"], c["cy"], c["fw"],
                                                  self.clouds.get(c["partition"], []), ps.DEDUP_K,
@@ -3143,15 +3134,14 @@ class SteeredFrontier:
                             reframe_decoded=reframe_decoded)
 
     def admit(self, c, cdir):
-        """Existing reframe + near-dup + admission path (guarded scorer, per-partition t_good)."""
+        """Existing reframe + near-dup + admission path (guarded scorer, `floors.GOOD_FLOOR`)."""
         loc = loc_of(c["partition"], c["c"], c["cx"], c["cy"], c["fw"])
         wd = cdir / f"reframe_n{c['node_id']}"
         res = reframe.reframe_location(loc, scorer=self.scorer, seed=0, workdir=wd, workers=ps.WORKERS)
         guard_pass = res.score > guard.GUARD_SENTINEL + 1e-6
         nb, pg, pg4 = ps._chosen_probs(res)
-        t_good = ps.t_good_for(c["partition"])
-        decoded = corn_decode(nb, pg, t_good, pg4) if guard_pass else None
-        is_q3 = guard_pass and (decoded or 0) >= 3   # q3+ — class 4 admits too
+        decoded = F.good_class(pg, pg4) if guard_pass else None
+        is_q3 = decoded is not None
         ocx, ocy, ofw = float(res.cx), float(res.cy), float(res.fw)
         distinct, dup_of = (False, None)
         if is_q3:
@@ -3174,7 +3164,12 @@ class SteeredFrontier:
             outcome_cx=ocx, outcome_cy=ocy, outcome_fw=ofw,
             k3=float(res.score), raw_top3=[float(c["cheap_eord"])],
             reached_depth=int(c["depth"]),
-            decoded_class=decoded, p_notbad=nb, p_good=pg, p_ge4=pg4, t_good=t_good,
+            # RAW probabilities only. The ledger stores no derived class and no threshold:
+            # `production_seeder.is_good` re-applies the live `floors.GOOD_FLOOR` to `p_good`
+            # at every read, so a floor move reaches every row ever written. The harvest log
+            # and the q4 store DO carry a class column, because the reframe probabilities are
+            # not otherwise recoverable there — see `_log_harvest`.
+            p_notbad=nb, p_good=pg, p_ge4=pg4,
             distinct=distinct, dup_of=dup_of,
             guard_pass=guard_pass, guard_fail=None if guard_pass else "sentinel",
             cheap_pgood=c["cheap_pgood"], canon_pgood=c["canon_pg"], branch=c["branch"],
@@ -3270,6 +3265,12 @@ class SteeredFrontier:
         # cx/cy/fw (+ julia seed c) make EVERY reject fate renderable from the log alone — the
         # gap the julia audit hit (precanon_dup / canonical-not-q3 rejects had no coords, so no
         # human could ever eyeball them). Cheap: 3 floats + an optional c pair per harvest check.
+        #
+        # `canon_decoded` / `reframe_decoded` are ANNOTATION columns and are now
+        # `floors.good_class(...)` — None below the good floor, else 3, or 4 when P(>=4) also
+        # clears `floors.GREAT_CUT`. Same column, same meaning, one bar for every partition
+        # instead of nine. Nothing DECIDES on them: admission is `is_good` on the raw `p_good`
+        # in the outcome ledger, and these exist so a sheet can label a tile without joining.
         jc = c.get("c")
         self._writer(self.harvest_log).write_row(dict(
             batch=self.batch_i, partition=c["partition"], depth=c["depth"],
@@ -3486,7 +3487,7 @@ class SteeredFrontier:
             canon_pge4=c.get("canon_pge4"), canon_decoded=c.get("canon_decoded"),
             reframe_decoded=reframe_decoded,
             tau_h=self.tau_h[c["partition"]], tau_rec=self.tau_rec[c["partition"]],
-            t_good=ps.t_good_for(c["partition"]),
+            good_floor=F.GOOD_FLOOR,
             int_frac=c.get("int_frac"), occ=c.get("occ"),
             mix_source=c.get("mix_source"), maneuver=c.get("man"),
             # TRIGGERED vs FRESH is stamped on the ROW, never derived at readout time from
@@ -3711,8 +3712,7 @@ class SteeredFrontier:
                       or ROOT_DRAW_BUDGET_S) / 60.0, 2),
             tau_h=self.tau_h, tau_rec=self.tau_rec,
             tau_h_uncalibrated=self.tau_h_uncalibrated,
-            t_good={p: ps.t_good_for(p) for p in self.partitions},
-            t_good_status={p: ps.t_good_status(p) for p in self.partitions},
+            good_floor=F.GOOD_FLOOR,
             record_and_rank=dict(
                 frac=Q4_REC_FRAC, floor_abs=Q4_REC_FLOOR_ABS,
                 record_canon_dups=self.record_canon_dups,
@@ -3997,7 +3997,7 @@ class SteeredFrontier:
         if not led.exists():
             raise SystemExit(f"--dive-source has no outcome_ledger.jsonl: {led}")
         rows = [json.loads(l) for l in open(led, encoding="utf-8") if l.strip()]
-        adm = [r for r in rows if r.get("distinct") and (r.get("decoded_class") or 0) >= 3]
+        adm = [r for r in rows if r.get("distinct") and ps.is_good(r)]
         if not adm:
             raise SystemExit(f"no distinct-q3 admissions in {led}")
         return adm
@@ -4108,7 +4108,7 @@ class SteeredFrontier:
         # the ledger is the durable source of truth; re-sync the admitted counter to it so a
         # resume across a mid-dive boundary can't leave the stat lagging the real admissions.
         self.totals["admitted"] = sum(
-            1 for r in self.ledger.rows if r.get("distinct") and (r.get("decoded_class") or 0) >= 3)
+            1 for r in self.ledger.rows if r.get("distinct") and ps.is_good(r))
         print(f"[dive-resume] {st['done_idx']}/{len(st['plan'])} dives done, "
               f"active {self.active_s/60:.1f}m, admitted {self.totals['admitted']}", flush=True)
         return st["plan"], st["done_idx"]
@@ -4791,7 +4791,7 @@ def main():
     ap.add_argument("--tau-h-phoenix", type=float, default=None,
                     help="phoenix's harvest cut. There is no derivable value under the "
                          "active head (see __init__), so this is explicit and the run "
-                         "config stamps it UNCALIBRATED. Default: t_good_for('phoenix').")
+                         "config stamps it UNCALIBRATED. Default: floors.GOOD_FLOOR.")
     ap.add_argument("--julia-seed-pool", type=str, default=str(JULIA_SUPPLY_POOL),
                     help="PRIMARY julia supply: a JSON list of {c_re,c_im} c's from the "
                          "c-diverse near-∂M sampler, injected as julia:mandelbrot roots at fresh "

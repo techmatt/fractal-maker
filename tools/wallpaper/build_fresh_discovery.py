@@ -67,7 +67,7 @@ import sample_location as SL          # noqa: E402  (run_location retain-all, lo
 import query_sampler as qs            # noqa: E402  (load_pool_library, PaletteSampler)
 import colormap as cm                 # noqa: E402  (stretch_field)
 import location as loc_mod            # noqa: E402  (canonical Location, from_render_block, location_key)
-import corpus_common as cc            # noqa: E402  (is_current_decoded — current-stamp guard)
+from tools.emission import floors as F  # noqa: E402  THE cut owner (GOOD_FLOOR)
 import gather_select as gs            # noqa: E402  (canonical ledger->render family map + outcome_geometry)
 from active_ckpt import auto_maxiter        # noqa: E402  (native fw-dependent maxiter policy)
 from label_crop import (              # noqa: E402  (shared label-crop spec — Recipe-2 tail)
@@ -214,12 +214,16 @@ def select_sources(seed, count, head_exclude=True):
         if not line.strip():
             continue
         d = json.loads(line)
-        if (not cc.is_current_decoded(d) or d.get("decoded_class") != 3
-                or not d.get("guard_pass")):
+        # THE admission filter: guard_pass + the row's RAW P(>=3) against the live
+        # `floors.GOOD_FLOOR`. It used to be `is_current_decoded ∧ decoded_class == 3` — a
+        # frozen class plus a decode-VERSION firewall, both retired 2026-08-09. A row an
+        # older head scored is now judged on its own probability rather than discarded, and
+        # a class-4 row is no longer excluded by an `== 3` that predates the K=4 head.
+        if not d.get("guard_pass") or not F.passes_good_floor(d.get("p_good")):
             continue
         tl = _to_location(d)
         if tl is None:
-            # current/class-3/guard-pass but not renderable (e.g. a julia row missing its z-plane
+            # good/guard-pass but not renderable (e.g. a julia row missing its z-plane
             # viewport). Counted so the Phase-1 reconciliation can see it as a real (non-dup)
             # drop rather than a silent leak.
             n_unrenderable += 1
@@ -256,7 +260,7 @@ def select_sources(seed, count, head_exclude=True):
     report = {
         "source_ledger": str(DISCOVERY_LEDGER.relative_to(ROOT)),
         "ledger_start_line": LEDGER_START_LINE,
-        "filter": f"scorer_version=={cc.active_scorer_version()} & decoded_class==3 & guard_pass (all families)",
+        "filter": f"p_good>={F.GOOD_FLOOR:g} (floors.GOOD_FLOOR) & guard_pass (all families)",
         "head_exclude": head_exclude,
         "raw_matches": n_raw,
         "unrenderable_dropped": n_unrenderable,

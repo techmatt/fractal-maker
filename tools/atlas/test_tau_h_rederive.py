@@ -1,14 +1,18 @@
-"""`tau_h_rederive` — the row cache is bulk, and it carries the K=4 triple.
+"""`tau_h_rederive` — the estimator, the row cache's storage class, and its K=4 shape.
 
-Two behaviours, each earned by a failure:
+Behaviours, each earned by a failure:
 
+* THE ESTIMATOR conditions on `floors.GOOD_FLOOR` and FAILS OPEN below `MIN_N` (2026-08-09).
+  Both halves are the point: a per-partition bar made every cross-version comparison a
+  confound, and a thin partition that got a POOLED cross-family cut was being served a number
+  about somebody else's population. Fail-open costs render time, which shows up in run
+  telemetry; the alternatives cost supply, which does not.
 * the row-level scores were written under `scratch/` and re-rendered from zero TWICE after a
   scratch wipe. They are expensive-but-deterministic given the committed ledgers plus the
   active weights, i.e. `bulk()`, and this pins that the write site declares it.
-* the rows stored the K=3-shaped `(score, p_notbad, p_good)` triple, which cannot reproduce
-  the SERVED decode on a K=4 head (`corn_decode(nb, pg, t_good, pg4)`): the third cutpoint
-  never reached the row, so a stored row was capped at class 3 by the reader rather than by
-  the head. This pins the K-aware shape and the refusal to mix shapes in one cache.
+* the rows stored the K=3-shaped `(score, p_notbad, p_good)` triple, so the third cutpoint
+  never reached the row and a cached row could not answer a class-4 question at all. This
+  pins the K-aware shape and the refusal to mix shapes in one cache.
 
 Run: uv run pytest tools/atlas/test_tau_h_rederive.py -q
 """
@@ -49,8 +53,8 @@ class FakeScorer:
         raise AssertionError("tau_h_rederive must score K-aware (score_paths_k)")
 
 
-def _row(key="h_run_1_0"):
-    return dict(pop="harvest", run="campaign1/breadth", partition="mandelbrot", depth=3,
+def _row(key="w_st_m_0"):
+    return dict(pop="walk", run="prospect_run1", partition="mandelbrot", depth=3,
                 cx="-0.5", cy="0.1", fw="1e-3", c=None, key=key)
 
 
@@ -137,8 +141,8 @@ def test_a_row_scored_under_another_model_is_refused(tmp_path):
 # not hypothetical: the 2026-08-08 enlargement re-derives v11 over 64,365 rows where the
 # adoption-era artifact was 3,492.
 def _art(**over):
-    base = dict(per_partition=200, n_rows_harvest=2400, n_rows_walk=1092,
-                keep=0.9, seed=0, combine="min", tau_h_base={"mandelbrot": 0.63})
+    base = dict(per_partition=0, n_rows=1148, keep=0.9, seed=0,
+                good_floor=0.5, min_n=5, tau_h_base={"mandelbrot": 0.63})
     base.update(over)
     return base
 
@@ -147,7 +151,7 @@ def test_a_rederivation_over_a_different_population_refuses_to_overwrite(tmp_pat
     out = tmp_path / "tau_h_base_v11.json"
     out.write_text(json.dumps(_art()), encoding="utf-8")
     with pytest.raises(SystemExit, match="DIFFERENT population"):
-        thr.assert_not_superseding(out, _art(n_rows_harvest=63217, per_partition=100000), False)
+        thr.assert_not_superseding(out, _art(n_rows=63217, per_partition=200), False)
 
 
 def test_the_refusal_names_every_field_that_moved(tmp_path):
@@ -156,16 +160,16 @@ def test_the_refusal_names_every_field_that_moved(tmp_path):
     out = tmp_path / "a.json"
     out.write_text(json.dumps(_art()), encoding="utf-8")
     with pytest.raises(SystemExit) as e:
-        thr.assert_not_superseding(out, _art(n_rows_harvest=63217, keep=0.8), False)
+        thr.assert_not_superseding(out, _art(n_rows=63217, keep=0.8), False)
     msg = str(e.value)
-    assert "n_rows_harvest: 2400 -> 63217" in msg and "keep: 0.9 -> 0.8" in msg
+    assert "n_rows: 1148 -> 63217" in msg and "keep: 0.9 -> 0.8" in msg
     assert "per_partition" not in msg           # unchanged fields stay out of the message
 
 
 def test_overwrite_is_the_deliberate_act_that_allows_it(tmp_path):
     out = tmp_path / "a.json"
     out.write_text(json.dumps(_art()), encoding="utf-8")
-    thr.assert_not_superseding(out, _art(n_rows_harvest=63217), True)
+    thr.assert_not_superseding(out, _art(n_rows=63217), True)
 
 
 def test_rerunning_the_same_derivation_is_not_superseding(tmp_path):
@@ -200,45 +204,71 @@ def test_the_render_fanout_does_not_inherit_the_one_process_thread_default():
 
 
 # --------------------------------------------------------------------------- #
-# the truncation mixture
+# the estimator: one bar for every partition, and fail-OPEN below MIN_N
 # --------------------------------------------------------------------------- #
-class _FakeRun:
-    def __init__(self, name, rows):
-        self.name, self.log, self._rows = name, name, rows
+def _scored(partition, canon, cheap):
+    return dict(partition=partition, canon_pgood=canon, cheap_pgood=cheap)
 
 
-def test_truncation_record_reports_the_mixture_not_a_single_level(monkeypatch):
-    """`caveat` used to say the harvest arm is left-truncated at "the previous head's tau_h",
-    singular. It never was: every row carries the tau_h LIVE FOR ITS OWN RUN, so pooling runs
-    pools tau eras and the bound's tightness varies by partition. This pins that the mixture
-    is reported rather than collapsed."""
-    runs = [_FakeRun("old", [dict(cx=1, fw=1e-3, partition="mandelbrot", tau_h=0.70)] * 3),
-            _FakeRun("new", [dict(cx=1, fw=1e-3, partition="mandelbrot", tau_h=0.02)] * 1)]
-    monkeypatch.setattr(thr.run_record, "require_rows", lambda log: dict(
-        old=runs[0]._rows, new=runs[1]._rows)[log])
-    rec = thr.truncation_record(runs)
-    mb = rec["by_partition"]["mandelbrot"]
-    assert mb["n_levels"] == 2 and mb["n_rows"] == 4
-    assert mb["min"] == 0.02 and mb["max"] == 0.70
-    assert mb["row_weighted_mean"] == pytest.approx((0.70 * 3 + 0.02) / 4)
-    assert rec["by_run"] == {"old": {"mandelbrot": 0.70}, "new": {"mandelbrot": 0.02}}
+def test_the_bar_is_the_good_floor_and_not_a_per_partition_threshold():
+    """The rows that count toward the quantile are the ones a CANONICAL render would have
+    kept under the live floor \u2014 the same cut the run side admits on. Two partitions with
+    identical score distributions must therefore get identical cuts; under the retired
+    per-partition t_good they would not have, which is what made every cross-version move a
+    head change AND a threshold change with no way to separate them."""
+    from tools.emission import floors as F
+    rows = []
+    for part in ("mandelbrot", "julia:multibrot4"):
+        for i in range(10):
+            rows.append(_scored(part, 0.05 * i + 0.30, 0.05 * i + 0.10))
+    tau, detail = thr.derive(rows, ["mandelbrot", "julia:multibrot4"], 0.90)
+    assert tau["mandelbrot"] == tau["julia:multibrot4"]
+    n_good = sum(1 for r in rows
+                 if r["partition"] == "mandelbrot" and r["canon_pgood"] >= F.GOOD_FLOOR)
+    assert detail["mandelbrot"]["n_good"] == n_good > 0
+    assert detail["mandelbrot"]["source"] == "own"
 
 
-def test_untagged_rows_are_counted_never_guessed(monkeypatch):
-    """A row written before the tau_h stamp existed has no level. Imputing one would invent
-    a truncation the pool does not have, so it is counted separately and excluded."""
-    run = _FakeRun("r", [dict(cx=1, fw=1e-3, partition="mandelbrot", tau_h=None),
-                         dict(cx=1, fw=1e-3, partition="mandelbrot", tau_h=0.5)])
-    monkeypatch.setattr(thr.run_record, "require_rows", lambda log: run._rows)
-    mb = thr.truncation_record([run])["by_partition"]["mandelbrot"]
-    assert mb["unstamped_rows"] == 1 and mb["n_rows"] == 1
-    assert mb["row_weighted_mean"] == pytest.approx(0.5)
+def test_a_partition_below_min_n_fails_OPEN_and_harvests_everything():
+    """0.0, not a pooled cross-family cut and not a refusal. A too-high cut sheds admissions
+    invisibly; a zero cut spends render minutes the run's own telemetry reports."""
+    rows = [_scored("mandelbrot", 0.9, 0.8) for _ in range(20)]
+    rows += [_scored("multibrot5", 0.9, 0.8) for _ in range(thr.MIN_N - 1)]
+    tau, detail = thr.derive(rows, ["mandelbrot", "multibrot5"], 0.90)
+    assert tau["multibrot5"] == 0.0
+    assert "FAIL-OPEN" in detail["multibrot5"]["source"]
+    assert tau["mandelbrot"] > 0.0                      # the thick partition is unaffected
 
 
-def test_phoenix_and_geometryless_rows_are_excluded_as_the_deriver_excludes_them(monkeypatch):
-    """The record must describe the population the estimator actually cuts on, not the log."""
-    run = _FakeRun("r", [dict(cx=None, fw=1e-3, partition="mandelbrot", tau_h=0.5),
-                         dict(cx=1, fw=None, partition="mandelbrot", tau_h=0.5),
-                         dict(cx=1, fw=1e-3, partition="phoenix", tau_h=0.5)])
-    monkeypatch.setattr(thr.run_record, "require_rows", lambda log: run._rows)
-    assert thr.truncation_record([run])["by_partition"] == {}
+def test_the_thin_partition_does_not_inherit_the_thick_one_s_cut():
+    """No pooled cross-family fallback. A pooled quantile is dominated by whichever
+    partitions happen to have the most passing rows, and handing it to a thin one is the same
+    category error as serving a v8 threshold on a v10 gate."""
+    rows = [_scored("mandelbrot", 0.9, 0.77) for _ in range(20)]
+    rows += [_scored("multibrot5", 0.9, 0.8)]
+    tau, _ = thr.derive(rows, ["mandelbrot", "multibrot5"], 0.90)
+    assert tau["multibrot5"] == 0.0 and tau["multibrot5"] != tau["mandelbrot"]
+
+
+def test_the_retired_harvest_arm_leaves_no_reader_behind():
+    """The harvest arm, the two-arm minimum, the per-run truncation record and the harvest-log
+    registry retired together (prompts/selection_restructure_3.md). A resumed cache may still
+    HOLD harvest rows \u2014 they are read past, never deleted \u2014 but nothing derives from them."""
+    for gone in ("_harvest_rows", "truncation_record"):
+        assert not hasattr(thr, gone), gone
+    src = (ROOT / "tools/atlas/tau_h_rederive.py").read_text(encoding="utf-8")
+    assert "harvest_log_registry" not in src
+    assert "--combine" not in src
+
+
+def test_only_walk_rows_reach_the_estimator(tmp_path):
+    """The cache is filtered by `pop` at the read, not at the write: a pile of harvest rows
+    with a different cheap distribution must not move the derived cut."""
+    walk = [dict(pop="walk", partition="mandelbrot", canon_pgood=0.9, cheap_pgood=0.8)
+            for _ in range(10)]
+    harvest = [dict(pop="harvest", partition="mandelbrot", canon_pgood=0.9, cheap_pgood=0.05)
+               for _ in range(500)]
+    tau_walk, _ = thr.derive(walk, ["mandelbrot"], 0.90)
+    tau_mixed, _ = thr.derive([r for r in walk + harvest if r["pop"] == "walk"],
+                              ["mandelbrot"], 0.90)
+    assert tau_walk["mandelbrot"] == tau_mixed["mandelbrot"] == pytest.approx(0.8)

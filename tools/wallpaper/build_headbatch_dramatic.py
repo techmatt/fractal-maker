@@ -69,7 +69,8 @@ from label_crop import (              # noqa: E402  (shared label-crop spec — 
 )
 from pool_rule import top_k_pool  # noqa: E402  (shared pool rule; lifted out of build_humanq3)
 import build_fresh_discovery as BFD   # noqa: E402  (_to_location, _head_corpus_exclusion, _spatially_in)
-import corpus_common as cc            # noqa: E402  (is_current_decoded — current-stamp guard)
+from tools.emission import floors as F  # noqa: E402  THE cut owner (GOOD_FLOOR)
+from production_pins import ACTIVE_VERSION as _ACTIVE_VERSION  # noqa: E402  (reported only)
 
 WALLPAPER_CORPUS = ROOT / "data" / "wallpaper_corpus"
 LABELS_DIR = ROOT / "labels"
@@ -270,17 +271,16 @@ def select_fresh(seed, count, reused_sources):
             if not line.strip():
                 continue
             d = json.loads(line)
-            # v6-stamp guard: `decoded_class` from a v5-decoded (unstamped) row is
-            # NOT a current-model machine-q3 verdict — reject it here, matching the
-            # sibling build_fresh_discovery emit path. The gather/mandelbrot partition is
-            # 100% v5, and after a checkpoint flip every prior-version row is stale too, so
-            # without this the "fresh machine-q3" pool is dominated by non-current verdicts.
-            if not cc.is_current_decoded(d):
-                if ((d.get("decoded_class") or 0) >= 3 and d.get("guard_pass")
+            # Rows scored by an older head are COUNTED, not excluded (2026-08-09): the
+            # stamp guard that used to drop them retired with the rest of the decode-version
+            # family, and a stale probability is a worse estimate rather than an
+            # inadmissible one. `n_excl_v5` keeps its name and now reports how much of the
+            # pool is off-head, which is the thing it was really measuring.
+            if d.get("scorer_version") != _ACTIVE_VERSION:
+                if (F.passes_good_floor(d.get("p_good")) and d.get("guard_pass")
                         and d.get("family") in DEG2_FAMILIES):
                     n_excl_v5 += 1
-                continue
-            if (d.get("decoded_class") != 3 or not d.get("guard_pass")
+            if (not F.passes_good_floor(d.get("p_good")) or not d.get("guard_pass")
                     or d.get("family") not in DEG2_FAMILIES):
                 continue
             tl = BFD._to_location(d)
@@ -336,7 +336,7 @@ def select_fresh(seed, count, reused_sources):
         })
     report = {
         "ledgers": [str(l.relative_to(ROOT)) for l in FRESH_LEDGERS],
-        "filter": f"scorer_version=={cc.active_scorer_version()} & decoded_class==3 & guard_pass & family∈{{mandelbrot,julia:mandelbrot}}",
+        "filter": f"p_good>={F.GOOD_FLOOR:g} (floors.GOOD_FLOOR) & guard_pass & family∈{{mandelbrot,julia:mandelbrot}}",
         "raw_matches": n_raw, "within_set_or_reused_dups": n_dup,
         "excluded_v5_decoded_q3": n_excl_v5,
         "excluded_head_corpus_by_key": n_excl_key,

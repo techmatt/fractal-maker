@@ -3,20 +3,20 @@ r"""classic_phoenix_supply.py — mint a CURRENT-decoded classic-phoenix supply 
 
 The Phase-B grid is VARIED phoenix (swept c/p/z_{-1}); classic phoenix is the original motif
 (fixed Ushiki plane, z_{-1}=0). The legacy phoenix ledgers hold classic q3 coordinates decoded
-under an OLDER HEAD — inadmissible now (`is_current_decoded` fails on any non-active stamp).
-This tool mints current rows AT THE SAME PLACES: it re-renders each legacy q3 coordinate at
-reframe/deploy fidelity carrying the classic Ushiki identity, re-scores under the guarded
-ACTIVE CORN scorer, and re-decodes at this partition's own production t_good. Legacy rows are
-untouched; this writes a fresh `classic_phoenix`-tagged ledger.
+under an OLDER HEAD, whose probabilities are on a scale the live floors were not set
+against. This tool mints current rows AT THE SAME PLACES: it re-renders each legacy good
+coordinate at reframe/deploy fidelity carrying the classic Ushiki identity and re-scores under
+the guarded ACTIVE CORN scorer. Legacy rows are untouched; this writes a fresh
+`classic_phoenix`-tagged ledger.
 
-THE HEAD IS NEVER PINNED HERE. Scorer, stamp and threshold all resolve from the live pins
-(`production_seeder.SCORER_PATH` / `SCORER_VERSION`, `t_good_for`), so re-running after a model
-flip re-mints rather than reproducing the previous head. `purge_stale` is what makes that true
-on a RESUME: the resume key is the decode-version predicate, not the coord id, so a flip does
-not read as "already done". First run 2026-07-21 under v7 at t_good 0.45; re-minted under v10
-on 2026-08-04 at the `phoenix:classic` partition's own t_good (registered 2026-08-04).
+THE HEAD IS NEVER PINNED HERE. Scorer and stamp resolve from the live pins
+(`production_seeder.SCORER_PATH` / `SCORER_VERSION`) and the cut from `floors.GOOD_FLOOR`, so
+re-running after a model flip re-mints rather than reproducing the previous head. `purge_stale`
+is what makes that true on a RESUME: the resume key is the scorer stamp, not the coord id, so a
+flip does not read as "already done". First run 2026-07-21 under v7 at t_good 0.45; re-minted
+under v10 on 2026-08-04, and under the flat `floors.GOOD_FLOOR` from 2026-08-09.
 
-  Stage A  collect   — q3 (decoded_class==3) phoenix coords from the legacy ledgers, coord-dedup.
+  Stage A  collect   — good phoenix coords from the legacy ledgers, coord-dedup.
   Stage B  rescore   — per-coord guarded ACTIVE-head render+score+decode (reframe fidelity, no
                        search), morph-embed distinct tally + 1280-D feature for each q3.
                        Per-coord resume, keyed on the decode VERSION (see `purge_stale`).
@@ -85,12 +85,19 @@ import production_seeder as ps            # noqa: E402
 import prescreen                          # noqa: E402
 import guard                              # noqa: E402
 import reframe                            # noqa: E402
-from score_lib import corn_decode         # noqa: E402
 from step0_reanalysis import load_frames_by_walk  # noqa: E402
 from deficit_scheduler import DistinctLookTally    # noqa: E402
 import discovery_sinks as _dsinks     # noqa: E402  (the feats bulk() class)
-import corpus_common as cc            # noqa: E402  THE current-decode predicate
 import partitions as _P               # noqa: E402  THE partition registry
+from tools.emission import floors as F  # noqa: E402  THE cut owner (GOOD_FLOOR)
+from production_pins import ACTIVE_VERSION as _ACTIVE_VERSION  # noqa: E402
+
+
+def _active_version() -> str:
+    """The live checkpoint's scorer_version token. Local rather than shared: the only
+    question this module asks it is "has the live head already scored this coord", which is
+    resume bookkeeping, not admission (see `purge_stale`)."""
+    return _ACTIVE_VERSION
 
 # --- classic Ushiki identity (Phase-A legacy defaults) --------------------------------------- #
 CLASSIC_SEED = psamp.Seed(
@@ -130,6 +137,12 @@ def collect_coords():
             if not line:
                 continue
             r = json.loads(line)
+            # The legacy ledgers were written before the fixed cut and carry the class
+            # their own head/threshold produced; re-reading them through the live floor
+            # would judge an old head's probabilities against a new head's bar. The COORD is
+            # what is being harvested here, and the stored class is what that run's own
+            # judgement of it was — so the legacy verdict is the right key, and stage B is
+            # where the live head gets its say.
             if r.get("family") != "phoenix" or r.get("decoded_class") != 3:
                 continue
             n_q3 += 1
@@ -168,12 +181,13 @@ def purge_stale(rescored_path, feats_path, looks_path) -> tuple[set, int]:
     """Drop every non-CURRENT-decoded row from the resume state, and return the ids that
     survive plus the count dropped.
 
-    THE RESUME PREDICATE IS THE DECODE-VERSION PREDICATE, not "have I seen this id".
-    `p_notbad`/`p_good`/`decoded_class` are a specific head's verdict, so a row carrying an
-    older `scorer_version` is not DONE under a new head — it is a row that must be scored
-    again. Resuming on id alone made a model flip a no-op: every coord looked finished and
-    the ledger kept serving the old head's admissions under the new head's name. Routed
-    through `corpus_common.is_current_decoded` so the stamp discriminator has one owner.
+    THE RESUME PREDICATE IS THE SCORER STAMP, not "have I seen this id". `p_notbad`/`p_good`
+    are a specific head's numbers, so a row carrying an older `scorer_version` is not DONE
+    under a new head — it is a row that must be scored again. Resuming on id alone made a
+    model flip a no-op: every coord looked finished and the ledger kept serving the old head's
+    admissions under the new head's name. This is an IDEMPOTENCE question ("has the live head
+    scored this yet"), not an admission one; the general-purpose decode-version predicate that
+    used to answer it was deleted on 2026-08-09 because it was being used as the latter.
 
     THE DERIVED SIDECARS GO WITH THEM. `rescored.jsonl`, `outcome_feats.npz` and
     `distinct_looks.npz` are all derived from the same admission set, and the look tally is
@@ -187,12 +201,12 @@ def purge_stale(rescored_path, feats_path, looks_path) -> tuple[set, int]:
         return set(), 0
     rows = [json.loads(l) for l in rescored_path.read_text(encoding="utf-8").splitlines()
             if l.strip()]
-    keep = [r for r in rows if cc.is_current_decoded(r)]
+    keep = [r for r in rows if r.get("scorer_version") == _active_version()]
     dropped = len(rows) - len(keep)
     if not dropped:
         return {r["id"] for r in keep}, 0
     log(f"[stale] {dropped}/{len(rows)} rescored rows carry a non-active scorer_version "
-        f"(active={cc.active_scorer_version()}); they die by the predicate and are re-scored. "
+        f"(active={_active_version()}); they die by the stamp check and are re-scored. "
         f"Stamps seen: {sorted({r.get('scorer_version') for r in rows})}")
     rescored_path.write_text("".join(json.dumps(r) + "\n" for r in keep), encoding="utf-8")
     # the two derived sidecars are rebuilt with the admissions, never carried across a head
@@ -202,7 +216,7 @@ def purge_stale(rescored_path, feats_path, looks_path) -> tuple[set, int]:
     return {r["id"] for r in keep}, dropped
 
 
-def rescore(coords, scorer, embedder, tally, feats, rescored_path, feats_path, t,
+def rescore(coords, scorer, embedder, tally, feats, rescored_path, feats_path,
             limit=None, done=None):
     done = set() if done is None else set(done)
     todo = [c for c in coords if c["id"] not in done]
@@ -221,10 +235,9 @@ def rescore(coords, scorer, embedder, tally, feats, rescored_path, feats_path, t
             log(f"  WARN {cid} render/score failed: {type(e).__name__}: {str(e)[:120]}")
             shutil.rmtree(dwork, ignore_errors=True)
             continue
-        decoded = corn_decode(nb, g, t) if gp else None
-        is_q3 = gp and decoded == 3
-        row = {**c, "family": "phoenix", "decoded_class": decoded, "p_notbad": nb, "p_good": g,
-               "t_good": t, "guard_pass": gp, "guard_fail": None if gp else "sentinel",
+        is_q3 = gp and F.passes_good_floor(g)
+        row = {**c, "family": "phoenix", "p_notbad": nb, "p_good": g,
+               "guard_pass": gp, "guard_fail": None if gp else "sentinel",
                **ps.phoenix_ident_fields(), "mix_source": "classic_phoenix", "canon_pgood": g,
                "scorer_version": ps.SCORER_VERSION}
         if is_q3:
@@ -255,7 +268,7 @@ def rescore(coords, scorer, embedder, tally, feats, rescored_path, feats_path, t
 # --------------------------------------------------------------------------- #
 # Stage C — fixed-classic descent top-up (guided-descend --phoenix at Ushiki).
 # --------------------------------------------------------------------------- #
-def topup(scorer, embedder, tally, feats, rescored_path, feats_path, t, seed_base, budget_min):
+def topup(scorer, embedder, tally, feats, rescored_path, feats_path, seed_base, budget_min):
     reframe.DUMP_GUARD_FIELD = True
     loc_of = pg.make_phoenix_loc_of(CLASSIC_SEED)
     fh = open(rescored_path, "a", encoding="utf-8")
@@ -283,8 +296,7 @@ def topup(scorer, embedder, tally, feats, rescored_path, feats_path, t, seed_bas
                 log(f"    walk {wid} skipped: {type(e).__name__}: {str(e)[:100]}")
                 continue
             gp = rew["reward_k3"] > guard.GUARD_SENTINEL + 1e-6
-            decoded = corn_decode(rew["p_notbad"], rew["p_good"], t) if gp else None
-            if not (gp and decoded == 3):
+            if not (gp and F.passes_good_floor(rew["p_good"])):
                 continue
             cid = f"clphx_topup_{leg:03d}_{wid:03d}"
             emb = embedder.embed(rew["outcome_cx"], rew["outcome_cy"], rew["outcome_fw"],
@@ -296,8 +308,8 @@ def topup(scorer, embedder, tally, feats, rescored_path, feats_path, t, seed_bas
             row = {"id": cid, "legacy_source": "topup_descent", "legacy_id": None,
                    "outcome_cx": rew["outcome_cx"], "outcome_cy": rew["outcome_cy"],
                    "outcome_fw": rew["outcome_fw"], "reached_depth": int(rew["reached_depth"]),
-                   "family": "phoenix", "decoded_class": decoded,
-                   "p_notbad": float(rew["p_notbad"]), "p_good": float(rew["p_good"]), "t_good": t,
+                   "family": "phoenix",
+                   "p_notbad": float(rew["p_notbad"]), "p_good": float(rew["p_good"]),
                    "guard_pass": gp, "guard_fail": None, **ps.phoenix_ident_fields(),
                    "mix_source": "classic_phoenix", "canon_pgood": float(rew["p_good"]),
                    "scorer_version": ps.SCORER_VERSION, "distinct": bool(distinct), "dup_of": None}
@@ -329,15 +341,11 @@ def main(argv=None):
     run_dir = Path(args.run_dir).resolve() if args.run_dir else RUN_DIR
     run_dir.mkdir(parents=True, exist_ok=True)
     SCRATCH.mkdir(parents=True, exist_ok=True)
-    # `phoenix:classic` is the partition this ledger IS (registered 2026-08-04); the pooled
-    # `phoenix` threshold is the varied family's and would be the wrong bar to admit on.
-    t = ps.t_good_for(_P.CLASSIC_PHOENIX)
-
     coords, per_src = collect_coords()
     (run_dir / "coords.jsonl").write_text(
         "\n".join(json.dumps(c) for c in coords) + "\n", encoding="utf-8")
-    log(f"=== classic phoenix supply  partition={_P.CLASSIC_PHOENIX} t_good={t} "
-        f"({ps.t_good_status(_P.CLASSIC_PHOENIX)}) scorer={ps.SCORER_VERSION} ===")
+    log(f"=== classic phoenix supply  partition={_P.CLASSIC_PHOENIX} "
+        f"good_floor={F.GOOD_FLOOR:g} scorer={ps.SCORER_VERSION} ===")
     log(f"[collect] legacy q3: {per_src} -> {len(coords)} unique coords")
 
     reframe.DUMP_GUARD_FIELD = True
@@ -358,26 +366,25 @@ def main(argv=None):
         with np.load(feats_path, allow_pickle=False) as z:
             feats = {k: z[k].copy() for k in z.files}
 
-    rescore(coords, scorer, embedder, tally, feats, rescored_path, feats_path, t,
+    rescore(coords, scorer, embedder, tally, feats, rescored_path, feats_path,
             limit=args.limit, done=done)
 
     n_distinct = tally.count("phoenix")
     topup_added = 0
     if not args.no_topup and not args.limit and n_distinct < MIN_DISTINCT:
         log(f"[topup] {n_distinct} < {MIN_DISTINCT} distinct — running fixed-classic descent leg")
-        topup_added = topup(scorer, embedder, tally, feats, rescored_path, feats_path, t,
+        topup_added = topup(scorer, embedder, tally, feats, rescored_path, feats_path,
                             args.seed, args.topup_budget)
 
     # Stage D — finalize: ledger = q3 rows from rescored.jsonl
     rows = [json.loads(l) for l in rescored_path.read_text(encoding="utf-8").splitlines() if l.strip()]
-    q3 = [r for r in rows if r.get("guard_pass") and (r.get("decoded_class") or 0) >= 3]
+    q3 = [r for r in rows if r.get("guard_pass") and F.passes_good_floor(r.get("p_good"))]
     with open(run_dir / "outcome_ledger.jsonl", "w", encoding="utf-8") as f:
         for r in q3:
             f.write(json.dumps(r) + "\n")
     n_distinct = sum(1 for r in q3 if r.get("distinct"))
     summary = {
-        "t_good": t, "partition": _P.CLASSIC_PHOENIX,
-        "t_good_status": ps.t_good_status(_P.CLASSIC_PHOENIX),
+        "good_floor": F.GOOD_FLOOR, "partition": _P.CLASSIC_PHOENIX,
         "scorer_version": ps.SCORER_VERSION, "near_dup_threshold": NEAR_DUP,
         "stale_rows_repredicated": n_stale,
         "legacy_sources": per_src, "coords_unique": len(coords),

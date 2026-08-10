@@ -3,9 +3,9 @@
 
 Four properties, each the mirror of something the frozen-verdict intake did:
 
-  1. the DECODE-VERSION predicate is gone — a stale-stamped row is admitted on its raw score,
-     where `load_admitted` would drop it. Asserted against `load_admitted` on the SAME file, so
-     the difference is demonstrated rather than described.
+  1. the DECODE-VERSION predicate is gone — a stale-stamped row is admitted on its raw score.
+     `load_admitted` dropped such a row until 2026-08-09 and the assertion was a CONTRAST;
+     that predicate has since been deleted tree-wide, so both readers are asserted to admit.
   2. the stored `decoded_class` is not read at all — a class-1 row with a strong `p_good` is
      admitted, and a class-3 row with a junk `p_good` is not.
   3. the junk floor is the ONE cut, with the floor-admit bypass intact.
@@ -55,16 +55,18 @@ def _ledger(tmp_path, rows, name="outcome_ledger.jsonl"):
 # --------------------------------------------------------------------------- #
 # 1 + 2. no decode-version predicate, no stored class
 # --------------------------------------------------------------------------- #
-def test_a_stale_stamped_row_is_admitted_where_the_old_intake_dropped_it(tmp_path):
-    """THE change. `load_admitted` refuses a v6-stamped row because its `decoded_class` is a
-    verdict from a head that is not live; the ranked intake reads the stored PROBABILITY,
-    which is a number and does not go stale into unusability — it just becomes an older head's
-    number, which is what a rank degrades to.
+def test_a_stale_stamped_row_is_admitted(tmp_path):
+    """A row an older head scored is ranked, not dropped. Its `p_good` is an older head's
+    number and therefore a worse estimate, which is what a RANK degrades to; it was once a
+    disqualification, and the v10 flip took the intake from ~1.4k rows to 16 that way.
 
-    Both sides asserted on one file: the old reader's rejection is what makes the new reader's
-    admission a change rather than a restatement."""
+    Both readers assert it now. Until 2026-08-09 this test's whole point was that they
+    DIFFERED — `load_admitted` refused the stale rows while the ranked path took them — and
+    the difference is gone because the decode-version predicate is: `load_admitted` cuts on
+    `floors.GOOD_FLOOR`, the ranked path on `JUNK_FLOOR`, and neither reads a stamp."""
     led = _ledger(tmp_path, [_row("cur"), _row("old", ver="v6"), _row("older", ver="v5")])
-    assert [r["id"] for r in D.load_admitted(led)] == ["cur"]        # unchanged old path
+    assert sorted(r["_ledger_row_id"] if "_ledger_row_id" in r else r["id"]
+                  for r in D.load_admitted(led)) == ["cur", "old", "older"]
     ranked, diag = RI.ranked_by_partition([led])
     assert sorted(r["_ledger_row_id"] for r in ranked["mandelbrot"]) == ["cur", "old", "older"]
     assert diag["n_passing"] == 3

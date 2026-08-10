@@ -1,9 +1,9 @@
 """descriptor.py — location intake: admitted rows → Location, morph embedding, and
 incremental morph-cluster assignment.
 
-The admitted-location loader enforces the current-decode predicate
-(`corpus_common.is_current_decoded`) — a v6/v5/unstamped row is never consumed as a
-current verdict. The canonical morph embedding is the LIBRARY recipe verbatim (a 640×360
+The admitted-location loader cuts on the row's RAW P(>=3) against `floors.GOOD_FLOOR`,
+read at read time (it used to enforce a frozen `decoded_class` plus a decode-VERSION
+predicate; both retired 2026-08-09). The canonical morph embedding is the LIBRARY recipe verbatim (a 640×360
 ss2 smooth field → `library_annotate.morph_gray_image` robust-z tanh gray →
 `colored_clip` CLIP `vit_base_patch16_clip_224.openai`). Clustering is incremental and
 WITHIN fractal type (matching the established within-family CLIP dedup convention): a
@@ -46,31 +46,33 @@ for p in (ROOT, ROOT / "tools" / "corpus", ROOT / "tools" / "scoring"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-import corpus_common as cc            # noqa: E402  is_current_decoded / require_current
 from partitions import base_partition, partition_of_row  # noqa: E402  THE partition resolver
 from tools.corpus import location as loc_mod  # noqa: E402
 from tools.corpus import julia_ledger_schema as jls  # noqa: E402  asserted julia (viewport,c) resolve
+from tools.emission import floors as F  # noqa: E402  THE cut owner (GOOD_FLOOR)
 
 # Strict near-dup cosine threshold — the established within-family morph-CLIP dedup knee
 # (tools/studies/morphology_dedup.py DEFAULT_THRESHOLD). Join a cluster iff cos > this.
 NEAR_DUP_THRESHOLD = 0.974
 
 # --------------------------------------------------------------------------- #
-# Source-aware admission quality predicate.
+# THE FLOOR-ADMIT BYPASS.
 #
 # The default emission source is a DISCOVERY ledger whose locations were found BY the active
-# scorer (the guided-descend reward is its q3 verdict), so `decoded_class>=3` is both the
-# selection signal and the admission gate — self-consistent. A FLOOR-ADMIT source is
-# different: its locations were selected by a quality signal ORTHOGONAL to the scorer — a
-# HUMAN label (`human_q3plus`), or the q4 goodness field (`q4_harvest`), both blind to the
-# scorer and to the window labels. Gating those on the scorer's own verdict would let it
-# silently veto locations it never chose. Guard + distinct + current-decode still apply to
-# EVERY source. See docs/design/q4_harvest_emission.md.
+# scorer, so applying that scorer's own `floors.GOOD_FLOOR` to them is self-consistent. A
+# FLOOR-ADMIT source is different: its locations were selected by a quality signal ORTHOGONAL
+# to the scorer — a HUMAN label (`human_q3plus`), or the q4 goodness field (`q4_harvest`), both
+# blind to the scorer and to the window labels. Gating those on the scorer's own verdict would
+# let it silently veto locations it never chose. Guard + distinct still apply to EVERY source.
+# See docs/design/q4_harvest_emission.md.
 #
-# The q3 gate is `>= 3`, NOT `== 3`. Since v8 the head is K=4 and a ledger row can decode to
-# class 4; `== 3` would let the intake reject precisely the best locations the discovery
-# pipeline exists to find, and it would do so silently — a class-4 row looks like any other
-# non-admitted row downstream.
+# THE QUALITY CUT ITSELF MOVED OUT (2026-08-09, prompts/selection_restructure_3.md). It was
+# `admit_quality`, a source-aware predicate over the STORED `decoded_class >= 3` — a class
+# frozen into the row at harvest time against that day's per-partition `t_good`. Both halves
+# of that are gone: there is no per-partition table, and no reader consumes a frozen verdict.
+# `load_admitted` applies `floors.passes_good_floor` to the raw `p_good` directly, with the
+# bypass below, and the read-time ranked intake supplies its own predicate through the same
+# reader (`ranked_intake.admit`, at the junk floor). One comparison, two heights, no verdicts.
 #
 # THE BADNESS FLOOR IS GONE (2026-08-04). A floor-admit source used to still face a machine
 # BADNESS floor — `p_notbad >= FLOOR_PNOTBAD` (0.5) — on the reading that "reject clear junk"
@@ -89,7 +91,7 @@ NEAR_DUP_THRESHOLD = 0.974
 #     exactly what an unstamped floor does, and why every cut that remains lives in
 #     `tools/emission/floors.py` carrying the head version it was set against.
 #
-# So a floor-admit row is admitted on guard ∧ distinct ∧ current-decode alone; the human does
+# So a floor-admit row is admitted on guard ∧ distinct alone; the human does
 # the quality pick downstream off the release sheet, which is what the rule always said.
 # `FLOOR_PNOTBAD` was DELETED rather than set to 0.0 — a zero floor is still a floor, still
 # reads as a policy somebody chose, and would still be re-tuned by the next person who found
@@ -102,15 +104,6 @@ def source_tag_of(row: dict) -> str | None:
     `_source_tag` intake convention. None when untagged."""
     return row.get("mix_source") or row.get("_source_tag")
 
-
-def admit_quality(row: dict) -> bool:
-    """Source-aware quality predicate. A FLOOR_ADMIT_SOURCES row BYPASSES the machine quality
-    verdict entirely (its selection signal is orthogonal to the head — see above); every other
-    source admits on the q3+ gate (`decoded_class >= 3`). Guard/distinct/current are checked
-    by the caller, for every source alike."""
-    if source_tag_of(row) in FLOOR_ADMIT_SOURCES:
-        return True
-    return (row.get("decoded_class") or 0) >= 3
 
 # auto_maxiter policy — IMPORTED from the owning module, never re-transcribed. This used to
 # be a hand-copied mirror justified by "keep this module torch-free", and it went stale:
@@ -230,13 +223,12 @@ def location_of(row: dict) -> loc_mod.Location:
 # --------------------------------------------------------------------------- #
 # Re-score sibling records (READER-RESOLVED; the original ledger is never rewritten).
 # --------------------------------------------------------------------------- #
-# A ledger's decode block belongs to ONE head. When the pin moves, every row in it goes
-# stale and `is_current_decoded` rejects it — correctly, and that is how the whole stage-2
-# intake fell to 16 rows at the v10 flip. The fix is a re-score, and the re-score CANNOT be
-# an in-place edit: a discovery ledger is the run's own record of what it found and what the
-# head of the day said about it, and overwriting that erases the only evidence of the
-# previous head's operating point. So a re-score is a SIBLING record, keyed by the ledger
-# stem AND the head version:
+# A ledger's `p_good` is ONE HEAD's P(>=3), on a train-prior-calibrated scale. When the pin
+# moves the number stays readable but stops meaning what the floors were set against, so it
+# is re-derived. The re-score CANNOT be an in-place edit: a discovery ledger is the run's own
+# record of what it found and what the head of the day said about it, and overwriting that
+# erases the only evidence of the previous head's operating point. So a re-score is a SIBLING
+# record, keyed by the ledger stem AND the head version:
 #
 #     data/discovery/campaign1/breadth/outcome_ledger.jsonl
 #     data/discovery/campaign1/breadth/outcome_ledger.rescored_v10.jsonl
@@ -253,17 +245,31 @@ def location_of(row: dict) -> loc_mod.Location:
 #     as a rescore of a 24-row ledger AND break its producer's resume. Classic has no overlay
 #     because it does not need one — it re-mints under the live pins every run and purges any
 #     row not stamped with the active version, so it arrives current instead of being patched.
-# (b) It is fail-correct across the NEXT flip: v11 looks for `rescored_v11.jsonl`, does not
-# find it, falls through to the original rows, and `is_current_decoded` rejects them — the
-# intake goes empty and loud rather than quietly serving v10 verdicts under v11's name.
+# (b) It is fail-correct across the NEXT flip in the sense that still applies: v12 looks for
+# `rescored_v12.jsonl`, does not find it, and falls through to the v11 probabilities — which
+# rank the pool worse rather than emptying it. That IS the change of 2026-08-09: the old
+# behaviour was to reject every un-re-scored row outright, which read as "the corpus vanished"
+# and cost a GPU pass to undo. The re-score is now an accuracy job, and what makes a flip
+# CORRECT rather than merely non-fatal is re-scoring AND volume-matching the two floors
+# together (`floors.GOOD_FLOOR` / `JUNK_FLOOR`; classifier_retrain_protocol.md section 5).
 RESCORE_SUFFIX_FMT = ".rescored_{version}.jsonl"
+
+
+def _active_scorer_version() -> str:
+    """The live checkpoint's version token, for NAMING the sibling — never for judging a row.
+
+    Resolved lazily so this module stays importable while a pin is mid-flip. It used to come
+    from `corpus_common.active_scorer_version`, which sat beside the decode-version predicate
+    family that was deleted on 2026-08-09; only the naming use survived the deletion."""
+    from production_pins import ACTIVE_VERSION  # noqa: PLC0415
+    return ACTIVE_VERSION
 
 
 def rescore_path(ledger_path, version: str | None = None) -> Path:
     """The sibling re-score record for `ledger_path` under `version` (default: the ACTIVE
     head). Pure path arithmetic — says nothing about whether the file exists."""
     p = Path(ledger_path)
-    v = version or cc.active_scorer_version()
+    v = version or _active_scorer_version()
     return p.with_name(p.stem + RESCORE_SUFFIX_FMT.format(version=v))
 
 
@@ -315,42 +321,33 @@ def guard_and_distinct(row: dict) -> bool:
     return bool(row.get("guard_pass")) and bool(row.get("distinct"))
 
 
-def load_admitted(ledger_path: Path, require_current: bool = False, admit=None) -> list:
-    """Yield admitted rows from a run-scoped ledger: current-decode ∧ <quality> ∧
-    guard_pass ∧ distinct, where <quality> is source-aware (`admit_quality`): the q3 gate
-    `decoded_class>=3` for a normal discovery source, and NO machine quality cut at all for a
-    FLOOR_ADMIT_SOURCES row (`q4_harvest`, `human_q3plus`) — see the block above
-    `admit_quality` for why the v7-era badness floor was deleted rather than re-derived. With
-    `require_current=True` a stale-decoded row RAISES (`cc.StaleDecodeError`) instead of
-    being skipped — the strict verdict-trust form used to prove old-ledger rows are
-    rejected.
+def load_admitted(ledger_path: Path, admit=None) -> list:
+    """Yield admitted rows from a run-scoped ledger: guard_pass ∧ distinct ∧ (the row's raw
+    P(>=3) clears `floors.GOOD_FLOOR`, OR the row is from a FLOOR_ADMIT source and bypasses
+    the machine verdict entirely — see the block above `FLOOR_ADMIT_SOURCES`).
 
     Rows come through `resolve_rows`, so a ledger carrying a sibling re-score record for the
-    ACTIVE head is admitted on the re-scored decode. Without one the original rows are read
-    verbatim and the current-decode predicate judges them as it always has.
+    ACTIVE head is judged on the RE-SCORED probability. Without one the original probability
+    is read verbatim — which is a number on an older head's scale and therefore a worse
+    estimate, not an inadmissible one. Until 2026-08-09 it WAS inadmissible: a decode-version
+    predicate refused every row an older head had stamped, and the v10 flip consequently took
+    this reader from ~1.4k rows to 16 with nothing going red.
 
-    `admit` REPLACES the whole predicate (decode currency AND quality AND guard/distinct) with
-    a caller-supplied `row -> bool`. It exists so the READ-TIME ranked intake
-    (`ranked_intake.py`, 2026-08-09) shares this one reader — and therefore `resolve_rows`, the
-    namespacing, the location dedup and the diagnostics — instead of growing a second union
-    walker that could disagree with this one about what the population is. `require_current` is
-    refused alongside it: the two are contradictory instructions about the same rows."""
-    if admit is not None and require_current:
-        raise ValueError("load_admitted: `admit` replaces the built-in predicate and "
-                         "`require_current` strengthens it — pass one, not both.")
+    `admit` REPLACES the whole predicate (quality AND guard/distinct) with a caller-supplied
+    `row -> bool`. It exists so the READ-TIME ranked intake (`ranked_intake.py`) shares this
+    one reader — and therefore `resolve_rows`, the namespacing, the location dedup and the
+    diagnostics — instead of growing a second union walker that could disagree with this one
+    about what the population is."""
     rows = []
     for row in resolve_rows(ledger_path):
         if admit is not None:
             if admit(row):
                 rows.append(row)
             continue
-        if require_current:
-            cc.require_current(row)       # raises on stale decode
-        elif not cc.is_current_decoded(row):
+        if not guard_and_distinct(row):
             continue
-        if not row.get("guard_pass") or not row.get("distinct"):
-            continue
-        if not admit_quality(row):        # source-aware: q3 gate, or bypass for floor-admit
+        if source_tag_of(row) not in FLOOR_ADMIT_SOURCES and \
+                not F.passes_good_floor(row.get("p_good")):
             continue
         rows.append(row)
     return rows

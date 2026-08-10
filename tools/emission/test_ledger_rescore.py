@@ -33,6 +33,8 @@ for _p in (ROOT, ROOT / "tools" / "corpus", ROOT / "tools" / "scoring"):
 
 from tools.emission import descriptor as D          # noqa: E402
 from tools.emission import ledger_rescore as LR     # noqa: E402
+from production_pins import ACTIVE_VERSION as _ACTIVE
+from tools.emission import floors as F
 import corpus_common as cc                          # noqa: E402
 
 
@@ -80,16 +82,23 @@ def test_the_seven_ledger_population_is_on_disk_and_its_siblings_are_distinct():
 # --------------------------------------------------------------------------- #
 # reader resolution
 # --------------------------------------------------------------------------- #
-def test_a_stale_ledger_admits_nothing_and_the_overlay_is_what_revives_it(tmp_path):
-    """Both sides. The stale ledger is the state the v10 flip left every non-classic ledger
-    in; the sibling is the fix; and the ids must be the ledger's own."""
-    led = tmp_path / "outcome_ledger.jsonl"
-    _write(led, [_row("a", "v7"), _row("b", "v7", decoded_class=1)])
-    assert D.load_admitted(led) == []
+def test_the_overlay_is_what_moves_a_rows_score_not_its_admissibility(tmp_path):
+    """What a re-score buys, after 2026-08-09. It used to buy ADMISSIBILITY: a stale ledger
+    admitted NOTHING (that is the state the v10 flip left every non-classic ledger in) and the
+    sibling revived it. The decode-version predicate is gone, so a stale row is admitted on
+    its own older-scale `p_good` — and what the overlay changes is the NUMBER, which can move
+    a row across the floor in either direction.
 
-    _write(D.rescore_path(led), [_row("a", cc.active_scorer_version()),
-                                 _row("b", cc.active_scorer_version(), decoded_class=2)])
-    assert [r["id"] for r in D.load_admitted(led)] == ["a"]      # b decodes below q3
+    Both directions asserted: `a` starts below the floor and the re-score lifts it over, `b`
+    starts above and the re-score drops it under. A re-score that could only add rows would
+    look like an improvement whatever it did."""
+    led = tmp_path / "outcome_ledger.jsonl"
+    _write(led, [_row("a", "v7", p_good=0.2), _row("b", "v7", p_good=0.8)])
+    assert [r["id"] for r in D.load_admitted(led)] == ["b"]       # stale, but judged on merit
+
+    _write(D.rescore_path(led), [_row("a", _ACTIVE, p_good=0.8),
+                                 _row("b", _ACTIVE, p_good=0.2)])
+    assert [r["id"] for r in D.load_admitted(led)] == ["a"]
 
 
 def test_the_original_ledger_is_byte_identical_after_a_resolve(tmp_path):
@@ -103,13 +112,16 @@ def test_the_original_ledger_is_byte_identical_after_a_resolve(tmp_path):
 
 
 def test_a_sibling_for_another_version_is_not_consulted(tmp_path):
-    """The fail-correct property. A v10 record must not answer a v11 reader's question."""
+    """The fail-correct property. A v99 record must not answer the live reader's question —
+    it falls through to the ORIGINAL rows, which is a worse estimate rather than an empty
+    intake (that distinction is the 2026-08-09 change; before it, falling through meant every
+    row was refused)."""
     led = tmp_path / "outcome_ledger.jsonl"
-    _write(led, [_row("a", "v7")])
+    _write(led, [_row("a", "v7", p_good=0.8)])
     other = led.with_name("outcome_ledger.rescored_v99.jsonl")
-    _write(other, [_row("a", "v99")])
+    _write(other, [_row("a", "v99", p_good=0.1)])
     assert D.load_rescored(led) == {}
-    assert D.load_admitted(led) == []
+    assert [r["id"] for r in D.load_admitted(led)] == ["a"]   # the v7 score, not the v99 one
     # ...and it IS readable when that version is the one being asked about (not vacuous).
     assert set(D.load_rescored(led, version="v99")) == {"a"}
 
@@ -195,22 +207,24 @@ def _classic_ledger(tmp_path, rows):
     return p
 
 
-def test_the_servable_classic_count_is_re_decoded_at_the_partitions_own_t_good(tmp_path):
-    """A ledger row carries the `t_good` it was MINTED under. Reading its stamped
-    `decoded_class` would report a count against a threshold that may no longer be live, which
-    is precisely the failure `ledger_rescore` exists to fix one level up."""
-    import production_seeder as ps
-    t = ps.t_good_for("phoenix:classic")
+def test_the_servable_classic_count_is_read_at_the_live_floor(tmp_path):
+    """SERVABLE is a live read, never a stored one. A ledger row used to carry the `t_good` it
+    was MINTED under, so counting its stamped `decoded_class` reported against a threshold that
+    might no longer be served; there is one flat `floors.GOOD_FLOOR` now and it is applied here
+    at read time for the same reason — a count against a retired cut is worse than no count.
+
+    `n_admitted` is guard ∧ distinct — what the ledger holds — and `n_servable` is the subset
+    over the floor, so the pair says "how much supply, and how much of it counts"."""
+    t = F.GOOD_FLOOR
     led = _classic_ledger(tmp_path, [
         _classic_row("a", 0.99, min(0.99, t + 0.2)),                  # clears the live cut
         _classic_row("b", 0.99, min(0.99, t + 0.2)),
-        # stamped decoded_class 3 (so `load_admitted`'s q3 gate passes) but BELOW the live
-        # cut — the row the stamped count would have over-reported.
+        # a row a stamped class-3 count would have over-reported: below the live floor.
         _classic_row("c", 0.99, max(0.0, t - 0.2), decoded_class=3),
     ])
     n = LR.classic_supply_note(ledger=led, n_union=100)
     assert n["n_admitted"] == 3 and n["n_servable"] == 2
-    assert n["t_good"] == t and n["partition"] == "phoenix:classic"
+    assert n["good_floor"] == t and n["partition"] == "phoenix:classic"
 
 
 def test_a_varied_phoenix_row_is_not_counted_as_classic_supply(tmp_path):

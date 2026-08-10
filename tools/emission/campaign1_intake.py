@@ -51,9 +51,9 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "wal
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-import corpus_common as cc                         # noqa: E402
 import paths                                        # noqa: E402   durability-class declaration
 from tools.emission import descriptor as D          # noqa: E402
+from tools.emission import floors as F              # noqa: E402   THE cut owner
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -88,10 +88,8 @@ def log(msg: str):
 def _reject_reason(row) -> str | None:
     """First failing predicate for a row, or None if admitted. Priority mirrors
     descriptor.load_admitted's short-circuit order."""
-    if not cc.is_current_decoded(row):
-        return "not_current_decode"
-    if (row.get("decoded_class") or 0) < 3:
-        return "decoded_class<3"
+    if not F.passes_good_floor(row.get("p_good")):
+        return "below_good_floor"
     if not row.get("guard_pass"):
         return "guard_fail"
     if not row.get("distinct"):

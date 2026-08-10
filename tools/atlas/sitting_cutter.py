@@ -51,11 +51,13 @@ correct and would cost a morph field for every row the other two were about to d
 THE CALIBRATION RESERVATION (Matt, 2026-08-04)
 ----------------------------------------------
 A partition whose LABELLED POSITIVES (human score >= 3, amendment overlay applied) are below
-`derive_t_good.MIN_POS` cannot have a threshold derived for it at all: it runs UNCALIBRATED at
-the 0.50 baseline, and no amount of discovery fixes that, because the missing thing is human
-labels. Left to the balanced draw, such a partition gets whatever its cell count earns — which
-for a scarce partition is close to nothing, so it stays uncalibrated forever. So `cut_sitting`
-RESERVES a slice of each sitting for it (`plan_reservations`, `draw_reserved`).
+`MIN_POS` is one nothing can be said about: no amount of discovery fixes that, because the
+missing thing is human labels. Left to the balanced draw, such a partition gets whatever its
+cell count earns — which for a scarce partition is close to nothing, so it stays unmeasurable
+forever. So `cut_sitting` RESERVES a slice of each sitting for it (`plan_reservations`,
+`draw_reserved`). The floor came from the retired t_good estimator's own sufficiency gate and
+this module now owns it; the reservation outlived the sweep because it is a statement about
+the label corpus, not about a threshold.
 
 It is a GENERAL RULE, not a `phoenix:classic` special case, and it lapses per-partition by
 itself: the qualifying set is recomputed from the live corpus at every cut, so a partition that
@@ -102,6 +104,7 @@ from tools import run_record            # noqa: E402  (segments-aware run-record
 import apportion                                # noqa: E402  (THE apportionment rules)
 import apply_interior_rule as air               # noqa: E402  (the rule id + threshold)
 import supply_routing as srt                    # noqa: E402  (the per-partition discard table)
+from tools.emission import floors as F          # noqa: E402  THE cut owner (GOOD_FLOOR/NOTBAD_CUT)
 
 MAX_ROWS = 1000              # one sitting
 
@@ -122,19 +125,19 @@ RESERVE_CAP_FRAC = 0.15      # ...and never more than this across ALL of them to
 POSITIVE_CLASSES = (3, 4)    # a "positive" is a human keeper — the deriver's own label>=3
 
 
+# THE sufficiency floor for the calibration reservation. It USED to be imported from
+# `tools/scoring/derive_t_good.MIN_POS`, the t_good estimator's own "can this partition be
+# calibrated at all" gate, precisely so a second literal 15 could not diverge from production
+# (`verification_practice.md` §1.8). That estimator was deleted on 2026-08-09 with the rest of
+# the per-partition t_good machinery (prompts/selection_restructure_3.md), and this module
+# INHERITED the number rather than losing it: the reservation is about having enough human
+# keepers in a partition to say anything about it, which is a question about the LABEL CORPUS
+# and outlived the threshold sweep that used to ask it. One owner, still — this one.
+MIN_POS = 15
+
+
 def min_pos() -> int:
-    """THE sufficiency floor, taken from the estimator that owns it rather than restated.
-
-    `derive_t_good` is the version-agnostic deriver and its `MIN_POS` is the number that
-    decides UNCALIBRATED, so a second literal 15 here would be a harness constant diverged
-    from production (`verification_practice.md` §1.8) — this rule exists precisely to feed
-    that gate, so the two must be the same 15 by construction.
-
-    Imported LAZILY and only when a plan is actually made: `derive_t_good` pulls `score_lib`,
-    which imports torch at module scope (~4 s), and this module is otherwise torch-free at
-    import (50 ms) — a module-level import would put torch in every test that touches a
-    stage function."""
-    from derive_t_good import MIN_POS                        # noqa: E402 (tools/scoring)
+    """THE sufficiency floor (see `MIN_POS` above)."""
     return int(MIN_POS)
 
 
@@ -152,8 +155,8 @@ def positives_census(partitions=None, corpus_dir=None) -> dict:
     Counted through `pop_quota.label_currency`, which is THE census — same amendment overlay,
     same phoenix split, same default-route rule — rather than a second corpus walk that could
     disagree with the deficit about what a partition holds. It reads a different projection of
-    the same counts: the deficit weights 4s ten times a 3, this counts keepers, because
-    `derive_t_good` needs POSITIVES and does not weight them.
+    the same counts: the deficit weights 4s ten times a 3, this counts keepers, because the
+    sufficiency floor is about POSITIVES and does not weight them.
 
     Memoized per (partitions, corpus_dir): the corpus does not change inside one cut, and a
     cut calls this once per invocation of a function that is also unit-tested."""
@@ -225,16 +228,26 @@ def stage_machine_1(rows, ctx):
     measured P(Matt=1 | decoded 1) rates were all taken against the 640x360 ss2 canonical
     decode. Treating the two as one number is the cap/geometry error, so a tier-1 row is
     never discarded here whatever its partition's flag says."""
+    # "MACHINE CLASS 1" IS `canon_nb < floors.NOTBAD_CUT`, read from the raw probability
+    # rather than from a stored class. It used to be `canon_decoded == 1`, and that column
+    # stopped being able to say 1 on 2026-08-09: it is `floors.good_class` now, which answers
+    # None / 3 / 4 (below the good floor there is no class, because the run keeps no verdict
+    # about how bad a thing it did not keep is). Reading it would have turned a narrow
+    # "the head is confident this is BAD" discard into "everything below the good floor",
+    # which is the whole of class 2 as well — a silent widening of a discard rule.
     table = ctx.get("machine_1_discard") or srt.MACHINE_1_DISCARD
     kept, removed = [], []
     no_verdict = Counter()
     for r in rows:
         part = r.get("partition")
+        nb = r.get("canon_nb")
         dec = r.get("canon_decoded")
-        if dec is None or int(r.get("rank_tier") or 0) < 2:
+        if int(r.get("rank_tier") or 0) < 2 or (nb is None and dec is None):
             no_verdict[part] += 1
             kept.append(r)
-        elif int(dec) == 1 and table.get(part, False):
+            continue
+        is_class_1 = (float(nb) < F.NOTBAD_CUT) if nb is not None else (int(dec) == 1)
+        if is_class_1 and table.get(part, False):
             removed.append(dict(r, discard_reason=f"machine_1:{part}"))
         else:
             kept.append(r)
@@ -1277,6 +1290,14 @@ def suggested_tier(r: dict) -> int | None:
         v = r.get(k)
         if v is not None:
             return int(v)
+    # Below `floors.GOOD_FLOOR` the class column is null (see `machine_1_discard`), and a row
+    # that DID earn a canonical verdict still deserves a prefill rather than being served
+    # unsuggested. Same two natural cutpoints the class column uses above the floor: 2 if the
+    # head calls it not-bad, else 1. This reproduces exactly what the retired hard-class
+    # decode returned for these rows.
+    nb = r.get("canon_nb")
+    if nb is not None and r.get("canon_pgood") is not None:
+        return 2 if float(nb) >= F.NOTBAD_CUT else 1
     return None
 
 

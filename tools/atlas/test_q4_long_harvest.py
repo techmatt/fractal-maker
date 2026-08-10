@@ -106,8 +106,9 @@ def test_the_uniform_leg_targets_the_partitions_with_no_unbiased_instrument():
     import json
     import sys as _sys
     _sys.path.insert(0, str(ROOT / "tools" / "scoring"))
-    import derive_t_good as est
     import eval_slice
+    import sitting_cutter as sc                # THE sufficiency floor's owner since 2026-08-09
+    from partitions import ALL_FAMS, FT2FAM
 
     rows = eval_slice.load()
     if not all("eval_role" in r for r in rows):
@@ -115,13 +116,17 @@ def test_the_uniform_leg_targets_the_partitions_with_no_unbiased_instrument():
     inst_pos = {}
     for r in rows:
         if r["eval_role"] == "instrument":
-            fam = est.fam_of(r)
+            # the row's OWN resolved partition when it carries one: a DERIVED partition has no
+            # `fractal_type` of its own, so an FT2FAM-only read folds it back into its base
+            # (`phoenix:classic` into `phoenix`) and the count is against the wrong population.
+            fam = r.get("partition") or FT2FAM.get(r["fractal_type"], r["fractal_type"])
             inst_pos[fam] = inst_pos.get(fam, 0) + int(r["label"] >= 3)
-    short = {f for f, n in inst_pos.items() if n < est.MIN_POS}
-    short |= {f for f in est.ALL_FAMS if f not in inst_pos}
+    min_pos = sc.min_pos()
+    short = {f for f, n in inst_pos.items() if n < min_pos}
+    short |= {f for f in ALL_FAMS if f not in inst_pos}
     assert UNIFORM_LEG_TARGETS <= short, (
         f"the uniform leg targets {sorted(UNIFORM_LEG_TARGETS - short)} which now HAVE an "
-        f"unbiased instrument at MIN_POS={est.MIN_POS} — re-decide the target list rather "
+        f"unbiased instrument at MIN_POS={min_pos} — re-decide the target list rather "
         f"than drawing rows a partition no longer needs")
 
 

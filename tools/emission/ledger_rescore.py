@@ -1,11 +1,24 @@
 #!/usr/bin/env python
 r"""ledger_rescore.py — bring the stage-2 intake ledgers CURRENT under the active head.
 
-WHY. A ledger's decode block (`decoded_class`, `p_notbad`, `p_good`, `t_good`) is one head's
-verdict, and `corpus_common.is_current_decoded` correctly refuses to consume it under another.
-At the v10 flip that took the whole emission intake from ~1.4k admissible locations to **16**
-— every non-classic ledger is still v7-stamped, so `descriptor.load_admitted` rejects it. The
-locations did not stop existing; only their verdicts went stale. This re-derives the verdicts.
+WHY. A ledger row's `p_good` is ONE HEAD's P(>=3), and every cut in the pipeline is a cut on
+that number — `floors.GOOD_FLOOR` on the run side, `floors.JUNK_FLOOR` at the colorize-pool
+draw. A CORN probability scale is train-prior-calibrated, so after a checkpoint flip a stored
+`p_good` is a number on a scale that no longer exists and every floor applied to it is
+meaningless. This re-derives the numbers under the live head.
+
+THIS IS HALF THE FLIP PROCEDURE, AND THE OTHER HALF IS THE FLOORS (2026-08-09,
+prompts/selection_restructure_3.md). Re-scoring makes the stored probabilities current;
+VOLUME-MATCHING `GOOD_FLOOR` and `JUNK_FLOOR` against the re-scored pool makes the cuts
+current. Doing one without the other silently moves how much the pipeline keeps. See
+`docs/design/classifier_retrain_protocol.md` section 5.
+
+WHAT IT NO LONGER IS. Until 2026-08-09 this also existed to defeat a version FIREWALL: rows
+carried a frozen `decoded_class` + the `t_good` it was decoded at, and
+`corpus_common.is_current_decoded` refused any row an older head had stamped — which took the
+v10-flip intake from ~1.4k locations to **16** until a re-score pass restored it. That
+predicate is gone and so is the cliff: a stale row now degrades the RANK it sorts into instead
+of vanishing, and re-scoring is an accuracy job rather than an outage repair.
 
 WHAT IT DOES NOT DO. It never touches an original ledger. A discovery ledger is that run's
 record of what it found AND what the head of the day said about it, so overwriting the decode
@@ -15,9 +28,9 @@ named for the ledger stem and the head version, `<stem>.rescored_<version>.jsonl
 the version is in the name). Re-running after the NEXT flip writes a new sibling; the old one
 stays as the record of what v10 said.
 
-THE HEAD IS NEVER PINNED HERE — scorer, stamp and threshold all resolve from the live pins
-(`production_seeder.SCORER_PATH`/`SCORER_VERSION`, `t_good_for`,
-`production_pins.auto_maxiter`), so this is the same "re-mint, don't reproduce" shape
+THE HEAD IS NEVER PINNED HERE — scorer and stamp resolve from the live pins
+(`production_seeder.SCORER_PATH`/`SCORER_VERSION`, `production_pins.auto_maxiter`), so this is
+the same "re-mint, don't reproduce" shape
 `classic_phoenix_supply` follows. Resume is by id WITHIN the version-named file, which cannot
 carry another head's rows, so the resume-key bug that made a flip read as "already done" is
 structurally absent rather than purged.
@@ -71,18 +84,44 @@ try:
 except Exception:
     pass
 
-import corpus_common as cc                      # noqa: E402
+import corpus_common as cc                      # noqa: E402  (engine launch defaults)
 import guard                                    # noqa: E402
 import reframe                                  # noqa: E402
 import production_seeder as ps                  # noqa: E402
 import location as loc_mod                      # noqa: E402
 import field_metrics as fm                      # noqa: E402  (POLICY_KEY — the axis's owner)
 import paths as _paths                          # noqa: E402
-from score_lib import corn_decode               # noqa: E402
+import active_ckpt                              # noqa: E402  (THE live version token)
 import partitions as P                          # noqa: E402  (THE partition map + the split)
 import release_mix as RM                        # noqa: E402  (THE release-mix ratio table)
 import supply_routing as srt                    # noqa: E402  (THE channel table; pure data)
 from tools.emission import descriptor as D      # noqa: E402
+from tools.emission import floors as F          # noqa: E402  THE cut owner
+
+
+# ---------------------------------------------------------------------------- #
+# THE scorer-version stamp check — and THE ONLY ONE LEFT IN THE TREE.
+# ---------------------------------------------------------------------------- #
+# `corpus_common` used to own a family of these (`is_current_decoded`, `is_decoded_by`,
+# `current_rows_only`, `require_current`, `StaleDecodeError`) and they were consumed as an
+# ADMISSION predicate: a row an older head had stamped was refused outright, which is how the
+# v10 flip deleted 99% of the emission intake in one commit. That family was deleted on
+# 2026-08-09 — every reader now takes the raw probability and whichever floor its purpose
+# needs, and a stale row sinks in the ranking instead of vanishing from it.
+#
+# This module is the one place the question is still the RIGHT question, because it is the
+# module whose entire job is "which rows has the live head not scored yet". It is idempotence,
+# not admission: the answer decides whether to spend a render, never whether to keep a
+# location. Kept private here rather than restored to `corpus_common`, so a future reader
+# reaching for a general-purpose staleness predicate does not find one.
+def active_scorer_version() -> str:
+    """The live checkpoint's `scorer_version` token (e.g. "v11")."""
+    return active_ckpt.ACTIVE_VERSION
+
+
+def scored_by_active(row) -> bool:
+    """True iff `row`'s probabilities were produced by the checkpoint that is live now."""
+    return row.get("scorer_version") == active_scorer_version()
 
 # ---------------------------------------------------------------------------- #
 # THE stage-2 intake population. These seven are what `stage_first_release`'s six library
@@ -161,22 +200,18 @@ def _score_row(scorer, row: dict, tile: Path) -> dict:
         assert guard_pass == (reason is None), \
             f"guard disagreement: sentinel_pass={guard_pass} field_reason={reason}"
 
-    # THE PARTITION, RESOLVED FROM THE ROW — not `row["family"]`, which is the ledger's
-    # partition for the nine BASE partitions and wrong for exactly one: a classic-phoenix row
-    # says `phoenix`. This read `t_good_for(row["family"])` until 2026-08-08 and the bug was
-    # invisible for as long as it mattered least — phoenix and phoenix:classic were BOTH
-    # UNCALIBRATED at 0.50, so the wrong key returned the right number. The v11 flip
-    # calibrated phoenix at 0.77 and left phoenix:classic at the baseline, at which point the
-    # first re-score minted all 24 classic rows against 0.77 (max p_good 0.639), decoded every
-    # one to class 1, and took the partition's entire admitted supply to zero — which the
-    # liveness census caught, and which reads as "v11 lost classic phoenix" rather than as a
-    # key resolution bug. `classic_phoenix_servable` below already used the row resolver;
-    # these two sites now agree.
-    t = ps.t_good_for(P.partition_of_row(row, row.get("family")))
-    decoded = corn_decode(notbad, good, t, great) if guard_pass else None
+    # NO PARTITION IS RESOLVED HERE ANY MORE, and that used to be the subtlest bug in the
+    # file. The re-score picked a per-partition `t_good` to freeze into the row, and it picked
+    # it with `t_good_for(row["family"])` — right for the nine BASE partitions and wrong for
+    # exactly one, because a classic-phoenix row says `phoenix`. It was invisible while it
+    # mattered least (both sat at the 0.50 baseline) and became visible the moment the v11
+    # flip calibrated `phoenix` at 0.77: the first re-score minted all 24 classic rows against
+    # 0.77, decoded every one to class 1, and took the partition's whole admitted supply to
+    # zero — which reads as "v11 lost classic phoenix" rather than as a key-resolution bug.
+    # A bug of that shape is now unwritable: this pass writes RAW PROBABILITIES and no
+    # threshold, and there is one floor for every partition to be judged against later.
     return {
-        "decoded_class": decoded, "p_notbad": notbad, "p_good": good, "p_ge4": great,
-        "t_good": t, "canon_pgood": good,
+        "p_notbad": notbad, "p_good": good, "p_ge4": great, "canon_pgood": good,
         "guard_pass": bool(guard_pass), "guard_fail": reason,
         "guard_source": "field" if want_field else "none (no escape-time backend)",
         "scorer_version": ps.SCORER_VERSION,
@@ -194,11 +229,11 @@ def rescore_ledger(tag: str, rel: str, scorer, *, limit: int | None = None) -> d
     out = D.rescore_path(src)
     rows = [json.loads(l) for l in src.read_text(encoding="utf-8").splitlines() if l.strip()]
 
-    already = [r for r in rows if cc.is_current_decoded(r)]
+    already = [r for r in rows if scored_by_active(r)]
     if len(already) == len(rows):
         # VERIFY, don't redo. A ledger the active head already wrote is current by
         # construction; re-rendering it would burn the budget to reproduce its own numbers.
-        log(f"[{tag}] {len(rows)} rows ALREADY current ({cc.active_scorer_version()}) — "
+        log(f"[{tag}] {len(rows)} rows ALREADY current ({active_scorer_version()}) — "
             f"verified, not re-scored")
         return dict(tag=tag, ledger=rel, n_rows=len(rows), n_rescored=0, n_failed=0,
                     already_current=True, sibling=None)
@@ -265,19 +300,20 @@ def census() -> dict:
         src = ledger_path(rel)
         raw = [json.loads(l) for l in src.read_text(encoding="utf-8").splitlines() if l.strip()]
         resolved = D.resolve_rows(src)
-        cur = sum(1 for r in resolved if cc.is_current_decoded(r))
+        cur = sum(1 for r in resolved if scored_by_active(r))
         adm = D.load_admitted(src)
-        classes = Counter(r.get("decoded_class") for r in resolved if cc.is_current_decoded(r))
+        classes = Counter(F.good_class(r.get("p_good"), r.get("p_ge4"))
+                          for r in resolved if scored_by_active(r))
         per.append(dict(tag=tag, ledger=rel, n_rows=len(raw), n_current=cur,
                         n_admitted=len(adm),
                         sibling_rows=len(D.load_rescored(src)),
-                        decoded_class_hist={str(k): v for k, v in sorted(
+                        class_hist={str(k): v for k, v in sorted(
                             classes.items(), key=lambda kv: (kv[0] is None, kv[0]))},
                         floor_admit=D.source_tag_of(raw[0]) in D.FLOOR_ADMIT_SOURCES if raw else None))
         tot_rows += len(raw)
         tot_cur += cur
         tot_adm += len(adm)
-    return dict(active_version=cc.active_scorer_version(),
+    return dict(active_version=active_scorer_version(),
                 maxiter_policy_token=loc_mod.maxiter_policy_token(),
                 per_ledger=per, total_rows=tot_rows, total_current=tot_cur,
                 total_admitted=tot_adm)
@@ -313,12 +349,13 @@ def classic_supply_note(ledger: Path | None = None, n_union: int | None = None) 
     crawl used to report it as starved every batch, which is a permanent false alarm; this is
     the same fact stated once, at the moment somebody could act on it.
 
-    SERVABLE = admitted through its own ledger (`descriptor.load_admitted`: current-decode ∧
-    guard ∧ distinct ∧ q3) AND still >= 3 when re-decoded at THIS partition's own threshold,
-    `t_good_for("phoenix:classic")`. The re-decode is not redundant: a ledger row carries the
-    `t_good` it was minted under (0.5 on every classic row today), and a later per-partition
-    derivation moves the cut without rewriting a single row — reading the stamped
-    `decoded_class` would report a count against a threshold nobody is using any more.
+    SERVABLE = admitted through its own ledger (`descriptor.load_admitted`) AND clearing
+    `floors.GOOD_FLOOR` on its stored raw P(>=3). The second half used to be a re-decode at
+    this partition's own per-partition threshold, because a row carried the `t_good` it was
+    minted under and a later derivation moved the cut without rewriting a row. There is one
+    cut now and it is applied here for the same reason it is applied everywhere else: it is
+    read from the floor owner at read time, so this count can never be against a threshold
+    nobody is using any more.
 
     THE LOW-WATER IS DERIVED, NOT DECLARED. It is what the committed release mix asks for at
     this intake's size: `release_mix.shares()["phoenix:classic"] * n_union`, rounded up. A
@@ -333,20 +370,25 @@ def classic_supply_note(ledger: Path | None = None, n_union: int | None = None) 
     part = P.CLASSIC_PHOENIX
     if ledger is None:
         ledger = ledger_path(dict((t, r) for t, r in LEDGERS)["classic_phoenix"])
-    t_good = ps.t_good_for(part)
+    # `n_admitted` is the ledger's own guard-and-distinct population, NOT `load_admitted`'s
+    # output: that reader applies the good floor itself, so taking it here would make the two
+    # counts identical and the pair would stop saying anything. The point of two numbers is
+    # "how much supply exists" against "how much of it counts".
     n_admitted = n_servable = 0
-    for row in D.load_admitted(Path(ledger)):
+    for row in D.resolve_rows(Path(ledger)):
+        if not D.guard_and_distinct(row):
+            continue
         if P.partition_of_row(row, row.get("family")) != part:
             continue
         n_admitted += 1
-        if corn_decode(row["p_notbad"], row["p_good"], t_good, row.get("p_ge4")) >= 3:
+        if F.passes_good_floor(row.get("p_good")):
             n_servable += 1
     if n_union is None:
         n_union = intake_union()["n_union"]
     share = RM.shares()[part]
     wanted = int(math.ceil(share * float(n_union)))
     return dict(partition=part, externally_supplied=srt.is_externally_supplied(part),
-                ledger=_rel(Path(ledger)), t_good=t_good, t_good_status=ps.t_good_status(part),
+                ledger=_rel(Path(ledger)), good_floor=F.GOOD_FLOOR,
                 n_admitted=n_admitted, n_servable=n_servable,
                 release_share=share, n_union=n_union, wanted=wanted,
                 low=bool(n_servable < wanted), command=srt.supply_command(part))
@@ -355,7 +397,7 @@ def classic_supply_note(ledger: Path | None = None, n_union: int | None = None) 
 def print_classic_supply_note(note: dict):
     st = "LOW" if note["low"] else "ok"
     log(f"  {note['partition']} servable: {note['n_servable']}/{note['n_admitted']} admitted "
-        f"at t_good {note['t_good']:.2f} ({note['t_good_status']}) — "
+        f"at good_floor {note['good_floor']:.2f} — "
         f"release mix asks ~{note['wanted']} of a {note['n_union']}-row intake "
         f"({note['release_share']:.2%}) — {st}")
     if note["low"] and note["externally_supplied"]:
@@ -366,10 +408,10 @@ def print_classic_supply_note(note: dict):
 def print_census(c: dict):
     log(f"\n=== INTAKE CENSUS (head {c['active_version']}, "
         f"maxiter policy {c['maxiter_policy_token']}) ===")
-    log(f"  {'ledger':18s} {'rows':>5s} {'current':>8s} {'admitted':>9s}  decoded_class")
+    log(f"  {'ledger':18s} {'rows':>5s} {'current':>8s} {'admitted':>9s}  class @ good_floor")
     for p in c["per_ledger"]:
         log(f"  {p['tag']:18s} {p['n_rows']:5d} {p['n_current']:8d} {p['n_admitted']:9d}"
-            f"  {p['decoded_class_hist']}")
+            f"  {p['class_hist']}")
     log(f"  {'TOTAL':18s} {c['total_rows']:5d} {c['total_current']:8d} {c['total_admitted']:9d}")
     u = intake_union()
     log(f"  union stage 2 intakes: {u['n_union']} "

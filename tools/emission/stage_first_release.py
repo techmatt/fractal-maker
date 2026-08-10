@@ -56,8 +56,8 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "wal
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-import corpus_common as cc                                # noqa: E402
 from tools.emission import descriptor as D                # noqa: E402
+from tools.emission import floors as F                    # noqa: E402  THE cut owner
 from tools.wallpaper import library_annotate as la        # noqa: E402
 from tools.wallpaper import library_store as store        # noqa: E402
 
@@ -206,26 +206,31 @@ def main():
     assert not only_snap and not only_drv, \
         f"driver/snapshot id mismatch: snap-only {list(only_snap)[:3]} drv-only {list(only_drv)[:3]}"
 
-    # ---- stale-rejection proof (acceptance) --------------------------------- #
-    # A real v6 (non-current) row from a legacy ledger: prove the admission predicate
-    # rejects it. All 1387 library rows are already current (0 stale in the 6 ledgers).
-    stale = {"checked": False}
+    # ---- below-floor rejection proof (acceptance) --------------------------- #
+    # A real below-floor row from a legacy ledger: prove the admission predicate rejects it.
+    # This USED to prove the same thing about a STALE-DECODED row, when a row an older head
+    # had stamped was refused outright. That predicate retired on 2026-08-09 and a stale row
+    # is now judged on its own (older-scale) `p_good` like any other, so the property worth
+    # proving moved with the cut: what must not leak past `load_admitted` is a row the live
+    # `floors.GOOD_FLOOR` rejects.
+    below = {"checked": False}
     legacy = ROOT / "data" / "discovery" / "outcome_ledger.jsonl"
     if legacy.exists():
+        admitted_here = None
         for line in legacy.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line:
                 continue
             r = json.loads(line)
-            if not cc.is_current_decoded(r):
+            if r.get("p_good") is None or F.passes_good_floor(r["p_good"]):
+                continue
+            if admitted_here is None:
                 admitted_here = {x["id"] for x in D.load_admitted(legacy)}
-                stale = {"checked": True, "ledger": str(legacy.relative_to(ROOT)),
-                         "id": r["id"], "scorer_version": r.get("scorer_version"),
-                         "is_current_decoded": cc.is_current_decoded(r),
-                         "in_load_admitted": r["id"] in admitted_here}
-                assert not stale["is_current_decoded"] and not stale["in_load_admitted"], \
-                    "stale row leaked past load_admitted"
-                break
+            below = {"checked": True, "ledger": str(legacy.relative_to(ROOT)),
+                     "id": r["id"], "p_good": r["p_good"], "good_floor": F.GOOD_FLOOR,
+                     "in_load_admitted": r["id"] in admitted_here}
+            assert not below["in_load_admitted"], "below-floor row leaked past load_admitted"
+            break
 
     # per-location durable source tag (ledger-carried) so source-tag measure overrides resolve
     # from the snapshot alone — the classic-phoenix split knob keys on this, not cluster ids.
@@ -255,17 +260,17 @@ def main():
             (i2_rows[r]["family"] if r in i2_tags else c1_rows[r[len(C1_PREFIX):]]["family"])
             for r in merged_tags)),
         "measure_phoenix_preserved": True,
-        "stale_rejection_proof": stale,
+        "below_floor_rejection_proof": below,
     }
     (OUT / "stage_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     print(f"[stage] snapshot: {n} locations, {n_clusters} distinct clusters "
           f"({len(i2_tags)} intake2 + {len(c1_tags)} campaign1-prefixed)", flush=True)
     print(f"[stage] per-type clusters: {report['per_type_clusters']}", flush=True)
-    if stale.get("checked"):
-        print(f"[stage] stale-rejection PROVEN: {stale['id']} ({stale['scorer_version']}) "
-              f"is_current={stale['is_current_decoded']} in_admitted={stale['in_load_admitted']}",
-              flush=True)
+    if below.get("checked"):
+        print(f"[stage] below-floor rejection PROVEN: {below['id']} "
+              f"p_good={below['p_good']:.3f} < {below['good_floor']:g} "
+              f"in_admitted={below['in_load_admitted']}", flush=True)
     print(f"[stage] wrote {(OUT / 'intake.json').relative_to(ROOT)}, "
           f"{(OUT / 'morph_embs.npz').relative_to(ROOT)}, stage_report.json", flush=True)
 

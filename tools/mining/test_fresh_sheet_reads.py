@@ -5,7 +5,7 @@ worth guarding are the ones that would let it overstate:
 
   * the bulk-sweep detector must FIND a sweep and must NOT invent one (§3 — every derived-set
     assertion paired with a control that fails on the unfixed input);
-  * `cut_block` must go through `Floor.gate()`, so a head-stamp mismatch REFUSES rather than
+  * `cut_block` must go through `Floor.annotates()`, so a head-stamp mismatch REFUSES rather than
     reporting a number on a scale the live pin no longer serves;
   * `load()` must fail closed on an unlabeled row — a silently smaller n reads exactly like a
     complete sitting (§2);

@@ -23,7 +23,6 @@ for _p in (HERE, HERE.parent):
 
 import run_record             # noqa: E402  (the segmented run-record reader)
 import steered_frontier as sf   # noqa: E402
-import keeper_cut as kc         # noqa: E402
 
 
 # =========================================================================== #
@@ -82,108 +81,19 @@ def test_anchor_cli_override_and_guard():
 
 
 # =========================================================================== #
-# keeper cut — F0.5 metric math + calibration gate.
+# THE KEEPER CUT WAS TESTED HERE, AND IT IS GONE (2026-08-09).
 # =========================================================================== #
-def test_fbeta_precision_weighted():
-    # F0.5 weights precision over recall: at equal-ish P/R it sits between them, closer to P.
-    p_heavy = kc.prf_beta(tp=8, fp=1, fn=4)   # P=0.889 R=0.667
-    prec, rec, f = p_heavy
-    assert prec > rec
-    # F0.5 must lie strictly between recall and precision (precision-leaning).
-    assert rec < f < prec
-
-
-def test_fbeta_beta_half_formula():
-    # explicit check against the closed form (1+0.25)*P*R / (0.25*P + R).
-    prec, rec, f = kc.prf_beta(tp=6, fp=2, fn=3)
-    p, r = 6 / 8, 6 / 9
-    expect = 1.25 * p * r / (0.25 * p + r)
-    assert abs(f - expect) < 1e-9
-
-
-@pytest.mark.version_pinned
-def test_keeper_cuts_rederive_matches_the_committed_constant():
-    """The re-derivation drift gate, RESTORED now that its input is durable.
-
-    This check was retired in the v7 era for a good reason: `kc.derive()` read
-    `data/classifier/v7/eval_scores_v7.jsonl`, which was gitignored, was never committed, and
-    is gone — so the check skip-plumbed itself quiet and was a gate that could never fire. The
-    v8 recut moved the population to `data/v8/eval_scores_v8.jsonl`, which is `paths.durable()`
-    and committed, so the reason to retire it no longer holds and the gate comes back: the
-    committed constant must be exactly what the derivation code produces from the committed
-    slice. A hand-edited threshold, a changed objective, or a changed keeper-positive predicate
-    all surface here instead of silently shipping."""
-    assert kc.EVAL.exists(), f"{kc.EVAL} missing — the keeper population must stay durable"
-    fresh = kc.derive()
-    committed = json.loads(kc.OUT.read_text(encoding="utf-8"))["cuts"]
-    assert set(fresh) == set(committed)
-    for part in fresh:
-        assert float(fresh[part]["t"]) == float(committed[part]["t"]), (
-            f"{part}: re-derived t={fresh[part]['t']} != committed {committed[part]['t']} — "
-            f"re-run tools/atlas/keeper_cut.py")
-        assert fresh[part]["calibrated"] == committed[part]["calibrated"], part
-        assert fresh[part]["pos"] == committed[part]["pos"], part
-
-
-@pytest.mark.version_pinned
-def test_keeper_positive_is_label_ge_3_not_eq_3():
-    # Under v8's 1..4 labels a class-4 location is the BEST kind of keeper. Scoring it as a
-    # negative would push the precision-weighted cut in exactly the wrong direction, and the
-    # v7-era `label == 3` predicate did precisely that once class 4 existed.
-    rows = kc.read_jsonl(kc.EVAL)
-    assert any(r["label"] == 4 for r in rows), "no class-4 rows — this test would be vacuous"
-    triples = kc.load_triples()
-    n_pos = sum(1 for rs in triples.values() for _, _, pos in rs if pos)
-    # Counted over the SAME population `load_triples` cut, not over the whole slice: since
-    # v11 that population is the grouped holdout with an instrument fallback, so "every row
-    # whose fractal_type maps" is a different and larger set. The invariant under test is the
-    # PREDICATE (`>= 3`, not `== 3`), and it is only visible if both sides count the same rows.
-    kept, _ = kc._select_population(rows, instrument=kc.INSTRUMENT)         if all("eval_role" in r for r in rows) else (rows, None)
-    n_ge3 = sum(1 for r in kept if r["label"] >= 3)
-    assert n_pos == n_ge3 > sum(1 for r in kept if r["label"] == 3)
-
-
-@pytest.mark.version_pinned
-def test_keeper_cuts_committed_shape_partitions_and_provenance():
-    # LIVE gate on the committed report-only constant data/atlas/keeper_cuts.json — the thing
-    # actually consumed (steered_run2_*/keeper_calibrate read it via kc.load_keeper_cuts). It
-    # does NOT re-assert threshold VALUES (the re-derivation test above does that). It guards the
-    # three things that would silently rot the constant: parseable shape, live partition coverage,
-    # and a provenance stamp whose named model is the active checkpoint.
-    import json
-    import active_ckpt  # single source of truth for the live scorer version (tools/scoring)
-
-    doc = json.loads(kc.OUT.read_text(encoding="utf-8"))
-    cuts = doc["cuts"]
-
-    # (1) shape — every partition row parses to the fields consumers rely on.
-    for part, row in cuts.items():
-        assert isinstance(row["calibrated"], bool), part
-        t = row["t"]
-        assert isinstance(t, (int, float)) and 0.0 <= float(t) <= 1.0, (part, t)
-        assert isinstance(row["n"], int) and isinstance(row["pos"], int), part
-        if not row["calibrated"]:
-            assert float(t) == kc.T_GOOD_BASELINE, part   # uncalibrated => discovery baseline
-
-    # (2) partition coverage — the live set is `partitions.ALL_FAMS` (derived from code, not
-    # hardcoded, so adding a family to the derivation without recutting keeper_cuts.json fails
-    # loudly here). ALL_FAMS, not `FT2FAM.values()`: a DERIVED partition has no fractal_type of
-    # its own, so the value list silently omitted `phoenix:classic` — which then read as "not a
-    # partition" rather than "uncalibrated". Fixed 2026-08-08 with the v11 recut, which is the
-    # first slice to carry rows for it.
-    live = set(kc.ALL_FAMS)
-    assert set(cuts) == live, f"keeper_cuts partitions {set(cuts)} != live {live}"
-
-    # (3) provenance — must carry a stamp naming the model + population the cuts came from. A stamp
-    # that NAMES a model must name the ACTIVE checkpoint; a null model is an accepted "unverified"
-    # stamp (used only if the basis were not cheaply determinable — it is, so today model=='v8').
-    prov = doc["provenance"]
-    assert prov["population"], "provenance must name the population the cuts were derived from"
-    model = prov.get("model")
-    if model is not None:
-        assert model == active_ckpt.ACTIVE_VERSION, (
-            f"keeper_cuts provenance names model {model!r} but active checkpoint is "
-            f"{active_ckpt.ACTIVE_VERSION!r} (tools/scoring/active_ckpt.py) — recut or restamp")
+# `tools/atlas/keeper_cut.py` derived a per-partition REPORT-TIME bar by the same F0.5-argmax
+# sweep the discovery `t_good` used, off the frozen eval slice, into
+# `data/atlas/keeper_cuts.json`. Four tests lived here: the F-beta metric math, a re-derivation
+# gate holding the committed constant to a fresh `derive()`, the committed file's shape /
+# partition coverage / provenance stamp, and `is_keeper` going through `corn_decode`.
+#
+# The derivation went with the rest of the t_good machinery (prompts/selection_restructure_3.md)
+# — it read `derive_t_good.select_population` and `production_seeder.T_GOOD_BASELINE`, both
+# deleted, and it answered a question one flat cut does not pose. `data/atlas/keeper_cuts.json`
+# STAYS as the record of what the v11 keeper bar was; nothing reads it, and it left
+# `production_pins.COUPLED_ARTIFACTS` for that reason (see the block there).
 
 
 def test_pop_batch_evicts_capped_root_nodes():
@@ -643,14 +553,6 @@ def test_add_julia_root_hook_spacing_and_durable_log(tmp_path):
     assert logged[1]["hooked"] is False and logged[1]["parent_oid"] == "p1"
 
 
-def test_is_keeper_uses_corn_decode():
-    cuts = {"mandelbrot": {"t": 0.5}}
-    # p_notbad>=0.5 AND p_good>=0.5 -> keeper; either failing -> not.
-    assert kc.is_keeper("mandelbrot", 0.9, 0.9, cuts) is True
-    assert kc.is_keeper("mandelbrot", 0.9, 0.4, cuts) is False
-    assert kc.is_keeper("mandelbrot", 0.4, 0.9, cuts) is False
-
-
 # =========================================================================== #
 # MorphMemory — the v1.2 novelty-memory fix (legacy vs recency semantics).
 # =========================================================================== #
@@ -793,7 +695,7 @@ def test_derive_tau_h_loud_fail_for_unvendored_partition_when_records_absent(mon
     import pytest
     monkeypatch.setattr(sf, "FIDELITY_RECORDS", tmp_path / "records_do_not_exist.json")
     monkeypatch.setattr(sf, "_active_scorer_version", lambda: sf.TAU_H_FIDELITY_BASE_MODEL)
-    with pytest.raises(SystemExit, match="descent_score_fidelity"):
+    with pytest.raises(SystemExit, match="tau_h_rederive"):
         sf.derive_tau_h(["mandelbrot", "julia:bogus_unvendored"])
 
 

@@ -164,9 +164,7 @@ read back via `label_store.resolve_score`, leaving the original byte-identical.
 
 **Shared owners under `tools/scoring/`** — the version dirs (`v7/`…`v10/`) each used to
 re-declare these, so they are named here to be imported, not rediscovered:
-`production_pins.py` (the pin + `COUPLED_ARTIFACTS`), `derive_t_good.py` (THE version-agnostic
-t_good estimator — a per-version deriver supplies only its slice, population rule and
-objective), `partitions.py` (the `fractal_type` ⟷ ledger-partition map; a source scan in
+`production_pins.py` (the pin + `COUPLED_ARTIFACTS`), `partitions.py` (the `fractal_type` ⟷ ledger-partition map; a source scan in
 `test_partitions.py` fails on a second literal copy), `eval_slice.py` (a version's frozen
 slice: `data/<v>/eval_scores_<v>.jsonl` and its `<v>_p_ge{2,3,4}` columns) and
 `batch_registry.py` (THE batch → split classification table, read by

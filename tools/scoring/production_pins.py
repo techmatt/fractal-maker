@@ -4,7 +4,7 @@ THE single source of truth for four things every discovery/corpus/wallpaper path
 resolves rather than hardcodes:
 
   * `ACTIVE_CKPT` / `ACTIVE_VERSION` — which classifier checkpoint is live, and what
-    "current" means for decode stamps (`corpus_common.is_current_decoded`,
+    "current" means for scorer stamps (`ledger_rescore.scored_by_active`,
     `production_seeder.SCORER_VERSION`).
   * the canonical crop constants — `PALETTE`, `JPG_Q`, `DEFAULT_SS`, `BIN` — the
     geometry-independent half of "rebuild a location the way the classifier expects".
@@ -60,35 +60,32 @@ ACTIVE_CKPT = "data/classifier/v11/model_best.pt"   # v11 unified location class
 # everything older, so v5/v6/v7/v8/v9 left the index on 2026-08-08 and the ladder names only
 # rungs whose weight a fresh clone actually gets. Reverting the one rung means reverting ALL of:
 #
-#   1. ACTIVE_CKPT (here)                          — ACTIVE_VERSION and every decode stamp
-#                                                    (corpus_common.is_current_decoded,
-#                                                    production_seeder.SCORER_VERSION) follow it
-#   2. production_seeder.T_GOOD_OVERRIDES          — v11: mandelbrot 0.90 / j:mandelbrot 0.85 /
-#                                                    phoenix 0.77 / j:mb{3,4,5} 0.26/0.10/0.39
-#                                                    (v10: 0.03 / — / — / 0.27/0.03/0.06). The
-#                                                    POPULATION moved too, not just the head —
-#                                                    see the block above T_GOOD_OVERRIDES.
-#   3. data/atlas/keeper_cuts.json                 — stamped model="v11"
-#   4. steered_frontier.TAU_H_FIDELITY_BASE
+#   1. ACTIVE_CKPT (here)                          — ACTIVE_VERSION and every scorer_version
+#                                                    stamp (production_seeder.SCORER_VERSION,
+#                                                    ledger_rescore.scored_by_active) follows it
+#   2. steered_frontier.TAU_H_FIDELITY_BASE
 #      + TAU_H_FIDELITY_BASE_MODEL                 — vendored base, stamped "v11"
-#   5. data/atlas/tau_h_base_v11.json              — provenance for (4)
-#   6. tools/v11/derive_t_good_v11.py's output
-#      data/v11/t_good_derivation.json             — derivation half of (2)
+#   3. data/atlas/tau_h_base_v11.json              — provenance for (2)
 #
-# Items 2-6 are the v11-stamped threshold files this flip wrote; 1-5 are the four the build
-# record names as coupled. The list above is PROSE — `COUPLED_ARTIFACTS` at the
-# bottom of this module is the same enumeration as DATA, walked by
-# tools/scoring/test_coupled_artifacts.py, which is what makes each entry's stamp actually
-# checked rather than remembered. Keep the two in step; the test asserts the count matches.
+# THE LIST SHRANK BY THREE ON 2026-08-09, and not because anything was found to be safely
+# uncoupled: the per-partition `production_seeder.T_GOOD_OVERRIDES`, its derivation
+# `data/{v}/t_good_derivation.json` and the report-time `data/atlas/keeper_cuts.json` were all
+# scale-bound in exactly the way this block describes, and all three were RETIRED rather than
+# re-derived (prompts/selection_restructure_3.md). The committed json files stay as records of
+# what those heads served; nothing reads them, so nothing about them has to move at a flip.
 #
-# THE v8 t_good RECORD STAYS, AND IT IS A RECORD, NOT A RUNG. v8 is no longer on the ladder,
-# but `data/v8/t_good_derivation.json` is kept: it was cut when the sweep's admission
-# predicate was an AND, which is not the rule corn_decode serves on a K=4 head; re-derived
-# through the aligned estimator (2026-08-02) v8's mandelbrot t_good is 0.14, not the
-# committed 0.85. It is left as the record of what v8 actually served — the hazard it
-# documents (a rollback that COPIES a table instead of re-deriving it) is general and
-# outlives v8's rung. The divergence and its 8 causal rows stay pinned by
-# tools/v8/test_t_good_sweep_decode.py.
+# WHAT REPLACED THEM IS NOT ON THIS LIST, AND THAT IS THE ONE THING TO UNDERSTAND HERE.
+# `tools/emission/floors.GOOD_FLOOR` (0.50) and `JUNK_FLOOR` (0.20) are cuts on the SAME
+# train-prior-calibrated scale and are just as scale-bound — but they are not artifacts to
+# re-derive, they are constants to RESTATE volume-matched against the re-scored pool, and a
+# stamp check cannot express that (the correct new value depends on a measurement, not on a
+# version). So a flip is: re-score the ledgers (`tools/emission/ledger_rescore.py`), then
+# volume-match the two floors. `docs/design/classifier_retrain_protocol.md` §5.
+#
+# The list above is PROSE — `COUPLED_ARTIFACTS` at the bottom of this module is the same
+# enumeration as DATA, walked by tools/scoring/test_coupled_artifacts.py, which is what makes
+# each entry's stamp actually checked rather than remembered. Keep the two in step; the test
+# asserts the count matches.
 # ================================================================================
 # The one rollback anchor. v5/v6/v7/v8's constants were deleted at the v11 flip together with
 # their weights: a named rung whose .pt a fresh clone does not receive is a rollback you
@@ -98,9 +95,11 @@ ACTIVE_CKPT = "data/classifier/v11/model_best.pt"   # v11 unified location class
 V10_CKPT_ROLLBACK = "data/classifier/v10/model_best.pt"   # one-flip rollback anchor
 DEFAULT_MODEL = ACTIVE_CKPT             # unified location-quality model (== ACTIVE_CKPT)
 # Version token of the live checkpoint, parsed off the checkpoint dir. This is the SINGLE
-# SOURCE OF TRUTH for what "current" means: corpus_common.is_current_decoded and
-# production_seeder.SCORER_VERSION both resolve the decode-stamp version from here, so
-# flipping ACTIVE_CKPT moves the whole notion of "current-decoded" with it. No literal in
+# SOURCE OF TRUTH for what "current" means: `production_seeder.SCORER_VERSION` stamps it onto
+# every row a run writes, and `ledger_rescore.scored_by_active` reads it back to decide which
+# rows the live head has not scored yet. It is no longer an ADMISSION discriminator — the
+# decode-version predicate family that refused every row an older head had stamped was deleted
+# on 2026-08-09, after it took the v10-flip intake from ~1.4k locations to 16. No literal in
 # the comment on purpose — this line carried `# "v8"` through the 2026-08-02 flip, one line
 # below the ACTIVE_CKPT it is derived from and disagreeing with it.
 ACTIVE_VERSION = Path(ACTIVE_CKPT).parent.name
@@ -161,24 +160,20 @@ COUPLED_ARTIFACTS = (
         "stamp": ("ckpt",),
         "guard": "tools/scoring/test_production_pins.py",
     },
-    {
-        "what": "tools/atlas/production_seeder.T_GOOD_OVERRIDES",
-        "why": "per-partition t_good is calibrated to ONE head's p_good scale (protocol §4)",
-        "stamp": None,          # a bare table of floats; its stamp is the derivation below
-        "guard": "tools/scoring/test_t_good_adoption.py",
-    },
-    {
-        "what": "data/{v}/t_good_derivation.json",
-        "why": "the derivation half of T_GOOD_OVERRIDES — the numbers' provenance",
-        "stamp": ("json", "data/{v}/t_good_derivation.json", "model"),
-        "guard": "tools/scoring/test_t_good_adoption.py",
-    },
-    {
-        "what": "data/atlas/keeper_cuts.json",
-        "why": "same scale-bound argument, on the report-time keeper bar",
-        "stamp": ("json", "data/atlas/keeper_cuts.json", "provenance", "model"),
-        "guard": "tools/atlas/test_steered_frontier.py",
-    },
+    # THREE ENTRIES LEFT THIS SET ON 2026-08-09 (prompts/selection_restructure_3.md), and
+    # they left because their SUBJECTS did, not because the coupling was found to be wrong:
+    #   production_seeder.T_GOOD_OVERRIDES  — the per-partition t_good table, deleted with
+    #                                         tools/scoring/derive_t_good.py
+    #   data/{v}/t_good_derivation.json     — its derivation; the committed files STAY as
+    #                                         records, but nothing reads them, so nothing
+    #                                         about them has to move at a flip
+    #   data/atlas/keeper_cuts.json         — the report-time keeper bar; same, the json
+    #                                         stays as a record and its derivation is gone
+    # What replaced all three is `tools/emission/floors.GOOD_FLOOR` / `JUNK_FLOOR`, which are
+    # NOT in this set on purpose: they are not stamped artifacts to be re-derived at a flip,
+    # they are two constants to be RESTATED volume-matched against the re-scored pool. The
+    # procedure is in classifier_retrain_protocol.md §5; the reason a restatement cannot be
+    # a stamp check is that the correct new value depends on a measurement, not on a version.
     {
         "what": "tools/atlas/steered_frontier.TAU_H_FIDELITY_BASE + TAU_H_FIDELITY_BASE_MODEL",
         "why": "tau_h is a cut on a specific head's cheap p_good",

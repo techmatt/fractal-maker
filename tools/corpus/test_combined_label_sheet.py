@@ -273,21 +273,25 @@ def test_a_filter_without_a_stated_rule_is_refused():
     B.SheetSpec(**base, row_filter=(lambda b, r: True), filter_rule="both")
 
 
-def test_the_status_reader_and_the_adopted_table_agree():
-    """Two independent authorities for the same fact: the DERIVATION artifact's per-partition
-    `status` stamp, and `production_seeder`'s adopted mirror of it. The filter reads the first;
-    the discovery path runs on the second. Equal, or the sitting is cut against a table the
-    engine does not use."""
+def test_the_status_reader_covers_every_partition_and_the_record_is_frozen():
+    """This USED to assert two independent authorities agreed: the derivation artifact's
+    per-partition `status` stamp, and `production_seeder`'s adopted mirror of it. The mirror
+    is gone — the whole per-partition t_good table retired on 2026-08-09 — and with it the
+    thing the agreement protected against (a sitting cut against a table the engine does not
+    use). What survives is the artifact as a RECORD, and the property worth asserting is that
+    the reader still covers every registered partition, so a frozen filter cannot silently
+    stop keying one."""
     import sys as _s
     _s.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "scoring")))
-    _s.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "mining")))
-    _s.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "atlas")))
-    import derive_t_good as est
-    import production_seeder as ps
     from partitions import ALL_FAMS
-    stamped = est.adopted_statuses()
+    stamped = B._t_good_statuses()
     assert set(stamped) == set(ALL_FAMS)
-    assert stamped == {f: ps.t_good_status(f) for f in ALL_FAMS}
+    assert set(stamped.values()) <= {"DERIVED", "UNCALIBRATED"}
+    # and the discovery path no longer carries a mirror of it to disagree with
+    _s.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "atlas")))
+    _s.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "mining")))
+    import production_seeder as ps
+    assert not hasattr(ps, "t_good_status") and not hasattr(ps, "T_GOOD_OVERRIDES")
 
 
 def test_the_filtered_sitting_is_exactly_uncalibrated_ranked_plus_the_whole_dive():

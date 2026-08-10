@@ -139,10 +139,11 @@ ALLOWLIST = [
     # `paths.durable()`. Deleted rather than re-pointed — this ledger names scratch paths
     # only, and a durable path on it would be a line that cannot go stale in the direction
     # the ledger exists to catch.
-    Entry("scratch/steered_run2_manifest", "tools/atlas/steered_run2_manifest.py", INPUT,
-          "keeper_calibrate's --manifest default: the blind manifest the keeper calibration "
-          "in docs/design/ is derived against.",
-          "until the keeper calibration is re-derived"),
+    # `scratch/steered_run2_manifest` left this ledger on 2026-08-09 with its producer:
+    # `steered_run2_manifest.py` and `keeper_calibrate.py` were deleted with the keeper cut
+    # (prompts/selection_restructure_3.md), so the entry named a path nothing writes and a
+    # tool nothing runs. The keeper calibration is not re-derivable and does not need to be:
+    # there is one flat `floors.GOOD_FLOOR` and no per-partition bar to calibrate.
     Entry("scratch/wallpaper/emit_v1/manifest.jsonl", "tools/wallpaper/emit_v1.py", INPUT,
           "deploy_tail's EMIT_MANIFEST — the emission it scores the tail of.",
           "until deploy_tail is re-run from a durable emission record"),

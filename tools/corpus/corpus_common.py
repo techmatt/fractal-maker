@@ -161,95 +161,45 @@ PROVENANCE_KEYS = (
 )
 
 
-# --- decode-version stamp guard (discovery outcome ledgers) ----------------
+# --- THE DECODE-VERSION PREDICATE FAMILY WAS HERE, AND IT IS GONE (2026-08-09) ----
 #
-# A discovery-ledger row's `decoded_class` is the PERSISTED q3 hard-class verdict
-# (corn_decode of raw_top3), stamped at harvest time by whichever classifier the
-# seeder ran, via `scorer_version` (the version dir of the active checkpoint —
-# "v6", "v7", ...). Historically production_seeder began stamping only partway
-# through the gather runs, so a body of older rows carry a v5-vintage
-# `decoded_class` and NO stamp (the entire `gather/mandelbrot` and `gather/phoenix`
-# partitions, the first chunks of multibrot{3,4,5}, ~237 rows of the main
-# `outcome_ledger.jsonl`). More generally, a verdict from a NON-CURRENT classifier
-# must never be consumed where a current-model readout is required (fresh-discovery
-# emit, wallpaper-head "fresh machine-q3" selection).
+# `is_decoded_by` / `is_current_decoded` / `current_rows_only` / `require_current` /
+# `StaleDecodeError` compared a ledger row's `scorer_version` stamp to the live pin and
+# REFUSED any row an older head had produced. The intent was sound — a verdict from a
+# non-current classifier is not a current verdict — and the consequence was not: it was
+# consumed as an ADMISSION predicate, per-row and silently, inside `descriptor.load_admitted`.
+# The v10 flip therefore took the emission stage-2 intake from ~1.4k admissible locations to
+# **16** with nothing going red, and the repair was hours of GPU re-scoring. It read as "the
+# intake found almost nothing", not as "the ledgers are stale".
 #
-# Discriminator: `scorer_version == <active version>`, where the active version is
-# resolved from tools/scoring/active_ckpt.ACTIVE_VERSION — the ONE source of truth
-# for what "current" means. A row whose stamp differs is decoded by a different
-# (older) model and its `decoded_class` is not a current verdict. This is an
-# explicit stamp field — no path/source inference needed. When the active checkpoint
-# is flipped, the meaning of "current-decoded" moves with it automatically, and
-# previously-current rows (e.g. every v6-stamped row after a v7 flip) correctly read
-# as not-current — that is expected, not a bug.
+# The whole family retired with the frozen verdict it protected
+# (prompts/selection_restructure_3.md). A ledger row's quality is now its RAW `p_good`, judged
+# at read time against `tools/emission/floors.GOOD_FLOOR` (run side) or `JUNK_FLOOR` (the
+# colorize-pool draw), so a row scored by an older head degrades in the RANKING instead of
+# vanishing from the population. Re-scoring (`tools/emission/ledger_rescore.py`) is an
+# accuracy job now, not an outage repair.
 #
-# READ-ONLY: this guard REJECTS stale rows; it never re-decodes, re-stamps, or
-# mutates a ledger. Re-decoding stale locations under the current model is a
-# separate, compute-bearing project and out of scope here.
+# ONE consumer of the stamp survives, and it asks a different question: "which rows has the
+# live head not scored yet". That is idempotence, and it lives with the pass that needs it
+# (`ledger_rescore.scored_by_active`) rather than here as a general-purpose predicate anyone
+# can reach for. `production_seeder.SCORER_VERSION` still stamps every row it writes, and
+# `production_pins.ACTIVE_VERSION` is still the one source of truth for the token.
 
 
 def active_scorer_version() -> str:
-    """The `scorer_version` token of the LIVE checkpoint (e.g. "v7"), resolved from
-    tools/scoring/active_ckpt.ACTIVE_VERSION — the single source of truth for what
-    "current" means. Flip ACTIVE_CKPT and this moves with it."""
+    """The `scorer_version` token of the LIVE checkpoint (e.g. "v11"), resolved from
+    tools/scoring/active_ckpt.ACTIVE_VERSION.
+
+    THE TOKEN, not a verdict about a row. It survives the predicate family above because
+    stamping is still real: `production_seeder` writes this onto every row a run produces, so
+    a later reader can say WHICH head's scale a probability is on. What it may no longer do is
+    decide whether that row is admissible — that is the floor's job, and it reads the number,
+    not the stamp."""
     scoring = os.path.join(ROOT, "tools", "scoring")
     if scoring not in sys.path:
         sys.path.insert(0, scoring)
     import active_ckpt  # noqa: E402  (stdlib-only at import; no torch pulled in)
     return active_ckpt.ACTIVE_VERSION
-
-
-class StaleDecodeError(ValueError):
-    """A row decoded by a non-current classifier reached a path that requires the
-    current model's verdict."""
-
-
-def is_decoded_by(row, version) -> bool:
-    """True iff `row`'s decode verdict carries the given `scorer_version` stamp.
-
-    The explicit-version primitive. Use this ONLY when a callsite genuinely wants a
-    specific historical version (e.g. an audit of the v5->v6 migration); for
-    "decoded by the model that is live right now" use `is_current_decoded`."""
-    return row.get("scorer_version") == version
-
-
-def is_current_decoded(row) -> bool:
-    """Canonical predicate: True iff `row`'s decode verdict was produced by the
-    ACTIVE checkpoint (the version from tools/scoring/active_ckpt.ACTIVE_VERSION).
-
-    The ONE place the current-stamp discriminator is defined. Consumers that require
-    a current-model readout gate on this rather than open-coding the `scorer_version`
-    check, so the stamp field can never drift out of sync across call sites."""
-    return is_decoded_by(row, active_scorer_version())
-
-
-def current_rows_only(rows):
-    """Filter an iterable of ledger rows to current-stamped ones.
-
-    Returns `(kept, excluded)` — the kept rows plus the count of stale/unstamped
-    rows dropped. For pool-builders that legitimately discard non-current rows and
-    want to report how many they excluded."""
-    kept, excluded = [], 0
-    for r in rows:
-        if is_current_decoded(r):
-            kept.append(r)
-        else:
-            excluded += 1
-    return kept, excluded
-
-
-def require_current(row):
-    """Return `row` if it is current-stamped, else raise `StaleDecodeError`.
-
-    For single-row verdict-trust paths that must never proceed on a stale verdict."""
-    if not is_current_decoded(row):
-        raise StaleDecodeError(
-            f"ledger row {row.get('id')!r} is stale-decoded "
-            f"(scorer_version={row.get('scorer_version')!r}, "
-            f"current={active_scorer_version()!r}); refusing to consume its "
-            f"decoded_class={row.get('decoded_class')!r} as a current verdict"
-        )
-    return row
 
 
 def hp_str(x) -> str:

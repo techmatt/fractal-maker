@@ -47,7 +47,7 @@ import eval_slice                                # noqa: E402
 import production_seeder as ps                   # noqa: E402
 from partitions import FT2FAM                    # noqa: E402
 from production_pins import ACTIVE_CKPT, ACTIVE_VERSION   # noqa: E402
-from score_lib import corn_decode                # noqa: E402
+from tools.emission import floors as F           # noqa: E402  THE cut owner
 from tools.emission import descriptor as D       # noqa: E402
 
 # Coupled to production_pins.ACTIVE_CKPT: `pytest -m version_pinned` lists it.
@@ -134,15 +134,19 @@ def test_a_forgetful_rollback_goes_red(monkeypatch):
     monkeypatch.setattr(active_ckpt, "ACTIVE_CKPT", f"data/classifier/{prev}/model_best.pt")
     rolled_back = active_ckpt.ACTIVE_VERSION
 
-    keeper_model = json.loads(KEEPER_CUTS.read_text(encoding="utf-8"))["provenance"]["model"]
-    assert keeper_model != rolled_back, "keeper-cut guard would NOT fire on a forgetful rollback"
     assert sf.TAU_H_FIDELITY_BASE_MODEL != rolled_back, (
         "tau_h stamp guard would NOT fire on a forgetful rollback")
-    live_tgood = ROOT / "data" / rolled_back / "t_good_derivation.json"
-    adopted = json.loads(live_tgood.read_text(encoding="utf-8"))["adopted"]
-    assert adopted != {k: float(v) for k, v in ps.T_GOOD_OVERRIDES.items()}, (
-        f"the adopted t_good table equals {rolled_back}'s — the t_good guard would NOT fire "
-        f"on a forgetful rollback")
+    art = ROOT / "data" / "atlas" / f"tau_h_base_{sf.TAU_H_FIDELITY_BASE_MODEL}.json"
+    assert json.loads(art.read_text(encoding="utf-8"))["model"] != rolled_back, (
+        "the tau_h provenance guard would NOT fire on a forgetful rollback")
+    # THE KEEPER-CUT AND t_good STAMPS WERE ASSERTED HERE TOO, until 2026-08-09. Both
+    # subjects were deleted (prompts/selection_restructure_3.md) and left
+    # `COUPLED_ARTIFACTS` with them; `data/atlas/keeper_cuts.json` and
+    # `data/<v>/t_good_derivation.json` survive as records nothing reads. What replaced them
+    # — `floors.GOOD_FLOOR` / `JUNK_FLOOR` — carries no stamp on purpose and cannot be
+    # asserted here: it is restated volume-matched, not re-derived
+    # (classifier_retrain_protocol.md §5a, and test_coupled_artifacts.py holds that reasoning
+    # to the doc).
 
 
 def test_the_rollback_ladder_is_readable_and_its_rungs_are_tracked():
@@ -166,32 +170,34 @@ def test_the_rollback_ladder_is_readable_and_its_rungs_are_tracked():
 
 
 # --------------------------------------------------------------------------- #
-# 2. stale by predicate, not by deletion
+# 2. an off-head ledger is RANKED, not refused
 # --------------------------------------------------------------------------- #
-def test_v8_ledger_rows_are_refused_by_the_version_predicate_not_deleted():
+def test_v8_ledger_rows_are_admitted_on_their_own_scores_not_refused_by_a_stamp():
+    """THE 2026-08-09 reversal, on the real v8-era ledger this file has always used.
+
+    It used to assert the opposite: every row here carries a `v8` stamp, so the decode-version
+    predicate refused all of them and `load_admitted` returned []. That was the intended
+    behaviour and it was the mechanism by which the v10 flip took the emission intake from
+    ~1.4k locations to 16 with nothing going red. The predicate is gone; a v8 `p_good` is a
+    worse estimate of quality than a v11 one, and a worse estimate ranks lower rather than
+    disappearing.
+
+    The floor still cuts, and the ledger is a good witness for that: it contains rows on both
+    sides of 0.50, so this is not "everything admits now"."""
     rows = _rows(STALE_LEDGER)
     stamps = {r.get("scorer_version") for r in rows}
     assert stamps == {"v8"}, f"expected a pure v8-era ledger, got stamps {stamps}"
-    assert not any(cc.is_current_decoded(r) for r in rows)
-
-    # The rows are still THERE — nothing was hand-deleted.
     assert len(rows) > 0
-    # ...and they are substantive: without the version predicate most would admit. If this
-    # count were 0 the test below would pass on an empty set and prove nothing.
-    would_admit = [r for r in rows
-                   if r.get("guard_pass") and r.get("distinct") and D.admit_quality(r)]
-    assert len(would_admit) > 100, (
-        f"only {len(would_admit)} rows would admit ignoring the stamp — pick a ledger with "
-        f"real admissions or this asserts nothing")
 
-    assert D.load_admitted(STALE_LEDGER) == [], (
-        "a v8-decoded row survived load_admitted after the flip")
-
-
-def test_require_current_raises_on_a_stale_row():
-    import pytest
-    with pytest.raises(cc.StaleDecodeError):
-        D.load_admitted(STALE_LEDGER, require_current=True)
+    eligible = [r for r in rows if D.guard_and_distinct(r)]
+    admitted = D.load_admitted(STALE_LEDGER)
+    assert len(admitted) > 100, (
+        f"only {len(admitted)} v8-stamped rows admit — the stamp is not supposed to cut, so "
+        f"this ledger should contribute its whole above-floor population")
+    assert len(admitted) < len(eligible), (
+        "every guard-and-distinct row admitted — the good floor is not cutting anything here, "
+        "so this ledger cannot witness that it still cuts")
+    assert all(F.passes_good_floor(r.get("p_good")) for r in admitted)
 
 
 # --------------------------------------------------------------------------- #
@@ -202,12 +208,10 @@ def _ledger_row(evrow, manifest):
     part = FT2FAM[evrow["fractal_type"]]
     m = manifest[evrow["location_id"]]
     p2, p3, p4 = eval_slice.probs(evrow, ACTIVE_VERSION)
-    t_good = ps.t_good_for(part)
     return part, {
         "id": f"flip_{evrow['location_id']}", "family": part,
         "outcome_cx": float(m["cx"]), "outcome_cy": float(m["cy"]), "outcome_fw": float(m["fw"]),
-        "p_notbad": p2, "p_good": p3, "p_ge4": p4, "t_good": t_good,
-        "decoded_class": corn_decode(p2, p3, t_good, p4),
+        "p_notbad": p2, "p_good": p3, "p_ge4": p4,
         "guard_pass": True, "distinct": True, "scorer_version": ACTIVE_VERSION,
     }
 
@@ -220,19 +224,21 @@ def _pick():
     return _ledger_row(best4, manifest), _ledger_row(worst1, manifest)
 
 
-def test_a_class4_location_decodes_to_4_and_admits_under_the_new_t_good():
+def test_a_class4_location_classifies_as_4_and_admits_end_to_end(tmp_path):
+    """The row carries PROBABILITIES and no stored class; the class is derived at read time
+    at the live floor, and the whole run-side path agrees with it."""
     (part, row), _ = _pick()
-    assert row["t_good"] == ps.t_good_for(part)
-    assert corn_decode(row["p_notbad"], row["p_good"], row["t_good"], row["p_ge4"]) \
-        == row["decoded_class"], "the persisted row does not re-decode to its own class"
-    assert row["decoded_class"] == 4, (
-        f"a human-labeled class-4 location decoded to {row['decoded_class']} "
+    assert "decoded_class" not in row and "t_good" not in row
+    cls = F.good_class(row["p_good"], row["p_ge4"])
+    assert cls == 4, (
+        f"a human-labeled class-4 location classifies as {cls} "
         f"(p2={row['p_notbad']:.4f} p3={row['p_good']:.4f} p4={row['p_ge4']:.4f} "
-        f"t_good={row['t_good']}) — if this is 3, the pipeline is q4-incapable")
-    assert ps.is_q3plus(row)
-    assert D.admit_quality(row)
+        f"good_floor={F.GOOD_FLOOR}) — if this is 3, the pipeline is q4-incapable")
+    assert ps.is_good(row)
     assert ps.build_cloud([row], part)
-    assert cc.is_current_decoded(row)
+    led = tmp_path / "one.jsonl"
+    led.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    assert len(D.load_admitted(led)) == 1
 
 
 def test_the_flip_watch_is_attached_to_the_readout_that_shows_class_4():
@@ -244,25 +250,28 @@ def test_the_flip_watch_is_attached_to_the_readout_that_shows_class_4():
     the head it was raised for is live, it is KEYED on the scorer version (so it retires
     itself at the next flip rather than outliving its subject), and it changes no verdict —
     the diagnostic's counts are identical with and without it."""
-    rows = [{"family": "mandelbrot", "guard_pass": True, "decoded_class": c,
+    rows = [{"family": "mandelbrot", "guard_pass": True, "p_good": pg, "p_ge4": p4,
              "outcome_cx": 0.1 * i, "outcome_cy": 0.2 * i, "outcome_fw": 1e-3}
-            for i, c in enumerate((1, 2, 3, 4))]
+            for i, (pg, p4) in enumerate([(0.05, 0.0), (0.30, 0.0), (0.80, 0.1), (0.95, 0.9)])]
     diag = ps.cloud_diagnostic(rows, ps.build_cloud(rows, "mandelbrot"), "mandelbrot")
-    assert diag["class_split"][4] == 1, "the diagnostic must count class 4 at all"
-    assert ps.Q4_WATCH_VERSION == ACTIVE_VERSION, (
-        "the q4 WATCH names a version that is not live — it should have retired itself")
-    assert diag.get("q4_watch") == ps.Q4_WATCH
+    assert diag["class_split"]["great"] == 1, "the diagnostic must count class 4 at all"
+    assert ps.GOOD_FLOOR_WATCH_VERSION == ACTIVE_VERSION, (
+        "the WATCH names a version that is not live — it should have retired itself")
+    assert diag.get("good_floor_watch") == ps.GOOD_FLOOR_WATCH
     # a WATCH is not a gate: nothing about the counts or the cloud depends on it
     assert diag["cloud_size"] == len(ps.build_cloud(rows, "mandelbrot"))
-    assert set(diag["class_split"]) == {1, 2, 3, 4}
+    assert set(diag["class_split"]) == {"below_floor", "good", "great"}
 
 
-def test_a_class1_location_is_refused_at_the_same_boundary():
-    """Without this, a decode that returned 4 unconditionally would pass the test above."""
+def test_a_class1_location_is_refused_at_the_same_boundary(tmp_path):
+    """Without this, a classifier that returned 4 unconditionally would pass the test above."""
     _, (part, row) = _pick()
-    assert row["decoded_class"] < 3, (
-        f"a human-labeled class-1 location decoded to {row['decoded_class']} — the q3+ "
-        f"boundary is not discriminating")
-    assert not ps.is_q3plus(row)
-    assert not D.admit_quality(row)
+    cls = F.good_class(row["p_good"], row["p_ge4"])
+    assert cls is None, (
+        f"a human-labeled class-1 location classifies as {cls} — the good floor is not "
+        f"discriminating")
+    assert not ps.is_good(row)
     assert not ps.build_cloud([row], part)
+    led = tmp_path / "one.jsonl"
+    led.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    assert D.load_admitted(led) == []

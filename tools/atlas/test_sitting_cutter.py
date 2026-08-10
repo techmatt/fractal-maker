@@ -266,12 +266,15 @@ def test_the_cut_balances_across_partition_and_tier_cells():
 # (what the sitting actually contains). The one test that reads the LIVE corpus is named as
 # such — it is the only thing that can catch the rule being right and inert.
 # =========================================================================== #
-def test_the_sufficiency_floor_is_the_derivers_own_MIN_POS():
-    """Not a second literal 15. This rule exists to feed `derive_t_good`'s gate, so a harness
-    constant that drifted from it would reserve labels for partitions that no longer need
-    them — or stop reserving for ones that do (`verification_practice.md` §1.8)."""
-    from derive_t_good import MIN_POS
-    assert sc.min_pos() == MIN_POS == 15
+def test_the_sufficiency_floor_has_exactly_one_owner():
+    """15, declared once. It used to be imported from `derive_t_good.MIN_POS` so a harness
+    constant could not drift from the estimator's own gate; that estimator was deleted on
+    2026-08-09 and this module inherited the number rather than growing a second copy of it
+    (`verification_practice.md` §1.8). A re-typed 15 anywhere in the cutter goes red here."""
+    assert sc.min_pos() == sc.MIN_POS == 15
+    src = (ROOT / "tools/atlas/sitting_cutter.py").read_text(encoding="utf-8")
+    assert src.count("MIN_POS = 15") == 1
+    assert "derive_t_good import" not in src
 
 
 def test_a_partition_below_the_floor_is_reserved_and_one_above_it_is_not():

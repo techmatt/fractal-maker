@@ -278,9 +278,9 @@ def test_mode_never_overrides_the_identity_clauses():
 def test_build_cloud_forwards_the_scale():
     """The cloud builder dedups with the rule it is handed — a replay that rebuilds a prior
     cloud under the RETIRED "max" must not silently get the live "min", or vice versa."""
-    rows = [{"id": "wide", "family": "mandelbrot", "decoded_class": 3,
+    rows = [{"id": "wide", "family": "mandelbrot", "decoded_class": 3, "p_good": 0.80,
              "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 2.0},
-            {"id": "deep", "family": "mandelbrot", "decoded_class": 3,
+            {"id": "deep", "family": "mandelbrot", "decoded_class": 3, "p_good": 0.80,
              "outcome_cx": 0.5, "outcome_cy": 0.0, "outcome_fw": 1e-3}]
     # live default (min): the deep zoom inside the wide outcome is its own place.
     assert [r["id"] for r in ps.build_cloud(rows, "mandelbrot")] == ["wide", "deep"]
@@ -339,14 +339,14 @@ def test_build_cloud_keeps_distinct_c_julias_as_separate_places():
     # within a julia partition, two distinct-c julias at the same viewport are TWO cloud
     # places (z-only dedup collapsed them to one — the cloud under-count half of the bug).
     rows = [
-        {"id": "ja", "family": "julia:multibrot3", "guard_pass": True, "decoded_class": 3,
+        {"id": "ja", "family": "julia:multibrot3", "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
          "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 3.0,
          "julia_c_re": 0.30, "julia_c_im": -0.10},
-        {"id": "jb", "family": "julia:multibrot3", "guard_pass": True, "decoded_class": 3,
+        {"id": "jb", "family": "julia:multibrot3", "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
          "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 3.0,
          "julia_c_re": -0.85, "julia_c_im": 0.20},
         # a genuine same-c revisit of ja collapses.
-        {"id": "ja2", "family": "julia:multibrot3", "guard_pass": True, "decoded_class": 3,
+        {"id": "ja2", "family": "julia:multibrot3", "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
          "outcome_cx": 0.01, "outcome_cy": 0.0, "outcome_fw": 3.0,
          "julia_c_re": 0.30, "julia_c_im": -0.10},
     ]
@@ -360,7 +360,7 @@ def test_build_cloud_keeps_distinct_c_julias_as_separate_places():
 # axes resolve to the legacy Ushiki values. See docs/design/phoenix_seed_sampler_spec.md §3.
 # --------------------------------------------------------------------------- #
 def _ph_row(oid, cx, cy, fw, c=(0.5667, 0.0), p=(-0.5, 0.0), z=(0.0, 0.0)):
-    return {"id": oid, "family": "phoenix", "guard_pass": True, "decoded_class": 3,
+    return {"id": oid, "family": "phoenix", "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
             "outcome_cx": cx, "outcome_cy": cy, "outcome_fw": fw,
             **ps.phoenix_ident_fields(c, p, z)}
 
@@ -495,18 +495,18 @@ def test_near_dup_does_not_double_count_a_region():
     density cap by being counted twice. build_cloud dedups by DEDUP_K*min(fw), so the
     near-dup's offset is stated against that radius rather than a frozen literal."""
     rows = [
-        {"id": "a", "guard_pass": True, "decoded_class": 3,
+        {"id": "a", "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
          "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 0.01},
         # near-dup of a (well inside DEDUP_K*min(fw)): must NOT create a second member.
-        {"id": "a2", "guard_pass": True, "decoded_class": 3,
+        {"id": "a2", "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
          "outcome_cx": 0.5 * ps.DEDUP_K * 0.01, "outcome_cy": 0.0, "outcome_fw": 0.01},
         # genuinely distinct q3 place.
-        {"id": "b", "guard_pass": True, "decoded_class": 3,
+        {"id": "b", "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
          "outcome_cx": 0.10, "outcome_cy": 0.0, "outcome_fw": 0.01},
         # class-2 and guard-failed rows never enter the q3 cloud.
-        {"id": "c2", "guard_pass": True, "decoded_class": 2,
+        {"id": "c2", "guard_pass": True, "decoded_class": 2, "p_good": 0.30,
          "outcome_cx": 0.11, "outcome_cy": 0.0, "outcome_fw": 0.01},
-        {"id": "gf", "guard_pass": False, "decoded_class": None,
+        {"id": "gf", "guard_pass": False, "decoded_class": None, "p_good": None,
          "outcome_cx": 0.12, "outcome_cy": 0.0, "outcome_fw": 0.01},
     ]
     cloud = ps.build_cloud(rows, "mandelbrot")     # keyless rows default to mandelbrot
@@ -531,10 +531,10 @@ def _isolate_ledgers(tmp_path, monkeypatch):
 def test_ledger_round_trip(tmp_path, monkeypatch):
     _isolate_ledgers(tmp_path, monkeypatch)
     led = ps.Ledgers()
-    row_q3 = {"id": "m_x_000001", "distinct": True, "guard_pass": True, "decoded_class": 3,
+    row_q3 = {"id": "m_x_000001", "distinct": True, "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
               "outcome_cx": 0.1, "outcome_cy": 0.2, "outcome_fw": 0.01, "k3": 1.9}
     row_dup = {"id": "m_x_000002", "distinct": False, "dup_of": "m_x_000001",
-               "guard_pass": True, "decoded_class": 3,
+               "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
                "outcome_cx": 0.1, "outcome_cy": 0.2, "outcome_fw": 0.01, "k3": 1.8}
     led.append_outcome(row_q3, np.arange(1280, dtype=np.float32))
     led.append_outcome(row_dup, np.ones(1280, dtype=np.float32))
@@ -550,21 +550,25 @@ def test_ledger_round_trip(tmp_path, monkeypatch):
 
     # cross-run cumulative: a second run appends and reloads with combined state.
     led2.append_outcome({"id": "m_x_000003", "distinct": True, "guard_pass": True,
-                         "decoded_class": 3, "outcome_cx": 9.0, "outcome_cy": 9.0,
+                         "decoded_class": 3, "p_good": 0.80, "outcome_cx": 9.0, "outcome_cy": 9.0,
                          "outcome_fw": 0.01, "k3": 2.0}, None)
     assert ps.Ledgers().n_outcomes_logged == 3
 
 
-def test_build_cloud_excludes_pre_decode_rows():
-    """No historical backfill: rows predating the decoded_class field (no key) never enter
-    the q3 cloud — only rows the new pipeline logged with decoded_class == 3 do."""
+def test_build_cloud_excludes_unscored_rows():
+    """A row with no `p_good` cannot be judged by the live floor and never enters the cloud.
+    It used to be a row with no `decoded_class` — same population (the pre-CORN era), read
+    through the column the cut actually uses since 2026-08-09."""
     rows = [
-        # historical row: guard_pass but no decoded_class key -> excluded.
+        # historical row: guard_pass but no probability at all -> excluded.
         {"id": "old", "guard_pass": True,
          "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 0.01},
-        # new-pipeline q3 row -> included.
-        {"id": "new", "guard_pass": True, "decoded_class": 3,
+        # scored, above floors.GOOD_FLOOR -> included.
+        {"id": "new", "guard_pass": True, "p_good": 0.80,
          "outcome_cx": 5.0, "outcome_cy": 0.0, "outcome_fw": 0.01},
+        # scored, BELOW the floor -> excluded, and this is the half a keyless-row test missed.
+        {"id": "weak", "guard_pass": True, "p_good": 0.30,
+         "outcome_cx": 9.0, "outcome_cy": 0.0, "outcome_fw": 0.01},
     ]
     assert [m["id"] for m in ps.build_cloud(rows, "mandelbrot")] == ["new"]
 
@@ -575,11 +579,11 @@ def test_build_cloud_partitions_by_family():
     active partition; keyless rows count as mandelbrot."""
     rows = [
         # same coords, three different planes -> each partition sees exactly its own row.
-        {"id": "m", "guard_pass": True, "decoded_class": 3,
+        {"id": "m", "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
          "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 0.01},              # keyless
-        {"id": "j", "family": "julia", "guard_pass": True, "decoded_class": 3,
+        {"id": "j", "family": "julia", "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
          "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 0.01},
-        {"id": "mb", "family": "multibrot_d3", "guard_pass": True, "decoded_class": 3,
+        {"id": "mb", "family": "multibrot_d3", "guard_pass": True, "decoded_class": 3, "p_good": 0.80,
          "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 0.01},
     ]
     assert [m["id"] for m in ps.build_cloud(rows, "mandelbrot")] == ["m"]

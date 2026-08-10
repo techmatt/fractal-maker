@@ -50,9 +50,9 @@ def test_a_wallpaper_head_flip_makes_its_floors_refuse(monkeypatch):
     monkeypatch.setattr(WP, "HEAD_VERSION", "v9")
     for f in (F.WALLPAPER_POOL, F.WALLPAPER_RELEASE):
         with pytest.raises(F.HeadStampMismatch) as ei:
-            f.gate(0.99)
+            f.annotates(0.99)
         assert f.stamp in str(ei.value) and "v9" in str(ei.value)
-    assert F.MINING_RELEASE.gate(0.99) is True          # untouched head still gates
+    assert F.MINING_RELEASE.annotates(0.99) is True     # untouched head still annotates
     with pytest.raises(F.HeadStampMismatch):
         F.check_stamps()
 
@@ -61,17 +61,17 @@ def test_a_mining_head_flip_makes_its_floors_refuse(monkeypatch):
     monkeypatch.setattr(MP, "HEAD_VERSION", "v2")
     for f in (F.MINING_POOL, F.MINING_RELEASE):
         with pytest.raises(F.HeadStampMismatch):
-            f.gate(0.99)
-    assert F.WALLPAPER_RELEASE.gate(0.99) is True
+            f.annotates(0.99)
+    assert F.WALLPAPER_RELEASE.annotates(0.99) is True
 
 
-def test_the_refusal_is_at_gate_not_only_at_check(monkeypatch):
-    """`gate()` is THE comparison every consumer calls. If the check only ran in `check()`, a
-    site that wrote its own `>=` against `.value` would gate on the wrong scale in silence —
-    which is precisely how the six copies this module replaced behaved."""
+def test_the_refusal_is_at_the_comparison_not_only_at_check(monkeypatch):
+    """`annotates()` is THE comparison every consumer calls. If the check only ran in
+    `check()`, a site that wrote its own `>=` against `.value` would annotate on the wrong
+    scale in silence — which is precisely how the six copies this module replaced behaved."""
     monkeypatch.setattr(WP, "HEAD_VERSION", "v9")
     with pytest.raises(F.HeadStampMismatch):
-        F.for_style("smooth", "release").gate(0.5)
+        F.for_style("smooth", "release").annotates(0.5)
 
 
 def test_active_head_version_reads_the_pin_at_call_time(monkeypatch):
@@ -116,7 +116,7 @@ def test_a_pool_floor_at_or_above_its_gate_is_a_red_build(pool_value):
     floor makes 'pooled but not release-grade' zero by construction — every inventory count
     downstream reads as a measurement and is an identity."""
     broken = (F.Floor(name="wallpaper_pool", value=pool_value, head=F.WALLPAPER_HEAD,
-                      stamp=WP.HEAD_VERSION, site="pool", acts=True, basis="injected"),
+                      stamp=WP.HEAD_VERSION, site="pool", basis="injected"),
               F.WALLPAPER_RELEASE)
     with pytest.raises(ValueError, match="not below their release floor"):
         F.check_below_gate(broken)
@@ -140,27 +140,30 @@ def test_style_routes_to_the_head_that_was_trained_on_it():
         F.for_style("smooth", "somewhere_else")
 
 
-def test_the_liveness_census_finds_no_ACTING_cut_left():
-    """THE census: `acts` is the record of which cuts remove rows, and the set that DO is now
-    empty. All four went annotation-only on 2026-08-09
-    (prompts/selection_restructure_1.md) — they keep their values and their stamps and are
-    read to say what the retired cut would have done.
+def test_a_Floor_cannot_cut_at_all():
+    """`acts` and `gate()` are GONE (2026-08-09, prompts/selection_restructure_3.md), and the
+    absence is the census. `acts` had been False on all four since the day before — a field
+    whose only legal value is False, sitting next to a method named for flipping it, is an
+    invitation rather than a record. What removes rows is the two module-level constants; a
+    `Floor` offers `annotates()` and nothing else.
 
-    An all-False census is exactly what a census reading the wrong field also returns, so the
-    mirror below injects an acting cut and requires the same expression to name it."""
-    assert [f.name for f in F.ALL_FLOORS if f.acts] == []
-    assert not any(f.acts for f in F.ALL_FLOORS)
+    Asserted on the CLASS, not on the four instances: a fifth Floor added later inherits the
+    property instead of needing to be remembered."""
+    assert not hasattr(F.Floor, "gate")
+    assert hasattr(F.Floor, "annotates")
+    assert "acts" not in F.Floor.__dataclass_fields__
     assert F.summary().count("annotation-only") == len(F.ALL_FLOORS)
 
 
-def test_the_census_still_names_an_acting_cut(monkeypatch):
-    """NON-VACUITY for the census above, both in the list and in the run-banner summary."""
+def test_the_summary_still_names_an_added_cut(monkeypatch):
+    """NON-VACUITY for the census above: the run-banner summary is derived from `ALL_FLOORS`,
+    so an added cut appears in it — and appears as annotation-only, because there is no longer
+    any other kind."""
     ghost = F.Floor(name="ghost_release", value=0.99, head=F.MINING_HEAD,
-                    stamp=MP.HEAD_VERSION, site="release", acts=True, basis="injected")
+                    stamp=MP.HEAD_VERSION, site="release", basis="injected")
     monkeypatch.setattr(F, "ALL_FLOORS", F.ALL_FLOORS + (ghost,))
-    assert [f.name for f in F.ALL_FLOORS if f.acts] == ["ghost_release"]
-    assert "ghost_release 0.99 (render_mode_head/v1)" in F.summary()
-    assert F.summary().count("annotation-only") == len(F.ALL_FLOORS) - 1
+    assert "ghost_release 0.99 (render_mode_head/v1, annotation-only)" in F.summary()
+    assert F.summary().count("annotation-only") == len(F.ALL_FLOORS)
 
 
 # --------------------------------------------------------------------------- #
@@ -199,3 +202,59 @@ def test_the_thin_supply_divisor_and_cluster_cap_live_beside_the_floor():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# --------------------------------------------------------------------------- #
+# 5. the good floor (2026-08-09, prompts/selection_restructure_3.md)
+# --------------------------------------------------------------------------- #
+def test_the_good_floor_is_the_run_side_cut_and_shares_the_junk_floor_s_shape():
+    """Two heights of ONE comparison, both on the stored raw P(>=3), both bare floats rather
+    than `Floor`s. Not `Floor`s for the reason the junk floor is not: they read on whichever
+    head owns the score at that site, and a stamp names one head."""
+    assert F.GOOD_FLOOR == 0.50 and F.JUNK_FLOOR == 0.20
+    assert F.JUNK_FLOOR < F.GOOD_FLOOR, "junk must be the permissive end of the same scale"
+    assert F.passes_good_floor(0.50) and F.passes_good_floor(0.99)
+    assert not F.passes_good_floor(0.4999) and not F.passes_good_floor(None)
+    # everything the junk floor passes is not automatically good, and vice versa is total
+    assert F.passes_junk_floor(0.30) and not F.passes_good_floor(0.30)
+
+
+def test_good_class_answers_None_below_the_floor_rather_than_a_bad_class():
+    """Below the floor there is NO class. The run keeps no verdict about how bad a thing it
+    did not keep is, which is what stops a stored class from being read as a decode of the
+    retired 1..4 kind."""
+    assert F.good_class(0.4) is None
+    assert F.good_class(0.4, 0.99) is None, "P(>=4) cannot promote a below-floor frame"
+    assert F.good_class(0.6) == 3
+    assert F.good_class(0.6, 0.49) == 3
+    assert F.good_class(0.6, 0.50) == 4
+    assert F.good_class(None) is None
+
+
+def test_the_two_natural_cutpoints_are_declared_here_not_at_their_call_sites():
+    """`NOTBAD_CUT` / `GREAT_CUT` are CORN's own uncalibrated rank cutpoints, and they only
+    NAME a frame — the run-side sites that need a class rather than a yes/no read them from
+    here so the surface of "numbers that decide something about a frame" stays one file."""
+    assert F.NOTBAD_CUT == F.GREAT_CUT == 0.50
+    assert not any(f.value == F.GOOD_FLOOR and f.site == "pool" for f in F.ALL_FLOORS)
+
+
+def test_no_module_outside_the_owner_declares_the_run_side_floors():
+    """The run side IMPORTS the constants and never restates them. `test_floors_one_source`
+    scans stage 2 and the two heads for a re-typed stage-2 cut; the run side is in
+    `tools/atlas`, outside that surface, so the two names are scanned for by hand here."""
+    import re
+    import subprocess
+    out = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT, capture_output=True, text=True)
+    if out.returncode != 0:
+        pytest.skip("git unavailable")
+    pat = re.compile(r"^\s*(GOOD_FLOOR|JUNK_FLOOR|GREAT_CUT|NOTBAD_CUT)\s*(?::[^=\n]*)?=", re.M)
+    offenders = []
+    for rel in out.stdout.splitlines():
+        norm = rel.replace("\\", "/")
+        if norm in ("tools/emission/floors.py", "tools/emission/test_floors.py"):
+            continue
+        if pat.search((ROOT / rel).read_text(encoding="utf-8", errors="replace")):
+            offenders.append(norm)
+    assert not offenders, f"the run-side cuts are re-declared in {offenders}"
+    assert pat.search("GOOD_FLOOR = 0.5")          # non-vacuous

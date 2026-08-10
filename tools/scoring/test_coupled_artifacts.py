@@ -75,14 +75,59 @@ def test_every_entry_names_a_guard_that_exists(entry):
     assert entry["why"], entry["what"]
 
 
-def test_the_unstamped_entries_are_the_ones_that_genuinely_carry_no_stamp():
+# Subjects a COMMITTED RECORD still names and the live registry deliberately does not, each
+# because the thing itself was deleted rather than uncoupled (2026-08-09,
+# prompts/selection_restructure_3.md). The committed json files survive as records of what
+# their heads served; nothing reads them, so nothing about them has to move at a flip. An
+# entry here must name something genuinely GONE from the tree — asserted below.
+RETIRED_SUBJECTS = {
+    "tools/atlas/production_seeder.T_GOOD_OVERRIDES",
+    "data/{v}/t_good_derivation.json",
+    "data/atlas/keeper_cuts.json",
+}
+
+
+def test_the_retired_subjects_are_actually_gone():
+    """The other half of `RETIRED_SUBJECTS`: an exemption that outlives its subject's
+    deletion is how a registry quietly stops covering something live again."""
+    import subprocess
+    src = (ROOT / "tools" / "atlas" / "production_seeder.py").read_text(encoding="utf-8")
+    assert "T_GOOD_OVERRIDES = {" not in src
+    out = subprocess.run(["git", "ls-files", "tools/scoring/derive_t_good.py",
+                          "tools/atlas/keeper_cut.py"], cwd=ROOT,
+                         capture_output=True, text=True)
+    assert out.stdout.strip() == "", f"still tracked: {out.stdout!r}"
+
+
+def test_every_entry_carries_a_stamp():
     """Non-vacuity in the other direction: `stamp: None` must be a fact about the artifact,
-    not a way to opt out of the check. Only `T_GOOD_OVERRIDES` qualifies — it is a bare dict
-    of floats in a .py file, and its version is carried by the derivation artifact that IS
-    stamped (the entry immediately after it)."""
+    not a way to opt out of the check. There is no such entry any more — the only one there
+    ever was, `production_seeder.T_GOOD_OVERRIDES` (a bare dict of floats in a .py file, whose
+    version was carried by the derivation artifact beside it), was deleted with the rest of
+    the per-partition t_good machinery on 2026-08-09."""
     unstamped = [e["what"] for e in COUPLED_ARTIFACTS if e.get("stamp") is None]
-    assert unstamped == ["tools/atlas/production_seeder.T_GOOD_OVERRIDES"], unstamped
-    assert len(STAMPED) >= 6, "the set lost stamped entries — did someone opt one out?"
+    assert unstamped == [], unstamped
+    assert len(STAMPED) == len(COUPLED_ARTIFACTS) >= 4, \
+        "the set lost stamped entries — did someone opt one out?"
+
+
+def test_the_two_enforcing_floors_are_deliberately_NOT_in_this_set():
+    """`floors.GOOD_FLOOR` / `JUNK_FLOOR` are cuts on the same train-prior-calibrated scale
+    as everything above and are just as scale-bound — and they are still not registered here,
+    because a stamp check is the wrong instrument for them. An artifact in this set is
+    RE-DERIVED at a flip and its stamp says which head it was derived under; a floor is
+    RESTATED volume-matched against the re-scored pool, and the correct new value depends on a
+    measurement rather than on a version. Registering them would make a flip pass by moving a
+    string. The procedure that does hold them is prose plus a human:
+    docs/design/classifier_retrain_protocol.md §5."""
+    from tools.emission import floors as F
+    assert not any("GOOD_FLOOR" in e["what"] or "JUNK_FLOOR" in e["what"] or
+                   "emission.floors" in e["what"] for e in COUPLED_ARTIFACTS)
+    assert (F.GOOD_FLOOR, F.JUNK_FLOOR) == (0.50, 0.20)
+    proto = (ROOT / "docs" / "design" / "classifier_retrain_protocol.md").read_text(
+        encoding="utf-8")
+    assert "GOOD_FLOOR" in proto and "volume-match" in proto.lower(), \
+        "the flip procedure must name the restatement the registry deliberately cannot check"
 
 
 def test_the_build_metadata_record_is_a_subset_of_the_registry():
@@ -93,11 +138,19 @@ def test_the_build_metadata_record_is_a_subset_of_the_registry():
     derivation, the campaign floor and the tau_h provenance file). From v11 the record is
     written BY the adoption off `COUPLED_ARTIFACTS` itself, so it is the whole set rather than
     a lagging subset. Either way what it may NOT do is name something the registry has
-    forgotten, and that is the direction asserted."""
+    forgotten, and that is the direction asserted.
+
+    RETIRED subjects are the one exemption, and they are LISTED rather than pattern-matched.
+    A committed record keeps what was true when it was written (`storage_classes.md`), so the
+    v11 adoption record still names the three artifacts the 2026-08-09 restructure deleted.
+    Naming them here is what stops "the registry forgot it" and "the subject no longer exists"
+    from reading the same."""
     meta = _ladder_record()
     known = {e["what"] for e in COUPLED_ARTIFACTS}
     for item in meta["must_revert_together"]:
         what = item["what"]
+        if what in RETIRED_SUBJECTS:
+            continue
         # the record writes the tau_h pair and its provenance file as one line; the registry
         # splits them, so match on the leading constant rather than the whole string.
         head = what.split(",")[0].strip()
@@ -108,16 +161,19 @@ def test_the_build_metadata_record_is_a_subset_of_the_registry():
 
 
 def test_the_prose_block_and_the_registry_have_not_drifted_apart():
-    """The comment beside ACTIVE_CKPT numbers the same set 1..6. Nothing can hold a comment
-    to a list, but it can hold the COUNT, which is what silently rots when someone adds an
-    artifact to one and not the other."""
+    """The comment beside ACTIVE_CKPT numbers the same set. Nothing can hold a comment to a
+    list, but it can hold the COUNT, which is what silently rots when someone adds an artifact
+    to one and not the other. The registry splits the tau_h pair (constant + stamp) from its
+    provenance file where the prose numbers them 2 and 3, and adds the campaign floor, so the
+    two counts differ by one BY CONSTRUCTION — asserted as a relation, not as a literal."""
     src = (ROOT / "tools" / "scoring" / "production_pins.py").read_text(encoding="utf-8")
     block = src.split("THE REVERT-TOGETHER SET", 1)[1].split("=" * 32, 1)[0]
     numbered = [ln for ln in block.splitlines()
                 if ln.lstrip("# ").strip()[:2] in {f"{i}." for i in range(1, 10)}]
-    assert len(numbered) == 6, (
-        f"the prose block numbers {len(numbered)} items; if the revert-together set changed, "
-        f"change BOTH it and COUPLED_ARTIFACTS ({len(COUPLED_ARTIFACTS)} entries)")
+    assert len(numbered) == len(COUPLED_ARTIFACTS) - 1, (
+        f"the prose block numbers {len(numbered)} items against "
+        f"{len(COUPLED_ARTIFACTS)} registry entries; if the revert-together set changed, "
+        f"change BOTH it and COUPLED_ARTIFACTS")
 
 
 if __name__ == "__main__":

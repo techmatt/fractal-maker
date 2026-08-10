@@ -19,7 +19,7 @@ r"""fresh_sheet_reads.py — the four reads off the MERGED render-mode correctio
      comparison against the July lock. Read this before read D is used to move anything.
 
 Nothing here moves a cut, floor, gate or pin. The two operating points are READ from
-`tools/emission/floors.py` (`MINING_POOL`, `MINING_RELEASE`) through `Floor.gate()`, so the
+`tools/emission/floors.py` (`MINING_POOL`, `MINING_RELEASE`) through `Floor.annotates()`, so the
 head-stamp check runs and a report cannot quietly be computed on a scale the live pin no
 longer serves. Candidate cuts in read D are DERIVED and printed; adopting one is a separate,
 human decision.
@@ -203,13 +203,13 @@ def head_block(rows, thr: int, score_key: str) -> dict:
 
 
 def cut_block(rows, floor: F.Floor, thr: int = GOOD) -> dict:
-    """What ONE live cut buys on a slice. `floor.gate()` — not `>= floor.value` — so the
+    """What ONE live cut buys on a slice. `floor.annotates()` — not `>= floor.value` — so the
     head-stamp check runs at every site that reports a number as "at the production cut"."""
-    fire = [r for r in rows if floor.gate(r["p_ge3"])]
+    fire = [r for r in rows if floor.annotates(r["p_ge3"])]
     good = [r for r in rows if r["label"] >= thr]
     k = sum(1 for r in fire if r["label"] >= thr)
     p, lo, hi = wilson(k, len(fire)) if fire else (None, None, None)
-    return {"floor": floor.name, "value": floor.value, "acts": floor.acts,
+    return {"floor": floor.name, "value": floor.value, "acts": False,
             "n": len(rows), "fires": len(fire),
             "pass_rate": len(fire) / len(rows) if rows else None,
             "n_good": len(good), "tp": k,
@@ -329,7 +329,7 @@ def build_E(rows) -> dict:
         "july_lock": JULY_LOCK,
     }
     # Does dropping the swept tail move a cut's precision at all? Only if it fires there.
-    fires_in_tail = sum(1 for r in swept if F.MINING_POOL.gate(r["p_ge3"]))
+    fires_in_tail = sum(1 for r in swept if F.MINING_POOL.annotates(r["p_ge3"]))
     E["tail_sensitivity"] = {
         "pool_fires_inside_tail": fires_in_tail,
         "verdict": ("the swept tail never reaches the lowest live cut, so precision and "
@@ -381,7 +381,7 @@ def build(rows) -> dict:
         "labels_export": SPEC.labels_export,
         "head": {"version": MP.HEAD_VERSION, "ckpt": MP.ACTIVE_MINING_CKPT,
                  "gate_version": MP.MINING_GATE_VERSION},
-        "cuts": {f.name: {"value": f.value, "acts": f.acts, "stamp": f"{f.head}/{f.stamp}"}
+        "cuts": {f.name: {"value": f.value, "acts": False, "stamp": f"{f.head}/{f.stamp}"}
                  for f in (F.MINING_POOL, F.MINING_RELEASE)},
         "n_rows": len(rows), "n_eval": len(ev), "n_train": len(tr),
         "n_modes": len({r["mode"] for r in rows}), "n_locations": len({r["loc"] for r in rows}),

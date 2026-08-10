@@ -29,7 +29,7 @@ import steered_frontier as sf           # noqa: E402
 
 def _srow(id, cx, cy, fw, family="mandelbrot"):
     """A guard-passing q3 ledger row with STRING coords (the q4_harvest/classic_phoenix form)."""
-    return {"id": id, "family": family, "decoded_class": 3, "guard_pass": True,
+    return {"id": id, "family": family, "decoded_class": 3, "p_good": 0.80, "guard_pass": True,
             "distinct": True, "outcome_cx": str(cx), "outcome_cy": str(cy),
             "outcome_fw": str(fw)}
 

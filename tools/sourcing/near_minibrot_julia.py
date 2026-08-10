@@ -62,7 +62,7 @@ import paths                                    # noqa: E402
 import production_seeder as ps                  # noqa: E402
 import prescreen                                # noqa: E402
 import guard                                    # noqa: E402
-from score_lib import corn_decode               # noqa: E402
+from tools.emission import floors as F          # noqa: E402  THE cut owner
 
 STAMP = "2026-08-03"
 GEN_VERSION = "q4_near_minibrot_v1"
@@ -213,7 +213,6 @@ def stage_score(args) -> int:
         return 0
 
     scorer = guard.make_guarded_scorer(ps.SCORER_PATH)
-    t_good = ps.t_good_for(PARTITION)
     tiles = paths.scratch("near_minibrot", "tiles")
     tiles.mkdir(parents=True, exist_ok=True)
     deadline = time.time() + args.max_minutes * 60.0 if args.max_minutes else None
@@ -250,8 +249,8 @@ def stage_score(args) -> int:
                 eord, nb, pg = float(k[0]), float(k[1]), float(k[2])
                 pg4 = float(k[3]) if len(k) > 3 else None
                 rec = dict(r, eord=eord, p_notbad=nb, p_good=pg, p_ge4=pg4,
-                           decoded_class=corn_decode(nb, pg, t_good, pg4),
-                           t_good=t_good, scorer_version=ps.SCORER_VERSION,
+                           decoded_class=F.good_class(pg, pg4),
+                           scorer_version=ps.SCORER_VERSION,
                            gen_version=GEN_VERSION)
                 fh.write(json.dumps(rec) + "\n")
                 n += 1
@@ -285,7 +284,7 @@ def stage_readout(args) -> int:
     if not rows:
         raise SystemExit(f"{p} is empty — run `score` first.")
     out = dict(n=len(rows), gen_version=GEN_VERSION,
-               scorer_version=rows[0]["scorer_version"], t_good=rows[0]["t_good"],
+               scorer_version=rows[0]["scorer_version"], good_floor=F.GOOD_FLOOR,
                ladder=list(LADDER), fw_band=[FW_LO, FW_HI])
     per = {}
     for rung in LADDER:

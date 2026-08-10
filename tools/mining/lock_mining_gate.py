@@ -140,7 +140,7 @@ def build_lock(report: dict, *, source_sha: str) -> dict:
                 f"quote a cut the sitting actually swept at that value.")
         r3 = _row_at(cal["ladder_ge3"], f.value)
         cuts[f.name] = {
-            "value": f.value, "site": f.site, "acts": f.acts,
+            "value": f.value, "site": f.site, "acts": False,
             "head": f"{f.head}/{f.stamp}", "basis": f.basis,
             "boundary": "p_ge3 (marginal P(label>=3))",
             "fires": r3["fires"], "n": cal["n"], "pass_rate": r3["pass_rate"],

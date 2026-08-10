@@ -68,7 +68,7 @@ import production_seeder as ps              # noqa: E402  (reward path, guard, i
 import prescreen                            # noqa: E402  (BIN, embed_paths, render constants)
 import guard                                # noqa: E402
 import reframe                              # noqa: E402
-from score_lib import corn_decode           # noqa: E402
+from tools.emission import floors as F      # noqa: E402  THE cut owner
 from step0_reanalysis import load_frames_by_walk  # noqa: E402
 from deficit_scheduler import DistinctLookTally    # noqa: E402  (cos-0.974 tally)
 import location as loc_mod                   # noqa: E402
@@ -85,13 +85,13 @@ OCC_FLOOR, BLACK_CAP = ps.OCC_FLOOR, ps.BLACK_CAP
 WORKERS = ps.WORKERS
 SCORER_PATH, SCORER_VERSION = ps.SCORER_PATH, ps.SCORER_VERSION
 
-# Phoenix q3 operating point. Source it from the production table so the grid always runs at
-# whatever the seeder is currently calibrated to (label-derived, now 0.45 — see production_seeder
-# T_GOOD_OVERRIDES / docs/design/phoenix_seed_sampler_spec.md §8). The original grid ran at a hardcoded
-# 0.18 that was NEVER a production value — a stale copy of the retired v6-era provisional that
-# nobody ordered; it admitted ~everything (in-batch precision 0.19). Raw p_good is stored per
-# outcome, so any t_good re-decodes for free (tools/phoenix/redecode_grid.py). --t-good overrides.
-T_GOOD_DEFAULT = ps.t_good_for("phoenix")
+# The quality cut. Sourced from `floors.GOOD_FLOOR` — THE one cut the whole pipeline uses
+# since 2026-08-09, replacing the per-partition `production_seeder.T_GOOD_OVERRIDES` table
+# this line used to read (docs/design/phoenix_seed_sampler_spec.md §8). Before that the grid
+# ran at a hardcoded 0.18 that was NEVER a production value — a stale copy of a retired v6-era
+# provisional; it admitted ~everything (in-batch precision 0.19). Raw p_good is stored per
+# outcome, so a different cut re-reads for free. --t-good overrides.
+T_GOOD_DEFAULT = F.GOOD_FLOOR
 
 NEAR_DUP_THRESHOLD = 0.974   # morph-embed distinct-look cosine (matches the library / scheduler)
 DEDUP_K = ps.DEDUP_K         # cloud viewport dedup (identity-aware via near_dup)
@@ -293,8 +293,8 @@ def score_descent(s: psamp.Seed, seed_idx: int, repeat: int, rng_seed: int, *, s
                   flush=True)
             continue
         guard_pass = rew["reward_k3"] > guard.GUARD_SENTINEL + 1e-6
-        decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good) if guard_pass else None
-        is_q3 = guard_pass and decoded == 3
+        decoded = F.good_class(rew["p_good"], rew.get("p_ge4")) if guard_pass else None
+        is_q3 = decoded is not None
         p_good = float(rew["p_good"]) if guard_pass else 0.0
         max_p_good = max(max_p_good, p_good)
         max_depth = max(max_depth, int(rew["reached_depth"]))

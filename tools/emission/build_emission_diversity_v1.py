@@ -94,7 +94,8 @@ except Exception:
 # cached 640×360 field, and realized-stats is a resolution-robust histogram — so the pool render
 # only has to survive the 384×224 downsample. The scores-match guard (docs/design/
 # pool-render-res-960.md) pinned 960×540 ss2: the mining head is res-robust everywhere (median
-# |Δ|=0.007 vs the old 1280×720 ss2) and the wallpaper head — the strict 0.90 gate, trained on
+# |Δ|=0.007 vs the old 1280×720 ss2) and the wallpaper head — the 0.90 gate (retired to
+# annotation-only 2026-08-09, but still the res-sensitive one), trained on
 # 1280-sourced crops, hence res-sensitive — matches at 960 ss2 (median |Δ|=0.027, spearman 0.933,
 # 0 release-floor flips) but NOT at 640 ss2 (max |Δ|=0.30, 5 flips). 960 ss2 is 0.56× the pixels
 # of the old 1280×720 ss2 leftover corpus-crop default → ~1.8× faster, floors unchanged.
@@ -115,9 +116,13 @@ DEFAULT_MINING_FLOOR = F.MINING_POOL.value                # 0.25  mining-head PO
 DEFAULT_RELEASE_FLOOR = F.WALLPAPER_RELEASE.value         # 0.90  smooth  → wallpaper gate
 DEFAULT_MINING_RELEASE_FLOOR = F.MINING_RELEASE.value     # 0.50  strange → mining gate
 DEFAULT_STRANGE_FRAC = 0.5    # target strange share of the release (render-mode split)
-# Within the strange (mining-head) pass, floor the coverage kernel for same-render-style
-# pairs at this value so greedy spreads across the promoted modes before doubling up on one.
-STRANGE_STYLE_WEIGHT = 0.5
+# `STRANGE_STYLE_WEIGHT` (0.5) was here until 2026-08-09: within the strange pass it floored
+# `greedy_select`'s coverage kernel for same-render-style pairs, so the greedy spread across
+# the promoted modes before doubling up on one. It went with `greedy_select`
+# (prompts/selection_restructure_3.md). Nothing replaced it and nothing needs to: the live
+# rule spreads the strange budget across modes UPSTREAM of selection, in
+# `attempt_budget.plan` + `styles_for_head`, so the pass is already offered a mode-spread
+# population instead of being asked to de-duplicate one afterwards.
 
 
 # --------------------------------------------------------------------------- #
@@ -694,12 +699,14 @@ class EmissionDiversity:
 
     # ---- location pick (coverage round-robin, ranker-ordered within a round) --------- #
     #
-    # RETIRED FROM THE BUDGETED PATH on 2026-08-09 (prompts/selection_restructure_2.md).
+    # RETIRED FROM THE BUDGETED PATH on 2026-08-09 (prompts/selection_restructure_2.md), and
+    # KEPT after the dead-code pass that followed it (selection_restructure_3.md).
     # `_round_order`/`pick_location` are the coverage round-robin that decided colorize order
     # while volume was a deficit-model side effect; `--cover-all` (an explicit one-pass over
     # every admitted location, which has no release budget to be sized against) still runs
-    # them, and they are otherwise superseded by `plan_attempts`. Not deleted: dead-code
-    # removal is a later pass, and `--cover-all` is a live flag.
+    # them, and they are otherwise superseded by `plan_attempts`. `--cover-all` is a live
+    # flag and this is its only ordering rule, so this is a LIVE path with one caller — not
+    # something the deletion pass overlooked.
     def _round_order(self, rows, round_idx: int) -> list:
         """The order ONE round is served in: seeded round-robin ACROSS partitions and RANK
         ORDER WITHIN one. Returns a list of location ids.
@@ -1612,7 +1619,7 @@ def main():
           f"accumulated → {rpath.relative_to(ROOT)} (population → {runs_path.relative_to(ROOT)})",
           flush=True)
     gpath, n_tot, n_cut, n_cut_sel, pool_c = eng.write_gate_report(selected)
-    acting = "ACTING" if F.MINING_RELEASE.acts else "ANNOTATION-ONLY"
+    acting = "ANNOTATION-ONLY"      # a Floor cannot act since 2026-08-09 (floors.py)
     # The `would_cut ∧ selected` join is NON-ZERO again. It was zero by construction from
     # 2026-08-06 (enforcing implies selection implies passing); with the floor annotating, a
     # row below 0.50 can be selected on rank, so the log recovers the free labelled false-cut

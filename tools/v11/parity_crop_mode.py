@@ -215,14 +215,15 @@ def main() -> int:
     recs, flips = [], []
     for (r, label, n_p, o_p), pn, po in zip(pairs, Pn, Po):
         fam = r.get("fractal_type", "mandelbrot")
-        # Decode through score_lib's SINGLE-SOURCE rank decode at the production t_good for
-        # this partition; never re-implement the >= counting inline.
-        import partitions as part
-        from production_seeder import t_good_for  # noqa: E402  (the live per-partition cut)
-        tg = t_good_for(part.partition_of(fam, default=fam))
+        # Decode at THE production cut, `floors.GOOD_FLOOR` — one number for every partition
+        # since 2026-08-09, where this used to resolve `t_good_for(partition)`. What the read
+        # measures is unchanged: whether the two AA modes put a location on the same side of
+        # the cut production serves.
+        from tools.emission import floors as _F
+        tg = _F.GOOD_FLOOR
         cn = corn_decode(pn[0], pn[1], p_great=pn[2] if len(pn) > 2 else None, t_good=tg)
         co = corn_decode(po[0], po[1], p_great=po[2] if len(po) > 2 else None, t_good=tg)
-        rec = {"loc_id": r["loc_id"], "family": fam, "aa": label, "t_good": tg,
+        rec = {"loc_id": r["loc_id"], "family": fam, "aa": label, "good_floor": tg,
                "maxiter": caps[r["loc_id"]],
                "score_new": sum(pn), "score_old": sum(po),
                "p_new": list(pn), "p_old": list(po),

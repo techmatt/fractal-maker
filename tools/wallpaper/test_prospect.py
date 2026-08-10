@@ -33,9 +33,10 @@ from tools.corpus import location as loc_mod  # noqa: E402
 from tools.corpus.corpus_common import active_scorer_version  # noqa: E402
 
 # The real seeder stamps each outcome row with the ACTIVE checkpoint's version, so fixtures
-# must use it too — a hardcoded stamp would read as stale (fresh-q3 harvest gates on
-# is_current_decoded) the moment ACTIVE_CKPT is flipped, which is exactly what happened at
-# the v6->v7 promotion.
+# use it too. It is no longer a GATE — the fresh-good harvest cut on `is_current_decoded` until
+# 2026-08-09 and a hardcoded stamp read as stale the moment ACTIVE_CKPT flipped, which is
+# exactly what happened at the v6->v7 promotion; the harvest now cuts on `floors.GOOD_FLOOR`
+# over the raw `p_good` and the stamp only records which head produced that number.
 _CUR_SCORER_VERSION = active_scorer_version()
 
 
@@ -58,9 +59,12 @@ def _pool_row(oid, family, fractal_type, cx="0.1", cy="0.2", fw="0.01",
 
 
 def _ledger_row(oid, family):
+    # `p_good` 0.72 — this fixture stands for an ADMITTED row, so it has to clear
+    # `floors.GOOD_FLOOR`. It was 0.42 with `decoded_class: 3` beside it, which was admitted
+    # under the row's own frozen `t_good` of 0.24 and is below the flat cut that replaced it.
     return {"id": oid, "family": family, "scorer_version": _CUR_SCORER_VERSION, "k3": 0.31,
-            "raw_top3": [0.3, 0.31, 0.32], "decoded_class": 3, "p_good": 0.42,
-            "p_notbad": 0.8, "t_good": 0.24, "reached_depth": 9, "guard_pass": True}
+            "raw_top3": [0.3, 0.31, 0.32], "decoded_class": 3, "p_good": 0.72,
+            "p_notbad": 0.8, "reached_depth": 9, "guard_pass": True}
 
 
 def _record(oid, family, fractal_type, **kw):

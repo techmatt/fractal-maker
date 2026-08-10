@@ -2,12 +2,17 @@
 
 THE FOUR STAMPED CUTS ARE ANNOTATION-ONLY AS OF 2026-08-09 (prompts/selection_restructure_1.md).
 Nothing in stage 2 removes a row on a stamped per-head floor any more. What removes rows is
-ONE semantic constant, `JUNK_FLOOR` below, at ONE site (drawing the colorize pool). The four
-Floor objects keep their values, their stamps and their `gate()` — they are read to ANNOTATE
-("this row would have failed the retired 0.90 wallpaper release floor") on release records and
-sheets, so the value of the old cut stays inspectable instead of being deleted and argued about
-from memory. `acts` is False on all four and that is the census (`test_floors.py`), not a
-transitional state. The gate-lock records (`data/render_mode_head/v1/mining_gate_lock.json`)
+TWO semantic constants declared below — `JUNK_FLOOR` (0.20, "don't spend colorize compute on
+this") and `GOOD_FLOOR` (0.50, "this is worth keeping"). They are the same comparison against
+the judging head's stored raw P(>=3) at two heights: the first at ONE site (drawing the
+colorize pool), the second on the whole RUN side, where it replaced the per-partition `t_good`
+served predicate on 2026-08-09 (prompts/selection_restructure_3.md). The four
+Floor objects keep their values, their stamps and an `annotates()` comparison — they are read
+to ANNOTATE ("this row would have failed the retired 0.90 wallpaper release floor") on release
+records and sheets, so the value of the old cut stays inspectable instead of being deleted and
+argued about from memory. A Floor CANNOT cut: `gate()` and the `acts` flag beside it were
+deleted on 2026-08-09 once `acts` had been False on all four for a day, because a switch nobody
+may flip next to a method named for flipping it is an invitation. The gate-lock records (`data/render_mode_head/v1/mining_gate_lock.json`)
 stay tracked as provenance of what those cuts were measured to buy.
 
 Matt, 2026-08-04. Every number that removes a row between "a location was admitted" and "a
@@ -24,24 +29,24 @@ WHY A STAMP AND NOT JUST A VALUE
 A floor is a point on ONE head's probability scale. `p_ge3 >= 0.90` means "high precision" on
 `wallpaper_head/v3` and means nothing at all on v4 until somebody re-derives it — the head is
 retrained, the scale moves, and the number that used to sit at 0.68 eval precision lands
-wherever it lands. So each cut carries `head` + `stamp`, and `gate()` REFUSES (raises
+wherever it lands. So each cut carries `head` + `stamp`, and `annotates()` REFUSES (raises
 `HeadStampMismatch`) when the live pin disagrees with the stamp. Refusing is the whole point:
-gating on the wrong scale is silent, produces a plausible pool, and is only visible much later
-as "the release got worse". A raised exception at the first gated row is not.
+an annotation on the wrong scale is silent, produces a plausible-looking column, and is only
+visible much later as "that counterfactual never made sense". A raised exception is not.
 
 The stamp check is torch-free by construction. The live head versions come from
 `tools/wallpaper/wallpaper_pins.py`, `tools/mining/mining_pins.py` and
-`corpus_common.active_scorer_version()` — three pin modules that hold no model — precisely so
+`production_pins.ACTIVE_VERSION` — three pin sources that hold no model — precisely so
 the pure readouts can run it. A check that costs a torch import is a check that gets skipped
 on the paths that most need it.
 
-THE FOUR CUTS
+THE FOUR CUTS — all four ANNOTATION-ONLY since 2026-08-09
 -------------
-                       value  head                  acts?
-  wallpaper pool        0.75  wallpaper_head/v3     no — annotation only since 2026-08-09
-  wallpaper release     0.90  wallpaper_head/v3     no — annotation only since 2026-08-09
-  mining pool           0.25  render_mode_head/v1   no — annotation only since 2026-08-09
-  mining release        0.50  render_mode_head/v1   no — annotation only since 2026-08-09
+                       value  head
+  wallpaper pool        0.75  wallpaper_head/v3
+  wallpaper release     0.90  wallpaper_head/v3
+  mining pool           0.25  render_mode_head/v1
+  mining release        0.50  render_mode_head/v1
 
 The paragraphs below are the record of what each cut WAS and what it was measured to buy. They
 are kept verbatim rather than rewritten in the past tense: the numbers are still the ones the
@@ -56,7 +61,7 @@ It is now measured: on the 422-row eval side of
 — both boundaries, both cuts, the head and batch identity, and the two caveats that make
 every number an OPTIMISTIC bound — is `data/render_mode_head/v1/mining_gate_lock.json`
 (`tools/mining/lock_mining_gate.py`), and its readers refuse when the pin moves off v1 for
-the same reason `Floor.gate` does.
+the same reason `Floor.annotates` does.
 
 The flip has a cost, paid on purpose and named here so it is not rediscovered: the gate
 report's free false-cut signal is gone. While the floor was report-only, a `would_cut` row
@@ -83,10 +88,10 @@ be a fifth live cut, applied to floor-admitted sources (`q4_harvest`, `human_q3p
 deleted on 2026-08-04, not moved: a floor-admit source is one whose selection signal is
 ORTHOGONAL to the head (a human label, or the q4 goodness field), and re-applying the head's
 own badness verdict to it is exactly the veto the floor-admit rule exists to prevent. See
-`docs/design/q4_harvest_emission.md` and `descriptor.admit_quality`.
+`docs/design/q4_harvest_emission.md` and `descriptor.FLOOR_ADMIT_SOURCES`.
 
     from tools.emission import floors as F
-    F.WALLPAPER_RELEASE.gate(p_ge3)        # checks the stamp, then compares
+    F.WALLPAPER_RELEASE.annotates(p_ge3)   # checks the stamp, then compares
     F.for_style("smooth", site="release")  # the per-head router the driver uses
 """
 from __future__ import annotations
@@ -141,6 +146,68 @@ LOCATION_HEAD = "location_head"         # the ACTIVE_CKPT quality head (intake-s
 # would turn a coarse waste cut back into an operating point.
 JUNK_FLOOR = 0.20
 
+# --------------------------------------------------------------------------- #
+# THE OTHER ENFORCING CUT (2026-08-09) — the good floor, on the RUN side.
+# --------------------------------------------------------------------------- #
+# ONE semantic constant again, and deliberately the same SHAPE of statement as `JUNK_FLOOR`:
+# a comparison against the judging head's STORED RAW P(>=3), not a verdict frozen into a row.
+# It says **this candidate is good enough to keep** — the thing the per-partition `t_good`
+# served predicate used to say, said once for every partition instead of nine times with nine
+# numbers.
+#
+# WHAT IT REPLACED (prompts/selection_restructure_3.md). Until 2026-08-09 the run side admitted
+# on `score_lib.corn_decode(p_notbad, p_good, t_good_for(partition), p_ge4) >= 3`, where
+# `t_good_for` was a per-partition DERIVED threshold (`production_seeder.T_GOOD_OVERRIDES`,
+# re-swept at every head flip out of `tools/scoring/derive_t_good.py`). That machinery is gone.
+# It cost a labeled per-partition sweep per flip, it froze its answer into every ledger row it
+# stamped, and — the reason it had to go rather than be maintained — it was a SECOND quality
+# definition, incompatible with the read-time one selection had already moved to. A location
+# could be "admitted" under a 0.90 mandelbrot cut and "junk" under a 0.20 read-time floor, and
+# no single sentence described what the pipeline meant by good.
+#
+# ONE DEFINITION, TWO HEIGHTS. `JUNK_FLOOR` and `GOOD_FLOOR` are the same predicate at two
+# points on one scale — "don't spend colorize compute on this" and "this is worth keeping" —
+# and both read the stored raw probability at read time. Nothing between them is frozen.
+#
+# 0.50 IS THE CORN SCALE'S OWN MIDPOINT and that is the whole of its derivation. It is not an
+# operating point, no eval chose it, and it must not be re-derived against one: a per-partition
+# derivation is exactly the state this restructure removed. The human at the sheet still does
+# every judgement of quality; this only decides what the run bothers to keep and count.
+#
+# NOT `corn_decode(...) >= 3`. The old rule ANDed a fixed `p_notbad >= 0.5` gate onto the
+# `p_good` cut, so a frame with P(>=3) = 0.6 and P(>=2) = 0.4 (CORN's cumulative probabilities
+# are not guaranteed monotone) decoded to class 2 and was refused. This floor reads P(>=3)
+# alone, exactly as read-time selection does. The disagreement is a knife-edge set and the
+# point is not its size — it is that there is now one comparison to reason about.
+#
+# HEAD-FLIP RULE — THE SAME ONE AS `JUNK_FLOOR`, for the same reason. A CORN probability scale
+# is train-prior-calibrated, so 0.50 on v11 is not 0.50 on v12. At a head flip, RESTATE this
+# floor VOLUME-MATCHED: recompute the score that keeps the same FRACTION of a fixed reference
+# pool under the new head and move the constant there. Re-scoring the ledgers
+# (`tools/emission/ledger_rescore.py`) and volume-matching THESE TWO FLOORS is the whole flip
+# procedure on this axis now — there is no sweep to re-run and no table to re-adopt.
+GOOD_FLOOR = 0.50
+
+# CORN'S OTHER TWO CUTPOINTS, beside the good floor because the three together are the whole
+# run-side quality vocabulary — but they are a DIFFERENT KIND of number and that is why neither
+# is called a floor. `GOOD_FLOOR` decides what a run KEEPS and is a policy somebody chose;
+# these two are the head's own natural rank cutpoints (P >= 0.5 on a cumulative rank
+# probability), they have NEVER been calibrated per family, and they decide only what a frame
+# is CALLED. Three sites need them:
+#
+#   NOTBAD_CUT  the julia sub-descent hook's parent gate — "does this walk show any structure
+#               at all", counted over the parent's un-reframed raw frames.
+#   GREAT_CUT   the pop-quota currency (`pop_quota.CLASS_WEIGHT`: a class 4 is worth ten class
+#               3s) and the class split a run's start-up cloud diagnostic prints.
+#
+# THEY SURVIVE THE t_good RETIREMENT UNCHANGED, and that is not an oversight — only the q3
+# operating point was ever swept, because only q3 gated admission
+# (`data/v8/t_good_derivation.json` `no_class4_threshold`). They are declared here rather than
+# left as bare 0.5s at their call sites so the surface of "numbers that decide something about
+# a frame" is one file, and so a future decision to calibrate one has somewhere to land.
+NOTBAD_CUT = 0.50
+GREAT_CUT = 0.50
+
 # THE THIN-SUPPLY DIVISOR, beside the floor because it is the same kind of number: coarse, not
 # derived, and about volume rather than quality. A partition emits at most
 # `floor(passing_supply / THIN_SUPPLY_DIVISOR)` — so a partition whose floor-passing supply is
@@ -185,6 +252,30 @@ def passes_junk_floor(score) -> bool:
     return score is not None and float(score) >= JUNK_FLOOR
 
 
+def passes_good_floor(score) -> bool:
+    """THE good-floor comparison. `score >= GOOD_FLOOR` on the stored raw P(>=3), with a
+    missing score reading as NOT passing — an unscored or guard-zeroed candidate has no
+    verdict to be kept on.
+
+    THE run-side admission predicate and THE run-side bookkeeping predicate: every "admitted",
+    "servable supply", census count and seed check on the discovery path goes through this one
+    function rather than through a stored `decoded_class`. That is what makes a floor move a
+    one-line change instead of a re-score of every ledger ever written."""
+    return score is not None and float(score) >= GOOD_FLOOR
+
+
+def good_class(p_good, p_great=None):
+    """The run-side CLASS of a scored frame: `None` below `GOOD_FLOOR`, `4` when it also
+    clears `GREAT_CUT` on P(>=4), else `3`.
+
+    For the two sites that need a class rather than a yes/no (see `GREAT_CUT`). Deliberately
+    NOT a 1..4 decode: below the floor there is no class, because the run keeps no verdict
+    about how bad a thing it did not keep is. `p_great=None` (a K=3 head) can only reach 3."""
+    if not passes_good_floor(p_good):
+        return None
+    return 4 if (p_great is not None and float(p_great) >= GREAT_CUT) else 3
+
+
 class HeadStampMismatch(RuntimeError):
     """A stage-2 cut was asked to gate while its head's live pin disagrees with the version
     the cut's value was set against. The value is a point on a probability scale that no
@@ -212,17 +303,21 @@ def active_head_version(head: str) -> str:
 class Floor:
     """One stage-2 cut: a threshold on one head's `p_ge3`, stamped with that head's version.
 
-    `acts` records whether this cut actually removes rows today. It is FALSE on all four as of
-    2026-08-09 — they annotate. An annotation-only cut still carries its value and its stamp,
-    for the same reason a report-only one did: the counterfactual it logs
-    (`tools/mining/gate_report.py`, the release record's `would_pass_floor` column) is only
-    readable as calibration signal if the scale it was computed on is pinned."""
+    A Floor CANNOT REMOVE A ROW. It carries a value and a stamp so the counterfactual it logs
+    (`tools/mining/gate_report.py`, the release record's `would_pass_floor` column) stays
+    readable as calibration signal, and `annotates()` is the only comparison it offers.
+
+    It used to offer `gate()` and an `acts: bool` saying whether that gate fired. Both went on
+    2026-08-09 (prompts/selection_restructure_3.md): `acts` had been False on all four since
+    the read-time restructure a day earlier, and a field whose only legal value is False is a
+    switch nobody may flip, sitting next to a method named for flipping it. A caller that
+    wants a row removed reaches for `passes_junk_floor` / `passes_good_floor` — the two
+    constants that actually cut — and cannot get there from here by accident."""
     name: str
     value: float
     head: str
     stamp: str          # head version this value was set against ("v3", "v1", "v10")
     site: str           # "pool" | "release"
-    acts: bool          # False = report-only counterfactual, cuts nothing
     basis: str          # one line: where this number came from
 
     # -- the stamp check ---------------------------------------------------- #
@@ -237,10 +332,11 @@ class Floor:
                 f"nothing on {live}'s — re-derive the floor against {live} and move the "
                 f"stamp, or roll the head pin back. Refusing to gate.")
 
-    def gate(self, score) -> bool:
-        """`score >= value`, AFTER the stamp check. THE comparison — every consumer calls
-        this rather than reading `.value` and writing its own `>=`, so the refusal cannot be
-        bypassed by a site that only wanted "the number"."""
+    def annotates(self, score) -> bool:
+        """`score >= value`, AFTER the stamp check. THE comparison — every consumer calls this
+        rather than reading `.value` and writing its own `>=`, so the refusal cannot be
+        bypassed by a site that only wanted "the number". Named for what it does: the answer
+        is written onto a record or a sheet, never used to drop a row."""
         self.check()
         return score is not None and float(score) >= self.value
 
@@ -253,21 +349,21 @@ class Floor:
 # --------------------------------------------------------------------------- #
 WALLPAPER_POOL = Floor(
     name="wallpaper_pool", value=0.75, head=WALLPAPER_HEAD, stamp=_wp.HEAD_VERSION,
-    site="pool", acts=False,
+    site="pool",
     basis="permissive inventory bar, set below the v3 gate (0.90) so a weak-but-real smooth "
           "wallpaper stays available to a later re-selection instead of being discarded at "
           "colorize time. Not a quality claim; the release floor is.")
 
 WALLPAPER_RELEASE = Floor(
     name="wallpaper_release", value=_wp.GATE_THRESHOLD, head=WALLPAPER_HEAD,
-    stamp=_wp.HEAD_VERSION, site="release", acts=False,
+    stamp=_wp.HEAD_VERSION, site="release",
     basis="IS the wallpaper head's production gate (wallpaper_pins.GATE_THRESHOLD), imported "
           "not copied. v3 eval precision of passers 0.68@0.90 vs 0.58@0.50; retuned with the "
           "head (prompts/prompt_gate_retune_v3.md).")
 
 MINING_POOL = Floor(
     name="mining_pool", value=0.25, head=MINING_HEAD, stamp=_mn.HEAD_VERSION,
-    site="pool", acts=False,
+    site="pool",
     basis="CAPACITY ORDERING, not curation: strange colorizes are cheap to make and expensive "
           "to carry, so the bottom quarter of the mining scale is dropped before it reaches "
           "the pool. It was already a hard cut through the period when the release floor "
@@ -278,7 +374,7 @@ MINING_POOL = Floor(
 
 MINING_RELEASE = Floor(
     name="mining_release", value=_mn.MINING_GATE_THRESHOLD, head=MINING_HEAD,
-    stamp=_mn.HEAD_VERSION, site="release", acts=False,
+    stamp=_mn.HEAD_VERSION, site="release",
     basis="IS the mining head's production gate (mining_pins.MINING_GATE_THRESHOLD), imported "
           "not copied. ENFORCING since 2026-08-06 (prompts/mining_adoption_prompt.md); it was "
           "report-only from prompts/mining_gate_report_only.md until the head had a measured "
@@ -352,11 +448,12 @@ def check_stamps(floors=None) -> None:
 
 
 def summary() -> str:
-    """One line per cut — for a run banner or a readout header. The enforcing junk floor is
-    named first because it is the only line that removes a row; the four stamped cuts follow
+    """One line per cut — for a run banner or a readout header. The two enforcing floors are
+    named first because they are the only lines that remove a row; the four stamped cuts follow
     with their annotation-only marker."""
-    return f"junk_floor {JUNK_FLOOR:g} (ENFORCING, colorize-pool draw) · " + " · ".join(
-        f"{f.name} {f.value:g} ({f.head}/{f.stamp}{'' if f.acts else ', annotation-only'})"
+    return (f"junk_floor {JUNK_FLOOR:g} (ENFORCING, colorize-pool draw) · "
+            f"good_floor {GOOD_FLOOR:g} (ENFORCING, run-side admission) · ") + " · ".join(
+        f"{f.name} {f.value:g} ({f.head}/{f.stamp}, annotation-only)"
         for f in ALL_FLOORS)
 
 

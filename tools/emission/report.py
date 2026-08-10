@@ -21,26 +21,33 @@ ROOT = Path(__file__).resolve().parents[2]
 REPORT_PATH = ROOT / "scratch" / "emission_v1_report.md"
 
 
-def _v1_release_reconstruction(v1_pool: Path, release_n: int):
-    """Reconstruct what the v1 run (no release floors) would ship from its durable pool:
-    greedy_select over ALL gated rows (the v1 behavior). Returns (rows_by_id, selected_ids,
-    p_ge3_by_id) or None if the v1 pool is absent. Used only for the v2 side-by-side."""
+def _v1_pool_under_the_live_rule(v1_pool: Path, release_n: int):
+    """What TODAY'S rule would ship from the v1 run's durable pool: top-N by the head's own
+    score, ties on id. Returns `{by_id, selected, n_gated}` or None if the pool is absent.
+
+    WHAT THIS STOPPED BEING, because the difference is the whole point of reading it. Until
+    2026-08-09 this reconstructed what v1 ACTUALLY shipped, by calling the v1 selector
+    (`selection.greedy_select`, max-marginal-gain over a morph-CLIP coverage kernel) over the
+    same pool. That selector was retired from the live path on 2026-08-09 and deleted with the
+    rest of the dead machinery; keeping one caller alive to reproduce a historical release is
+    what "retired" is supposed to end. So the comparison flipped: the pool is the same durable
+    v1 pool, and the rule applied to it is the LIVE one. Read the table as "the v1 pool under
+    today's rule", never as "the v1 release".
+
+    `emb` is not consulted — the live rule is a rank, so the coverage kernel the v1 pool's
+    embeddings fed has no reader here. The cluster cap is deliberately NOT applied: the v1
+    pool's `morph_cluster` ids were minted by a different intake, so capping across them would
+    mix two clusterings and produce a set neither rule would ever have chosen."""
     if not v1_pool.exists():
         return None
-    from tools.emission import selection as SEL
     rows = [json.loads(l) for l in v1_pool.read_text(encoding="utf-8").splitlines() if l.strip()]
     gated = [r for r in rows if r.get("passed")]
     if not gated:
         return None
-    entries = [{
-        "id": r["id"], "type": r["type"], "cluster": r["morph_cluster"],
-        "flavor": r["palette_flavor"], "style": r["render_style"],
-        "score": r["p_ge3"], "emb": None, "_rec": r,
-    } for r in gated]
-    selected, _log = SEL.greedy_select(entries, release_n)
+    ranked = sorted(gated, key=lambda r: (-(r.get("p_ge3") or 0.0), str(r["id"])))
     return {
         "by_id": {r["id"]: r for r in gated},
-        "selected": [e["id"] for e in selected],
+        "selected": [r["id"] for r in ranked[:release_n]],
         "n_gated": len(gated),
     }
 
@@ -217,8 +224,8 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
     mn_gated = [r for r in gated if r.get("head") == "mining"]
     # "gated rows that ALSO clear their head's release floor" — through the one owner, not
     # two bare literals that happened to agree with the driver on the day this was written.
-    wp_also = sum(1 for r in wp_gated if F.WALLPAPER_RELEASE.gate(r["p_ge3"] or 0))
-    mn_also = sum(1 for r in mn_gated if F.MINING_RELEASE.gate(r["p_ge3"] or 0))
+    wp_also = sum(1 for r in wp_gated if F.WALLPAPER_RELEASE.annotates(r["p_ge3"] or 0))
+    mn_also = sum(1 for r in mn_gated if F.MINING_RELEASE.annotates(r["p_ge3"] or 0))
     also_090 = wp_also
 
     # colorizer choice — flavor + style distribution vs uniform-random baseline
@@ -474,20 +481,21 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
                  f"{'✓' if ok else '✗'} {rf:g} |")
     L.append("")
 
-    # v1 side-by-side: reconstruct the v1 release (no release floors) from its durable pool.
-    v1 = _v1_release_reconstruction(ROOT / "scratch" / "emission_v1" / "pool_log.jsonl", eng.release_n)
+    # v1 pool side-by-side: today's rule applied to the v1 run's durable pool.
+    v1 = _v1_pool_under_the_live_rule(ROOT / "scratch" / "emission_v1" / "pool_log.jsonl",
+                                      eng.release_n)
     if v1 and eng.out.name != "emission_v1":
-        L.append("### vs the v1 release (no release floors) — side-by-side\n")
-        L.append("v1 selected from ALL gated pool rows (permissive floor only). Reconstructed "
-                 "here by the ORIGINAL greedy select over the durable v1 pool — the retired "
-                 "rule, deliberately, so this stays a reconstruction of what v1 shipped rather "
-                 "than of what today's rank rule would ship. Annotated with which picks fall "
-                 "below their head's release floor; that floor is annotation-only again as of "
-                 "2026-08-09, so a ✗ row would ship today and would not have between "
-                 "2026-08-06 and then.\n")
+        L.append("### the v1 POOL under today's rule — side-by-side\n")
+        L.append("The durable v1 pool (all gated rows, permissive floor only), re-selected by "
+                 "the LIVE rank rule. It is NOT a reconstruction of the v1 release: the v1 "
+                 "selector was `greedy_select`, retired 2026-08-09 and deleted with the rest of "
+                 "the dead machinery, so what changed is the RULE and what is held fixed is the "
+                 "POOL. Annotated with which picks fall below their head's release floor; that "
+                 "floor is annotation-only again as of 2026-08-09, so a ✗ row would ship today "
+                 "and would not have between 2026-08-06 and then.\n")
         wp_rf, mn_rf = eng.release_floor, eng.mining_release_floor
         n_below = 0
-        L.append("| v1 pick | type/style | p_ge3 | ≥ release floor? |")
+        L.append("| v1-pool pick | type/style | p_ge3 | ≥ release floor? |")
         L.append("|---|---|--:|---|")
         for iid in v1["selected"]:
             r = v1["by_id"][iid]
@@ -499,9 +507,9 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
             verdict = f"✓ ({p:.2f} ≥ {rf})" if ok else f"✗ {p:.2f} BELOW {rf}"
             L.append(f"| {iid} | {r['type']}/{style} | {p:.3f} | {verdict} |")
         L.append("")
-        L.append(f"**{n_below}/{len(v1['selected'])}** v1 picks sit below the (now retired) "
-                 f"release floors — the sub-floor tiles the v1 permissive-only bar shipped, and "
-                 f"that the current rule would let compete again.\n")
+        L.append(f"**{n_below}/{len(v1['selected'])}** of these sit below the (now retired) "
+                 f"release floors — the sub-floor material the v1 permissive-only bar admitted, "
+                 f"and that the current rule lets compete again.\n")
     L.append("## Contact sheets\n")
     L.append(f"- `{rel_png.relative_to(ROOT)}` — the {len(selected)}-wallpaper release")
     L.append(f"- `{pool_png.relative_to(ROOT)}` — the gated pool grouped by niche\n")
@@ -537,7 +545,7 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         "attempt_budget": budget, "attempt_realized": realized,
         "target_accounting": acct,
         "floors": {f.name: {"value": f.value, "head": f.head, "stamp": f.stamp,
-                            "acts": f.acts} for f in F.ALL_FLOORS},
+                            "acts": False} for f in F.ALL_FLOORS},
         "floor_overrides": getattr(eng, "floor_overrides", {}),
         "release_split": getattr(eng, "release_split", {}),
         "palette_ranker": selected[0]["_rec"]["ranker"] if selected else None,

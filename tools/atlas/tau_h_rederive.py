@@ -5,39 +5,48 @@ WHY THIS EXISTS. `steered_frontier.TAU_H_FIDELITY_BASE` is a vendored constant s
 with the model version it was derived under (`TAU_H_FIDELITY_BASE_MODEL`). tau_h is a cut
 on the CHEAP-render p_good of a SPECIFIC head, so after a checkpoint flip the vendored
 value is a number about nothing and `derive_tau_h` refuses to start a run. This tool is
-the re-derivation the failure message points at: it rebuilds the base from the committed
-harvest logs under whatever `active_ckpt.ACTIVE_CKPT` currently is.
+the re-derivation the failure message points at.
 
-WHAT IT DOES. The original derivation (`descent_score_fidelity.py` -> the now-lost
-`descent_score_fidelity_records.json`) needed PAIRED (cheap, canonical) scores from ONE
-head. The harvest logs record every harvest check's geometry (`cx/cy/fw` + the julia seed
-c) precisely so every check is re-renderable from the log alone, so the pair is
-reconstructible for any head:
+WHAT IT DOES.
 
-    harvest_log row -> Location -> render 384x216 ss1  -> score  => cheap_pgood(active)
-                                -> render 640x360 ss2  -> score  => canon_pgood(active)
+    walk-outcome row -> Location -> render 384x216 ss1  -> score  => cheap_pgood(active)
+                                 -> render 640x360 ss2  -> score  => canon_pgood(active)
 
-    tau_h[part] = quantile(cheap_pgood, 1-keep) over rows with canon_pgood >= t_good(part)
+    tau_h[part] = quantile(cheap_pgood, 1-keep) over rows with canon_pgood >= GOOD_FLOOR
 
-which is the fidelity study's estimator verbatim (keep=0.90 -> the 10th percentile of
-cheap p_good among frames whose canonical p_good clears the family's t_good), with a
-pooled cross-family fallback for partitions too thin to cut on their own.
+i.e. the cheap cut that RETAINS ~`keep` of the frames a canonical render would have kept.
 
-THE ONE BIAS, STATED. The harvest log only holds checks that ALREADY CLEARED the LIVE
-(v7-era) tau_h — it is a left-truncated sample of the candidate population. Cheap p_good
-under two heads is correlated, so the surviving rows skew high on the active head's cheap
-axis too, and the (1-keep) quantile computed on them is an UPPER bound on the untruncated
-value. An upper bound is the aggressive direction (a too-high cut sheds admissions), so
-the result is reported alongside a `truncation_floor` cross-check: the same estimator run
-on the untruncated `prospect_run1` walk-outcome ledger (walk outcomes are a uniform-random
-survivor per rung and are NOT tau-selected). `--combine min` takes the conservative
-(lower) of the two per partition, which is the default, and the artifact records both so
-the choice is auditable rather than baked in.
+TWO THINGS CHANGED ON 2026-08-09 (prompts/selection_restructure_3.md) AND BOTH ARE
+SIMPLIFICATIONS OF THE SAME KIND — one definition of "good", one population.
+
+  1. "GOOD OUTCOME" IS `canon_pgood >= floors.GOOD_FLOOR`, not `canon_pgood >=
+     t_good_for(partition)`. The per-partition t_good table is gone: the run side admits on
+     the fixed floor now, so conditioning this estimator on anything else would derive a
+     harvest cut for a gate that does not exist. It also removes the confound that made the
+     v10 -> v11 table unreadable — five partitions moved on population alone and three moved
+     on population AND a t_good change, and no pair of artifacts could separate them.
+
+  2. THE HARVEST ARM IS GONE, and with it the two-arm minimum, the per-run truncation record
+     and the harvest-log registry. The harvest log only ever held checks that had already
+     cleared a PREVIOUS head's tau_h, at a level that differed per run — a left-truncated
+     sample at a MIXTURE of levels, whose quantile is an upper bound of unknown tightness.
+     Every derivation had to carry a paragraph explaining why its own largest number was the
+     one to distrust (v11's multibrot4 0.8245 rested on that arm alone). The walk-outcome
+     ledger is a uniform-random gate survivor per rung, never tau-selected, so it is the
+     only untruncated population in the tree and it is now the only one used. It is smaller
+     — hundreds of rows per partition, not thousands — and a smaller unbiased sample is a
+     better estimator than a larger one with an unquantifiable bias.
+
+A PARTITION WITH FEWER THAN `MIN_N` GOOD ROWS GETS tau_h = 0.0 — harvest everything. Fail
+OPEN, deliberately: tau_h decides who pays for a canonical confirmation render, so a
+too-high cut sheds supply invisibly while a too-low one shows up as GPU-minutes in the run's
+own telemetry. There is no pooled cross-family fallback and there never was a defensible
+one — a cut derived on other families' frames is a number about a different population.
 
 Kill-safe: every rendered+scored row is appended to `rows.jsonl` under the work dir and
 re-used on a rerun, so a kill loses at most the in-flight batch.
 
-  uv run python tools/atlas/tau_h_rederive.py --per-partition 200
+  uv run python tools/atlas/tau_h_rederive.py
   uv run python tools/atlas/tau_h_rederive.py --score-only        # re-derive from cached rows
 """
 from __future__ import annotations
@@ -57,15 +66,14 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "atlas", ROOT / "tools" / "cor
            ROOT / "tools" / "mining", ROOT / "tools" / "scoring", ROOT / "tools" / "reframe"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
-from tools import run_record            # noqa: E402  (segments-aware run-record layer)
 
 import corpus_common as cc                                   # noqa: E402  (engine launch defaults)
-import harvest_log_registry as hreg                          # noqa: E402
 import location as loc_mod                                   # noqa: E402
 import paths                                                 # noqa: E402
 from active_ckpt import (                                    # noqa: E402
     BIN, PALETTE, JPG_Q, auto_maxiter, make_scorer, ACTIVE_CKPT, ACTIVE_VERSION,
 )
+from tools.emission import floors as F                       # noqa: E402  THE cut owner
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -76,15 +84,16 @@ except Exception:
 CAN_W, CAN_H, CAN_SS = 640, 360, 2      # steered_frontier harvest confirmation render
 CHEAP_W, CHEAP_H, CHEAP_SS = 384, 216, 1  # guided-descend --expand cheap node presentation
 
-# Harvest logs are DISCOVERED, not listed — `harvest_log_registry`. The five-entry hand
-# list this replaced went stale silently: nine runs written after it was typed were never
-# looked at, and a hand list reports that as "settled". The registry pins those five (their
-# absence is a hard failure, since they are the population the adopted base was derived on)
-# and discovers everything else that writes a log under a registered store.
-#
-# Untruncated cross-check population: walk OUTCOME frames. The walk picks a uniform-random
-# gate survivor per rung and never scores, so this ledger is not selected on any tau.
+# THE population: walk OUTCOME frames. The walk picks a uniform-random gate survivor per rung
+# and never scores, so this ledger is not selected on any tau — the one untruncated sample of
+# the candidate stream in the tree.
 WALK_LEDGER = ROOT / "data/discovery/fresh_runs/prospect_run1/outcome_ledger.jsonl"
+
+# Below this many GOOD rows a partition is not cut at all and harvests everything (tau_h=0.0).
+# 5 is the smallest n at which a 10th percentile is a statement rather than a restatement of
+# the minimum, and the consequence of being under it is spending render time, not losing
+# supply — see the fail-open paragraph in the module docstring.
+MIN_N = 5
 
 # BULK, not scratch. `rows.jsonl` is one rendered+scored (cheap, canonical) pair per
 # sampled row — hours of render + GPU scoring — and it is EXACTLY reproducible from the
@@ -93,6 +102,10 @@ WALK_LEDGER = ROOT / "data/discovery/fresh_runs/prospect_run1/outcome_ledger.jso
 # re-rendered from zero twice after a scratch wipe. `bulk()` resolves it out-of-tree via
 # ARTIFACTS_ROOT (registered in artifacts.RELOCATED_PREFIXES), so it survives
 # `rm -r scratch/*` and never costs the working tree a traversal.
+#
+# It may still hold `pop == "harvest"` rows from a pre-2026-08-09 derivation. They are read
+# past, never deleted: re-rendering the walk arm costs an hour and the file is the only
+# record of what those renders scored.
 WORK = paths.bulk("data/atlas/tau_h_rederive")
 ARTIFACT = ROOT / "data" / "atlas" / f"tau_h_base_{ACTIVE_VERSION}.json"
 WORKERS = 4            # concurrent render-one PROCESSES (project cap)
@@ -104,108 +117,15 @@ RENDER_THREADS = 3
 
 
 # --------------------------------------------------------------------------- #
-# rows in, from the two populations
+# rows in
 # --------------------------------------------------------------------------- #
-def _harvest_rows(runs=None):
-    """Every harvest check across the DISCOVERED runs, tagged with its source run.
-
-    `runs` is a `harvest_log_registry.HarvestRun` list; the default resolves the registry,
-    which raises if a pinned run's log has gone missing rather than deriving over a
-    quietly smaller population."""
-    out = []
-    for run in (hreg.require_harvest_runs() if runs is None else runs):
-        n, no_geom, off_partition = 0, 0, 0
-        # require_, not iter_: a pinned run whose log has gone would otherwise contribute
-        # zero rows and print as a run with zero re-scoreable checks.
-        for r in run_record.require_rows(run.log):
-            # Geometry was added to the harvest row late (the "every reject fate is
-            # renderable from the log alone" fix). Older rows carry no cx/cy/fw and are
-            # simply not re-scoreable — counted, never guessed at. This is ALSO what keeps
-            # campaign1 out of the harvest arm by construction: all 37,853 of its checks
-            # predate the field, so it discovers, reports 0, and contributes nothing.
-            if r.get("cx") is None or r.get("fw") is None:
-                no_geom += 1
-                continue
-            # Same partition exclusion the walk arm applies ("phoenix is not a frontier
-            # partition"), and it has to be here too now that discovery reaches runs that
-            # actually harvest phoenix: `derive` never cuts phoenix, so an unfiltered row
-            # would be rendered and scored for nothing and would still land in the pooled
-            # cross-family figure the artifact reports.
-            if r["partition"] == "phoenix":
-                off_partition += 1
-                continue
-            out.append(dict(
-                pop="harvest", run=run.name, partition=r["partition"], depth=int(r["depth"]),
-                cx=r["cx"], cy=r["cy"], fw=r["fw"],
-                c=(None if r.get("julia_c_re") is None
-                   else (str(r["julia_c_re"]), str(r["julia_c_im"]))),
-                key=f"h_{run.name.replace('/', '_')}_{r['node_id']}_{r['batch']}",
-            ))
-            n += 1
-        print(f"  {'PIN ' if run.pinned else '    '}{run.name}: {n} re-scoreable checks"
-              + (f"  ({no_geom} pre-geometry rows skipped)" if no_geom else "")
-              + (f"  ({off_partition} phoenix rows skipped)" if off_partition else ""))
-    return out
-
-
-def truncation_record(runs):
-    """Per-partition, the LEFT-TRUNCATION LEVELS the harvest pool is actually made of.
-
-    THE CONFOUND, MADE FIRST-CLASS. `caveat` has always said the harvest arm is left-truncated
-    at "the previous head's tau_h" — singular, as if there were one level. There is not. Every
-    harvest row carries the tau_h that was LIVE FOR ITS RUN (`steered_frontier._log_harvest`),
-    and pooling 22 runs pools four distinct tau eras: mandelbrot alone spans 0.0229 (the v10
-    era) to 0.7041 (the v8 era), a 30x range, and the (1-keep) quantile over that mixture is
-    an upper bound whose TIGHTNESS varies by partition according to how its rows happen to be
-    split across eras. A partition drawn mostly from a 0.02-truncated run is nearly
-    untruncated; one drawn mostly from a 0.77-truncated run is barely a sample at all.
-
-    Returned per partition: every distinct level with its row count, the min/max, and the
-    row-weighted mean — so a reader can see the mixture instead of being told a single number.
-    Computed over the POOL the registry offers (not the post-`sample` draw), which is the same
-    thing whenever `--per-partition` exceeds every pool size, and `per_partition` is stamped
-    beside it so a capped run is visibly a different statement."""
-    by_part = defaultdict(lambda: defaultdict(int))
-    by_run = defaultdict(dict)
-    for run in runs:
-        for r in run_record.require_rows(run.log):
-            if r.get("cx") is None or r.get("fw") is None or r["partition"] == "phoenix":
-                continue
-            t = r.get("tau_h")
-            if t is None:                       # pre-tau_h-stamp rows: counted, never guessed
-                by_part[r["partition"]]["unstamped"] += 1
-                continue
-            t = round(float(t), 6)
-            by_part[r["partition"]][t] += 1
-            by_run[run.name][r["partition"]] = t
-    out = {}
-    for part, levels in sorted(by_part.items()):
-        num = {k: v for k, v in levels.items() if k != "unstamped"}
-        n = sum(num.values())
-        out[part] = dict(
-            levels={f"{k:.6f}": v for k, v in sorted(num.items())},
-            n_levels=len(num), n_rows=n,
-            min=(min(num) if num else None), max=(max(num) if num else None),
-            row_weighted_mean=(sum(k * v for k, v in num.items()) / n if n else None),
-            unstamped_rows=levels.get("unstamped", 0),
-        )
-    return dict(
-        by_partition=out,
-        by_run={r: dict(sorted(v.items())) for r, v in sorted(by_run.items())},
-        note=("Each harvest log is left-truncated at the tau_h that was LIVE FOR ITS OWN RUN, "
-              "not at one shared level: the pool mixes tau eras and the levels above are the "
-              "mixture. The harvest arm therefore stays an UPPER bound on the untruncated "
-              "quantile, and the bound is NOT uniformly tight across partitions — read "
-              "`row_weighted_mean` against `tau_h_base` per partition before treating any "
-              "single harvest number as near-unbiased."),
-    )
-
-
-def _walk_rows():
-    """Walk-outcome frames — the untruncated cross-check population."""
+def walk_rows():
+    """Walk-outcome frames — THE population."""
     if not WALK_LEDGER.exists():
-        print(f"  WARN untruncated cross-check ledger absent: {WALK_LEDGER}")
-        return []
+        raise SystemExit(
+            f"tau_h derivation: the walk-outcome ledger is absent ({WALK_LEDGER}). It is the "
+            f"only untruncated population in the tree and there is no substitute — a harvest "
+            f"log is truncated at whatever tau its own run was serving.")
     out = []
     for line in open(WALK_LEDGER, encoding="utf-8"):
         line = line.strip()
@@ -232,10 +152,12 @@ def _walk_rows():
 
 
 def sample(rows, per_partition: int, seed: int):
-    """Up to `per_partition` rows per (pop, partition), drawn without replacement."""
+    """Up to `per_partition` rows per partition, drawn without replacement. `0` = uncapped."""
+    if not per_partition:
+        return list(rows)
     by = defaultdict(list)
     for r in rows:
-        by[(r["pop"], r["partition"])].append(r)
+        by[r["partition"]].append(r)
     rng = np.random.default_rng(seed)
     picked = []
     for k in sorted(by):
@@ -307,11 +229,10 @@ def render_and_score(rows, scorer, tiles: Path, out_jsonl: Path, chunk: int = 48
         ok = [r for r in blk if (tiles / f"{r['key']}_cheap.jpg").exists()
               and (tiles / f"{r['key']}_canon.jpg").exists()]
         if ok:
-            # K-AWARE (`score_paths_k`, not `score_paths`). The K=3-shaped reader drops the
-            # third cutpoint, so on the K=4 active head a stored row could not reproduce the
-            # SERVED decode — `corn_decode(nb, pg, t_good, pg4)`, which is what the harvest
-            # gate actually applies (steered_frontier.harvest). Rows written without p_ge4
-            # are capped at class 3 by the reader, not by the head. `None` on a K=3 head.
+            # K-AWARE (`score_paths_k`, not `score_paths`). The cut itself reads only P(>=3),
+            # but the third cutpoint is what a K=4 head produces and dropping it at write time
+            # makes the cached row unable to answer a later question about class 4. `None` on
+            # a K=3 head.
             cheap = scorer.score_paths_k([str(tiles / f"{r['key']}_cheap.jpg") for r in ok])
             canon = scorer.score_paths_k([str(tiles / f"{r['key']}_canon.jpg") for r in ok])
             with open(out_jsonl, "a", encoding="utf-8") as fh:
@@ -357,7 +278,7 @@ def assert_rows_current(rows, rows_jsonl):
 # The fields that make one derivation a DIFFERENT STATEMENT from another, rather than a
 # re-run of the same one. Population size and the estimator's settings; NOT the derived
 # values, which are exactly what a legitimate re-run is allowed to move.
-SUPERSEDE_KEYS = ("per_partition", "n_rows_harvest", "n_rows_walk", "keep", "seed", "combine")
+SUPERSEDE_KEYS = ("per_partition", "n_rows", "keep", "seed", "good_floor", "min_n")
 
 
 def assert_not_superseding(out: Path, art: dict, overwrite: bool) -> None:
@@ -389,66 +310,42 @@ def assert_not_superseding(out: Path, art: dict, overwrite: bool) -> None:
 # --------------------------------------------------------------------------- #
 # the estimator
 # --------------------------------------------------------------------------- #
-def derive(rows, partitions, keep, t_good_for, min_n=5, allow_pooled=False):
-    """The fidelity-study estimator: per partition, the (1-keep) quantile of cheap p_good
-    over rows whose canonical p_good clears that partition's t_good.
+def derive(rows, partitions, keep, *, good_floor=None, min_n=MIN_N):
+    """`(tau_h, detail)` — per partition, the (1-keep) quantile of cheap p_good over the rows
+    whose CANONICAL p_good clears `good_floor` (default `floors.GOOD_FLOOR`).
 
-    NO POOLED FALLBACK by default (`allow_pooled=False`, changed at the v10 flip). A partition
-    too thin to cut on its OWN population yields `None` — the arm is UNAVAILABLE for it, and
-    the caller takes its per-partition minimum over the arms that actually produced a number.
-
-    Why the original behaviour had to go. The pooled cut is a cross-family quantile: it is
-    dominated by whichever partitions happen to have the most passing rows, and handing it to
-    a thin partition is the same category error as serving a v8 threshold on a v10 gate — a
-    number derived on a population that is not this one. It was harmless under v8 (every
-    partition cut on its own on both arms) and stopped being harmless under v10: the native
-    multibrot partitions run at the 0.50 UNCALIBRATED baseline, v10's canonical p_good sits
-    lower than v8's, so walk-arm pass counts collapsed (multibrot3 12 -> 1, multibrot5 11 -> 3)
-    and BOTH would have silently taken a pooled 0.039 in place of their own ~0.35 — a ~9x
-    looser harvest gate, sourced from other families' frames.
-
-    The pooled value is still COMPUTED and reported, because "what would the pooled cut have
-    been" is useful context; it is simply never served."""
+    A partition with fewer than `min_n` good rows gets 0.0 and harvests everything. There is
+    no pooled cross-family fallback: a cut derived on other families' frames is a number about
+    a population that is not this one, and handing it over is the same category error as
+    serving a v8 threshold on a v10 gate. Fail OPEN rather than fail-to-a-neighbour."""
+    good_floor = F.GOOD_FLOOR if good_floor is None else float(good_floor)
     q = 1.0 - keep
     by = defaultdict(list)
     for r in rows:
         by[r["partition"]].append(r)
-
-    def cut(sel):
-        vals = [r["cheap_pgood"] for r in sel]
-        return (float(np.quantile(vals, q)), len(vals)) if len(vals) >= min_n else (None, len(vals))
-
-    pooled_pass = [r for r in rows if r["canon_pgood"] >= t_good_for(r["partition"])]
-    pooled, n_pooled = cut(pooled_pass)
-    if pooled is None:
-        pooled = 0.5
     out, detail = {}, {}
     for p in partitions:
-        sel = [r for r in by.get(p, []) if r["canon_pgood"] >= t_good_for(p)]
-        v, n = cut(sel)
-        if v is None:
-            out[p] = pooled if allow_pooled else None
-            src = "pooled_fallback" if allow_pooled else f"UNAVAILABLE (<{min_n} own passing rows)"
-        else:
-            out[p] = v
+        pool = by.get(p, [])
+        sel = [r["cheap_pgood"] for r in pool if r["canon_pgood"] >= good_floor]
+        if len(sel) >= min_n:
+            out[p] = float(np.quantile(sel, q))
             src = "own"
-        detail[p] = dict(n_rows=len(by.get(p, [])), n_pass=n, t_good=t_good_for(p),
-                         value=out[p], source=src,
-                         pooled_would_have_been=(round(pooled, 6) if v is None else None))
-    return out, detail, dict(pooled=pooled, n_pooled=n_pooled)
+        else:
+            out[p] = 0.0
+            src = f"FAIL-OPEN (<{min_n} good rows) — harvests everything"
+        detail[p] = dict(n_rows=len(pool), n_good=len(sel), value=out[p], source=src)
+    return out, detail
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--per-partition", type=int, default=200,
-                    help="max rows sampled per (population, partition)")
+    ap.add_argument("--per-partition", type=int, default=0,
+                    help="max rows sampled per partition (0 = uncapped, the default: the walk "
+                         "ledger is small enough to use whole)")
     ap.add_argument("--keep", type=float, default=0.90,
-                    help="fraction of canonical-passing frames the cut retains (default 0.90)")
+                    help="fraction of canonical-good frames the cut retains (default 0.90)")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--combine", choices=["min", "harvest", "walk"], default="min",
-                    help="how to combine the truncated harvest estimate with the untruncated "
-                         "walk cross-check (default min = the conservative one)")
     ap.add_argument("--score-only", action="store_true",
                     help="skip rendering; re-derive from the cached rows.jsonl")
     ap.add_argument("--work", type=Path, default=WORK)
@@ -459,130 +356,70 @@ def main():
                          "production was served)")
     args = ap.parse_args()
 
-    import production_seeder as ps                        # noqa: E402 (heavy)
-    partitions = list(ps.T_GOOD_OVERRIDES) + [
+    partitions = sorted({
         "mandelbrot", "multibrot3", "multibrot4", "multibrot5",
-        "julia:mandelbrot", "julia:multibrot3", "julia:multibrot4", "julia:multibrot5"]
-    partitions = sorted(set(p for p in partitions if p != "phoenix"))
+        "julia:mandelbrot", "julia:multibrot3", "julia:multibrot4", "julia:multibrot5"})
 
     args.work.mkdir(parents=True, exist_ok=True)
     rows_jsonl = args.work / "rows.jsonl"
     tiles = args.work / "tiles"
 
-    # Resolved even under --score-only: the artifact stamps WHICH population the registry
-    # offers, and a --score-only rerun that quietly omitted that would be a derivation
-    # record that cannot say what it was over.
-    harvest_runs = hreg.require_harvest_runs()
-    n_pin = sum(1 for r in harvest_runs if r.pinned)
-    print(f"[registry] {len(harvest_runs)} harvest run(s): {n_pin} pinned, "
-          f"{len(harvest_runs) - n_pin} discovered "
-          f"({', '.join(r.name for r in harvest_runs if not r.pinned) or 'none'})",
-          flush=True)
-
     if not args.score_only:
-        print(f"[pop] harvest logs ({ACTIVE_VERSION} re-score):")
-        pool = _harvest_rows(harvest_runs)
-        print("[pop] untruncated cross-check:")
-        pool += _walk_rows()
-        picked = sample(pool, args.per_partition, args.seed)
+        print("[pop] untruncated walk-outcome ledger:")
+        picked = sample(walk_rows(), args.per_partition, args.seed)
         cnt = defaultdict(int)
         for r in picked:
-            cnt[(r["pop"], r["partition"])] += 1
+            cnt[r["partition"]] += 1
         print(f"[sample] {len(picked)} rows: {dict(sorted(cnt.items()))}", flush=True)
         scorer = make_scorer(ACTIVE_CKPT)
         print(f"[scorer] {ACTIVE_CKPT} ({ACTIVE_VERSION})", flush=True)
         render_and_score(picked, scorer, tiles, rows_jsonl)
 
-    rows = [json.loads(l) for l in open(rows_jsonl, encoding="utf-8") if l.strip()]
-    assert_rows_current(rows, rows_jsonl)
-    h_rows = [r for r in rows if r["pop"] == "harvest"]
-    w_rows = [r for r in rows if r["pop"] == "walk"]
+    cached = [json.loads(l) for l in open(rows_jsonl, encoding="utf-8") if l.strip()]
+    assert_rows_current(cached, rows_jsonl)
+    # A pre-2026-08-09 cache carries the retired harvest arm's rows too. Read past them.
+    rows = [r for r in cached if r["pop"] == "walk"]
+    n_ignored = len(cached) - len(rows)
+    if n_ignored:
+        print(f"[cache] {len(rows)} walk rows; {n_ignored} retired harvest-arm rows ignored")
 
-    h_val, h_det, h_pool = derive(h_rows, partitions, args.keep, ps.t_good_for)
-    w_val, w_det, w_pool = derive(w_rows, partitions, args.keep, ps.t_good_for) if w_rows \
-        else ({}, {}, {})
-
-    # `combine=min` over the arms that ACTUALLY produced a number on this partition's own
-    # population. An arm that came back UNAVAILABLE (too few own passing rows) contributes
-    # nothing — it is not replaced by a pooled cross-family cut, and it does not silently
-    # become the other arm's value under a `walk`/`harvest` selection either.
-    final, arms_used = {}, {}
-    for p in partitions:
-        cands = {k: v for k, v in (("harvest", h_val.get(p)), ("walk", w_val.get(p)))
-                 if v is not None}
-        if not cands:
-            raise SystemExit(
-                f"tau_h: partition {p!r} has NO arm cut on its own population "
-                f"(harvest n_pass={h_det[p]['n_pass']}, walk "
-                f"n_pass={(w_det.get(p) or {}).get('n_pass', 0)}). Raise --per-partition or "
-                f"accept that {p} cannot be cut under {ACTIVE_VERSION}; a pooled cross-family "
-                f"quantile is NOT a substitute.")
-        if args.combine == "min":
-            pick = min(cands, key=cands.get)
-        elif args.combine in cands:
-            pick = args.combine
-        else:                       # requested arm unavailable -> fall to the one that exists
-            pick = next(iter(cands))
-        final[p], arms_used[p] = cands[pick], {"picked": pick, "available": sorted(cands)}
+    tau, detail = derive(rows, partitions, args.keep)
 
     art = dict(
         model=ACTIVE_VERSION, ckpt=ACTIVE_CKPT, keep=args.keep, seed=args.seed,
-        combine=args.combine, per_partition=args.per_partition,
-        n_rows_harvest=len(h_rows), n_rows_walk=len(w_rows),
-        harvest_runs=[r.name for r in harvest_runs],
-        harvest_registry=hreg.registry_record(harvest_runs),
-        harvest_truncation=truncation_record(harvest_runs),
-        walk_ledger=str(WALK_LEDGER),
-        t_good={p: ps.t_good_for(p) for p in partitions},
-        t_good_status={p: ps.t_good_status(p) for p in partitions},
-        tau_h_base=final, harvest_estimate=h_val, walk_estimate=w_val,
-        harvest_detail=h_det, walk_detail=w_det, arms_used=arms_used,
-        pooled_harvest=h_pool, pooled_walk=w_pool, pooled_fallback_allowed=False,
-        caveat=("The harvest population is LEFT-TRUNCATED at the tau_h each run was serving "
-                "WHEN IT RAN — not at one level; see `harvest_truncation` for the per-run and "
-                "per-partition mixture and the non-uniformity it implies. Its quantile is "
-                "therefore an UPPER bound on the untruncated value, loosely for a partition "
-                "whose rows come from high-tau eras and nearly tight for one whose rows come "
-                "from low-tau eras. The walk-outcome population is untruncated but "
-                "off-distribution (walk outcomes, not frontier candidates). combine=min takes "
-                "the conservative side."),
-        no_pooling=("EVERY partition is cut on its OWN population. An arm with fewer than "
-                    "min_n=5 own passing rows is UNAVAILABLE and contributes nothing; the "
-                    "pooled cross-family quantile is computed and reported but NEVER served. "
-                    "`arms_used` names, per partition, which arms existed and which was "
-                    "taken — read it before comparing a partition against a prior version."),
+        per_partition=args.per_partition, n_rows=len(rows),
+        good_floor=F.GOOD_FLOOR, min_n=MIN_N,
+        walk_ledger=str(WALK_LEDGER.relative_to(ROOT).as_posix()),
+        tau_h_base=tau, detail=detail,
+        population=("The prospect_run1 walk-outcome ledger, whole. Walk outcomes are a "
+                    "uniform-random gate survivor per rung and are never tau-selected, so "
+                    "this is the one UNTRUNCATED population available; the harvest arm and "
+                    "its per-run truncation mixture retired on 2026-08-09. It is "
+                    "off-distribution in the other direction — walk outcomes, not frontier "
+                    "candidates — and that is stated rather than corrected for."),
+        definition=("good outcome = canonical p_good >= floors.GOOD_FLOOR (the run side's "
+                    "own admission cut, not a per-partition t_good). tau_h = the (1-keep) "
+                    "quantile of CHEAP p_good among those frames."),
+        fail_open=(f"A partition with fewer than min_n={MIN_N} good rows gets tau_h = 0.0 and "
+                   f"harvests everything. No pooled cross-family fallback: fail OPEN, which "
+                   f"costs visible GPU-minutes in run telemetry, never invisible supply."),
     )
     assert_not_superseding(args.out, art, args.overwrite)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(art, indent=2), encoding="utf-8")
 
-    print(f"\n=== tau_h base under {ACTIVE_VERSION} (keep={args.keep}, combine={args.combine}) ===")
-    print(f"{'partition':22s} {'harvest':>9s} {'walk':>9s} {'FINAL':>9s}  t_good  n_pass(h/w)")
-    def _f(v):
-        return f"{v:9.4f}" if v is not None else f"{'n/a':>9s}"
-
+    print(f"\n=== tau_h base under {ACTIVE_VERSION} "
+          f"(keep={args.keep}, good_floor={F.GOOD_FLOOR:g}) ===")
+    print(f"{'partition':22s} {'n_rows':>7s} {'n_good':>7s} {'tau_h':>9s}  source")
     for p in partitions:
-        # Print BOTH arms' availability. The old line printed only the harvest arm's source,
-        # so a walk arm that had silently fallen back to the pooled cut still read "[own]".
-        print(f"{p:22s} {_f(h_val.get(p))} {_f(w_val.get(p))} "
-              f"{final[p]:9.4f}  {ps.t_good_for(p):.2f}   "
-              f"{h_det[p]['n_pass']}/{(w_det.get(p, {}) or {}).get('n_pass', 0)}"
-              f"  [{'+'.join(arms_used[p]['available'])} -> {arms_used[p]['picked']}]")
-    unavail = {p: d for p, d in list(h_det.items()) + list(w_det.items())
-               if d["source"].startswith("UNAVAILABLE")}
-    if unavail:
-        print("\n  arms UNAVAILABLE (cut on own population impossible; NOT pooled):")
-        for p in partitions:
-            for nm, det in (("harvest", h_det.get(p)), ("walk", w_det.get(p))):
-                if det and det["source"].startswith("UNAVAILABLE"):
-                    print(f"    {p:20s} {nm:8s} n_pass={det['n_pass']} "
-                          f"(pooled would have been {det['pooled_would_have_been']})")
+        d = detail[p]
+        print(f"{p:22s} {d['n_rows']:7d} {d['n_good']:7d} {tau[p]:9.4f}  {d['source']}")
     print(f"\nartifact -> {args.out}")
     print("\nPaste into tools/atlas/steered_frontier.py (BOTH lines together):")
     print(f'TAU_H_FIDELITY_BASE_MODEL = "{ACTIVE_VERSION}"')
     print("TAU_H_FIDELITY_BASE = {")
     for p in partitions:
-        print(f'    "{p}": {final[p]!r},')
+        print(f'    "{p}": {tau[p]!r},')
     print("}")
 
 

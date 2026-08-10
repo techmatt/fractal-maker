@@ -573,3 +573,73 @@ an item's evidence, the line points at it rather than restating it.
   `[decision: prompts/selection_restructure_2.md, Matt, 2026-08-09]`
   `[code: tools/emission/attempt_budget.py; tools/emission/test_attempt_budget.py;
   tools/emission/build_emission_diversity_v1.py::_run_budgeted]`
+
+- **2026-08-09 — the per-partition `t_good` served predicate, and the whole apparatus around
+  it.** The run side admitted on `score_lib.corn_decode(p_notbad, p_good, t_good_for(partition),
+  p_ge4) >= 3`, where `t_good_for` read a per-partition table re-swept at every head flip by an
+  F_beta-argmax estimator over a labeled eval slice. Replaced by **one constant on the stored
+  raw P(>=3)**: `floors.GOOD_FLOOR = 0.50`, through `floors.passes_good_floor`, everywhere the
+  old predicate bound. Three costs ended with it — a labeled sweep per flip on populations that
+  kept being undecidable (v10's mandelbrot argmax fell to the grid floor; six partitions never
+  reached `MIN_POS` and ran UNCALIBRATED on a bare 0.50 indistinguishable from a derived one); a
+  FROZEN verdict, since moving a cut moved no stored class and only a full re-score could make a
+  threshold change reach the intake; and a SECOND quality definition, incompatible with the
+  read-time one selection had moved to a day earlier. **Measured at retirement:** the emission
+  intake goes **779 -> 862 admitted rows** over the seven ledgers with not a row added — the
+  four partitions cut above 0.50 loosen, the four below tighten, and `classic_phoenix` comes
+  back from 0 to 4 of its 24. **NOT retired: the class-4 cutpoint** (`floors.GREAT_CUT`, P(>=4)
+  >= 0.5) and the rank-2 one (`NOTBAD_CUT`) — CORN's own natural cutpoints, never calibrated per
+  family, and they only NAME a frame. **NOT retired: `ledger_rescore`** — a re-score is still
+  half of a head flip; the other half is now a VOLUME-MATCHED restatement of the two floors
+  rather than a table re-adoption (`classifier_retrain_protocol.md` §5a).
+  Deleted with it: `tools/scoring/derive_t_good.py` (+ `select_population`),
+  `tools/v{7,8,9,10,11}/derive_t_good_*.py`, `tools/v6/verify_t_good.py`,
+  `tools/scoring/test_t_good_adoption.py`, `tools/v8/test_t_good_sweep_decode.py`,
+  `tools/atlas/keeper_cut.py`, `tools/atlas/keeper_calibrate.py`, `tools/v9/keeper_cut_v9.py`,
+  `tools/atlas/mandelbrot_tgood_steered.py`, `tools/atlas/steered_run2_{manifest,report}.py`,
+  `tools/phoenix/redecode_grid.py`. `data/{v8,v10,v11}/t_good_derivation.json` and
+  `data/atlas/keeper_cuts.json` stay as records nothing reads, and left
+  `production_pins.COUPLED_ARTIFACTS` for that reason.
+  `[decision: prompts/selection_restructure_3.md §1, Matt, 2026-08-09]`
+  `[code: tools/emission/floors.py::GOOD_FLOOR; tools/atlas/production_seeder.py::is_good;
+  tools/emission/test_floors.py]`
+
+- **2026-08-09 — the decode-version predicate family** (`corpus_common.is_current_decoded`,
+  `is_decoded_by`, `current_rows_only`, `require_current`, `StaleDecodeError`). It compared a
+  ledger row's `scorer_version` stamp to the live pin and REFUSED any row an older head had
+  produced. The intent was sound and the consumption was not: it was an ADMISSION predicate,
+  applied per-row and silently inside `descriptor.load_admitted`, so the v10 flip took the
+  emission stage-2 intake from ~1.4k locations to **16** with nothing going red and hours of
+  GPU re-scoring to undo. Every reader now takes the raw probability and whichever floor its
+  purpose needs; a stale row is a WORSE ESTIMATE, so it sinks in the ranking instead of
+  vanishing from the population. **NOT retired: the stamp.**
+  `production_seeder.SCORER_VERSION` still writes it and `production_pins.ACTIVE_VERSION` is
+  still the one source of truth for the token — two modules read it back, each asking
+  "which rows has the live head not scored yet" (`ledger_rescore.scored_by_active`,
+  `classic_phoenix_supply.purge_stale`), which is idempotence and not admission. That question
+  lives with the passes that ask it rather than as a general-purpose predicate anyone can reach
+  for.
+  `[decision: prompts/selection_restructure_3.md §2, Matt, 2026-08-09]`
+  `[code: tools/corpus/corpus_common.py (the block where the family was);
+  tools/emission/ledger_rescore.py::scored_by_active]`
+
+- **2026-08-09 — the τ_h harvest arm, the two-arm minimum, and the per-run truncation record.**
+  τ_h was the per-partition MINIMUM over two estimates of the cheap-p_good cut: one over the
+  harvest logs (`harvest_log_registry` discovering 22 runs, 63,217 rows) and one over the
+  untruncated `prospect_run1` walk-outcome ledger (1,148 rows). The harvest log holds only
+  checks that already cleared a PREVIOUS head's τ_h, at a level that differed per run — a
+  left-truncated sample at a MIXTURE of levels (mandelbrot's rows spanned 0.0229 to 0.7041
+  across four τ eras), so its quantile is an upper bound of unknown tightness and every
+  derivation had to carry a paragraph naming its own least trustworthy number. Now: the walk
+  arm alone, conditioned on `floors.GOOD_FLOOR` rather than on a per-partition t_good, with a
+  partition under `MIN_N = 5` good rows getting **τ_h = 0.0** (harvest everything) instead of a
+  pooled cross-family cut. Fail OPEN, deliberately: a too-high cut sheds supply invisibly, a
+  too-low one shows up as GPU-minutes in the run's own telemetry. **Measured at retirement:**
+  the table flattens from a 0.20–0.82 spread to 0.20–0.55, and multibrot4's 0.8245 — which
+  rested on the truncated arm alone — becomes 0.4743. Deleted with it:
+  `tools/atlas/harvest_log_registry.py`, `tools/atlas/tau_h_retained_readout.py`,
+  `tools/atlas/check_ledger_decode_version.py`. `data/atlas/tau_h_base_v11_two_arm.json` is the
+  archived record of the superseded table.
+  `[decision: prompts/selection_restructure_3.md §1, Matt, 2026-08-09]`
+  `[code: tools/atlas/tau_h_rederive.py; tools/atlas/test_tau_h_rederive.py;
+  tools/atlas/steered_frontier.py::TAU_H_FIDELITY_BASE]`

@@ -25,7 +25,8 @@ from tools.emission import descriptor as D     # noqa: E402
 from tools.emission import floors as FL        # noqa: E402
 from tools.emission import ranked_intake as RI  # noqa: E402
 from tools.emission.pool import Pool           # noqa: E402
-import corpus_common as cc                     # noqa: E402
+import corpus_common as cc                     # noqa: E402  (batch/corpus helpers)
+from production_pins import ACTIVE_VERSION as _ACTIVE_VERSION  # noqa: E402
 
 
 # --------------------------------------------------------------------------- #
@@ -161,61 +162,15 @@ def test_choose_option_avoids_filled():
     from collections import Counter
     ct = Counter(picks)
     assert ct["k16:2"] > ct["k16:1"]      # deficit steers away from the filled flavor
-
-
 # --------------------------------------------------------------------------- #
-# select.py — kernel, niche percentile, greedy coverage.
+# release selection — `rank_select`, THE live rule.
 # --------------------------------------------------------------------------- #
-def _entry(id, type, cluster, flavor, style, score, emb):
-    return {"id": id, "type": type, "cluster": cluster, "flavor": flavor,
-            "style": style, "score": score, "emb": emb}
-
-
-def test_kernel_continuous_cos_across_cells():
-    # continuous morph cos, NO categorical gate: a near-identical look is discounted even
-    # across cells (this is the coverage-engages fix — the old kernel returned 0 for c).
-    a = _entry("a", "mandelbrot", "m#0", "k16:1", "smooth", 0.9, [1.0, 0.0])
-    b = _entry("b", "mandelbrot", "m#0", "k16:1", "smooth", 0.8, [1.0, 0.0])   # same cell, cos 1
-    c = _entry("c", "mandelbrot", "m#0", "k16:2", "smooth", 0.8, [1.0, 0.0])   # diff flavor, cos 1
-    d = _entry("d", "mandelbrot", "m#0", "k16:2", "smooth", 0.8, [0.0, 1.0])   # diff flavor, cos 0
-    assert SEL.kernel(a, b) == pytest.approx(1.0)
-    assert SEL.kernel(a, c) == pytest.approx(1.0)   # was 0.0 under the categorical gate
-    assert SEL.kernel(a, d) == pytest.approx(0.0)
-
-
-def test_kernel_style_weight_floors_same_mode():
-    # morph-distinct (orthogonal) tiles of the SAME render style are floored at style_weight;
-    # a different style stays at the (here 0) cosine — how the strange pass spreads modes.
-    a = _entry("a", "mandelbrot", "m#0", "k16:1", "tia", 0.6, [1.0, 0.0])
-    b = _entry("b", "mandelbrot", "m#1", "k16:2", "tia", 0.6, [0.0, 1.0])       # same style, cos 0
-    c = _entry("c", "mandelbrot", "m#2", "k16:3", "stripe", 0.6, [0.0, 1.0])    # diff style, cos 0
-    assert SEL.kernel(a, b) == pytest.approx(0.0)                # no floor → 0
-    assert SEL.kernel(a, b, style_weight=0.5) == pytest.approx(0.5)
-    assert SEL.kernel(a, c, style_weight=0.5) == pytest.approx(0.0)
-
-
-def test_greedy_style_weight_spreads_modes():
-    # 3 tia + 1 stripe, all morph-distinct, N=2; the style floor makes the 2nd pick switch
-    # modes to stripe rather than take a 2nd (lower-score) tia.
-    e = [_entry("t0", "mandelbrot", "m#0", "k16:1", "tia", 0.90, [1.0, 0.0, 0.0, 0.0]),
-         _entry("t1", "mandelbrot", "m#1", "k16:1", "tia", 0.80, [0.0, 1.0, 0.0, 0.0]),
-         _entry("t2", "mandelbrot", "m#2", "k16:1", "tia", 0.70, [0.0, 0.0, 1.0, 0.0]),
-         _entry("s0", "mandelbrot", "m#3", "k16:1", "stripe", 0.60, [0.0, 0.0, 0.0, 1.0])]
-    sel, _log = SEL.greedy_select(e, 2, style_weight=0.5)
-    styles = {x["style"] for x in sel}
-    assert styles == {"tia", "stripe"}         # spread, not two tia
-    assert sel[0]["id"] == "t0"                # best tia first
-
-
-def test_greedy_prefers_distinct_cells():
-    # two near-duplicate entries in ONE cell + one entry in another cell; N=2 → one per cell.
-    a = _entry("a", "mandelbrot", "m#0", "k16:1", "smooth", 0.95, [1.0, 0.0])
-    b = _entry("b", "mandelbrot", "m#0", "k16:1", "smooth", 0.90, [1.0, 0.0])
-    c = _entry("c", "mandelbrot", "m#0", "k16:2", "smooth", 0.80, [0.0, 1.0])
-    selected, log = SEL.greedy_select([a, b, c], 2)
-    cells = {(e["type"], e["cluster"], e["flavor"], e["style"]) for e in selected}
-    assert len(cells) == 2                     # spread across cells, not two from the crowded one
-    assert {e["id"] for e in selected} == {"a", "c"}
+# `greedy_select` and its coverage kernel (`kernel`, `niche_percentiles`) were tested here
+# until 2026-08-09 and were deleted with the rule (prompts/selection_restructure_3.md): the
+# continuous-cosine kernel, the `style_weight` floor that spread the strange pass across
+# render modes, and the niche-percentile quality term. Nothing here replaces them because
+# nothing replaced the rule — the diversity they bought is bought by `CLUSTER_CAP` below, and
+# the mode spread by `attempt_budget` upstream of selection.
 
 
 def _rentry(id, part, cluster, score):
@@ -253,12 +208,6 @@ def test_rank_select_cluster_counter_is_shared_across_calls():
     assert used["m#0"] == SEL.CLUSTER_CAP
     # a fresh counter takes it again — the cap is state, not a property of the entries
     assert len(SEL.rank_select(e2, {"mandelbrot": 2}, {}, {})[0]) == 1
-
-
-def test_niche_percentile_singleton_is_one():
-    a = _entry("a", "mandelbrot", "m#0", "k16:1", "smooth", 0.5, [1.0])
-    pct = SEL.niche_percentiles([a])
-    assert pct["a"] == 1.0
 
 
 # --------------------------------------------------------------------------- #
@@ -314,28 +263,28 @@ def _row(id, ver=None, dc=3, guard=True, distinct=True, cx=None, p_good=0.7, **e
     row = {"id": id, "family": "mandelbrot", "outcome_cx": cx, "outcome_cy": 0.1,
            "outcome_fw": 0.03, "decoded_class": dc, "guard_pass": guard,
            "distinct": distinct, "p_good": p_good,
-           "scorer_version": cc.active_scorer_version() if ver is None else ver}
+           "scorer_version": _ACTIVE_VERSION if ver is None else ver}
     row.update(extra)
     return row
 
 
-def test_stale_scorer_version_rows_rejected(tmp_path):
-    cur = cc.active_scorer_version()
-    assert cur and cur not in ("v6", "v5")   # sanity: the tokens below really are stale
+def test_a_row_scored_by_an_older_head_is_admitted_on_its_own_probability(tmp_path):
+    """THE 2026-08-09 reversal. This test used to assert the opposite: a row whose
+    `scorer_version` was not the live one was REFUSED outright by `load_admitted`, and a
+    strict form raised `StaleDecodeError`. That predicate family took the v10-flip intake from
+    ~1.4k locations to 16 and cost a GPU re-score pass to undo, so it was deleted; a stale
+    probability is a worse estimate of quality, not a disqualification.
+
+    What still cuts is the floor, and it cuts a stale row exactly as it cuts a fresh one."""
     led = tmp_path / "outcome_ledger.jsonl"
     led.write_text("\n".join(json.dumps(r) for r in [
         _row("cur"), _row("old", "v6"), _row("older", "v5"),
+        _row("stale_and_bad", "v6", p_good=0.1),
     ]) + "\n", encoding="utf-8")
-
-    # soft form: stale rows silently skipped, only the current row admitted.
-    admitted = D.load_admitted(led)
-    assert [r["id"] for r in admitted] == ["cur"]
-
-    # strict form: a v6 row RAISES rather than being consumed as a current verdict.
-    only_v6 = tmp_path / "v6_only.jsonl"
-    only_v6.write_text(json.dumps(_row("old", "v6")) + "\n", encoding="utf-8")
-    with pytest.raises(cc.StaleDecodeError):
-        D.load_admitted(only_v6, require_current=True)
+    admitted = {r["id"] for r in D.load_admitted(led)}
+    assert admitted == {"cur", "old", "older"}
+    assert "stale_and_bad" not in admitted, "the good floor must still cut, stale or not"
+    assert not hasattr(cc, "StaleDecodeError") and not hasattr(cc, "is_current_decoded")
 
 
 # --------------------------------------------------------------------------- #

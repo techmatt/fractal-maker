@@ -247,41 +247,78 @@ three of which had hardcoded the outgoing version and went red *for* the flip ra
 a fault. A test that would need editing when the pin moves is mismarked as a guard; mark it,
 or make it resolve the version from the pin.
 
-**τ_h re-derivation is two costs, and only one of them is the 26-minute one.**
-`tools/atlas/tau_h_rederive.py` renders and scores a paired sample per partition — that is
-the expensive arm. Once `rows.jsonl` exists under the work dir, **`--score-only` re-derives
-the base from those cached rows in seconds**, which is what makes fixing an estimator choice
-(a pooling rule, a `--combine` arm, a `--keep`) cheap. Reach for it before re-rendering:
+### 5a. The two floors — RE-SCORE, then VOLUME-MATCH. This is the whole quality half of a flip.
+
+Since 2026-08-09 (`prompts/selection_restructure_3.md`) there is **one quality definition in
+the pipeline**, and it is two constants in `tools/emission/floors.py` read against a row's raw
+stored P(≥3):
+
+| constant | value | what it decides |
+|---|---|---|
+| `GOOD_FLOOR` | 0.50 | run-side admission and every run-side count — what a discovery run keeps |
+| `JUNK_FLOOR` | 0.20 | the colorize-pool draw — what stage 2 spends compute on |
+
+Neither is in `COUPLED_ARTIFACTS`, **deliberately**, and this is the part to understand before
+a flip. Both are cuts on a train-prior-calibrated CORN scale, so they are exactly as
+scale-bound as the artifacts that *are* registered — but a registered artifact is *re-derived*
+and carries a stamp saying which head it came from, whereas a floor is *restated*, and the
+correct new value depends on a measurement rather than on a version. A stamp check would pass
+by moving a string. So they are held by this procedure plus a human:
+
+1. **Re-score the ledgers** (below) so every stored `p_good` is on the new head's scale.
+2. **Volume-match each floor**: recompute the score that keeps the same FRACTION of a fixed
+   reference pool under the new head, and move the constant there. Volume-matching is the only
+   restatement that keeps the thing each floor was chosen for invariant — how much obvious
+   waste `JUNK_FLOOR` removes, how much supply `GOOD_FLOOR` keeps. Keeping the float silently
+   moves the volume; re-deriving from an eval turns a coarse cut back into an operating point,
+   which is precisely the per-partition machinery this replaced.
+3. Nothing else. There is no threshold sweep, no per-partition table to re-adopt and no
+   conformance test to re-run — `tools/scoring/derive_t_good.py`,
+   `production_seeder.T_GOOD_OVERRIDES`, `tools/atlas/keeper_cut.py` and their five per-version
+   drivers were all deleted on 2026-08-09. Their committed json outputs stay as records of what
+   those heads served; nothing reads them.
+
+`tools/scoring/test_coupled_artifacts.py::test_the_two_enforcing_floors_are_deliberately_NOT_in_this_set`
+holds that reasoning to this section, so the registry and this page cannot drift.
+
+### 5b. τ_h re-derivation — two costs, and only one of them is the long one
+
+`tools/atlas/tau_h_rederive.py` renders and scores a paired (cheap, canonical) sample over the
+walk-outcome ledger — that is the expensive arm. Once `rows.jsonl` exists under the work dir,
+**`--score-only` re-derives the base from those cached rows in seconds**, which is what makes
+fixing an estimator choice (a `--keep`, a `MIN_N`) cheap. Reach for it before re-rendering:
 
 ```bash
-uv run python tools/atlas/tau_h_rederive.py --per-partition 200        # the render arm, once
-uv run python tools/atlas/tau_h_rederive.py --score-only               # every re-derivation after
+uv run python tools/atlas/tau_h_rederive.py                # the render arm, once (~1,150 rows)
+uv run python tools/atlas/tau_h_rederive.py --score-only   # every re-derivation after
 ```
 
-Read the resulting artifact's `harvest_detail` / `walk_detail` per partition, not the summary
-line: the summary prints the harvest arm's `source`, so a partition whose WALK arm fell back
-to the pooled estimate still reads `[own]`.
+The estimator conditions on `GOOD_FLOOR`, not on a per-partition threshold, and a partition
+under `MIN_N` good rows gets **τ_h = 0.0** — fail OPEN, which costs visible GPU-minutes rather
+than invisible supply. Read the artifact's `detail` per partition (`n_rows` / `n_good` /
+`source`) before trusting a value: three partitions clear `MIN_N` by single digits.
 
-**Every discovery ledger goes stale at the flip, and nothing tells you.** `is_current_decoded`
-compares a row's `scorer_version` to `ACTIVE_VERSION`, so the instant the pin moves every
-ledger row written under the old head becomes unreachable — correctly, because its decode is
-that head's verdict. But the rejection is silent and happens per-row inside `load_admitted`,
-so the visible symptom is a downstream population that quietly shrinks. The v10 flip took the
-emission stage-2 intake from ~1.4k admissible locations to **16** (2026-08-04), and it read as
-"the intake found almost nothing", not as "the ledgers are stale".
+### 5c. Re-score the ledgers — an accuracy job now, not an outage repair
 
-The recovery is a **re-score**, and it is a sibling record, never an in-place edit — a ledger
-is its run's record of what it found *and* what the head of the day said about it:
+Every discovery ledger's `p_good` is the head-of-the-day's number, so after a flip every floor
+applied to it means something slightly different. **This used to be far worse than that.**
+Until 2026-08-09 a decode-VERSION predicate refused any row an older head had stamped, per-row
+and silently, inside `load_admitted`: the v10 flip took the emission stage-2 intake from ~1.4k
+admissible locations to **16** (2026-08-04), and it read as "the intake found almost nothing"
+rather than as "the ledgers are stale". That predicate is gone. A stale row now sinks in the
+ranking instead of vanishing from it, so a deferred re-score costs accuracy, not the corpus.
+
+It is still the first thing to do, and it is a sibling record, never an in-place edit — a
+ledger is its run's record of what it found *and* what the head of the day said about it:
 
 ```bash
 uv run python tools/emission/ledger_rescore.py status    # per-ledger rows / current / admitted
 uv run python tools/emission/ledger_rescore.py           # writes <stem>.rescored_<version>.jsonl
 ```
 
-`descriptor.resolve_rows` overlays the sibling at read time. The **version is in the filename**
-and that is load-bearing: after the *next* flip the reader looks for `rescored_v11.jsonl`, does
-not find it, falls through to the original rows, and the current-decode predicate rejects them.
-The intake goes empty and loud rather than serving v10 verdicts under v11's name. Add a ledger
-re-score to the flip checklist alongside the coupled-artifact walk above — the cost is ~1 row/s
-(render at the deploy presentation + guarded score), so the 1,633-row intake population is ~25
-minutes, not a reason to defer it.
+`descriptor.resolve_rows` overlays the sibling at read time, and the **version is in the
+filename** so the next flip's reader looks for `rescored_v12.jsonl`, does not find it, and
+falls through to the v11 numbers rather than to another head's verdicts under v12's name. The
+cost is ~1 row/s (render at the deploy presentation + guarded score), so the 1,633-row intake
+population is ~25 minutes — not a reason to defer it, and step 2 above cannot be done honestly
+before it.

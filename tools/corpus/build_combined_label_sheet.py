@@ -77,7 +77,7 @@ import corpus_common as cc            # noqa: E402
 import label_store as ls              # noqa: E402
 import merge_scores as ms             # noqa: E402
 import paths                          # noqa: E402
-from partitions import partition_of_row   # noqa: E402  (THE fractal_type -> partition map)
+from partitions import ALL_FAMS, partition_of_row  # noqa: E402  (THE fractal_type -> partition map)
 from tools.v7 import build_manifest as bm   # noqa: E402  (assign_split — the authority)
 
 STAMP = "2026-08-03"
@@ -227,24 +227,62 @@ STEADY_STATE_SITTING = SheetSpec(
 # =========================================================================== #
 # row filters — the SUBSET rules a spec may carry
 # =========================================================================== #
+# The adopted t_good derivation artifact. It is a FROZEN RECORD now: the estimator that wrote
+# it (`tools/scoring/derive_t_good.py`) and the per-partition table it fed
+# (`production_seeder.T_GOOD_OVERRIDES`) were deleted on 2026-08-09 when the run side moved to
+# the flat `floors.GOOD_FLOOR` (prompts/selection_restructure_3.md). The committed json stays,
+# and this module keeps reading it, because the question it answers here is HISTORICAL: the
+# `steady_state_uncal` sheet was cut against "which partitions had no derived threshold under
+# v10", that selection is frozen in `route.json`, and re-answering it from anything live would
+# describe a different population than the sheet actually served. Nothing new should be
+# filtered on this — there is no such thing as an uncalibrated partition under one flat cut.
+T_GOOD_ADOPTED_REL = "data/{version}/t_good_derivation.json"
+_T_GOOD_STATUS_BLOCKS = ("derived", "uncalibrated")
+
+
+def t_good_adopted_path(version: str | None = None) -> Path:
+    """Path to the adopted derivation record for `version` (default: the LIVE pin)."""
+    if version is None:
+        from production_pins import ACTIVE_VERSION  # noqa: PLC0415
+        version = ACTIVE_VERSION
+    return ROOT / T_GOOD_ADOPTED_REL.format(version=version)
+
+
 @functools.lru_cache(maxsize=8)
 def _t_good_statuses(version: str | None = None) -> dict:
-    """`{partition: DERIVED|UNCALIBRATED}` off the ADOPTED derivation artifact, via the module
-    that WRITES that artifact (`derive_t_good.adopted_statuses`).
+    """`{partition: DERIVED|UNCALIBRATED}` read off the adopted derivation RECORD.
 
-    `version=None` is the LIVE pin, which is what an unbuilt sheet wants. A BUILT sheet passes
-    the version its filter was cut under (`SheetSpec.filter_version`): the selection is frozen
-    in `route.json`, so re-deriving it from a live status re-answers a settled question, and at
-    the v11 flip it did — phoenix and julia:mandelbrot left UNCALIBRATED and the predicate
-    started selecting a different population than the sheet had actually served.
+    `version=None` is the LIVE pin. A BUILT sheet passes the version its filter was cut under
+    (`SheetSpec.filter_version`): the selection is frozen in `route.json`, so re-deriving it
+    from a live status re-answers a settled question, and at the v11 flip it did — phoenix and
+    julia:mandelbrot left UNCALIBRATED and the predicate started selecting a different
+    population than the sheet had actually served.
 
-    Imported lazily, the same way `_loc()` is: `derive_t_good` pulls numpy and, through
-    `score_lib`, torch — and a sheet with no filter must stay buildable without them. Cached
-    per version because a build reads it once per row over hundreds of rows; a CLI run is the
-    unit of freshness here, and re-deriving t_good mid-run is not a thing that happens.
-    """
-    import derive_t_good
-    return derive_t_good.adopted_statuses(version)
+    Strict in three ways, each because the lenient reading is silent: a MISSING artifact raises
+    naming the file; a partition in NEITHER block raises rather than defaulting; a partition in
+    BOTH raises, since the blocks are meant to partition ALL_FAMS. The reader used to live
+    beside the writer in `derive_t_good`; the writer is gone and the record is not, so the
+    schema knowledge moved here with its one remaining consumer."""
+    p = t_good_adopted_path(version)
+    if not p.exists():
+        raise FileNotFoundError(
+            f"{p} missing — no adopted t_good derivation record for this version. The "
+            f"estimator that wrote these was retired 2026-08-09; a sheet filtered on this "
+            f"must name a version whose record is committed, not fall back to another's.")
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    out = {}
+    for blk in _T_GOOD_STATUS_BLOCKS:
+        for fam, ent in (doc.get(blk) or {}).items():
+            if fam in out:
+                raise ValueError(f"{p}: partition {fam!r} is stamped in both "
+                                 f"{_T_GOOD_STATUS_BLOCKS} — the blocks must partition ALL_FAMS")
+            out[fam] = ent["status"]
+    missing = [f for f in ALL_FAMS if f not in out]
+    if missing:
+        raise ValueError(
+            f"{p}: partitions {missing} carry no status stamp — this record predates their "
+            f"registration. Filter on a version whose record covers them.")
+    return out
 
 
 def t_good_status_of(row, version: str | None = None) -> str:
@@ -280,8 +318,7 @@ def uncalibrated_t_good_in(*batches, version: str | None = None):
     # naming "the adopted artifact" is not reproducible six months on unless the record says
     # which file that was ("derive state in code; freeze it in records", CLAUDE.md).
     def _provenance():
-        import derive_t_good
-        p = derive_t_good.adopted_path(version)
+        p = t_good_adopted_path(version)
         return {"t_good_artifact": p.relative_to(ROOT).as_posix(),
                 "t_good_version": version or "LIVE at build time",
                 "scoped_batches": sorted(scoped),

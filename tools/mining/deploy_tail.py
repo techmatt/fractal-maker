@@ -557,11 +557,12 @@ def main():
     #    IT USED TO BE THE 0.50 MINING RELEASE FLOOR, via `floors.MINING_RELEASE.acts`. That
     #    floor is ANNOTATION-ONLY now (floors.py), and reading `.acts` here would have silently
     #    turned this site into "no filter at all" the moment it flipped — which is why the
-    #    `.acts` read is replaced rather than left to resolve to False. The 0.50 verdict is
-    #    still logged per candidate in the gate report below, where it is now a genuine
+    #    `.acts` read was replaced rather than left to resolve to False. The flag itself was
+    #    deleted on 2026-08-09; a Floor can no longer claim to act at all. The 0.50 verdict is
+    #    still logged per candidate in the gate report below, where it is a genuine
     #    counterfactual again.
     passers = [c for c in cands if c.get("passed")]          # the retired 0.50 verdict
-    gate_acts = F.MINING_RELEASE.acts                        # False — for the report only
+    gate_acts = False                                        # a Floor cannot act — report only
     alloc_input = [c for c in cands if F.passes_junk_floor(c.get("p_ge3"))]
     print(f"[gate] junk floor {F.JUNK_FLOOR}: {len(alloc_input)}/{len(cands)} candidates "
           f"enter the allocation ({len(passers)} would also clear the retired "

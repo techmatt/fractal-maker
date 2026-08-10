@@ -112,8 +112,6 @@ def test_the_derived_reads_match_the_old_plain_layout(tmp_path):
     """THE round-trip the compaction has to pass: every reader the tree takes off these
     streams produces the same answer on the compacted record as on the plain one."""
     import harvest_log_reconcile as hlr
-    import harvest_log_registry as hreg
-    import tau_h_rederive as thr
     import q4_fate_sheets as q4s
     import harvest_v2_readout as hv2
 
@@ -132,14 +130,10 @@ def test_the_derived_reads_match_the_old_plain_layout(tmp_path):
     assert (a_rows, a_torn) == (b_rows, b_torn)
     assert hlr.dedup(a_rows)[1] == hlr.dedup(b_rows)[1]
 
-    # tau_h_rederive: the re-scoreable population, incl. its phoenix/no-geometry exclusions
-    def _pop(d):
-        run = hreg.HarvestRun(name=d.name, store="t", dir=d,
-                              log=d / "harvest_log.jsonl", pinned=False)
-        return thr._harvest_rows([run])
-    pa, pb = _pop(plain), _pop(seg)
-    assert len(pa) == len(pb) > 0
-    assert [r["partition"] for r in pa] == [r["partition"] for r in pb]
+    # `tau_h_rederive` used to be the third reader here, through `harvest_log_registry`.
+    # Both retired on 2026-08-09 with the tau_h harvest arm (prompts/selection_restructure_3.md)
+    # — the deriver reads only the untruncated walk-outcome ledger now, which is a plain
+    # ledger and not a segmented stream. Nothing replaced them in this round-trip.
 
     # q4_fate_sheets.load_rows (dedup on geometry) and harvest_v2_readout's fate tally
     assert q4s.load_rows(plain) == q4s.load_rows(seg)
@@ -282,21 +276,6 @@ def test_an_unregistered_path_is_read_without_a_directory_scan(tmp_path):
     with gzip.open(tmp_path / "pool.000.jsonl.gz", "wt", encoding="utf-8") as f:
         f.write(json.dumps({"stray": True}) + "\n")
     assert R.read_rows(tmp_path / "pool.jsonl") == rows
-
-
-def test_harvest_discovery_still_finds_a_run_whose_log_has_been_finalized(tmp_path):
-    """The silent-shrink guard. A finished run has no `harvest_log.jsonl`; discovery keyed on
-    that exact name would stop seeing runs the moment they complete."""
-    import harvest_log_registry as hreg
-    store = tmp_path / "discovery"
-    (store / "finalized_run").mkdir(parents=True)
-    _write_segmented(store / "finalized_run" / "harvest_log.jsonl", _harvest_rows(60))
-    (store / "legacy_run").mkdir(parents=True)
-    _write_plain(store / "legacy_run" / "harvest_log.jsonl", _harvest_rows(20))
-    runs, missing = hreg.discover_run_dirs(registry=[("t", store)], pinned=[])
-    assert sorted(r.name for r in runs) == ["finalized_run", "legacy_run"]
-    assert missing == []
-    assert all(len(R.read_rows(r.log)) > 0 for r in runs)
 
 
 def test_every_registered_stream_is_committed_and_none_of_the_ignored_ones_rotate():

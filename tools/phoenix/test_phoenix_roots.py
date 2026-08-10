@@ -77,10 +77,12 @@ def test_phoenix_roots_smoke(tmp_path):
     # (3) two distinct-parameter outcomes do NOT dup-collide even at the IDENTICAL viewport
     #     (the whole point of keying phoenix identity on (c, p, z_{-1})).
     idents = list(by_seed)
+    # `p_good` above `floors.GOOD_FLOOR`, not a stored `decoded_class`: `build_cloud` reads
+    # the raw probability at read time since 2026-08-09.
     ra = dict(by_seed[idents[0]][0], outcome_cx=0.0, outcome_cy=0.0, outcome_fw=3.0,
-              decoded_class=3, guard_pass=True)
+              p_good=0.9, guard_pass=True)
     rb = dict(by_seed[idents[1]][0], outcome_cx=0.0, outcome_cy=0.0, outcome_fw=3.0,
-              decoded_class=3, guard_pass=True)
+              p_good=0.9, guard_pass=True)
     assert ps.near_dup(0.0, 0.0, 3.0, 0.0, 0.0, 3.0, a_c=ps.row_ident(ra),
                        b_c=ps.row_ident(rb)) is False
     cloud = ps.build_cloud([ra, rb], "phoenix")

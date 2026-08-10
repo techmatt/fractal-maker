@@ -79,20 +79,21 @@ def test_live_keeper_cut_still_names_the_active_head():
     assert doc["provenance"]["model"] != "v9", "the STAGED v9 cut was promoted to the live path"
 
 
-def test_production_seeder_t_good_never_mirrors_the_staged_v9_table():
-    """`T_GOOD_OVERRIDES` is the ADOPTED table and must mirror the DEPLOYED head's
-    derivation (held exactly by tools/scoring/test_t_good_adoption.py). What this file adds
-    is the negative: the staged v9 table must never be the one in production, whichever head
-    is live."""
+def test_no_t_good_table_can_be_adopted_from_v9_or_anywhere_else():
+    """This used to assert that `production_seeder.T_GOOD_OVERRIDES` mirrored the DEPLOYED
+    head's derivation and never the staged v9 one — the negative half of the adoption gate.
+
+    The whole per-partition table went on 2026-08-09 (prompts/selection_restructure_3.md), so
+    the hazard it guarded (a staged table reaching production by being copied) is unwritable:
+    there is no table to copy into. `data/v9/t_good_derivation.json` stays as v9's record and
+    the staged marker on it stays true. The assertion follows the hazard rather than the
+    file."""
     import production_seeder as ps
-    active = active_ckpt.ACTIVE_VERSION
-    live_doc = ROOT / "data" / active / "t_good_derivation.json"
-    assert live_doc.exists(), f"no t_good derivation for the live head {active}"
-    assert json.loads(live_doc.read_text(encoding="utf-8"))["adopted"] ==         {k: float(v) for k, v in ps.T_GOOD_OVERRIDES.items()}
-    if STAGED_TGOOD.exists() and active != "v9":
-        v9 = json.loads(STAGED_TGOOD.read_text(encoding="utf-8"))["adopted"]
-        assert {k: float(v) for k, v in ps.T_GOOD_OVERRIDES.items()} != v9, (
-            "the adopted table equals the STAGED v9 table while v9 is not deployed")
+    assert not hasattr(ps, "T_GOOD_OVERRIDES") and not hasattr(ps, "t_good_for")
+    if STAGED_TGOOD.exists():
+        doc = json.loads(STAGED_TGOOD.read_text(encoding="utf-8"))
+        assert doc.get("staged") or "STAGED" in json.dumps(doc), (
+            "the v9 derivation record must stay marked staged even now that nothing reads it")
 
 
 # --------------------------------------------------------------------------- #
@@ -159,7 +160,7 @@ def test_tau_h_mismatch_raise_names_v9_as_the_active_version(monkeypatch, tmp_pa
     msg = str(ei.value)
     assert "v9" in msg, msg
     assert sf.TAU_H_FIDELITY_BASE_MODEL in msg, msg
-    assert "harvest logs" in msg, "the raise should name the re-derivation route"
+    assert "tau_h_rederive" in msg, "the raise should name the re-derivation route"
     # non-vacuity: the same call under the stamped head does NOT raise
     monkeypatch.setattr(sf, "_active_scorer_version", lambda: sf.TAU_H_FIDELITY_BASE_MODEL)
     assert sf.derive_tau_h(["mandelbrot"])["mandelbrot"] > 0

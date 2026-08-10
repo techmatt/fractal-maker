@@ -4,10 +4,17 @@ red build.
 
 WHY. Stage 2 has collapsed silently twice, and both times it was found by a human going
 looking. The v10 head flip took the intake from ~1.4k admissible locations to **16** (every
-non-classic ledger was still v7-stamped, so `is_current_decoded` correctly refused it) and
-nothing went red — the driver ran, admitted 16 rows, and reported a healthy-looking run over
-them. The union then aborted outright on 11 run-scoped id collisions. Neither is a bug in any
-one function; both are the pipeline's INPUTS going away underneath code that still works.
+non-classic ledger was still v7-stamped, so the decode-version predicate correctly refused it)
+and nothing went red — the driver ran, admitted 16 rows, and reported a healthy-looking run
+over them. The union then aborted outright on 11 run-scoped id collisions. Neither is a bug in
+any one function; both are the pipeline's INPUTS going away underneath code that still works.
+
+THAT PARTICULAR CLIFF IS GONE (2026-08-09) and this file is not. The decode-version predicate
+was deleted with the frozen verdict it guarded, so a head flip degrades the RANK of old rows
+instead of deleting them, and the specific 1.4k -> 16 failure cannot recur. What this asserts
+is unchanged and still worth asserting: the inputs can still go away — a ledger can be moved,
+a re-score can write a sibling nothing reads, a floor can be restated too high — and every one
+of those is silent in exactly the same way.
 
 WHAT THIS ASSERTS. The four things that must be true for stage 2 to be able to run at all,
 checked against whatever is on disk today:
@@ -46,7 +53,6 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "sc
 from tools.emission import cells as C                # noqa: E402
 from tools.emission import descriptor as D           # noqa: E402
 from tools.emission import ledger_rescore as LR      # noqa: E402
-import corpus_common as cc                           # noqa: E402
 import partitions as P                               # noqa: E402
 import release_mix as RM                             # noqa: E402
 
@@ -72,7 +78,13 @@ def census():
         resolved = D.resolve_rows(path)
         per_ledger[tag] = {
             "rows": len(resolved),
-            "current": sum(1 for r in resolved if cc.is_current_decoded(r)),
+            # SCORED, not "current-decoded". The denominator of the collapse floor below used
+            # to be "rows the live head has a verdict for", which was also the admission
+            # predicate — so a stale ledger shrank numerator and denominator together and the
+            # fraction stayed healthy while the intake emptied. It is now "rows carrying a
+            # probability at all", which does not move with the head, so the ratio measures
+            # what it claims to.
+            "scored": sum(1 for r in resolved if r.get("p_good") is not None),
             "admitted": len(D.load_admitted(path)),
         }
     rows, diag = D.load_union_admitted([p for _t, p in LEDGERS])
@@ -94,16 +106,21 @@ def test_the_union_loads_and_is_the_per_ledger_sum(census):
 # "no ledger is UNEXPECTEDLY empty", and a registered entry still has to be true: an entry that
 # starts contributing again goes red, so the note cannot outlive its subject.
 #
-# `classic_phoenix` (2026-08-08, the v11 flip). Its 24 rows re-score cleanly under v11 —
-# 19 decode class 1, 5 class 2 — and NONE reaches q3, so `load_admitted` refuses all of them.
-# This is the HEAD, not a stale decode: the partition runs at the 0.50 UNCALIBRATED baseline
-# under v11 exactly as it did under v10, and the re-score is current. The first read of it was
-# worse and wrong — a partition-key bug in `ledger_rescore` minted all 24 against `phoenix`'s
-# new 0.77 and decoded every one to class 1; that is fixed, and the remaining zero is real.
-# `phoenix:classic` is EXTERNALLY SUPPLIED — no crawl produces it — so the remedy is a supply
-# run, not a threshold: `production_seeder.py --run-phoenix` then `classic_phoenix_supply.py`.
-# The release mix asks ~12 of a 779-row intake (1.52%) and gets 0.
-KNOWN_EMPTY = {"classic_phoenix"}
+# IT IS EMPTY, AND `classic_phoenix` IS WHY IT ISN'T ANY MORE. It was registered on 2026-08-08
+# at the v11 flip: all 24 of its rows decoded class 1 or 2 against the partition's 0.50
+# baseline through `corn_decode`'s AND rule, so `load_admitted` refused every one. Under the
+# flat `floors.GOOD_FLOOR` on the raw P(>=3) (2026-08-09) FOUR of the same 24 rows admit — no
+# re-score, no new supply, the same numbers read by a different predicate. The registration's
+# own second guard (`test_no_known_empty_ledger_has_quietly_come_back`) is what forced this
+# edit rather than letting the note describe a state the tree had left.
+#
+# Four of 24 is thin, and the underlying supply problem the entry described is NOT solved:
+# `phoenix:classic` is EXTERNALLY SUPPLIED — no crawl produces it — so topping it up is a
+# supply run, not a threshold (`production_seeder.py --run-phoenix` then
+# `classic_phoenix_supply.py`). The release mix asks ~13 of an 862-row intake (1.52%) and gets
+# 4. That is a THIN-supply fact, reported by `ledger_rescore`'s classic-supply note where a
+# human can act on it, and not a dead-ledger fact, which is what this set is for.
+KNOWN_EMPTY: set = set()
 
 
 def test_every_intake_ledger_still_contributes(census):
@@ -114,9 +131,10 @@ def test_every_intake_ledger_still_contributes(census):
             if v["admitted"] == 0 and tag not in KNOWN_EMPTY}
     assert not dead, (
         f"{len(dead)} intake ledger(s) contribute NO admitted rows: {sorted(dead)}. Either the "
-        f"decode block went stale under a head flip (re-run tools/emission/ledger_rescore.py) "
-        f"or the ledger itself is gone. Stage 2 will run either way, on a corpus that quietly "
-        f"lost a family.")
+        f"ledger is gone, or every row in it sits below floors.GOOD_FLOOR on a scale the live "
+        f"head did not produce (re-run tools/emission/ledger_rescore.py, then volume-match the "
+        f"floors — classifier_retrain_protocol.md §5). Stage 2 will run either way, on a corpus "
+        f"that quietly lost a family.")
 
 
 def test_no_known_empty_ledger_has_quietly_come_back(census):
@@ -135,15 +153,15 @@ def test_no_known_empty_ledger_has_quietly_come_back(census):
 
 
 def test_the_admitted_share_is_above_the_collapse_floor(census):
-    """Relational scale floor: admitted as a fraction of the ledgers' own current-decode rows.
-    Not a count — a count is a pin that a legitimate re-score breaks."""
-    current = sum(v["current"] for v in census["per_ledger"].values())
-    assert current > 0, "no ledger row decodes as current — the whole intake is stale"
-    frac = census["diag"]["n_union"] / current
+    """Relational scale floor: admitted as a fraction of the ledgers' own SCORED rows. Not a
+    count — a count is a pin that a legitimate re-score breaks."""
+    scored = sum(v["scored"] for v in census["per_ledger"].values())
+    assert scored > 0, "no ledger row carries a probability — the whole intake is unscored"
+    frac = census["diag"]["n_union"] / scored
     assert frac >= MIN_ADMITTED_FRACTION, (
-        f"union admits {census['diag']['n_union']}/{current} = {frac:.2%} of current-decode "
-        f"rows, under the {MIN_ADMITTED_FRACTION:.0%} collapse floor. The v10 flip looked like "
-        f"this (0.97%).")
+        f"union admits {census['diag']['n_union']}/{scored} = {frac:.2%} of scored rows, under "
+        f"the {MIN_ADMITTED_FRACTION:.0%} collapse floor. The v10 flip looked like this "
+        f"(0.97%).")
 
 
 # --------------------------------------------------------------------------- #

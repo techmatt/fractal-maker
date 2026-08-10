@@ -47,14 +47,22 @@ except Exception:
 from tools.emission import floors as F           # noqa: E402  THE stage-2 cut owner
 
 LEDGER_DIR = ROOT / "data" / "emission" / "q4_harvest"
-# Production release floors (strict; here only ANNOTATED, never acted on). IMPORTED from the
-# one owner — this file used to carry `STRICT_WP, STRICT_MN = 0.90, 0.50`, a third copy of a
-# pair the driver and two other readouts each also declared.
+# The four RETIRED per-head floors. They were never acted on HERE — this readout has always
+# only annotated against them — and since 2026-08-09 nothing acts on them anywhere: a `Floor`
+# offers `annotates()` and nothing else. IMPORTED from the one owner; this file used to carry
+# `STRICT_WP, STRICT_MN = 0.90, 0.50`, a third copy of a pair the driver and two other readouts
+# each also declared.
+#
+# THE NAMES KEEP THE WORD "STRICT" ON PURPOSE. It is the column name in every committed
+# readout these constants have ever produced, and renaming it would break the join between
+# this run's table and the previous one for no gain. Read `strict` as "would have cleared the
+# retired 0.90/0.50 release floor", never as "was cut by it". The two cuts that DO remove a
+# row are `floors.JUNK_FLOOR` (the colorize-pool draw) and `floors.GOOD_FLOOR` (the run side),
+# and neither is per-head.
 STRICT_WP = F.WALLPAPER_RELEASE.value
 STRICT_MN = F.MINING_RELEASE.value
 POOL_WP = F.WALLPAPER_POOL.value
 POOL_MN = F.MINING_POOL.value
-STRANGE_STYLE_WEIGHT = 0.5
 
 
 def _wallpaper_style(style: str) -> bool:
@@ -62,34 +70,29 @@ def _wallpaper_style(style: str) -> bool:
 
 
 def _diversity_select(out_dir: Path, gated: list, n: int) -> list:
-    """The gated q4 pool, diversity-selected via the driver's OWN head-split greedy kernel
-    (release floors = pool floors, so ALL gated wallpapers are eligible). Two disjoint
-    within-head passes — heads never compared in one step — exactly like
-    build_emission_diversity_v1.select_release, just without the extra strict release floor."""
-    from tools.emission import selection as SEL
-    from tools.emission import descriptor as D
-    embs = D.load_embs(out_dir / "morph_embs.npz")
+    """The gated q4 pool, ordered by the LIVE release rule: two disjoint within-head passes
+    (heads are never compared in one step — their scales are incommensurable), each top-N by
+    the head's own score.
 
-    def entries(rows):
-        out = []
-        for r in rows:
-            emb = embs.get(r["location_id"])
-            out.append({"id": r["id"], "type": r["type"], "cluster": r["morph_cluster"],
-                        "flavor": r["palette_flavor"], "style": r["render_style"],
-                        "score": r.get("p_ge3"), "emb": emb.tolist() if emb is not None else None,
-                        "_rec": r})
-        return out
-
+    It was `selection.greedy_select`, max-marginal-gain over a morph-CLIP coverage kernel, with
+    the strange pass's kernel floored at `STRANGE_STYLE_WEIGHT` to spread across render modes.
+    That selector was retired from the live path on 2026-08-09 and deleted; a READOUT that kept
+    calling it would be describing a pool by a rule production does not use, which is the whole
+    failure mode this file exists to avoid elsewhere (it used to annotate against release floors
+    the driver had stopped applying). The head split and the 50/50 slot split are unchanged —
+    they are the parts that were never greedy's."""
     smooth = [r for r in gated if _wallpaper_style(r["render_style"])]
     strange = [r for r in gated if not _wallpaper_style(r["render_style"])]
     strange_slots = int(round(n * 0.5))
     smooth_slots = n - strange_slots
-    sm_sel, _ = SEL.greedy_select(entries(smooth), min(smooth_slots, len(smooth)))
-    st_sel, _ = SEL.greedy_select(entries(strange), min(strange_slots, len(strange)),
-                                  style_weight=STRANGE_STYLE_WEIGHT)
-    ordered = [e["_rec"] for e in sm_sel] + [e["_rec"] for e in st_sel]
-    # any gated rows greedy didn't reach (slots exhausted) still belong in the view — append
-    # them after the diversity-ordered picks so the full gated pool is representable.
+
+    def top(rows, k):
+        return sorted(rows, key=lambda r: (-(r.get("p_ge3") or 0.0), str(r["id"])))[:k]
+
+    ordered = top(smooth, min(smooth_slots, len(smooth))) + \
+        top(strange, min(strange_slots, len(strange)))
+    # any gated rows the slots did not reach still belong in the view — append them after the
+    # selected picks so the full gated pool is representable.
     picked = {r["id"] for r in ordered}
     ordered += sorted((r for r in gated if r["id"] not in picked),
                       key=lambda r: -(r.get("p_ge3") or 0.0))
@@ -97,7 +100,7 @@ def _diversity_select(out_dir: Path, gated: list, n: int) -> list:
 
 
 def _clears_strict(r) -> bool:
-    return F.for_style(r["render_style"], "release").gate(r.get("p_ge3") or 0.0)
+    return F.for_style(r["render_style"], "release").annotates(r.get("p_ge3") or 0.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -188,9 +191,9 @@ def build(out_dir: Path):
     # Release-candidate VIEW = the gated q4 wallpapers, diversity-selected (prompt §Selection).
     # v7 is a floor here, not the gate, and the mining head is uncalibrated on strange — so the
     # release view draws from the whole GATED pool (release floors = pool floors) and Matt judges
-    # by eye, rather than shipping only the few that clear the strict 0.90/0.50 production floors.
+    # by eye, rather than shipping only the few that clear the retired 0.90/0.50 release floors.
     # We run the driver's OWN head-split greedy select (same kernel), then annotate which picks
-    # also clear the strict production release floors (0.90 wallpaper / 0.50 mining).
+    # also clear the retired per-head release floors (0.90 wallpaper / 0.50 mining).
     selected = _diversity_select(out_dir, gated, n=min(len(gated), 24))
     selected_ids = {r["id"] for r in selected}
     inventory = [r for r in gated if r["id"] not in selected_ids]
@@ -375,22 +378,23 @@ def _markdown(counts, selected, inventory, floor_rejected, rescored, ledger, bot
     w(f"| colorized attempts | {counts['colorized_attempts']} |")
     w(f"| **gated pool** (pool floors: wp {POOL_WP} / mn {POOL_MN}) | **{counts['gated_pool']}** |")
     w(f"| **release-candidate view** (gated pool, diversity-selected) | **{counts['release_candidates']}** |")
-    w(f"| — of which clear the STRICT production floors (wp {STRICT_WP} / mn {STRICT_MN}) | {counts['strict_release_eligible']} |")
+    w(f"| — of which clear the RETIRED per-head floors (wp {STRICT_WP} / mn {STRICT_MN}) | {counts['strict_release_eligible']} |")
     w("")
     w("**The release-candidate view is the whole gated q4 pool, diversity-selected** (heads never "
       "compared in one greedy step — smooth via the wallpaper head, strange via the mining head, "
       "two disjoint passes). v7 is a floor here, so the view is NOT truncated to the "
-      "strict-floor subset — Matt judges by eye. The mining head is no longer uncalibrated on "
+      "retired-floor subset — Matt judges by eye. The mining head is no longer uncalibrated on "
       "strange renders (data/render_mode_head/v1/mining_gate_lock.json, 2026-08-06), which is "
       "why its 0.50 floor now cuts in the driver; this readout still shows what it cut. "
-      f"For reference, the driver's strict-floor pass shipped only "
+      f"For reference, the driver's retired-floor pass shipped only "
       f"{counts.get('driver_strict_release_split', {}).get('smooth_selected', 0) + counts.get('driver_strict_release_split', {}).get('strange_selected', 0)} "
       f"(smooth ≥{STRICT_WP} + strange ≥{STRICT_MN}).\n")
 
     w("## Release candidates — both head scores\n")
     w("The gated q4 pool, diversity-selected. `wp`/`mn` = wallpaper-head / mining-head marginal "
       "`p_ge3`; `★` marks the ROUTED head (the score the driver gated on); `✓` = clears that "
-      f"head's STRICT production floor (wallpaper {STRICT_WP} / mining {STRICT_MN}). The mining "
+      f"head's RETIRED release floor (wallpaper {STRICT_WP} / mining {STRICT_MN}; annotation-only "
+      f"since 2026-08-09 — a ✗ row ships today). The mining "
       f"floor is measured on the 2026-08-06 sheet (97.0% precision of passers at "
       f"{STRICT_MN} [84.7%-99.5%], recall 50.8%) — but on renders at locations v1 trained "
       "at, so treat mn as an optimistic hint on a MINIBROT population and judge by eye.\n")

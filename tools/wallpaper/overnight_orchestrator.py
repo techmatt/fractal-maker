@@ -57,7 +57,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
-import corpus_common as cc  # noqa: E402  (is_current_decoded — the current-stamp discriminator)
+sys.path.insert(0, str(ROOT))          # `tools.emission` is a namespace package off the root
+from tools.emission import floors as F  # noqa: E402  THE cut owner (GOOD_FLOOR)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -369,8 +370,8 @@ def ledger_line_count(ledger: Path) -> int:
 
 
 def new_fresh_q3(ledger: Path, start_line: int) -> list[dict]:
-    """The fresh q3 rows appended after `start_line`: v6-stamped, guard_pass,
-    decoded_class == 3 — exactly build_fresh_discovery's admission filter."""
+    """The fresh GOOD rows appended after `start_line`: guard_pass ∧ raw P(>=3) >=
+    `floors.GOOD_FLOOR` — exactly build_fresh_discovery's admission filter."""
     if not ledger.exists():
         return []
     rows = []
@@ -379,7 +380,7 @@ def new_fresh_q3(ledger: Path, start_line: int) -> list[dict]:
             if i < start_line or not line.strip():
                 continue
             d = json.loads(line)
-            if cc.is_current_decoded(d) and d.get("guard_pass") and (d.get("decoded_class") or 0) >= 3:
+            if d.get("guard_pass") and F.passes_good_floor(d.get("p_good")):
                 rows.append(d)
     return rows
 

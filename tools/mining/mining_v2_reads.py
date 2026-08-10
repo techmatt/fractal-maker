@@ -459,7 +459,7 @@ def build(rows, labels, heads, seed_scores) -> dict:                     # noqa:
         "heads": {"v1": {"ckpt": V1_CKPT, "role": "incumbent (LIVE pin)"},
                   "v2": {"ckpt": V2_CKPT, "role": "finetune candidate"}},
         "live_pin": MP.ACTIVE_MINING_CKPT,
-        "cuts": {f.name: {"value": f.value, "acts": f.acts, "stamp": f"{f.head}/{f.stamp}"}
+        "cuts": {f.name: {"value": f.value, "acts": False, "stamp": f"{f.head}/{f.stamp}"}
                  for f in (F.MINING_POOL, F.MINING_RELEASE)},
         "bootstrap": {"draws": BOOTSTRAP, "seed": BOOT_SEED, "kind": "paired over eval rows"},
         "caveats": {

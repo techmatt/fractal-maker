@@ -42,7 +42,6 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "sco
 import release_mix as RM                          # noqa: E402  THE release-mix ratio table
 from tools.emission import floors as F           # noqa: E402  THE stage-2 cut owner
 from tools.emission import cells as C            # noqa: E402
-from tools.emission import selection as SEL      # noqa: E402
 from tools.emission import descriptor as D       # noqa: E402
 
 try:
@@ -52,9 +51,12 @@ except Exception:
 
 OUT = ROOT / "scratch" / "first_release"
 REPORT = ROOT / "scratch" / "first_release_readout.md"
-# The release floors this readout annotates the pool against: IMPORTED from the one owner,
-# never re-typed. This readout used to carry `= 0.90, 0.50` of its own, so it kept annotating
-# against whatever the pair happened to be on the day it was written while the driver moved.
+# The RETIRED release floors this readout annotates the pool against: IMPORTED from the one
+# owner, never re-typed. This readout used to carry `= 0.90, 0.50` of its own, so it kept
+# annotating against whatever the pair happened to be on the day it was written while the
+# driver moved. Since 2026-08-09 nothing applies them at all — `Floor.annotates()` is the only
+# comparison a Floor offers — so every count below is a COUNTERFACTUAL ("would have cleared"),
+# and a row below the floor is a row that ships.
 WP_RELEASE_FLOOR = F.WALLPAPER_RELEASE.value
 MN_RELEASE_FLOOR = F.MINING_RELEASE.value
 STYLES = ["smooth", "tia", "stripe", "smooth_mean_angle", "smooth_angle_min",
@@ -88,7 +90,7 @@ def clears_release(row) -> bool:
     """`row` clears its head's release floor — through the owner's `gate`, so the stamp check
     runs here too. A readout that annotates "release-eligible" against a floor whose head has
     moved is stating a fact about a scale that no longer exists."""
-    return F.for_style(row["render_style"], "release").gate(row.get("p_ge3") or 0.0)
+    return F.for_style(row["render_style"], "release").annotates(row.get("p_ge3") or 0.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -269,13 +271,14 @@ def main():
     n_floor = sum(1 for r in rows if not r.get("passed") and not r.get("error"))
     recon_ok = (n_att == n_pass + n_floor + n_err)
 
-    # release-eligible subset + a reconstructed release (matches the driver's greedy select)
+    # release-eligible subset + the release the LIVE rank rule would pick from it. It was
+    # `selection.greedy_select`, the v1 driver's rule, which was retired on 2026-08-09 and
+    # deleted; a readout still calling it would describe this pool by a rule production does
+    # not use. Top-N by the head's own score, ties on id — no cluster cap, because this is a
+    # single-head ordering of one historical pool, not a run's release allocation.
     rel_elig = [r for r in gated if clears_release(r)]
-    entries = [{"id": r["id"], "type": r["type"], "cluster": r["morph_cluster"],
-                "flavor": r["palette_flavor"], "style": r["render_style"],
-                "score": r["p_ge3"], "emb": None, "_rec": r} for r in rel_elig]
-    selected, _log = SEL.greedy_select(entries, args.release_n)
-    rel_rows = [e["_rec"] for e in selected]
+    rel_rows = sorted(rel_elig,
+                      key=lambda r: (-(r.get("p_ge3") or 0.0), str(r["id"])))[:args.release_n]
 
     tgt = target_marginals(tags, by_id_partition, flavors, STYLES)
     real_g = realized_marginals(gated)
@@ -357,7 +360,7 @@ def main():
 
     w("## 4. Strange inventory (mining head)\n")
     w(f"- strange (non-smooth) gated wallpapers: **{len(strange)}**")
-    w(f"- above the {MN_RELEASE_FLOOR} mining release floor: **{len(strange_rel)}** "
+    w(f"- above the RETIRED {MN_RELEASE_FLOOR} mining release floor: **{len(strange_rel)}** "
       f"(toward mining-head calibration)")
     w("")
 

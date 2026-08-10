@@ -300,9 +300,10 @@ they are served and priced next run.
 ## 4. τ_h on record — the real per-partition curve
 
 `τ_h` is the **per-partition cheap-`p_good` harvest cut**: cheap score ≥ `τ_h` → one
-canonical confirmation render → decode. It is a **fixed offline constant**
-(`derive_tau_h`, keep=0.90 = the 10th percentile of cheap `p_good` among fidelity-study
-frames whose *canonical* `p_good` clears the family's `t_good`), **not** learned per run —
+canonical confirmation render → score. It is a **fixed offline constant**
+(`derive_tau_h`, keep=0.90 = the 10th percentile of cheap `p_good` among frames whose
+*canonical* `p_good` clears **`floors.GOOD_FLOOR`** — the family's per-partition `t_good`
+until 2026-08-09, when the whole table retired), **not** learned per run —
 identical across campaign 1 and 2. The question was whether the campaign harvests let us
 replace that guessed constant with an **empirical curve** of the real tradeoff: raise
 `τ_h` → canonical renders saved (cost) vs q3 admissions lost (benefit).
@@ -318,7 +319,11 @@ durably **in-tree via LFS** beside each run's ledger (`.gitattributes`;
 `tools/atlas/tau_h_retained_readout.py`: **reconciliation** (harvest_log admitted ties to
 each summary — 314/254/311/271) and **threshold era** (the confirmation decode recomputed
 under current `t_good` equals the recorded `canon_decoded` — campaign 1/2 already ran at
-today's `t_good`, so this is a no-op that *proves* the era matches). Campaign 2 breadth is
+today's `t_good`, so this is a no-op that *proves* the era matches). **That readout was
+deleted on 2026-08-09** with the τ_h harvest arm it belonged to: τ_h is now derived from the
+untruncated walk-outcome ledger alone, so the harvest logs are no longer an input to it and
+the era gate has nothing to gate. The curve read below stands as the measurement it was.
+Campaign 2 breadth is
 **segmented at the batch-1211 resume** where julia hook spacing changed 0.2 → 0.1
 (`julia_hooks.jsonl`: 0.2 for batches ≤1204, 0.1 for ≥1260), which shifts the julia
 candidate population; the two segments are never pooled.

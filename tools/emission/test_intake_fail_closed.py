@@ -26,6 +26,7 @@ from __future__ import annotations
 import ast
 import functools
 import json
+import pathlib
 import sys
 import tempfile
 from pathlib import Path
@@ -39,6 +40,7 @@ for _p in (ROOT, ROOT / "tools" / "scoring", ROOT / "tools" / "corpus"):
         sys.path.insert(0, str(_p))
 
 from tools.emission import descriptor as D            # noqa: E402
+from tools.emission import floors as F          # noqa: E402  THE cut owner
 from tools.emission import campaign1_intake as C1     # noqa: E402
 from tools.emission import library_seed_v2 as LS2     # noqa: E402
 import corpus_common as cc                            # noqa: E402
@@ -216,14 +218,28 @@ def test_the_verifier_raises_rather_than_rewriting():
 # 2. the relit seed's rows admit on the HUMAN label, not on a decode
 # --------------------------------------------------------------------------- #
 def _seed_row(**over):
-    """A row shaped like the relit seed's, current-stamped so `is_current_decoded` passes."""
+    """A row shaped like the relit seed's: a HUMAN 3/4 selected it and the head hates it
+    (`p_good` 0.01, far below `floors.GOOD_FLOOR`). Distinct ids get distinct coordinates —
+    the union dedups on location identity, so same-viewport rows are one location."""
     row = {"id": "s0", "family": "mandelbrot",
            "outcome_cx": "0.0", "outcome_cy": "0.0", "outcome_fw": "1.0",
            "mix_source": LS2.MIX_SOURCE, "scorer_version": cc.active_scorer_version(),
-           "decoded_class": 1, "p_notbad": 0.80, "p_good": 0.01,
+           "p_notbad": 0.80, "p_good": 0.01,
            "guard_pass": True, "distinct": True}
     row.update(over)
     return row
+
+
+def _admits(row) -> bool:
+    """`load_admitted`'s quality half, exercised through the loader on a one-row ledger —
+    there is no standalone predicate to call any more. `admit_quality` was that predicate and
+    it retired with the frozen `decoded_class` it read (2026-08-09); the rule it carried, the
+    FLOOR-ADMIT BYPASS, did not, and is what these tests are about."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        led = pathlib.Path(d) / "one.jsonl"
+        led.write_text(json.dumps(row) + "\n", encoding="utf-8")
+        return bool(D.load_admitted(led))
 
 
 def test_the_seeds_source_tag_is_registered_as_a_floor_admit_source():
@@ -232,11 +248,13 @@ def test_the_seeds_source_tag_is_registered_as_a_floor_admit_source():
     assert LS2.MIX_SOURCE in D.FLOOR_ADMIT_SOURCES
 
 
-def test_a_seed_row_admits_on_the_floor_with_a_class_1_decode():
-    """The whole point: `decoded_class` is 1 and the row is still admitted, because the
-    selection signal was a human 3/4 and the head never judged it."""
-    assert D.admit_quality(_seed_row()) is True
-    assert D.admit_quality(_seed_row(decoded_class=None)) is True
+def test_a_seed_row_admits_on_the_bypass_with_a_far_below_floor_score():
+    """The whole point: `p_good` is 0.01, an order of magnitude below `floors.GOOD_FLOOR`,
+    and the row is still admitted — because the selection signal was a human 3/4 and the
+    head never judged it."""
+    assert F.passes_good_floor(_seed_row()["p_good"]) is False   # the cut really would bite
+    assert _admits(_seed_row()) is True
+    assert _admits(_seed_row(p_good=None)) is True
 
 
 def test_a_seed_row_the_head_calls_bad_is_admitted_anyway():
@@ -248,8 +266,8 @@ def test_a_seed_row_the_head_calls_bad_is_admitted_anyway():
     Injection: this is red under the old `p_notbad >= FLOOR_PNOTBAD` branch for every value
     below the floor, which is what it is here to catch coming back."""
     for nb in (0.0, 0.01, 0.49, 0.4999):
-        assert D.admit_quality(_seed_row(p_notbad=nb)) is True, nb
-    assert D.admit_quality(_seed_row(p_notbad=None)) is True
+        assert _admits(_seed_row(p_notbad=nb)) is True, nb
+    assert _admits(_seed_row(p_notbad=None)) is True
     # ...and the constant itself is gone, so a re-add cannot be silent.
     assert not hasattr(D, "FLOOR_PNOTBAD"), (
         "descriptor.FLOOR_PNOTBAD is back. A floor-admit source's selection signal is "
@@ -259,12 +277,12 @@ def test_a_seed_row_the_head_calls_bad_is_admitted_anyway():
 
 
 def test_the_source_tag_is_what_switches_the_rule_not_the_row_shape():
-    """Same row, same numbers, different `mix_source` -> the q3 gate applies and it is cut.
+    """Same row, same numbers, different `mix_source` -> the good floor applies and it is cut.
     Without this the bypass test passes for any row at all — which is exactly the failure
     mode a bypass introduces, so this is the non-vacuity half of §B."""
-    assert D.admit_quality(_seed_row(mix_source="steered_frontier")) is False
-    assert D.admit_quality(_seed_row(mix_source=None)) is False
-    assert D.admit_quality(_seed_row(mix_source="steered_frontier", decoded_class=3)) is True
+    assert _admits(_seed_row(mix_source="steered_frontier")) is False
+    assert _admits(_seed_row(mix_source=None)) is False
+    assert _admits(_seed_row(mix_source="steered_frontier", p_good=0.9)) is True
 
 
 def test_load_admitted_admits_the_seed_row_end_to_end(tmp_path):
@@ -274,14 +292,18 @@ def test_load_admitted_admits_the_seed_row_end_to_end(tmp_path):
 
     `s1` carries `p_notbad=0.1` and is admitted (it used to be the row the badness floor cut);
     `s2` fails the guard and `s3` is not distinct, and both are still rejected — which is what
-    keeps "bypasses the quality cut" from meaning "bypasses everything"."""
+    keeps "bypasses the quality cut" from meaning "bypasses everything".
+
+    `s4` carries an OLDER head's stamp and is now admitted, where it used to be dropped: the
+    decode-version predicate retired on 2026-08-09. On a floor-admit source that is doubly
+    right — the head's opinion of the row was never what selected it."""
     led = tmp_path / "seed_ledger.jsonl"
     led.write_text("\n".join(json.dumps(r) for r in (
         _seed_row(),
-        _seed_row(id="s1", p_notbad=0.1),
-        _seed_row(id="s2", guard_pass=False),
-        _seed_row(id="s3", distinct=False),
-        _seed_row(id="s4", scorer_version="v6"),
+        _seed_row(id="s1", p_notbad=0.1, outcome_cx="0.1"),
+        _seed_row(id="s2", guard_pass=False, outcome_cx="0.2"),
+        _seed_row(id="s3", distinct=False, outcome_cx="0.3"),
+        _seed_row(id="s4", scorer_version="v6", outcome_cx="0.4"),
     )) + "\n", encoding="utf-8")
     got = [r["id"] for r in D.load_admitted(led)]
-    assert got == ["s0", "s1"]
+    assert got == ["s0", "s1", "s4"]

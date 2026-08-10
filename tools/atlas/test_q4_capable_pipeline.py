@@ -12,6 +12,7 @@ v5..v7-era shifts under it.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -19,7 +20,9 @@ ROOT = Path(__file__).resolve().parents[2]
 for sub in ("", "tools/mining", "tools/atlas", "tools/scoring", "tools/reframe", "tools/corpus"):
     sys.path.insert(0, str(ROOT / sub) if sub else str(ROOT))
 
-from score_lib import corn_decode  # noqa: E402
+from score_lib import corn_decode  # noqa: E402  (the CORN decode primitive; no
+                                   #  longer the SERVED predicate, still the decode)
+from tools.emission import floors as F  # noqa: E402  THE cut owner
 import production_seeder as ps  # noqa: E402
 from tools.emission import descriptor as desc  # noqa: E402
 
@@ -85,63 +88,82 @@ def test_chosen_probs_tolerates_a_pre_q4_trace_with_no_key_at_all():
 
 
 # --------------------------------------------------------------------------- ledger row
-def test_ledger_write_path_records_and_decodes_class_4():
-    """The `rew`-dict -> row contract the four append sites share, exercised directly."""
+def test_ledger_write_path_persists_the_third_probability():
+    """The `rew`-dict -> row contract the four append sites share, exercised directly.
+
+    THE ROW CARRIES PROBABILITIES AND NO CLASS since 2026-08-09: `decoded_class` and the
+    `t_good` it was decoded at are gone from every ledger row a run writes, because the class
+    is a pure function of the probabilities beside it plus a global constant and a stored copy
+    can only go stale. What must survive is the THIRD probability — dropping it is what made
+    a K=4 head's best rows unreadable, and it is what this test has always been about."""
     rew = {"p_notbad": 0.97, "p_good": 0.93, "p_ge4": 0.88}
-    t_good = ps.t_good_for("julia:multibrot4")
-    decoded = corn_decode(rew["p_notbad"], rew["p_good"], t_good, rew.get("p_ge4"))
-    row = {"decoded_class": decoded, "p_notbad": rew["p_notbad"], "p_good": rew["p_good"],
-           "p_ge4": rew.get("p_ge4"), "t_good": t_good, "guard_pass": True, "distinct": True}
-    assert row["decoded_class"] == 4, "a q4 row must be able to decode to 4"
+    row = {"p_notbad": rew["p_notbad"], "p_good": rew["p_good"],
+           "p_ge4": rew.get("p_ge4"), "guard_pass": True, "distinct": True}
     assert row["p_ge4"] == 0.88, "the third probability must be persisted, not dropped"
-    # and the row is re-decodable from what was persisted (no re-render, no re-forward)
-    assert corn_decode(row["p_notbad"], row["p_good"], row["t_good"], row["p_ge4"]) == 4
+    assert "decoded_class" not in row and "t_good" not in row
+    # the class is recoverable from what WAS persisted, at read time, at the live floor
+    assert F.good_class(row["p_good"], row["p_ge4"]) == 4
 
 
 def test_a_pre_q4_rew_dict_still_writes_a_valid_row():
     rew = {"p_notbad": 0.97, "p_good": 0.93}          # no p_ge4 key (K=3 era)
-    decoded = corn_decode(rew["p_notbad"], rew["p_good"], 0.5, rew.get("p_ge4"))
-    assert decoded == 3 and rew.get("p_ge4") is None
+    assert F.good_class(rew["p_good"], rew.get("p_ge4")) == 3
+    assert rew.get("p_ge4") is None
 
 
-# --------------------------------------------------------------------------- q3+ predicates
-def test_q3plus_admits_class_4_everywhere_it_is_asked():
-    assert ps.is_q3plus({"decoded_class": 4}) and ps.is_q3plus({"decoded_class": 3})
-    assert not ps.is_q3plus({"decoded_class": 2})
-    assert not ps.is_q3plus({"decoded_class": None})   # guard-failed
-    assert not ps.is_q3plus({})                        # pre-decoded_class era, no backfill
+# --------------------------------------------------------------------------- the good floor
+def test_is_good_reads_the_probability_not_a_stored_class():
+    """A strong row with a stale class-1 stamp is IN; a weak row stamped class 3 is OUT. The
+    stamp is a fact about the day the row was minted and the floor is a fact about now."""
+    assert ps.is_good({"p_good": 0.95, "decoded_class": 1})
+    assert not ps.is_good({"p_good": 0.05, "decoded_class": 3})
+    assert not ps.is_good({"p_good": None})            # guard-failed / unscored
+    assert not ps.is_good({})                          # pre-CORN era, no backfill
 
 
 def test_build_cloud_keeps_a_class_4_row():
     rows = [
-        {"id": "q4", "family": "mandelbrot", "guard_pass": True, "decoded_class": 4,
+        {"id": "q4", "family": "mandelbrot", "guard_pass": True, "p_good": 0.95, "p_ge4": 0.9,
          "outcome_cx": 0.0, "outcome_cy": 0.0, "outcome_fw": 1e-3},
-        {"id": "q3", "family": "mandelbrot", "guard_pass": True, "decoded_class": 3,
+        {"id": "q3", "family": "mandelbrot", "guard_pass": True, "p_good": 0.80,
          "outcome_cx": 5.0, "outcome_cy": 5.0, "outcome_fw": 1e-3},
-        {"id": "q2", "family": "mandelbrot", "guard_pass": True, "decoded_class": 2,
+        {"id": "q2", "family": "mandelbrot", "guard_pass": True, "p_good": 0.30,
          "outcome_cx": 9.0, "outcome_cy": 9.0, "outcome_fw": 1e-3},
     ]
     assert {r["id"] for r in ps.build_cloud(rows, "mandelbrot")} == {"q4", "q3"}
 
 
-def test_cloud_diagnostic_reports_class_4():
-    rows = [{"family": "mandelbrot", "guard_pass": True, "decoded_class": c,
+def test_cloud_diagnostic_reports_great_as_a_subset_of_good():
+    """The split is DERIVED from `p_good`/`p_ge4` at the live floor, not tallied off a stored
+    class — so it describes the ledger the way the run about to read it will. `great` is a
+    SUBSET of `good`, and the three buckets sum to the scored population."""
+    rows = [{"family": "mandelbrot", "guard_pass": True, "p_good": pg, "p_ge4": p4,
              "outcome_cx": float(i), "outcome_cy": 0.0, "outcome_fw": 1e-3}
-            for i, c in enumerate((1, 2, 3, 4, 4))]
+            for i, (pg, p4) in enumerate([(0.05, 0.0), (0.30, 0.0), (0.80, 0.1),
+                                          (0.95, 0.9), (0.96, 0.8)])]
     diag = ps.cloud_diagnostic(rows, ps.build_cloud(rows, "mandelbrot"), "mandelbrot")
-    assert diag["class_split"] == {1: 1, 2: 1, 3: 1, 4: 2}
+    assert diag["class_split"] == {"below_floor": 2, "good": 3, "great": 2}
+    assert diag["good_floor"] == F.GOOD_FLOOR
+    sp = diag["class_split"]
+    assert sp["below_floor"] + sp["good"] == diag["guard_clean_scored"]
 
 
-def test_emission_intake_admits_a_class_4_row():
-    assert desc.admit_quality({"decoded_class": 4})
-    assert desc.admit_quality({"decoded_class": 3})
-    assert not desc.admit_quality({"decoded_class": 2})
-    assert not desc.admit_quality({"decoded_class": None})
+def test_emission_intake_admits_a_class_4_row(tmp_path):
+    """Through the loader: there is no standalone quality predicate left to call."""
+    def admits(**row):
+        base = {"id": "x", "family": "mandelbrot", "outcome_cx": "0.0", "outcome_cy": "0.0",
+                "outcome_fw": "1.0", "guard_pass": True, "distinct": True}
+        led = tmp_path / f"{abs(hash(tuple(sorted(row.items()))))}.jsonl"
+        led.write_text(json.dumps({**base, **row}) + "\n", encoding="utf-8")
+        return bool(desc.load_admitted(led))
+
+    assert admits(p_good=0.95, p_ge4=0.9)              # a class-4 row
+    assert admits(p_good=0.80)                         # a class-3 row
+    assert not admits(p_good=0.30)                     # below the floor
+    assert not admits(p_good=None)
     # a FLOOR-ADMIT source takes NO machine quality cut at all (the v7-era badness floor was
-    # deleted 2026-08-04) — neither the q3 gate nor a p_notbad bar can veto it.
-    assert desc.admit_quality({"_source_tag": "q4_harvest", "p_notbad": 0.6,
-                               "decoded_class": 1})
-    assert desc.admit_quality({"_source_tag": "q4_harvest", "p_notbad": 0.4,
-                               "decoded_class": 4})
-    assert desc.admit_quality({"_source_tag": "q4_harvest", "p_notbad": 0.0,
-                               "decoded_class": 1})
+    # deleted 2026-08-04, and the good floor does not apply either) — nothing the head says
+    # can veto material it never selected.
+    assert admits(mix_source="q4_harvest", p_notbad=0.6, p_good=0.01)
+    assert admits(mix_source="q4_harvest", p_notbad=0.0, p_good=0.01)
+    assert admits(mix_source="q4_harvest", p_notbad=0.4, p_good=0.95)

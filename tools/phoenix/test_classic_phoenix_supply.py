@@ -112,17 +112,19 @@ def test_a_missing_resume_file_is_an_empty_resume_not_a_crash(tmp_path):
                            tmp_path / "l.npz") == (set(), 0)
 
 
-def test_the_ledger_admits_on_its_OWN_partitions_threshold(tmp_path):
-    """`classic_phoenix` IS `phoenix:classic` (registered 2026-08-04), so the bar it decodes
-    at is that partition's, not pooled `phoenix`'s. Asserted through the registry rather than
-    against a literal, so it follows a future derivation instead of pinning today's baseline."""
+def test_the_ledger_resolves_to_its_OWN_partition_and_the_pinned_point(tmp_path):
+    """`classic_phoenix` IS `phoenix:classic` (registered 2026-08-04). That used to also decide
+    WHICH THRESHOLD admitted its rows, and getting the key wrong once minted all 24 against
+    `phoenix`'s 0.77 and took the partition to zero supply. There is one flat
+    `floors.GOOD_FLOOR` now, so the partition no longer selects a cut and that class of bug is
+    unwritable; the partition still decides the CELL, the release share and the supply note."""
     import production_seeder as ps
     cps = _mod()
     # every row this ledger writes resolves to the derived partition
     assert P.partition_of_row(dict(family="phoenix", outcome_cx="0", outcome_cy="0",
                                    outcome_fw="3.0")) == P.CLASSIC_PHOENIX
-    assert P.CLASSIC_PHOENIX in ps.T_GOOD_UNCALIBRATED
-    assert ps.t_good_status(P.CLASSIC_PHOENIX) == "UNCALIBRATED"
+    # ...and nothing anywhere can pick a per-partition threshold for it any more
+    assert not hasattr(ps, "t_good_for") and not hasattr(ps, "T_GOOD_UNCALIBRATED")
     # the module's classic identity is the registry's pinned point, not a second literal
     s = cps.CLASSIC_SEED
     assert (s.c.real, s.c.imag, s.p.real, s.p.imag, s.z_m1.real, s.z_m1.imag) \

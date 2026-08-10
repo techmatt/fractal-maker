@@ -33,7 +33,9 @@ from tools.emission import floors as F           # noqa: E402  THE stage-2 cut o
 
 OUT = ROOT / "scratch" / "first_release"
 REPORT = ROOT / "scratch" / "first_release_reselect_readout.md"
-# IMPORTED from the one owner (this file used to re-type `= 0.90, 0.50`).
+# The RETIRED release floors, IMPORTED from the one owner (this file used to re-type
+# `= 0.90, 0.50`). Annotation-only since 2026-08-09: every count against them below is a
+# counterfactual, not a description of what was cut.
 WP_RELEASE_FLOOR = F.WALLPAPER_RELEASE.value
 MN_RELEASE_FLOOR = F.MINING_RELEASE.value
 
@@ -149,7 +151,8 @@ def strange_sheet(strange_rel, released_set, out_png: Path, cols: int = 8):
     H = hdr + rows * (th + lh + pad) + pad
     sheet = Image.new("RGB", (W, H), (16, 16, 18))
     d = ImageDraw.Draw(sheet)
-    d.text((pad, 8), f"strange supply — {n} pool tiles ≥ {MN_RELEASE_FLOOR} mining floor, "
+    d.text((pad, 8), f"strange supply — {n} pool tiles ≥ the retired {MN_RELEASE_FLOOR} mining "
+                     f"floor, "
            f"ranked by mining p_ge3 (deploy fidelity). ★ = in the release.",
            fill=(235, 235, 235), font=_font(14))
     for i, r in enumerate(strange_rel):
@@ -194,7 +197,7 @@ def main():
     strange_rel = sorted(
         [r for r in by_id.values()
          if r["render_style"] != "smooth" and r.get("passed")
-         and F.MINING_RELEASE.gate(r.get("p_ge3") or 0)],
+         and F.MINING_RELEASE.annotates(r.get("p_ge3") or 0)],
         key=lambda r: -(r.get("p_ge3") or 0))
     strange_sheet(strange_rel, released_set, OUT / "strange_candidates_sheet.png")
 

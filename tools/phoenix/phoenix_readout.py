@@ -66,30 +66,36 @@ def fertility(records: list[dict], key) -> list[dict]:
 
 
 def intake_check(ledger: list[dict]) -> dict:
-    """Confirm the admissions ledger is library-intake-ready: is_current_decoded ∧
-    decoded_class==3 ∧ guard_pass ∧ distinct, with the full (c,p,z_-1) identity stamped."""
-    active = cc.active_scorer_version()
+    """Confirm the admissions ledger is library-intake-ready: raw P(>=3) >= `floors.GOOD_FLOOR`
+    ∧ guard_pass ∧ distinct, with the full (c,p,z_-1) identity stamped.
+
+    The `scorer_version` stamp is REPORTED, not gated on. Until 2026-08-09 a row an older head
+    had stamped was inadmissible outright; it is now judged on its own probability like any
+    other, and the stamp says how much to trust that probability rather than whether to read
+    it at all."""
+    active = active_ckpt.ACTIVE_VERSION
     ok = 0
     fails = defaultdict(int)
     id_ok = 0
+    n_stale = 0
     for r in ledger:
-        cur = cc.is_current_decoded(r)
-        q3 = (r.get("decoded_class") or 0) >= 3
+        n_stale += int(r.get("scorer_version") != active)
+        q3 = F.passes_good_floor(r.get("p_good"))
         gp = bool(r.get("guard_pass"))
         dist = bool(r.get("distinct"))
         has_id = all(r.get(k) is not None for k in
                      ("phoenix_c_re", "phoenix_c_im", "phoenix_p_re", "phoenix_p_im",
                       "phoenix_zm1_re", "phoenix_zm1_im"))
         id_ok += int(has_id)
-        if cur and q3 and gp and dist and has_id:
+        if q3 and gp and dist and has_id:
             ok += 1
         else:
-            if not cur: fails["stale_decode"] += 1
-            if not q3: fails["not_q3"] += 1
+            if not q3: fails["below_good_floor"] += 1
             if not gp: fails["guard_fail"] += 1
             if not dist: fails["not_distinct"] += 1
             if not has_id: fails["missing_identity"] += 1
     return {"active_version": active, "n_ledger": len(ledger), "n_intake_ready": ok,
+            "n_off_active_head": n_stale, "good_floor": F.GOOD_FLOOR,
             "n_identity_stamped": id_ok, "reject_breakdown": dict(fails)}
 
 
@@ -241,9 +247,11 @@ def main(argv=None):
     md.append("### by |p| band\n" + _fmt_ferti(fert_pb, "|p|") + "\n")
 
     md.append("## Admissions ledger — intake-ready check\n")
-    md.append(f"Predicate (library intake): `is_current_decoded` (scorer_version=="
-              f"`{intake['active_version']}`) ∧ decoded_class==3 ∧ guard_pass ∧ distinct ∧ full "
-              f"(c,p,z₋₁) identity stamped.\n")
+    md.append(f"Predicate (library intake): raw P(>=3) >= `floors.GOOD_FLOOR` "
+              f"({intake['good_floor']:g}) ∧ guard_pass ∧ distinct ∧ full (c,p,z₋₁) identity "
+              f"stamped. Active head `{intake['active_version']}`; "
+              f"{intake['n_off_active_head']} row(s) carry another head's stamp — reported, "
+              f"not gated on.\n")
     md.append(f"- Ledger rows: **{intake['n_ledger']}**; identity-stamped: "
               f"**{intake['n_identity_stamped']}/{intake['n_ledger']}**; "
               f"**intake-ready: {intake['n_intake_ready']}/{intake['n_ledger']}**.")

@@ -59,7 +59,7 @@ def test_the_lock_quotes_the_owner_cuts_and_their_measured_operating_points(lock
     # `acts` is DERIVED from the owner, so the record tracks the retirement instead of
     # outliving it: the cut went annotation-only on 2026-08-09 and the frozen MEASUREMENT
     # beside it is unchanged, which is the whole reason the record survives the retirement.
-    assert rel["acts"] is F.MINING_RELEASE.acts and rel["site"] == "release"
+    assert rel["acts"] is False and rel["site"] == "release"
     assert (rel["fires"], rel["tp"], rel["n"]) == (33, 32, 422)
     lo, hi = rel["precision_ci95"]
     assert lo < rel["precision"] < hi                       # a Wilson interval, not a point
@@ -132,7 +132,7 @@ def test_a_sitting_that_calibrated_another_checkpoint_cannot_lock_this_gate():
 def test_a_floor_moved_off_the_sitting_cannot_be_quoted(monkeypatch):
     """A value nobody measured cannot acquire a precision by being written into the record."""
     moved = F.Floor(name="mining_release", value=0.55, head=F.MINING_HEAD,
-                    stamp=MP.HEAD_VERSION, site="release", acts=True, basis="injected")
+                    stamp=MP.HEAD_VERSION, site="release", basis="injected")
     monkeypatch.setattr(L, "LOCKED_CUTS", (F.MINING_POOL, moved))
     with pytest.raises(L.LockDerivationError, match="only\n?\\s*quote a cut"):
         L.derive()
