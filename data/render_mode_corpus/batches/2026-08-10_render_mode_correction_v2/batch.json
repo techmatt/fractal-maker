@@ -1,0 +1,537 @@
+{
+  "created": "2026-08-10T12:10:44",
+  "batch_id": "2026-08-10_render_mode_correction_v2",
+  "generator_version": "render_mode_correction_v2",
+  "labeler": null,
+  "n_rows": 1000,
+  "schema_note": "MINING CORRECTION SHEET, stratified by render mode x mining score with the composite/direct ('fancy') modes deliberately OVER-DRAWN at high score \u2014 the busy-false-positive cell run 25's era gate named. Every row carries the complete render block, the mode + mode_params, the inherited colormap recipe (provenance.color_params \u2014 the crop is a pure function of the two), the location-grouped split_side, the bucket/score-bin it was drawn under and the mining-v1 pre-label (head_mining_v1 / p_ge3 / pred / suggested_tier). label.score is null on every row: the suggestion is NOT a label and is never merged as one. Presentation is sorted good->bad by pred, stamped contiguous in sheet_order, with opaque image_ids.",
+  "sheet_incomplete": false,
+  "incomplete_note": null,
+  "head": {
+    "ckpt": "data/render_mode_head/v1/model_best.pt",
+    "version": "v1",
+    "gate_version": "mining_v1",
+    "role": "PRE-LABEL + SELECTION SCREEN \u2014 no gate, floor, threshold or pin is applied or moved here; would_pass_gate is stamped and gates nothing",
+    "scorer": "tools/mining/mining_gate.MiningScorer (fp32, no autocast; marginal p_ge = cumprod(sigmoid), NEVER the CORN conditional)",
+    "deploy_transform": "classifier.data.Transform(train=False) \u2014 384x224 bicubic stretch + the checkpoint's own mean/std"
+  },
+  "suggested_tier_rule": {
+    "rule": "tier = 1 + #{c in cuts : expected_tier >= c}; expected_tier = 1 + sum_k marginal_k",
+    "rule_owner": "tools/wallpaper/suggest_tier.py (expected_tier / tier_from_pred / fit_cuts) \u2014 imported, not restated",
+    "k_tiers": 3,
+    "cuts": [
+      1.317,
+      1.8727
+    ],
+    "cut_method": "fit_cuts \u2014 prior-matched quantiles of the head's own readout on a LABELED SLICE, frozen and applied ABSOLUTELY. This replaces the per-batch `cuts_from_prior` fallback, which had no labeled slice to fit and therefore carried no information about a batch's absolute quality level.",
+    "derived": "2026-08-10",
+    "deriver": "tools/mining/suggest_tier_mining.derive_cuts()",
+    "fit_slice": {
+      "batch": "2026-08-06_render_mode_fresh_sheet_v1",
+      "labels": "labels/render_mode_fresh_sheet_v1.json",
+      "n": 960,
+      "tier_prior": {
+        "1": 577,
+        "2": 235,
+        "3": 148
+      },
+      "suggested_hist_on_the_fit_slice": {
+        "1": 577,
+        "2": 235,
+        "3": 148
+      }
+    },
+    "anchoring": "the fit slice's labels were collected on a CORRECTION sheet served with the previous (per-batch quantile) suggestion prefilled; agreement with what was served was 892/960 = 0.929, so these cuts are anchored to their predecessor and largely reproduce it ((1.3893, 1.9331) -> (1.317, 1.8727)).",
+    "head": {
+      "ckpt": "data/render_mode_head/v1/model_best.pt",
+      "version": "v1"
+    },
+    "realized_suggestion_hist": {
+      "1": 61,
+      "2": 510,
+      "3": 429
+    },
+    "realized_suggestion_shares": {
+      "1": 0.061,
+      "2": 0.51,
+      "3": 0.429
+    },
+    "n_rows": 1000,
+    "scope": "a SUGGESTION, never a label \u2014 nothing downstream may read it as one, and the merge refuses to."
+  },
+  "universe": {
+    "population": {
+      "artifact": "data/render_mode_corpus/gate_passers_v3.json",
+      "rows": 401,
+      "locations": 112,
+      "head": {
+        "ckpt": "data/wallpaper_head/v3/model_best.pt",
+        "version": "v3",
+        "pin": "tools/wallpaper/wallpaper_pins.HEAD_CKPT_REL"
+      },
+      "gate": {
+        "statistic": "marginal p_ge3 = cumprod(sigmoid(logits))[1] (NEVER the CORN conditional)",
+        "rule": "p_ge3 > 0.9",
+        "threshold": 0.9,
+        "pin": "tools/wallpaper/wallpaper_pins.GATE_THRESHOLD"
+      },
+      "source_batch": "2026-07-09_wallpaper_headbatch_dramatic_v1"
+    },
+    "exclusion": {
+      "prior_sheet": "2026-08-06_render_mode_fresh_sheet_v1",
+      "served_location_mode_pairs": 960,
+      "rule": "a (location, mode) pair Matt has already judged is never served again, whatever palette it would carry"
+    },
+    "roster": {
+      "n_modes": 15,
+      "kinds": {
+        "pure": 6,
+        "composite": 5,
+        "direct": 4
+      }
+    },
+    "n_universe": 3486,
+    "universe_by_mode": {
+      "tia": 168,
+      "stripe": 159,
+      "exp_smoothing": 155,
+      "gaussian_int": 169,
+      "trap_circle": 160,
+      "curv_linear": 160,
+      "smooth_mean_angle": 152,
+      "smooth_angle_min": 161,
+      "composite_c7_smooth_trap_circle": 168,
+      "composite_c13_smooth_stripe": 142,
+      "composite_c17_smooth_curvature": 164,
+      "direct_trap_ring": 432,
+      "direct_trap_screen": 432,
+      "direct_trap_multiply": 432,
+      "direct_trap_lines": 432
+    },
+    "universe_by_kind": {
+      "pure": 971,
+      "composite": 787,
+      "direct": 1728
+    },
+    "direct_rule": "direct_* is palette-INDIFFERENT by construction, so it spreads the 9-cell DIRECT_GRID on one deterministic palette per location instead of spreading palettes (sheet v1's rule, unchanged)"
+  },
+  "selection_report": {
+    "max_rows": 1000,
+    "drawn_rows": 1000,
+    "screened": 3486,
+    "cuts": [
+      1.317,
+      1.8727
+    ],
+    "bucket_order": [
+      "hi_fancy",
+      "hi_pure",
+      "mode_floor",
+      "mid_fancy",
+      "fill"
+    ],
+    "per_bucket": [
+      {
+        "bucket": "hi_fancy",
+        "rule": "TAKE ALL \u2014 mining pred >= 1.8727 (the head's own top tier), kinds ['composite', 'direct']",
+        "available": 219,
+        "drawn": 219,
+        "by_mode": {
+          "composite_c13_smooth_stripe": 21,
+          "composite_c17_smooth_curvature": 8,
+          "composite_c7_smooth_trap_circle": 3,
+          "direct_trap_lines": 47,
+          "direct_trap_multiply": 123,
+          "direct_trap_ring": 2,
+          "direct_trap_screen": 12,
+          "smooth_angle_min": 3
+        }
+      },
+      {
+        "bucket": "hi_pure",
+        "rule": "TAKE ALL \u2014 mining pred >= 1.8727 (the head's own top tier), kinds ['pure']",
+        "available": 208,
+        "drawn": 208,
+        "by_mode": {
+          "curv_linear": 7,
+          "exp_smoothing": 98,
+          "gaussian_int": 20,
+          "stripe": 29,
+          "tia": 54
+        }
+      },
+      {
+        "bucket": "mode_floor",
+        "rule": "top every mode up to 20 rows (mid band before low) \u2014 a floor, not a bonus",
+        "available": null,
+        "drawn": 125,
+        "by_mode": {
+          "tia": 0,
+          "stripe": 0,
+          "exp_smoothing": 0,
+          "gaussian_int": 0,
+          "trap_circle": 20,
+          "curv_linear": 13,
+          "smooth_mean_angle": 20,
+          "smooth_angle_min": 17,
+          "composite_c7_smooth_trap_circle": 17,
+          "composite_c13_smooth_stripe": 0,
+          "composite_c17_smooth_curvature": 12,
+          "direct_trap_ring": 18,
+          "direct_trap_screen": 8,
+          "direct_trap_multiply": 0,
+          "direct_trap_lines": 0
+        }
+      },
+      {
+        "bucket": "mid_fancy",
+        "rule": "60% of the post-floor remainder to composite+direct in the mid band, balanced over modes (deal_round_robin)",
+        "target": 269,
+        "available": 538,
+        "drawn": 269,
+        "mode_available": {
+          "composite_c13_smooth_stripe": 38,
+          "composite_c17_smooth_curvature": 12,
+          "composite_c7_smooth_trap_circle": 8,
+          "direct_trap_lines": 116,
+          "direct_trap_multiply": 152,
+          "direct_trap_ring": 75,
+          "direct_trap_screen": 118,
+          "smooth_angle_min": 19
+        },
+        "mode_alloc": {
+          "composite_c13_smooth_stripe": 38,
+          "composite_c17_smooth_curvature": 12,
+          "composite_c7_smooth_trap_circle": 8,
+          "direct_trap_lines": 48,
+          "direct_trap_multiply": 48,
+          "direct_trap_ring": 48,
+          "direct_trap_screen": 48,
+          "smooth_angle_min": 19
+        }
+      },
+      {
+        "bucket": "fill",
+        "rule": "the remainder, balanced over modes (deal_round_robin), mid band before low",
+        "available": null,
+        "drawn": 179,
+        "by_mode": {
+          "curv_linear": 14,
+          "direct_trap_lines": 21,
+          "direct_trap_multiply": 21,
+          "direct_trap_ring": 20,
+          "direct_trap_screen": 21,
+          "exp_smoothing": 20,
+          "gaussian_int": 20,
+          "stripe": 21,
+          "tia": 21
+        }
+      }
+    ],
+    "drawn_by_bucket": {
+      "hi_fancy": 219,
+      "mid_fancy": 269,
+      "mode_floor": 125,
+      "fill": 179,
+      "hi_pure": 208
+    },
+    "drawn_by_mode": {
+      "composite_c13_smooth_stripe": 59,
+      "composite_c17_smooth_curvature": 32,
+      "composite_c7_smooth_trap_circle": 28,
+      "curv_linear": 34,
+      "direct_trap_lines": 116,
+      "direct_trap_multiply": 192,
+      "direct_trap_ring": 88,
+      "direct_trap_screen": 89,
+      "exp_smoothing": 118,
+      "gaussian_int": 40,
+      "smooth_angle_min": 39,
+      "smooth_mean_angle": 20,
+      "stripe": 50,
+      "tia": 75,
+      "trap_circle": 20
+    },
+    "drawn_by_kind": {
+      "composite": 178,
+      "direct": 485,
+      "pure": 337
+    },
+    "drawn_by_bin": {
+      "hi": 427,
+      "lo": 5,
+      "mid": 568
+    },
+    "drawn_mode_x_bin": {
+      "composite_c13_smooth_stripe": {
+        "hi": 21,
+        "mid": 38
+      },
+      "composite_c17_smooth_curvature": {
+        "mid": 24,
+        "hi": 8
+      },
+      "composite_c7_smooth_trap_circle": {
+        "mid": 25,
+        "hi": 3
+      },
+      "curv_linear": {
+        "mid": 27,
+        "hi": 7
+      },
+      "direct_trap_lines": {
+        "mid": 69,
+        "hi": 47
+      },
+      "direct_trap_multiply": {
+        "hi": 123,
+        "mid": 69
+      },
+      "direct_trap_ring": {
+        "mid": 86,
+        "hi": 2
+      },
+      "direct_trap_screen": {
+        "mid": 77,
+        "hi": 12
+      },
+      "exp_smoothing": {
+        "hi": 98,
+        "mid": 20
+      },
+      "gaussian_int": {
+        "mid": 20,
+        "hi": 20
+      },
+      "smooth_angle_min": {
+        "mid": 36,
+        "hi": 3
+      },
+      "smooth_mean_angle": {
+        "mid": 16,
+        "lo": 4
+      },
+      "stripe": {
+        "hi": 29,
+        "mid": 21
+      },
+      "tia": {
+        "hi": 54,
+        "mid": 21
+      },
+      "trap_circle": {
+        "mid": 19,
+        "lo": 1
+      }
+    },
+    "screened_by_bin": {
+      "hi": 427,
+      "lo": 2204,
+      "mid": 855
+    },
+    "screened_mode_x_bin": {
+      "tia": {
+        "hi": 54,
+        "lo": 61,
+        "mid": 53
+      },
+      "stripe": {
+        "hi": 29,
+        "lo": 83,
+        "mid": 47
+      },
+      "exp_smoothing": {
+        "hi": 98,
+        "lo": 13,
+        "mid": 44
+      },
+      "gaussian_int": {
+        "hi": 20,
+        "lo": 110,
+        "mid": 39
+      },
+      "trap_circle": {
+        "lo": 141,
+        "mid": 19
+      },
+      "curv_linear": {
+        "hi": 7,
+        "lo": 126,
+        "mid": 27
+      },
+      "smooth_mean_angle": {
+        "lo": 136,
+        "mid": 16
+      },
+      "smooth_angle_min": {
+        "hi": 3,
+        "lo": 122,
+        "mid": 36
+      },
+      "composite_c7_smooth_trap_circle": {
+        "hi": 3,
+        "lo": 140,
+        "mid": 25
+      },
+      "composite_c13_smooth_stripe": {
+        "hi": 21,
+        "lo": 83,
+        "mid": 38
+      },
+      "composite_c17_smooth_curvature": {
+        "hi": 8,
+        "lo": 132,
+        "mid": 24
+      },
+      "direct_trap_ring": {
+        "hi": 2,
+        "lo": 337,
+        "mid": 93
+      },
+      "direct_trap_screen": {
+        "hi": 12,
+        "lo": 294,
+        "mid": 126
+      },
+      "direct_trap_multiply": {
+        "hi": 123,
+        "lo": 157,
+        "mid": 152
+      },
+      "direct_trap_lines": {
+        "hi": 47,
+        "lo": 269,
+        "mid": 116
+      }
+    },
+    "modes_below_floor": {},
+    "hi_band_retention": {
+      "screened": 427,
+      "drawn": 427,
+      "note": "TAKE-ALL, so these agree unless the cap bound first"
+    },
+    "seed": 20260810
+  },
+  "screen_vs_keeper": {
+    "n": 1000,
+    "spearman": 0.9422476502476502,
+    "mean_abs_delta": 0.04509855865189239,
+    "top_tier_agreement": 0.995,
+    "note": "screen = the same render path at (640, 360, 1), SCORING-ONLY; keeper = the stored 1280x720 ss2 crop. head_mining_v1 IS the keeper score; the screen only chose what to render."
+  },
+  "split": {
+    "rule": "union-find over locations linked by Julia-seed == parent-plane point; family-stratified seeded draw over UNITS, not locations",
+    "seed": 0,
+    "eval_frac": 0.4,
+    "n_locations": 91,
+    "n_units": 77,
+    "n_multi_loc_units": 9,
+    "largest_unit": 4,
+    "linked_base_parents": 6,
+    "n_eval_units": 30,
+    "n_eval_loc": 39,
+    "n_train_loc": 52,
+    "units_disjoint": "77 units, each wholly on one side",
+    "eval_rows": 394,
+    "train_rows": 606
+  },
+  "seeds": {
+    "draw_seed": 20260810,
+    "split_seed": 0,
+    "id_salt": "render_mode_correction_v2/2026-08-10"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "filter": "lanczos3",
+    "jpg_quality": 95,
+    "interior_mode": "black",
+    "composition": "center",
+    "why_these_pins": "sheet v1's pins, which are the July render-mode batches' own \u2014 the mining head was trained on crops at these settings, and a corpus whose two halves differ in geometry cannot be unioned",
+    "screen_geometry": [
+      640,
+      360,
+      1
+    ]
+  },
+  "realized": {
+    "rows_by_mode": {
+      "composite_c13_smooth_stripe": 59,
+      "composite_c17_smooth_curvature": 32,
+      "composite_c7_smooth_trap_circle": 28,
+      "curv_linear": 34,
+      "direct_trap_lines": 116,
+      "direct_trap_multiply": 192,
+      "direct_trap_ring": 88,
+      "direct_trap_screen": 89,
+      "exp_smoothing": 118,
+      "gaussian_int": 40,
+      "smooth_angle_min": 39,
+      "smooth_mean_angle": 20,
+      "stripe": 50,
+      "tia": 75,
+      "trap_circle": 20
+    },
+    "rows_by_kind": {
+      "composite": 178,
+      "direct": 485,
+      "pure": 337
+    },
+    "rows_by_bucket": {
+      "hi_fancy": 219,
+      "hi_pure": 208,
+      "mode_floor": 125,
+      "mid_fancy": 269,
+      "fill": 179
+    },
+    "rows_by_score_bin": {
+      "hi": 427,
+      "lo": 5,
+      "mid": 568
+    },
+    "rows_by_family": {
+      "mandelbrot": 758,
+      "julia": 242
+    },
+    "rows_by_split": {
+      "train": 606,
+      "eval": 394
+    },
+    "suggested_tier_hist": {
+      "1": 61,
+      "2": 510,
+      "3": 429
+    },
+    "would_pass_mining_gate": 184,
+    "transfer_dropped_rows": 473,
+    "pred": {
+      "min": 1.0,
+      "max": 2.9159
+    }
+  },
+  "presentation": {
+    "order": "sheet_order \u2014 DESCENDING pred (good -> bad), ties on the crop stem",
+    "sorted_on": "the continuous head score (pred), NOT the suggested tier",
+    "contiguous": true,
+    "image_id": "OPAQUE `<prefix><slot>_<hash8>` \u2014 slot is presentation position (published anyway: the sheet is sorted), hash is a salted digest of the unit key, so the id encodes no mode, kind, bucket or score bin. route.json maps it back."
+  },
+  "labels_export": "labels/scores_2026-08-10_render_mode_correction_v2.json",
+  "labeling": {
+    "ui": "tools/viz/wallpaper_label.html?corpus=render_mode_corpus&tiers=3&order=file&batch=2026-08-10_render_mode_correction_v2",
+    "mode": "correction \u2014 every row shows its suggested tier PREFILLED; Enter confirms, 1-3 override. Only rows Matt acts on are exported; an unreviewed suggestion never leaves the page as a label.",
+    "bulk": "accept all remaining, and accept all BELOW THIS ROW \u2014 both behind a confirm",
+    "blind_rows": 0,
+    "calibration_duplicates": 0,
+    "merge": "uv run python tools/wallpaper/merge_sitting.py --corpus render_mode_corpus --batch 2026-08-10_render_mode_correction_v2 --scores labels/scores_2026-08-10_render_mode_correction_v2.json --apply"
+  },
+  "render_failures": [],
+  "run_status": {
+    "drawn_rows": 1000,
+    "rendered_rows": 1000,
+    "n_failures": 0,
+    "n_unaccounted": 0,
+    "unaccounted_rows": [],
+    "unaccounted_note": "drawn but neither rendered nor failed \u2014 a bounded (--limit) or interrupted run; re-run `render` then `write`"
+  }
+}
