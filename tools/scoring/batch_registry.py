@@ -278,6 +278,21 @@ REGISTRY: dict[str, tuple[Registration, ...]] = {
                          "positives) and at the page (mining-v1 suggestion prefilled, sorted "
                          "by its score). Its whole purpose is a non-representative slice, so "
                          "no rate on it is a base rate."),),
+    "2026-08-10_render_mode_rare_palette_v1": (
+        Registration(source="mining_rare_palette_sitting", biased=True,
+                     why="the rare-palette strange sheet (sheet C of the (27) sittings). "
+                         "Biased in three independent ways, and the FIRST is the new standing "
+                         "rule rather than a defect: its locations are exactly those carrying "
+                         "a HUMAN label of 4 (3 where a partition is short), so location "
+                         "quality is conditioned on before Matt ever sees the page and what "
+                         "he is left judging is the rendering. Then the palette draw "
+                         "deliberately targets the rare hue families (green/spectral/rose/"
+                         "gold/neutral over-drawn, purple/fire/ice cut), the mode mix is "
+                         "biased toward modes the smooth-equivalence measure calls DISTINCT "
+                         "from smooth, and the page is mining-v1 pre-labeled and sorted by "
+                         "its score. Every one of those is a selection on quality or on a "
+                         "model's own read, so nothing measured on it is a base rate and no "
+                         "location of it may be an eval instrument."),),
 }
 
 UNREGISTERED = Registration(

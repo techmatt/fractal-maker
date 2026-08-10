@@ -49,6 +49,25 @@ DIRECT_OPACITY = (0.15, 0.30, 0.45)
 DIRECT_THRESHOLD = (0.05, 0.08, 0.12)          # spans measured p75..p95 across shapes
 DIRECT_GRID = tuple((op, th) for op in DIRECT_OPACITY for th in DIRECT_THRESHOLD)  # 9 cells
 
+# --- the SMOOTH baseline ------------------------------------------------------- #
+# `smooth` is the base carrier every composite builds on (`specs/smooth.json`,
+# tier=promoted) and is deliberately NOT on the roster: the corpus's class vocabulary is the
+# 15 STRANGE modes, and a corpus that quietly held smooth rows under the same mode axis would
+# make "the head judges the mode choice" false.
+#
+# It is nameable here anyway, because two live callers need to render the smooth twin of a
+# strange row through the SAME path and at the SAME geometry:
+#   * the smooth-EQUIVALENCE measure (`smooth_equivalence.py`) — a mode render that is
+#     indistinguishable from its own location's smooth render is a duplicate of something
+#     Matt has already judged, and the distance is only meaningful if the only difference
+#     between the two frames is the mode;
+#   * a sheet's small smooth-for-comparison slice.
+# `spec_for(SMOOTH_MODE)` therefore answers a real field spec, `SMOOTH_MODE not in MODES`
+# stays true, and `missing_recipes()` is untouched (it walks MODES and the two recipe tables).
+SMOOTH_MODE = "smooth"
+SMOOTH_KIND = "pure"
+SMOOTH_FIELD_SPEC = {"field": "smooth", "transform": "linear"}
+
 # --- pure modes: the `--coloring` field spec handed to `--dump-field` ---------- #
 PURE_FIELD_SPEC = {
     "tia": {"field": "tia", "skip": 1},
@@ -108,6 +127,17 @@ TRAINER_DROPPED_V1 = ("trap_circle", "exp_smoothing", "direct_trap_screen")
 ROLLOFF = {"direct_trap_screen": ("soft_knee", 0.35)}
 
 
+def kind_of(mode: str) -> str:
+    """The render KIND of a mode, including the off-roster smooth baseline. Raises on an
+    unknown mode for the same reason `spec_for` does."""
+    if mode == SMOOTH_MODE:
+        return SMOOTH_KIND
+    kind = MODE_KIND.get(mode)
+    if kind is None:
+        raise KeyError(f"{mode!r} is not on the mining roster ({len(MODES)} modes): {MODES}")
+    return kind
+
+
 def rolloff_for(mode: str) -> tuple:
     """`(name, strength)`; `("none", 1.0)` for every mode but `direct_trap_screen`."""
     return ROLLOFF.get(mode, ("none", 1.0))
@@ -128,6 +158,8 @@ def spec_for(mode: str, mode_params: dict | None = None) -> dict:
     silently rendered `smooth` would put a mislabeled class in the corpus."""
     import json
 
+    if mode == SMOOTH_MODE:
+        return dict(SMOOTH_FIELD_SPEC)
     kind = MODE_KIND.get(mode)
     if kind is None:
         raise KeyError(f"{mode!r} is not on the mining roster ({len(MODES)} modes): {MODES}")

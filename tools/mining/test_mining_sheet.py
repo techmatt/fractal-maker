@@ -60,9 +60,21 @@ def test_the_corpus_keeps_the_modes_the_TRAINER_drops():
 
 def test_an_unknown_mode_RAISES_instead_of_rendering_a_default():
     """A typo'd mode that silently rendered `smooth` would put a mislabeled class in the
-    corpus — the label IS the mode here."""
+    corpus — the label IS the mode here.
+
+    `smooth` USED to be this test's example of an unknown mode. It stopped being one on
+    2026-08-10, when the smooth-equivalence measure and sheet C's comparison slice made the
+    smooth baseline something two callers must be able to render through the same path
+    (`mining_roster.SMOOTH_MODE`). The property the test is actually about is unchanged and
+    is asserted below: a name nobody registered raises, and `smooth` is still not a roster
+    CLASS — which is what "a mislabeled class in the corpus" means."""
     with pytest.raises(KeyError):
-        MR.spec_for("smooth")                      # deliberately not on the roster
+        MR.spec_for("smoooth")                     # a real typo, registered nowhere
+    with pytest.raises(KeyError):
+        MR.kind_of("smoooth")
+    assert MR.SMOOTH_MODE not in MR.MODES
+    assert MR.SMOOTH_MODE not in MR.MODE_KIND
+    assert MR.spec_for(MR.SMOOTH_MODE)["field"] == "smooth"   # nameable, deliberately
     assert MR.spec_for("tia")["field"] == "tia"    # non-vacuity: the happy path works
 
 
