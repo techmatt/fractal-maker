@@ -173,6 +173,11 @@ __pycache__/
 # belt-and-braces half for a writer that bypassed the resolver. The snapshot beside it
 # (library_seed_v2/intake.json) stays tracked: it is durable, and not under `embs/`.
 /data/emission/library_seed_v2/embs/
+# v3's per-medoid vectors: same class, same stanza. Written 2026-08-10 by
+# production_run_25's post-run seed repopulation (v2's 168 human->=3 looks UNIONED with the
+# run's emission intake, v2 winning every collision). The snapshot beside it
+# (library_seed_v3/intake.json + morph_embs.npz) stays tracked for the same reason v2's does.
+/data/emission/library_seed_v3/embs/
 # campaign1's per-medoid vectors: same class, same stanza. The family is dark (its
 # snapshot was never rebuilt after the derived-artifact wipe); the rule exists so a relight
 # cannot commit 168+ vectors by default.

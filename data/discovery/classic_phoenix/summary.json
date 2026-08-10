@@ -1,8 +1,7 @@
 {
-  "t_good": 0.5,
+  "good_floor": 0.5,
   "partition": "phoenix:classic",
-  "t_good_status": "UNCALIBRATED",
-  "scorer_version": "v10",
+  "scorer_version": "v11",
   "near_dup_threshold": 0.974,
   "stale_rows_repredicated": 184,
   "legacy_sources": {
@@ -21,8 +20,8 @@
   },
   "coords_unique": 184,
   "rescored": 184,
-  "admissions_q3": 24,
-  "distinct_looks": 16,
+  "admissions_q3": 33,
+  "distinct_looks": 22,
   "topup_added": 0,
   "min_distinct_target": 15,
   "classic_identity": {

@@ -102,6 +102,14 @@ RELOCATED_PREFIXES = (
     # resolved it in-tree under scratch/ and a wipe took it. That is the failure this
     # literal (and `deficit_scheduler`'s resolve-time scratch refusal) exist to prevent.
     "data/emission/library_seed_v2/embs",
+    # v3's per-medoid vectors — the same family one generation on, registered BEFORE the
+    # first write per storage_classes.md rule 5. v3 is v2's 168 human->=3 looks UNIONED with
+    # production_run_25's emission intake (1,285 locations / 1,159 morph clusters), v2 winning
+    # every id collision so no human verdict is displaced by a machine one. Same class and
+    # same reason as v2: `!/data/emission/` re-includes the subtree, so in-tree these 1,322
+    # vectors would be COMMITTED. They are bulk — regenerable from the snapshot's own render
+    # blocks by one CLIP forward pass each.
+    "data/emission/library_seed_v3/embs",
     # campaign1's per-medoid vectors. The family is DARK — its snapshot was never rebuilt
     # after the derived-artifact wipe and its inputs are gone — so nothing writes here
     # today. The line exists so the registry invariant is uniform rather than special-cased:

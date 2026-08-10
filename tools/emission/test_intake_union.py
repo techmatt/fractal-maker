@@ -29,10 +29,17 @@ from tools.emission import descriptor as D          # noqa: E402
 from tools.emission import ledger_rescore as LR     # noqa: E402
 from tools.emission import floors as F              # noqa: E402  THE cut owner
 
-# The live census, 2026-08-09, head v11. 862 admitted rows over the seven intake ledgers,
+# The live census, 2026-08-10, head v11. 881 admitted rows over the seven intake ledgers,
 # 0 cross-ledger same-location overlaps, 16 bare-id collisions that the namespacing keeps
 # apart. Per ledger: c1_breadth 149, c1_dive 140, c2_breadth 157, c2_dive 157,
-# phoenix_grid 147, classic_phoenix 4, q4_harvest 108.
+# phoenix_grid 147, classic_phoenix 23, q4_harvest 108.
+#
+# 862 -> 881 (+19) ON 2026-08-10, and unlike every move below it IS a corpus change:
+# production_run_25's classic-phoenix supply leg re-minted all 184 legacy Ushiki coords under
+# v11 (`tools/phoenix/classic_phoenix_supply.py`; the ledger's 184 rescored rows were all
+# stamped v10, so `purge_stale` re-scored rather than resumed). classic_phoenix 4 -> 23 is the
+# whole delta — 33 rows clear GOOD_FLOOR and 23 of those are distinct looks. No other ledger
+# moved: the run's own breadth/dive/phoenix-native ledgers are NOT among the seven.
 #
 # 779 -> 862 (+83) ON 2026-08-09, and it is a PREDICATE change, not a corpus change: not a row
 # was added. `load_admitted` cut on `is_current_decoded ∧ decoded_class >= 3` — a frozen class
@@ -49,7 +56,7 @@ from tools.emission import floors as F              # noqa: E402  THE cut owner
 # THIS PIN IS SUPPOSED TO BREAK ON A RE-SCORE. It is a census — "what the union IS" — and its
 # job is to make a change in the intake population an explicit edit. The standing ALIVE check
 # is the relational floor in test_liveness_census.py, which a legitimate re-score leaves green.
-UNION_ADMITTED = 862
+UNION_ADMITTED = 881
 Q4_HARVEST_ADMITTED = 108        # the floor-admit ledger, whole (guard ∧ distinct)
 ID_COLLISIONS = 16
 LOCATION_OVERLAPS = 0

@@ -1,0 +1,19 @@
+{
+  "ts": "20260809_190537",
+  "mode": "run-phoenix",
+  "family": "phoenix",
+  "wallclock_s": 1962.0,
+  "rounds": 2,
+  "good_floor": 0.5,
+  "walks_per_round": 12,
+  "walks_cap": 0,
+  "totals": {
+    "walked": 24,
+    "q3": 17,
+    "not_q3": 7,
+    "guarded": 0,
+    "walk_errors": 0
+  },
+  "yield_q3_per_walk": 0.7083,
+  "run_ledger": "C:\\Code\\fractal-maker\\data\\discovery\\prod25_phoenix_native\\outcome_ledger.jsonl"
+}
