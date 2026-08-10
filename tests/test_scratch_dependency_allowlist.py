@@ -115,6 +115,16 @@ ALLOWLIST = [
     Entry("scratch/palette_preview/dramatic-test/densified.json", "tools/palettes/densify.py",
           INPUT, "preview_render's --colormaps default.",
           "regenerable — a wipe costs a re-densify"),
+    Entry("scratch/wallpaper_sitting/v2/screen.jsonl", "tools/wallpaper/build_wallpaper_sitting.py",
+          INPUT,
+          "the PROPOSED-palette column of measure_palette_bias: every palette candidate the "
+          "wallpaper sitting's screen scored per location. Without it, pool-vs-served cannot "
+          "be split into a DRAW failure and a PICK failure, which is the whole content of "
+          "the 2026-08-10 bias measurement. Read SOFTLY on purpose — an absent file reports "
+          "the column as unavailable and says so, never as zeros, so a wipe degrades the "
+          "report instead of falsifying it.",
+          "until the sitting's screen log is wiped; the measurement it fed is frozen in "
+          "rare_palette_draw.MEASURED_2026_08_10 and does not depend on it"),
     # THE `present` DISCOVERY CHANNEL LEFT THIS LEDGER ON 2026-08-10, with its two entries —
     # `scratch/present/run4_bridge/locations.jsonl` (pool_to_locations -> present) and
     # `scratch/present/run4_present/manifest.json` (present -> build_rev4_batch). All three
