@@ -117,8 +117,8 @@ def test_the_union_loads_and_is_the_per_ledger_sum(census):
 # Four of 24 is thin, and the underlying supply problem the entry described is NOT solved:
 # `phoenix:classic` is EXTERNALLY SUPPLIED — no crawl produces it — so topping it up is a
 # supply run, not a threshold (`production_seeder.py --run-phoenix` then
-# `classic_phoenix_supply.py`). The release mix asks ~13 of an 862-row intake (1.52%) and gets
-# 4. That is a THIN-supply fact, reported by `ledger_rescore`'s classic-supply note where a
+# `classic_phoenix_supply.py`). The release mix asks ~44 of the 2,867-row intake (1.52%) and
+# gets 22. That is a THIN-supply fact, reported by `ledger_rescore`'s classic-supply note where a
 # human can act on it, and not a dead-ledger fact, which is what this set is for.
 KNOWN_EMPTY: set = set()
 

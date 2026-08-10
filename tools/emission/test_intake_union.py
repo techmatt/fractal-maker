@@ -1,4 +1,4 @@
-"""The stage-2 intake UNION, against the live seven-ledger census.
+"""The stage-2 intake UNION, against the live ten-ledger census.
 
 WHY THIS FILE. `_load_all_admitted` used to abort the whole emission stage on 11 run-scoped
 id collisions between campaign1 and campaign2 (`st_<fam>_<arm>_<seq>` minted per campaign,
@@ -29,10 +29,22 @@ from tools.emission import descriptor as D          # noqa: E402
 from tools.emission import ledger_rescore as LR     # noqa: E402
 from tools.emission import floors as F              # noqa: E402  THE cut owner
 
-# The live census, 2026-08-10, head v11. 881 admitted rows over the seven intake ledgers,
+# The live census, 2026-08-10, head v11. 2,867 admitted rows over the TEN intake ledgers,
 # 0 cross-ledger same-location overlaps, 16 bare-id collisions that the namespacing keeps
 # apart. Per ledger: c1_breadth 149, c1_dive 140, c2_breadth 157, c2_dive 157,
-# phoenix_grid 147, classic_phoenix 23, q4_harvest 108.
+# phoenix_grid 147, classic_phoenix 22, q4_harvest 108, prod25_breadth 1867,
+# prod25_dive 103, prod25_phoenix 17.
+#
+# 881 -> 2,867 (+1,986) ON 2026-08-10 (prompts/sittings_27.md step 0), and it is TWO changes
+# in one edit, which is why both numbers are stated:
+#   +1,987  production run 25's three legs joined `ledger_rescore.LEDGERS`. The run emitted
+#           from the seven-ledger union verbatim, so its own night of discovery had never
+#           reached an intake. Every row is natively v11 — no re-score, no render.
+#      -1   the redundant `classic_phoenix/outcome_ledger.rescored_v11.jsonl` overlay was
+#           DELETED in the same commit. It re-reported 24 of the 33 fresh classic rows at the
+#           OLD render's probabilities, and one of those rows was distinct-and-admitted only
+#           under the stale numbers: classic_phoenix 23 -> 22. The native ledger is the
+#           record; the overlay was a second one saying something slightly different.
 #
 # 862 -> 881 (+19) ON 2026-08-10, and unlike every move below it IS a corpus change:
 # production_run_25's classic-phoenix supply leg re-minted all 184 legacy Ushiki coords under
@@ -56,7 +68,7 @@ from tools.emission import floors as F              # noqa: E402  THE cut owner
 # THIS PIN IS SUPPOSED TO BREAK ON A RE-SCORE. It is a census — "what the union IS" — and its
 # job is to make a change in the intake population an explicit edit. The standing ALIVE check
 # is the relational floor in test_liveness_census.py, which a legitimate re-score leaves green.
-UNION_ADMITTED = 881
+UNION_ADMITTED = 2867
 Q4_HARVEST_ADMITTED = 108        # the floor-admit ledger, whole (guard ∧ distinct)
 ID_COLLISIONS = 16
 LOCATION_OVERLAPS = 0

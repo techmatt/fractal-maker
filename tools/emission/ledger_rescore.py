@@ -124,10 +124,22 @@ def scored_by_active(row) -> bool:
     return row.get("scorer_version") == active_scorer_version()
 
 # ---------------------------------------------------------------------------- #
-# THE stage-2 intake population. These seven are what `stage_first_release`'s six library
+# THE stage-2 intake population. The first seven are what `stage_first_release`'s six library
 # ledgers plus the q4_harvest supply resolve to on disk; the survey's decode-currency census
 # is taken over exactly this list. `classic_phoenix` is here so the pass VERIFIES it is
 # already current rather than a reader having to remember that it is.
+#
+# THE RUN-25 LEGS JOINED ON 2026-08-10 (prompts/sittings_27.md step 0). Production run 25 was
+# the first run under the restructured selection regime and it emitted from the SEVEN-ledger
+# union verbatim, so its own 1,987 admitted rows — the whole night's discovery — could not
+# reach its own release sheet (`scratch/production_run25_report.md`, "Decisions I made that
+# the prompt did not specify"). All three legs are one run and each is its own ledger on disk,
+# so all three are listed: breadth (1,867 admitted), dive (103) and the native-phoenix supply
+# leg (17). 1867+103+17 = 1987, which is the forward-supply number the run recorded.
+#
+# THEY COST NO RENDER. Every row is stamped `scorer_version: v11` by the run itself, so
+# `rescore_ledger` VERIFIES rather than re-scores them — the same reason `classic_phoenix` is
+# in the list. A future flip re-scores all ten together.
 # ---------------------------------------------------------------------------- #
 LEDGERS = (
     ("c1_breadth",      "data/discovery/campaign1/breadth/outcome_ledger.jsonl"),
@@ -137,6 +149,9 @@ LEDGERS = (
     ("phoenix_grid",    "data/discovery/phoenix_grid/grid/outcome_ledger_v7_t45.jsonl"),
     ("classic_phoenix", "data/discovery/classic_phoenix/outcome_ledger.jsonl"),
     ("q4_harvest",      "data/emission/q4_harvest/outcome_ledger.jsonl"),
+    ("prod25_breadth",  "data/discovery/prod25_20260809/outcome_ledger.jsonl"),
+    ("prod25_dive",     "data/discovery/prod25_20260809_dive/outcome_ledger.jsonl"),
+    ("prod25_phoenix",  "data/discovery/prod25_phoenix_native/outcome_ledger.jsonl"),
 )
 
 SCRATCH = ROOT / "scratch" / "emission" / "ledger_rescore"
