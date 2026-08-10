@@ -1,0 +1,3842 @@
+{
+ "wc20000_db05c83e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000854",
+  "crop_stem": "db05c83edf8dff36"
+ },
+ "wc20001_e678ccaf": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000934",
+  "crop_stem": "e678ccaf03722b84"
+ },
+ "wc20002_11da3c58": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001082",
+  "crop_stem": "11da3c58cf994605"
+ },
+ "wc20003_1c47d6cd": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_002384",
+  "crop_stem": "1c47d6cd29d9f35a"
+ },
+ "wc20004_56d36e78": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000897",
+  "crop_stem": "56d36e787cdbef16"
+ },
+ "wc20005_3938bbae": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000109",
+  "crop_stem": "3938bbae0092bb10"
+ },
+ "wc20006_e535b878": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000856",
+  "crop_stem": "e535b878817ec234"
+ },
+ "wc20007_7bc84a7f": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot5_breadth_000112",
+  "crop_stem": "7bc84a7f521acdd2"
+ },
+ "wc20008_f8ad54c6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000355",
+  "crop_stem": "f8ad54c65d66bb93"
+ },
+ "wc20009_cbd13add": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0020_1_000",
+  "crop_stem": "cbd13add69df6005"
+ },
+ "wc20010_5c4fdde7": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_multibrot4_dive_000076",
+  "crop_stem": "5c4fdde789f6a1e2"
+ },
+ "wc20011_dd2fa3fb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002257",
+  "crop_stem": "dd2fa3fb17e3f885"
+ },
+ "wc20012_0a9d860e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000876",
+  "crop_stem": "0a9d860e913f6fd8"
+ },
+ "wc20013_23834822": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001091",
+  "crop_stem": "23834822a4baf6b0"
+ },
+ "wc20014_956429c8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000888",
+  "crop_stem": "956429c869039cfd"
+ },
+ "wc20015_065f3bd7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001084",
+  "crop_stem": "065f3bd77ec526fc"
+ },
+ "wc20016_290913e9": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_julia_multibrot3_dive_000239",
+  "crop_stem": "290913e98a94d166"
+ },
+ "wc20017_03c0da7f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000836",
+  "crop_stem": "03c0da7f7e17af29"
+ },
+ "wc20018_4628dc3c": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000146",
+  "crop_stem": "4628dc3cc7d6aa99"
+ },
+ "wc20019_9e1c842a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000026",
+  "crop_stem": "9e1c842a55b46af6"
+ },
+ "wc20020_d5a75693": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001405",
+  "crop_stem": "d5a7569320f357ca"
+ },
+ "wc20021_701b8634": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001074",
+  "crop_stem": "701b863456f93109"
+ },
+ "wc20022_fb7289fd": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot3_dive_000042",
+  "crop_stem": "fb7289fd792127ea"
+ },
+ "wc20023_db0f1892": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000851",
+  "crop_stem": "db0f1892d4e3b508"
+ },
+ "wc20024_9afb6c15": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000005",
+  "crop_stem": "9afb6c15a4d0307b"
+ },
+ "wc20025_48b39ae7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000158",
+  "crop_stem": "48b39ae7fc05cf40"
+ },
+ "wc20026_a904eb7b": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot4_breadth_000111",
+  "crop_stem": "a904eb7bcb7d74d5"
+ },
+ "wc20027_d3719e2c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001062",
+  "crop_stem": "d3719e2cda98876e"
+ },
+ "wc20028_c910c050": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot4_breadth_000247",
+  "crop_stem": "c910c0504a0fc6a5"
+ },
+ "wc20029_c6e4c9e9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000623",
+  "crop_stem": "c6e4c9e966f3e60a"
+ },
+ "wc20030_259f0f36": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000381",
+  "crop_stem": "259f0f36d9fb6697"
+ },
+ "wc20031_0a776118": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0080_0_003",
+  "crop_stem": "0a7761182d1adb30"
+ },
+ "wc20032_1f792784": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot5_dive_000133",
+  "crop_stem": "1f792784c02d7f89"
+ },
+ "wc20033_150c1c9e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001066",
+  "crop_stem": "150c1c9ec53f1a58"
+ },
+ "wc20034_5b8a41d8": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0044_0_003",
+  "crop_stem": "5b8a41d841682f64"
+ },
+ "wc20035_5646899b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000385",
+  "crop_stem": "5646899b40421075"
+ },
+ "wc20036_46a09c03": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001464",
+  "crop_stem": "46a09c03c581229a"
+ },
+ "wc20037_96a95170": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0119",
+  "crop_stem": "96a95170df3d04c7"
+ },
+ "wc20038_5d744a70": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot5_dive_000246",
+  "crop_stem": "5d744a700cdf5ecf"
+ },
+ "wc20039_db307035": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0075_2_001",
+  "crop_stem": "db307035a392fc83"
+ },
+ "wc20040_a72a66b9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001437",
+  "crop_stem": "a72a66b9551d54de"
+ },
+ "wc20041_aa738cfb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001496",
+  "crop_stem": "aa738cfb0128cc5c"
+ },
+ "wc20042_77c48f24": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000011",
+  "crop_stem": "77c48f24847b3d2d"
+ },
+ "wc20043_0431fcd0": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000020",
+  "crop_stem": "0431fcd05eba2e5d"
+ },
+ "wc20044_fc5ba722": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000253",
+  "crop_stem": "fc5ba722d68e3c42"
+ },
+ "wc20045_5479e98b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000883",
+  "crop_stem": "5479e98b4acf68a7"
+ },
+ "wc20046_f03c04fb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002205",
+  "crop_stem": "f03c04fb00ea2ad7"
+ },
+ "wc20047_0f5bde26": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000218",
+  "crop_stem": "0f5bde26e14ddbed"
+ },
+ "wc20048_b61065be": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot4_breadth_000037",
+  "crop_stem": "b61065befa56dc62"
+ },
+ "wc20049_b2aa078b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000927",
+  "crop_stem": "b2aa078bcefd1168"
+ },
+ "wc20050_f249008c": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot4_breadth_000197",
+  "crop_stem": "f249008cb760dab7"
+ },
+ "wc20051_62a90106": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000586",
+  "crop_stem": "62a9010668c6a37a"
+ },
+ "wc20052_9f40a1aa": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002110",
+  "crop_stem": "9f40a1aa2c51444b"
+ },
+ "wc20053_ab1027e7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000205",
+  "crop_stem": "ab1027e79e4c3ee5"
+ },
+ "wc20054_1869de6a": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot3_breadth_000075",
+  "crop_stem": "1869de6a6c60f19a"
+ },
+ "wc20055_5465ef85": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000312",
+  "crop_stem": "5465ef851db542cd"
+ },
+ "wc20056_a7829900": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000229",
+  "crop_stem": "a78299000610ed97"
+ },
+ "wc20057_bdbe3dee": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot5_breadth_000046",
+  "crop_stem": "bdbe3dee04d479b4"
+ },
+ "wc20058_8b8b4636": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000114",
+  "crop_stem": "8b8b4636dcbd39f6"
+ },
+ "wc20059_8f23a446": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000933",
+  "crop_stem": "8f23a44673ee140d"
+ },
+ "wc20060_fde340f9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000170",
+  "crop_stem": "fde340f9feb499aa"
+ },
+ "wc20061_2f294385": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000807",
+  "crop_stem": "2f2943857512304e"
+ },
+ "wc20062_de97b5be": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000823",
+  "crop_stem": "de97b5bea750d5f7"
+ },
+ "wc20063_67f1eb29": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001935",
+  "crop_stem": "67f1eb2938872900"
+ },
+ "wc20064_b43859e9": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000040",
+  "crop_stem": "b43859e981d94880"
+ },
+ "wc20065_24480e9a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002306",
+  "crop_stem": "24480e9a673b3eba"
+ },
+ "wc20066_8b33eec4": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot3_dive_000267",
+  "crop_stem": "8b33eec42583060e"
+ },
+ "wc20067_26ec065b": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot5_breadth_000178",
+  "crop_stem": "26ec065b7f8c660d"
+ },
+ "wc20068_13b081e3": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot3_breadth_000122",
+  "crop_stem": "13b081e3314a3712"
+ },
+ "wc20069_1860cf0a": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000064",
+  "crop_stem": "1860cf0ab0cbefa3"
+ },
+ "wc20070_4734d810": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000697",
+  "crop_stem": "4734d810e4d2ada1"
+ },
+ "wc20071_964960a1": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot5_dive_000144",
+  "crop_stem": "964960a137fe7ebe"
+ },
+ "wc20072_8cdbdd33": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000001",
+  "crop_stem": "8cdbdd33bcb59470"
+ },
+ "wc20073_870ba1de": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0042",
+  "crop_stem": "870ba1dedc96c76c"
+ },
+ "wc20074_81ca3734": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0167",
+  "crop_stem": "81ca373406c43ef1"
+ },
+ "wc20075_292279e2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000821",
+  "crop_stem": "292279e2c415fd59"
+ },
+ "wc20076_eed0551a": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0044_3_002",
+  "crop_stem": "eed0551ae038bb67"
+ },
+ "wc20077_0446de45": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002262",
+  "crop_stem": "0446de450b6d3016"
+ },
+ "wc20078_805323fd": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000327",
+  "crop_stem": "805323fdfa267554"
+ },
+ "wc20079_3c5006bd": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot4_breadth_000062",
+  "crop_stem": "3c5006bdb7e17c8a"
+ },
+ "wc20080_83e3ce44": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_multibrot4_dive_000079",
+  "crop_stem": "83e3ce44db7c30b8"
+ },
+ "wc20081_a01dd53f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002102",
+  "crop_stem": "a01dd53fd85096cf"
+ },
+ "wc20082_dfe36069": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000700",
+  "crop_stem": "dfe36069783ae22d"
+ },
+ "wc20083_b5c4cace": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000052",
+  "crop_stem": "b5c4caced58e9084"
+ },
+ "wc20084_2002ef18": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000427",
+  "crop_stem": "2002ef1896020ae4"
+ },
+ "wc20085_89ae0f1e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000601",
+  "crop_stem": "89ae0f1e3435bbbb"
+ },
+ "wc20086_0b59be06": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_julia_multibrot4_breadth_000091",
+  "crop_stem": "0b59be067bb109bd"
+ },
+ "wc20087_44e5c8e6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000859",
+  "crop_stem": "44e5c8e68d08e9f8"
+ },
+ "wc20088_aa297129": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000210",
+  "crop_stem": "aa297129db7c97fe"
+ },
+ "wc20089_b541f7bc": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot4_breadth_000110",
+  "crop_stem": "b541f7bcdf256bce"
+ },
+ "wc20090_0299b31a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001494",
+  "crop_stem": "0299b31a56dbed6c"
+ },
+ "wc20091_40f4f6b0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001068",
+  "crop_stem": "40f4f6b0b516cb29"
+ },
+ "wc20092_0d4b2310": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000521",
+  "crop_stem": "0d4b2310b4cd4594"
+ },
+ "wc20093_cf205828": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001441",
+  "crop_stem": "cf205828d73736cf"
+ },
+ "wc20094_ac849068": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002343",
+  "crop_stem": "ac84906804f8f796"
+ },
+ "wc20095_923f0300": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000928",
+  "crop_stem": "923f030068a08f0b"
+ },
+ "wc20096_022da48f": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000142",
+  "crop_stem": "022da48fe8f86bdc"
+ },
+ "wc20097_14be0cf8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000664",
+  "crop_stem": "14be0cf80f0f15df"
+ },
+ "wc20098_0a43d743": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002137",
+  "crop_stem": "0a43d743c5f99a01"
+ },
+ "wc20099_3298eac0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000118",
+  "crop_stem": "3298eac024db36ad"
+ },
+ "wc20100_253dcf1d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000430",
+  "crop_stem": "253dcf1d8ed1e86b"
+ },
+ "wc20101_49f7228a": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0175",
+  "crop_stem": "49f7228a576d3a24"
+ },
+ "wc20102_ac55945b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001443",
+  "crop_stem": "ac55945b337f2254"
+ },
+ "wc20103_0c7ae14e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000843",
+  "crop_stem": "0c7ae14eb00bfbf3"
+ },
+ "wc20104_25aa7234": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002265",
+  "crop_stem": "25aa723446d8eedb"
+ },
+ "wc20105_153001ab": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002089",
+  "crop_stem": "153001abb76dc160"
+ },
+ "wc20106_a00774e9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000383",
+  "crop_stem": "a00774e9e28d7894"
+ },
+ "wc20107_dc0c26c5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002323",
+  "crop_stem": "dc0c26c5994dd9b2"
+ },
+ "wc20108_f42d8de7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000753",
+  "crop_stem": "f42d8de7760aa812"
+ },
+ "wc20109_fca6af7b": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_m_dive_000086",
+  "crop_stem": "fca6af7b48d9f392"
+ },
+ "wc20110_9a12d4aa": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot4_breadth_000029",
+  "crop_stem": "9a12d4aaa5a2bb12"
+ },
+ "wc20111_8e5fba2a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000618",
+  "crop_stem": "8e5fba2a108e1792"
+ },
+ "wc20112_90ebb3c3": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001391",
+  "crop_stem": "90ebb3c34e66c4d0"
+ },
+ "wc20113_77df88e8": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_julia_multibrot3_breadth_000077",
+  "crop_stem": "77df88e81ebaf6f9"
+ },
+ "wc20114_5b766ff1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000635",
+  "crop_stem": "5b766ff159b835b4"
+ },
+ "wc20115_e19cf7c4": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001465",
+  "crop_stem": "e19cf7c47e35cd08"
+ },
+ "wc20116_e089d3a4": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000121",
+  "crop_stem": "e089d3a47b4ea253"
+ },
+ "wc20117_072c01eb": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0015_2_003",
+  "crop_stem": "072c01eb9275c83a"
+ },
+ "wc20118_dc791d72": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_julia_multibrot3_breadth_000123",
+  "crop_stem": "dc791d72115076ae"
+ },
+ "wc20119_e5414182": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000658",
+  "crop_stem": "e54141820380c87e"
+ },
+ "wc20120_d21e1c2b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000558",
+  "crop_stem": "d21e1c2b9a5cf75f"
+ },
+ "wc20121_978c5758": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001497",
+  "crop_stem": "978c57587b10e56e"
+ },
+ "wc20122_9e813066": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot5_breadth_000047",
+  "crop_stem": "9e8130660a718f9d"
+ },
+ "wc20123_c22c2166": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000884",
+  "crop_stem": "c22c21660ac8b7e5"
+ },
+ "wc20124_6cb8cb1a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001727",
+  "crop_stem": "6cb8cb1a1bbaf774"
+ },
+ "wc20125_ccc82497": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000313",
+  "crop_stem": "ccc82497d5c10cba"
+ },
+ "wc20126_1cdd0cc5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001438",
+  "crop_stem": "1cdd0cc546742cfe"
+ },
+ "wc20127_7165fffc": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000153",
+  "crop_stem": "7165fffc0174735c"
+ },
+ "wc20128_a247b486": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0122",
+  "crop_stem": "a247b486ddced92a"
+ },
+ "wc20129_3f9bc07c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000774",
+  "crop_stem": "3f9bc07c64332b08"
+ },
+ "wc20130_d7658044": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000733",
+  "crop_stem": "d76580441c260c08"
+ },
+ "wc20131_4e5ed374": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000776",
+  "crop_stem": "4e5ed3743a8a4849"
+ },
+ "wc20132_52976f61": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001485",
+  "crop_stem": "52976f613650a22c"
+ },
+ "wc20133_f4fc76f4": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000782",
+  "crop_stem": "f4fc76f46d7d0434"
+ },
+ "wc20134_b944f09c": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000023",
+  "crop_stem": "b944f09cb47ae78c"
+ },
+ "wc20135_65b5f5ee": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001482",
+  "crop_stem": "65b5f5eec55e1dd4"
+ },
+ "wc20136_f599255e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001571",
+  "crop_stem": "f599255ee0b6d0d9"
+ },
+ "wc20137_df639afa": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000137",
+  "crop_stem": "df639afa649c2cda"
+ },
+ "wc20138_16a849aa": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot4_breadth_000174",
+  "crop_stem": "16a849aaf20f951d"
+ },
+ "wc20139_7184eb0c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000754",
+  "crop_stem": "7184eb0c715f6ee6"
+ },
+ "wc20140_72343999": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_julia_multibrot5_dive_000104",
+  "crop_stem": "72343999f28b3817"
+ },
+ "wc20141_3361e336": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001444",
+  "crop_stem": "3361e33652fcdb2d"
+ },
+ "wc20142_f9418cbe": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000404",
+  "crop_stem": "f9418cbef54746e5"
+ },
+ "wc20143_eea9abb6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000654",
+  "crop_stem": "eea9abb6717130a6"
+ },
+ "wc20144_6066db96": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000572",
+  "crop_stem": "6066db96c07e0809"
+ },
+ "wc20145_2b5c327b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000958",
+  "crop_stem": "2b5c327baf5dced5"
+ },
+ "wc20146_5c9619c5": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0079_1_004",
+  "crop_stem": "5c9619c553a78dab"
+ },
+ "wc20147_1a9f4b55": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0014",
+  "crop_stem": "1a9f4b55bb2b479f"
+ },
+ "wc20148_84e4fe07": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0080_3_003",
+  "crop_stem": "84e4fe07dd92561a"
+ },
+ "wc20149_f3c6e782": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot4_breadth_000001",
+  "crop_stem": "f3c6e782120bd592"
+ },
+ "wc20150_8f6abce2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000640",
+  "crop_stem": "8f6abce2d5475cba"
+ },
+ "wc20151_f882fe3f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001617",
+  "crop_stem": "f882fe3f42ba93ca"
+ },
+ "wc20152_6b50a2f6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002348",
+  "crop_stem": "6b50a2f68d3ce97a"
+ },
+ "wc20153_a1ca7c74": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000024",
+  "crop_stem": "a1ca7c742b3d9868"
+ },
+ "wc20154_c30a0216": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000195",
+  "crop_stem": "c30a0216ebaca3d5"
+ },
+ "wc20155_de29924a": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot5_breadth_000001",
+  "crop_stem": "de29924a4de19840"
+ },
+ "wc20156_bf06de7b": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000138",
+  "crop_stem": "bf06de7bbb7aa6a6"
+ },
+ "wc20157_04272146": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001587",
+  "crop_stem": "042721464598534e"
+ },
+ "wc20158_1ea54094": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002307",
+  "crop_stem": "1ea54094251b1d07"
+ },
+ "wc20159_1fabc13d": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_julia_mandelbrot_dive_000002",
+  "crop_stem": "1fabc13df0e75d72"
+ },
+ "wc20160_3a0031f4": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot4_breadth_000086",
+  "crop_stem": "3a0031f4beb8c29f"
+ },
+ "wc20161_f70a777c": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_mandelbrot_dive_000000",
+  "crop_stem": "f70a777ce7b21681"
+ },
+ "wc20162_7250b308": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_mandelbrot_dive_000009",
+  "crop_stem": "7250b3085853d8f9"
+ },
+ "wc20163_cc58de28": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0098",
+  "crop_stem": "cc58de28893530a7"
+ },
+ "wc20164_ee354210": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000616",
+  "crop_stem": "ee35421004cf9ba1"
+ },
+ "wc20165_0863f490": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000203",
+  "crop_stem": "0863f490e44910a2"
+ },
+ "wc20166_15101a3d": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000175",
+  "crop_stem": "15101a3d8f05aa91"
+ },
+ "wc20167_16585ced": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001516",
+  "crop_stem": "16585ced8ee0cfb7"
+ },
+ "wc20168_b21e4932": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001289",
+  "crop_stem": "b21e49321e2b9c27"
+ },
+ "wc20169_89b4eeda": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0075_0_002",
+  "crop_stem": "89b4eeda639fe220"
+ },
+ "wc20170_1b057046": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002339",
+  "crop_stem": "1b057046ae024e9f"
+ },
+ "wc20171_b7644c42": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000016",
+  "crop_stem": "b7644c425bbe0fa2"
+ },
+ "wc20172_dbbcd241": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_multibrot5_dive_000045",
+  "crop_stem": "dbbcd241295d43cf"
+ },
+ "wc20173_fb94adfe": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000442",
+  "crop_stem": "fb94adfe92c223c4"
+ },
+ "wc20174_f6cb14e8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000436",
+  "crop_stem": "f6cb14e8fc580d36"
+ },
+ "wc20175_47e626a6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001222",
+  "crop_stem": "47e626a68e3fba80"
+ },
+ "wc20176_bec12760": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot3_dive_000270",
+  "crop_stem": "bec127609b6cec07"
+ },
+ "wc20177_25b0d77d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000217",
+  "crop_stem": "25b0d77d87c1e7e2"
+ },
+ "wc20178_780ff936": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000608",
+  "crop_stem": "780ff936b846bfa7"
+ },
+ "wc20179_27b46162": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot5_dive_000227",
+  "crop_stem": "27b46162524af2ef"
+ },
+ "wc20180_2d39836a": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0044_2_001",
+  "crop_stem": "2d39836aa0d11f1d"
+ },
+ "wc20181_0f8ee3d1": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0015_2_002",
+  "crop_stem": "0f8ee3d150dcfba6"
+ },
+ "wc20182_cd9b61a8": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_julia_multibrot5_dive_000245",
+  "crop_stem": "cd9b61a86656df39"
+ },
+ "wc20183_5e359c3d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000624",
+  "crop_stem": "5e359c3d02de698c"
+ },
+ "wc20184_5942c79e": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0012",
+  "crop_stem": "5942c79e1f06eb3f"
+ },
+ "wc20185_3fdbba0d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001490",
+  "crop_stem": "3fdbba0d77a13c45"
+ },
+ "wc20186_37593ea5": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot4_dive_000012",
+  "crop_stem": "37593ea5b2d85cc0"
+ },
+ "wc20187_1844bf84": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001295",
+  "crop_stem": "1844bf84191d5acf"
+ },
+ "wc20188_c1e8c012": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000678",
+  "crop_stem": "c1e8c012e71b359c"
+ },
+ "wc20189_695c9a7b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001524",
+  "crop_stem": "695c9a7bd2ade052"
+ },
+ "wc20190_961f0d5e": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0033",
+  "crop_stem": "961f0d5e278a771f"
+ },
+ "wc20191_3d4cee78": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_mandelbrot_breadth_000133",
+  "crop_stem": "3d4cee78fe0cb286"
+ },
+ "wc20192_17c5f3ee": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002291",
+  "crop_stem": "17c5f3eea038d6e1"
+ },
+ "wc20193_e77aa81d": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_m_dive_000206",
+  "crop_stem": "e77aa81d9c4e8dd0"
+ },
+ "wc20194_a707eb78": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot4_breadth_000199",
+  "crop_stem": "a707eb78ad0db6dd"
+ },
+ "wc20195_fcb24632": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_multibrot3_prod25_20260809_dive_000046",
+  "crop_stem": "fcb246321ac3fd52"
+ },
+ "wc20196_37e628ff": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000512",
+  "crop_stem": "37e628ffa8e276c0"
+ },
+ "wc20197_b1484025": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001724",
+  "crop_stem": "b1484025e4dda8d5"
+ },
+ "wc20198_5e404654": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0052",
+  "crop_stem": "5e4046548fd4f1c1"
+ },
+ "wc20199_3562c013": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0066_0_004",
+  "crop_stem": "3562c01342ed4818"
+ },
+ "wc20200_032a1252": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0015_1_001",
+  "crop_stem": "032a1252c41392a0"
+ },
+ "wc20201_13878930": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001668",
+  "crop_stem": "13878930490dd6e9"
+ },
+ "wc20202_d62bd7c5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000872",
+  "crop_stem": "d62bd7c5be34d9ef"
+ },
+ "wc20203_426271bb": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot3_breadth_000159",
+  "crop_stem": "426271bb930ffd63"
+ },
+ "wc20204_e60e67e5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000685",
+  "crop_stem": "e60e67e56be3fb63"
+ },
+ "wc20205_498c2d20": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000578",
+  "crop_stem": "498c2d20975cc383"
+ },
+ "wc20206_90c4687d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000004",
+  "crop_stem": "90c4687db13304b3"
+ },
+ "wc20207_17ec7f84": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001528",
+  "crop_stem": "17ec7f84340cb538"
+ },
+ "wc20208_5643f688": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_multibrot4_dive_000092",
+  "crop_stem": "5643f688df47f8db"
+ },
+ "wc20209_158e6825": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000503",
+  "crop_stem": "158e6825c13460c2"
+ },
+ "wc20210_452dae1d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001586",
+  "crop_stem": "452dae1d5d5d2d29"
+ },
+ "wc20211_3670dbb2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000943",
+  "crop_stem": "3670dbb2a0770851"
+ },
+ "wc20212_3210af2a": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0047",
+  "crop_stem": "3210af2aaf1b0946"
+ },
+ "wc20213_4c9bc5ee": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000780",
+  "crop_stem": "4c9bc5eef3c149d2"
+ },
+ "wc20214_9ed55c60": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000147",
+  "crop_stem": "9ed55c60b91bb750"
+ },
+ "wc20215_71f76bf6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000197",
+  "crop_stem": "71f76bf6947c4efe"
+ },
+ "wc20216_59ad7551": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0132",
+  "crop_stem": "59ad75511dd39b56"
+ },
+ "wc20217_20476b1a": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0074_0_000",
+  "crop_stem": "20476b1a3fd7e08f"
+ },
+ "wc20218_1fc46c33": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000954",
+  "crop_stem": "1fc46c335a1c2366"
+ },
+ "wc20219_1379d4e2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000736",
+  "crop_stem": "1379d4e26ea42f03"
+ },
+ "wc20220_b8601955": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000258",
+  "crop_stem": "b8601955d4d3ffbe"
+ },
+ "wc20221_dbb1b3ab": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000349",
+  "crop_stem": "dbb1b3ab4c4dc270"
+ },
+ "wc20222_d6b7211c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_000049",
+  "crop_stem": "d6b7211c3d89118f"
+ },
+ "wc20223_ce4ddfd5": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot4_breadth_000292",
+  "crop_stem": "ce4ddfd593e4740d"
+ },
+ "wc20224_60138d24": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000265",
+  "crop_stem": "60138d2472b032f5"
+ },
+ "wc20225_1c826d58": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000078",
+  "crop_stem": "1c826d58a4b17c5f"
+ },
+ "wc20226_2bbc1b06": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000051",
+  "crop_stem": "2bbc1b06e47c39e0"
+ },
+ "wc20227_3b18c900": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002340",
+  "crop_stem": "3b18c9004b2e50bf"
+ },
+ "wc20228_e518006e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001402",
+  "crop_stem": "e518006e8e4d9472"
+ },
+ "wc20229_faa6beea": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_002304",
+  "crop_stem": "faa6beeac547e5bb"
+ },
+ "wc20230_0b659bd0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000293",
+  "crop_stem": "0b659bd0bd4c8e00"
+ },
+ "wc20231_233ff5af": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002294",
+  "crop_stem": "233ff5afe7f871a2"
+ },
+ "wc20232_6f9cb0e7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001043",
+  "crop_stem": "6f9cb0e77e58ad78"
+ },
+ "wc20233_98f0eca4": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001467",
+  "crop_stem": "98f0eca43051d1b8"
+ },
+ "wc20234_fee5e66a": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0153",
+  "crop_stem": "fee5e66a3301fde0"
+ },
+ "wc20235_ebc4f9f1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000094",
+  "crop_stem": "ebc4f9f1dcd59149"
+ },
+ "wc20236_b3ed5ff3": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0044_2_000",
+  "crop_stem": "b3ed5ff36d536cc9"
+ },
+ "wc20237_c5c38fc7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000259",
+  "crop_stem": "c5c38fc73b3f7809"
+ },
+ "wc20238_48005278": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001840",
+  "crop_stem": "4800527805b6e284"
+ },
+ "wc20239_628f1c3b": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0078_0_002",
+  "crop_stem": "628f1c3b648bfca9"
+ },
+ "wc20240_15ffd9bb": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_julia_multibrot4_dive_000028",
+  "crop_stem": "15ffd9bba6c476b6"
+ },
+ "wc20241_536b3255": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000287",
+  "crop_stem": "536b325557b0a6a0"
+ },
+ "wc20242_5389e62a": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000067",
+  "crop_stem": "5389e62abebc4656"
+ },
+ "wc20243_78afb89a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001078",
+  "crop_stem": "78afb89a66415d3b"
+ },
+ "wc20244_7a2f3f94": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002195",
+  "crop_stem": "7a2f3f9404c2a460"
+ },
+ "wc20245_792dbac8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000996",
+  "crop_stem": "792dbac8e05b92e0"
+ },
+ "wc20246_9993306f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000292",
+  "crop_stem": "9993306f90c8bc9d"
+ },
+ "wc20247_390dac7f": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0015_0_002",
+  "crop_stem": "390dac7ff9edafb8"
+ },
+ "wc20248_fd73b122": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0075_3_001",
+  "crop_stem": "fd73b122f8ad339d"
+ },
+ "wc20249_904beac4": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000064",
+  "crop_stem": "904beac4b0d5e2d4"
+ },
+ "wc20250_313a4c62": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000999",
+  "crop_stem": "313a4c628eb14e26"
+ },
+ "wc20251_40c94dea": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000144",
+  "crop_stem": "40c94dea27a08c4b"
+ },
+ "wc20252_3b3c9b78": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000693",
+  "crop_stem": "3b3c9b7821cd5a41"
+ },
+ "wc20253_bf2e0abf": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000168",
+  "crop_stem": "bf2e0abf5f8e130d"
+ },
+ "wc20254_7c555d82": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_m_dive_000073",
+  "crop_stem": "7c555d82ee70a52b"
+ },
+ "wc20255_4ca1e780": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0066_3_001",
+  "crop_stem": "4ca1e78004107d91"
+ },
+ "wc20256_f0727135": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_julia_multibrot4_dive_000058",
+  "crop_stem": "f0727135d2e98691"
+ },
+ "wc20257_bc4b8330": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002328",
+  "crop_stem": "bc4b833048a49757"
+ },
+ "wc20258_ab681268": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001172",
+  "crop_stem": "ab681268379b2cce"
+ },
+ "wc20259_86d75f4e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000923",
+  "crop_stem": "86d75f4eafe4c607"
+ },
+ "wc20260_e782bc2b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000959",
+  "crop_stem": "e782bc2bbab11784"
+ },
+ "wc20261_4ded16ec": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0032",
+  "crop_stem": "4ded16ec8f2f7457"
+ },
+ "wc20262_d7c1b268": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_julia_multibrot5_dive_000026",
+  "crop_stem": "d7c1b2680507d0b3"
+ },
+ "wc20263_0b116792": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001231",
+  "crop_stem": "0b116792f3b700db"
+ },
+ "wc20264_ab728a2a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000738",
+  "crop_stem": "ab728a2a2eb6a17d"
+ },
+ "wc20265_519ba2ee": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000090",
+  "crop_stem": "519ba2ee3c63eec4"
+ },
+ "wc20266_8f6287cd": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001581",
+  "crop_stem": "8f6287cd16d0cd90"
+ },
+ "wc20267_e50b4044": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000762",
+  "crop_stem": "e50b4044722edcf5"
+ },
+ "wc20268_f566cab0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001275",
+  "crop_stem": "f566cab0f637f2f6"
+ },
+ "wc20269_d196b070": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000563",
+  "crop_stem": "d196b0702af4655f"
+ },
+ "wc20270_edfa3187": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000283",
+  "crop_stem": "edfa3187afea08a8"
+ },
+ "wc20271_139bcaa1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002334",
+  "crop_stem": "139bcaa183b86f6e"
+ },
+ "wc20272_ae89a77e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000131",
+  "crop_stem": "ae89a77e57735f20"
+ },
+ "wc20273_ee795299": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000363",
+  "crop_stem": "ee79529904175c0b"
+ },
+ "wc20274_9f81c749": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000666",
+  "crop_stem": "9f81c749a9f7cc42"
+ },
+ "wc20275_a92c6f57": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000684",
+  "crop_stem": "a92c6f5743d5b9ad"
+ },
+ "wc20276_99b4acbe": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000267",
+  "crop_stem": "99b4acbe6d99a579"
+ },
+ "wc20277_a74f7227": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001069",
+  "crop_stem": "a74f7227082d4cc9"
+ },
+ "wc20278_d1726898": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001676",
+  "crop_stem": "d1726898ce8158b3"
+ },
+ "wc20279_893e62cb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001291",
+  "crop_stem": "893e62cb2e51584a"
+ },
+ "wc20280_4f5df743": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000225",
+  "crop_stem": "4f5df743f79194bf"
+ },
+ "wc20281_50d1cb02": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001706",
+  "crop_stem": "50d1cb02c71ce94f"
+ },
+ "wc20282_2d269e04": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot3_breadth_000072",
+  "crop_stem": "2d269e04b9496e81"
+ },
+ "wc20283_83001cf3": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001588",
+  "crop_stem": "83001cf3770b7bfd"
+ },
+ "wc20284_1d884353": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001261",
+  "crop_stem": "1d884353d49bdfec"
+ },
+ "wc20285_258fc5da": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001580",
+  "crop_stem": "258fc5da49dc179f"
+ },
+ "wc20286_c3d0bdf0": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0054_0_002",
+  "crop_stem": "c3d0bdf0095a6382"
+ },
+ "wc20287_ebe17fda": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001303",
+  "crop_stem": "ebe17fda8d863f21"
+ },
+ "wc20288_8b3e967b": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot5_dive_000252",
+  "crop_stem": "8b3e967b3b3a85df"
+ },
+ "wc20289_3f05f1ab": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000077",
+  "crop_stem": "3f05f1ab60cb5305"
+ },
+ "wc20290_ad6d8043": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000134",
+  "crop_stem": "ad6d8043f2caa2df"
+ },
+ "wc20291_a12730b1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000103",
+  "crop_stem": "a12730b1b391145b"
+ },
+ "wc20292_b65ddf9f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000392",
+  "crop_stem": "b65ddf9fff04f3c0"
+ },
+ "wc20293_4ffb0909": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002004",
+  "crop_stem": "4ffb09094f7a8395"
+ },
+ "wc20294_3298c421": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000163",
+  "crop_stem": "3298c4216ea5eccc"
+ },
+ "wc20295_28b47410": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0054_0_000",
+  "crop_stem": "28b474108ef0d475"
+ },
+ "wc20296_56c852e8": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0015",
+  "crop_stem": "56c852e87f108d73"
+ },
+ "wc20297_3e61f561": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001434",
+  "crop_stem": "3e61f561c5e2bfcd"
+ },
+ "wc20298_2bf0b5f5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001051",
+  "crop_stem": "2bf0b5f5bab65abe"
+ },
+ "wc20299_e7b8e914": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000930",
+  "crop_stem": "e7b8e914da77eac2"
+ },
+ "wc20300_937a9a07": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000410",
+  "crop_stem": "937a9a07616df5ad"
+ },
+ "wc20301_7fe2db8f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000382",
+  "crop_stem": "7fe2db8fd88f2e2b"
+ },
+ "wc20302_30b8de4a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001696",
+  "crop_stem": "30b8de4a3c8be3cf"
+ },
+ "wc20303_59d92ec9": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0008_3_001",
+  "crop_stem": "59d92ec96c38ff69"
+ },
+ "wc20304_33afb16d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000945",
+  "crop_stem": "33afb16d537d75a1"
+ },
+ "wc20305_2318e986": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot3_breadth_000309",
+  "crop_stem": "2318e9862637dd70"
+ },
+ "wc20306_e69a99a3": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001729",
+  "crop_stem": "e69a99a3c9f337f5"
+ },
+ "wc20307_25fd8367": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000193",
+  "crop_stem": "25fd83679d1648c5"
+ },
+ "wc20308_b1f6eb7b": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot4_breadth_000148",
+  "crop_stem": "b1f6eb7b09664004"
+ },
+ "wc20309_efd62999": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001094",
+  "crop_stem": "efd62999d60fd6a9"
+ },
+ "wc20310_e7bb951f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000709",
+  "crop_stem": "e7bb951fb3856093"
+ },
+ "wc20311_7e9cf374": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_001603",
+  "crop_stem": "7e9cf37411ddeae9"
+ },
+ "wc20312_725ab020": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001037",
+  "crop_stem": "725ab02077eece90"
+ },
+ "wc20313_72ad23e7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001317",
+  "crop_stem": "72ad23e78cb4e2d0"
+ },
+ "wc20314_a960effa": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001663",
+  "crop_stem": "a960effac87fe6fa"
+ },
+ "wc20315_f096a2b1": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot3_dive_000134",
+  "crop_stem": "f096a2b1f633ffd0"
+ },
+ "wc20316_14c14674": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000961",
+  "crop_stem": "14c14674000856fa"
+ },
+ "wc20317_150de8f9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_001931",
+  "crop_stem": "150de8f95430ad25"
+ },
+ "wc20318_e6de87f2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002156",
+  "crop_stem": "e6de87f27df24472"
+ },
+ "wc20319_49446478": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0088",
+  "crop_stem": "494464786ee22d32"
+ },
+ "wc20320_40128f69": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001963",
+  "crop_stem": "40128f69e4b8377c"
+ },
+ "wc20321_dd2bf309": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0079_2_001",
+  "crop_stem": "dd2bf3097623fe9d"
+ },
+ "wc20322_9826f078": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000083",
+  "crop_stem": "9826f078d00c9399"
+ },
+ "wc20323_9add24c4": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002264",
+  "crop_stem": "9add24c48cd8197a"
+ },
+ "wc20324_acc22279": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000257",
+  "crop_stem": "acc22279d3f9786c"
+ },
+ "wc20325_85060d14": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001945",
+  "crop_stem": "85060d141ba19eb3"
+ },
+ "wc20326_c68cc2d0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000519",
+  "crop_stem": "c68cc2d03ce099cc"
+ },
+ "wc20327_3d2da6f3": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000880",
+  "crop_stem": "3d2da6f32e73e212"
+ },
+ "wc20328_3967c77b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002100",
+  "crop_stem": "3967c77b07e4232b"
+ },
+ "wc20329_e2def9b7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001242",
+  "crop_stem": "e2def9b7e80c89e7"
+ },
+ "wc20330_14522593": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001178",
+  "crop_stem": "145225939e7ff4ae"
+ },
+ "wc20331_ed5e76dc": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001073",
+  "crop_stem": "ed5e76dcbd657560"
+ },
+ "wc20332_acffb981": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0020_1_004",
+  "crop_stem": "acffb981570aad21"
+ },
+ "wc20333_6d8d8111": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000136",
+  "crop_stem": "6d8d811100c9357a"
+ },
+ "wc20334_2ed6ca23": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001225",
+  "crop_stem": "2ed6ca2312312a76"
+ },
+ "wc20335_8812ce35": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0128",
+  "crop_stem": "8812ce35b1f1f428"
+ },
+ "wc20336_5485eaed": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000743",
+  "crop_stem": "5485eaed640e4593"
+ },
+ "wc20337_90db2abb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001660",
+  "crop_stem": "90db2abb2f561ec1"
+ },
+ "wc20338_7d4f7dbb": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot5_breadth_000278",
+  "crop_stem": "7d4f7dbbcfcdc358"
+ },
+ "wc20339_a2062c90": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000660",
+  "crop_stem": "a2062c900179c003"
+ },
+ "wc20340_bcb10ea7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000274",
+  "crop_stem": "bcb10ea7425a0b27"
+ },
+ "wc20341_5af3e11c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000006",
+  "crop_stem": "5af3e11c3a3b5ec8"
+ },
+ "wc20342_35e36c5f": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000011",
+  "crop_stem": "35e36c5f02cb426d"
+ },
+ "wc20343_c470a9b6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001851",
+  "crop_stem": "c470a9b698a3a185"
+ },
+ "wc20344_eacdbcc3": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001684",
+  "crop_stem": "eacdbcc3f1823b46"
+ },
+ "wc20345_9d5d776c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001584",
+  "crop_stem": "9d5d776c55415749"
+ },
+ "wc20346_46b6380a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001695",
+  "crop_stem": "46b6380a879044d5"
+ },
+ "wc20347_cd5d6219": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001085",
+  "crop_stem": "cd5d6219c28f3634"
+ },
+ "wc20348_22eda441": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0161",
+  "crop_stem": "22eda441196569f9"
+ },
+ "wc20349_575479fe": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot5_dive_000192",
+  "crop_stem": "575479fe7bf6e4ac"
+ },
+ "wc20350_de547790": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001196",
+  "crop_stem": "de547790f9e7ae36"
+ },
+ "wc20351_d2b1be93": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000612",
+  "crop_stem": "d2b1be93f71aecb2"
+ },
+ "wc20352_b8e48616": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001625",
+  "crop_stem": "b8e486167967fd8b"
+ },
+ "wc20353_adabd632": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001280",
+  "crop_stem": "adabd632bc5e72cc"
+ },
+ "wc20354_ae73a587": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000652",
+  "crop_stem": "ae73a5873a0e5836"
+ },
+ "wc20355_e015d082": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_julia_multibrot3_dive_000238",
+  "crop_stem": "e015d08239ad7d4c"
+ },
+ "wc20356_3cb1b1b2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000680",
+  "crop_stem": "3cb1b1b215c68440"
+ },
+ "wc20357_9b628246": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0110",
+  "crop_stem": "9b628246c89048ff"
+ },
+ "wc20358_3e4c74e2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001910",
+  "crop_stem": "3e4c74e260c8f3c3"
+ },
+ "wc20359_e7dc2627": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot3_breadth_000233",
+  "crop_stem": "e7dc2627d4580a38"
+ },
+ "wc20360_6e4bed78": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001492",
+  "crop_stem": "6e4bed787ea35b76"
+ },
+ "wc20361_7f3f7700": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000726",
+  "crop_stem": "7f3f77008ae68a34"
+ },
+ "wc20362_93367d16": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000639",
+  "crop_stem": "93367d1643434934"
+ },
+ "wc20363_decc15a3": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0097",
+  "crop_stem": "decc15a3bde27c69"
+ },
+ "wc20364_9c70c52e": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_julia_multibrot3_prod25_20260809_dive_000120",
+  "crop_stem": "9c70c52e915392a0"
+ },
+ "wc20365_9546e564": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000167",
+  "crop_stem": "9546e564c17f3e85"
+ },
+ "wc20366_7ee8fc5d": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0096",
+  "crop_stem": "7ee8fc5d7cd8b4c0"
+ },
+ "wc20367_fb9ff6b7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_001134",
+  "crop_stem": "fb9ff6b780bf6f5d"
+ },
+ "wc20368_09b22b77": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001675",
+  "crop_stem": "09b22b7727199164"
+ },
+ "wc20369_159adeda": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot5_dive_000194",
+  "crop_stem": "159adedadedae25a"
+ },
+ "wc20370_002c3eac": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot3_breadth_000203",
+  "crop_stem": "002c3eac7f51af81"
+ },
+ "wc20371_2b2e741e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001647",
+  "crop_stem": "2b2e741e301363f7"
+ },
+ "wc20372_d4231ac4": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001468",
+  "crop_stem": "d4231ac4b34b5b80"
+ },
+ "wc20373_a7164461": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001592",
+  "crop_stem": "a71644618caa7a32"
+ },
+ "wc20374_13cf94f7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000013",
+  "crop_stem": "13cf94f7b65ab56e"
+ },
+ "wc20375_e0605b74": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001687",
+  "crop_stem": "e0605b748c2ccc0f"
+ },
+ "wc20376_4ca05127": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_mandelbrot_breadth_000240",
+  "crop_stem": "4ca05127ad5b9ec7"
+ },
+ "wc20377_2efc9576": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000903",
+  "crop_stem": "2efc9576e7c428e6"
+ },
+ "wc20378_39f069bd": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000761",
+  "crop_stem": "39f069bd9d96b1ac"
+ },
+ "wc20379_e2d7b5c8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000687",
+  "crop_stem": "e2d7b5c85642d185"
+ },
+ "wc20380_daa5ef6e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001685",
+  "crop_stem": "daa5ef6eb41f024a"
+ },
+ "wc20381_9ba6d658": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000039",
+  "crop_stem": "9ba6d6587ad0f90a"
+ },
+ "wc20382_b2ca5f56": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001281",
+  "crop_stem": "b2ca5f56ec565c11"
+ },
+ "wc20383_d750fb81": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0099",
+  "crop_stem": "d750fb81ecc3395a"
+ },
+ "wc20384_080c94ab": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001573",
+  "crop_stem": "080c94ab2bee4a9a"
+ },
+ "wc20385_4b591f1c": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0025_2_001",
+  "crop_stem": "4b591f1c3d08fe0f"
+ },
+ "wc20386_92f96d89": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0009",
+  "crop_stem": "92f96d89ed293d90"
+ },
+ "wc20387_fd85d824": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0066_2_004",
+  "crop_stem": "fd85d824453a9e4e"
+ },
+ "wc20388_d4c775e2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001287",
+  "crop_stem": "d4c775e21cc68d95"
+ },
+ "wc20389_40d4af93": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000255",
+  "crop_stem": "40d4af93a5627b28"
+ },
+ "wc20390_2ec9da98": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000997",
+  "crop_stem": "2ec9da9893e1e727"
+ },
+ "wc20391_5349478c": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0022",
+  "crop_stem": "5349478c03b13725"
+ },
+ "wc20392_dc13f952": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0044",
+  "crop_stem": "dc13f952ffbd518b"
+ },
+ "wc20393_ef5accb3": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000012",
+  "crop_stem": "ef5accb3699988d4"
+ },
+ "wc20394_8e297ac1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002094",
+  "crop_stem": "8e297ac1cc1614c5"
+ },
+ "wc20395_0fc97b66": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002096",
+  "crop_stem": "0fc97b66c9b7ee64"
+ },
+ "wc20396_80ce4938": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0037",
+  "crop_stem": "80ce493825790346"
+ },
+ "wc20397_8770f52a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000748",
+  "crop_stem": "8770f52a8fe0633c"
+ },
+ "wc20398_3813cba4": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot4_breadth_000109",
+  "crop_stem": "3813cba437c48b2b"
+ },
+ "wc20399_0c3c4e19": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000143",
+  "crop_stem": "0c3c4e19071acd31"
+ },
+ "wc20400_a9f1d514": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000662",
+  "crop_stem": "a9f1d514518efaf9"
+ },
+ "wc20401_8bc0f22e": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0010",
+  "crop_stem": "8bc0f22e0c90cda1"
+ },
+ "wc20402_9d552830": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000160",
+  "crop_stem": "9d5528300cc5d8b5"
+ },
+ "wc20403_abc80bc8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001681",
+  "crop_stem": "abc80bc8c7009505"
+ },
+ "wc20404_0ce28d3c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000302",
+  "crop_stem": "0ce28d3c65a96fae"
+ },
+ "wc20405_2b2222da": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000775",
+  "crop_stem": "2b2222da3a3d17b8"
+ },
+ "wc20406_50f411c0": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000032",
+  "crop_stem": "50f411c0edafc7ef"
+ },
+ "wc20407_5825de90": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000813",
+  "crop_stem": "5825de903c4d312b"
+ },
+ "wc20408_2cb3582d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000657",
+  "crop_stem": "2cb3582d7dcd14c3"
+ },
+ "wc20409_9ff180f0": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000174",
+  "crop_stem": "9ff180f03e772aec"
+ },
+ "wc20410_17a0c550": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001360",
+  "crop_stem": "17a0c5505116cd0e"
+ },
+ "wc20411_6c2e6b81": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000148",
+  "crop_stem": "6c2e6b8140c51139"
+ },
+ "wc20412_6d0918cc": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000647",
+  "crop_stem": "6d0918cc25b41f1c"
+ },
+ "wc20413_75c5155c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001445",
+  "crop_stem": "75c5155c4b7344c4"
+ },
+ "wc20414_6753fa4f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001648",
+  "crop_stem": "6753fa4fb5db7bd2"
+ },
+ "wc20415_013628ff": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001964",
+  "crop_stem": "013628ffa5ea35fe"
+ },
+ "wc20416_d8937186": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_m_dive_000187",
+  "crop_stem": "d893718614f35107"
+ },
+ "wc20417_14a342aa": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000737",
+  "crop_stem": "14a342aa982c9ea3"
+ },
+ "wc20418_96dbbab4": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0008_3_000",
+  "crop_stem": "96dbbab4eeff09b3"
+ },
+ "wc20419_61880ec2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001484",
+  "crop_stem": "61880ec2b6f3caac"
+ },
+ "wc20420_478e4260": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002009",
+  "crop_stem": "478e4260637fe36b"
+ },
+ "wc20421_197e1ef2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002299",
+  "crop_stem": "197e1ef225c54786"
+ },
+ "wc20422_ce281b7b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000948",
+  "crop_stem": "ce281b7b7e7f6446"
+ },
+ "wc20423_0f4fa781": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000096",
+  "crop_stem": "0f4fa7814657e385"
+ },
+ "wc20424_ad5e602b": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000262",
+  "crop_stem": "ad5e602b5703e1f0"
+ },
+ "wc20425_dcfdd9d9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001491",
+  "crop_stem": "dcfdd9d9635b70d5"
+ },
+ "wc20426_910605af": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0019",
+  "crop_stem": "910605af54fc5fe9"
+ },
+ "wc20427_be80911f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000260",
+  "crop_stem": "be80911fb72b40ff"
+ },
+ "wc20428_233211c2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001279",
+  "crop_stem": "233211c2401c1e20"
+ },
+ "wc20429_0c07811d": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0055",
+  "crop_stem": "0c07811dd2515283"
+ },
+ "wc20430_91b513f3": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000462",
+  "crop_stem": "91b513f385c0d625"
+ },
+ "wc20431_fc0c8e0f": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_multibrot4_dive_000086",
+  "crop_stem": "fc0c8e0f8c5eb13e"
+ },
+ "wc20432_74e23f36": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0041",
+  "crop_stem": "74e23f36f84ae149"
+ },
+ "wc20433_717d84bf": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0005",
+  "crop_stem": "717d84bf26cdbd8e"
+ },
+ "wc20434_0db4d2c4": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot3_breadth_000194",
+  "crop_stem": "0db4d2c4ba159692"
+ },
+ "wc20435_0972d6ef": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000252",
+  "crop_stem": "0972d6efc354dd57"
+ },
+ "wc20436_9d65fae1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000101",
+  "crop_stem": "9d65fae1313c2d7c"
+ },
+ "wc20437_8f938c1b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000091",
+  "crop_stem": "8f938c1b0311cc8a"
+ },
+ "wc20438_747d8a5b": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0078",
+  "crop_stem": "747d8a5ba3d44a90"
+ },
+ "wc20439_5bd8083b": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0026",
+  "crop_stem": "5bd8083b80d67b07"
+ },
+ "wc20440_bce90a56": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000136",
+  "crop_stem": "bce90a56d6c26726"
+ },
+ "wc20441_0ece4626": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_m_dive_000173",
+  "crop_stem": "0ece4626f346d1f9"
+ },
+ "wc20442_b897b133": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002073",
+  "crop_stem": "b897b133e2a5585b"
+ },
+ "wc20443_9a46c2e5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000692",
+  "crop_stem": "9a46c2e51cb3e3d3"
+ },
+ "wc20444_ad892621": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001435",
+  "crop_stem": "ad892621b5782de9"
+ },
+ "wc20445_199cc6f1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001373",
+  "crop_stem": "199cc6f106c73a50"
+ },
+ "wc20446_6981a878": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot4_breadth_000296",
+  "crop_stem": "6981a8783eca6428"
+ },
+ "wc20447_e3f2dd3f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001083",
+  "crop_stem": "e3f2dd3f96b2fa91"
+ },
+ "wc20448_f9ffff47": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_julia_multibrot4_breadth_000097",
+  "crop_stem": "f9ffff47c328edd5"
+ },
+ "wc20449_c151e759": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_001338",
+  "crop_stem": "c151e759b54b9560"
+ },
+ "wc20450_086d62c1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000165",
+  "crop_stem": "086d62c1cd3dbe89"
+ },
+ "wc20451_6c1b5c47": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0034",
+  "crop_stem": "6c1b5c47354ed55d"
+ },
+ "wc20452_6d19c63f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000472",
+  "crop_stem": "6d19c63f8cc3d130"
+ },
+ "wc20453_de0d18c9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001670",
+  "crop_stem": "de0d18c97328e315"
+ },
+ "wc20454_a3f846c2": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot5_dive_000169",
+  "crop_stem": "a3f846c234ecb781"
+ },
+ "wc20455_522e126e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001672",
+  "crop_stem": "522e126e400cb28a"
+ },
+ "wc20456_49744f20": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000227",
+  "crop_stem": "49744f207701e1b7"
+ },
+ "wc20457_89eb271a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002211",
+  "crop_stem": "89eb271af45f7613"
+ },
+ "wc20458_3053d134": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001474",
+  "crop_stem": "3053d1342a47712a"
+ },
+ "wc20459_5684d07b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000674",
+  "crop_stem": "5684d07bab045f62"
+ },
+ "wc20460_1ca06cb5": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_m_dive_000126",
+  "crop_stem": "1ca06cb518b585d9"
+ },
+ "wc20461_519c18fc": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001461",
+  "crop_stem": "519c18fc0875181b"
+ },
+ "wc20462_e1763337": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot5_dive_000085",
+  "crop_stem": "e176333746046748"
+ },
+ "wc20463_748ac3e4": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000379",
+  "crop_stem": "748ac3e4d720e207"
+ },
+ "wc20464_eadc2bbe": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_001778",
+  "crop_stem": "eadc2bbe62f87931"
+ },
+ "wc20465_03bf9ddc": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000731",
+  "crop_stem": "03bf9ddcd72eaf9e"
+ },
+ "wc20466_a0c3de02": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0106",
+  "crop_stem": "a0c3de023a79c5f2"
+ },
+ "wc20467_445819bd": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_001498",
+  "crop_stem": "445819bd200f4b5d"
+ },
+ "wc20468_c86b44d8": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot5_breadth_000207",
+  "crop_stem": "c86b44d8d8be3b36"
+ },
+ "wc20469_59c928c0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001969",
+  "crop_stem": "59c928c0e638086a"
+ },
+ "wc20470_ecb1fcc4": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000168",
+  "crop_stem": "ecb1fcc4391379ca"
+ },
+ "wc20471_543ee9df": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001439",
+  "crop_stem": "543ee9df9a89f262"
+ },
+ "wc20472_0620dc72": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0059",
+  "crop_stem": "0620dc72b43efbdb"
+ },
+ "wc20473_c88c44a8": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot3_breadth_000231",
+  "crop_stem": "c88c44a88f721bd8"
+ },
+ "wc20474_4a6c635c": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot3_breadth_000093",
+  "crop_stem": "4a6c635cecaac1f4"
+ },
+ "wc20475_d213f85c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001692",
+  "crop_stem": "d213f85c7ce5901c"
+ },
+ "wc20476_60cf4606": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0081",
+  "crop_stem": "60cf4606af726bd8"
+ },
+ "wc20477_30802920": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000579",
+  "crop_stem": "30802920705521b3"
+ },
+ "wc20478_481e227d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000587",
+  "crop_stem": "481e227dd8b09819"
+ },
+ "wc20479_ed34f5c0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001433",
+  "crop_stem": "ed34f5c0e56918a1"
+ },
+ "wc20480_92de992d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001939",
+  "crop_stem": "92de992d1f4d1a8e"
+ },
+ "wc20481_52061999": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000617",
+  "crop_stem": "520619994f773c73"
+ },
+ "wc20482_ae773fb5": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_mandelbrot_dive_000029",
+  "crop_stem": "ae773fb5acc34deb"
+ },
+ "wc20483_a22c7402": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_multibrot3_prod25_20260809_dive_000043",
+  "crop_stem": "a22c7402d27b48b4"
+ },
+ "wc20484_41a0a077": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0075_0_001",
+  "crop_stem": "41a0a077206d831d"
+ },
+ "wc20485_c17a566a": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot5_breadth_000185",
+  "crop_stem": "c17a566a469f3471"
+ },
+ "wc20486_78260fed": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000887",
+  "crop_stem": "78260fedc8dd9ef8"
+ },
+ "wc20487_79fab590": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001169",
+  "crop_stem": "79fab590f4284ba4"
+ },
+ "wc20488_a10eeb39": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001081",
+  "crop_stem": "a10eeb395c3e3fc6"
+ },
+ "wc20489_bb2bb6b5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000759",
+  "crop_stem": "bb2bb6b54119cd0c"
+ },
+ "wc20490_79945d45": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001416",
+  "crop_stem": "79945d456f107973"
+ },
+ "wc20491_ee9306dc": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001574",
+  "crop_stem": "ee9306dcda97fda5"
+ },
+ "wc20492_56cc4c99": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot5_breadth_000237",
+  "crop_stem": "56cc4c99e6d89b02"
+ },
+ "wc20493_15422693": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001448",
+  "crop_stem": "15422693aa445c93"
+ },
+ "wc20494_ee0ad252": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001458",
+  "crop_stem": "ee0ad252a2619586"
+ },
+ "wc20495_e6d6e621": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001475",
+  "crop_stem": "e6d6e621d453be47"
+ },
+ "wc20496_eaf0d35d": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot4_breadth_000000",
+  "crop_stem": "eaf0d35d699305ff"
+ },
+ "wc20497_2be65148": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot3_breadth_000305",
+  "crop_stem": "2be6514851c0fb3e"
+ },
+ "wc20498_72abd90c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001412",
+  "crop_stem": "72abd90c2b2dc3e8"
+ },
+ "wc20499_cfb71cbf": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0046",
+  "crop_stem": "cfb71cbf564b0cd1"
+ },
+ "wc20500_7c4cfcbc": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000968",
+  "crop_stem": "7c4cfcbc49ba4626"
+ },
+ "wc20501_213bc719": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000460",
+  "crop_stem": "213bc7199ed3ac07"
+ },
+ "wc20502_5326a6fd": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot5_dive_000214",
+  "crop_stem": "5326a6fd1708c219"
+ },
+ "wc20503_42646739": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000286",
+  "crop_stem": "42646739fa64ff3d"
+ },
+ "wc20504_7f8c6904": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot4_breadth_000103",
+  "crop_stem": "7f8c6904551ef54b"
+ },
+ "wc20505_d75609a4": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000060",
+  "crop_stem": "d75609a478a618b3"
+ },
+ "wc20506_f4e9e0fb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000804",
+  "crop_stem": "f4e9e0fb4477160a"
+ },
+ "wc20507_f4ba4b87": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0024_0_000",
+  "crop_stem": "f4ba4b874fc9d75b"
+ },
+ "wc20508_f34cfccc": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001076",
+  "crop_stem": "f34cfccc4c27dfcf"
+ },
+ "wc20509_7dbe5ada": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000744",
+  "crop_stem": "7dbe5adaefa29925"
+ },
+ "wc20510_9d78d60a": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot3_breadth_000144",
+  "crop_stem": "9d78d60a213cdf1f"
+ },
+ "wc20511_d3556d94": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001285",
+  "crop_stem": "d3556d94ad2f6f6b"
+ },
+ "wc20512_9e0c32ca": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0031",
+  "crop_stem": "9e0c32ca79f96cba"
+ },
+ "wc20513_343bea40": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000007",
+  "crop_stem": "343bea4065df4f1f"
+ },
+ "wc20514_9d5ceb9b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000468",
+  "crop_stem": "9d5ceb9be0596361"
+ },
+ "wc20515_3bea5404": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001284",
+  "crop_stem": "3bea5404d7140d55"
+ },
+ "wc20516_5c9504b1": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0087",
+  "crop_stem": "5c9504b1849ddaae"
+ },
+ "wc20517_a0171360": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000786",
+  "crop_stem": "a017136019eeb132"
+ },
+ "wc20518_f1664ba3": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot4_breadth_000190",
+  "crop_stem": "f1664ba31002d09d"
+ },
+ "wc20519_d0c1ba37": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001045",
+  "crop_stem": "d0c1ba378afb30c7"
+ },
+ "wc20520_d7ef9b4e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002325",
+  "crop_stem": "d7ef9b4e0ff61bd3"
+ },
+ "wc20521_6ac2ba51": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001170",
+  "crop_stem": "6ac2ba51fa3cab60"
+ },
+ "wc20522_ea90508a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000393",
+  "crop_stem": "ea90508ae8ab7537"
+ },
+ "wc20523_06e91bef": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000688",
+  "crop_stem": "06e91befb2f9036e"
+ },
+ "wc20524_f6a40f8d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000159",
+  "crop_stem": "f6a40f8df2c7ade6"
+ },
+ "wc20525_e68715be": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot5_dive_000230",
+  "crop_stem": "e68715be468fcd33"
+ },
+ "wc20526_826c90b3": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000251",
+  "crop_stem": "826c90b31362eb5c"
+ },
+ "wc20527_43e17fc7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000459",
+  "crop_stem": "43e17fc78d922bdb"
+ },
+ "wc20528_50356d1b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001585",
+  "crop_stem": "50356d1b308892b3"
+ },
+ "wc20529_48f529c2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001310",
+  "crop_stem": "48f529c213b6b721"
+ },
+ "wc20530_e87b347b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001440",
+  "crop_stem": "e87b347bd6517084"
+ },
+ "wc20531_d3021c1f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001251",
+  "crop_stem": "d3021c1f44ccef17"
+ },
+ "wc20532_8f4ec48d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001866",
+  "crop_stem": "8f4ec48d9d26ba95"
+ },
+ "wc20533_35f3860b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001502",
+  "crop_stem": "35f3860beb3e7d2a"
+ },
+ "wc20534_2bcb8033": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002151",
+  "crop_stem": "2bcb803344886d32"
+ },
+ "wc20535_a82ba39c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000718",
+  "crop_stem": "a82ba39c78c71547"
+ },
+ "wc20536_04f58809": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000669",
+  "crop_stem": "04f588099e05d014"
+ },
+ "wc20537_e439b2cd": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000074",
+  "crop_stem": "e439b2cdb6dbd5a6"
+ },
+ "wc20538_81105206": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000022",
+  "crop_stem": "8110520621fb0413"
+ },
+ "wc20539_f8844cf0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002152",
+  "crop_stem": "f8844cf0900d664a"
+ },
+ "wc20540_4fda3a54": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001292",
+  "crop_stem": "4fda3a5413f32790"
+ },
+ "wc20541_2b942ae9": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot3_dive_000153",
+  "crop_stem": "2b942ae984d9ad02"
+ },
+ "wc20542_5f9e61c9": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000003",
+  "crop_stem": "5f9e61c93e8a030e"
+ },
+ "wc20543_66e1204c": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_julia_multibrot5_dive_000249",
+  "crop_stem": "66e1204c5283f85a"
+ },
+ "wc20544_c1261864": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0044_1_001",
+  "crop_stem": "c126186423890b8d"
+ },
+ "wc20545_cca36a42": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0077",
+  "crop_stem": "cca36a42269a972c"
+ },
+ "wc20546_3c83f9fa": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0063_0_002",
+  "crop_stem": "3c83f9faf27813f6"
+ },
+ "wc20547_1f49f68c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000728",
+  "crop_stem": "1f49f68cac15fc0d"
+ },
+ "wc20548_c3aa77b3": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001064",
+  "crop_stem": "c3aa77b333e60d21"
+ },
+ "wc20549_8da09358": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001099",
+  "crop_stem": "8da09358409ab9a9"
+ },
+ "wc20550_8db86e5a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002053",
+  "crop_stem": "8db86e5a89c6100b"
+ },
+ "wc20551_58d6e61c": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000057",
+  "crop_stem": "58d6e61ccde22b3f"
+ },
+ "wc20552_8512beeb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001270",
+  "crop_stem": "8512beeb2e568be5"
+ },
+ "wc20553_3d699599": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000145",
+  "crop_stem": "3d6995990481ff88"
+ },
+ "wc20554_9d2809ff": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_001145",
+  "crop_stem": "9d2809ff8e215892"
+ },
+ "wc20555_c708f0bd": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot3_dive_000076",
+  "crop_stem": "c708f0bd93abec2e"
+ },
+ "wc20556_28e347b9": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot5_dive_000239",
+  "crop_stem": "28e347b9ff920291"
+ },
+ "wc20557_2ff58342": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0078_2_000",
+  "crop_stem": "2ff58342b7b0fbf1"
+ },
+ "wc20558_11a51576": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0053",
+  "crop_stem": "11a51576098ca185"
+ },
+ "wc20559_222b72cc": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot5_dive_000209",
+  "crop_stem": "222b72ccce26fb60"
+ },
+ "wc20560_72aa7494": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001594",
+  "crop_stem": "72aa7494fd6dd103"
+ },
+ "wc20561_8be4f42d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002139",
+  "crop_stem": "8be4f42dd8342381"
+ },
+ "wc20562_4453022c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_001346",
+  "crop_stem": "4453022c4f61d98d"
+ },
+ "wc20563_3af5977f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001890",
+  "crop_stem": "3af5977faf1e6aef"
+ },
+ "wc20564_837f5780": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001104",
+  "crop_stem": "837f578066207c89"
+ },
+ "wc20565_6415a9c0": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0030_0_001",
+  "crop_stem": "6415a9c015294ef4"
+ },
+ "wc20566_22b88922": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000906",
+  "crop_stem": "22b889223c1cd51d"
+ },
+ "wc20567_1a12bbc8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001432",
+  "crop_stem": "1a12bbc8ee079b3d"
+ },
+ "wc20568_862faf15": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000691",
+  "crop_stem": "862faf155afa2845"
+ },
+ "wc20569_143e91e8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002093",
+  "crop_stem": "143e91e8bb8a7043"
+ },
+ "wc20570_1bbc28b6": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot5_breadth_000228",
+  "crop_stem": "1bbc28b6df72dd30"
+ },
+ "wc20571_4bf3116f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000384",
+  "crop_stem": "4bf3116f63bf288e"
+ },
+ "wc20572_53c9a1ed": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000756",
+  "crop_stem": "53c9a1ed8e5f9cbe"
+ },
+ "wc20573_62a83db0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_002361",
+  "crop_stem": "62a83db087ba463b"
+ },
+ "wc20574_116d2635": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000712",
+  "crop_stem": "116d2635a1c6c4a5"
+ },
+ "wc20575_0002ce84": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001572",
+  "crop_stem": "0002ce840e6db7d1"
+ },
+ "wc20576_b323d721": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot4_breadth_000068",
+  "crop_stem": "b323d7217605b2e7"
+ },
+ "wc20577_0b6cb33d": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0029",
+  "crop_stem": "0b6cb33d342f5fda"
+ },
+ "wc20578_168bed9d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001701",
+  "crop_stem": "168bed9d14d467d7"
+ },
+ "wc20579_2f2f609d": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot3_breadth_000325",
+  "crop_stem": "2f2f609dff010d12"
+ },
+ "wc20580_cdb0599c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001495",
+  "crop_stem": "cdb0599cc438f836"
+ },
+ "wc20581_f3665b46": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000992",
+  "crop_stem": "f3665b46a208683b"
+ },
+ "wc20582_7ba7a11a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001480",
+  "crop_stem": "7ba7a11ab0b19907"
+ },
+ "wc20583_85f4751f": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000140",
+  "crop_stem": "85f4751fadb3fb7f"
+ },
+ "wc20584_a7085bb5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000305",
+  "crop_stem": "a7085bb5c4d52578"
+ },
+ "wc20585_0e508500": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000104",
+  "crop_stem": "0e508500633b6e80"
+ },
+ "wc20586_e110a472": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000135",
+  "crop_stem": "e110a47223e0d388"
+ },
+ "wc20587_7405649d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000929",
+  "crop_stem": "7405649d05eed19d"
+ },
+ "wc20588_fdeb4d2c": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot5_breadth_000299",
+  "crop_stem": "fdeb4d2cef0a8c03"
+ },
+ "wc20589_61d4e940": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_001600",
+  "crop_stem": "61d4e940dff6fac6"
+ },
+ "wc20590_3f018c39": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000031",
+  "crop_stem": "3f018c393211b730"
+ },
+ "wc20591_9a6c0c37": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot5_breadth_000328",
+  "crop_stem": "9a6c0c3794d75894"
+ },
+ "wc20592_912220e5": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_m_dive_000154",
+  "crop_stem": "912220e5a98a8bed"
+ },
+ "wc20593_ba0f9ca8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000698",
+  "crop_stem": "ba0f9ca80bcebd5a"
+ },
+ "wc20594_6044331b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001987",
+  "crop_stem": "6044331b69f67318"
+ },
+ "wc20595_4bcab041": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000254",
+  "crop_stem": "4bcab0412e85a240"
+ },
+ "wc20596_87981ee3": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000002",
+  "crop_stem": "87981ee3b9767cc7"
+ },
+ "wc20597_203bcd43": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot4_dive_000005",
+  "crop_stem": "203bcd43289df930"
+ },
+ "wc20598_33be3380": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002098",
+  "crop_stem": "33be3380ceb200bb"
+ },
+ "wc20599_6c8952f3": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0017",
+  "crop_stem": "6c8952f395b9b145"
+ },
+ "wc20600_38ef0b53": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000261",
+  "crop_stem": "38ef0b53cb211e02"
+ },
+ "wc20601_44358471": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0015_0_000",
+  "crop_stem": "4435847131598eff"
+ },
+ "wc20602_37ac7cbb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000588",
+  "crop_stem": "37ac7cbb633e385f"
+ },
+ "wc20603_7ffdf085": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001164",
+  "crop_stem": "7ffdf0850f053cd9"
+ },
+ "wc20604_4f9ab76a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000336",
+  "crop_stem": "4f9ab76a254d1501"
+ },
+ "wc20605_fe4c3c4d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001763",
+  "crop_stem": "fe4c3c4dfbdf4e15"
+ },
+ "wc20606_77622c7a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002118",
+  "crop_stem": "77622c7ac97f4650"
+ },
+ "wc20607_64629336": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0008_0_004",
+  "crop_stem": "6462933624b87499"
+ },
+ "wc20608_92374d53": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001563",
+  "crop_stem": "92374d53db715904"
+ },
+ "wc20609_4984db3e": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0038",
+  "crop_stem": "4984db3e02d86a0c"
+ },
+ "wc20610_a0d1332f": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0089",
+  "crop_stem": "a0d1332f1cf30d4c"
+ },
+ "wc20611_dbdd172e": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot4_breadth_000182",
+  "crop_stem": "dbdd172ebb3fdee7"
+ },
+ "wc20612_54ceaad9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001961",
+  "crop_stem": "54ceaad947771702"
+ },
+ "wc20613_a087a9db": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001409",
+  "crop_stem": "a087a9dba10cb146"
+ },
+ "wc20614_bdf2738a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001011",
+  "crop_stem": "bdf2738a7e3b6fe3"
+ },
+ "wc20615_7cabcf6f": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0060",
+  "crop_stem": "7cabcf6f8c16e870"
+ },
+ "wc20616_1bbead3a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000289",
+  "crop_stem": "1bbead3af5097cac"
+ },
+ "wc20617_9b0ebf8f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000772",
+  "crop_stem": "9b0ebf8f0df15cc9"
+ },
+ "wc20618_d3446eb6": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0104",
+  "crop_stem": "d3446eb69c4cc81d"
+ },
+ "wc20619_25eb0f43": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001071",
+  "crop_stem": "25eb0f43e43e1cf8"
+ },
+ "wc20620_ec71aca5": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot3_dive_000258",
+  "crop_stem": "ec71aca552731aae"
+ },
+ "wc20621_ebde1119": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot5_dive_000089",
+  "crop_stem": "ebde11199c16b450"
+ },
+ "wc20622_b1ab14c7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002079",
+  "crop_stem": "b1ab14c75793bbd1"
+ },
+ "wc20623_d549e125": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002208",
+  "crop_stem": "d549e125961d596b"
+ },
+ "wc20624_176e10de": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000270",
+  "crop_stem": "176e10de804ea3f9"
+ },
+ "wc20625_93b48452": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001088",
+  "crop_stem": "93b4845273758313"
+ },
+ "wc20626_06d49d88": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_mandelbrot_dive_000018",
+  "crop_stem": "06d49d886144e43f"
+ },
+ "wc20627_61a57cce": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002244",
+  "crop_stem": "61a57cce798fba2a"
+ },
+ "wc20628_afc0f5c9": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_multibrot4_dive_000101",
+  "crop_stem": "afc0f5c96ec31f20"
+ },
+ "wc20629_78167b30": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0006_1_001",
+  "crop_stem": "78167b30e32296ec"
+ },
+ "wc20630_07d4f188": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001662",
+  "crop_stem": "07d4f1883da53de3"
+ },
+ "wc20631_47cb7053": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001576",
+  "crop_stem": "47cb7053313cea34"
+ },
+ "wc20632_f3ecd137": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0030",
+  "crop_stem": "f3ecd13783a6f052"
+ },
+ "wc20633_7381a7fd": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000158",
+  "crop_stem": "7381a7fdfa71128d"
+ },
+ "wc20634_162b32ec": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot5_breadth_000131",
+  "crop_stem": "162b32ec539ff565"
+ },
+ "wc20635_00ed58b6": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_m_dive_000195",
+  "crop_stem": "00ed58b6713931c8"
+ },
+ "wc20636_b7976817": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000546",
+  "crop_stem": "b79768179ddd652c"
+ },
+ "wc20637_5a17c2d0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002087",
+  "crop_stem": "5a17c2d0e9dae848"
+ },
+ "wc20638_27474698": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001942",
+  "crop_stem": "27474698e890c99a"
+ },
+ "wc20639_fe5293aa": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001457",
+  "crop_stem": "fe5293aa6a9f20a0"
+ },
+ "wc20640_5ec26304": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_m_dive_000111",
+  "crop_stem": "5ec2630423297834"
+ },
+ "wc20641_647a5d7d": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000152",
+  "crop_stem": "647a5d7dba54b2ca"
+ },
+ "wc20642_3cb5f9a0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000638",
+  "crop_stem": "3cb5f9a013f236db"
+ },
+ "wc20643_c7f895a3": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001282",
+  "crop_stem": "c7f895a3a801240f"
+ },
+ "wc20644_24c5b1b9": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0050",
+  "crop_stem": "24c5b1b9acfb5ac3"
+ },
+ "wc20645_d6f8e15a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001189",
+  "crop_stem": "d6f8e15ad052c456"
+ },
+ "wc20646_e281af4a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_000524",
+  "crop_stem": "e281af4af65ab0c1"
+ },
+ "wc20647_179bf2d2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000469",
+  "crop_stem": "179bf2d2220187f7"
+ },
+ "wc20648_1a197266": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000414",
+  "crop_stem": "1a197266f0b931e6"
+ },
+ "wc20649_55fd64ec": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001487",
+  "crop_stem": "55fd64ec62d82b0e"
+ },
+ "wc20650_da2c5644": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001981",
+  "crop_stem": "da2c56441cc80563"
+ },
+ "wc20651_ed92c9fb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001518",
+  "crop_stem": "ed92c9fb96d14664"
+ },
+ "wc20652_4a3d66b6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001227",
+  "crop_stem": "4a3d66b633e71a2c"
+ },
+ "wc20653_fd8488d9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000389",
+  "crop_stem": "fd8488d9f6daacc9"
+ },
+ "wc20654_8c0128b9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000055",
+  "crop_stem": "8c0128b91e96cff0"
+ },
+ "wc20655_ac7c0320": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000337",
+  "crop_stem": "ac7c0320a7d454f3"
+ },
+ "wc20656_e76c9422": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000878",
+  "crop_stem": "e76c9422b22b8c7d"
+ },
+ "wc20657_3177076d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_001838",
+  "crop_stem": "3177076d02b0e748"
+ },
+ "wc20658_cd18ca9d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002346",
+  "crop_stem": "cd18ca9db26fb68c"
+ },
+ "wc20659_66a7233f": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot4_breadth_000213",
+  "crop_stem": "66a7233fb9521066"
+ },
+ "wc20660_9fd5591b": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_m_dive_000162",
+  "crop_stem": "9fd5591bd2902557"
+ },
+ "wc20661_42b38189": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_julia_multibrot5_breadth_000003",
+  "crop_stem": "42b38189274a6600"
+ },
+ "wc20662_2cf94b50": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0008_1_004",
+  "crop_stem": "2cf94b5073885dd0"
+ },
+ "wc20663_c2930290": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001131",
+  "crop_stem": "c29302908b374009"
+ },
+ "wc20664_7fdd0bf6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000716",
+  "crop_stem": "7fdd0bf6899505a8"
+ },
+ "wc20665_b5167a8c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000063",
+  "crop_stem": "b5167a8c3eb7b00a"
+ },
+ "wc20666_2f9e3697": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001747",
+  "crop_stem": "2f9e36971437ab0b"
+ },
+ "wc20667_401bd63a": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000072",
+  "crop_stem": "401bd63a988ded4a"
+ },
+ "wc20668_9243c80a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001697",
+  "crop_stem": "9243c80ac1863b2d"
+ },
+ "wc20669_12d27c1a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_001330",
+  "crop_stem": "12d27c1a08faa02e"
+ },
+ "wc20670_b6e62194": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot5_dive_000016",
+  "crop_stem": "b6e62194557655cd"
+ },
+ "wc20671_8472785a": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot4_dive_000155",
+  "crop_stem": "8472785a1b5cb8a2"
+ },
+ "wc20672_26e35d33": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001640",
+  "crop_stem": "26e35d333111b625"
+ },
+ "wc20673_f83fc658": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000458",
+  "crop_stem": "f83fc6582365aaaf"
+ },
+ "wc20674_51cf6602": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000079",
+  "crop_stem": "51cf660276197732"
+ },
+ "wc20675_dadcc310": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot5_breadth_000076",
+  "crop_stem": "dadcc31056e00656"
+ },
+ "wc20676_6b340586": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0072",
+  "crop_stem": "6b340586b8b4649c"
+ },
+ "wc20677_98975788": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002239",
+  "crop_stem": "989757889515537e"
+ },
+ "wc20678_362edd92": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_001141",
+  "crop_stem": "362edd924209e00b"
+ },
+ "wc20679_6f12721f": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_m_dive_000024",
+  "crop_stem": "6f12721fa6eb78e1"
+ },
+ "wc20680_5de469ba": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot5_breadth_000248",
+  "crop_stem": "5de469baf8454b24"
+ },
+ "wc20681_b2e3c897": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000787",
+  "crop_stem": "b2e3c897aff876d7"
+ },
+ "wc20682_4f591f7a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000485",
+  "crop_stem": "4f591f7a0cbaefae"
+ },
+ "wc20683_f29d69f5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000727",
+  "crop_stem": "f29d69f59f546b83"
+ },
+ "wc20684_95edff4d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000297",
+  "crop_stem": "95edff4daceed534"
+ },
+ "wc20685_d3b92211": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001870",
+  "crop_stem": "d3b92211095a269f"
+ },
+ "wc20686_8400c27b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001234",
+  "crop_stem": "8400c27b8a8c22bf"
+ },
+ "wc20687_6e94ebd2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_001342",
+  "crop_stem": "6e94ebd2259af0b0"
+ },
+ "wc20688_f4c03a90": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000243",
+  "crop_stem": "f4c03a9072edb478"
+ },
+ "wc20689_eae028ab": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_julia_multibrot4_breadth_000096",
+  "crop_stem": "eae028abbd7483f0"
+ },
+ "wc20690_e20b7587": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001277",
+  "crop_stem": "e20b75874ffa2585"
+ },
+ "wc20691_243b7104": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001595",
+  "crop_stem": "243b7104cd62edc3"
+ },
+ "wc20692_3533c049": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001431",
+  "crop_stem": "3533c04905e90404"
+ },
+ "wc20693_abdbd7f7": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot4_breadth_000163",
+  "crop_stem": "abdbd7f70f273c21"
+ },
+ "wc20694_8362c9a2": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_mandelbrot_dive_000023",
+  "crop_stem": "8362c9a2c691e3ed"
+ },
+ "wc20695_823d6b9b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000277",
+  "crop_stem": "823d6b9b976050ef"
+ },
+ "wc20696_1f2ea722": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002128",
+  "crop_stem": "1f2ea7229d0ff888"
+ },
+ "wc20697_202f9ff0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000973",
+  "crop_stem": "202f9ff0e27bedc4"
+ },
+ "wc20698_151b6a9a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000284",
+  "crop_stem": "151b6a9af7a39dca"
+ },
+ "wc20699_a89450ba": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000651",
+  "crop_stem": "a89450ba3f3f1cfb"
+ },
+ "wc20700_018051ae": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000126",
+  "crop_stem": "018051ae66ba6fa4"
+ },
+ "wc20701_6204df4c": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot3_dive_000165",
+  "crop_stem": "6204df4c4fca6fb9"
+ },
+ "wc20702_a1dd10cd": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0088",
+  "crop_stem": "a1dd10cdb5203d9d"
+ },
+ "wc20703_dc9cfee7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000670",
+  "crop_stem": "dc9cfee7c1fadb2b"
+ },
+ "wc20704_74ddd741": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001629",
+  "crop_stem": "74ddd74198d8ab33"
+ },
+ "wc20705_0b5898d6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_002040",
+  "crop_stem": "0b5898d646266bbe"
+ },
+ "wc20706_595fcaa7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000656",
+  "crop_stem": "595fcaa7966c12ab"
+ },
+ "wc20707_faee8a14": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001986",
+  "crop_stem": "faee8a143efe0856"
+ },
+ "wc20708_88f0d234": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001274",
+  "crop_stem": "88f0d23454f7bd32"
+ },
+ "wc20709_5c86e5ad": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_mandelbrot_breadth_000038",
+  "crop_stem": "5c86e5ad73c20134"
+ },
+ "wc20710_28804ee5": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_mandelbrot_dive_000004",
+  "crop_stem": "28804ee509949557"
+ },
+ "wc20711_89b29c19": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000324",
+  "crop_stem": "89b29c19174c4fab"
+ },
+ "wc20712_3dbdbf0c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000276",
+  "crop_stem": "3dbdbf0ce6a403f7"
+ },
+ "wc20713_385dc529": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002097",
+  "crop_stem": "385dc5299ee6ab74"
+ },
+ "wc20714_41fc85c1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_001349",
+  "crop_stem": "41fc85c122f83b49"
+ },
+ "wc20715_34245ef2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000222",
+  "crop_stem": "34245ef2dde1d9b0"
+ },
+ "wc20716_e6970584": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000470",
+  "crop_stem": "e697058426d5d580"
+ },
+ "wc20717_1e03d2ae": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001061",
+  "crop_stem": "1e03d2ae404306bb"
+ },
+ "wc20718_0a91d4a6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002150",
+  "crop_stem": "0a91d4a6b080cabc"
+ },
+ "wc20719_79fd5aee": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002159",
+  "crop_stem": "79fd5aee5ec2afbd"
+ },
+ "wc20720_4cc1a431": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001219",
+  "crop_stem": "4cc1a431a499191e"
+ },
+ "wc20721_7b6fe6f9": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0012_2_002",
+  "crop_stem": "7b6fe6f92166aee1"
+ },
+ "wc20722_b266f44f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002274",
+  "crop_stem": "b266f44fa9660055"
+ },
+ "wc20723_ff7bdd10": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000603",
+  "crop_stem": "ff7bdd10125efc76"
+ },
+ "wc20724_0fb7af3b": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000019",
+  "crop_stem": "0fb7af3bf33f4ae6"
+ },
+ "wc20725_1ced2707": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_002305",
+  "crop_stem": "1ced2707cdedb7f1"
+ },
+ "wc20726_bcaca227": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot5_breadth_000143",
+  "crop_stem": "bcaca227caa9749c"
+ },
+ "wc20727_04116aa2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_001340",
+  "crop_stem": "04116aa263bab6bf"
+ },
+ "wc20728_640a4ed2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_002303",
+  "crop_stem": "640a4ed265dfaeb7"
+ },
+ "wc20729_26686b69": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot5_dive_000241",
+  "crop_stem": "26686b6990ddc355"
+ },
+ "wc20730_98e10b4f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000262",
+  "crop_stem": "98e10b4fe18b3e1a"
+ },
+ "wc20731_e7052f7e": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0053",
+  "crop_stem": "e7052f7e9917ae3f"
+ },
+ "wc20732_b9008c67": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000870",
+  "crop_stem": "b9008c67a5125405"
+ },
+ "wc20733_38925ba4": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0049",
+  "crop_stem": "38925ba458d43af0"
+ },
+ "wc20734_a615caf0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000760",
+  "crop_stem": "a615caf06362865b"
+ },
+ "wc20735_9a506bff": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000001",
+  "crop_stem": "9a506bffd40ff960"
+ },
+ "wc20736_3f29d608": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002084",
+  "crop_stem": "3f29d6081c7c2078"
+ },
+ "wc20737_7f308902": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0075",
+  "crop_stem": "7f308902a9b5d4c1"
+ },
+ "wc20738_25134d05": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000518",
+  "crop_stem": "25134d054c4da41f"
+ },
+ "wc20739_adb232f4": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot4_breadth_000200",
+  "crop_stem": "adb232f482be6cce"
+ },
+ "wc20740_7f49daf9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_000449",
+  "crop_stem": "7f49daf9d3a052d2"
+ },
+ "wc20741_59b19b8b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000514",
+  "crop_stem": "59b19b8b016b4071"
+ },
+ "wc20742_8470f63b": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0078_1_002",
+  "crop_stem": "8470f63bbaca1ec6"
+ },
+ "wc20743_173dca76": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000143",
+  "crop_stem": "173dca76f7f13d89"
+ },
+ "wc20744_1bdb59e2": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000021",
+  "crop_stem": "1bdb59e286649d59"
+ },
+ "wc20745_32dd2350": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000164",
+  "crop_stem": "32dd2350a3e7c93c"
+ },
+ "wc20746_158a9768": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0115",
+  "crop_stem": "158a9768b2a4c5a3"
+ },
+ "wc20747_87874af2": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0130",
+  "crop_stem": "87874af27dc76e83"
+ },
+ "wc20748_e2b402dd": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000000",
+  "crop_stem": "e2b402dd810229a4"
+ },
+ "wc20749_5fe130fc": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000610",
+  "crop_stem": "5fe130fc71c3cbd7"
+ },
+ "wc20750_a1cd986a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001938",
+  "crop_stem": "a1cd986a9c8e3e80"
+ },
+ "wc20751_c1d8bc36": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0085",
+  "crop_stem": "c1d8bc36c1083be1"
+ },
+ "wc20752_5b0fa6e5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002052",
+  "crop_stem": "5b0fa6e5e2b375f7"
+ },
+ "wc20753_37a8dfbc": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot4_dive_000036",
+  "crop_stem": "37a8dfbc0aa5d88f"
+ },
+ "wc20754_8a04bdc5": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot4_breadth_000309",
+  "crop_stem": "8a04bdc587f22f7b"
+ },
+ "wc20755_d927e170": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001488",
+  "crop_stem": "d927e17049025c56"
+ },
+ "wc20756_71af1e56": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001590",
+  "crop_stem": "71af1e561c31799a"
+ },
+ "wc20757_ca40260b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001473",
+  "crop_stem": "ca40260bf73a6fee"
+ },
+ "wc20758_3b358d6b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000127",
+  "crop_stem": "3b358d6b225b41b3"
+ },
+ "wc20759_c9cc1b67": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001163",
+  "crop_stem": "c9cc1b6757a77d09"
+ },
+ "wc20760_a259755c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001691",
+  "crop_stem": "a259755c6b428ca1"
+ },
+ "wc20761_50aace2a": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot4_breadth_000116",
+  "crop_stem": "50aace2a72f377d7"
+ },
+ "wc20762_63af85b9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001928",
+  "crop_stem": "63af85b9287e669a"
+ },
+ "wc20763_38998e99": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001113",
+  "crop_stem": "38998e9924629dfa"
+ },
+ "wc20764_25a66757": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001762",
+  "crop_stem": "25a66757c5694568"
+ },
+ "wc20765_c9d5888b": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0083",
+  "crop_stem": "c9d5888b29586d48"
+ },
+ "wc20766_6ef1db58": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_001597",
+  "crop_stem": "6ef1db5830e41a89"
+ },
+ "wc20767_a4e680d9": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000112",
+  "crop_stem": "a4e680d9d7982542"
+ },
+ "wc20768_8858a593": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0024_0_001",
+  "crop_stem": "8858a593995a3ebc"
+ },
+ "wc20769_44c8e988": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000749",
+  "crop_stem": "44c8e98833865b6b"
+ },
+ "wc20770_08246306": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot5_breadth_000191",
+  "crop_stem": "082463066c1f55ab"
+ },
+ "wc20771_0abdcfd7": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0094",
+  "crop_stem": "0abdcfd7f79ce78e"
+ },
+ "wc20772_f9d42876": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002080",
+  "crop_stem": "f9d428767b3acfeb"
+ },
+ "wc20773_9e862f89": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot3_breadth_000241",
+  "crop_stem": "9e862f894f7d48d2"
+ },
+ "wc20774_03820f5e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000920",
+  "crop_stem": "03820f5eeb8d4408"
+ },
+ "wc20775_75527343": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000279",
+  "crop_stem": "7552734324464f40"
+ },
+ "wc20776_35d55ae6": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001379",
+  "crop_stem": "35d55ae6d3311b99"
+ },
+ "wc20777_ebcd0643": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001313",
+  "crop_stem": "ebcd064395663932"
+ },
+ "wc20778_4080834b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001745",
+  "crop_stem": "4080834b19516fc8"
+ },
+ "wc20779_1687f122": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot4_dive_000041",
+  "crop_stem": "1687f122fa8b81d6"
+ },
+ "wc20780_34378197": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000020",
+  "crop_stem": "34378197e41730da"
+ },
+ "wc20781_15941aa5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001194",
+  "crop_stem": "15941aa5cc40fa73"
+ },
+ "wc20782_d3b7b015": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000559",
+  "crop_stem": "d3b7b015d198dea1"
+ },
+ "wc20783_5f2a3932": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001936",
+  "crop_stem": "5f2a39325205a720"
+ },
+ "wc20784_1962451e": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0091",
+  "crop_stem": "1962451e2d84249b"
+ },
+ "wc20785_fdb275ee": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_000448",
+  "crop_stem": "fdb275eeea4629fd"
+ },
+ "wc20786_0247c79d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001460",
+  "crop_stem": "0247c79d1d53b545"
+ },
+ "wc20787_44799336": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001130",
+  "crop_stem": "447993365f9824b5"
+ },
+ "wc20788_abde8726": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000614",
+  "crop_stem": "abde872676df471d"
+ },
+ "wc20789_aa06bd0b": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0024",
+  "crop_stem": "aa06bd0b7a8e1430"
+ },
+ "wc20790_671768b0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000388",
+  "crop_stem": "671768b0fee8245c"
+ },
+ "wc20791_2c6069db": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002254",
+  "crop_stem": "2c6069db09688486"
+ },
+ "wc20792_ddb7f302": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002103",
+  "crop_stem": "ddb7f3024b223d02"
+ },
+ "wc20793_8355cd94": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001095",
+  "crop_stem": "8355cd940c5581ce"
+ },
+ "wc20794_c49cbf42": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0079_0_000",
+  "crop_stem": "c49cbf4209a980d1"
+ },
+ "wc20795_275f880c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001430",
+  "crop_stem": "275f880cffc44995"
+ },
+ "wc20796_352c5b2d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000000",
+  "crop_stem": "352c5b2deca5f1a7"
+ },
+ "wc20797_5f2332bb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_002124",
+  "crop_stem": "5f2332bb4d4415ea"
+ },
+ "wc20798_0e86d6ec": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002212",
+  "crop_stem": "0e86d6ec6c78b732"
+ },
+ "wc20799_51cafeb5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_001599",
+  "crop_stem": "51cafeb5e478f472"
+ },
+ "wc20800_a96d458f": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0102",
+  "crop_stem": "a96d458ffe7ba8ff"
+ },
+ "wc20801_c1e67e31": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002083",
+  "crop_stem": "c1e67e313b227a1f"
+ },
+ "wc20802_cd5d2c6a": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0012_0_000",
+  "crop_stem": "cd5d2c6aa12b1699"
+ },
+ "wc20803_42e434da": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001758",
+  "crop_stem": "42e434dace8a6d7f"
+ },
+ "wc20804_89411ef9": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000170",
+  "crop_stem": "89411ef91f973330"
+ },
+ "wc20805_77d43956": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001052",
+  "crop_stem": "77d43956a86165f9"
+ },
+ "wc20806_329df157": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001807",
+  "crop_stem": "329df157d80d6e0d"
+ },
+ "wc20807_6d113b69": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002253",
+  "crop_stem": "6d113b69a4d73451"
+ },
+ "wc20808_3cd79c3f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001477",
+  "crop_stem": "3cd79c3fd388873d"
+ },
+ "wc20809_e8e29633": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_julia_multibrot3_dive_000229",
+  "crop_stem": "e8e2963354f9703a"
+ },
+ "wc20810_d1a94201": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001089",
+  "crop_stem": "d1a942019f2b13e6"
+ },
+ "wc20811_612a824a": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000023",
+  "crop_stem": "612a824a68cb56c3"
+ },
+ "wc20812_59016d68": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0062",
+  "crop_stem": "59016d68cef8dc23"
+ },
+ "wc20813_1c9d39b7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000637",
+  "crop_stem": "1c9d39b7936488e9"
+ },
+ "wc20814_0238d32f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001761",
+  "crop_stem": "0238d32f8d348786"
+ },
+ "wc20815_e8d72b81": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000467",
+  "crop_stem": "e8d72b811dddbdfe"
+ },
+ "wc20816_f1e36a69": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001106",
+  "crop_stem": "f1e36a69338b5499"
+ },
+ "wc20817_d9745656": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001096",
+  "crop_stem": "d974565625bb1f8c"
+ },
+ "wc20818_4b59afa4": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0110",
+  "crop_stem": "4b59afa4bf3cc769"
+ },
+ "wc20819_dd4afbf5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000077",
+  "crop_stem": "dd4afbf50c77132e"
+ },
+ "wc20820_0f66cd60": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000781",
+  "crop_stem": "0f66cd606b2c9892"
+ },
+ "wc20821_f35cd45d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000949",
+  "crop_stem": "f35cd45d1c5f34e5"
+ },
+ "wc20822_d47f0349": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0030_2_002",
+  "crop_stem": "d47f0349c9a56407"
+ },
+ "wc20823_e647f4d3": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot4_breadth_000221",
+  "crop_stem": "e647f4d3a6ff9e01"
+ },
+ "wc20824_61b90031": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000015",
+  "crop_stem": "61b90031e057820d"
+ },
+ "wc20825_6f841fbb": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot4_breadth_000200",
+  "crop_stem": "6f841fbb4b3393b2"
+ },
+ "wc20826_b352d003": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_julia_multibrot3_prod25_20260809_dive_000126",
+  "crop_stem": "b352d00355f0c545"
+ },
+ "wc20827_ecc4b26d": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0025_2_003",
+  "crop_stem": "ecc4b26d818fb297"
+ },
+ "wc20828_59aa288b": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000261",
+  "crop_stem": "59aa288b798ccac5"
+ },
+ "wc20829_992cab33": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001649",
+  "crop_stem": "992cab33847ee1fe"
+ },
+ "wc20830_4be59db0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002076",
+  "crop_stem": "4be59db0751135a6"
+ },
+ "wc20831_24926159": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000904",
+  "crop_stem": "2492615909648fa4"
+ },
+ "wc20832_588e4655": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002001",
+  "crop_stem": "588e46550f3225ad"
+ },
+ "wc20833_7b53f838": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000086",
+  "crop_stem": "7b53f8383872bc3c"
+ },
+ "wc20834_28054991": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot5_breadth_000210",
+  "crop_stem": "280549912cf845cf"
+ },
+ "wc20835_7e4314c2": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000332",
+  "crop_stem": "7e4314c236763624"
+ },
+ "wc20836_6c013074": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000597",
+  "crop_stem": "6c0130740fd85424"
+ },
+ "wc20837_6dccef41": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000166",
+  "crop_stem": "6dccef419ca82125"
+ },
+ "wc20838_79f86c4d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000249",
+  "crop_stem": "79f86c4d2e8efed3"
+ },
+ "wc20839_0b28ed65": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001283",
+  "crop_stem": "0b28ed6539a6fefc"
+ },
+ "wc20840_88421ce7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000676",
+  "crop_stem": "88421ce7630eb792"
+ },
+ "wc20841_3f7ef304": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0025_1_002",
+  "crop_stem": "3f7ef304aafa74e5"
+ },
+ "wc20842_0e88abf1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001319",
+  "crop_stem": "0e88abf12751b1be"
+ },
+ "wc20843_169b26c5": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000247",
+  "crop_stem": "169b26c5f467bbf0"
+ },
+ "wc20844_7cf27503": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0090",
+  "crop_stem": "7cf27503daffc9a5"
+ },
+ "wc20845_87171b7e": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001257",
+  "crop_stem": "87171b7e41789296"
+ },
+ "wc20846_a9bb38e8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001830",
+  "crop_stem": "a9bb38e84d08e980"
+ },
+ "wc20847_6c2ec112": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_julia_multibrot4_breadth_000189",
+  "crop_stem": "6c2ec11282d96611"
+ },
+ "wc20848_5178e962": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001286",
+  "crop_stem": "5178e9625953772d"
+ },
+ "wc20849_d63db934": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001760",
+  "crop_stem": "d63db934bccf662c"
+ },
+ "wc20850_1c0d1507": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001917",
+  "crop_stem": "1c0d1507687ac57a"
+ },
+ "wc20851_e436dd5a": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001967",
+  "crop_stem": "e436dd5a5b2738d0"
+ },
+ "wc20852_9af54ea6": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000315",
+  "crop_stem": "9af54ea6f7d2b97e"
+ },
+ "wc20853_5bb66db1": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0093",
+  "crop_stem": "5bb66db126793440"
+ },
+ "wc20854_13ced584": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002068",
+  "crop_stem": "13ced58436e756c4"
+ },
+ "wc20855_214e10df": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot5_breadth_000030",
+  "crop_stem": "214e10dfc5bd3b76"
+ },
+ "wc20856_9054484d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001368",
+  "crop_stem": "9054484d1bdf7edb"
+ },
+ "wc20857_866dc5ed": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001278",
+  "crop_stem": "866dc5edf519b303"
+ },
+ "wc20858_eebba499": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002329",
+  "crop_stem": "eebba499ae767fd5"
+ },
+ "wc20859_f017fa71": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_multibrot4_dive_000095",
+  "crop_stem": "f017fa71f21bdf50"
+ },
+ "wc20860_5d18cbd2": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000151",
+  "crop_stem": "5d18cbd26b7402f6"
+ },
+ "wc20861_0344f176": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000004",
+  "crop_stem": "0344f176683c12ad"
+ },
+ "wc20862_03d3ad38": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001966",
+  "crop_stem": "03d3ad38174e17dd"
+ },
+ "wc20863_5967347c": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot4_breadth_000028",
+  "crop_stem": "5967347c62c892b7"
+ },
+ "wc20864_8836c2a8": {
+  "unit_key": "union:discovery_prod25_20260809_dive_outcome_ledger__st_m_prod25_20260809_dive_000087",
+  "crop_stem": "8836c2a816fb4e60"
+ },
+ "wc20865_67c78e23": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0086",
+  "crop_stem": "67c78e2348fd0ed1"
+ },
+ "wc20866_d588a360": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot4_dive_000011",
+  "crop_stem": "d588a360e46b1ba0"
+ },
+ "wc20867_2a7717fb": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000729",
+  "crop_stem": "2a7717fb13adf1ad"
+ },
+ "wc20868_ba725430": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot4_dive_000100",
+  "crop_stem": "ba72543032900219"
+ },
+ "wc20869_29eec04b": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0092",
+  "crop_stem": "29eec04b59ce45a8"
+ },
+ "wc20870_ae93cea7": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001533",
+  "crop_stem": "ae93cea760a899bd"
+ },
+ "wc20871_66506a39": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001263",
+  "crop_stem": "66506a39966deecf"
+ },
+ "wc20872_f869141d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_000549",
+  "crop_stem": "f869141d471df26f"
+ },
+ "wc20873_609fa0a8": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000769",
+  "crop_stem": "609fa0a8a5af8dac"
+ },
+ "wc20874_cd989092": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001991",
+  "crop_stem": "cd989092cec17f53"
+ },
+ "wc20875_23ae2f49": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_001276",
+  "crop_stem": "23ae2f49ace60d35"
+ },
+ "wc20876_0380119f": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000018",
+  "crop_stem": "0380119f8e6e6f08"
+ },
+ "wc20877_1b5caa68": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000135",
+  "crop_stem": "1b5caa685328b235"
+ },
+ "wc20878_bf5f104a": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_m_dive_000183",
+  "crop_stem": "bf5f104a66cf6a1c"
+ },
+ "wc20879_281b9715": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000742",
+  "crop_stem": "281b971584268f36"
+ },
+ "wc20880_61604058": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot5_breadth_000132",
+  "crop_stem": "6160405811d663bd"
+ },
+ "wc20881_29074195": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot5_breadth_000090",
+  "crop_stem": "290741955cea6c13"
+ },
+ "wc20882_57db7c3b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000791",
+  "crop_stem": "57db7c3bd84487e1"
+ },
+ "wc20883_dafff26d": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_mandelbrot_breadth_000130",
+  "crop_stem": "dafff26dce77d632"
+ },
+ "wc20884_b994366c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_001356",
+  "crop_stem": "b994366c59b28f43"
+ },
+ "wc20885_908c6bc4": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0136",
+  "crop_stem": "908c6bc456ca8ef2"
+ },
+ "wc20886_0ef44f41": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0045",
+  "crop_stem": "0ef44f41d2a004a7"
+ },
+ "wc20887_916be9b1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001949",
+  "crop_stem": "916be9b10a0edb95"
+ },
+ "wc20888_f212678c": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000263",
+  "crop_stem": "f212678c1c885bc5"
+ },
+ "wc20889_ec078361": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0069",
+  "crop_stem": "ec078361d6ab271a"
+ },
+ "wc20890_fccfaa52": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_001246",
+  "crop_stem": "fccfaa523a2d167b"
+ },
+ "wc20891_95e6527a": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot4_breadth_000214",
+  "crop_stem": "95e6527a8f5800ec"
+ },
+ "wc20892_51d9acd6": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_m_dive_000196",
+  "crop_stem": "51d9acd6bba1809f"
+ },
+ "wc20893_41e3b118": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0097",
+  "crop_stem": "41e3b1186b75ca75"
+ },
+ "wc20894_e8e89916": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000489",
+  "crop_stem": "e8e899166ad41680"
+ },
+ "wc20895_000b6f3c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001725",
+  "crop_stem": "000b6f3c9a24126f"
+ },
+ "wc20896_e98f1092": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000725",
+  "crop_stem": "e98f109208fb45dc"
+ },
+ "wc20897_f0a606a0": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0006",
+  "crop_stem": "f0a606a04f9f6fb4"
+ },
+ "wc20898_d8017d14": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot5_breadth_000109",
+  "crop_stem": "d8017d14e0e59323"
+ },
+ "wc20899_3b0b77e1": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_001348",
+  "crop_stem": "3b0b77e1aa32b614"
+ },
+ "wc20900_e25a614b": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000423",
+  "crop_stem": "e25a614b3dfebe03"
+ },
+ "wc20901_d7ccf0da": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0043",
+  "crop_stem": "d7ccf0da532158c1"
+ },
+ "wc20902_eb3165a9": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0099",
+  "crop_stem": "eb3165a9437574f2"
+ },
+ "wc20903_6c6d0126": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0039",
+  "crop_stem": "6c6d0126580c6047"
+ },
+ "wc20904_abe70fb0": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0008",
+  "crop_stem": "abe70fb0996fb1b7"
+ },
+ "wc20905_28b57a32": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001421",
+  "crop_stem": "28b57a324b1faf1f"
+ },
+ "wc20906_0be32931": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000348",
+  "crop_stem": "0be32931084618b7"
+ },
+ "wc20907_6b2aa685": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot5_prod25_20260809_000161",
+  "crop_stem": "6b2aa685e2e162ab"
+ },
+ "wc20908_3c9e2161": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_002338",
+  "crop_stem": "3c9e2161d6d20135"
+ },
+ "wc20909_325d614d": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_000368",
+  "crop_stem": "325d614d6f8eefa2"
+ },
+ "wc20910_83b30191": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001951",
+  "crop_stem": "83b30191e03c9a55"
+ },
+ "wc20911_e9d31cba": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_phoenix_prod25_20260809_001154",
+  "crop_stem": "e9d31cbaa8d9cafb"
+ },
+ "wc20912_c441c399": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001630",
+  "crop_stem": "c441c399e9b8a75a"
+ },
+ "wc20913_58a247c2": {
+  "unit_key": "union:discovery_phoenix_grid_grid_outcome_ledger_v7_t45__phg_0079_3_004",
+  "crop_stem": "58a247c23ef7be48"
+ },
+ "wc20914_fc1004ba": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_julia_multibrot4_dive_000093",
+  "crop_stem": "fc1004ba862aaad3"
+ },
+ "wc20915_36d8bd21": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001544",
+  "crop_stem": "36d8bd212483b920"
+ },
+ "wc20916_e9ce0905": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001983",
+  "crop_stem": "e9ce09057b841465"
+ },
+ "wc20917_9378244f": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000686",
+  "crop_stem": "9378244f5458d90d"
+ },
+ "wc20918_a3a07540": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_000667",
+  "crop_stem": "a3a075402b8d06f9"
+ },
+ "wc20919_0588c968": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001799",
+  "crop_stem": "0588c968042e7e31"
+ },
+ "wc20920_5d1a91f5": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0057",
+  "crop_stem": "5d1a91f5ec967f15"
+ },
+ "wc20921_f060745f": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0023",
+  "crop_stem": "f060745f3bb2a720"
+ },
+ "wc20922_9153e478": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_multibrot5_breadth_000300",
+  "crop_stem": "9153e4782c8e6fef"
+ },
+ "wc20923_1c201c9c": {
+  "unit_key": "union:discovery_classic_phoenix_outcome_ledger__clphx_0140",
+  "crop_stem": "1c201c9ccc05ec72"
+ },
+ "wc20924_e3426235": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot4_prod25_20260809_000795",
+  "crop_stem": "e34262357ffb447f"
+ },
+ "wc20925_e8857ec6": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0048",
+  "crop_stem": "e8857ec65f509662"
+ },
+ "wc20926_be1347ae": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000277",
+  "crop_stem": "be1347ae22985adf"
+ },
+ "wc20927_ce58904e": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0058",
+  "crop_stem": "ce58904e7efd7235"
+ },
+ "wc20928_0cb4d059": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_multibrot5_dive_000238",
+  "crop_stem": "0cb4d059d657b026"
+ },
+ "wc20929_2b1b863e": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_m_dive_000199",
+  "crop_stem": "2b1b863e6305039f"
+ },
+ "wc20930_65995a84": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot4_dive_000046",
+  "crop_stem": "65995a84100d1818"
+ },
+ "wc20931_c1be4503": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0100",
+  "crop_stem": "c1be450344dadfea"
+ },
+ "wc20932_8cb66559": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000629",
+  "crop_stem": "8cb66559bd314189"
+ },
+ "wc20933_64e27181": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_001979",
+  "crop_stem": "64e27181dd106579"
+ },
+ "wc20934_b4686a9c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000770",
+  "crop_stem": "b4686a9cf1a55569"
+ },
+ "wc20935_1f216472": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_multibrot3_breadth_000238",
+  "crop_stem": "1f2164723c7cd289"
+ },
+ "wc20936_cfa3be36": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_000784",
+  "crop_stem": "cfa3be36fa48e83d"
+ },
+ "wc20937_189b76b0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot5_prod25_20260809_000705",
+  "crop_stem": "189b76b02cc00c53"
+ },
+ "wc20938_0cbe8c80": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_002013",
+  "crop_stem": "0cbe8c8068289f08"
+ },
+ "wc20939_34a96e81": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001645",
+  "crop_stem": "34a96e813bd4f847"
+ },
+ "wc20940_f4cff53c": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000055",
+  "crop_stem": "f4cff53c1d05b9f9"
+ },
+ "wc20941_28e9285c": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000312",
+  "crop_stem": "28e9285cd82751b2"
+ },
+ "wc20942_69311a31": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0076",
+  "crop_stem": "69311a310c1e2fc0"
+ },
+ "wc20943_66e93717": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot5_breadth_000177",
+  "crop_stem": "66e93717d483a985"
+ },
+ "wc20944_50ff1d5e": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_julia_multibrot3_breadth_000087",
+  "crop_stem": "50ff1d5ed2da8efd"
+ },
+ "wc20945_8ad875d5": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000009",
+  "crop_stem": "8ad875d5c0123e6b"
+ },
+ "wc20946_c426f905": {
+  "unit_key": "union:discovery_campaign1_dive_outcome_ledger__st_multibrot4_dive_000030",
+  "crop_stem": "c426f905988d00ab"
+ },
+ "wc20947_5ae94248": {
+  "unit_key": "union:discovery_prod25_phoenix_native_outcome_ledger__ph_20260809_190537_000013",
+  "crop_stem": "5ae9424843bbe6f0"
+ },
+ "wc20948_2df40dc4": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_multibrot3_prod25_20260809_000246",
+  "crop_stem": "2df40dc430fdb8f3"
+ },
+ "wc20949_fcf4cee0": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot3_prod25_20260809_001828",
+  "crop_stem": "fcf4cee0a5b1ac2e"
+ },
+ "wc20950_783db84a": {
+  "unit_key": "union:discovery_campaign1_breadth_outcome_ledger__st_m_breadth_000099",
+  "crop_stem": "783db84a36dfb54c"
+ },
+ "wc20951_9bafeb92": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0065",
+  "crop_stem": "9bafeb9243e8ae6a"
+ },
+ "wc20952_94904575": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_001345",
+  "crop_stem": "94904575156c6fef"
+ },
+ "wc20953_aff78f77": {
+  "unit_key": "union:discovery_campaign2_breadth_outcome_ledger__st_m_breadth_000205",
+  "crop_stem": "aff78f779bc6d162"
+ },
+ "wc20954_afa89f72": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0011",
+  "crop_stem": "afa89f720570dc66"
+ },
+ "wc20955_4df73f1c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_m_prod25_20260809_001506",
+  "crop_stem": "4df73f1c4628084d"
+ },
+ "wc20956_ab78b423": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_mandelbrot_prod25_20260809_001183",
+  "crop_stem": "ab78b4234f78a49e"
+ },
+ "wc20957_67fecacb": {
+  "unit_key": "union:emission_q4_harvest_outcome_ledger__q4h_0103",
+  "crop_stem": "67fecacbcb0afa1c"
+ },
+ "wc20958_85ff4f74": {
+  "unit_key": "union:discovery_campaign2_dive_outcome_ledger__st_m_dive_000197",
+  "crop_stem": "85ff4f749fdcce81"
+ },
+ "wc20959_abb3182c": {
+  "unit_key": "union:discovery_prod25_20260809_outcome_ledger__st_julia_multibrot4_prod25_20260809_000275",
+  "crop_stem": "abb3182c785459bf"
+ }
+}

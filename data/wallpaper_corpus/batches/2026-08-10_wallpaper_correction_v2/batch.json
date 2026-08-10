@@ -1,0 +1,493 @@
+{
+  "created": "2026-08-10T11:24:45",
+  "batch_id": "2026-08-10_wallpaper_correction_v2",
+  "generator_version": "wallpaper_correction_v2",
+  "labeler": null,
+  "n_rows": 960,
+  "schema_note": "BUCKETED wallpaper CORRECTION SITTING over the stage-2 admitted intake. One finished coloured render per location \u2014 the head's own argmax palette out of that location's seeded screen draw \u2014 at the shared label-crop pins. Every row carries the complete render block + colormap recipe (provenance.params: the crop is a pure function of the two), the bucket/vein/partition it was drawn under, the v3 pre-label (head_v3 / p_ge3 / pred / suggested_tier) and a stamped bucket-grouped split_side. label.score is null on every row: the suggestion is NOT a label and is never merged as one. Presentation is sorted good->bad by pred (descending), stamped contiguous in sheet_order, with opaque image_ids.",
+  "sheet_incomplete": false,
+  "incomplete_note": null,
+  "head": {
+    "ckpt": "data/wallpaper_head/v3/model_best.pt",
+    "version": "v3",
+    "role": "PRE-LABEL only \u2014 no gate, floor, threshold or pin is applied or moved here",
+    "deploy_transform": "classifier.data.Transform(train=False) (1280x720 -> 384x224 bicubic stretch + normalize)"
+  },
+  "suggested_tier_rule": {
+    "rule": "tier = 1 + #{c in cuts : expected_tier >= c}; expected_tier = 1 + sum_k marginal_k",
+    "cuts": [
+      1.0119,
+      2.4663,
+      3.0012
+    ],
+    "cut_method": "quantiles of expected_tier at the derivation slice's own tier prior (prior-matched) via fit_cuts \u2014 ABSOLUTE, applied unchanged to new batches",
+    "derived": "2026-08-10",
+    "head": "data/wallpaper_head/v3/model_best.pt",
+    "deriver": "tools/wallpaper/suggest_tier.derive_intake_cuts()",
+    "slice": "the two 2026-08-05 stage-2 intake correction sheets, whole: 2026-08-05_wallpaper_fresh_sheet_v1 (960) + 2026-08-05_wallpaper_colorize_path_v1 (180), pred = head_v3.pred stamped on the stored label crop, tier = the merged human sidecar",
+    "n": 1140,
+    "tier_prior": {
+      "1": 493,
+      "2": 431,
+      "3": 163,
+      "4": 53
+    },
+    "accuracy_on_slice": {
+      "exact": 0.687,
+      "within_one": 0.994,
+      "mae": 0.319,
+      "suggested_hist": {
+        "1": 495,
+        "2": 429,
+        "3": 163,
+        "4": 53
+      },
+      "hist_note": "the REALIZED histogram under the frozen 4-dp cuts; the exact-prior fit is {493, 431, 163, 53} and two rows sit on the tier-1/2 quantile tie"
+    },
+    "vs_the_dramatic_cuts": {
+      "cuts": [
+        1.017,
+        2.615,
+        2.997
+      ],
+      "exact": 0.707,
+      "suggested_hist": {
+        "1": 519,
+        "2": 426,
+        "3": 131,
+        "4": 64
+      },
+      "why_not_kept": "higher exact agreement, but it is not the objective \u2014 these cuts reproduce the intake prior exactly and the dramatic ones do not"
+    },
+    "anchoring": {
+      "both_sources_were_correction_sheets": true,
+      "agreement_with_what_was_served": {
+        "fresh_sheet": 0.733,
+        "colorize_path": 0.567
+      },
+      "note": "the slice is anchored to CUTS, not a copy of it \u2014 27% and 43% of the rows were corrected. A blind slice of the same population would be better evidence and nothing prevents one."
+    },
+    "scope": "derived on the stage-2 admitted intake, applied to sittings drawn from it; a suggestion, never a label"
+  },
+  "population": {
+    "source": "the ten-ledger stage-2 admitted union (tools/emission/ledger_rescore.LEDGERS -> descriptor.load_union_admitted)",
+    "ledgers": [
+      "data/discovery/campaign1/breadth/outcome_ledger.jsonl",
+      "data/discovery/campaign1/dive/outcome_ledger.jsonl",
+      "data/discovery/campaign2/breadth/outcome_ledger.jsonl",
+      "data/discovery/campaign2/dive/outcome_ledger.jsonl",
+      "data/discovery/phoenix_grid/grid/outcome_ledger_v7_t45.jsonl",
+      "data/discovery/classic_phoenix/outcome_ledger.jsonl",
+      "data/emission/q4_harvest/outcome_ledger.jsonl",
+      "data/discovery/prod25_20260809/outcome_ledger.jsonl",
+      "data/discovery/prod25_20260809_dive/outcome_ledger.jsonl",
+      "data/discovery/prod25_phoenix_native/outcome_ledger.jsonl"
+    ],
+    "n_population": 2867,
+    "union_diag": {
+      "n_union": 2867,
+      "per_ledger": {
+        "data/discovery/campaign1/breadth/outcome_ledger.jsonl": 149,
+        "data/discovery/campaign1/dive/outcome_ledger.jsonl": 140,
+        "data/discovery/campaign2/breadth/outcome_ledger.jsonl": 157,
+        "data/discovery/campaign2/dive/outcome_ledger.jsonl": 157,
+        "data/discovery/phoenix_grid/grid/outcome_ledger_v7_t45.jsonl": 147,
+        "data/discovery/classic_phoenix/outcome_ledger.jsonl": 22,
+        "data/emission/q4_harvest/outcome_ledger.jsonl": 108,
+        "data/discovery/prod25_20260809/outcome_ledger.jsonl": 1867,
+        "data/discovery/prod25_20260809_dive/outcome_ledger.jsonl": 103,
+        "data/discovery/prod25_phoenix_native/outcome_ledger.jsonl": 17
+      },
+      "n_location_overlaps": 0,
+      "n_id_collisions": 16
+    },
+    "by_partition": {
+      "julia:mandelbrot": 229,
+      "julia:multibrot3": 673,
+      "julia:multibrot4": 140,
+      "julia:multibrot5": 306,
+      "mandelbrot": 447,
+      "multibrot3": 495,
+      "multibrot4": 99,
+      "multibrot5": 173,
+      "phoenix": 266,
+      "phoenix:classic": 39
+    },
+    "by_source_tag": {
+      "steered": 1625,
+      "dive": 400,
+      "phoenix_grid": 147,
+      "triggered:snap_at_seed:k=None": 112,
+      "q4_harvest": 108,
+      "triggered:snap_at_seed:k=16.0": 87,
+      "maneuver:neighborhood_expand:k=16.0": 69,
+      "triggered:neighborhood_expand:k=16.0": 64,
+      "triggered:neighborhood_expand:k=None": 60,
+      "maneuver:neighborhood_expand:k=None": 55,
+      "maneuver:snap_to_nucleus:k=8.0": 38,
+      "maneuver:neighborhood_expand:k=8.0": 36,
+      "classic_phoenix": 22,
+      "null": 17,
+      "maneuver:snap_to_nucleus:k=16.0": 15,
+      "maneuver:lateral_to_sibling:k=None": 8,
+      "maneuver:snap_to_nucleus:k=None": 4
+    },
+    "by_vein": {
+      "classic_phoenix": 22,
+      "descent": 1642,
+      "dive": 400,
+      "maneuver": 548,
+      "phoenix_grid": 147,
+      "q4_harvest": 108
+    },
+    "human_q3plus_excluded": "the library seed is not intake; its 168 looks already carry a human 3-or-4 and were served whole in 2026-08-05_wallpaper_fresh_sheet_v1"
+  },
+  "selection_report": {
+    "target_rows": 960,
+    "drawn_rows": 960,
+    "screened": 2867,
+    "screen_failures": 0,
+    "eligible": 2867,
+    "bucket_order": [
+      "phoenix_classic",
+      "minibrot_maneuver",
+      "below_retired_floor",
+      "top_slice",
+      "partition_floor",
+      "remainder"
+    ],
+    "per_bucket": [
+      {
+        "bucket": "phoenix_classic",
+        "target": null,
+        "rule": "TAKE ALL",
+        "available": 39,
+        "drawn": 39
+      },
+      {
+        "bucket": "minibrot_maneuver",
+        "target": 300,
+        "rule": "veins maneuver/q4_harvest, balanced over partitions (deal_round_robin)",
+        "available": 656,
+        "drawn": 300,
+        "partition_available": {
+          "mandelbrot": 222,
+          "multibrot3": 372,
+          "multibrot4": 11,
+          "multibrot5": 51
+        },
+        "partition_alloc": {
+          "mandelbrot": 119,
+          "multibrot3": 119,
+          "multibrot4": 11,
+          "multibrot5": 51
+        },
+        "by_vein": {
+          "maneuver": 244,
+          "q4_harvest": 56
+        }
+      },
+      {
+        "bucket": "below_retired_floor",
+        "target": 150,
+        "rule": "v3 screen p_ge3 in [0.5, 0.9) \u2014 GOOD_FLOOR to the retired wallpaper_release floor, balanced over partitions",
+        "band": [
+          0.5,
+          0.9
+        ],
+        "available": 541,
+        "drawn": 150,
+        "partition_available": {
+          "julia:mandelbrot": 58,
+          "julia:multibrot3": 147,
+          "julia:multibrot4": 27,
+          "julia:multibrot5": 75,
+          "mandelbrot": 72,
+          "multibrot3": 60,
+          "multibrot4": 18,
+          "multibrot5": 29,
+          "phoenix": 55
+        },
+        "partition_alloc": {
+          "julia:mandelbrot": 17,
+          "julia:multibrot3": 17,
+          "julia:multibrot4": 16,
+          "julia:multibrot5": 17,
+          "mandelbrot": 17,
+          "multibrot3": 17,
+          "multibrot4": 16,
+          "multibrot5": 16,
+          "phoenix": 17
+        }
+      },
+      {
+        "bucket": "top_slice",
+        "target": 75,
+        "rule": "highest v3 screen p_ge3, NO apportionment",
+        "available": 2378,
+        "drawn": 75,
+        "score_range": [
+          1.0,
+          0.9999
+        ]
+      },
+      {
+        "bucket": "partition_floor",
+        "target": 40,
+        "rule": "top every partition up to 40 rows, counting buckets 1-4 (a floor, not a bonus)",
+        "available": null,
+        "drawn": 81,
+        "partition_topup": {
+          "julia:mandelbrot": 19,
+          "julia:multibrot3": 0,
+          "julia:multibrot4": 21,
+          "julia:multibrot5": 19,
+          "mandelbrot": 0,
+          "multibrot3": 0,
+          "multibrot4": 10,
+          "multibrot5": 0,
+          "phoenix": 12,
+          "phoenix:classic": 0
+        },
+        "partition_after": {
+          "julia:mandelbrot": 40,
+          "julia:multibrot3": 49,
+          "julia:multibrot4": 40,
+          "julia:multibrot5": 40,
+          "mandelbrot": 141,
+          "multibrot3": 147,
+          "multibrot4": 40,
+          "multibrot5": 69,
+          "phoenix": 40,
+          "phoenix:classic": 39
+        }
+      },
+      {
+        "bucket": "remainder",
+        "target": 315,
+        "rule": "near-proportional to intake via ranked_intake.partition_slots (sequence_by_deficit), shortfall from a drained partition re-spilled",
+        "available": null,
+        "drawn": 315,
+        "partition_slots": {
+          "julia:mandelbrot": 25,
+          "julia:multibrot3": 74,
+          "julia:multibrot4": 16,
+          "julia:multibrot5": 34,
+          "mandelbrot": 49,
+          "multibrot3": 54,
+          "multibrot4": 11,
+          "multibrot5": 19,
+          "phoenix": 29,
+          "phoenix:classic": 4
+        },
+        "partition_drawn": {
+          "julia:multibrot3": 75,
+          "multibrot3": 55,
+          "mandelbrot": 50,
+          "julia:multibrot5": 34,
+          "phoenix": 30,
+          "julia:mandelbrot": 25,
+          "multibrot5": 19,
+          "julia:multibrot4": 16,
+          "multibrot4": 11,
+          "phoenix:classic": 0
+        },
+        "intake_shares": {
+          "julia:mandelbrot": 0.0799,
+          "julia:multibrot3": 0.2347,
+          "julia:multibrot4": 0.0488,
+          "julia:multibrot5": 0.1067,
+          "mandelbrot": 0.1559,
+          "multibrot3": 0.1727,
+          "multibrot4": 0.0345,
+          "multibrot5": 0.0603,
+          "phoenix": 0.0928,
+          "phoenix:classic": 0.0136
+        }
+      }
+    ],
+    "drawn_by_bucket": {
+      "top_slice": 75,
+      "remainder": 315,
+      "partition_floor": 81,
+      "below_retired_floor": 150,
+      "phoenix_classic": 39,
+      "minibrot_maneuver": 300
+    },
+    "drawn_by_partition": {
+      "julia:mandelbrot": 65,
+      "julia:multibrot3": 124,
+      "julia:multibrot4": 56,
+      "julia:multibrot5": 74,
+      "mandelbrot": 191,
+      "multibrot3": 202,
+      "multibrot4": 51,
+      "multibrot5": 88,
+      "phoenix": 70,
+      "phoenix:classic": 39
+    },
+    "drawn_by_vein": {
+      "classic_phoenix": 22,
+      "descent": 418,
+      "dive": 101,
+      "maneuver": 307,
+      "phoenix_grid": 46,
+      "q4_harvest": 66
+    },
+    "drawn_by_source_tag": {
+      "steered": 401,
+      "dive": 101,
+      "q4_harvest": 66,
+      "triggered:snap_at_seed:k=None": 54,
+      "triggered:snap_at_seed:k=16.0": 47,
+      "phoenix_grid": 46,
+      "maneuver:neighborhood_expand:k=16.0": 43,
+      "triggered:neighborhood_expand:k=16.0": 34,
+      "triggered:neighborhood_expand:k=None": 32,
+      "maneuver:neighborhood_expand:k=None": 31,
+      "maneuver:neighborhood_expand:k=8.0": 27,
+      "maneuver:snap_to_nucleus:k=8.0": 23,
+      "classic_phoenix": 22,
+      "null": 17,
+      "maneuver:snap_to_nucleus:k=16.0": 9,
+      "maneuver:lateral_to_sibling:k=None": 4,
+      "maneuver:snap_to_nucleus:k=None": 3
+    },
+    "intake_by_partition": {
+      "julia:mandelbrot": 229,
+      "julia:multibrot3": 673,
+      "julia:multibrot4": 140,
+      "julia:multibrot5": 306,
+      "mandelbrot": 447,
+      "multibrot3": 495,
+      "multibrot4": 99,
+      "multibrot5": 173,
+      "phoenix": 266,
+      "phoenix:classic": 39
+    },
+    "coverage_floor": 40,
+    "partitions_below_coverage_floor": {
+      "phoenix:classic": 39
+    },
+    "seed": 27,
+    "palette_note": "NOT a stratum. Each row is the location's argmax-p_ge3 palette out of its own seeded screen draw; palette spread is reported, never targeted."
+  },
+  "screen_vs_keeper": {
+    "n": 960,
+    "spearman": 0.883355694830398,
+    "mean_abs_delta": 0.14487178178233817,
+    "gate_side_agreement_at_0.9": 0.8416666666666667,
+    "note": "screen = a 512x288ss2 field area-downsampled to the 512x288 scoring grid (SCORING-ONLY); keeper = the stored 1280x720 ss2 crop. The stamped head_v3 IS the keeper score; the screen only chose what to render and with which palette."
+  },
+  "sampling_metaparameters": {
+    "n_screen_candidates": 8,
+    "picks_per_loc": 1,
+    "pick_rule": "the location's argmax-p_ge3 screened candidate \u2014 the row a release would actually ship (enrich --mode render selects the same way). PALETTE IS NEVER A STRATUM.",
+    "target_rows": 960,
+    "palette_pool": 120,
+    "palette_draw": "sample_location.gen0_palettes(sampler, 120) \u2014 the deployed GEN0_SOURCE_WEIGHTS composition; per-location seeded subsample of n_screen, params via query_sampler.sample_candidate",
+    "maxiter_policy": "mi4000k0.3c200-67000",
+    "seed": 27,
+    "split_seed": 0,
+    "eval_frac": 0.3,
+    "id_salt": "wallpaper_correction_v2/2026-08-10"
+  },
+  "split_summary": {
+    "eval_rows": 287,
+    "train_rows": 673,
+    "planned_eval_locations": 287,
+    "rule": "location-grouped (one location = one row), seeded on split_seed, stratified BY BUCKET so each named population appears on both sides"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "filter": "lanczos3",
+    "jpg_quality": 90,
+    "interior_mode": "black",
+    "composition": "center",
+    "render_path": "render-one --dump-field + colormap.render_candidate (tools/wallpaper/label_crop.py \u2014 the locked label-crop pins)"
+  },
+  "realized": {
+    "rows_by_bucket": {
+      "top_slice": 75,
+      "minibrot_maneuver": 300,
+      "remainder": 315,
+      "partition_floor": 81,
+      "phoenix_classic": 39,
+      "below_retired_floor": 150
+    },
+    "rows_by_partition": {
+      "julia:mandelbrot": 65,
+      "julia:multibrot3": 124,
+      "julia:multibrot4": 56,
+      "julia:multibrot5": 74,
+      "mandelbrot": 191,
+      "multibrot3": 202,
+      "multibrot4": 51,
+      "multibrot5": 88,
+      "phoenix": 70,
+      "phoenix:classic": 39
+    },
+    "rows_by_vein": {
+      "classic_phoenix": 22,
+      "descent": 418,
+      "dive": 101,
+      "maneuver": 307,
+      "phoenix_grid": 46,
+      "q4_harvest": 66
+    },
+    "rows_by_split": {
+      "train": 673,
+      "eval": 287
+    },
+    "suggested_tier_hist": {
+      "1": 16,
+      "2": 263,
+      "3": 469,
+      "4": 212
+    },
+    "distinct_palettes": 113,
+    "palette_top10": {
+      "afmhot": 38,
+      "hot": 35,
+      "cet_linear_bmw_5_95_c86": 27,
+      "Orchid Triad": 25,
+      "Amethyst Veil": 21,
+      "cet_linear_kbc_5_95_c73": 21,
+      "Pale Orchid, Deep Well": 20,
+      "cmr.fusion": 19,
+      "Ember Against Steel": 18,
+      "Copper Bloom, Teal Fleck": 18
+    },
+    "p_ge3": {
+      "min": 0.0,
+      "max": 1.0
+    },
+    "above_retired_release_floor": 501
+  },
+  "presentation": {
+    "order": "sheet_order \u2014 DESCENDING pred (good -> bad), ties on the crop stem",
+    "sorted_on": "the continuous head score (pred), NOT the suggested tier",
+    "contiguous": true,
+    "image_id": "OPAQUE `<prefix><slot>_<hash8>` \u2014 slot is presentation position (published anyway, the sheet is sorted); the hash is a salted digest of the unit key, so the id encodes no bucket, partition, vein or ledger. route.json maps it back."
+  },
+  "labels_export": "labels/scores_2026-08-10_wallpaper_correction_v2.json",
+  "labeling": {
+    "ui": "tools/viz/wallpaper_label.html?corpus=wallpaper_corpus&tiers=4&order=file&batch=2026-08-10_wallpaper_correction_v2",
+    "mode": "correction \u2014 every row shows its suggested tier PREFILLED; Enter confirms, 1-4 override. Only rows Matt acts on are exported; an unreviewed suggestion never leaves the page as a label.",
+    "bulk": "accept all remaining, and accept all BELOW THIS ROW (the positional sweep a sorted sheet makes natural) \u2014 both behind a confirm",
+    "blind_rows": 0,
+    "calibration_duplicates": 0,
+    "merge": "uv run python tools/wallpaper/merge_sitting.py --corpus wallpaper_corpus --batch 2026-08-10_wallpaper_correction_v2 --scores labels/scores_2026-08-10_wallpaper_correction_v2.json --apply"
+  },
+  "render_failures": [],
+  "run_status": {
+    "drawn_rows": 960,
+    "rendered_rows": 960,
+    "n_failures": 0,
+    "n_unaccounted": 0,
+    "unaccounted_rows": [],
+    "unaccounted_note": "drawn but neither rendered nor failed \u2014 a bounded (--limit) or interrupted run; re-run `render` then `write`"
+  }
+}
