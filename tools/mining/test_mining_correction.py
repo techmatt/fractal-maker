@@ -163,14 +163,56 @@ def test_every_mode_reaches_the_floor_where_supply_allows(drawn):
     assert not rep["modes_below_floor"]
 
 
-def test_the_fancy_oversample_is_real_and_declared(drawn):
-    """composite+direct are 9 of 15 modes but must come out with MORE than their equal share —
-    that is what the bucket is for, and a draw that merely balanced would pass a weaker test."""
-    sel, rep, pop = drawn
-    kinds = Counter(r["kind"] for r in sel)
-    fancy = kinds["composite"] + kinds["direct"]
-    pop_fancy = sum(1 for r in pop if r["kind"] in BC.FANCY_KINDS)
-    assert fancy / len(sel) > pop_fancy / len(pop)
+def test_the_fancy_oversample_is_where_the_prompt_put_it_the_MID_band(drawn):
+    """WHERE the oversample can act, and where it cannot.
+
+    In the HIGH band it CANNOT: that band is take-all for both kinds, so the drawn fancy share
+    equals the supply's by construction and there is nothing more to give. What the sheet does
+    there is take every fancy high row there is (4.3x what sheet v1 carried) and keep the pure
+    high rows as the CONTROL — without them "fancy top-tier rows are corrected more often than
+    pure ones" is not a measurable sentence.
+
+    In the MID band it can and does: `mid_fancy` claims a declared share of the post-floor
+    remainder, so the drawn fancy share must EXCEED the mid band's own supply share.
+
+    The OVERALL fancy share is deliberately NOT asserted. The mode floor and the balanced fill
+    both spread over modes, and the six pure modes have far less supply per mode than the nine
+    fancy ones (`direct_*` alone spreads a 9-cell grid), so a correct draw comes out BELOW the
+    population's fancy share overall — 0.663 against 0.721 on the live screen. Asserting the
+    overall share would go red on a draw doing exactly what it was asked to do."""
+    # A population where the PURE modes dominate the mid band, so a draw that merely balanced
+    # over modes would come out fancy-POOR there. The equal-supply fixture cannot show this:
+    # at 9 fancy modes of 15 its fancy share is already 0.60, which is exactly what the
+    # declared mid share happens to be, and the test would pass on an equality.
+    pop, i = [], 0
+    hi, mid, lo = ST.CUTS[1] + 0.05, ST.CUTS[0] + 0.05, ST.CUTS[0] - 0.1
+    for mode in MR.MODES:
+        n_mid = 60 if MR.MODE_KIND[mode] in BC.FANCY_KINDS else 300
+        for j in range(n_mid):
+            pop.append(rec(i, mode, mid))
+            i += 1
+        for j in range(5):
+            pop.append(rec(i, mode, hi))
+            i += 1
+        for j in range(20):
+            pop.append(rec(i, mode, lo))
+            i += 1
+    sel, rep = BC.select(SPEC, pop)
+    for r in pop:
+        r["bin"] = BC.score_bin(r["screen_pred"])
+
+    def fancy_share(rows):
+        return sum(1 for r in rows if r["kind"] in BC.FANCY_KINDS) / max(len(rows), 1)
+
+    mid_pop = [r for r in pop if r["bin"] == "mid"]
+    mid_sel = [r for r in sel if r["bin"] == "mid"]
+    assert fancy_share(mid_pop) < 0.25                      # the draw starts fancy-poor...
+    assert mid_sel and fancy_share(mid_sel) > 0.5           # ...and the bucket pulls it up
+    hi_pop = [r for r in pop if r["bin"] == "hi"]
+    hi_sel = [r for r in sel if r["bin"] == "hi"]
+    assert len(hi_sel) == len(hi_pop)
+    assert fancy_share(hi_sel) == pytest.approx(fancy_share(hi_pop)), \
+        "the high band is take-all; a fancy share that differs from supply means it is not"
     assert rep["per_bucket"][3]["bucket"] == "mid_fancy"
     assert {r["kind"] for r in sel if r["bucket"] == "mid_fancy"} <= BC.FANCY_KINDS
 
