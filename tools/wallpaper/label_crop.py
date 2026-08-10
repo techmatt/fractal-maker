@@ -48,13 +48,18 @@ LABEL_FILTER = "lanczos3"
 JPG_Q = 90
 
 
-def ensure_label_field(loc, fields_dir=DEFAULT_FIELDS_DIR):
+def ensure_label_field(loc, fields_dir=DEFAULT_FIELDS_DIR, timeout_s=None):
     """Dump (or reuse) the label-geometry smooth field for `loc`. Returns FieldData.
 
     This is the expensive Rust pass — one per location, shared by that location's
     picks (coloring-independent). `fields_dir` is the cache directory; distinct
     directories never change the rendered field (pure function of loc + geometry +
-    maxiter), so callers may keep separate caches (e.g. the ss2 rerender)."""
+    maxiter), so callers may keep separate caches (e.g. the ss2 rerender).
+
+    `timeout_s` is a per-dump backstop, default OFF so the three 2026-07/08 builders keep
+    their exact behaviour. A batch driver that runs hundreds of these in a worker pool should
+    pass one CLAMPED TO ITS OWN BUDGET: without it a single hung dump holds a worker for the
+    whole run, and a backstop longer than the job it protects is not a backstop (CLAUDE.md)."""
     fields_dir = Path(fields_dir)
     fields_dir.mkdir(parents=True, exist_ok=True)
     # iteration-CAP policy token — empty for the legacy policy (existing stems stay
@@ -76,7 +81,8 @@ def ensure_label_field(loc, fields_dir=DEFAULT_FIELDS_DIR):
                "--maxiter", str(loc.maxiter),
                "--dump-field", str(bin_path)]
         cmd += loc_mod.render_one_flags(loc)
-        r = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True)
+        r = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True,
+                           timeout=timeout_s)
         if r.returncode != 0:
             raise RuntimeError(f"label dump-field failed for {stem}:\n{r.stderr[-500:]}")
     return cm.load_field(str(bin_path), str(json_path))

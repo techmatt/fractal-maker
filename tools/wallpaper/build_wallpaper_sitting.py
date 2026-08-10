@@ -629,8 +629,8 @@ def render_one(job):
     t0 = time.time()
     loc = loc_mod.from_render_block(render_block)
     os.environ["RAYON_NUM_THREADS"] = str(ENGINE_THREADS)
-    field = ensure_label_field(loc, fields_dir=Path(fields_s))
     try:
+        field = ensure_label_field(loc, fields_dir=Path(fields_s), timeout_s=timeout_s)
         prep = cm.stretch_field(field)
         cfg = cm.CandidateConfig.from_json(json.dumps(cand_json))
         w, h = render_label_crop(field, cfg, _R_LIB, Path(crop_s), prep=prep)
