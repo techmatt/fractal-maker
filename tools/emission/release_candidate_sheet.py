@@ -304,7 +304,10 @@ def build(run_dir: Path, record_root: Path, out_html: Path) -> dict:
     # --- per-partition supply, the thin-supply rule's input ------------------ #
     mined = summary.get("mined_supply", {}) or {}
     passing = summary.get("passing_supply", {}) or {}
+    good = summary.get("good_supply", {}) or {}
     caps = summary.get("emit_caps", {}) or {}
+    guar = ((summary.get("release_split", {}) or {}).get("slot_guarantee", {}) or {})
+    owed = {p: h for h, ps in (guar.get("owed_by_head") or {}).items() for p in ps}
     if mined or passing:
         div = summary.get("thin_supply_divisor", "?")
         P.append("<h2>Per-partition supply</h2>")
@@ -312,15 +315,21 @@ def build(run_dir: Path, record_root: Path, out_html: Path) -> dict:
                  f"too few floor-passing candidates emits nothing rather than shipping its own "
                  f"least-bad row — one line each, including the ones that emit zero, because a "
                  f"partition that vanishes from a readout when its supply dies is the failure "
-                 f"this list exists to prevent.</p>")
+                 f"this list exists to prevent. <b>Since 2026-08-10 the slot guarantee overrides "
+                 f"that zero for ONE slot</b>: a partition with any candidate above the "
+                 f"{guar.get('good_floor', summary.get('good_floor', '?'))} good floor is seated "
+                 f"whatever its <code>release_mix</code> share, and the cap governs beyond it.</p>")
         P.append('<div class="scroll"><table><tr><th>partition</th><th>mined</th>'
-                 '<th>above junk floor</th><th>emit cap</th></tr>')
-        for part in sorted(set(mined) | set(passing)):
+                 '<th>above junk floor</th><th>above good floor</th><th>emit cap</th>'
+                 '<th>guaranteed slot</th></tr>')
+        for part in sorted(set(mined) | set(passing) | set(good)):
             n_pass = passing.get(part, 0)
             cap = caps.get(part, 0)
             note = "" if cap else " <span class=note>(thin supply → 0)</span>"
+            g = f"yes ({escape(owed[part])} head)" if part in owed else "—"
             P.append(f"<tr><td>{escape(part)}</td><td>{mined.get(part, 0)}</td>"
-                     f"<td>{n_pass}</td><td>{cap}{note}</td></tr>")
+                     f"<td>{n_pass}</td><td>{good.get(part, 0)}</td><td>{cap}{note}</td>"
+                     f"<td>{g}</td></tr>")
         P.append("</table></div>")
 
     # readout tables

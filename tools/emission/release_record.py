@@ -57,7 +57,13 @@ RECORD_DIR_REL = "data/emission/release_records"
 # said, so "was the 0.90 bar buying anything" stays answerable off the accumulating record
 # instead of only off runs made while it enforced. Additive: every v1 field is unchanged, and
 # a v1 row read back simply has no `would_pass_floor`.
-SCHEMA_VERSION = 2
+# v3 (2026-08-10): adds `slot_source` — `guarantee` | `mix` | None. The slot guarantee gives
+# every partition with floor-passing supply one release slot regardless of its `release_mix`
+# share, and the whole reason to stamp it per row is that the policy is a FOR-NOW one: judging
+# it later means asking "which tiles only shipped because of it", which is unanswerable off a
+# record that says only that they shipped. Additive: every v2 field is unchanged, and a v2 row
+# read back simply has no `slot_source`.
+SCHEMA_VERSION = 3
 
 STAGE_GATE = "gate"
 STAGE_RELEASE = "release"
@@ -94,7 +100,8 @@ def _key(run_id: str, stage: str, join_key: str) -> str:
 
 def decision_row(*, run_id, stage, join_key, location_id, location, partition,
                  morph_cluster, decision, score=None, reason=None, head=None,
-                 floor=None, would_pass_floor=None, style=None, palette=None) -> dict:
+                 floor=None, would_pass_floor=None, slot_source=None,
+                 style=None, palette=None) -> dict:
     """One gate-time or release-time decision.
 
     `join_key`  the candidate's identity within the run (location_id|style|palette) — the join
@@ -111,6 +118,11 @@ def decision_row(*, run_id, stage, join_key, location_id, location, partition,
                 when there is no score to compare, which is why this is a tri-state and not a
                 bool — `False` means "the old cut would have removed this row" and must not be
                 the value a render error gets.
+    `slot_source`  PROVENANCE (schema v3): which kind of release slot this row took —
+                `"guarantee"` (the partition's guaranteed slot, which exists whatever its
+                `release_mix` share) or `"mix"`. `None` on gate rows and on every
+                `not_selected` row: a row that took no slot has no slot provenance, and
+                defaulting it to `"mix"` would invent a decision.
     """
     return {
         "schema_version": SCHEMA_VERSION,
@@ -129,6 +141,7 @@ def decision_row(*, run_id, stage, join_key, location_id, location, partition,
         "score": None if score is None else round(float(score), 6),
         "floor": None if floor is None else float(floor),
         "would_pass_floor": None if would_pass_floor is None else bool(would_pass_floor),
+        "slot_source": None if slot_source is None else str(slot_source),
         "reason": reason,
     }
 

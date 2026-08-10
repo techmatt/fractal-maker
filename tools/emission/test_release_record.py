@@ -192,6 +192,8 @@ class _Engine:
         # here: this fixture is about the DECISION rows, and a `--select-only` run reaches
         # `_record_counts` with exactly this — no plan, and realized read off the pool.
         self.attempt_budget = {}
+        # per-slot provenance (2026-08-10): the one pick here took a `release_mix` slot.
+        self.slot_source = {"e0": "mix"}
 
     # borrow the real implementations
     RECORD_SITE = SITE
@@ -270,6 +272,11 @@ def test_driver_end_to_end_records_gate_and_release(store, monkeypatch):
     assert rel["L0|smooth|viridis"]["would_pass_floor"] is True
     assert rel["L1|smooth|magma"]["decision"] == "not_selected"
     assert rel["L1|smooth|magma"]["would_pass_floor"] is False     # 0.60 < the retired 0.90
+    # schema v3: the slot's provenance rides on the SELECTED row only. A not_selected row took
+    # no slot, so "mix" there would invent a decision the run never made.
+    assert rel["L0|smooth|viridis"]["slot_source"] == "mix"
+    assert rel["L1|smooth|magma"]["slot_source"] is None
+    assert all(r["slot_source"] is None for r in rows if r["stage"] == RR.STAGE_GATE)
     assert all(r["run_id"] == "run_smoke" for r in rows)
     assert all(r["partition"] and r["morph_cluster"] for r in rows)
 

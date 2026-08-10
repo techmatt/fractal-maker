@@ -80,6 +80,23 @@ def passes(row: dict) -> bool:
     return is_floor_admit(row) or F.passes_junk_floor(raw_p_ge3(row))
 
 
+def passes_good(row: dict) -> bool:
+    """`floors.GOOD_FLOOR` on the same stored raw P(>=3), with the same floor-admit bypass.
+
+    THE SLOT-GUARANTEE TRIGGER (2026-08-10): a partition is guaranteed one release slot iff at
+    least one of its intake candidates passes THIS — deliberately the higher of the two floors,
+    not the junk floor `passes` admits on. The two are one definition at two heights
+    (`floors.GOOD_FLOOR` docstring), and the guarantee asks the higher question: "does this
+    partition have anything worth keeping", where `passes` only asks "is this not obvious
+    junk". A guarantee triggered at 0.20 would seat a partition whose whole supply the run
+    itself would not call good.
+
+    The floor-admit bypass carries over unchanged, and for the unchanged reason: a `q4_harvest`
+    / `human_q3plus` row was selected by a signal ORTHOGONAL to the head, so the head's own
+    verdict must not veto it at either height."""
+    return is_floor_admit(row) or F.passes_good_floor(raw_p_ge3(row))
+
+
 def admit(row: dict) -> bool:
     """The whole read-time predicate handed to `descriptor.load_union_admitted`:
     guard ∧ distinct ∧ (junk floor ∨ floor-admit). No decode-version predicate, no q3 gate."""
@@ -133,9 +150,12 @@ def ranked_from_mined(mined_rows, mdiag: dict | None = None) -> tuple:
     ranked: dict = {}
     mined: dict = {}
     bypass: dict = {}
+    good: dict = {}
     for row in mined_rows:
         part = D.cell_partition(row)
         mined[part] = mined.get(part, 0) + 1
+        if passes_good(row):
+            good[part] = good.get(part, 0) + 1
         if not passes(row):
             continue
         ranked.setdefault(part, []).append(row)
@@ -146,11 +166,14 @@ def ranked_from_mined(mined_rows, mdiag: dict | None = None) -> tuple:
     diag = dict(mdiag or {})
     diag.update({
         "junk_floor": F.JUNK_FLOOR,
+        "good_floor": F.GOOD_FLOOR,
         "mined_by_partition": dict(sorted(mined.items())),
         "passing_by_partition": {p: len(v) for p, v in sorted(ranked.items())},
+        "good_by_partition": dict(sorted(good.items())),
         "bypass_by_partition": dict(sorted(bypass.items())),
         "n_mined": len(mined_rows),
         "n_passing": sum(len(v) for v in ranked.values()),
+        "n_good": sum(good.values()),
     })
     return ranked, diag
 
@@ -162,15 +185,21 @@ def ranked_by_partition(ledger_paths) -> tuple:
 
 
 def supply_census(mined_rows, scope: set | None = None) -> tuple:
-    """`(mined_by_partition, passing_by_partition)` over `mined_rows`, restricted to `scope`.
+    """`(mined, passing, good)` by partition over `mined_rows`, restricted to `scope`.
 
-    ONE walk producing BOTH halves, because the two must describe the SAME population and the
+    ONE walk producing ALL THREE, because they must describe the SAME population and the
     obvious way to get them wrong is to take each from wherever it was already lying around:
     the sheet printed "81 mined, 18 above floor" for julia:mandelbrot when the mined count came
     from the whole 1470-row union and the passing count from the 720 rows an intake SNAPSHOT
-    restricted the run to. `scope` is that restriction (None = the whole union)."""
+    restricted the run to. `scope` is that restriction (None = the whole union).
+
+    `good` (2026-08-10) is the third height on the same population: `passes_good`, the slot
+    guarantee's trigger. It is produced HERE rather than by a second walk for exactly the
+    reason above — a guarantee counted over the union while the cap is counted over a snapshot
+    is the same two-denominator bug one floor higher."""
     mined: dict = {}
     passing: dict = {}
+    good: dict = {}
     for row in mined_rows:
         if scope is not None and row["id"] not in scope:
             continue
@@ -178,7 +207,10 @@ def supply_census(mined_rows, scope: set | None = None) -> tuple:
         mined[part] = mined.get(part, 0) + 1
         if passes(row):
             passing[part] = passing.get(part, 0) + 1
-    return dict(sorted(mined.items())), dict(sorted(passing.items()))
+        if passes_good(row):
+            good[part] = good.get(part, 0) + 1
+    return (dict(sorted(mined.items())), dict(sorted(passing.items())),
+            dict(sorted(good.items())))
 
 
 def supply_lines(diag: dict) -> list:
@@ -188,13 +220,19 @@ def supply_lines(diag: dict) -> list:
     the failure this line exists to make visible."""
     mined = diag.get("mined_by_partition", {})
     passing = diag.get("passing_by_partition", {})
+    good = diag.get("good_by_partition", {})
     out = []
-    for part in sorted(set(mined) | set(passing)):
+    for part in sorted(set(mined) | set(passing) | set(good)):
         n_pass = passing.get(part, 0)
-        line = f"{part}: {mined.get(part, 0)} mined, {n_pass} above floor"
+        n_good = good.get(part, 0)
+        line = (f"{part}: {mined.get(part, 0)} mined, {n_pass} above floor, "
+                f"{n_good} above good floor")
         cap = emit_cap(n_pass)
         if not cap:
-            line += " → emits 0 (thin supply)"
+            # The thin-supply zero and the slot guarantee meet on exactly this line, so it says
+            # which one wins: the guarantee takes the first slot, the cap still governs beyond it.
+            line += (" → emits 1 (slot guarantee), then 0 (thin supply)" if n_good
+                     else " → emits 0 (thin supply)")
         out.append(line)
     return out
 
@@ -219,7 +257,17 @@ def emit_cap(passing_supply: int) -> int:
 SLOT_GRANULARITY = 1000
 
 
-def partition_slots(shares: dict, n: int) -> dict:
+class SlotGuaranteeOverflow(RuntimeError):
+    """More partitions are guaranteed a release slot than the release has slots.
+
+    Raised rather than pro-rated: a guarantee that quietly becomes "1 slot each unless there
+    are too many of you" is not a guarantee, and the run must be re-sized (a bigger `N`) or the
+    policy re-decided by a human. Impossible at today's N=12 over 10 partitions; asserted
+    because the shape that makes it possible — a head that holds every guarantee — is one
+    `--strange-frac` away."""
+
+
+def partition_slots(shares: dict, n: int, guaranteed=()) -> dict:
     """`{partition: slots}` — `n` release slots apportioned over `shares`, near-proportionally.
 
     Through `apportion.sequence_by_deficit`, THE owner of the ordering rule, and through it
@@ -230,14 +278,61 @@ def partition_slots(shares: dict, n: int) -> dict:
 
     The ±1 prefix bound is a CHECK, not a theorem (apportion.py) — `selection.rank_select`'s
     log carries the realized slots so the allocation is inspectable on the run that used it,
-    and no caller here asserts a bound it did not measure."""
+    and no caller here asserts a bound it did not measure.
+
+    `guaranteed` (2026-08-10) — partitions that must come out with AT LEAST ONE slot. At N=12
+    over 10 partitions the mix seats 6 and structurally zeroes 4 whatever their supply:
+    `phoenix:classic` carries the lowest ratio in the table (0.2), so it could not ship a tile
+    off 23 floor-passing rows. The guarantee is the approved fix (Matt, 2026-08-10, for-now):
+    every partition with floor-passing supply gets one slot, the REMAINDER is apportioned by
+    `release_mix` exactly as before.
+
+    IT IS A FLOOR, NOT A BONUS, and that is why this is a FIXED POINT rather than
+    `reserve + apportion(n − reserve)`. The naive form gives a guaranteed partition its
+    reservation ON TOP of whatever the mix would have handed it anyway — `natural + reserved`
+    where the intent is `max(natural, reserved)`, differing by exactly the reservation on every
+    cell that did not need one (`apportion.deal_round_robin`'s `preseed` paragraph, the same
+    distinction). `sequence_by_deficit` has no `preseed`, so the floor is expressed by pinning:
+    each round, any guaranteed partition the mix still zeroes is pinned at 1 and removed from
+    the pool the rest share, until nothing is short. A partition the mix already seats is never
+    pinned, so it gains nothing from being named here.
+
+    A guaranteed partition absent from `shares` is NOT seatable here (it has no candidates in
+    this pass) and is silently ignored. `guaranteed` is what THIS pass has been told to seat,
+    never the whole supplied set: the guarantee is one slot across the WHOLE release, so the
+    caller owns which head owes it (`build_emission_diversity_v1._plan_with_guarantees`)."""
     n = max(0, int(n))
     weights = {p: int(round(float(s) * SLOT_GRANULARITY)) for p, s in sorted(shares.items())}
     weights = {p: w for p, w in weights.items() if w > 0}
-    if not weights or n == 0:
-        return {p: 0 for p in sorted(shares)}
-    seq = sequence_by_deficit(weights)[:n]
     out = {p: 0 for p in sorted(shares)}
-    for p in seq:
-        out[p] += 1
+    guar = [p for p in sorted(set(guaranteed)) if p in weights]
+    if len(guar) > n:
+        raise SlotGuaranteeOverflow(
+            f"{len(guar)} partition(s) guaranteed a release slot against {n} slot(s) in this "
+            f"pass: {guar}. Pro-rating a guarantee silently would make it not a guarantee — "
+            f"raise the release N, or re-decide which partitions are guaranteed.")
+    if not weights or n == 0:
+        return out
+    pinned: set = set()
+    while True:
+        free = {p: w for p, w in weights.items() if p not in pinned}
+        mix = {p: 0 for p in weights}
+        for p in sequence_by_deficit(free)[:n - len(pinned)]:
+            mix[p] += 1
+        short = [p for p in guar if p not in pinned and mix[p] < 1]
+        if not short:
+            break
+        pinned.update(short)
+    for p in weights:
+        out[p] = 1 if p in pinned else mix[p]
     return out
+
+
+def would_emit(slots: int, cap) -> int:
+    """`min(slots, cap)` — what a partition emits under the two caps, with `cap=None` meaning
+    UNCAPPED (no supply census for it, the honest default `selection.rank_select` already
+    takes). One spelling, because the driver's guarantee fixed point and the selector's budget
+    must agree about what "emits nothing" means or the guarantee fires on a partition that was
+    going to ship anyway."""
+    s = int(slots)
+    return s if cap is None else min(s, int(cap))

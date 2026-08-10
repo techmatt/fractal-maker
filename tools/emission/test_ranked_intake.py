@@ -153,14 +153,21 @@ def test_partitions_are_cell_identity_not_the_family_token(tmp_path):
 def test_supply_lines_name_every_partition_including_the_empty_ones(tmp_path):
     """The sheet's one-liner. A partition whose whole supply fell below the floor must still
     appear — a partition that vanishes from the readout when its supply dies is the failure
-    the mined count exists to prevent."""
+    the mined count exists to prevent.
+
+    It also carries BOTH heights, because the thin-supply zero and the slot guarantee meet on
+    this line and disagree: mandelbrot is thin (2 < 4) yet has good-floor supply, so it emits
+    its one guaranteed slot; classic has nothing above either floor and emits zero. A line that
+    printed only "emits 0 (thin supply)" for both would be wrong about the first."""
     led = _ledger(tmp_path, [_row("m1", p_good=0.9), _row("m2", p_good=0.9),
                              _row("p1", family="phoenix", p_good=0.01),
                              _row("p2", family="phoenix", p_good=0.02)])
     _ranked, diag = RI.ranked_by_partition([led])
     lines = RI.supply_lines(diag)
-    assert "mandelbrot: 2 mined, 2 above floor → emits 0 (thin supply)" in lines
-    assert "phoenix:classic: 2 mined, 0 above floor → emits 0 (thin supply)" in lines
+    assert ("mandelbrot: 2 mined, 2 above floor, 2 above good floor "
+            "→ emits 1 (slot guarantee), then 0 (thin supply)") in lines
+    assert ("phoenix:classic: 2 mined, 0 above floor, 0 above good floor "
+            "→ emits 0 (thin supply)") in lines
 
 
 def test_the_supply_census_reports_both_halves_over_the_SAME_scope(tmp_path):
@@ -173,10 +180,14 @@ def test_the_supply_census_reports_both_halves_over_the_SAME_scope(tmp_path):
     led = _ledger(tmp_path, rows)
     mined_rows, _ = RI.load_mined([led])
     scope = {r["id"] for r in mined_rows if r["_ledger_row_id"].startswith("keep")}
-    m_all, p_all = RI.supply_census(mined_rows, None)
-    m_scoped, p_scoped = RI.supply_census(mined_rows, scope)
+    m_all, p_all, g_all = RI.supply_census(mined_rows, None)
+    m_scoped, p_scoped, g_scoped = RI.supply_census(mined_rows, scope)
     assert (m_all["mandelbrot"], p_all["mandelbrot"]) == (4, 2)
     assert (m_scoped["mandelbrot"], p_scoped["mandelbrot"]) == (2, 1)
+    # the guarantee's trigger count comes off the SAME scoped walk, which is the whole reason
+    # it is a third return and not a second pass: a guarantee counted over the union while the
+    # cap is counted over a snapshot is the two-denominator bug one floor higher.
+    assert (g_all["mandelbrot"], g_scoped["mandelbrot"]) == (2, 1)
 
 
 # --------------------------------------------------------------------------- #
@@ -208,6 +219,74 @@ def test_partition_slots_handles_the_degenerate_ends():
     assert RI.partition_slots({}, 5) == {}
     # one slot goes to the biggest share, not to whatever sorts first
     assert RI.partition_slots(shares, 1) == {"mandelbrot": 1, "phoenix": 0}
+
+
+# --------------------------------------------------------------------------- #
+# the slot guarantee (2026-08-10, prompts/slot_guarantee_26.md)
+# --------------------------------------------------------------------------- #
+def test_the_mix_structurally_zeroes_partitions_and_the_guarantee_seats_them():
+    """THE defect, and the fix, on the shape that produced it. Six slots (one head at N=12)
+    over the ten registered partitions: `release_mix` seats 6 and zeroes 4, and
+    `phoenix:classic` — the lowest ratio in the table — is zeroed no matter how much supply it
+    has. Named as a pair so the guarantee is provably doing something rather than agreeing with
+    an allocation that was already fine."""
+    parts = sorted(RM.RATIO)
+    shares = RM.shares(parts)
+    plain = RI.partition_slots(shares, 6)
+    zeroed = sorted(p for p, k in plain.items() if not k)
+    assert "phoenix:classic" in zeroed and len(zeroed) == 4
+
+    guar = RI.partition_slots(shares, 6, ["phoenix:classic"])
+    assert guar["phoenix:classic"] == 1
+    assert sum(guar.values()) == 6, "the guarantee comes OUT of the mix, it is not extra"
+    # ...and it is paid for by the most over-served partition, not by another zeroed one.
+    assert all(guar[p] <= plain[p] for p in parts if p != "phoenix:classic")
+
+
+def test_the_guarantee_is_a_floor_and_not_a_bonus():
+    """`max(natural, 1)`, never `natural + 1`. A partition the mix already seats is named in
+    `guaranteed` and comes back with EXACTLY what the mix gave it — the distinction
+    `apportion.deal_round_robin`'s `preseed` exists for, which a reserve-then-apportion
+    implementation gets wrong by exactly the reservation on every cell that did not need one."""
+    parts = sorted(RM.RATIO)
+    shares = RM.shares(parts)
+    plain = RI.partition_slots(shares, 12)
+    seated = [p for p, k in plain.items() if k]
+    assert RI.partition_slots(shares, 12, seated) == plain
+
+
+def test_guaranteeing_everything_is_one_slot_each_when_the_slots_run_out():
+    """Ten guaranteed partitions into ten slots: one each, and the mix gets nothing. The
+    boundary matters because it is the first place `n - len(pinned)` reaches zero."""
+    parts = sorted(RM.RATIO)
+    slots = RI.partition_slots(RM.shares(parts), len(parts), parts)
+    assert slots == {p: 1 for p in parts}
+
+
+def test_more_guarantees_than_slots_raises_rather_than_pro_rating():
+    """A guarantee that quietly becomes "one each unless there are too many of you" is not a
+    guarantee. It stops and names the numbers."""
+    parts = sorted(RM.RATIO)
+    with pytest.raises(RI.SlotGuaranteeOverflow) as ex:
+        RI.partition_slots(RM.shares(parts), 6, parts)
+    assert "10 partition(s) guaranteed" in str(ex.value) and "6 slot(s)" in str(ex.value)
+
+
+def test_an_unseatable_guarantee_is_ignored_here_not_invented():
+    """A partition with no candidates in THIS pass is absent from `shares`, so it cannot be
+    seated by this call and no slot is invented for it. The cross-pass question — can the other
+    head seat it — belongs to the driver, which is why this one is silent rather than raising."""
+    shares = RM.shares(["mandelbrot", "phoenix"])
+    assert RI.partition_slots(shares, 2, ["phoenix:classic"]) == RI.partition_slots(shares, 2)
+
+
+@pytest.mark.parametrize("slots,cap,emit", [(1, 0, 0), (1, None, 1), (3, 2, 2), (0, 5, 0)])
+def test_would_emit_is_the_one_spelling_of_the_two_caps(slots, cap, emit):
+    """The driver's guarantee fixed point and the selector's budget must agree about what
+    "emits nothing" means — a partition the mix seats but the thin-supply cap zeroes ships no
+    tile, and a guarantee that counted it as served would guarantee an allocation, not a
+    wallpaper. `cap=None` is UNCAPPED, the same default `rank_select` takes."""
+    assert RI.would_emit(slots, cap) == emit
 
 
 if __name__ == "__main__":

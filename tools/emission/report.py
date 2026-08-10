@@ -178,13 +178,19 @@ def _supply_lines(eng) -> list:
     # two different denominators on one line.
     mined = getattr(eng, "mined_supply", {}) or {}
     passing = getattr(eng, "passing_supply", {}) or {}
+    good = getattr(eng, "good_supply", {}) or {}
     caps = getattr(eng, "emit_caps", {}) or {}
     out = []
-    for part in sorted(set(mined) | set(passing)):
+    for part in sorted(set(mined) | set(passing) | set(good)):
         n_pass = passing.get(part, 0)
+        n_good = good.get(part, 0)
         cap = caps.get(part, 0)
-        out.append(f"{part}: {mined.get(part, 0)} mined, {n_pass} above floor"
-                   + ("" if cap else " → emits 0 (thin supply)"))
+        line = (f"{part}: {mined.get(part, 0)} mined, {n_pass} above floor, "
+                f"{n_good} above good floor")
+        if not cap:
+            line += (" → emits 1 (slot guarantee), then 0 (thin supply)" if n_good
+                     else " → emits 0 (thin supply)")
+        out.append(line)
     return out
 
 
@@ -459,11 +465,27 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
                  f"`{ {k: v for k, v in (split.get('partition_slots', {}).get('smooth', {}) or {}).items() if v} }` "
                  f"strange "
                  f"`{ {k: v for k, v in (split.get('partition_slots', {}).get('strange', {}) or {}).items() if v} }`.\n")
+        guar = split.get("slot_guarantee") or {}
+        if guar:
+            owed = {h: v for h, v in (guar.get("owed_by_head") or {}).items() if v}
+            L.append(f"**The slot guarantee** (2026-08-10). Every partition with at least one "
+                     f"intake candidate above the **{guar.get('good_floor')}** good floor gets "
+                     f"one release slot whatever its `release_mix` share; the remainder is "
+                     f"apportioned by the mix exactly as above, and the thin-supply cap still "
+                     f"governs every slot beyond the guaranteed one. It exists because at N="
+                     f"{eng.release_n} the mix seats 6 partitions and structurally zeroes the "
+                     f"rest — `phoenix:classic` could not ship a tile off 23 floor-passing rows. "
+                     f"Owed this run: `{owed or '{}'}` → "
+                     f"**{guar.get('n_guarantee_slots', 0)}** of {len(selected)} pick(s) took a "
+                     f"guaranteed slot"
+                     + (f"; UNSEATABLE (supply but no scored candidate in either head): "
+                        f"`{guar['unseatable']}`" if guar.get("unseatable") else "") + ".\n")
     L.append("Each head's pass ranks on its OWN `p_ge3` (the two scales are incommensurable). No "
              "floor gates the draw; `retired floor` below is the annotation the 0.90/0.50 cuts "
              "became — a ✗ row is one that could not have shipped before 2026-08-09.\n")
-    L.append("| # | id | type/cluster | flavor/style | p_ge3 | rank in partition | retired floor |")
-    L.append("|--:|---|---|---|--:|--:|---|")
+    L.append("| # | id | type/cluster | flavor/style | p_ge3 | rank in partition | slot | "
+             "retired floor |")
+    L.append("|--:|---|---|---|--:|--:|---|---|")
     logi = {l["id"]: l for l in (sel_log or [])}
     for i, e in enumerate(sheet_order(selected), 1):
         r = e["_rec"]
@@ -477,7 +499,7 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
             ok = (r.get("p_ge3") or 0.0) >= rf
         L.append(f"| {i} | {r['id']} | {r['type']}/{r['morph_cluster']} | "
                  f"{r['palette_flavor']}/{r['render_style']} | {r['p_ge3']:.3f} | "
-                 f"{l.get('rank_in_partition', '—')} | "
+                 f"{l.get('rank_in_partition', '—')} | {l.get('slot_source', '—')} | "
                  f"{'✓' if ok else '✗'} {rf:g} |")
     L.append("")
 
@@ -534,8 +556,10 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         "release_eligible": acct.get("release_eligible", n_rel),
         "release_n": len(selected), "release_rendered": len(rel_paths),
         "junk_floor": F.JUNK_FLOOR, "thin_supply_divisor": F.THIN_SUPPLY_DIVISOR,
+        "good_floor": F.GOOD_FLOOR,
         "passing_supply": dict(getattr(eng, "passing_supply", {}) or {}),
         "mined_supply": dict(getattr(eng, "mined_supply", {}) or {}),
+        "good_supply": dict(getattr(eng, "good_supply", {}) or {}),
         "emit_caps": dict(getattr(eng, "emit_caps", {}) or {}),
         "pool_floor": eng.floor, "mining_pool_floor": eng.mining_floor,
         "release_floor": eng.release_floor, "mining_release_floor": eng.mining_release_floor,

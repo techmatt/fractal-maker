@@ -476,7 +476,11 @@ class EmissionDiversity:
         self.intake_scope = None      # None = the whole union; a set = the snapshot's ids
         self.mined_supply: dict = {}
         self.passing_supply: dict = {}
+        self.good_supply: dict = {}      # above `floors.GOOD_FLOOR` — the guarantee's trigger
         self.emit_caps: dict = {}
+        # per-selected-id slot provenance ("guarantee" | "mix"), filled by `select_release`
+        # and read by the release record. Declared here for the paths that never select.
+        self.slot_source: dict = {}
         # the colorize attempt budget (`attempt_budget.plan`), filled by `plan_attempts()`.
         # Declared here for the same reason as the census above: `--select-only` and a report
         # rebuild never plan, and every reader takes the empty dict rather than a getattr.
@@ -620,9 +624,12 @@ class EmissionDiversity:
         self.ranked = {p: RI.rank_rows(v) for p, v in by_part.items()}
         self.rank_of = {r["id"]: k for v in self.ranked.values()
                         for k, r in enumerate(v)}
-        mined, passing = RI.supply_census(self.mined_rows, self.intake_scope)
+        mined, passing, good = RI.supply_census(self.mined_rows, self.intake_scope)
         self.mined_supply = mined
         self.passing_supply = passing
+        # The slot guarantee's trigger population: candidates above `floors.GOOD_FLOOR`, from
+        # the SAME scoped walk as the other two (see `RI.supply_census`).
+        self.good_supply = good
         self.emit_caps = {p: RI.emit_cap(n) for p, n in passing.items()}
 
     # ---- axes + deficit model ------------------------------------------- #
@@ -953,7 +960,13 @@ class EmissionDiversity:
 
         `reason` names WHICH cap passed a row over, not just that one did — the rank, the
         cluster cap and the partition budget fail differently and a bare "not picked" cannot
-        tell a thin partition from a saturated cluster."""
+        tell a thin partition from a saturated cluster.
+
+        `slot_source` (2026-08-10) is the per-slot provenance of a SELECTED row: `guarantee` if
+        that pick took the partition's guaranteed slot, `mix` if it took a `release_mix` one,
+        None on every not_selected row. It is on the record and not only in the run's log
+        because the question it answers — "which of these tiles only shipped because of the
+        guarantee" — is exactly the one the for-now policy will be judged on later."""
         from tools.emission import release_record as RR
         run_id = self._run_id()
         sel_ids = {e["_rec"]["id"] for e in selected}
@@ -979,6 +992,7 @@ class EmissionDiversity:
                 score=r.get("p_ge3"), reason=reason,
                 head=r.get("head"), floor=self.release_floor_for(r["render_style"]),
                 would_pass_floor=self.would_pass_release_floor(r),
+                slot_source=(self.slot_source or {}).get(r["id"]),
                 style=r.get("render_style"), palette=r.get("palette")))
         return rows
 
@@ -1364,9 +1378,14 @@ class EmissionDiversity:
             e["emb"] = emb.tolist() if emb is not None else None
         return entries
 
-    def _slot_plan(self, entries: list, n_slots: int) -> tuple:
+    def _slot_plan(self, entries: list, n_slots: int, guaranteed=()) -> tuple:
         """`(slots, caps)` for ONE head pass: the partition slot allocation and the
         thin-supply emit cap it is crossed with.
+
+        `guaranteed` is the set of partitions THIS pass owes a guaranteed slot to; it reaches
+        `ranked_intake.partition_slots`, which pins each of them at 1 and apportions the
+        remainder by the mix. Which head owes what is `_plan_with_guarantees`'s decision, not
+        this one's.
 
         Slots come from `release_mix` — the canonical ratio table — re-solved over the
         partitions THIS PASS actually has candidates for, then apportioned to `n_slots` through
@@ -1381,7 +1400,7 @@ class EmissionDiversity:
         applied to each head pass independently and is a CEILING, not a budget being split."""
         parts = sorted({e["type"] for e in entries})
         shares = RM.shares(parts) if parts else {}
-        slots = RI.partition_slots(shares, n_slots)
+        slots = RI.partition_slots(shares, n_slots, guaranteed)
         # A partition with no supply census entry is UNCAPPED, not capped to zero. Zero would
         # be a silent kill on the one path where the census can be short of the pool — a
         # `--select-only` resume against a pool built from a larger intake — and a cap nobody
@@ -1392,6 +1411,88 @@ class EmissionDiversity:
             print(f"[select] no intake supply census for {missing} — UNCAPPED by the "
                   f"thin-supply rule (their slot budget still applies)", flush=True)
         return slots, caps
+
+    # ---- the slot guarantee (2026-08-10, prompts/slot_guarantee_26.md) --------------- #
+    def _guarantee_head(self, part: str, entries_by_head: dict, slot_n: dict,
+                        assigned: dict) -> str:
+        """WHICH head owes `part` its guaranteed slot. Deterministic, three keys in order:
+
+          1. the head has room — a head cannot owe more guarantees than it has slots;
+          2. fewer guarantees placed so far, so the two heads' mixes are eroded evenly rather
+             than one head paying for every guarantee;
+          3. more candidates for `part` in that head, then the head name, so the choice is a
+             pure function of the pass and two runs over one pool agree.
+
+        Returns None when NO head has a candidate for `part` — the caller reports that rather
+        than raising, because a partition nobody colorized is a supply fact, not a policy
+        failure. When a head has candidates but every such head is already full of guarantees,
+        it RAISES (`SlotGuaranteeOverflow`): that is the "guaranteed partitions exceed N" case,
+        and pro-rating it silently is what the raise exists to prevent."""
+        placed = {h: sum(1 for hh in assigned.values() if hh == h) for h in entries_by_head}
+        n_cand = {h: sum(1 for e in entries_by_head[h] if e["type"] == part)
+                  for h in entries_by_head}
+        able = [h for h in sorted(entries_by_head) if n_cand[h] > 0]
+        if not able:
+            return None
+        cand = [h for h in able if placed[h] < int(slot_n.get(h, 0))]
+        if not cand:
+            raise RI.SlotGuaranteeOverflow(
+                f"{part} has floor-passing supply and candidates in {able}, but every head "
+                f"that could seat it is already full of guarantees (placed {placed} against "
+                f"slots {dict(slot_n)}, release N={self.release_n}). Raise --release-n or "
+                f"re-decide the guarantee; pro-rating it silently would make it not a "
+                f"guarantee.")
+        return min(cand, key=lambda h: (placed[h], -n_cand[h], h))
+
+    def _plan_with_guarantees(self, entries_by_head: dict, slot_n: dict) -> tuple:
+        """`(plans, caps, owed, unseatable)` — the slot allocation with the guarantee applied
+        ACROSS the whole release.
+
+        THE GUARANTEE (Matt, 2026-08-10, for-now): every partition with floor-passing supply
+        gets one release slot; the remainder is apportioned by `release_mix` exactly as before.
+        Floor-passing = at least one intake candidate above `floors.GOOD_FLOOR`
+        (`self.good_supply`) — the higher of the two floors, deliberately (`RI.passes_good`).
+
+        WHY IT IS A FIXED POINT AND NOT A ONE-PASS PATCH. The guarantee is defined on the WHOLE
+        release ("a partition served by either head counts as served"), and the two heads are
+        planned separately, so seating a guarantee in one head removes a mix slot that may have
+        been the ONLY thing serving some other supplied partition. Each round re-plans both
+        heads under the guarantees placed so far and re-asks which supplied partitions still
+        emit nothing; a round that finds none is the answer. It terminates because `owed` only
+        grows and is bounded by the partition count.
+
+        "EMITS NOTHING" IS `min(slots, cap)`, NOT `slots == 0` (`RI.would_emit`). A partition
+        the mix seats but the thin-supply cap zeroes ships no tile, and a guarantee that
+        counted it as served would be a guarantee of an allocation rather than of a wallpaper.
+
+        `unseatable` names supplied partitions with NO scored candidate in either head pass:
+        reported and short-filled, never raised, because that is a colorize/supply outcome and
+        no slot rule can fix it. The other way to fail — candidates exist but every head that
+        could seat them is full of guarantees — DOES raise (`_guarantee_head`), because that
+        one is the policy exceeding N."""
+        supplied = [p for p, n in sorted((self.good_supply or {}).items()) if n >= 1]
+        seatable = [p for p in supplied
+                    if any(any(e["type"] == p for e in entries_by_head[h]) for h in entries_by_head)]
+        unseatable = [p for p in supplied if p not in seatable]
+        owed: dict = {}
+        while True:
+            plans, caps = {}, {}
+            for h in entries_by_head:
+                plans[h], caps[h] = self._slot_plan(
+                    entries_by_head[h], slot_n[h],
+                    {p for p, hh in owed.items() if hh == h})
+            emits = {p: sum(RI.would_emit(plans[h].get(p, 0), caps[h].get(p))
+                            for h in plans) for p in seatable}
+            short = [p for p in seatable if p not in owed and emits[p] == 0]
+            if not short:
+                return plans, caps, owed, sorted(unseatable)
+            for p in short:
+                h = self._guarantee_head(p, entries_by_head, slot_n, owed)
+                if h is None:
+                    seatable.remove(p)
+                    unseatable.append(p)
+                    continue
+                owed[p] = h
 
     def select_release(self):
         """Head-split RANK release selection — the two heads are NEVER compared in one step.
@@ -1414,6 +1515,11 @@ class EmissionDiversity:
         release-eligible strange tiles lost every slot to smooth in the v1 release. Slot
         budget: strange_slots = round(N·strange_frac), smooth = N − strange.
 
+        THE SLOT GUARANTEE (2026-08-10) is applied across BOTH passes before either runs:
+        every partition with floor-passing supply gets one slot somewhere in the release, the
+        remainder is the mix as before. `_plan_with_guarantees` decides which head owes what;
+        the two passes below are otherwise unchanged.
+
         Honest short-fill: a head that cannot fill its quota under the caps ships fewer. Never
         pad, never backfill from the other head, and never redistribute a slot a thin partition
         could not use — a redistributed slot is the thin-supply rule undone one level up."""
@@ -1426,13 +1532,22 @@ class EmissionDiversity:
         # ONE cluster counter across both passes — the cap is per RUN (§4).
         cluster_used: dict = {}
         sm_entries, st_entries = self._release_entries(smooth), self._release_entries(strange)
-        sm_slots, sm_caps = self._slot_plan(sm_entries, smooth_slots)
-        st_slots, st_caps = self._slot_plan(st_entries, strange_slots)
-        sm_sel, sm_log = SEL.rank_select(sm_entries, sm_slots, sm_caps, cluster_used)
-        st_sel, st_log = SEL.rank_select(st_entries, st_slots, st_caps, cluster_used)
+        entries_by_head = {"smooth": sm_entries, "strange": st_entries}
+        slot_n = {"smooth": smooth_slots, "strange": strange_slots}
+        plans, caps, owed, unseatable = self._plan_with_guarantees(entries_by_head, slot_n)
+        sm_slots, sm_caps = plans["smooth"], caps["smooth"]
+        st_slots, st_caps = plans["strange"], caps["strange"]
+        guar = {h: {p for p, hh in owed.items() if hh == h} for h in entries_by_head}
+        sm_sel, sm_log = SEL.rank_select(sm_entries, sm_slots, sm_caps, cluster_used,
+                                         guaranteed=guar["smooth"])
+        st_sel, st_log = SEL.rank_select(st_entries, st_slots, st_caps, cluster_used,
+                                         guaranteed=guar["strange"])
         selected = sm_sel + st_sel
         log = sm_log + st_log
         self.release_log = log
+        # Per-slot provenance, keyed by candidate id, for the durable release record.
+        self.slot_source = {l["id"]: l["slot_source"] for l in log
+                            if l.get("picked") and l.get("slot_source")}
 
         self.release_split = {
             "strange_frac_target": self.strange_frac,
@@ -1446,6 +1561,16 @@ class EmissionDiversity:
             "partition_slots": {"smooth": sm_slots, "strange": st_slots},
             "emit_caps": dict(self.emit_caps),
             "passing_supply": dict(self.passing_supply),
+            # THE SLOT GUARANTEE's whole state, so a sheet or a later readout can say which
+            # slots were guarantees without re-deriving the allocation.
+            "slot_guarantee": {
+                "good_floor": F.GOOD_FLOOR,
+                "good_supply": dict(self.good_supply),
+                "owed_by_head": {h: sorted(v) for h, v in sorted(guar.items())},
+                "unseatable": list(unseatable),
+                "n_guarantee_slots": sum(1 for v in self.slot_source.values()
+                                         if v == "guarantee"),
+            },
         }
         self.release_short_fill = {
             "requested": self.release_n, "eligible": len(eligible), "selected": len(selected),
@@ -1456,9 +1581,18 @@ class EmissionDiversity:
         thin = [p for p, n in sorted(self.passing_supply.items()) if not self.emit_caps.get(p)]
         if thin:
             print(f"[select] thin supply — emit 0 (floor(passing/"
-                  f"{F.THIN_SUPPLY_DIVISOR}) == 0): "
+                  f"{F.THIN_SUPPLY_DIVISOR}) == 0) beyond any guaranteed slot: "
                   + ", ".join(f"{p} {self.passing_supply[p]} above floor" for p in thin),
                   flush=True)
+        if owed:
+            print(f"[select] slot guarantee (>=1 candidate above the {F.GOOD_FLOOR:g} good "
+                  f"floor): " + ", ".join(f"{p}→{h}" for p, h in sorted(owed.items()))
+                  + f" — {self.release_split['slot_guarantee']['n_guarantee_slots']} of "
+                    f"{len(selected)} pick(s) are guarantee slots", flush=True)
+        if unseatable:
+            print(f"[select] slot guarantee UNSEATABLE for {unseatable} — floor-passing supply "
+                  f"but no scored candidate in either head pass (a colorize/supply fact, not a "
+                  f"slot one)", flush=True)
         if len(selected) < self.release_n:
             print(f"[select] SHORT-FILL {len(selected)}/{self.release_n}: smooth "
                   f"{len(sm_sel)}/{smooth_slots} (elig {len(smooth)}) + strange "

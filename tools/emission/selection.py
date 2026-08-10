@@ -3,9 +3,11 @@
 `rank_select` — THE LIVE RULE since 2026-08-09 (prompts/selection_restructure_1.md). Top-N by
 the head's own score, under two caps: a per-partition slot allocation crossed with the
 thin-supply emit cap (`ranked_intake`), and at most `CLUSTER_CAP` picks per morph cluster per
-run. Nothing else discounts a candidate — the diversity that `greedy_select` bought with a
-continuous kernel is bought here by the cluster cap, which is a rule a human can read off a
-sheet ("no more than two from one look") instead of a marginal-gain number.
+run — plus, since 2026-08-10, the SLOT GUARANTEE, the one thing that can raise a partition's
+budget instead of lowering it (`guaranteed`, below). Nothing else discounts a candidate — the
+diversity that `greedy_select` bought with a continuous kernel is bought here by the cluster
+cap, which is a rule a human can read off a sheet ("no more than two from one look") instead
+of a marginal-gain number.
 
 `greedy_select` WAS HERE AND IS GONE (2026-08-09, prompts/selection_restructure_3.md). It was
 max-marginal-gain over a morph-CLIP coverage kernel: `niche_relative_quality(c) ×
@@ -44,7 +46,7 @@ CATEGORICAL_AXES = ("type", "cluster", "flavor", "style")
 
 
 def rank_select(entries: list, slots: dict, caps: dict, cluster_used: dict | None = None,
-                cluster_cap: int = CLUSTER_CAP) -> tuple:
+                cluster_cap: int = CLUSTER_CAP, guaranteed=()) -> tuple:
     """Top-N by score, per partition, under a slot budget, a supply cap and a cluster cap.
 
     `entries`  the SAME dicts `greedy_select` takes (id, type, cluster, flavor, style, score);
@@ -60,6 +62,18 @@ def rank_select(entries: list, slots: dict, caps: dict, cluster_used: dict | Non
     `cluster_used`  a mutable `{cluster: count}` carried ACROSS calls, so the cap is per RUN
                and not per pass. Two disjoint head passes over the same locations would
                otherwise each be free to take two tiles of one look. Mutated in place.
+    `guaranteed`  the partitions THIS pass owes a guaranteed slot (2026-08-10). Two effects,
+               both on the FIRST pick only: the budget floors at 1, which is the guarantee
+               overriding the thin-supply cap (`emit = min(slots, floor(passing/4))` still
+               governs every slot beyond it); and that pick's log row is stamped
+               `slot_source="guarantee"` instead of `"mix"`. The caller decides membership —
+               the guarantee is one slot across the WHOLE release and only the driver sees both
+               head passes — so a partition named here is one that would otherwise emit NOTHING,
+               never merely one with supply.
+
+    THE CLUSTER CAP STILL OUTRANKS THE GUARANTEE. A guaranteed partition whose only candidates
+    sit in saturated morph clusters ships nothing and short-fills, exactly as before: the
+    guarantee buys a slot and the right to spend it, not a second tile of a look already taken.
 
     Returns `(selected, log)`. `selected` is ordered partition-major (partitions in slot-map
     order, each partition's picks best-first); `log` carries one row per pick with the
@@ -72,14 +86,18 @@ def rank_select(entries: list, slots: dict, caps: dict, cluster_used: dict | Non
     smooth in the v1 release). The driver calls this once per head and allocates the head
     budget outside — exactly as it did with `greedy_select`."""
     used = cluster_used if cluster_used is not None else {}
+    guar = set(guaranteed)
     by_part: dict = defaultdict(list)
     for e in entries:
         by_part[e["type"]].append(e)
     selected: list = []
     log: list = []
     for part in slots:
-        budget = min(int(slots.get(part, 0)),
-                     int(caps[part]) if part in caps else int(slots.get(part, 0)))
+        n_slots = int(slots.get(part, 0))
+        budget = min(n_slots, int(caps[part]) if part in caps else n_slots)
+        owed = part in guar and n_slots >= 1
+        if owed:
+            budget = max(budget, 1)
         pool = sorted(by_part.get(part, []), key=lambda e: (-float(e["score"]), str(e["id"])))
         took = 0
         for rank, e in enumerate(pool):
@@ -92,12 +110,15 @@ def rank_select(entries: list, slots: dict, caps: dict, cluster_used: dict | Non
                             "picked": False, "skip": "cluster_cap"})
                 continue
             used[cl] = used.get(cl, 0) + 1
-            took += 1
             selected.append(e)
             log.append({"id": e["id"], "partition": part, "cluster": cl,
                         "rank_in_partition": rank, "score": round(float(e["score"]), 4),
                         "picked": True, "skip": None,
-                        "slots": int(slots.get(part, 0)),
+                        "slots": n_slots,
                         "supply_cap": (int(caps[part]) if part in caps else None),
+                        # PER-SLOT PROVENANCE. The guarantee is one slot, so it is the FIRST
+                        # pick of an owed partition; everything after it came out of the mix.
+                        "slot_source": "guarantee" if (owed and took == 0) else "mix",
                         "cluster_count": used[cl]})
+            took += 1
     return selected, log

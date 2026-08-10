@@ -24,6 +24,7 @@ from tools.emission import selection as SEL     # noqa: E402
 from tools.emission import descriptor as D     # noqa: E402
 from tools.emission import floors as FL        # noqa: E402
 from tools.emission import ranked_intake as RI  # noqa: E402
+import release_mix as RM                        # noqa: E402  THE release-mix ratio table
 from tools.emission.pool import Pool           # noqa: E402
 import corpus_common as cc                     # noqa: E402  (batch/corpus helpers)
 from production_pins import ACTIVE_VERSION as _ACTIVE_VERSION  # noqa: E402
@@ -355,10 +356,15 @@ def _gate_rec(id, loc, style, p_ge3, cell):
             "p_ge3": p_ge3, "passed": True, "head": B.head_for_style(style)}
 
 
-def _supply(eng, **per_partition):
+def _supply(eng, good=None, **per_partition):
     """Give a hand-built engine the intake supply census `select_release` reads. A pool-only
-    fixture never ran `intake()`, and the thin-supply cap has to come from somewhere."""
+    fixture never ran `intake()`, and the thin-supply cap has to come from somewhere.
+
+    `good` is the count above `floors.GOOD_FLOOR` per partition — the slot guarantee's trigger
+    — and defaults to the junk-floor counts, i.e. "all of this supply is good". Pass it
+    explicitly to build the case the two floors disagree about."""
     eng.passing_supply = dict(per_partition)
+    eng.good_supply = dict(per_partition if good is None else good)
     eng.emit_caps = {p: RI.emit_cap(n) for p, n in per_partition.items()}
     return eng
 
@@ -415,24 +421,113 @@ def test_a_release_now_ships_rows_the_retired_floors_would_have_cut(tmp_path):
     assert eng.release_split["strange_selected"] == 2
 
 
-def test_a_thin_partition_emits_nothing(tmp_path):
-    """§3. `emit = min(slots, floor(passing_supply / 4))`. A partition with 3 floor-passing
-    candidates mined emits ZERO even though it has a 0.99 row sitting in the pool — the point
-    of the rule is that it refuses to ship a partition's least-bad row. Paired with the ample
-    case above, which is the same code path with supply 40."""
+def test_a_thin_partition_emits_nothing_unless_the_guarantee_seats_it(tmp_path):
+    """§3 as amended by the slot guarantee (2026-08-10). `emit = min(slots, floor(passing / 4))`
+    still governs, but NOT the first slot: a partition with 3 junk-floor-passing candidates has
+    emit cap 0 and ships one tile anyway, because at least one of those candidates is above the
+    GOOD floor and the guarantee overrides the cap for exactly one slot.
+
+    The pair that keeps the thin-supply rule real is the second half: the same 3-row supply
+    with NOTHING above the good floor emits zero, unchanged. The guarantee is triggered by good
+    supply, not by any supply, which is why it can override the cap without deleting it."""
     eng = _supply(B.EmissionDiversity(_args(tmp_path, release_n=4)), mandelbrot=3)
     eng.embs = {}
     eng.pool.append(_gate_rec("em_0", "l0", "smooth", 0.99,
                               ("mandelbrot", "m#0", "k16:1", "smooth")))
-    selected, _log = eng.select_release()
-    assert selected == []
-    assert eng.release_short_fill["short_by"] == 4
-    # ...and one more mined-and-passing row flips it on: 4 // 4 == 1
-    eng2 = _supply(B.EmissionDiversity(_args(tmp_path / "b", release_n=4)), mandelbrot=4)
+    selected, log = eng.select_release()
+    assert [e["_rec"]["id"] for e in selected] == ["em_0"]
+    assert eng.slot_source == {"em_0": "guarantee"}
+    assert eng.release_short_fill["short_by"] == 3
+
+    # nothing above the good floor: the thin-supply zero stands, exactly as before.
+    eng2 = _supply(B.EmissionDiversity(_args(tmp_path / "b", release_n=4)),
+                   good={"mandelbrot": 0}, mandelbrot=3)
     eng2.embs = {}
     eng2.pool.append(_gate_rec("em_0", "l0", "smooth", 0.99,
                                ("mandelbrot", "m#0", "k16:1", "smooth")))
-    assert len(eng2.select_release()[0]) == 1
+    assert eng2.select_release()[0] == []
+    assert eng2.release_short_fill["short_by"] == 4
+
+    # ...and beyond the guaranteed slot the cap is untouched: 40 passing → 10, three pooled
+    # rows → three picks, all of them `mix` because the mix seated the partition anyway.
+    eng3 = _supply(B.EmissionDiversity(_args(tmp_path / "c", release_n=4, strange_frac=0.0)),
+                   mandelbrot=40)
+    eng3.embs = {}
+    for k in range(3):
+        eng3.pool.append(_gate_rec(f"em_{k}", f"l{k}", "smooth", 0.9 - k * 0.1,
+                                   ("mandelbrot", f"m#{k}", "k16:1", "smooth")))
+    sel3, _ = eng3.select_release()
+    assert len(sel3) == 3 and set(eng3.slot_source.values()) == {"mix"}
+
+
+def test_the_guarantee_seats_a_partition_the_mix_structurally_zeroes(tmp_path):
+    """THE production defect (run 25): at N=12 over the ten registered partitions the mix seats
+    six and zeroes four, so `phoenix:classic` shipped nothing off 23 floor-passing rows. One
+    pooled smooth + one pooled strange row per partition, ample supply everywhere.
+
+    The release comes out as the policy states it: every supplied partition ships exactly one,
+    and the REMAINDER — 12 slots minus 10 partitions — goes to the two ratio-3 partitions,
+    which is `release_mix` doing its job on what is left after the guarantee.
+
+    The guarantee count is 7, not the 4 the mix zeroes at 6 slots, and that CASCADE is the
+    reason `_plan_with_guarantees` is a fixed point: seating the first four consumes mix slots
+    that were the only thing serving three more partitions, which then need guarantees of their
+    own. A one-pass patch would have shipped 9 partitions and called it done."""
+    parts = sorted(RM.RATIO)
+    eng = _supply(B.EmissionDiversity(_args(tmp_path, release_n=12, strange_frac=0.5)),
+                  **{p: 40 for p in parts})
+    eng.embs = {}
+    for i, p in enumerate(parts):
+        for style in ("smooth", "tia"):
+            eng.pool.append(_gate_rec(f"em_{i}_{style}", f"l{i}_{style}", style, 0.9 - i * 0.01,
+                                      (p, f"c#{i}_{style}", "k16:1", style)))
+    # the defect, first: the unguaranteed mix zeroes four of the ten at one head's six slots.
+    zeroed = sorted(p for p, k in RI.partition_slots(RM.shares(parts), 6).items() if not k)
+    assert "phoenix:classic" in zeroed and len(zeroed) == 4
+
+    from collections import Counter
+    selected, _log = eng.select_release()
+    assert len(selected) == 12
+    by_part = Counter(e["_rec"]["type"] for e in selected)
+    assert sorted(by_part) == parts, "every supplied partition is in the release"
+    assert sorted(p for p, k in by_part.items() if k == 2) == ["julia:mandelbrot", "mandelbrot"]
+    guar = eng.release_split["slot_guarantee"]
+    owed = sorted(p for h in guar["owed_by_head"] for p in guar["owed_by_head"][h])
+    assert set(zeroed) <= set(owed) and len(owed) == 7          # the cascade, not four
+    assert guar["n_guarantee_slots"] == 7 and guar["unseatable"] == []
+    assert sum(1 for v in eng.slot_source.values() if v == "mix") == 5
+
+
+def test_the_guarantee_is_one_slot_across_the_release_not_one_per_head(tmp_path):
+    """"A partition served by either head counts as served." A partition with a thin (cap 0)
+    supply and candidates in BOTH heads gets exactly ONE tile, not one per pass — the two head
+    passes are planned separately, so this is the property that has to be checked rather than
+    assumed."""
+    eng = _supply(B.EmissionDiversity(_args(tmp_path, release_n=4, strange_frac=0.5)),
+                  mandelbrot=40, phoenix=2)
+    eng.embs = {}
+    eng.pool.append(_gate_rec("m_s", "lm", "smooth", 0.99,
+                              ("mandelbrot", "m#0", "k16:1", "smooth")))
+    eng.pool.append(_gate_rec("m_t", "lmt", "tia", 0.99, ("mandelbrot", "m#1", "k16:1", "tia")))
+    eng.pool.append(_gate_rec("p_s", "lp", "smooth", 0.5, ("phoenix", "p#0", "k16:1", "smooth")))
+    eng.pool.append(_gate_rec("p_t", "lpt", "tia", 0.5, ("phoenix", "p#1", "k16:1", "tia")))
+    selected, _log = eng.select_release()
+    assert sum(1 for e in selected if e["_rec"]["type"] == "phoenix") == 1
+    assert sum(1 for v in eng.slot_source.values() if v == "guarantee") == 1
+
+
+def test_a_supplied_partition_nobody_colorized_is_reported_not_raised(tmp_path):
+    """Floor-passing supply with no SCORED candidate in either head cannot be seated by any
+    slot rule. That is a colorize/supply fact, so it is named in the record (`unseatable`) and
+    the release ships short — never an exception, and never a slot held open for it."""
+    eng = _supply(B.EmissionDiversity(_args(tmp_path, release_n=4, strange_frac=0.0)),
+                  mandelbrot=40, multibrot5=8)
+    eng.embs = {}
+    eng.pool.append(_gate_rec("em_0", "l0", "smooth", 0.9,
+                              ("mandelbrot", "m#0", "k16:1", "smooth")))
+    selected, _log = eng.select_release()
+    assert [e["_rec"]["id"] for e in selected] == ["em_0"]
+    assert eng.release_split["slot_guarantee"]["unseatable"] == ["multibrot5"]
 
 
 def test_at_most_two_picks_per_morph_cluster_per_run(tmp_path):
