@@ -10,7 +10,9 @@ reproduce the pilot priority exactly, plus the F0.5 keeper-cut metric math.
 from __future__ import annotations
 
 import collections
+import inspect
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -23,6 +25,7 @@ for _p in (HERE, HERE.parent):
 
 import run_record             # noqa: E402  (the segmented run-record reader)
 import steered_frontier as sf   # noqa: E402
+import visited_density as vd    # noqa: E402  (the cross-run saturation memory)
 
 
 # =========================================================================== #
@@ -133,8 +136,14 @@ def _push_children_node(cand, **over):
         batch_i=3, totals=collections.Counter(),
         prio_log=over.pop("prio_log"), sat_log=over.pop("sat_log"),
         _stream_writers={},
+        # cross-run saturation memory: OFF unless a caller hands in an index, so every test
+        # written before it existed keeps measuring what it was written to measure.
+        sat_on=over.pop("sat_on", False), sat_strength=over.pop("sat_strength", 0.0),
+        sat_index=over.pop("sat_index", None), sat_by_partition={},
     )
+    obj.__dict__.update(over)
     obj.prune_frontier = types.MethodType(lambda s: None, obj)
+    obj.visited_density_of = types.MethodType(sf.SteeredFrontier.visited_density_of, obj)
     # The prio log goes through the REAL `_writer` (run_record.SegmentWriter), not a
     # stub: it is the append path the stub is standing in front of, and a fake that
     # skipped it would let the rebuild write to a stream nothing rotates.
@@ -182,6 +191,193 @@ def test_push_children_does_not_invent_a_stamp_the_candidate_never_had(tmp_path)
                                      man=None),
                                prio_log=tmp_path / "prio_terms.jsonl", sat_log=tmp_path / "s.jsonl")
     assert not node["triggered"] and node["phoenix"] is None
+
+
+class _MorphStub:
+    """The three members the per-batch saturation row reads off `MorphMemory`. A real one
+    would load CLIP; the row only ever asks it how big it is."""
+    n_perm = 0
+    n_recency = 0
+
+    def __len__(self):
+        return 0
+
+
+# =========================================================================== #
+# v1.7 CROSS-RUN SATURATION MEMORY. Three things have to hold, and only the first is about
+# arithmetic: the discount must reorder a breadth queue in visited territory, it must reach
+# NOTHING ELSE (roots, maneuvers, dive, cross-partition allocation), and it must stay soft.
+# =========================================================================== #
+def test_the_saturation_discount_scales_eord_and_leaves_every_other_term_alone():
+    """The form is `eord * 1/(1+s*d)` and NOT a subtraction, which is what bounds it below."""
+    prio, terms = sf.priority_terms(2.0, 0.1, 0.3, 0.0, 0.0, 0.02, 5, 0.85, 0.974,
+                                    sat_density=3, sat_strength=1.0)
+    assert terms["sat_disc"] == pytest.approx(0.25)
+    assert terms["sat_density"] == 3
+    assert prio == pytest.approx(2.0 * 0.25 + 0.1 - 0.3 + 0.02 * 5)
+    # the untouched terms are byte-identical to the same call with the memory off
+    _, off = sf.priority_terms(2.0, 0.1, 0.3, 0.0, 0.0, 0.02, 5, 0.85, 0.974)
+    for k in ("gumbel", "dup_pen", "nov_pen", "depth_bonus"):
+        assert off[k] == terms[k]
+
+
+def test_priority_is_byte_identical_when_the_memory_is_off_however_saturated():
+    """The acceptance guarantee for `--sat-strength 0`, straddled: even a density of 10,000
+    must move nothing, or 'off reproduces v1.6' is false in exactly the runs that matter."""
+    for d in (0, 1, 10_000):
+        prio, terms = sf.priority_terms(1.3, 0.02, 0.1, 0.99, 0.5, 0.02, 7, 0.85, 0.974,
+                                        sat_density=d, sat_strength=0.0)
+        base, bterms = sf.priority_terms(1.3, 0.02, 0.1, 0.99, 0.5, 0.02, 7, 0.85, 0.974)
+        assert prio == base and terms["sat_disc"] == 1.0 == bterms["sat_disc"]
+
+
+def test_a_visited_candidate_LOSES_its_queue_place_to_a_fresh_lower_scoring_one(tmp_path):
+    """THE behavioural claim, with its control. Two candidates in one partition: the better
+    score sits in territory a prior run already covered, the worse one is fresh. With the
+    memory ON the fresh one must rank first; with it OFF (same seed, same everything) the
+    visited one must still rank first — or the reordering above proves nothing about the
+    mechanism and everything about the fixture."""
+    import types
+    import numpy as np
+    idx = vd.VisitedIndex(0.3)
+    for _ in range(4):                       # four prior visits shadowing (0.10, 0.20)
+        idx.add("multibrot3", None, 0.10, 0.20, 0.5)
+
+    def order(sat_on):
+        obj = types.SimpleNamespace(
+            frontier=[], node_embs={}, clouds={}, rng=np.random.default_rng(11),
+            lambda_m=0.0, beta=0.0, morph_lo=0.85, morph_hi=0.974, sat_cos=0.9666,
+            batch_i=1, totals=collections.Counter(), sat_by_partition={},
+            prio_log=tmp_path / f"prio_terms_{sat_on}" / "prio_terms.jsonl",
+            sat_log=tmp_path / f"s_{sat_on}.jsonl",
+            _stream_writers={}, sat_on=sat_on, sat_strength=1.0, sat_index=idx,
+            morph=_MorphStub())
+        obj.prune_frontier = types.MethodType(lambda s: None, obj)
+        obj._writer = types.MethodType(sf.SteeredFrontier._writer, obj)
+        obj.visited_density_of = types.MethodType(sf.SteeredFrontier.visited_density_of, obj)
+        sf.SteeredFrontier.push_children(obj, [
+            _cand(node_id=1, cx=0.10, cy=0.20, cheap_eord=1.60, man=None, triggered=None),
+            _cand(node_id=2, cx=-1.30, cy=0.90, cheap_eord=1.10, man=None, triggered=None),
+        ])
+        return [n["node_id"] for n in sorted(obj.frontier, key=lambda n: -n["priority"])], obj
+
+    on_order, on_obj = order(True)
+    off_order, _ = order(False)
+    assert off_order == [1, 2], "CONTROL: without the memory the visited candidate wins"
+    assert on_order == [2, 1], "the discount did not move the order in visited territory"
+    assert on_obj.sat_by_partition["multibrot3"] == dict(n=2, discounted=1, density_sum=4)
+
+
+def test_the_discount_never_makes_a_candidate_unpoppable(tmp_path):
+    """'Strongly disfavoured, never impossible': a candidate under a thousand prior visits
+    still carries a finite priority and still sorts against its peers."""
+    import types
+    import numpy as np
+    idx = vd.VisitedIndex(0.3)
+    for i in range(1000):
+        idx.add("multibrot3", None, 0.10 + 1e-9 * i, 0.20, 0.5)
+    obj = types.SimpleNamespace(
+        frontier=[], node_embs={}, clouds={}, rng=np.random.default_rng(3),
+        lambda_m=0.0, beta=0.0, morph_lo=0.85, morph_hi=0.974, sat_cos=0.9666,
+        batch_i=1, totals=collections.Counter(), sat_by_partition={},
+        prio_log=tmp_path / "prio_terms.jsonl", sat_log=tmp_path / "s.jsonl",
+        _stream_writers={},
+        sat_on=True, sat_strength=1.0, sat_index=idx, morph=_MorphStub())
+    obj.prune_frontier = types.MethodType(lambda s: None, obj)
+    obj._writer = types.MethodType(sf.SteeredFrontier._writer, obj)
+    obj.visited_density_of = types.MethodType(sf.SteeredFrontier.visited_density_of, obj)
+    sf.SteeredFrontier.push_children(obj, [_cand(cx=0.10, cy=0.20, cheap_eord=2.0, man=None)])
+    node = obj.frontier[0]
+    assert math.isfinite(node["priority"])
+    assert obj.totals["sat_mem_density_sum"] == 1000
+
+
+def test_the_density_query_keys_on_the_candidates_own_dynamical_plane(tmp_path):
+    """`visited_density_of` routes the identity through `ident_c`, so a julia candidate is
+    compared only against prior visits on ITS seed c. Without this the julia channels read as
+    saturated by every other c ever walked at the same z (measured on the calibration
+    population: julia:mandelbrot 46.3% shadowed z-only vs 9.7% identity-aware)."""
+    import types
+    idx = vd.VisitedIndex(0.3)
+    idx.add("julia:mandelbrot", (-0.75, 0.10), 0.0, 0.0, 1.0)
+    obj = types.SimpleNamespace(sat_on=True, sat_index=idx)
+    q = types.MethodType(sf.SteeredFrontier.visited_density_of, obj)
+    assert q(dict(partition="julia:mandelbrot", c=("-0.75", "0.10"), cx=0.05, cy=0.0)) == 1
+    assert q(dict(partition="julia:mandelbrot", c=("0.30", "-0.40"), cx=0.05, cy=0.0)) == 0
+
+
+def test_the_saturation_discount_reaches_only_push_children():
+    """SCOPE, as a source property because that is what the claim is about: roots and
+    maneuver-originated nodes build their own priority inline and must never acquire the
+    discount — the prompt's dive/quality exemption is exactly this. `priority_terms` is the
+    one door, and `push_children` is the only caller."""
+    src = inspect.getsource(sf)
+    callers = [ln for ln in src.splitlines() if "priority_terms(" in ln
+               and "def priority_terms" not in ln]
+    assert len(callers) == 1, callers
+    for method in (sf.SteeredFrontier.draw_roots, sf.SteeredFrontier._consume_maneuver):
+        body = inspect.getsource(method)
+        assert "priority_terms" not in body and "sat_index" not in body, method.__name__
+        assert "NEUTRAL_PRIOR" in body or "prior" in body
+
+
+def test_cross_partition_allocation_never_sees_a_priority():
+    """The other half of the scope claim: the discount must not reach the pop-quota /
+    scheduler choice. Both pops pick the partition from QUEUE LENGTHS and only then sort, so
+    a per-candidate discount cannot move which partition is served."""
+    for method in (sf.SteeredFrontier.pop_batch_quota, sf.SteeredFrontier.pop_batch_scheduled):
+        src = inspect.getsource(method)
+        pick = next(i for i, ln in enumerate(src.splitlines()) if ".pick" in ln)
+        sort = next(i for i, ln in enumerate(src.splitlines()) if "sort(key=" in ln)
+        assert pick < sort, f"{method.__name__}: the partition choice must precede the sort"
+
+
+def test_dive_mode_switches_the_memory_off_rather_than_building_it_unread():
+    """A loaded index the dive loop cannot consult is 0.4 s and a run_config stamp that reads
+    like a live mechanism. Pinned on the constructor line so the two facts stay together."""
+    src = inspect.getsource(sf.SteeredFrontier.__init__)
+    assert "self.sat_on = self.sat_strength > 0.0 and not self.dive" in src
+
+
+def test_the_saturation_summary_says_OFF_rather_than_reporting_zeros():
+    """A run with the memory off and a run whose memory found nothing both tally zero, and
+    those are opposite facts (§2: absence is not a measurement)."""
+    import types
+    off = sf.SteeredFrontier.saturation_memory_summary(types.SimpleNamespace(
+        totals={}, sat_on=False, dive=False, sat_k=0.3, sat_strength=0.0,
+        sat_build_s=0.0, sat_index=None, sat_by_partition={}))
+    assert off["status"] == "off" and off["discounted_frac"] is None
+    empty = sf.SteeredFrontier.saturation_memory_summary(types.SimpleNamespace(
+        totals=dict(sat_mem_scored=500, sat_mem_discounted=0, sat_mem_density_sum=0),
+        sat_on=True, dive=False, sat_k=0.3, sat_strength=1.0, sat_build_s=0.4,
+        sat_index=None, sat_by_partition={"mandelbrot": dict(n=500, discounted=0,
+                                                             density_sum=0)}))
+    assert empty["status"] == "on" and empty["discounted_frac"] == 0.0
+    assert empty["by_partition"]["mandelbrot"]["mean_density_when_discounted"] is None
+
+
+def test_the_per_batch_row_writes_null_not_zero_for_the_half_that_did_not_run(tmp_path):
+    """`saturation.jsonl` carries two soft-term telemetries now. A `frac: 0.0` written by a
+    run that never measured novelty would be averaged in as a real observation by
+    `campaign2_readout` / `steered_v1_2_dive_report`."""
+    import types
+    import numpy as np
+    idx = vd.VisitedIndex(0.3)
+    idx.add("multibrot3", None, 0.1, 0.2, 0.5)
+    sat_log = tmp_path / "saturation.jsonl"
+    obj = types.SimpleNamespace(
+        frontier=[], node_embs={}, clouds={}, rng=np.random.default_rng(0),
+        lambda_m=0.0, beta=0.0, morph_lo=0.85, morph_hi=0.974, sat_cos=0.9666,
+        batch_i=2, totals=collections.Counter(), sat_by_partition={},
+        prio_log=tmp_path / "prio_terms.jsonl", sat_log=sat_log, _stream_writers={},
+        sat_on=True, sat_strength=1.0, sat_index=idx, morph=_MorphStub())
+    obj.prune_frontier = types.MethodType(lambda s: None, obj)
+    obj._writer = types.MethodType(sf.SteeredFrontier._writer, obj)
+    obj.visited_density_of = types.MethodType(sf.SteeredFrontier.visited_density_of, obj)
+    sf.SteeredFrontier.push_children(obj, [_cand(cx=0.1, cy=0.2, man=None)])
+    row = json.loads(sat_log.read_text(encoding="utf-8").strip())
+    assert row["sat"] is None and row["frac"] is None, "morph half must be null, not 0"
+    assert row["visited"]["by_partition"]["multibrot3"] == dict(n=1, discounted=1, frac=1.0)
 
 
 def test_expand_group_reads_the_stamps_back_off_the_node():
@@ -1481,11 +1677,13 @@ def test_every_crawl_only_constructor_attribute_is_declared():
         f"next real one.")
 
 
-def test_the_declared_set_is_the_measured_41_and_every_entry_carries_a_reason():
+def test_the_declared_set_is_the_measured_42_and_every_entry_carries_a_reason():
     """Non-vacuity for the gate above: an empty or trivially-satisfied analysis would pass
-    it. 41 is what the 2026-08-05 reachability measured, and a reason string that says
-    nothing is the same as no declaration."""
-    assert len(sf.DIVE_IGNORES) == 41, len(sf.DIVE_IGNORES)
+    it. 41 is what the 2026-08-05 reachability measured; +1 on 2026-08-09 for
+    `sat_by_partition` (the saturation memory's per-partition tally — its four knobs stayed
+    OUT of the table because `write_run_config` reads them on both paths). A reason string
+    that says nothing is the same as no declaration."""
+    assert len(sf.DIVE_IGNORES) == 42, len(sf.DIVE_IGNORES)
     assert _sf_crawl_only(), "the reachability analysis found nothing — it is not running"
     for attr, why in sf.DIVE_IGNORES.items():
         assert isinstance(why, str) and len(why) > 20, f"{attr}: reason is not a reason"

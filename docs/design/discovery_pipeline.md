@@ -442,3 +442,133 @@ measured on the same file as the alternative and is not competitive: `atom_key` 
 compressed bytes, `screen.interior_radial` −7.4%, every null −0.9%, each paying real
 information. Result: the same five runs go from 12–114 MB to **1.6–17.0 MB projected at 8 h**
 (worst observed rate: `steady_state_v1_20260805`, 17.0 MB tree / 12.4 MB LFS+pack).
+
+## 5. Cross-run saturation memory — the breadth leg stops re-mining what earlier runs mined
+
+Every run before 2026-08-09 started with **no memory of where its predecessors went**. The
+dup cloud starts empty (the freshness prior is off by default, and §2 is why it must stay off
+for dives), so a basin three runs already walked ranked exactly like untouched territory and
+the breadth leg re-bought it. The fix is a **soft, scale-aware discount on the breadth
+candidate's steering weight**, and it is deliberately not a new store:
+
+```
+cheap_eord  *=  1 / (1 + SAT_STRENGTH * density)
+density      =  # prior ledger visits v with dist((cx,cy), v) <= SAT_RADIUS_K * v.fw,
+                in the same partition AND on the same dynamical plane
+```
+
+`tools/atlas/visited_density.py` owns the index; `steered_frontier.SAT_RADIUS_K` (0.30) and
+`SAT_STRENGTH` (1.0) own the knobs, both on flags, both stamped into `run_config.json`.
+
+**The memory IS the ledgers.** `data/**/outcome_ledger.jsonl` already records, durably and per
+run, every place a run confirmed — 15,156 rows over 33 ledgers as of 2026-08-09. Loading them
+at run start costs **0.36 s** and the query costs **≤57 µs per candidate** (measured
+2026-08-09 on the full store; a 32-node batch pays ~1.8 ms against a ~30 s batch), so nothing
+justifies a second store that could drift from the one that already exists. The index is built
+once, EXCLUDES this run's own ledger, and is never mutated — the current run's coverage is
+what the dup cloud and the morph memory are for, and a frozen index is what makes a resume
+rebuild the identical memory. `visited_density.iter_prior_ledger_rows` is the single owner of
+that enumeration, shared with the freshness prior.
+
+**No quality filter and no dedup, unlike `build_cloud`.** A place that was checked and
+rejected was still visited, and `is_good` is a cut on a stored probability whose meaning moves
+with the active head — a quality-filtered cross-run memory would silently re-shape itself at
+every classifier flip. **No decay** either: regions do not un-exhaust, and the answer to "that
+was a while ago" is the dive channel and stage-2 recolor, not a half-life.
+
+**Scale-aware on the VISIT's frame, not the candidate's** — the difference from `near_dup`,
+whose radius is `DEDUP_K * min(a_fw, b_fw)`. A deep confirmation shadows almost nothing; a
+base-scale one shadows a neighbourhood. One run passing through a wide frame does not exhaust
+what is inside it, but a hundred deep confirmations in one basin do exhaust that basin.
+
+**Identity-aware, and this is load-bearing.** Inside a julia or phoenix partition the
+coordinate is a **z-plane** point, so two views at the same z with different seed parameters
+are different fractals — the "over-kill" collapse `build_cloud`'s `row_ident` gate already
+exists to prevent, reached by another route. Measured on the calibration population below: a
+z-only index reads julia:mandelbrot as **46.3%** shadowed at k=0.05 where the identity-aware
+index reads **9.7%**, and julia:multibrot5 as **8.5%** where the true answer is **0.0%** — it
+would discount channels that have never been visited twice, which are exactly the channels the
+next production run exists to serve. The identity is `production_seeder.row_ident`, bucketed on
+a grid of `JULIA_SAME_C_EPS`; two identities within eps but straddling a bucket edge simply do
+not shadow each other, which errs toward LESS discount.
+
+### 5.1 Scope: the breadth leg's ORDER inside one partition, and nothing else
+
+`priority_terms` has exactly one caller, `push_children`, and that is the whole surface:
+
+- **Root draws are exempt** — a root carries `NEUTRAL_PRIOR + gumbel` built inline.
+  `draw_roots` could consult the same index cheaply and deliberately does not: the native
+  seeder's rejection sampler is already a density gate (`count_within(REJECT_RADIUS) >=
+  Q3_DENSITY_CAP`, on the RUN cloud) that was tuned for a cloud starting EMPTY, and feeding it
+  cross-run mass is the exact shape of the part-0 sterilization finding — prior-ON gave a
+  productive-region seed a median ~12 neighbours inside 0.20 and rejected ~98% of seeds on
+  arrival. Root draws stay undiscounted until that sampler is re-tuned as one decision.
+- **Maneuver-originated nodes are exempt** — they build their own priority in
+  `_consume_maneuver` (neutral prior, or the view/range screen percentile) and hold a reserved
+  quota. A ranker cannot evaluate a population it was never trained on, and a slot is not a
+  probability (`measurement_practice.md` §2).
+- **Dive mode is exempt** — `run_dive` never reaches `push_children`, so the index is not built
+  at all there rather than built and unread (`run_config` stamps `n_a`).
+- **Cross-partition allocation is untouched.** `pop_batch_quota` / `pop_batch_scheduled` pick
+  the partition from QUEUE LENGTHS and only then sort that partition's nodes by priority, so a
+  per-candidate discount cannot move which partition is served. Pop-quota targets are computed
+  exactly as before.
+
+**Multiplicative on `eord`, never a subtracted penalty.** `eord` is the head's E[ord] in
+[0, K−1] and the only non-negative term in the priority, so scaling it demotes a candidate
+towards — never below — what an unscored root ranks at, and the Gumbel/depth terms still
+separate the survivors. A saturated place with a great score loses to a fresh place with a
+merely good one and still beats a fresh place with a bad one; a partition whose entire frontier
+is saturated keeps picking its best candidate rather than stalling. A subtraction would be
+unbounded below, i.e. "saturated" would eventually mean "unreachable".
+
+### 5.2 Where `SAT_RADIUS_K = 0.30` comes from
+
+The failure mode is not "too big" in the abstract — it is the one the **morph-novelty term**
+already demonstrated. Re-derived from `steered_run2/prio_terms.jsonl` (38,419 pushed
+candidates): **99.58%** carried a nonzero novelty penalty and **92.88%** sat within 10% of the
+FULL penalty. A term that fires at full strength on 93% of the population subtracts a
+near-constant from every priority and reorders nothing. So the bar is stated against that
+number:
+
+> **saturated share** = fraction of candidates whose discount is within 10% of full
+> (`density >= 9` at strength 1.0). Adopt the largest k whose saturated share stays
+> **≤ 5% pooled and ≤ 10% in every partition**.
+
+Both bars, because a pooled share hides a partition. `tools/atlas/sat_radius_calibrate.py`
+measures it over **46,798** committed `q4_candidates` rows from 8 runs — the widest committed
+record of breadth candidates carrying coordinates *and* the dynamical parameter, which is why
+this cannot be measured on `prio_terms` (it carries neither) — leave-one-run-out against the
+ledger union, later runs included: the estimand is what the NEXT run will face.
+
+| k | discounted | saturated (pooled) | worst partition |
+|---|---|---|---|
+| 0.25 | 26.6% | 0.96% | phoenix 6.1% |
+| **0.30** | **31.1%** | **1.39%** | **phoenix 7.8%** |
+| 0.32 | 33.0% | 1.61% | phoenix 8.7% |
+| 0.35 | 35.5% | 2.61% | phoenix 14.4% ✗ |
+| 1.00 | 59.8% | 10.9% | phoenix 36.7% ✗ |
+
+*[measured: 46,798 q4_candidates rows against 15,156 ledger rows, 2026-08-09,*
+*`uv run python tools/atlas/sat_radius_calibrate.py`]*
+
+The grid crosses the per-partition bar between 0.32 and 0.35; **0.30 is the round value inside
+it with margin**, not the grid maximum. Phoenix is the binding partition and honestly so: 954
+of its 1,933 ledger rows sit on the ONE classic Ushiki plane (930 of them pre-date the phoenix
+parameter axes and resolve to it through `row_phoenix_key`'s Ushiki defaults), which really is
+the most-visited surface in the store. The c-plane natives are the other extreme —
+multibrot4 reads 0.1% discounted at k=0.05 and 19.8% at k=0.25, because four runs barely dent
+a whole parameter plane.
+
+### 5.3 Telemetry
+
+Per candidate: `prio_terms.jsonl` gains `sat_density` and `sat_disc` beside the other terms.
+Per batch and per partition: the existing `saturation.jsonl` row gains a `visited` block
+(`n` / `discounted` / `frac` / `by_partition`) — one file, because both halves answer the same
+question, "is a soft steering term firing on everything?". **The morph half of that row is now
+`null` rather than `0` when `lambda_m == 0`**: a `frac: 0.0` written by a run that never
+measured novelty would be averaged in as a real observation by `campaign2_readout` /
+`steered_v1_2_dive_report`. Per run: `summary.saturation_memory` carries `status`
+(`on` / `off` / `dive_n_a` — a run with the memory off and a run whose memory found nothing
+tally identical zeros and are opposite facts), the index census, and the per-partition
+discounted share.

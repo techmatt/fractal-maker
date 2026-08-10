@@ -99,6 +99,7 @@ import view_fit as vfit                  # noqa: E402  (the staged view_fit v1.1
 # rule. Imported rather than restated: a third literal 0.30 in this tree is how the three
 # drift (`verification_practice.md` §1.8).
 import label_seeded_harvest as lsh       # noqa: E402  (pure mpmath + the view screen)
+import visited_density as vd             # noqa: E402  (cross-run saturation memory; pure)
 
 _INTERIOR_DISCARD = lsh.INTERIOR_DISCARD
 
@@ -165,6 +166,37 @@ DIVE_NOISE_T = 0.02      # small Gumbel tie-break on the dive argmax-child selec
 DUP_P0 = 1.0             # dup-penalty magnitude at zero distance to the q3 cloud (E[ord] units)
 DUP_SCALE = ps.REJECT_RADIUS   # Gaussian decay scale of the dup penalty (plane coords)
 NEUTRAL_PRIOR = 1.0      # root prior priority (mid E[ord] in [0,2])
+
+# --- v1.7 CROSS-RUN SATURATION MEMORY (2026-08-09). The breadth leg's steering weight is
+# discounted by how much of the committed ledger already shadows a candidate's place:
+#     eord *= 1 / (1 + SAT_STRENGTH * density)
+# Mechanism + why the memory is the ledgers rather than a new store: `visited_density.py`.
+# SCOPE, and it is the whole scope: `push_children` and nothing else. Root draws
+# (NEUTRAL_PRIOR), maneuver-originated nodes (their own screen prior + the reserved quota) and
+# the dive path are all EXEMPT by construction — none of them routes through `priority_terms`.
+# The exemption is on the PROPOSAL, not on its whole subtree: a maneuver node's ordinary
+# descendants are found by ordinary descent, carry a `cheap_eord`, and compete in the ordinary
+# queue, so they are discounted like any other breadth candidate. Exempting a lineage forever
+# would need a flag threaded down it, and would make a saturated basin permanently cheap to
+# re-enter through one operator.
+# Cross-partition allocation is untouched: the discount moves an ORDER inside one partition's
+# queue, and `pop_batch_quota`/`pop_batch_scheduled` pick the partition before they ever look
+# at a priority.
+SAT_STRENGTH = 1.0       # discount magnitude; 0 disables the mechanism ENTIRELY (no ledger
+                         # load, no index, priorities byte-identical to v1.6 — and the RNG
+                         # draw order is unchanged either way, nothing here draws).
+SAT_RADIUS_K = 0.30      # a visit at framewidth fw shadows a disc of radius k*fw AROUND
+                         # ITSELF (the visit's fw, never the candidate's — see the module
+                         # docstring). ADOPTED 2026-08-09 from
+                         #   uv run python tools/atlas/sat_radius_calibrate.py
+                         # over 46,798 committed q4_candidates rows (8 runs) leave-one-run-out
+                         # against the 15,156-row ledger union: 31.1% of candidates carry a
+                         # discount and 1.4% land within 10% of full (7.8% in phoenix, the
+                         # worst partition), against the 92.9% at which run 2's morph-novelty
+                         # term degenerated into a constant offset. The grid crosses the
+                         # per-partition bar between 0.32 and 0.35; 0.30 is the round value
+                         # inside it. NOT the dedup radius (ps.DEDUP_K, also 0.25-ish) — that
+                         # one scales on min(a_fw, b_fw) and answers a boolean.
 
 # --- morph-novelty + depth knobs (v1.1; both zero => byte-identical pilot behaviour) ---
 LAMBDA_M_DEFAULT = 0.5   # morph-novelty penalty magnitude (E[ord] units); CLI --lambda-m
@@ -826,14 +858,26 @@ def dup_penalty(cx, cy, cloud) -> float:
     return DUP_P0 * math.exp(-(d / DUP_SCALE) ** 2)
 
 
-def priority_terms(eord, g, dup_pen, cos_max, lambda_m, beta, depth, lo, hi):
-    """Pure priority decomposition. Returns (priority, {terms}). At lambda_m==0 AND beta==0 this
-    is byte-identical to the pilot's `eord + gumbel - dup_pen` (novelty/depth terms vanish)."""
+def priority_terms(eord, g, dup_pen, cos_max, lambda_m, beta, depth, lo, hi,
+                   sat_density=0, sat_strength=0.0):
+    """Pure priority decomposition. Returns (priority, {terms}). At lambda_m==0 AND beta==0 AND
+    sat_strength==0 this is byte-identical to the pilot's `eord + gumbel - dup_pen` (the
+    novelty, depth and saturation terms all vanish).
+
+    THE SATURATION DISCOUNT IS MULTIPLICATIVE ON `eord` AND ADDITIVE ON NOTHING, which is what
+    keeps it soft. `eord` is the head's E[ord] in [0, K-1] and is the only non-negative term
+    here, so scaling it demotes a candidate towards — never below — what an unscored root
+    would rank at, and the Gumbel/depth terms still separate the survivors. A saturated place
+    with a great score therefore loses to a fresh place with a merely good one, and still
+    beats a fresh place with a bad one. Subtracting a penalty instead would be unbounded below
+    and would make "saturated" eventually mean "unreachable"."""
     nov_pen = novelty_penalty(cos_max, lambda_m, lo, hi)
     depth_bonus = beta * depth
-    prio = eord + g - dup_pen - nov_pen + depth_bonus
+    sat_disc = vd.discount(sat_density, sat_strength)
+    prio = eord * sat_disc + g - dup_pen - nov_pen + depth_bonus
     return prio, dict(eord=eord, gumbel=g, dup_pen=dup_pen, cos_max=cos_max,
-                      nov_pen=nov_pen, depth_bonus=depth_bonus, priority=prio)
+                      nov_pen=nov_pen, depth_bonus=depth_bonus,
+                      sat_density=sat_density, sat_disc=sat_disc, priority=prio)
 
 
 def novelty_penalty(cos_max: float, lambda_m: float, lo: float, hi: float) -> float:
@@ -929,6 +973,11 @@ DIVE_IGNORES: dict[str, str] = {
                  "which the dive only saves — it folds no expanded looks in",
     "prio_log": "`push_children`'s per-candidate priority log",
     "sat_log": "`push_children`'s saturation log",
+    "sat_by_partition": "per-partition tally of the cross-run saturation discount, filled by "
+                        "`push_children`. The knobs themselves (`sat_k`/`sat_strength`/"
+                        "`sat_on`/`sat_index`) are NOT here — `write_run_config` stamps them "
+                        "on both paths, and stamps `n_a` for the dive — but a dive orders no "
+                        "frontier, so there is nothing for this to count",
     # --- accounting the dive replaces wholesale ------------------------------------
     "state_path": "the crawl checkpoint; the dive checkpoints to `dive_state_path`",
     "_session_t0": "wall-clock origin for `wall_elapsed_s` — THE `--wall-budget` CLASS. The "
@@ -1411,6 +1460,18 @@ class SteeredFrontier:
         # 90% of the [lo,hi] ramp): a near-constant offset, not a gradient. Report shows this
         # dropping under the recency fix.
         self.sat_cos = self.morph_lo + 0.9 * (self.morph_hi - self.morph_lo)
+        # --- v1.7 cross-run saturation memory. Strength 0 => the index is never built and
+        # priorities are byte-identical to v1.6. Dive mode never reaches `push_children`, so
+        # the memory is switched off there rather than built and unread — a loaded index the
+        # dive path cannot consult is 0.4 s and a misleading `run_config` stamp.
+        self.sat_k = float(getattr(args, "sat_radius_k", SAT_RADIUS_K))
+        self.sat_strength = float(getattr(args, "sat_strength", SAT_STRENGTH))
+        self.sat_on = self.sat_strength > 0.0 and not self.dive
+        self.sat_index = None
+        # Per-partition run tally, CHECKPOINTED: the headline this mechanism is judged on is
+        # "did the discount fire, and where", and a resumed run that restarted the tally would
+        # report the last session's share as the run's.
+        self.sat_by_partition: dict = {}
 
         # partitions this run tracks a cloud for (c-plane + julia twins if hooked; dive covers
         # all twins so a start from any source partition has a cloud + tau_h).
@@ -1584,6 +1645,11 @@ class SteeredFrontier:
                            julia_roots=0, julia_hooks_skipped=0, precanon_dup=0,
                            cap_hits=0, dead_nodes=0, novelty_hits=0,
                            nov_scored=0, sat_hits=0, distinct_looks=0,
+                           # v1.7 cross-run saturation memory. Initialised to 0 rather than
+                           # created on first fire, for the reason `root_draw_truncated` is:
+                           # "the memory never discounted anything" has to be a positive
+                           # statement in the summary, not an absent key.
+                           sat_mem_scored=0, sat_mem_discounted=0, sat_mem_density_sum=0,
                            # reconcile terms: every harvest check must land in exactly one
                            # of these buckets, checked per batch (see _reconcile_batch).
                            canon_not_q3=0, reframe_not_q3=0, render_failed=0,
@@ -1626,6 +1692,22 @@ class SteeredFrontier:
         # enter self.ledger.rows and are never counted as this-run admissions. build_cloud dedups
         # the union, so a resume is idempotent.
         self.prior_rows = self.load_prior_library_rows() if self.freshness_prior else []
+        # CROSS-RUN SATURATION MEMORY, built once and never mutated (see `visited_density`):
+        # the current run's coverage is the dup cloud's and the morph memory's job, and a
+        # frozen index is what makes a resume rebuild the identical memory. Reuses
+        # `prior_rows` when the freshness prior already paid for the read — same files, same
+        # exclusion rule, one owner (`vd.iter_prior_ledger_rows`).
+        self.sat_build_s = 0.0
+        if self.sat_on:
+            _t0 = time.time()
+            self.sat_index = (vd.VisitedIndex.from_rows(self.prior_rows, self.sat_k)
+                              if self.freshness_prior
+                              else vd.build_from_ledgers(self.sat_k, ROOT,
+                                                         exclude=self.ledger.path))
+            if self.freshness_prior:
+                self.sat_index.sources = [str(p.relative_to(ROOT)) for p in
+                                          vd.ledger_paths(ROOT, self.ledger.path)]
+            self.sat_build_s = time.time() - _t0
         self.clouds = self.build_clouds()
         self.run_clouds = self.build_run_clouds()
         self.hooked_c = defaultdict(list)                   # jpart -> [(c_re,c_im)] already hooked
@@ -1722,28 +1804,13 @@ class SteeredFrontier:
         """Item 5: every admitted-coord row in the prior library — all
         data/**/outcome_ledger.jsonl EXCEPT this run's own ledger. Read for the coordinate
         freshness prior only (their coords seed the dup/rejection clouds); nothing here enters
-        this run's ledger or records. Matches campaign1_readout's prior-ledger enumeration."""
-        rows = []
-        own = self.ledger.path.resolve()
-        for led in sorted((ROOT / "data").rglob("outcome_ledger.jsonl")):
-            if led.resolve() == own:
-                continue
-            for line in open(led, encoding="utf-8"):
-                line = line.strip()
-                if not line:
-                    continue
-                r = json.loads(line)
-                # Some ledgers (deep / q4_harvest / phoenix) serialize outcome coords as
-                # high-precision decimal STRINGS. The prior rows feed float arithmetic in every
-                # dedup/steering site (near_dup, dup_penalty, count_within), so coerce once here
-                # at ingestion — float64 is ample for these O(1) dedup coords and lossless for the
-                # purpose (prior rows are never re-rendered from this run).
-                for k in ("outcome_cx", "outcome_cy", "outcome_fw"):
-                    v = r.get(k)
-                    if isinstance(v, str):
-                        r[k] = float(v)
-                rows.append(r)
-        return rows
+        this run's ledger or records. Matches campaign1_readout's prior-ledger enumeration.
+
+        The enumeration itself moved to `visited_density.iter_prior_ledger_rows` when the
+        saturation memory became a second consumer of exactly this population under exactly
+        this exclusion rule — the same rglob written twice is how the two would eventually
+        disagree about which files are "prior"."""
+        return list(vd.iter_prior_ledger_rows(ROOT, self.ledger.path))
 
     def rebuild_hooked_c(self):
         """Reconstruct the set of already-hooked julia parameters so hook spacing survives a
@@ -3542,16 +3609,45 @@ class SteeredFrontier:
         return kept
 
     # ---------------------------------------------------------------- push
+    def visited_density_of(self, c) -> int:
+        """Cross-run visited density for one BREADTH candidate, or 0 with the memory off.
+
+        The identity comes from `ident_c` — the same parameter vector the dedup path hands
+        `is_distinct` — so a julia/phoenix candidate is compared only against prior visits on
+        ITS OWN dynamical plane. A c-plane candidate has no identity (None) and matches the
+        c-plane bucket, which is what makes the mandelbrot/multibrot memory work at all."""
+        if not self.sat_on:
+            return 0
+        return self.sat_index.density(c["partition"], ident_c(c["partition"], c.get("c")),
+                                      c["cx"], c["cy"])
+
     def push_children(self, cands):
         prio_rows = []
         batch_sat = 0                                    # saturated candidates this batch
+        sat_seen: dict = defaultdict(int)                # partition -> candidates scored
+        sat_disc_n: dict = defaultdict(int)              # partition -> density > 0
         for c in cands:
             dup_pen = dup_penalty(c["cx"], c["cy"], self.clouds.get(c["partition"], []))
             cos_max = float(c.get("cos_max", 0.0))
+            sat_d = self.visited_density_of(c)
             g = gumbel(self.rng, T_GUMBEL)               # RNG draw order unchanged from pilot
             prio, terms = priority_terms(
                 c["cheap_eord"], g, dup_pen, cos_max,
-                self.lambda_m, self.beta, c["depth"], self.morph_lo, self.morph_hi)
+                self.lambda_m, self.beta, c["depth"], self.morph_lo, self.morph_hi,
+                sat_density=sat_d,
+                sat_strength=(self.sat_strength if self.sat_on else 0.0))
+            if self.sat_on:
+                sat_seen[c["partition"]] += 1
+                self.totals["sat_mem_scored"] += 1
+                agg = self.sat_by_partition.setdefault(
+                    c["partition"], dict(n=0, discounted=0, density_sum=0))
+                agg["n"] += 1
+                if sat_d > 0:
+                    sat_disc_n[c["partition"]] += 1
+                    agg["discounted"] += 1
+                    agg["density_sum"] += sat_d
+                    self.totals["sat_mem_discounted"] += 1
+                    self.totals["sat_mem_density_sum"] += sat_d
             self.frontier.append(dict(
                 node_id=c["node_id"], root_id=c["root_id"], partition=c["partition"], c=c["c"],
                 cx=c["cx"], cy=c["cy"], fw=c["fw"], depth=c["depth"], priority=prio,
@@ -3590,15 +3686,35 @@ class SteeredFrontier:
         # per-batch saturation fraction (the v1.2 novelty-fix telemetry): fraction of pushed
         # candidates whose novelty penalty is within 10% of full. A high fraction => the term
         # is a constant offset, not a gradient. Logged so the report shows it drop under the fix.
-        if self.lambda_m > 0.0 and cands:
-            self.totals["nov_scored"] += len(cands)
-            self.totals["sat_hits"] += batch_sat
+        #
+        # v1.7 shares this row rather than opening a second stream: both halves answer the same
+        # question ("is a soft steering term firing on everything?") and the visited-density
+        # half is what says, per partition and per batch, whether the cross-run memory is doing
+        # anything at all. THE MORPH HALF IS `null`, NOT ZERO, WHEN `lambda_m == 0` — a
+        # `frac: 0.0` written by a run that never measured novelty is a claim about a
+        # population that does not exist, and the pre-v1.7 readers (`campaign2_readout`,
+        # `steered_v1_2_dive_report`) would average it in as a real observation.
+        if cands and (self.lambda_m > 0.0 or self.sat_on):
+            morph_on = self.lambda_m > 0.0
+            if morph_on:
+                self.totals["nov_scored"] += len(cands)
+                self.totals["sat_hits"] += batch_sat
             with open(self.sat_log, "a", encoding="utf-8") as f:
                 f.write(json.dumps(dict(
-                    batch=self.batch_i, n=len(cands), sat=batch_sat,
-                    frac=round(batch_sat / len(cands), 4),
+                    batch=self.batch_i, n=len(cands),
+                    sat=(batch_sat if morph_on else None),
+                    frac=(round(batch_sat / len(cands), 4) if morph_on else None),
                     mem_perm=self.morph.n_perm, mem_recency=self.morph.n_recency,
                     mem_total=len(self.morph),
+                    # cross-run visited-density half (null when the memory is off)
+                    visited=(dict(
+                        n=sum(sat_seen.values()),
+                        discounted=sum(sat_disc_n.values()),
+                        frac=round(sum(sat_disc_n.values()) / max(1, sum(sat_seen.values())), 4),
+                        by_partition={p: dict(n=sat_seen[p], discounted=sat_disc_n.get(p, 0),
+                                              frac=round(sat_disc_n.get(p, 0) / sat_seen[p], 4))
+                                      for p in sorted(sat_seen)},
+                    ) if self.sat_on else None),
                 )) + "\n")
         if prio_rows:
             self._writer(self.prio_log).write_rows(prio_rows)
@@ -3729,6 +3845,23 @@ class SteeredFrontier:
                 julia_hook_spacing=self.julia_hook_spacing,
                 cspacing_floor=srt.CSPACING_FLOOR,
                 spacing_reconciled=(self.julia_hook_spacing <= srt.CSPACING_FLOOR)),
+            # CROSS-RUN SATURATION MEMORY (v1.7), stamped before batch 1 like every other
+            # allocation-adjacent decision. `memory` is the index's own census, so a run that
+            # started with an empty or truncated ledger union says so in its own config
+            # instead of leaving it to be inferred from behaviour six weeks later.
+            saturation_memory=dict(
+                on=self.sat_on, radius_k=self.sat_k, strength=self.sat_strength,
+                form="cheap_eord *= 1/(1 + strength * density)",
+                scope=("breadth-leg candidate ordering inside one partition (push_children). "
+                       "Root draws, maneuver-originated nodes and dive mode are EXEMPT; "
+                       "cross-partition allocation is untouched."),
+                radius_rule="a visit at fw shadows a disc of radius k*fw around ITSELF",
+                decay="none — a visit from any past run counts the same as yesterday's",
+                source="data/**/outcome_ledger.jsonl minus this run's own; frozen at start",
+                build_s=round(self.sat_build_s, 2),
+                memory=(self.sat_index.summary() if self.sat_index is not None else None),
+                **({} if not self.dive else
+                   {"n_a": "dive mode has no frontier to order; the index is not built"})),
             interior_gate=dict(on=self.interior_gate_on, threshold=self.interior_discard,
                                comparison="strict >",
                                measure="expand sidecar int_frac (= render::black_fraction)"),
@@ -3855,6 +3988,7 @@ class SteeredFrontier:
         state["root_draw_s"] = self.root_draw_s
         state["last_refill_batch"] = self.last_refill_batch
         state["tau_rec"] = self.tau_rec
+        state["sat_by_partition"] = self.sat_by_partition
         state["tau_h_uncalibrated"] = self.tau_h_uncalibrated
         state["family_weights"] = self.family_weights
         # The visited set is maneuver state under `--maneuvers`, but a TRIGGERED run writes
@@ -3937,8 +4071,10 @@ class SteeredFrontier:
                   "trig_nodes_pushed", "trig_admitted", "trig_unavailable",
                   "trig_budget_skip", "trig_expanded", "trig_candidates",
                   "root_draw_truncated", "root_draw_timeouts",
-                  "root_refills", "root_refill_families", "root_refill_deferred"):
+                  "root_refills", "root_refill_families", "root_refill_deferred",
+                  "sat_mem_scored", "sat_mem_discounted", "sat_mem_density_sum"):
             self.totals.setdefault(k, 0)
+        self.sat_by_partition = dict(st.get("sat_by_partition") or {})
         if self.trig_on and not self.maneuvers:
             self.man_visited = set(st.get("man_visited") or [])
         if self.maneuvers and "maneuvers" in st:
@@ -4211,6 +4347,16 @@ class SteeredFrontier:
                   f"freshness_prior={self.freshness_prior} "
                   f"(prior_rows={len(self.prior_rows)}) "
                   f"seeded_cloud_sizes={ {p: len(v) for p, v in self.clouds.items()} }", flush=True)
+            if self.sat_on:
+                m = self.sat_index.summary()
+                print(f"[sat-memory] ON — k={self.sat_k} strength={self.sat_strength}; "
+                      f"{m['visits']} prior visits over {m['ledgers']} ledgers / "
+                      f"{m['identity_buckets']} identity buckets, built in "
+                      f"{self.sat_build_s:.2f}s ({m['unusable_rows']} unusable rows); "
+                      f"per-partition {m['partitions']}", flush=True)
+            else:
+                print(f"[sat-memory] OFF (--sat-strength {self.sat_strength}) — breadth "
+                      f"priorities are v1.6-identical", flush=True)
             if self.lambda_m > 0.0:
                 mode = f"recency (admitted + last {self.recency_k} batches)" if self.recency_k \
                     else "legacy (all-permanent)"
@@ -4466,6 +4612,7 @@ class SteeredFrontier:
             sat_cos=round(self.sat_cos, 4),
             sat_frac=(round(self.totals["sat_hits"] / self.totals["nov_scored"], 4)
                       if self.totals.get("nov_scored") else None),
+            saturation_memory=self.saturation_memory_summary(),
             active_min=round(self.active_s / 60.0, 2), batches=self.batch_i,
             tau_h=self.tau_h, totals=self.totals,
             cloud_sizes={p: len(v) for p, v in self.clouds.items()},
@@ -4553,6 +4700,20 @@ class SteeredFrontier:
               f"novelty_hits={self.totals['novelty_hits']} sat_frac={sf} "
               f"morph_mem={len(self.morph)} (perm {self.morph.n_perm} + recency {self.morph.n_recency})")
         print(f"  cloud: {summary['cloud_sizes']}")
+        sm = summary["saturation_memory"]
+        if sm["status"] == "on":
+            mem = sm["memory"] or {}
+            print(f"  SATURATION MEMORY (k={sm['radius_k']} strength={sm['strength']}): "
+                  f"{mem.get('visits')} prior visits over {mem.get('ledgers')} ledgers, "
+                  f"loaded+indexed in {sm['build_s']:.2f}s")
+            print(f"    discounted {sm['discounted']}/{sm['scored']} = "
+                  f"{sm['discounted_frac']} of breadth candidates; mean density when "
+                  f"discounted {sm['mean_density_when_discounted']}")
+            for p, v in sm["by_partition"].items():
+                print(f"    {p:20s} {v['discounted']:6d}/{v['n']:<6d} = {v['frac']} "
+                      f"(mean density {v['mean_density_when_discounted']})")
+        else:
+            print(f"  saturation memory: {sm['status']}")
         if self.quota is not None:
             q = summary["pop_quota"]
             print(f"  POP QUOTA (floor {q['allocation']['floor']:.0%}): "
@@ -4625,6 +4786,36 @@ class SteeredFrontier:
                       f"{m['view_fit_scored']}/{m['view_screened']} = "
                       f"{m['view_fit_coverage']} — RECORDED ONLY, composite_v3 still sorts")
         print(f"  ledger -> {self.ledger.path}\n  summary -> {self.run_dir/'summary.json'}")
+
+    def saturation_memory_summary(self) -> dict:
+        """Did the cross-run discount do anything, and where — the §11 read.
+
+        `status` is a WORD, not an absence: a run with the memory off and a run whose memory
+        found nothing both write zeros, and those are opposite facts. Off says so; on with
+        `discounted_frac == 0` means the ledger union genuinely does not overlap anything this
+        run walked, which is the interesting negative result."""
+        t = self.totals
+        n, d = t.get("sat_mem_scored", 0), t.get("sat_mem_discounted", 0)
+        return dict(
+            status=("off" if not self.sat_on else
+                    ("dive_n_a" if self.dive else "on")),
+            radius_k=self.sat_k, strength=self.sat_strength,
+            build_s=round(self.sat_build_s, 2),
+            memory=(self.sat_index.summary() if self.sat_index is not None else None),
+            scored=n, discounted=d,
+            discounted_frac=(round(d / n, 4) if n else None),
+            # Mean density AMONG THE DISCOUNTED, not over all scored: the zeros are already
+            # reported by `discounted_frac`, and pooling them turns "how saturated is the
+            # saturated territory" into a restatement of how much of it there is.
+            mean_density_when_discounted=(round(t.get("sat_mem_density_sum", 0) / d, 2)
+                                          if d else None),
+            by_partition={p: dict(
+                n=v["n"], discounted=v["discounted"],
+                frac=round(v["discounted"] / v["n"], 4) if v["n"] else None,
+                mean_density_when_discounted=(round(v["density_sum"] / v["discounted"], 2)
+                                              if v["discounted"] else None))
+                for p, v in sorted(self.sat_by_partition.items())},
+        )
 
     def maneuver_summary(self) -> dict:
         """The §7 read: did each operator fire, what did availability actually run at, did
@@ -4833,6 +5024,20 @@ def main():
                     help="override the zero-penalty cos knee (default: calibrated anchors file)")
     ap.add_argument("--morph-hi", type=float, default=None,
                     help="override the full-penalty cos knee (default: calibrated anchors file)")
+    # --- v1.7 cross-run saturation memory (ON by default; --sat-strength 0 reproduces v1.6) ---
+    ap.add_argument("--sat-radius-k", type=float, default=SAT_RADIUS_K,
+                    help=f"CROSS-RUN SATURATION MEMORY radius multiple: a prior ledger visit "
+                         f"at framewidth fw shadows a disc of radius k*fw around ITSELF "
+                         f"(default {SAT_RADIUS_K}, calibrated by "
+                         f"tools/atlas/sat_radius_calibrate.py). Larger => more of the plane "
+                         f"counts as already-mined; past ~0.35 the discount fires on so much "
+                         f"of phoenix that it stops being a gradient.")
+    ap.add_argument("--sat-strength", type=float, default=SAT_STRENGTH,
+                    help=f"magnitude of the visited-density discount on a BREADTH candidate's "
+                         f"steering weight: cheap_eord *= 1/(1 + strength*density) "
+                         f"(default {SAT_STRENGTH}). 0 disables the mechanism entirely — no "
+                         f"ledger load, no index, priorities byte-identical to v1.6. Root "
+                         f"draws, maneuver nodes and dive mode are exempt at any strength.")
     ap.add_argument("--mem-recency", action="store_true",
                     help="v1.2 morph-memory fix: novelty measured vs ADMITTED looks + a rolling "
                          "window of the last --recency-k batches' expanded looks (default off => "
