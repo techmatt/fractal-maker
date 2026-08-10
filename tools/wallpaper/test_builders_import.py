@@ -28,6 +28,7 @@ BUILDERS = [
     "build_bootstrap.py",
     "build_fresh_sheet.py",
     "build_colorize_sheet.py",
+    "build_wallpaper_sitting.py",
 ]
 
 
@@ -37,4 +38,18 @@ def test_builder_module_loads(fname):
     assert path.exists(), path
     spec = importlib.util.spec_from_file_location(path.stem, path)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)   # raises if any top-level import/const is stale
+    # REGISTER BEFORE EXEC. A module carrying `from __future__ import annotations` AND a
+    # `@dataclass` resolves its string annotations through `sys.modules[cls.__module__]`, so
+    # exec'ing an unregistered module raises `AttributeError: 'NoneType' has no attribute
+    # '__dict__'` from inside dataclasses — a failure of THIS LOADER, not of the builder.
+    # Removed afterwards so a builder is never left shadowing a real import.
+    import sys
+    prev = sys.modules.get(path.stem)
+    sys.modules[path.stem] = module
+    try:
+        spec.loader.exec_module(module)   # raises if any top-level import/const is stale
+    finally:
+        if prev is None:
+            sys.modules.pop(path.stem, None)
+        else:
+            sys.modules[path.stem] = prev
