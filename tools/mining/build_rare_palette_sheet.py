@@ -623,10 +623,12 @@ def select(spec: SheetSpec, screen_recs, emb: dict, max_rows=None, seed=None):
         kept.append(r)
         kept_vecs.append(v)
 
-    # the smooth comparison slice — a seeded sample of locations that kept a strange row, so
-    # every smooth row on the page has a strange sibling to be compared against.
-    strange_locs = sorted({r["location_key"] for r in kept})
-    n_smooth = min(spec.smooth_slice, max(0, max_rows - len(kept)), len(strange_locs))
+    # The smooth comparison slice is RESERVED, not a leftover: the strange rows are truncated
+    # to leave room for it first. Taking it out of the remainder means a sheet that fills its
+    # cap on strange rows — which is every sheet — serves ZERO smooth rows and the comparison
+    # the slice exists for does not exist.
+    strange_locs = sorted({r["location_key"] for r in kept[:max(0, max_rows - spec.smooth_slice)]})
+    n_smooth = min(spec.smooth_slice, len(strange_locs))
     pick_locs = set(rng.permutation(len(strange_locs))[:n_smooth].tolist())
     smooth_rows = []
     for i, k in enumerate(strange_locs):

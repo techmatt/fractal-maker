@@ -1,0 +1,750 @@
+{
+  "created": "2026-08-10T15:39:28",
+  "batch_id": "2026-08-10_render_mode_rare_palette_v1",
+  "generator_version": "render_mode_rare_palette_v1",
+  "labeler": null,
+  "n_rows": 500,
+  "schema_note": "RARE-PALETTE STRANGE SHEET (sheet C of the (27) sittings). Its locations are conditioned on HUMAN label quality FIRST (score 4, falling back to 3 only where a partition is short), so what is being judged is the RENDERING and never the location \u2014 the new standing rule for strange-wallpaper sheets. Palettes are drawn against a declared RARE hue-family target (green/spectral/rose/gold/neutral over-drawn; purple/fire/ice cut), the coloring is the canonical emission recipe, and every mode row is measured against a SMOOTH render of its own location on the colored-CLIP substrate: smooth-equivalent rows are excluded and no two served rows are within cos 0.974 of each other. label.score is null on every row; the suggestion is NOT a label. Presentation is sorted good->bad by pred with opaque image_ids.",
+  "sheet_incomplete": false,
+  "incomplete_note": null,
+  "registration": {
+    "source": "mining_rare_palette_sitting",
+    "biased": true,
+    "eval_eligible": false,
+    "split": "train",
+    "registered_before_build": true,
+    "owner": "tools/scoring/batch_registry.py"
+  },
+  "head": {
+    "ckpt": "data/render_mode_head/v1/model_best.pt",
+    "version": "v1",
+    "gate_version": "mining_v1",
+    "role": "PRE-LABEL + SELECTION SCREEN \u2014 no gate, floor, threshold or pin is applied or moved here; would_pass_gate is stamped and gates nothing",
+    "out_of_distribution_note": "mining v1 was trained on crops built from `gate_passers_v3.json` \u2014 112 locations, 38 palettes, one July batch. This sheet's palettes are drawn from the whole 987 pool and its locations from the human label corpus, so the pre-label is an EXTRAPOLATION and its correction rate is not comparable to sheet B's.",
+    "scorer": "tools/mining/mining_gate.MiningScorer (fp32, no autocast; marginal p_ge = cumprod(sigmoid), NEVER the CORN conditional)",
+    "deploy_transform": "classifier.data.Transform(train=False) \u2014 384x224 bicubic stretch + the checkpoint's own mean/std"
+  },
+  "suggested_tier_rule": {
+    "rule": "tier = 1 + #{c in cuts : expected_tier >= c}; expected_tier = 1 + sum_k marginal_k",
+    "rule_owner": "tools/wallpaper/suggest_tier.py (expected_tier / tier_from_pred / fit_cuts) \u2014 imported, not restated",
+    "k_tiers": 3,
+    "cuts": [
+      1.317,
+      1.8727
+    ],
+    "cut_method": "fit_cuts \u2014 prior-matched quantiles of the head's own readout on a LABELED SLICE, frozen and applied ABSOLUTELY. This replaces the per-batch `cuts_from_prior` fallback, which had no labeled slice to fit and therefore carried no information about a batch's absolute quality level.",
+    "derived": "2026-08-10",
+    "deriver": "tools/mining/suggest_tier_mining.derive_cuts()",
+    "fit_slice": {
+      "batch": "2026-08-06_render_mode_fresh_sheet_v1",
+      "labels": "labels/render_mode_fresh_sheet_v1.json",
+      "n": 960,
+      "tier_prior": {
+        "1": 577,
+        "2": 235,
+        "3": 148
+      },
+      "suggested_hist_on_the_fit_slice": {
+        "1": 577,
+        "2": 235,
+        "3": 148
+      }
+    },
+    "anchoring": "the fit slice's labels were collected on a CORRECTION sheet served with the previous (per-batch quantile) suggestion prefilled; agreement with what was served was 892/960 = 0.929, so these cuts are anchored to their predecessor and largely reproduce it ((1.3893, 1.9331) -> (1.317, 1.8727)).",
+    "head": {
+      "ckpt": "data/render_mode_head/v1/model_best.pt",
+      "version": "v1"
+    },
+    "realized_suggestion_hist": {
+      "1": 2,
+      "2": 189,
+      "3": 309
+    },
+    "realized_suggestion_shares": {
+      "1": 0.004,
+      "2": 0.378,
+      "3": 0.618
+    },
+    "n_rows": 500,
+    "scope": "a SUGGESTION, never a label \u2014 nothing downstream may read it as one, and the merge refuses to."
+  },
+  "universe": {
+    "population": {
+      "source": "data/label_corpus \u2014 corpus_reader.iter_labeled -> label_store.resolve_score (amendments applied); location label = MAX over its crops",
+      "n_locations": 2577,
+      "by_partition": {
+        "julia:mandelbrot": {
+          "score4": 200,
+          "score3": 609,
+          "total": 809
+        },
+        "julia:multibrot3": {
+          "score4": 30,
+          "score3": 60,
+          "total": 90
+        },
+        "julia:multibrot4": {
+          "score4": 43,
+          "score3": 61,
+          "total": 104
+        },
+        "julia:multibrot5": {
+          "score4": 44,
+          "score3": 115,
+          "total": 159
+        },
+        "mandelbrot": {
+          "score4": 103,
+          "score3": 368,
+          "total": 471
+        },
+        "multibrot3": {
+          "score4": 35,
+          "score3": 187,
+          "total": 222
+        },
+        "multibrot4": {
+          "score4": 36,
+          "score3": 115,
+          "total": 151
+        },
+        "multibrot5": {
+          "score4": 33,
+          "score3": 163,
+          "total": 196
+        },
+        "phoenix": {
+          "score4": 109,
+          "score3": 259,
+          "total": 368
+        },
+        "phoenix:classic": {
+          "score4": 1,
+          "score3": 6,
+          "total": 7
+        }
+      },
+      "totals": {
+        "score4": 634,
+        "score3": 1943
+      }
+    },
+    "location_draw": {
+      "rule": "apportion.deal_round_robin over partitions (balanced-or-drained), with phoenix:classic PRESEEDED take-all \u2014 a bucketed cut never reserves, so the classic slice needs its own floor or it is absent by construction",
+      "n_locations": 250,
+      "target": 250,
+      "location_caps": {
+        "phoenix": 24,
+        "phoenix:classic": 7
+      },
+      "reserved_take_all": {
+        "phoenix:classic": 7
+      },
+      "available_after_caps": {
+        "julia:mandelbrot": 809,
+        "julia:multibrot3": 90,
+        "julia:multibrot4": 104,
+        "julia:multibrot5": 159,
+        "mandelbrot": 471,
+        "multibrot3": 222,
+        "multibrot4": 151,
+        "multibrot5": 196,
+        "phoenix": 24,
+        "phoenix:classic": 7
+      },
+      "drawn_by_partition": {
+        "julia:mandelbrot": 28,
+        "julia:multibrot3": 27,
+        "julia:multibrot4": 27,
+        "julia:multibrot5": 27,
+        "mandelbrot": 28,
+        "multibrot3": 28,
+        "multibrot4": 27,
+        "multibrot5": 27,
+        "phoenix": 24,
+        "phoenix:classic": 7
+      },
+      "drawn_by_score": {
+        "4": 244,
+        "3": 6
+      },
+      "score4_by_partition": {
+        "julia:mandelbrot": 28,
+        "julia:multibrot3": 27,
+        "julia:multibrot4": 27,
+        "julia:multibrot5": 27,
+        "mandelbrot": 28,
+        "multibrot3": 28,
+        "multibrot4": 27,
+        "multibrot5": 27,
+        "phoenix": 24,
+        "phoenix:classic": 1
+      },
+      "score3_by_partition": {
+        "phoenix:classic": 6
+      },
+      "balanced_excl_classic": true,
+      "balance": "max take 28, all cells within 1 or drained",
+      "fallback_note": "a partition reaches its human-3s only after its human-4s are exhausted; score3_by_partition IS the shortfall, per partition"
+    },
+    "palette_draw": {
+      "n_planned": 250,
+      "n_taken": 250,
+      "target_shares": {
+        "green": 0.28,
+        "spectral": 0.16,
+        "fire": 0.15,
+        "ice": 0.14,
+        "rose": 0.09,
+        "purple": 0.08,
+        "neutral": 0.06,
+        "gold": 0.04
+      },
+      "down_weighted": [
+        "purple",
+        "fire",
+        "ice"
+      ],
+      "over_drawn": [
+        "green",
+        "spectral",
+        "rose",
+        "neutral",
+        "gold"
+      ],
+      "distinct_supply": {
+        "fire": 438,
+        "gold": 9,
+        "green": 75,
+        "ice": 324,
+        "purple": 46,
+        "rose": 23,
+        "spectral": 57,
+        "neutral": 15
+      },
+      "planned_counts": {
+        "fire": 38,
+        "gold": 9,
+        "green": 71,
+        "ice": 35,
+        "purple": 20,
+        "rose": 22,
+        "spectral": 40,
+        "neutral": 15
+      },
+      "drawn_counts": {
+        "fire": 38,
+        "gold": 9,
+        "green": 71,
+        "ice": 35,
+        "purple": 20,
+        "rose": 22,
+        "spectral": 40,
+        "neutral": 15
+      },
+      "drawn_shares": {
+        "fire": 0.152,
+        "gold": 0.036,
+        "green": 0.284,
+        "ice": 0.14,
+        "purple": 0.08,
+        "rose": 0.088,
+        "spectral": 0.16,
+        "neutral": 0.06
+      },
+      "distinct_palettes_used": 250,
+      "family_distinct_used": {
+        "fire": 38,
+        "gold": 9,
+        "green": 71,
+        "ice": 35,
+        "purple": 20,
+        "rose": 22,
+        "spectral": 40,
+        "neutral": 15
+      },
+      "max_repeats": 1,
+      "sequence_prefix_deviation": 0.716,
+      "sequence_rule": "apportion.sequence_by_deficit over the planned family counts \u2014 every prefix near-target, which is what survives a truncating render budget",
+      "within_family_rule": "least-used members first, then palette_deficit.pick (deficit gain, no pref head) on intrinsic signatures"
+    },
+    "color_params": {
+      "reverse": false,
+      "log_premap": "none",
+      "gamma": 1.0,
+      "phase": 0.0,
+      "n_cycles": 1,
+      "transfer": "pct",
+      "transfer_gamma": 0.0,
+      "owner": "tools/mining/deploy_tail._color_params({}) \u2014 the canonical inherited coloring the LIVE emission path uses"
+    },
+    "roster": {
+      "n_modes": 15,
+      "smooth_baseline": "smooth",
+      "kinds": {
+        "pure": 6,
+        "composite": 5,
+        "direct": 4
+      }
+    },
+    "n_universe": 4000,
+    "universe_by_mode": {
+      "composite_c13_smooth_stripe": 250,
+      "composite_c17_smooth_curvature": 250,
+      "composite_c7_smooth_trap_circle": 250,
+      "curv_linear": 250,
+      "direct_trap_lines": 250,
+      "direct_trap_multiply": 250,
+      "direct_trap_ring": 250,
+      "direct_trap_screen": 250,
+      "exp_smoothing": 250,
+      "gaussian_int": 250,
+      "smooth": 250,
+      "smooth_angle_min": 250,
+      "smooth_mean_angle": 250,
+      "stripe": 250,
+      "tia": 250,
+      "trap_circle": 250
+    },
+    "universe_by_partition": {
+      "julia:mandelbrot": 448,
+      "julia:multibrot3": 432,
+      "julia:multibrot4": 432,
+      "julia:multibrot5": 432,
+      "mandelbrot": 448,
+      "multibrot3": 448,
+      "multibrot4": 432,
+      "multibrot5": 432,
+      "phoenix": 384,
+      "phoenix:classic": 112
+    },
+    "direct_rule": "one DIRECT_GRID cell per (location, direct mode), rotating a permuted cycle across locations \u2014 sheet v1's rule with the per-location sweep collapsed, because this sheet's axis is the palette, not the grid"
+  },
+  "selection_report": {
+    "max_rows": 500,
+    "drawn_rows": 500,
+    "screened": 4000,
+    "smooth_equivalence": {
+      "substrate": "colored_clip \u2014 palette-ON CLIP vit_base_patch16_clip_224.openai, timm eval transform (tools/curation/colored_clip.py)",
+      "pair": "the mode render vs a SMOOTH render of the same location at the same palette, colour params, geometry and render tail (mining_roster.SMOOTH_MODE through build_mining_sheet.render_one) \u2014 the mode is the only difference",
+      "strict_cut": 0.974,
+      "strict_cut_owner": "tools/emission/descriptor.NEAR_DUP_THRESHOLD",
+      "identity_interleave": [
+        0.934,
+        0.986
+      ],
+      "identity_interleave_source": "data/atlas/precanon_calibration/adoption.json (morph_gray-derived)",
+      "caveat": "BOTH anchors were derived on the GRAYSCALE morph embedding and the tree records that grayscale anchors do not transfer. On colored CLIP they are a borrowed yardstick, not a calibrated one \u2014 read every share next to `unrelated_reference`, which is the scale's actual floor here.",
+      "measured_at_geometry": [
+        640,
+        360,
+        1
+      ],
+      "excluded_smooth_equivalent": 248,
+      "unmeasured_dropped": 0,
+      "bands_over_universe": {
+        "distinct": 3479,
+        "near_dup": 248,
+        "interleave": 23
+      },
+      "by_mode": {
+        "tia": {
+          "n": 250,
+          "share_distinct": 0.988,
+          "median_cos": 0.8611887991428375
+        },
+        "stripe": {
+          "n": 250,
+          "share_distinct": 1.0,
+          "median_cos": 0.7994165420532227
+        },
+        "exp_smoothing": {
+          "n": 250,
+          "share_distinct": 0.0,
+          "median_cos": 0.9951856136322021
+        },
+        "gaussian_int": {
+          "n": 250,
+          "share_distinct": 1.0,
+          "median_cos": 0.7709815800189972
+        },
+        "trap_circle": {
+          "n": 250,
+          "share_distinct": 1.0,
+          "median_cos": 0.7967164516448975
+        },
+        "curv_linear": {
+          "n": 250,
+          "share_distinct": 1.0,
+          "median_cos": 0.8188824951648712
+        },
+        "smooth_mean_angle": {
+          "n": 250,
+          "share_distinct": 1.0,
+          "median_cos": 0.757233738899231
+        },
+        "smooth_angle_min": {
+          "n": 250,
+          "share_distinct": 0.996,
+          "median_cos": 0.7758313417434692
+        },
+        "composite_c7_smooth_trap_circle": {
+          "n": 250,
+          "share_distinct": 0.936,
+          "median_cos": 0.8419508039951324
+        },
+        "composite_c13_smooth_stripe": {
+          "n": 250,
+          "share_distinct": 1.0,
+          "median_cos": 0.8159515559673309
+        },
+        "composite_c17_smooth_curvature": {
+          "n": 250,
+          "share_distinct": 0.996,
+          "median_cos": 0.8401382267475128
+        },
+        "direct_trap_ring": {
+          "n": 250,
+          "share_distinct": 1.0,
+          "median_cos": 0.8060278594493866
+        },
+        "direct_trap_screen": {
+          "n": 250,
+          "share_distinct": 1.0,
+          "median_cos": 0.799471914768219
+        },
+        "direct_trap_multiply": {
+          "n": 250,
+          "share_distinct": 1.0,
+          "median_cos": 0.792236864566803
+        },
+        "direct_trap_lines": {
+          "n": 250,
+          "share_distinct": 1.0,
+          "median_cos": 0.7834336757659912
+        }
+      }
+    },
+    "near_dup_filter": {
+      "cut": 0.974,
+      "substrate": "colored_clip",
+      "n_dropped": 10,
+      "dropped": [
+        {
+          "unit_key": "phoenix|-0.275707435456956|-0.5348112226278448|0.21352853949196604|||||||composite_c13_smooth_stripe",
+          "mode": "composite_c13_smooth_stripe",
+          "partition": "phoenix:classic",
+          "palette": "celestial-domain-25",
+          "cos_smooth": 0.7996559143066406,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.9828262329101562,
+          "dup_of": "phoenix|-0.275707435456956|-0.5348112226278448|0.21352853949196604|||||||stripe"
+        },
+        {
+          "unit_key": "phoenix|-0.2559627313640381|-0.7966429982192929|0.055504816766542515|||||||composite_c13_smooth_stripe",
+          "mode": "composite_c13_smooth_stripe",
+          "partition": "phoenix:classic",
+          "palette": "commons_Mandelbrot_4_B_C3_B4ng_Ho_C3_A0ng_D_C3_A3",
+          "cos_smooth": 0.816264271736145,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.9872148036956787,
+          "dup_of": "phoenix|-0.2559627313640381|-0.7966429982192929|0.055504816766542515|||||||stripe"
+        },
+        {
+          "unit_key": "phoenix|0.6538651997401944|0.5156089057638801|0.0158997484022494|||||||stripe",
+          "mode": "stripe",
+          "partition": "phoenix:classic",
+          "palette": "cmr.waterlily",
+          "cos_smooth": 0.7040066123008728,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.9817814230918884,
+          "dup_of": "phoenix|0.6538651997401944|0.5156089057638801|0.0158997484022494|||||||composite_c13_smooth_stripe"
+        },
+        {
+          "unit_key": "mandelbrot|-0.7613587284737784|-0.0845804023128517|0.00304489894478706|||composite_c13_smooth_stripe",
+          "mode": "composite_c13_smooth_stripe",
+          "partition": "mandelbrot",
+          "palette": "cet_linear_bgyw_15_100_c67",
+          "cos_smooth": 0.869910478591919,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.9853069186210632,
+          "dup_of": "mandelbrot|-0.7613587284737784|-0.0845804023128517|0.00304489894478706|||stripe"
+        },
+        {
+          "unit_key": "phoenix|-0.3654465588750679|0.7918504509285901|0.010227688881009507|||||||stripe",
+          "mode": "stripe",
+          "partition": "phoenix:classic",
+          "palette": "Pale Aurora",
+          "cos_smooth": 0.7937272191047668,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.9904399514198303,
+          "dup_of": "phoenix|-0.3654465588750679|0.7918504509285901|0.010227688881009507|||||||composite_c13_smooth_stripe"
+        },
+        {
+          "unit_key": "julia|-0.829098308592662|-0.15366748787484058|1.0962481248678784|-0.7548374821242281|-0.07387098369508416|direct_trap_lines",
+          "mode": "direct_trap_lines",
+          "partition": "julia:mandelbrot",
+          "palette": "cmr.lavender",
+          "cos_smooth": 0.8108158111572266,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.9740094542503357,
+          "dup_of": "julia|-0.829098308592662|-0.15366748787484058|1.0962481248678784|-0.7548374821242281|-0.07387098369508416|direct_trap_screen"
+        },
+        {
+          "unit_key": "phoenix|0.18711999589842318|-0.5500012731542442|0.05611549411062788|||||||composite_c13_smooth_stripe",
+          "mode": "composite_c13_smooth_stripe",
+          "partition": "phoenix:classic",
+          "palette": "riven-25",
+          "cos_smooth": 0.8392661809921265,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.9811572432518005,
+          "dup_of": "phoenix|0.18711999589842318|-0.5500012731542442|0.05611549411062788|||||||stripe"
+        },
+        {
+          "unit_key": "phoenix|-0.19512430516526888|-0.685952527861021|0.10725978484253311|-0.5266783574752247|-0.652322729101436|-0.28353182998131243|-0.02545285599096059|-0.10324356398202189|0.43684294503006016|stripe",
+          "mode": "stripe",
+          "partition": "phoenix",
+          "palette": "paezing",
+          "cos_smooth": 0.8178093433380127,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.978074312210083,
+          "dup_of": "phoenix|-0.19512430516526888|-0.685952527861021|0.10725978484253311|-0.5266783574752247|-0.652322729101436|-0.28353182998131243|-0.02545285599096059|-0.10324356398202189|0.43684294503006016|composite_c13_smooth_stripe"
+        },
+        {
+          "unit_key": "mandelbrot|-0.7584687636012517|0.07289850652722302|3.067921334235291e-05|||curv_linear",
+          "mode": "curv_linear",
+          "partition": "mandelbrot",
+          "palette": "YlGn",
+          "cos_smooth": 0.7429788112640381,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.9818952083587646,
+          "dup_of": "mandelbrot|-0.7584687636012517|0.07289850652722302|3.067921334235291e-05|||composite_c17_smooth_curvature"
+        },
+        {
+          "unit_key": "julia_multibrot4|-0.4104674462444886|-0.19868987495440746|0.25333940458942095|-0.5881456385958159|0.4311213650277541|direct_trap_lines",
+          "mode": "direct_trap_lines",
+          "partition": "julia:multibrot4",
+          "palette": "ten-leaf-clover-25",
+          "cos_smooth": 0.867556631565094,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.979568600654602,
+          "dup_of": "julia_multibrot4|-0.4104674462444886|-0.19868987495440746|0.25333940458942095|-0.5881456385958159|0.4311213650277541|direct_trap_screen"
+        }
+      ],
+      "rule": "greedy best-first over the selected set \u2014 no two served rows within cos 0.974, INCLUDING two modes of one location"
+    },
+    "buckets": {
+      "mode_floor": 20,
+      "per_location": 440,
+      "smooth_comparison": 40
+    },
+    "mode_floor": {
+      "floor": 12,
+      "added": {
+        "composite_c7_smooth_trap_circle": 4,
+        "curv_linear": 9,
+        "exp_smoothing": 3,
+        "smooth_mean_angle": 9
+      }
+    },
+    "drawn_by_mode": {
+      "composite_c13_smooth_stripe": 33,
+      "composite_c17_smooth_curvature": 14,
+      "composite_c7_smooth_trap_circle": 12,
+      "curv_linear": 11,
+      "direct_trap_lines": 74,
+      "direct_trap_multiply": 57,
+      "direct_trap_ring": 19,
+      "direct_trap_screen": 56,
+      "exp_smoothing": 1,
+      "gaussian_int": 14,
+      "smooth": 40,
+      "smooth_angle_min": 9,
+      "smooth_mean_angle": 10,
+      "stripe": 35,
+      "tia": 106,
+      "trap_circle": 9
+    },
+    "drawn_by_kind": {
+      "composite": 78,
+      "direct": 206,
+      "pure": 216
+    },
+    "drawn_by_partition": {
+      "julia:mandelbrot": 59,
+      "julia:multibrot3": 53,
+      "julia:multibrot4": 51,
+      "julia:multibrot5": 58,
+      "mandelbrot": 45,
+      "multibrot3": 63,
+      "multibrot4": 50,
+      "multibrot5": 56,
+      "phoenix": 49,
+      "phoenix:classic": 16
+    },
+    "drawn_by_hue_family": {
+      "fire": 77,
+      "gold": 19,
+      "green": 150,
+      "ice": 68,
+      "purple": 38,
+      "rose": 47,
+      "spectral": 74,
+      "neutral": 27
+    },
+    "drawn_by_human_score": {
+      "3": 14,
+      "4": 486
+    },
+    "modes_below_floor": {
+      "curv_linear": 11,
+      "exp_smoothing": 1,
+      "smooth_angle_min": 9,
+      "smooth_mean_angle": 10,
+      "trap_circle": 9
+    },
+    "distinct_locations": 235,
+    "distinct_palettes": 235,
+    "seed": 20260810
+  },
+  "screen_vs_keeper": {
+    "n": 500,
+    "spearman": 0.9475754383017532,
+    "mean_abs_delta": 0.04528615518759284,
+    "note": "screen = the same render path at (640, 360, 1), SCORING-ONLY; keeper = the stored 1280x720 ss2 crop. head_mining_v1 IS the keeper score."
+  },
+  "split": {
+    "rule": "the whole batch is train-side (see registration)",
+    "train_rows": 500,
+    "eval_rows": 0
+  },
+  "seeds": {
+    "draw_seed": 20260810,
+    "id_salt": "render_mode_rare_palette_v1/2026-08-10"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "filter": "lanczos3",
+    "jpg_quality": 95,
+    "interior_mode": "black",
+    "composition": "center",
+    "why_these_pins": "sheet v1/v2's pins, which are the July render-mode batches' own \u2014 the mining head was trained on crops at these settings, and a corpus whose parts differ in geometry cannot be unioned",
+    "screen_geometry": [
+      640,
+      360,
+      1
+    ]
+  },
+  "realized": {
+    "rows_by_mode": {
+      "composite_c13_smooth_stripe": 33,
+      "composite_c17_smooth_curvature": 14,
+      "composite_c7_smooth_trap_circle": 12,
+      "curv_linear": 11,
+      "direct_trap_lines": 74,
+      "direct_trap_multiply": 57,
+      "direct_trap_ring": 19,
+      "direct_trap_screen": 56,
+      "exp_smoothing": 1,
+      "gaussian_int": 14,
+      "smooth": 40,
+      "smooth_angle_min": 9,
+      "smooth_mean_angle": 10,
+      "stripe": 35,
+      "tia": 106,
+      "trap_circle": 9
+    },
+    "rows_by_kind": {
+      "composite": 78,
+      "direct": 206,
+      "pure": 216
+    },
+    "rows_by_bucket": {
+      "per_location": 440,
+      "smooth_comparison": 40,
+      "mode_floor": 20
+    },
+    "rows_by_partition": {
+      "julia:mandelbrot": 59,
+      "julia:multibrot3": 53,
+      "julia:multibrot4": 51,
+      "julia:multibrot5": 58,
+      "mandelbrot": 45,
+      "multibrot3": 63,
+      "multibrot4": 50,
+      "multibrot5": 56,
+      "phoenix": 49,
+      "phoenix:classic": 16
+    },
+    "rows_by_hue_family": {
+      "fire": 77,
+      "gold": 19,
+      "green": 150,
+      "ice": 68,
+      "purple": 38,
+      "rose": 47,
+      "spectral": 74,
+      "neutral": 27
+    },
+    "rows_by_human_score": {
+      "3": 14,
+      "4": 486
+    },
+    "distinct_locations": 235,
+    "distinct_palettes": 235,
+    "suggested_tier_hist": {
+      "1": 2,
+      "2": 189,
+      "3": 309
+    },
+    "would_pass_mining_gate": 134,
+    "transfer_dropped_rows": 0,
+    "cos_smooth": {
+      "n": 460,
+      "mean": 0.8169276119574257,
+      "q": {
+        "p5": 0.7227730393409729,
+        "p25": 0.775605246424675,
+        "p50": 0.8205329775810242,
+        "p75": 0.8594516515731812,
+        "p95": 0.9054725229740143
+      },
+      "min": 0.6328923106193542,
+      "max": 0.9702349305152893,
+      "bands": {
+        "distinct": 456,
+        "interleave": 4
+      }
+    },
+    "pred": {
+      "min": 1.2293,
+      "max": 2.9558
+    }
+  },
+  "presentation": {
+    "order": "sheet_order \u2014 DESCENDING pred (good -> bad), ties on the crop stem",
+    "sorted_on": "the continuous head score (pred), NOT the suggested tier",
+    "contiguous": true,
+    "image_id": "OPAQUE `<prefix><slot>_<hash8>` \u2014 slot is presentation position (published anyway: the sheet is sorted), hash is a salted digest of the unit key, so the id encodes no mode, palette, family or band. route.json maps it back."
+  },
+  "labels_export": "labels/scores_2026-08-10_render_mode_rare_palette_v1.json",
+  "labeling": {
+    "ui": "tools/viz/wallpaper_label.html?corpus=render_mode_corpus&tiers=3&order=file&batch=2026-08-10_render_mode_rare_palette_v1",
+    "mode": "correction \u2014 every row shows its suggested tier PREFILLED; Enter confirms, 1-3 override. Only rows Matt acts on are exported; an unreviewed suggestion never leaves the page as a label.",
+    "bulk": "accept all remaining, and accept all BELOW THIS ROW \u2014 both behind a confirm",
+    "blind_rows": 0,
+    "calibration_duplicates": 0,
+    "merge": "uv run python tools/wallpaper/merge_sitting.py --corpus render_mode_corpus --batch 2026-08-10_render_mode_rare_palette_v1 --scores labels/scores_2026-08-10_render_mode_rare_palette_v1.json --apply"
+  },
+  "render_failures": [],
+  "run_status": {
+    "drawn_rows": 500,
+    "rendered_rows": 500,
+    "n_failures": 0,
+    "n_unaccounted": 0,
+    "unaccounted_rows": [],
+    "unaccounted_note": "drawn but neither rendered nor failed \u2014 a bounded (--limit) or interrupted run; re-run `render` then `write`"
+  }
+}
