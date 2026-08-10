@@ -1,13 +1,17 @@
-"""The two emission intake snapshots are written through `paths.durable()`, and every reader
-points at that same durable path.
+"""The two emission intake snapshots resolve durable, and every reader points at that path.
 
 The intake `cluster_tags` snapshot names WHICH locations/clusters the seeded library draws
 against — a population that cannot be regenerated once its discovery scratch is cleared (the
-campaign-1 and library_intake_2 snapshots were wiped exactly that way). The writers now land the
-snapshot under `data/emission/<pass>/intake.json` via `paths.durable()`, which asserts at the
-write site that git would keep it. These tests pin that assertion AND that the readers
-(deficit_scheduler, library_intake_2's cross-ref, stage_first_release's union) resolve the same
-path — an orphaned durable write that no reader follows would be a silent half-fix.
+campaign-1 and library_intake_2 snapshots were wiped exactly that way).
+
+THE WRITERS ARE GONE (2026-08-10): `campaign1_intake.py` / `library_intake_2.py` were deleted
+in the closure sweep — no caller, and `descriptor.load_admitted`'s predicate had changed under
+them, so a re-run would have rewritten those two names with a DIFFERENT population. The
+snapshots stay; the READERS (`deficit_scheduler`'s library seed, `stage_first_release`'s union)
+are live and are now the only thing that names these paths, so the rels below are sourced from
+them rather than from the deleted writers' constants. What is pinned is unchanged in substance:
+the paths are durable-class (a gitignore would make `paths.durable` raise), disk_audit forces
+NEVER on them, and the regenerable field/emb bulk beside them stays out of the tracked tree.
 
 Run:  uv run pytest tools/emission/test_intake_durable.py -q
 """
@@ -25,11 +29,14 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "emission", ROOT / "tools" / "a
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 import paths  # noqa: E402
-import campaign1_intake as c1i  # noqa: E402
-import library_intake_2 as li2  # noqa: E402
 import stage_first_release as sfr  # noqa: E402
 import deficit_scheduler as dsch  # noqa: E402
 import disk_audit as da  # noqa: E402
+
+# The two snapshot addresses, as the LIVE readers spell them. Repo-relative rels for
+# `paths.durable()`; the absolute forms are what the readers hold.
+C1_REL = "data/emission/campaign1/intake.json"
+I2_REL = "data/emission/library_intake_2/intake.json"
 
 
 def _clear_ignore_cache():
@@ -38,10 +45,10 @@ def _clear_ignore_cache():
         clear()
 
 
-@pytest.mark.parametrize("rel", [c1i.INTAKE_REL, li2.INTAKE_REL])
-def test_write_site_asserts_durability(rel, monkeypatch):
-    """If the snapshot home ever became gitignored, the write must fail on the spot — the
-    writer routes through paths.durable(rel), so we exercise that exact rel."""
+@pytest.mark.parametrize("rel", [C1_REL, I2_REL])
+def test_durable_class_refuses_a_gitignored_snapshot_home(rel, monkeypatch):
+    """If a snapshot home ever became gitignored, `paths.durable()` must fail on the spot —
+    exercised on the exact rels the live readers resolve."""
     _clear_ignore_cache()
     monkeypatch.setattr(paths, "_is_gitignored", lambda _p: True)
     with pytest.raises(paths.DurabilityError):
@@ -49,21 +56,20 @@ def test_write_site_asserts_durability(rel, monkeypatch):
     _clear_ignore_cache()
 
 
-@pytest.mark.parametrize("rel,tail", [
-    (c1i.INTAKE_REL, "data/emission/campaign1/intake.json"),
-    (li2.INTAKE_REL, "data/emission/library_intake_2/intake.json"),
-])
+@pytest.mark.parametrize("rel,tail", [(C1_REL, C1_REL), (I2_REL, I2_REL)])
 def test_real_paths_not_gitignored(rel, tail):
     _clear_ignore_cache()
     assert str(paths.durable(rel)).replace("\\", "/").endswith(tail)
 
 
-def test_readers_point_at_the_durable_write_path():
-    """No drift between where the writers land and where the readers look."""
-    assert dsch.INTAKE_ARTIFACT == c1i.INTAKE_JSON            # scheduler library seed
-    assert li2.C1_INTAKE_JSON == c1i.INTAKE_JSON              # library_intake_2 cross-ref
-    assert sfr.C1_INTAKE == c1i.INTAKE_JSON                   # first-release union (campaign1)
-    assert sfr.I2_INTAKE == li2.INTAKE_JSON                   # first-release union (intake_2)
+def test_readers_point_at_the_durable_path():
+    """No drift between the two live readers, and both resolve to the durable address. With
+    the writers deleted this is the whole join: if `deficit_scheduler` and
+    `stage_first_release` ever disagreed, one of them would read an empty seed in silence."""
+    assert dsch.INTAKE_ARTIFACT == sfr.C1_INTAKE              # scheduler seed == release union
+    for reader, rel in ((sfr.C1_INTAKE, C1_REL), (sfr.I2_INTAKE, I2_REL)):
+        _clear_ignore_cache()
+        assert Path(reader) == paths.durable(rel)
 
 
 def test_bulk_fields_are_not_promoted_into_the_tracked_tree():
@@ -92,9 +98,6 @@ def test_bulk_fields_are_not_promoted_into_the_tracked_tree():
     dsch._refuse_scratch_class("embeddings", dsch.INTAKE_EMB_DIR)
 
 
-@pytest.mark.parametrize("rel", [
-    "data/emission/campaign1/intake.json",
-    "data/emission/library_intake_2/intake.json",
-])
+@pytest.mark.parametrize("rel", [C1_REL, I2_REL])
 def test_disk_audit_forces_never(rel):
     assert da.classify(rel).category == da.NEVER

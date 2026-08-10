@@ -168,36 +168,23 @@ class ColorGrid:
 #     by reading the constants instead of mirroring them, so the next recalibration moves
 #     both layers together and cannot leave this one behind again.
 #
-#   julia* (julia, julia_multibrot{3,4,5}) AND phoenix: z-plane viewports that the
-#     seeder NEVER deduped, so their fw spans ~3 decades within one plane and a flat
-#     K*max(fw) lets one shallow (big-fw) base view swallow genuinely-distinct deep
-#     zooms at different sub-locations (observed on the pilot run: a fw=0.86 julia
-#     base view merging fit~2.9 deep zooms 5800x finer). Use a SCALE-AWARE viewport
-#     rule instead (`_same_viewport`): same place iff the centers are close at the
-#     FINER frame (dist < K*min(fw)) AND the two zooms are comparable
-#     (max(fw) <= ZOOM_RATIO*min(fw)). Recolor siblings (~same center, ~same fw, the
-#     redundancy we DO want to kill) still merge; a decade-deeper zoom stays distinct.
-#     Julia additionally requires a seed-`c` match FIRST: `c` IS the fractal, so two
-#     DIFFERENT-c views are distinct even when both sit at the base-scale (0,0) frame
-#     (all base-scale julias share viewport (0,0,~3)). Match c, not viewport alone.
+#   julia* (julia, julia_multibrot{3,4,5}) AND phoenix: THE Z-PLANE BRANCH IS GONE
+#     (2026-08-10). It carried a scale-aware viewport rule of its own — `_same_viewport`
+#     under a local `VIEWPORT_K = 1.5` and `ZOOM_RATIO = 4.0`, plus a julia seed-`c` match —
+#     and BOTH constants were uncalibrated: named for what they govern, never fitted to any
+#     verdict set, and explicitly not the c-plane pair (which has 135 hand verdicts behind
+#     it). Nothing live reached them. `select()` is called only by `emit_v1.main` (the
+#     humanq3 emission, whose home is `scratch/wallpaper/emit_v1` and which the diversity-v1
+#     driver replaced), `selector_montage.py` and two archived studies; the LIVE release path
+#     (`tools/emission/`) does its own morph clustering and never calls `same_fractal`. So
+#     the branch was an uncalibrated policy with no caller, and it went with the closure
+#     sweep (docs/design/retired.md). Every family now takes `same_place_c_plane`.
 #
-#   NOTE ON THE SPEC. The fix prompt prescribed a flat 1.5*max(fw) for julia and
-#   carved out only phoenix as scale-aware. But julia's z-plane viewport has the
-#   identical never-upstream-deduped / decade-spanning structure as phoenix, and on
-#   the pilot run the flat rule DROPPED several high-fitness genuinely-distinct julia
-#   viewports (see the validation report) — which the same prompt forbids ("do NOT
-#   collapse genuinely-distinct locations"). So julia gets the same scale-aware
-#   viewport rule as phoenix; the c-plane rule is unchanged and matches the seeder.
-VIEWPORT_K = 1.5            # the emission-side Z-PLANE viewport K, and ONLY that. It is not
-                            # production_seeder.DEDUP_K and never was a copy of it: that pair
-                            # was calibrated on the c-PLANE coordinate gate against 135 hand
-                            # verdicts (adoption.json), while this is a different rule on a
-                            # different population (z-plane viewports, already min-scaled here,
-                            # plus the ZOOM_RATIO clause). Moving it needs its own calibration,
-                            # not a copy of that one — which is why it is named for what it
-                            # governs rather than `DEDUP_K`, a name the c-plane owner holds.
-ZOOM_RATIO = 4.0            # z-plane (julia/phoenix): frames farther apart than this in zoom are distinct places
-_C_TOL = 1e-9               # julia seed-c match tolerance (siblings share the exact seed; distinct c differ by >>tol)
+#     WHAT THAT COSTS, stated because it is a real behaviour change on the dead path: the
+#     c-plane gate is scale-aware in the same direction (0.25 * min(fw)) but has no zoom-ratio
+#     clause and no `c` match, so two same-viewport julias with DIFFERENT seed `c` — distinct
+#     fractals — would now merge. Reviving z-plane identity means calibrating it, not
+#     restoring these numbers.
 
 
 def _seeder():
@@ -213,28 +200,8 @@ def _seeder():
     return production_seeder
 
 
-def _is_julia(family: str) -> bool:
-    return family.startswith("julia")
-
-
 def _plane_dist(a: "Candidate", b: "Candidate") -> float:
     return math.hypot(a.cx - b.cx, a.cy - b.cy)
-
-
-def _c_match(a: "Candidate", b: "Candidate") -> bool:
-    if a.c_re is None or a.c_im is None or b.c_re is None or b.c_im is None:
-        return a.c_re == b.c_re and a.c_im == b.c_im       # both None -> match; one None -> distinct
-    return abs(a.c_re - b.c_re) <= _C_TOL and abs(a.c_im - b.c_im) <= _C_TOL
-
-
-def _same_viewport(a: "Candidate", b: "Candidate", k: float) -> bool:
-    """Scale-aware viewport identity for never-upstream-deduped z-planes (julia/phoenix):
-    centers close at the FINER frame AND zooms comparable — so a base view can't swallow
-    a genuinely-distinct deep zoom of a different sub-location."""
-    lo, hi = min(a.fw, b.fw), max(a.fw, b.fw)
-    if lo <= 0.0:
-        return _plane_dist(a, b) < k * hi
-    return _plane_dist(a, b) < k * lo and hi <= ZOOM_RATIO * lo
 
 
 def same_place_c_plane(a: "Candidate", b: "Candidate") -> bool:
@@ -251,25 +218,21 @@ def same_place_c_plane(a: "Candidate", b: "Candidate") -> bool:
                             ps.DEDUP_K, scale=ps.DEDUP_SCALE))
 
 
-def same_fractal(a: "Candidate", b: "Candidate", k: float = VIEWPORT_K) -> bool:
+def same_fractal(a: "Candidate", b: "Candidate") -> bool:
     """Do `a` and `b` render the SAME fractal (up to recolor / sibling-descent jitter)?
 
-    Per-family identity (see the block comment above). Falls back to exact
-    location-id equality when either candidate carries no viewport geometry, so
-    geometry-free callers keep the historical <=1/location behavior exactly.
+    ONE rule for every family now — the seeder's calibrated c-plane gate (see the block
+    comment above; the z-plane branch and its two uncalibrated constants went 2026-08-10).
+    Falls back to exact location-id equality when either candidate carries no viewport
+    geometry, so geometry-free callers keep the historical <=1/location behavior exactly.
 
-    `k` is the Z-PLANE VIEWPORT K and governs the julia/phoenix branch only. The c-plane
-    branch takes no K from here — it resolves the live calibrated pair from the seeder — so a
-    caller cannot re-open the coordinate gate by passing one.
+    Takes no `k`: the coordinate gate resolves the live calibrated pair from its owner, so a
+    caller cannot re-open it by passing one.
     """
     if a.family != b.family:
         return False
     if not (a.has_geometry and b.has_geometry):
         return a.location_id == b.location_id
-    if _is_julia(a.family):
-        return _c_match(a, b) and _same_viewport(a, b, k)
-    if a.family == "phoenix":
-        return _same_viewport(a, b, k)
     return same_place_c_plane(a, b)
 
 

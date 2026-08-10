@@ -145,15 +145,16 @@ draw from a durable roster and render via `render-one`. Both land a batch under
 in `tools/viz/corpus_label.html` (exports `scores.json`, merged by
 `tools/corpus/merge_scores.py`; revisions go to the amendment stream via
 `merge_amendments.py`) → `classifier/` trains by **unioning every batch blind to provenance**
-(`corpus_reader.py`). The `present` subcommand still builds zoom/composition batches and the
-schema still names it a crop-rebuild path, but **no live tool invokes it** — `render-one` is
-what runs today.
+(`corpus_reader.py`). The `present` subcommand — the zoom/composition crop-rebuild path the
+schema still names — was **deleted 2026-08-10** with its two Python ends
+(`pool_to_locations.py`, `build_rev4_batch.py`): no live tool invoked it, and `render-one` is
+what runs today (`retired.md`).
 
 **The label corpus contract** (full spec: `CORPUS_SCHEMA.md`). Each `images.jsonl`
 row has three independent blocks. `render` is **version-invariant** — the identical
 field set across all batches (`RENDER_KEYS` in `tools/corpus/corpus_common.py`),
 cx/cy/fw as decimal strings, and is the *only* thing the classifier sees (it's a
-pure function → `crops/<image_id>.jpg`, rebuildable via `present`/`render-one`).
+pure function → `crops/<image_id>.jpg`, rebuildable via `render-one`).
 `provenance` is **version-tagged**, free to differ/be null across batches
 (`PROVENANCE_KEYS`); it feeds the bias loop only and **never enters training**.
 `label.score ∈ {null,1,2,3,4}` (bad/okay/good/exceptional; rubric in `CORPUS_SCHEMA.md`
@@ -201,8 +202,8 @@ first K=4 head, not v9). Read it from `data/classifier/<v>/config.json`, which *
 version now has: v5/v6/v7 shipped the weight and nothing else until
 `tools/scoring/extract_retired_config.py` lifted their recipes out of the checkpoints ahead of
 the de-track — the record is small and stays, the weight is large and went. Deploy transform = `classifier.data.Transform(train=False)`: the
-deterministic **1280×720 → 384×224 bicubic stretch + normalize** mirror of `present.rs`'s JPG
-path (no jitter/flips). `model.score_from_logits` returns `Σ σ(logit_k)` ∈ [0,K−1] — the
+deterministic **1280×720 → 384×224 bicubic stretch + normalize** mirror of the Rust JPG path
+(`render_one.rs`; it mirrored the deleted `present.rs` when it was written — no jitter/flips). `model.score_from_logits` returns `Σ σ(logit_k)` ∈ [0,K−1] — the
 monotone rank score used for AP. **P(not-bad) = σ(logit₀)** (= P(rank≥1) = P(label≥2)).
 Black-gate parity with the Rust render path: accept iff `black_fraction < 0.30`
 (`BLACK_THRESH`, strict `<`).

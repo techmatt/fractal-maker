@@ -19,7 +19,6 @@ use fractal_generator::enrich;
 use fractal_generator::generate;
 use fractal_generator::guided_descend;
 use fractal_generator::palette_probe;
-use fractal_generator::present;
 use fractal_generator::probe::PERTURB_SPACING;
 use fractal_generator::render_one;
 use fractal_generator::v4_cache;
@@ -332,7 +331,6 @@ fn run() -> Result<(), String> {
     match &cli.command {
         Some(Command::Sheet(args)) => run_sheet(args),
         Some(Command::Generate(args)) => generate::run_generate(args),
-        Some(Command::Present(args)) => present::run_present(args),
         Some(Command::GuidedDescend(args)) => guided_descend::run_guided_descend(args),
         Some(Command::DumpJuliaBands(args)) => guided_descend::run_dump_julia_bands(args),
         Some(Command::Calibrate(args)) => energy::run_calibrate(args),

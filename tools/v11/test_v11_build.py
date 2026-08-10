@@ -200,3 +200,19 @@ def test_the_split_is_two_eval_roles_and_the_instrument_half_is_unbiased(record)
     assert set(record["eval_roles"]) == {"instrument", "holdout"}
     assert pop["eval_instrument"] == 1050, "the four instruments moved"
     assert pop["dropped_biased_in_forced_eval_group"] == 0
+
+
+def test_the_eval_loads_its_bars_and_does_not_restate_them():
+    """A bar in the eval script is a bar that can be edited after seeing the numbers, so the
+    eval must READ the committed pre-registration and carry no margin constant of its own.
+
+    Moved here from `tools/v10/test_v10_build.py` on 2026-08-10 when `eval_v10.py` was deleted:
+    it was written against v10's file but the property belongs to whichever eval is live, which
+    is the same defect the v10-flip tests had (a test that goes red FOR a flip rather than for
+    a fault). Source-level on purpose — the claim is about what the file does NOT contain."""
+    src = (ROOT / "tools/v11/eval_v11.py").read_text(encoding="utf-8")
+    assert "prereg_v11.json" in src and "PREREG.read_text" in src
+    for forbidden in ("NONINF_MARGIN =", "SEPARATION_BAR =", "CENSUS_Q3_REFERENCE"):
+        assert forbidden not in src, (
+            f"eval_v11.py defines its own {forbidden.strip(' =')} — bars must come from "
+            f"data/v11/prereg_v11.json, which was committed before any eval ran")

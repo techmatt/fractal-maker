@@ -41,7 +41,6 @@ for _p in (ROOT, ROOT / "tools" / "scoring", ROOT / "tools" / "corpus"):
 
 from tools.emission import descriptor as D            # noqa: E402
 from tools.emission import floors as F          # noqa: E402  THE cut owner
-from tools.emission import campaign1_intake as C1     # noqa: E402
 from tools.emission import library_seed_v2 as LS2     # noqa: E402
 import corpus_common as cc                            # noqa: E402
 
@@ -84,16 +83,39 @@ def _seeded_library(d: Path, embs: dict, tags: dict):
     D._save_embs(embs, d / D.LIBRARY_EMBS_NAME)
 
 
+def _seeded_cluster(rows, embs, library_dir):
+    """The seeded-intake composition, spelled exactly as the live call site spells it
+    (`build_emission_diversity_v1.Intake.build`, the `else:` branch): load the seed, cluster
+    WITH it, then verify nothing already in the library moved. Returns `(tags, medoid_id)`.
+
+    It used to be `campaign1_intake.cluster`, a real call site that was pure numpy and so ran
+    whole in a test. That module was deleted on 2026-08-10 (docs/design/retired.md) and the
+    one remaining call site is a method on a class that wants a GPU, a field cache and a run
+    dir — so the composition is mirrored here to keep these three behavioural tests, and the
+    two AST scans below are what tie the mirror to production: they assert that the live site
+    still loads the seed outside a `try` and still pairs the clustering with the verifier. A
+    mirror alone would drift; a scan alone would not catch a medoid displacing on a join.""" 
+    lib, prior, _note = D.load_library_seed(library_dir)
+    tags = D.assign_morph_clusters(rows, embs, library=lib)
+    D.verify_library_unmoved(prior, tags)
+    seeded = {f"{f}#{k}" for f, med in lib.items() for k, _e in med}
+    medoid_id = {}
+    for row in rows:
+        t = tags.get(row["id"])
+        if t is not None and t not in seeded and t not in medoid_id:
+            medoid_id[t] = row["id"]
+    return tags, medoid_id
+
+
 # --------------------------------------------------------------------------- #
 # 1. the intake path itself aborts — bracketed on both sides
 # --------------------------------------------------------------------------- #
 def test_the_intake_clustering_path_ABORTS_on_a_missing_seed():
-    """`campaign1_intake.cluster` is one of the two live intake call sites and is pure
-    numpy, so the whole path runs here. Before the fix this returned tags and logged a
-    note."""
+    """The composition aborts at its first step. Before the fix this returned tags and logged
+    a note."""
     rows = [{"id": "n0", "family": "mandelbrot"}]
     with pytest.raises(D.LibrarySeedUnavailable):
-        C1.cluster(rows, {"n0": _emb(1)}, library_dir=ROOT / "data" / "emission" / "_absent")
+        _seeded_cluster(rows, {"n0": _emb(1)}, ROOT / "data" / "emission" / "_absent")
 
 
 def test_the_intake_clustering_path_ABORTS_on_a_present_but_empty_seed():
@@ -104,24 +126,19 @@ def test_the_intake_clustering_path_ABORTS_on_a_present_but_empty_seed():
         d = Path(td)
         _seeded_library(d, {}, {})
         with pytest.raises(D.LibrarySeedUnavailable):
-            C1.cluster(rows, {"n0": _emb(1)}, library_dir=d)
+            _seeded_cluster(rows, {"n0": _emb(1)}, d)
 
 
-def test_the_intake_clustering_path_SUCCEEDS_and_actually_seeds_when_the_seed_is_there(
-        tmp_path, monkeypatch):
+def test_the_intake_clustering_path_SUCCEEDS_and_actually_seeds_when_the_seed_is_there():
     """The over-correction check: the guard must not have turned every intake into an
     abort. A new row that near-duplicates a library look joins the LIBRARY's cluster, which
-    is only observable if the seed reached the clustering.
-
-    `C1.OUT` is redirected because `campaign1_intake.log` appends to a progress file under
-    it — the success path writes, the two abort paths above never get that far."""
-    monkeypatch.setattr(C1, "OUT", tmp_path)
+    is only observable if the seed reached the clustering."""
     lib_emb = _emb(7)
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)
         _seeded_library(d, {"lib0": lib_emb}, {"lib0": "mandelbrot#4"})
         rows = [{"id": "n0", "family": "mandelbrot"}]
-        tags, _medoid_id = C1.cluster(rows, {"n0": lib_emb.copy()}, library_dir=d)
+        tags, _medoid_id = _seeded_cluster(rows, {"n0": lib_emb.copy()}, d)
     assert tags == {"n0": "mandelbrot#4"}          # joined, did not found #0
 
 
@@ -150,7 +167,10 @@ def test_the_scan_above_is_not_vacuous():
             continue
         if "load_library_seed(" in text:
             n += 1
-    assert n >= 2, f"expected the two intake call sites, found {n}"
+    assert n >= 1, (
+        f"expected the live intake call site (build_emission_diversity_v1), found {n}. It was "
+        f"TWO until 2026-08-10; campaign1_intake was the other and was deleted, so this bound "
+        f"came down with the population rather than being re-baselined against a growing one.")
 
 
 # --------------------------------------------------------------------------- #
@@ -181,15 +201,16 @@ def test_every_seeded_clustering_call_site_runs_the_never_moved_verifier():
                 checked += 1
                 where = f"{py.relative_to(ROOT)}:{fn.name}"
                 (verified if "verify_library_unmoved" in names else seeded).append(where)
-    assert checked >= 2, f"expected the two seeded intake call sites, found {checked}"
+    assert checked >= 1, (
+        f"expected the live seeded intake call site, found {checked} "
+        f"(two until campaign1_intake was deleted, 2026-08-10)")
     assert not seeded, f"seeded clustering with no verify_library_unmoved: {seeded}"
 
 
-def test_a_seeded_medoid_is_frozen_and_joiners_do_not_displace_it(tmp_path, monkeypatch):
+def test_a_seeded_medoid_is_frozen_and_joiners_do_not_displace_it():
     """The freeze, observed rather than asserted about: two new rows that each near-dup a
     seeded medoid but NOT each other must both land in the seeded cluster. If a join updated
     the medoid, the second row would be compared against the first and would found its own."""
-    monkeypatch.setattr(C1, "OUT", tmp_path)
     med = _emb(101)
     r = np.random.default_rng(202).normal(size=DIM).astype(np.float32)
     perp = _unit(r - np.dot(r, med) * med)
@@ -201,7 +222,7 @@ def test_a_seeded_medoid_is_frozen_and_joiners_do_not_displace_it(tmp_path, monk
         d = Path(td)
         _seeded_library(d, {"lib0": med}, {"lib0": "mandelbrot#9"})
         rows = [{"id": "n1", "family": "mandelbrot"}, {"id": "n2", "family": "mandelbrot"}]
-        tags, medoid_id = C1.cluster(rows, {"n1": j1, "n2": j2}, library_dir=d)
+        tags, medoid_id = _seeded_cluster(rows, {"n1": j1, "n2": j2}, d)
     assert tags == {"n1": "mandelbrot#9", "n2": "mandelbrot#9"}
     assert "mandelbrot#9" not in medoid_id      # a joiner never becomes the medoid
 

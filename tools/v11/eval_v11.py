@@ -48,7 +48,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-for sub in ("tools", "tools/v7", "tools/v8", "tools/corpus", "tools/scoring"):
+for sub in ("tools", "tools/v7", "tools/corpus", "tools/scoring"):
     sys.path.insert(0, str(ROOT / sub))
 
 from scipy.stats import spearmanr  # noqa: E402
@@ -56,7 +56,7 @@ from scipy.stats import spearmanr  # noqa: E402
 import partitions as P  # noqa: E402
 import paths  # noqa: E402
 from eval_delong import boot_ci, delong_paired  # reuse — do NOT reimplement DeLong  # noqa: E402
-from eval_v8 import load_model, q_auc  # reuse v8's loader verbatim  # noqa: E402
+from eval_model import load_model, q_auc  # THE shared eval loader (tools/scoring)  # noqa: E402
 
 from classifier.data_v11 import load_locations_v11  # noqa: E402
 from classifier.train_v2 import detect_device  # noqa: E402

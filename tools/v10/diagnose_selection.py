@@ -40,7 +40,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tools" / "v7"))
-sys.path.insert(0, str(ROOT / "tools" / "v8"))
+sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 sys.path.insert(0, str(ROOT / "tools" / "corpus"))
 
 import paths  # noqa: E402
@@ -48,7 +48,7 @@ from eval_delong import boot_ci, delong_paired  # noqa: E402
 from classifier.data_v4 import load_locations  # noqa: E402
 from classifier.train_v2 import detect_device  # noqa: E402
 from classifier.train_v8 import derive_k, score_renders_k  # noqa: E402
-from eval_v8 import load_model  # noqa: E402
+from eval_model import load_model  # THE shared eval loader (tools/scoring)  # noqa: E402
 
 V10_CACHE = ROOT / "data/v10/cache_manifest.jsonl"
 OUT = "v10_selection_diagnosis.json"

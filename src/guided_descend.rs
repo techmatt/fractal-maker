@@ -11,8 +11,8 @@
 //!
 //! Reuse: the cheap screen ([`probe::render_mandel_panel`] +
 //! [`generate::screen_stats`] + [`generate::AcceptBand`]), the energy-weighted
-//! content focus ([`energy::tile_energy`], same primitive `present`'s
-//! `content_focus` uses), and `present`'s focus→frame composition math
+//! content focus ([`energy::tile_energy`], the primitive the deleted `present`'s
+//! `content_focus` used), and that subcommand's focus→frame composition math
 //! (child center = focus placed inside `parent.fw × zoom_per_step`).
 //!
 //! ## The focus finder (built here — `focus_diag` is dump-only)
@@ -1821,7 +1821,7 @@ fn sample_focus(foci: &[Focus], rng: &mut SplitMix64) -> Option<Focus> {
 
 /// Density-optimal focus: the energy-weighted centroid of a default-shaded
 /// `OCC_GX×OCC_GY` edge-energy grid over the parent frame, with the same void
-/// guard `present`'s `content_focus` uses (centroid tile < `OCC_FLOOR` → snap to
+/// guard the deleted `present`'s `content_focus` used (centroid tile < `OCC_FLOOR` → snap to
 /// peak tile). Reuses the parent's already-rendered samples (no re-render).
 fn density_focus(
     parent: &Frame,
@@ -2949,7 +2949,7 @@ pub struct GuidedDescendArgs {
     #[arg(long, default_value_t = 0.30)]
     pub descent_black_cap: f64,
 
-    /// Best-of-N **Stage 2** occupancy floor (rev3, reuses present's 0.321). Stage-1
+    /// Best-of-N **Stage 2** occupancy floor (rev3, reuses the retired present's 0.321). Stage-1
     /// survivors are rendered at the 768 node size, shaded, and scored with the
     /// `energy::occupancy` parity scorer; candidates below this are rejected (keeps
     /// walks feature-rich, not empty). Among the rest the **least interior** wins.
@@ -2965,7 +2965,7 @@ pub struct GuidedDescendArgs {
     /// off:** the occ floor is skipped at d1→d2 and kept for every d≥3 step. Pass
     /// this flag to restore the legacy behaviour (occ floor at every depth). The
     /// Stage-1 interior cap and least-interior selection are unaffected at every
-    /// depth; the *presentation* occ floor (`present --occupancy-floor`) is a
+    /// depth; the *presentation* occ floor (the deleted `present --occupancy-floor`) is a
     /// separate, correctly-calibrated gate and is untouched by this flag.
     #[arg(long, default_value_t = false)]
     pub descent_occ_at_d1d2: bool,

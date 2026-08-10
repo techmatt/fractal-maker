@@ -1233,6 +1233,60 @@ class RunLedger:
 # still need to read — a closed run can be asked its summary, a dead one cannot.
 SCRATCH_TEARDOWN_KEY = "scratch_teardown"
 
+# --------------------------------------------------------------------------- #
+# ...and the number the teardown above is judged against: the WHOLE bulk store's size.
+#
+# `tools/audit/size_guard.py` walks REPO_ROOT, so the one tree it can never see is the one
+# its own rule (c) pushes everything into. This is the only number in the system that looks
+# at ARTIFACTS_ROOT, and it is stamped at the close of every run — the moment when the run
+# that just grew it is still identifiable.
+#
+# MEASURED AFTER TEARDOWN, deliberately: the run's own scratch lives INSIDE this store, so a
+# pre-teardown walk would count ~100 GB that is about to be deleted and trip the watch on
+# every long run. The number reported is the store as this run LEAVES it.
+BULK_STORE_KEY = "bulk_store"
+# Loud key above this. Set 2026-08-10 at ~2x the store's then-current 33.47 GiB
+# (389,325 files / 35,938,614,727 B, measured at C:\Code\fractal-maker-artifacts). It is a
+# WATCH, not a cap: nothing refuses, the run has already finished, and the point is that the
+# next reader of `summary.json` sees the growth instead of discovering it at 178 GB. Adjust
+# freely — a threshold that trips every run is trained out (`verification_practice.md` §4).
+BULK_STORE_WATCH_BYTES = 67 * 2**30
+BULK_STORE_OVER_WATCH_KEY = "BULK_STORE_OVER_WATCH"
+
+
+def measure_bulk_store(root=None) -> dict:
+    """Total bytes + file count of the bulk store, plus the loud key when over the watch.
+
+    NEVER RAISES, same contract as `teardown_scratch`: this runs after a closed run's summary
+    is already on disk, so an unreadable directory is a recorded `error`, not a traceback that
+    turns a finished 6 h run into a failure. A store that does not exist is `files=0`, which is
+    the honest answer for a fresh checkout that has never run one.
+    """
+    # Resolved through the ONE ARTIFACTS_ROOT resolver `paths.bulk` delegates to, never a
+    # second copy of the env-var-or-sibling rule — a store measured at a different address
+    # from the one the run wrote into is a number about nothing.
+    root = Path(root) if root is not None else _paths._artifacts.artifacts_root()
+    rec = {"root": str(root), "watch_bytes": BULK_STORE_WATCH_BYTES}
+    if not root.exists():
+        return {**rec, "files": 0, "bytes": 0, "gib": 0.0, "present": False}
+    n_files, n_bytes, n_err = 0, 0, 0
+    for dirpath, _dirs, names in os.walk(root, onerror=lambda _e: None):
+        for nm in names:
+            n_files += 1
+            try:
+                n_bytes += os.path.getsize(os.path.join(dirpath, nm))
+            except OSError:
+                n_err += 1
+    rec.update(present=True, files=n_files, bytes=n_bytes,
+               gib=round(n_bytes / 2**30, 3), unstatable=n_err)
+    if n_bytes >= BULK_STORE_WATCH_BYTES:
+        rec[BULK_STORE_OVER_WATCH_KEY] = (
+            f"bulk store is {n_bytes / 2**30:.1f} GiB across {n_files} files at {root}, over "
+            f"the {BULK_STORE_WATCH_BYTES / 2**30:.0f} GiB watch. Nothing guards this tree — "
+            f"size_guard walks the repo only. Prune finished runs' retained scratch, or raise "
+            f"steered_frontier.BULK_STORE_WATCH_BYTES if this is the new normal.")
+    return rec
+
 
 # --------------------------------------------------------------------------- #
 # The driver.
@@ -1333,8 +1387,13 @@ class SteeredFrontier:
             note="teardown had not returned when this summary was written; a summary that "
                  "STILL says this was interrupted mid-teardown and its scratch may be "
                  "partially deleted")
+        summary[BULK_STORE_KEY] = {"measured": False,
+                                   "note": "measured after teardown; see BULK_STORE_KEY"}
         path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
         summary[SCRATCH_TEARDOWN_KEY] = rec = self.teardown_scratch()
+        # After teardown, so the store is measured as this run LEAVES it (this run's own
+        # ~100 GB of scratch lives inside it and has just gone).
+        summary[BULK_STORE_KEY] = bulk_rec = measure_bulk_store(self.bulk_store_root)
         path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
         if rec["outcome"] == "scratch_deleted":
             print(f"[teardown] scratch deleted: {rec['files']} files / {rec['gb']:.2f} GB "
@@ -1343,6 +1402,12 @@ class SteeredFrontier:
             print(f"[teardown] scratch {rec['outcome']}: {rec['path']}"
                   + (f" — {rec['reason']}" if rec.get("reason") else "")
                   + (f" — {rec['error']}" if rec.get("error") else ""), flush=True)
+        print(f"[bulk-store] {bulk_rec.get('gib', 0.0):.2f} GiB / {bulk_rec.get('files', 0)} "
+              f"files at {bulk_rec['root']} (watch "
+              f"{BULK_STORE_WATCH_BYTES / 2**30:.0f} GiB)", flush=True)
+        if BULK_STORE_OVER_WATCH_KEY in bulk_rec:
+            print(f"[bulk-store] {BULK_STORE_OVER_WATCH_KEY}: "
+                  f"{bulk_rec[BULK_STORE_OVER_WATCH_KEY]}", flush=True)
         return summary
 
     def __init__(self, args):
@@ -1355,6 +1420,10 @@ class SteeredFrontier:
         # single resolver, so a new campaign needs no registry line at all; a run whose
         # run_dir is already out-of-tree (or under scratch/) keeps <run_dir>/scratch.
         self.scratch = self._bulk_scratch()
+        # The store that scratch is BORN into, resolved once here so the close-time size line
+        # measures the same address the run wrote to (and so a test can point it elsewhere the
+        # same way it points `scratch`).
+        self.bulk_store_root = _paths._artifacts.artifacts_root()
         # ...and it is torn down again on a clean close unless this is set (see
         # SCRATCH_TEARDOWN_KEY). Read on BOTH entry points (finish / finish_dive both close
         # through `_close_summary`), so it needs no DIVE_IGNORES exemption.

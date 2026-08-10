@@ -21,7 +21,8 @@ blocks:
     "fw": "0.009992443630274168", //   forever. (Shallow f64 batches store the f64's
     "maxiter": 2000,              //   exact decimal; deep batches store true arb-prec.)
     "palette": "RdGy",
-    "composition": "center",      // center | thirds | golden  (the present offset name)
+    "composition": "center",      // center | thirds | golden  (a `present` offset name;
+                              //   `present` was deleted 2026-08-10, the values are frozen)
     "width": 1280,
     "height": 720,
     "ss": 4,                      // grid supersampling factor
@@ -53,7 +54,8 @@ blocks:
 
 ### `render` — version-invariant. The classifier sees ONLY this (+ the crop).
 **Always present, identical field set across every batch.** It is a pure function from
-`render` → crop: `crops/<image_id>.jpg` is rebuildable from `render` via `present`/`render-one`.
+`render` → crop: `crops/<image_id>.jpg` is rebuildable from `render` via `render-one`
+(`present` was the other path and was deleted 2026-08-10; see `docs/design/retired.md`).
 `cx`/`cy`/`fw` are **decimal strings**, because an f64 center is meaningless at deep zoom and
 the store must outlive the depth regime that produced any one batch.
 
@@ -103,7 +105,8 @@ the exact `{image_id: measured_value}` it fired on.
 **`interior_gt30_v1`** (2026-08-01, the four `supply_crawl` batches): `provenance.interior_fraction
 > 0.30` → score **1**. Matt's rule, dictated: past 30% black the frame does not work as a
 wallpaper, no gray zone. The measure is the non-escaped fraction on the VIEW-frame screen — the
-same quantity as Rust `render::black_fraction` at the same 0.30 as `present.rs::BLACK_THRESH`,
+same quantity as Rust `render::black_fraction` at the same 0.30 the deleted
+`present.rs::BLACK_THRESH` set (it lives on in `enrich`/`guided_descend`),
 measured at the crop's own frame (`view_fw == render.fw`) at 64×36 under a maxiter 4.8–13.9× the
 crop's, so it under-fires rather than over-fires. Falsified against the 130 labels standing when
 it was applied: of 21 human-labeled rows over the threshold, **21 were class 1 and none ≥2**.
@@ -173,4 +176,4 @@ edge_floor, tile_grid), and `render_defaults` (the `render` block's batch-consta
 `batch.json`, `images.jsonl`, `scores.json`.
 
 **Gitignore** `crops/` — a crop is a pure function of its row's `render` block, rebuildable via
-`present` / `render-one`. (See the repo `.gitignore` rule for `data/label_corpus/batches/*/crops/`.)
+`render-one`. (See the repo `.gitignore` rule for `data/label_corpus/batches/*/crops/`.)

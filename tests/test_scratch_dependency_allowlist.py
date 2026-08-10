@@ -115,13 +115,13 @@ ALLOWLIST = [
     Entry("scratch/palette_preview/dramatic-test/densified.json", "tools/palettes/densify.py",
           INPUT, "preview_render's --colormaps default.",
           "regenerable — a wipe costs a re-densify"),
-    Entry("scratch/present/run4_bridge/locations.jsonl", "tools/corpus/pool_to_locations.py",
-          INPUT, "written by pool_to_locations, read by build_rev4_batch — a two-tool "
-          "handoff that lives entirely in the deletable class.",
-          "regenerable from data/guided_descend/run4/pool.jsonl"),
-    Entry("scratch/present/run4_present/manifest.json", "present (src/, Rust)", INPUT,
-          "build_rev4_batch's --manifest default.",
-          "regenerable by re-running present over run4"),
+    # THE `present` DISCOVERY CHANNEL LEFT THIS LEDGER ON 2026-08-10, with its two entries —
+    # `scratch/present/run4_bridge/locations.jsonl` (pool_to_locations -> present) and
+    # `scratch/present/run4_present/manifest.json` (present -> build_rev4_batch). All three
+    # tools are gone: the Rust `present` subcommand had no live invoker (`render-one` is what
+    # runs), and the two Python ends were runnable only through it (docs/design/retired.md).
+    # The rev4 batch they built is a tracked record and stays; what left is the ability to
+    # rebuild it, which is what deleting a closed builder costs.
     # SEVEN RANKER ROWS LEFT THIS LEDGER ON 2026-08-08 — `dive_manifest/{manifest_key.json,
     # tiles}`, `steered_run2_manifest/{manifest_key.json,tiles}`, `campaign1_blind`,
     # `pref_loc_v0_report.md` and `ranker_next_read`. Not because the hazard was resolved:

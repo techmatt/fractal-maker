@@ -105,7 +105,7 @@ use crate::render_modes::{self, ColoringParams, Family, Field, SmoothFieldColore
 use crate::{ensure_parent_dir, hp, jsonl};
 
 /// Escape radius for the **location-profile** families — identical to
-/// render-one/present/enrich/v4-render-batch.
+/// render-one/enrich/v4-render-batch.
 const BAILOUT: f64 = 1e6;
 
 /// The location-profile smooth density ([`crate::generate::color_params`]`.density`).

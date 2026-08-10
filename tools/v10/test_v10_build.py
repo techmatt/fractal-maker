@@ -186,16 +186,11 @@ def test_the_uniform_bar_is_recomputed_from_its_own_power():
     assert pr.min_detectable_auc(n_pos * 4, (n - n_pos) * 4) < arm["separation_bar"]
 
 
-def test_eval_v10_loads_its_bars_and_does_not_restate_them():
-    """A bar in the eval script is a bar that can be edited after seeing the numbers.
-    Source-level, in the style of `tools/ranker/test_ranker.py`'s pin guard: the eval must
-    read the committed pre-registration and must not carry its own margin constant."""
-    src = (ROOT / "tools/v10/eval_v10.py").read_text(encoding="utf-8")
-    assert "prereg_v10.json" in src and "PREREG.read_text" in src
-    for forbidden in ("NONINF_MARGIN =", "SEPARATION_BAR =", "V8_CENSUS_Q3_REFERENCE"):
-        assert forbidden not in src, (
-            f"eval_v10.py defines its own {forbidden.strip(' =')} — bars must come from "
-            f"data/v10/prereg_v10.json, which was committed before any eval ran")
+# `test_eval_v10_loads_its_bars_and_does_not_restate_them` stood here until 2026-08-10. Its
+# subject — `tools/v10/eval_v10.py` — was deleted in the closure sweep (its cache went
+# 2026-08-08, so it failed before its durable write; `retired.md`). The PROPERTY it guarded is
+# not v10's and did not go with it: it moved to `tools/v11/test_v11_build.py`, pointed at the
+# live eval. `data/v10/prereg_v10.json` stays as the record of what v10 was judged against.
 
 
 def test_the_prereg_records_that_the_frozen_arms_cannot_see_the_intervention():

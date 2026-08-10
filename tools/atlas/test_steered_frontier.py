@@ -1745,7 +1745,11 @@ def _scratch_run(tmp_path, *, retain=False, n_files=7, size=1024):
     (run_dir / "keep.txt").write_text("the ledger and summary live here", encoding="utf-8")
     (run_dir / "outcome_ledger.jsonl").write_text('{"guard_pass": 1}\n', encoding="utf-8")
 
-    stub = types.SimpleNamespace(run_dir=run_dir, scratch=scratch, retain_scratch=retain)
+    # The bulk-store root the close-time size line measures. Pointed at the run's own parent
+    # so the walk is over ~8 files, never the real 30+ GiB store — the same reason `scratch`
+    # is a tmp_path here.
+    stub = types.SimpleNamespace(run_dir=run_dir, scratch=scratch, retain_scratch=retain,
+                                 bulk_store_root=tmp_path)
     stub.finalize_streams = lambda: None
     for m in ("teardown_scratch", "_close_summary"):
         setattr(stub, m, types.MethodType(getattr(sf.SteeredFrontier, m), stub))
@@ -1770,6 +1774,46 @@ def test_teardown_fires_on_a_clean_close_and_takes_ONLY_the_scratch(tmp_path):
     # COUNTED, not asserted-to-exist: a smoke that asserts "it ran" passes on zero.
     assert (rec["files"], rec["bytes"]) == (7, nbytes)
     assert rec["path"] == str(scratch) and rec["retain_flag"] is False
+
+
+def test_the_close_stamps_the_bulk_store_size_AFTER_teardown(tmp_path):
+    """The store size lands on `summary.json` at every clean close, and it is the store as
+    the run LEAVES it: the run's own scratch lives inside the store, so a pre-teardown walk
+    would count the ~100 GB about to be deleted. Here the 7 scratch files are gone from the
+    count and only the 2 kept run files remain — an ordering the number itself reveals."""
+    stub, run_dir, _scratch, _nbytes = _scratch_run(tmp_path)
+    stub._close_summary(dict(run_ts="mini", mode="steered"))
+    rec = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))[sf.BULK_STORE_KEY]
+    assert rec["present"] is True and rec["root"] == str(tmp_path)
+    # COUNTED against the census, not asserted-to-exist: summary.json + keep.txt +
+    # outcome_ledger.jsonl, and NOT the 7 teardown'd field tiles.
+    assert rec["files"] == 3, rec
+    # The two run files are counted in full; `summary.json` is counted at its FIRST-write size
+    # (the close writes twice — see `_close_summary`), which is why this is a floor and not an
+    # equality against the tree as it stands now.
+    fixed = (run_dir / "keep.txt").stat().st_size + (run_dir / "outcome_ledger.jsonl").stat().st_size
+    assert fixed < rec["bytes"] < sum(f.stat().st_size for f in tmp_path.rglob("*") if f.is_file())
+    assert sf.BULK_STORE_OVER_WATCH_KEY not in rec       # a few KB is under any watch
+
+
+def test_the_bulk_store_watch_key_fires_when_injected(tmp_path, monkeypatch):
+    """Prove the loud key red on purpose (`verification_practice.md` §3). Injected on the
+    THRESHOLD, not on a fabricated 67 GiB tree: the branch under test is the comparison, and
+    a guard that has never been seen to fire is a guard that is off."""
+    (tmp_path / "a.bin").write_bytes(b"\x00" * 4096)
+    assert sf.BULK_STORE_OVER_WATCH_KEY not in sf.measure_bulk_store(tmp_path)   # control
+    monkeypatch.setattr(sf, "BULK_STORE_WATCH_BYTES", 1024)
+    rec = sf.measure_bulk_store(tmp_path)
+    assert sf.BULK_STORE_OVER_WATCH_KEY in rec
+    assert "over the" in rec[sf.BULK_STORE_OVER_WATCH_KEY]
+    assert rec["watch_bytes"] == 1024 and rec["bytes"] == 4096
+
+
+def test_measure_bulk_store_reports_an_absent_store_rather_than_raising(tmp_path):
+    """A fresh checkout that has never run one is `files=0`, not a traceback that turns a
+    finished run into a failure (`teardown_scratch`'s contract, same reason)."""
+    rec = sf.measure_bulk_store(tmp_path / "never_existed")
+    assert rec["present"] is False and (rec["files"], rec["bytes"]) == (0, 0)
 
 
 def test_retain_scratch_keeps_the_tree_and_SAYS_it_kept_it(tmp_path):

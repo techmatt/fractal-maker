@@ -75,15 +75,18 @@ REGISTRY = [
      "OK as a class — regenerable bulk. Moot while the pool it needs is gone."),
 
     # ---------------- emission intake + decision records --------------------------
-    ("data/emission/campaign1/intake.json", "tools/emission/campaign1_intake.py", DUR,
+    ("data/emission/campaign1/intake.json", "NONE — campaign1_intake.py deleted 2026-08-10", DUR,
      "NOTHING — built from discovery scratch that has since been cleared", Y,
      "MISMATCH (realized). Class is correct on paper — negated, durable-eligible, "
      "disk_audit says NEVER — but it was never committed, so the declaration never bound. "
      "cluster_tags names WHICH clusters the seeded library draws against; absent, the "
      "scheduler seed is empty (this is what the unseeded-run guard now refuses to start on)."),
-    ("data/emission/library_intake_2/intake.json", "tools/emission/library_intake_2.py", DUR,
+    ("data/emission/library_intake_2/intake.json",
+     "NONE — library_intake_2.py deleted 2026-08-10", DUR,
      "NOTHING — same shape as campaign1 (incl. phoenix cluster tags)", Y,
-     "MISMATCH (realized). Same as above: declared durable, never committed, gone."),
+     "MISMATCH (realized). Same as above: declared durable, never committed, gone. Its "
+     "writer went on 2026-08-10 (no caller, and `load_admitted`'s predicate had changed "
+     "under it, so a re-run would have written a DIFFERENT population under the name)."),
     ("data/emission/release_records/*.jsonl", "tools/emission/release_record.py", DUR,
      "NOTHING — the pool a release decision was taken against dies with --out", Y,
      "OK as of 2026-08-06. The slot stopped being empty: the post-flip run wrote 302 "
@@ -201,13 +204,12 @@ REGISTRY = [
      "MISMATCH (fragile). CLAUDE.md names this THE durable persistent-store example and "
      "the frozen quantile bins ARE the metric's definition — yet the path is gitignored. "
      "It survives only by force-add; durable() refuses any new artifact in this dir."),
-    ("data/calibration/{buffet_histograms,control_histograms,collision_distances,\n"
-     "     palette_muster,rescore_{archetype,buffet,controls}}.json",
-     "NONE — producers retired in the P2 subcommand cull", DUR_F,
-     "NOTHING — the six scoring-experiment subcommands that wrote them are deleted", Y,
-     "MISMATCH (orphaned). Committed by force-add, gitignored by rule, and 6 of the 7 "
-     "have zero references anywhere in the repo — no producer, no consumer, no doc. "
-     "Population-defining if anything ever quotes them; unrebuildable either way."),
+    # The seven orphans this row used to describe — buffet_histograms, control_histograms,
+    # collision_distances, palette_muster, rescore_{archetype,buffet,controls} — were DELETED
+    # on 2026-08-10 (docs/design/retired.md). This row said "6 of the 7 have zero references";
+    # the re-derivation before the delete found **7 of 7** — the reference the row credited was
+    # this row itself. Producer gone with the P2 subcommand cull, no consumer, no doc, and
+    # unrebuildable either way, so there was nothing to be population-defining FOR.
     ("data/calibration/dedup_droplist.json", "palette_extractor/harvest_dedup.py", DUR_F,
      "re-run the dedup harvest over the palette cache (gitignored, local-only inputs)", Y,
      "MISMATCH (fragile). Its only consumer is outside tools/; inputs are the "
@@ -416,7 +418,8 @@ REGISTRY = [
      "out-of-repo holding copy of the deleted bytes was itself deleted 2026-08-07 at the "
      "end of its stated lifetime, so the `corpus-fields` rebuild in this row's regen column "
      "is now the whole recovery path — which is what it was the whole time."),
-    ("data/emission/campaign1/embs/*.npy", "tools/emission/campaign1_intake.py", BULK,
+    ("data/emission/campaign1/embs/*.npy",
+     "NONE — campaign1_intake.py deleted 2026-08-10", BULK,
      "re-embed the intake's medoids — needs intake.json, which is gone", N,
      "Was scratch/emission/campaign1/embs and that is why campaign1 is DARK: the vectors "
      "were wiped and the snapshot went with them, so 'regenerable by contract' was false in "

@@ -187,12 +187,6 @@ pub enum Command {
     /// located, logged, single-palette-preview keepers only (3-palette labeling
     /// is a downstream stage).
     Generate(crate::generate::GenerateArgs),
-    /// Presentation renderer: takes a `locations.jsonl` from a `generate` run,
-    /// zooms in on each seed center, tries three composition offsets (center,
-    /// thirds, golden) at cheap resolution, gates on black fraction < 40%, and
-    /// renders the accepted composition at full resolution across random palettes.
-    /// Emits per-crop PNGs, a contact sheet, and a manifest.json.
-    Present(crate::present::PresentArgs),
     /// Stochastic guided descent: many decorrelated root-down walks to random
     /// depth, each step picking the next center by a probabilistic policy (mostly
     /// into a detected μ-focus). Every visited frame is a candidate; emits a
@@ -231,7 +225,7 @@ pub enum Command {
     PaletteProbe(crate::palette_probe::PaletteProbeArgs),
     /// v2-filtered enrichment batch render bridge (two disjoint modes). `score`
     /// iterates each guided-descend pool location once at the label geometry,
-    /// applies the present gates (black<0.30 + occ>=0.321), recolors survivors
+    /// applies the label-crop gates (black<0.30 + occ>=0.321), recolors survivors
     /// under K seeded score-3 palettes, and streams the recolored RGB frames to
     /// stdout for in-memory v2 scoring (no crops to disk) + a `--meta-out` gate
     /// sidecar. `render` renders the ~1100 selected `(location, argmax palette)`

@@ -195,7 +195,9 @@ def test_the_coordinate_gate_scan_would_catch_a_copy():
         assert DEDUP_LITERAL.search(planted), planted
     for ok in ("DEDUP_K = ps.DEDUP_K         # cloud viewport dedup",
                "REPLAY_K = ps.RETIRED_DEDUP_K",
-               "VIEWPORT_K = 1.5            # the emission-side Z-PLANE viewport K",
+               # a differently-NAMED constant is a different rule and must not match (this
+               # was the emission-side Z-plane K until it was deleted, 2026-08-10)
+               "VIEWPORT_K = 1.5            # a viewport K, not a coordinate-gate K",
                "DEDUP_FRAC = 0.5",
                "    k = 1.5   # a local, not a module-level policy",
                "# DEDUP_K = 1.5 used to live here"):
@@ -221,9 +223,11 @@ def test_the_emission_selector_c_plane_branch_resolves_the_owners_pair():
                                 ((0.5, 0.0, 1.0), (0.0, 0.0, 1.0))):      # symmetric, K-only
         assert es.same_fractal(cand(cx, cy, fw), cand(*other)) is ps.near_dup(
             cx, cy, fw, *other, ps.DEDUP_K, scale=ps.DEDUP_SCALE)
-    # and the emission-side VIEWPORT K is a separate rule that this alignment did not move.
-    assert es.VIEWPORT_K == 1.5 and es.ZOOM_RATIO == 4.0
     assert not hasattr(es, "DEDUP_K"), "the c-plane K is the seeder's; emission holds no copy"
+    # The emission-side Z-PLANE K used to sit beside it as a separate, uncalibrated rule. It
+    # was deleted with its branch on 2026-08-10 (no live caller), so there is now exactly ONE
+    # identity rule in that module and it is this one.
+    assert not hasattr(es, "VIEWPORT_K") and not hasattr(es, "ZOOM_RATIO")
 
 
 def test_dedup_scale_rejects_an_unknown_mode():

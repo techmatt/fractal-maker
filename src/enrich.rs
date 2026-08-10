@@ -2,12 +2,12 @@
 //!
 //! Two deliberately-disjoint modes share one render path so scoring and the final
 //! label crop are produced by the *same* iterate-once / recolor machinery as
-//! `palette-probe` / `present` (the wallpaper f64 path):
+//! `palette-probe` (the wallpaper f64 path; the gates below came from the deleted `present`):
 //!
 //! - **`--mode score`** (Stage B). For each location in a guided-descend
 //!   `pool.jsonl`, iterate ONCE at the label geometry (center composition, the
 //!   stored `cx/cy/fw`, 1280×720), apply the **present gates** (black `< 0.30` +
-//!   detail-occupancy `>= 0.321`, parity with `present`), and — for survivors —
+//!   detail-occupancy `>= 0.321`, the retired `present`'s pair), and — for survivors —
 //!   recolor under **K seeded score-3 palettes**, streaming each recolored RGB
 //!   frame to **stdout** as a raw length-prefixed record. The Python side
 //!   (`tools/corpus/enrich_score.py`) scores every frame with v2 *in-memory*
@@ -393,7 +393,7 @@ pub struct EnrichArgs {
     #[arg(long, default_value = "data/enrich/run5/selection.jsonl")]
     pub selection: String,
 
-    /// Score-3 palette roster (selective-mirror load, parity with present).
+    /// Score-3 palette roster (selective-mirror load, parity with the retired present).
     #[arg(long, default_value = "data/palettes/score3_colormaps.json")]
     pub colormaps: String,
 
@@ -422,7 +422,7 @@ pub struct EnrichArgs {
     #[arg(long, default_value_t = 4)]
     pub render_ss: u32,
 
-    /// Iteration cap (matches present/render-one label-crop default).
+    /// Iteration cap (matches the render-one label-crop default).
     #[arg(long, default_value_t = 8000)]
     pub maxiter: u32,
 

@@ -643,3 +643,98 @@ an item's evidence, the line points at it rather than restating it.
   `[decision: prompts/selection_restructure_3.md §1, Matt, 2026-08-09]`
   `[code: tools/atlas/tau_h_rederive.py; tools/atlas/test_tau_h_rederive.py;
   tools/atlas/steered_frontier.py::TAU_H_FIDELITY_BASE]`
+
+- **2026-08-10 — the legacy A/B orchestrators** (`tools/wallpaper/{prospect,overnight}_orchestrator.py`).
+  Two unattended fresh-discovery loops sharing one set of helpers: overnight owned the
+  GPU-phase decoupling, the wall-cap discipline, the run-scoped fresh-isolation assert and the
+  `state.json` resume; prospect imported them verbatim and swapped the emit tail for a
+  location-library tail. Both `--mini` arms had already been dropped and the A/B they were the
+  two halves of is dead — discovery runs through `steered_frontier` / `production_seeder`, and
+  the release through `tools/emission/`. **Checked before deleting, not assumed:** no importer
+  of either module outside the pair and its two test files, and no other user of the helpers
+  prospect imported (`run_phase`, `gpu_boundary`, `purge_cycle_intermediates`,
+  `sweep_orphan_seeder_scratch`, `assert_fresh_isolation`, `ledger_line_count`,
+  `load_state`/`save_state`, `KILL_MULT`, `LEAK_THRESH_MIB`, `_kill_tree`) — `production_seeder`
+  only NAMES `new_fresh_q3` in a comment and `test_shard_crash.py` has its own `_kill_tree`. So
+  nothing was relocated. **NOT retired: the library tail they drove** — `library_store.py`,
+  `library_annotate.py` and `library_dedup.py` are live (12 importers), so their halves of the
+  two test files were kept and the files renamed for what they now cover: `test_prospect.py` →
+  `test_library_tail.py` (19 tests), `test_pool_rebalance.py` → `test_library_dedup.py` (5).
+  What went with the orchestrators is the loop coverage: per-cycle reconciliation
+  (`reconcile_cycle`, the harvest-leak halt), the annotate retry / defer / `--rerun-failed`
+  drain, the accumulated-budget resume and the STOP sentinel.
+  `[decision: prompts/closure_sweep_1.md §1, Matt, 2026-08-10]`
+
+- **2026-08-10 — the `present` discovery channel** (`src/present.rs` + the two Python ends,
+  `tools/corpus/pool_to_locations.py` and `tools/corpus/build_rev4_batch.py`). `present` took a
+  `generate` run's `locations.jsonl`, tried three composition offsets at 320×180, gated on
+  black fraction, and rendered the winner across random library palettes. It had **no live
+  invoker** — nothing in the tree passes the subcommand name, and `render-one` is what runs
+  today (`CLAUDE.md` had said so since the corpus pipeline superseded it). The two Python ends
+  were runnable only through it: `pool_to_locations` wrote the bridge file only `present` reads,
+  `build_rev4_batch` read only the manifest only `present` writes. **Nothing else was reachable
+  only through it** — checked symbol by symbol, and every primitive it used (`black_fraction`,
+  `energy::{occupancy,OCC_*}`, `generate::color_params`, `palette_pick::parse_colormaps`,
+  `probe::SplitMix64`, `render::shade_and_downsample_filtered`) has live users in `enrich`,
+  `guided_descend`, `crop_batch` or `palette_probe`, so the Rust deletion is the one file plus
+  its four wiring lines. **NOT retired: `present`'s numbers.** The black gate `< 0.30` and the
+  occupancy floor `0.321` live on in `enrich`/`guided_descend` and in the classifier's
+  `BLACK_THRESH` parity, and the doc comments that still say "parity with present" are naming
+  where a constant came from. The rev4 and loose0_v3 batches stay; what left is the ability to
+  rebuild rev4 from committed code. `tools/corpus/import_loose0_v3.py` was NOT deleted — it
+  imports a *pre-existing* flat-generate manifest and is a frozen-record importer, not part of
+  this channel.
+  `[decision: prompts/closure_sweep_1.md §2, Matt, 2026-08-10]`
+
+- **2026-08-10 — five frozen-record write sites** (`tools/v8/eval_v8.py`, `tools/v9/eval_v9.py`,
+  `tools/v10/eval_v10.py`, `tools/emission/campaign1_intake.py`,
+  `tools/emission/library_intake_2.py`). The three eval batteries are dead in practice: each
+  reads a `data/v{8,9,10}/cache_manifest.jsonl` that was deleted (2026-08-03 / 2026-08-08),
+  unguarded, so it fails long before its durable write — but the write targets
+  (`data/v*/eval_scores_*.jsonl`) still exist and are still read through `eval_slice`, so the
+  overwrite risk was real and merely unreachable. The two emission intakes have no caller and
+  their targets are already gone; the live hazard was the opposite one — `load_admitted`'s
+  predicate changed under them on 2026-08-09, so a re-run would write a DIFFERENT population
+  under the original name. Every tracked record they once wrote stays.
+  **RELOCATED, not deleted: `eval_v8.load_model` + `q_auc`** → `tools/scoring/eval_model.py`.
+  This is a correction to the retirement's premise: `eval_v8` was NOT importer-free — the LIVE
+  `tools/v11/eval_v11.py` and `tools/v10/diagnose_selection.py` both import those two from it,
+  so deleting the module wholesale would have taken the live version's eval battery with it.
+  **NOT retired: `tools/v8/build_manifest.py`**, for the same reason and more strongly — the
+  LIVE `tools/v11/build_manifest.py` imports 17 names from it (`UF`, `cluster`,
+  `load_all_labeled`, `classify_location`, `assign_groups`, `assign_split_by_group`, `row_of`,
+  `ident`, …), as do `tools/v10/build_manifest.py` and three test files. The vN chain is a
+  copy-forward everywhere else and a real import here. Its BUILDER half — `main()`, the ten
+  gates and `load_prior_loc_ids` — was deleted instead, which is exactly the overwrite hazard
+  the retirement was aimed at; what survives is a library nobody can run by accident.
+  `[decision: prompts/closure_sweep_1.md §3, Matt, 2026-08-10]`
+
+- **2026-08-10 — seven orphaned calibration artifacts** (`data/calibration/{buffet_histograms,
+  control_histograms,collision_distances,palette_muster,rescore_{archetype,buffet,controls}}.json`,
+  65,415 B total, all written 2026-06-21). Outputs of the scoring-experiment subcommands culled in P2; the
+  producers went then and nothing replaced them. **Re-derived before deleting** (the census
+  record was in wiped scratch): `durability_map` said "6 of the 7 have zero references anywhere
+  in the repo" and the true count is **7 of 7** — the reference it credited was its own registry
+  row. No producer, no consumer, no doc, and unrebuildable, so there was nothing left for them
+  to be population-defining for. **NOT retired:** `energy_calibration.json` (live consumer —
+  `src/generate.rs` defaults to it, `energy::ARTIFACT_PATH` is the read-back path) and
+  `dedup_droplist.json` (live producer, `palette_extractor/harvest_dedup.py`; it has no
+  consumer, which is a different and weaker condition than orphaned).
+  `[decision: prompts/closure_sweep_1.md §4, Matt, 2026-08-10]`
+
+- **2026-08-10 — the `emission_selector` z-plane identity branch** (`_same_viewport`,
+  `_c_match`, `_is_julia`, `VIEWPORT_K = 1.5`, `ZOOM_RATIO = 4.0`, `_C_TOL`). A scale-aware
+  viewport rule for julia*/phoenix — families the seeder's c-plane dedup never sees — under two
+  constants that were **never calibrated against anything**: named for what they govern,
+  explicitly not the c-plane pair (which has 135 hand verdicts behind it), and moving them
+  "needs its own calibration" per their own comment. **No live caller.** `same_fractal` is
+  reached only through `emission_selector.select`, whose callers are `emit_v1.main` (the
+  humanq3 emission, output home `scratch/wallpaper/emit_v1`, superseded by
+  `build_emission_diversity_v1`), `selector_montage.py` and two archived studies; the live
+  release path does its own morph clustering and never calls it. Every family now takes
+  `same_place_c_plane`. **The cost is pinned rather than left to be found**
+  (`test_the_deleted_branch_took_the_c_match_with_it`): the c-plane gate does not look at the
+  julia seed `c`, so two base-scale julias with different `c` — genuinely different fractals —
+  now merge. Reviving z-plane identity means calibrating it, not restoring 1.5 and 4.0.
+  `[decision: prompts/closure_sweep_1.md §5, Matt, 2026-08-10]`
+  `[code: tools/wallpaper/emission_selector.py (the block comment where the branch was)]`

@@ -76,45 +76,28 @@ def test_cplane_keeps_a_deep_zoom_inside_a_wide_outcome():
     assert not es.same_fractal(wide, deep)
 
 
-def test_julia_requires_c_match():
-    # identical base-scale (0,0) viewport, DIFFERENT seed c -> distinct fractals.
+def test_zplane_families_take_the_cplane_gate_now():
+    """The z-plane branch was deleted 2026-08-10 (uncalibrated `VIEWPORT_K`/`ZOOM_RATIO`, no
+    live caller — see the module block comment). julia and phoenix now resolve through the
+    SAME calibrated coordinate gate as the c-plane families: co-located inside 0.25*min(fw)
+    merges, a decade-deeper zoom at a different center does not."""
+    a = C("julia", 0.0, 0.0, 0.14, c_re=-0.779, c_im=-0.134)
+    b = C("julia", 1e-4, 0.0, 0.18, c_re=-0.779, c_im=-0.134)   # d=1e-4 < 0.25*0.14
+    assert es.same_fractal(a, b)
+    far_ph = C("phoenix", -0.375556, 0.551152, 0.382)
+    deep_ph = C("phoenix", -0.411817, 0.540521, 3.7e-4)         # d=0.038 >> 0.25*3.7e-4
+    assert not es.same_fractal(far_ph, deep_ph)
+
+
+def test_the_deleted_branch_took_the_c_match_with_it():
+    """The COST of that deletion, pinned rather than left to be discovered: two base-scale
+    julias with different seed `c` are different fractals and the z-plane branch knew it; the
+    c-plane gate does not look at `c`, so they merge. Reviving z-plane identity means
+    calibrating it, not restoring 1.5/4.0."""
     a = C("julia", 0.0, 0.0, 3.0, c_re=-0.77, c_im=-0.13)
     b = C("julia", 0.0, 0.0, 3.0, c_re=-0.62, c_im=-0.40)
-    assert not es.same_fractal(a, b)
-
-
-def test_julia_same_c_base_recolors_merge():
-    # same seed c, base (0,0) view, comparable zoom (recolor siblings) -> merge.
-    a = C("julia", 0.0, 0.0, 0.14, c_re=-0.779, c_im=-0.134)
-    b = C("julia", 0.0, 0.0, 0.18, c_re=-0.779, c_im=-0.134)
     assert es.same_fractal(a, b)
-
-
-def test_julia_same_c_deep_zoom_distinct():
-    # same seed c, same (0,0) center, but a 45x-deeper zoom is a genuinely-distinct view.
-    a = C("julia", 0.0, 0.0, 1.61, c_re=-0.744, c_im=0.126)
-    b = C("julia", 0.0, 0.0, 0.0356, c_re=-0.744, c_im=0.126)
-    assert not es.same_fractal(a, b)
-
-
-def test_julia_same_c_far_viewport_distinct():
-    # same seed c, viewports far apart in the z-plane -> distinct sub-locations.
-    a = C("julia_multibrot3", 0.716, 0.629, 0.02, c_re=0.525, c_im=-0.144)
-    b = C("julia_multibrot3", 0.569, -0.067, 0.011, c_re=0.525, c_im=-0.144)
-    assert not es.same_fractal(a, b)
-
-
-def test_phoenix_recolor_siblings_merge():
-    a = C("phoenix", -0.444237, 0.838584, 0.078)
-    b = C("phoenix", -0.443955, 0.844047, 0.080)
-    assert es.same_fractal(a, b)
-
-
-def test_phoenix_decade_zoom_not_over_collapsed():
-    # nearby centers but a ~1000x zoom gap -> NOT the same fractal (the phoenix carve-out).
-    a = C("phoenix", -0.375556, 0.551152, 0.382)
-    b = C("phoenix", -0.411817, 0.540521, 3.7e-4)
-    assert not es.same_fractal(a, b)
+    assert not hasattr(es, "VIEWPORT_K") and not hasattr(es, "ZOOM_RATIO")
 
 
 def test_no_geometry_falls_back_to_exact_key():
@@ -147,10 +130,12 @@ def test_select_drops_recolor_dups_keeps_best():
 
 
 def test_select_keeps_distinct_fractals():
-    # two genuinely-distinct julia (different seed c) -> both kept.
+    # two genuinely-distinct julia -> both kept. The pair used to be "same viewport, different
+    # seed c", which the deleted z-plane branch separated; with every family on the c-plane
+    # gate the separation has to be in the COORDINATES, so it is (d=1.0 >> 0.25*3.0=0.75).
     cands = [
         C("julia", 0.0, 0.0, 3.0, c_re=-0.779, c_im=-0.134, cell=2, fit=3.0, iid="a"),
-        C("julia", 0.0, 0.0, 3.0, c_re=-0.62, c_im=-0.40, cell=4, fit=2.0, iid="b"),
+        C("julia", 1.0, 0.0, 3.0, c_re=-0.62, c_im=-0.40, cell=4, fit=2.0, iid="b"),
     ]
     res = es.select(cands, grid=es.ColorGrid(), **_NOCAP)
     assert sorted(c.image_id for c in res.picks) == ["a", "b"]

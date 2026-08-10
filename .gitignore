@@ -185,7 +185,7 @@ __pycache__/
 # Permanent label corpus (see data/label_corpus/CORPUS_SCHEMA.md): commit the
 # tiny, irreplaceable metadata (schema, batch.json, images.jsonl, scores.json);
 # gitignore crops/ — each crop is a pure function of its row's `render` block,
-# rebuildable via present/render-one.
+# rebuildable via render-one.
 !/data/label_corpus/
 /data/label_corpus/batches/*/crops/
 # vivid (blue/orange) companion crops — the labeler-judges-from render; rebuildable
@@ -338,7 +338,8 @@ __pycache__/
 /data/discovery/**/distinct_looks.npz
 /data/discovery/**/julia_hooks.jsonl
 
-# Phase-1 prospect location LIBRARY (tools/wallpaper/prospect_orchestrator.py). The
+# Phase-1 prospect location LIBRARY (written by tools/wallpaper/library_annotate.py; the
+# prospect_orchestrator that drove it was deleted 2026-08-10, the store was not). The
 # durable records + the consolidated embeddings matrix are load-bearing and
 # committed by EXACT PATH — not by directory. A bare `!/data/library_embeddings/`
 # would re-include the per-cycle shards/*.npz stream, which is a regenerable overlay

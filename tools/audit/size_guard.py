@@ -260,7 +260,8 @@ REGISTRY: list[Entry] = [
 
     # === RELOCATE -> artifacts — regenerable bulk (rebuildable render/cache) ====
     # Human-label corpora: the CROP JPGs are a pure function of render coords
-    # (present/render-one). The tracked scores.json / images.jsonl labels + ledgers
+    # (render-one; `present` was the other and was deleted 2026-08-10). The tracked
+    # scores.json / images.jsonl labels + ledgers
     # are tiny and STAY in-tree (guarded by test_tracked_artifacts.py); only the crop
     # bulk relocates. `_work/` preview+staging subtrees are dead intermediates.
     Entry("data/label_corpus/", KEEP, None, "tracked",
@@ -323,7 +324,7 @@ REGISTRY: list[Entry] = [
           "all default their sheet output to dramatic_palettes/<viz*>/ in-tree.",
           forward=True),
     Entry("data/guided_descend/", RELOCATE, ARTIFACTS, "mixed",
-          "render/field caches; regenerable via present/enrich (tiny pool.jsonl pools "
+          "render/field caches; regenerable via enrich (tiny pool.jsonl pools "
           "stay). FORWARD: empty today, but this is the HEAD of the live corpus pipeline — "
           "`guided-descend --out` defaults to data/guided_descend/run4 (src/guided_descend.rs) "
           "and `enrich --pool` reads data/guided_descend/run5/pool.jsonl (src/enrich.rs). "

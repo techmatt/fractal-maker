@@ -173,7 +173,8 @@ pub const OCC_GX: usize = 32;
 pub const OCC_GY: usize = 18;
 /// Per-tile edge-energy floor (OKLab ΔE/px tile mean) that defines "occupied".
 /// This is the calibration's chosen floor — NOT the gate threshold on the
-/// resulting occupancy fraction (that is `present`'s `--occupancy-floor`).
+/// resulting occupancy fraction (the deleted `present`'s `--occupancy-floor`; the live
+/// readers of this floor are `enrich` and `guided_descend`).
 pub const OCC_FLOOR: f64 = 0.010;
 
 /// Detail occupancy of a colored image at its native resolution: fraction of the
@@ -216,7 +217,8 @@ pub fn occupancy(img: &RgbImage, gx: usize, gy: usize, floor: f64) -> f64 {
 /// Per-tile **mean** edge energy of a colored image at its native resolution:
 /// the `gx*gy` row-major tile means, computed with the exact same
 /// `srgb8_to_oklab`/`edge_energy`/tiling primitive as [`occupancy`] — only the
-/// floor reduction is dropped. Used by `present`'s content-centered focus, which
+/// floor reduction is dropped. Used by `guided_descend`'s content-centered focus (a port of
+/// the deleted `present`'s), which
 /// takes the energy-weighted centroid of this grid. Degenerate tilings return an
 /// all-zero `gx*gy` grid (or empty when `gx*gy == 0`).
 pub fn tile_energy(img: &RgbImage, gx: usize, gy: usize) -> Vec<f64> {
