@@ -1,0 +1,863 @@
+{
+  "created": "2026-08-11T08:51:56",
+  "batch_id": "2026-08-11_render_mode_blind_v1",
+  "generator_version": "render_mode_blind_v1",
+  "labeler": null,
+  "n_rows": 150,
+  "schema_note": "SHEET E \u2014 the BLIND render-mode eval slice for the mining heads. Fresh (location, mode) pairs only (excluded against every prior render-mode batch by key AND by proximity, globbed, self-excluding), locations conditioned on HUMAN label quality alone, palettes drawn from the POOL against the declared rare hue-family target, coloured with the canonical emission recipe at the frozen corpus pins. Weighted toward the four contested per-mode cells; exp_smoothing excluded as measured smooth-equivalent. NO mining head score appears anywhere: no suggested_tier, no head block, no flat score, no score-ordered page. Presentation is a seeded shuffle stamped in sheet_order. EVAL-ONLY, PERMANENTLY.",
+  "sheet_incomplete": false,
+  "incomplete_note": null,
+  "registration": {
+    "source": "mining_blind_eval",
+    "biased": true,
+    "eval_eligible": false,
+    "split": "train",
+    "registered_before_build": true,
+    "owner": "tools/scoring/batch_registry.py"
+  },
+  "blind": {
+    "row_keys": [
+      "image_id",
+      "sheet_order",
+      "render",
+      "provenance",
+      "label"
+    ],
+    "machine_prelabel": null,
+    "presentation": "seeded shuffle, stamped in sheet_order and served with &order=file",
+    "shuffle_seed": 20260811,
+    "why": "an incumbent-vs-challenger eval slice must come from blind or pre-incumbent labels; a slice served with the incumbent's suggestions measures agreement with the incumbent, never quality (classifier_retrain_protocol.md 2b). Every prior render-mode batch is a correction sheet, and 0.929 of the mining sitting's labels came back equal to the served suggestion."
+  },
+  "eval_only": true,
+  "eval_only_note": "PERMANENT. Every row is stamped split_side=eval and this slice must never enter any train split, for this head generation or any later one. It was bought to referee mining v1 against the five staged arms on unanchored labels; training on it spends the only unanchored read of this population that exists. It is also deliberately absent from near_dup_groups.BATCHES, so mining_corpus.load_corpus cannot pool it in by default.",
+  "heads_read": {
+    "mining": "NONE \u2014 no mining checkpoint is loaded, scored, stamped or sorted on by this builder. A tokenizing source scan fails the build on the symbol.",
+    "location": "NONE \u2014 the location head is not read either; quality is conditioned on the HUMAN label corpus.",
+    "palette": "NONE \u2014 the palette is a screened POOL draw (rare_palette_draw against the declared rare-family target, palette_deficit.pick within family), not a head proposal."
+  },
+  "universe": {
+    "population": {
+      "population": {
+        "source": "data/label_corpus \u2014 corpus_reader.iter_labeled -> label_store.resolve_score (amendments applied); location label = MAX over its crops",
+        "n_locations": 2577,
+        "by_partition": {
+          "julia:mandelbrot": {
+            "score4": 200,
+            "score3": 609,
+            "total": 809
+          },
+          "julia:multibrot3": {
+            "score4": 30,
+            "score3": 60,
+            "total": 90
+          },
+          "julia:multibrot4": {
+            "score4": 43,
+            "score3": 61,
+            "total": 104
+          },
+          "julia:multibrot5": {
+            "score4": 44,
+            "score3": 115,
+            "total": 159
+          },
+          "mandelbrot": {
+            "score4": 103,
+            "score3": 368,
+            "total": 471
+          },
+          "multibrot3": {
+            "score4": 35,
+            "score3": 187,
+            "total": 222
+          },
+          "multibrot4": {
+            "score4": 36,
+            "score3": 115,
+            "total": 151
+          },
+          "multibrot5": {
+            "score4": 33,
+            "score3": 163,
+            "total": 196
+          },
+          "phoenix": {
+            "score4": 109,
+            "score3": 259,
+            "total": 368
+          },
+          "phoenix:classic": {
+            "score4": 1,
+            "score3": 6,
+            "total": 7
+          }
+        },
+        "totals": {
+          "score4": 634,
+          "score3": 1943
+        }
+      },
+      "exclusion": {
+        "rule": "a location is excluded if its key appears in ANY prior render-mode batch, or if it is within DEDUP_FRAC*min(fw) of one at a matching c (build_fresh_discovery._spatially_in). LOCATION level, which implies the prompt's (location, mode) pair rule and is stronger than it \u2014 affordable because the label corpus is ~30x the spent population.",
+        "prior_batches": {
+          "2026-08-06_render_mode_fresh_sheet_v1": 960,
+          "2026-08-10_render_mode_correction_v2": 1000,
+          "2026-08-10_render_mode_rare_palette_v1": 500
+        },
+        "n_prior_location_keys": 339,
+        "n_prior_location_mode_pairs": 1813,
+        "excluded_by_key": 293,
+        "excluded_by_proximity": 155,
+        "n_fresh": 2129,
+        "self_excluded_batch": "2026-08-11_render_mode_blind_v1"
+      },
+      "fresh_by_partition": {
+        "julia:mandelbrot": 732,
+        "julia:multibrot3": 54,
+        "julia:multibrot4": 73,
+        "julia:multibrot5": 122,
+        "mandelbrot": 375,
+        "multibrot3": 184,
+        "multibrot4": 114,
+        "multibrot5": 167,
+        "phoenix": 308
+      },
+      "fresh_by_human_score": {
+        "3": 1784,
+        "4": 345
+      }
+    },
+    "location_draw": {
+      "rule": "apportion.deal_round_robin over partitions (balanced-or-drained), with phoenix:classic PRESEEDED take-all \u2014 a bucketed cut never reserves, so the classic slice needs its own floor or it is absent by construction",
+      "n_locations": 150,
+      "target": 150,
+      "location_caps": {
+        "phoenix": 16,
+        "phoenix:classic": 6
+      },
+      "reserved_take_all": {},
+      "available_after_caps": {
+        "julia:mandelbrot": 732,
+        "julia:multibrot3": 54,
+        "julia:multibrot4": 73,
+        "julia:multibrot5": 122,
+        "mandelbrot": 375,
+        "multibrot3": 184,
+        "multibrot4": 114,
+        "multibrot5": 167,
+        "phoenix": 16
+      },
+      "drawn_by_partition": {
+        "julia:mandelbrot": 17,
+        "julia:multibrot3": 16,
+        "julia:multibrot4": 16,
+        "julia:multibrot5": 17,
+        "mandelbrot": 17,
+        "multibrot3": 17,
+        "multibrot4": 17,
+        "multibrot5": 17,
+        "phoenix": 16
+      },
+      "drawn_by_score": {
+        "4": 105,
+        "3": 45
+      },
+      "score4_by_partition": {
+        "julia:mandelbrot": 17,
+        "julia:multibrot3": 3,
+        "julia:multibrot4": 14,
+        "julia:multibrot5": 16,
+        "mandelbrot": 17,
+        "multibrot3": 8,
+        "multibrot4": 7,
+        "multibrot5": 7,
+        "phoenix": 16
+      },
+      "score3_by_partition": {
+        "julia:multibrot3": 13,
+        "julia:multibrot4": 2,
+        "julia:multibrot5": 1,
+        "multibrot3": 9,
+        "multibrot4": 10,
+        "multibrot5": 10
+      },
+      "balanced_excl_classic": true,
+      "balance": "max take 17, all cells within 1 or drained",
+      "fallback_note": "a partition reaches its human-3s only after its human-4s are exhausted; score3_by_partition IS the shortfall, per partition"
+    },
+    "palette_draw": {
+      "n_planned": 150,
+      "n_taken": 150,
+      "target_shares": {
+        "green": 0.28,
+        "spectral": 0.16,
+        "fire": 0.15,
+        "ice": 0.14,
+        "rose": 0.09,
+        "purple": 0.08,
+        "neutral": 0.06,
+        "gold": 0.04
+      },
+      "down_weighted": [
+        "purple",
+        "fire",
+        "ice"
+      ],
+      "over_drawn": [
+        "green",
+        "spectral",
+        "rose",
+        "neutral",
+        "gold"
+      ],
+      "distinct_supply": {
+        "fire": 438,
+        "gold": 9,
+        "green": 75,
+        "ice": 324,
+        "purple": 46,
+        "rose": 23,
+        "spectral": 57,
+        "neutral": 15
+      },
+      "planned_counts": {
+        "fire": 22,
+        "gold": 6,
+        "green": 42,
+        "ice": 21,
+        "purple": 12,
+        "rose": 14,
+        "spectral": 24,
+        "neutral": 9
+      },
+      "drawn_counts": {
+        "fire": 22,
+        "gold": 6,
+        "green": 42,
+        "ice": 21,
+        "purple": 12,
+        "rose": 14,
+        "spectral": 24,
+        "neutral": 9
+      },
+      "drawn_shares": {
+        "fire": 0.14666666666666667,
+        "gold": 0.04,
+        "green": 0.28,
+        "ice": 0.14,
+        "purple": 0.08,
+        "rose": 0.09333333333333334,
+        "spectral": 0.16,
+        "neutral": 0.06
+      },
+      "distinct_palettes_used": 150,
+      "family_distinct_used": {
+        "fire": 22,
+        "gold": 6,
+        "green": 42,
+        "ice": 21,
+        "purple": 12,
+        "rose": 14,
+        "spectral": 24,
+        "neutral": 9
+      },
+      "max_repeats": 1,
+      "sequence_prefix_deviation": 0.72,
+      "sequence_rule": "apportion.sequence_by_deficit over the planned family counts \u2014 every prefix near-target, which is what survives a truncating render budget",
+      "within_family_rule": "least-used members first, then palette_deficit.pick (deficit gain, no pref head) on intrinsic signatures"
+    },
+    "color_params": {
+      "reverse": false,
+      "log_premap": "none",
+      "gamma": 1.0,
+      "phase": 0.0,
+      "n_cycles": 1,
+      "transfer": "pct",
+      "transfer_gamma": 0.0,
+      "owner": "tools/mining/deploy_tail._color_params({}) \u2014 the canonical inherited coloring the LIVE emission path uses",
+      "one_palette_per": "LOCATION, shared by that location's rows, so the smooth twin is one render per location and two rows at a location differ ONLY in mode"
+    },
+    "roster": {
+      "n_modes": 15,
+      "n_active": 14,
+      "excluded": [
+        "exp_smoothing"
+      ],
+      "kinds": {
+        "pure": 5,
+        "composite": 5,
+        "direct": 4
+      }
+    },
+    "mode_targets": {
+      "rule": "the 4 contested modes take 25 rows each; the remaining 50 rows are apportion.deal_round_robin over the other 10 active modes (balanced-or-drained). NO score weights this.",
+      "contested_modes": [
+        "curv_linear",
+        "direct_trap_lines",
+        "direct_trap_ring",
+        "direct_trap_screen"
+      ],
+      "excluded_modes": [
+        "exp_smoothing"
+      ],
+      "excluded_why": "measured ~100% smooth-equivalent (118/118 on sheet B at cos p50 0.9972; 249/250 on sheet C) \u2014 a blind label spent on a smooth twin buys nothing",
+      "active_modes": 14,
+      "target_rows": 150,
+      "rows_by_mode": {
+        "composite_c13_smooth_stripe": 5,
+        "composite_c17_smooth_curvature": 5,
+        "composite_c7_smooth_trap_circle": 5,
+        "curv_linear": 25,
+        "direct_trap_lines": 25,
+        "direct_trap_multiply": 5,
+        "direct_trap_ring": 25,
+        "direct_trap_screen": 25,
+        "gaussian_int": 5,
+        "smooth_angle_min": 5,
+        "smooth_mean_angle": 5,
+        "stripe": 5,
+        "tia": 5,
+        "trap_circle": 5
+      },
+      "supply_by_mode": {
+        "composite_c13_smooth_stripe": 150,
+        "composite_c17_smooth_curvature": 150,
+        "composite_c7_smooth_trap_circle": 150,
+        "curv_linear": 150,
+        "direct_trap_lines": 150,
+        "direct_trap_multiply": 150,
+        "direct_trap_ring": 150,
+        "direct_trap_screen": 150,
+        "gaussian_int": 150,
+        "smooth_angle_min": 150,
+        "smooth_mean_angle": 150,
+        "stripe": 150,
+        "tia": 150,
+        "trap_circle": 150
+      }
+    },
+    "candidate_draw": {
+      "rule": "round-robin over modes (contested first), each mode walking its own seeded permutation of the drawn locations, a location capped at 2 units. Deterministic in (population, seed, targets); NO score orders it.",
+      "oversample": 1.6,
+      "quota_by_mode": {
+        "composite_c13_smooth_stripe": 8,
+        "composite_c17_smooth_curvature": 8,
+        "composite_c7_smooth_trap_circle": 8,
+        "curv_linear": 40,
+        "direct_trap_lines": 40,
+        "direct_trap_multiply": 8,
+        "direct_trap_ring": 40,
+        "direct_trap_screen": 40,
+        "gaussian_int": 8,
+        "smooth_angle_min": 8,
+        "smooth_mean_angle": 8,
+        "stripe": 8,
+        "tia": 8,
+        "trap_circle": 8
+      },
+      "drawn_by_mode": {
+        "composite_c13_smooth_stripe": 8,
+        "composite_c17_smooth_curvature": 8,
+        "composite_c7_smooth_trap_circle": 8,
+        "curv_linear": 40,
+        "direct_trap_lines": 40,
+        "direct_trap_multiply": 8,
+        "direct_trap_ring": 40,
+        "direct_trap_screen": 40,
+        "gaussian_int": 8,
+        "smooth_angle_min": 8,
+        "smooth_mean_angle": 8,
+        "stripe": 8,
+        "tia": 8,
+        "trap_circle": 8
+      },
+      "short_of_quota": {},
+      "n_candidates": 240,
+      "n_locations_used": 135,
+      "rows_per_location_hist": {
+        "1": 30,
+        "2": 105
+      },
+      "seed": 29
+    },
+    "n_candidates": 240,
+    "n_smooth_twins": 135,
+    "candidates_by_mode": {
+      "composite_c13_smooth_stripe": 8,
+      "composite_c17_smooth_curvature": 8,
+      "composite_c7_smooth_trap_circle": 8,
+      "curv_linear": 40,
+      "direct_trap_lines": 40,
+      "direct_trap_multiply": 8,
+      "direct_trap_ring": 40,
+      "direct_trap_screen": 40,
+      "gaussian_int": 8,
+      "smooth_angle_min": 8,
+      "smooth_mean_angle": 8,
+      "stripe": 8,
+      "tia": 8,
+      "trap_circle": 8
+    },
+    "candidates_by_partition": {
+      "julia:mandelbrot": 23,
+      "julia:multibrot3": 25,
+      "julia:multibrot4": 27,
+      "julia:multibrot5": 26,
+      "mandelbrot": 31,
+      "multibrot3": 28,
+      "multibrot4": 22,
+      "multibrot5": 30,
+      "phoenix": 28
+    },
+    "direct_rule": "ONE opacity x threshold cell per (location, direct mode), off a per-location permutation of DIRECT_GRID \u2014 so no direct mode appears twice at a location (sheet B's self-dup class) and distinct direct modes at a location still land on distinct cells",
+    "pair_freshness": {
+      "rule": "(location_key, render_mode) served by any prior render-mode batch",
+      "n_universe": 240,
+      "n_stale_pairs": 0,
+      "stale": []
+    }
+  },
+  "selection_report": {
+    "target_rows": 150,
+    "drawn_rows": 150,
+    "screened": 240,
+    "targets_by_mode": {
+      "composite_c13_smooth_stripe": 5,
+      "composite_c17_smooth_curvature": 5,
+      "composite_c7_smooth_trap_circle": 5,
+      "curv_linear": 25,
+      "direct_trap_lines": 25,
+      "direct_trap_multiply": 5,
+      "direct_trap_ring": 25,
+      "direct_trap_screen": 25,
+      "gaussian_int": 5,
+      "smooth_angle_min": 5,
+      "smooth_mean_angle": 5,
+      "stripe": 5,
+      "tia": 5,
+      "trap_circle": 5
+    },
+    "smooth_equivalence": {
+      "substrate": "colored_clip \u2014 palette-ON CLIP vit_base_patch16_clip_224.openai, timm eval transform (tools/curation/colored_clip.py)",
+      "pair": "the mode render vs a SMOOTH render of the same location at the same palette, colour params, geometry and render tail (mining_roster.SMOOTH_MODE through build_mining_sheet.render_one) \u2014 the mode is the only difference",
+      "strict_cut": 0.974,
+      "strict_cut_owner": "tools/emission/descriptor.NEAR_DUP_THRESHOLD",
+      "identity_interleave": [
+        0.934,
+        0.986
+      ],
+      "identity_interleave_source": "data/atlas/precanon_calibration/adoption.json (morph_gray-derived)",
+      "caveat": "BOTH anchors were derived on the GRAYSCALE morph embedding and the tree records that grayscale anchors do not transfer. On colored CLIP they are a borrowed yardstick, not a calibrated one \u2014 read every share next to `unrelated_reference`, which is the scale's actual floor here.",
+      "measured_at_geometry": [
+        640,
+        360,
+        1
+      ],
+      "excluded_smooth_equivalent": 0,
+      "unmeasured_dropped": 0,
+      "unmeasured_note": "counted APART from the smooth-equivalent exclusion: 'we could not measure this' must not read as 'this is a smooth twin'. Both are dropped \u2014 an unmeasured row must not read as distinct either.",
+      "n_rows_without_a_twin_embedding": 0,
+      "bands_over_candidates": {
+        "distinct": 239,
+        "interleave": 1
+      },
+      "by_mode": {
+        "tia": {
+          "n": 8,
+          "share_distinct": 0.875,
+          "median_cos": 0.8419294059276581
+        },
+        "stripe": {
+          "n": 8,
+          "share_distinct": 1.0,
+          "median_cos": 0.8411857783794403
+        },
+        "gaussian_int": {
+          "n": 8,
+          "share_distinct": 1.0,
+          "median_cos": 0.7871427237987518
+        },
+        "trap_circle": {
+          "n": 8,
+          "share_distinct": 1.0,
+          "median_cos": 0.7964427769184113
+        },
+        "curv_linear": {
+          "n": 40,
+          "share_distinct": 1.0,
+          "median_cos": 0.8209464251995087
+        },
+        "smooth_mean_angle": {
+          "n": 8,
+          "share_distinct": 1.0,
+          "median_cos": 0.7406921982765198
+        },
+        "smooth_angle_min": {
+          "n": 8,
+          "share_distinct": 1.0,
+          "median_cos": 0.813909649848938
+        },
+        "composite_c7_smooth_trap_circle": {
+          "n": 8,
+          "share_distinct": 1.0,
+          "median_cos": 0.7909645736217499
+        },
+        "composite_c13_smooth_stripe": {
+          "n": 8,
+          "share_distinct": 1.0,
+          "median_cos": 0.8352219462394714
+        },
+        "composite_c17_smooth_curvature": {
+          "n": 8,
+          "share_distinct": 1.0,
+          "median_cos": 0.822897732257843
+        },
+        "direct_trap_ring": {
+          "n": 40,
+          "share_distinct": 1.0,
+          "median_cos": 0.819207102060318
+        },
+        "direct_trap_screen": {
+          "n": 40,
+          "share_distinct": 1.0,
+          "median_cos": 0.770603209733963
+        },
+        "direct_trap_multiply": {
+          "n": 8,
+          "share_distinct": 1.0,
+          "median_cos": 0.7946355938911438
+        },
+        "direct_trap_lines": {
+          "n": 40,
+          "share_distinct": 1.0,
+          "median_cos": 0.7744632959365845
+        }
+      }
+    },
+    "near_dup_filter": {
+      "cut": 0.974,
+      "substrate": "colored_clip",
+      "n_dropped": 1,
+      "dropped": [
+        {
+          "unit_key": "julia_multibrot4|0.12376451487303644|-0.05256715989666879|0.12330067534235471|0.3403864134157075|0.9315688954938434|direct_trap_lines",
+          "mode": "direct_trap_lines",
+          "partition": "julia:multibrot4",
+          "palette": "cmr.guppy",
+          "cos_smooth": 0.8371269702911377,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.9845395088195801,
+          "dup_of": "julia_multibrot4|0.12376451487303644|-0.05256715989666879|0.12330067534235471|0.3403864134157075|0.9315688954938434|direct_trap_screen"
+        }
+      ],
+      "rule": "greedy in DRAW ORDER over the survivors \u2014 no two served rows within cos 0.974, INCLUDING two modes of one location. The survivor of a collision is the earlier-drawn row; NO score breaks the tie."
+    },
+    "buckets": {
+      "contested": 100,
+      "pooled_read": 50
+    },
+    "short_of_target": {},
+    "drawn_by_mode": {
+      "composite_c13_smooth_stripe": 5,
+      "composite_c17_smooth_curvature": 5,
+      "composite_c7_smooth_trap_circle": 5,
+      "curv_linear": 25,
+      "direct_trap_lines": 25,
+      "direct_trap_multiply": 5,
+      "direct_trap_ring": 25,
+      "direct_trap_screen": 25,
+      "gaussian_int": 5,
+      "smooth_angle_min": 5,
+      "smooth_mean_angle": 5,
+      "stripe": 5,
+      "tia": 5,
+      "trap_circle": 5
+    },
+    "drawn_by_kind": {
+      "composite": 25,
+      "direct": 80,
+      "pure": 45
+    },
+    "drawn_by_partition": {
+      "julia:mandelbrot": 10,
+      "julia:multibrot3": 12,
+      "julia:multibrot4": 19,
+      "julia:multibrot5": 16,
+      "mandelbrot": 19,
+      "multibrot3": 19,
+      "multibrot4": 14,
+      "multibrot5": 18,
+      "phoenix": 23
+    },
+    "drawn_by_hue_family": {
+      "fire": 23,
+      "gold": 6,
+      "green": 37,
+      "ice": 23,
+      "purple": 14,
+      "rose": 12,
+      "spectral": 27,
+      "neutral": 8
+    },
+    "drawn_by_human_score": {
+      "3": 42,
+      "4": 108
+    },
+    "distinct_locations": 110,
+    "distinct_palettes": 110,
+    "rows_per_location_hist": {
+      "1": 70,
+      "2": 40
+    },
+    "seed": 29,
+    "unused_candidates": 90
+  },
+  "render_bill": {
+    "basis": "scratch/sittings27c/bill_probe.json",
+    "speedup_assumed": 3.0,
+    "speedup_basis": "4 workers x 3 rayon threads at BELOW_NORMAL \u2014 sheet C's measured screen speedup, not a core count",
+    "n_screen_units": 375,
+    "n_keeper_units": 150,
+    "stages": {
+      "screen": {
+        "per_partition": {
+          "julia:mandelbrot": {
+            "units": 37.0,
+            "mean_s": 0.5512148936589559,
+            "single_process_min": 0.34
+          },
+          "julia:multibrot3": {
+            "units": 40.0,
+            "mean_s": 0.4400656620661418,
+            "single_process_min": 0.29
+          },
+          "julia:multibrot4": {
+            "units": 41.0,
+            "mean_s": 0.3553570906321208,
+            "single_process_min": 0.24
+          },
+          "julia:multibrot5": {
+            "units": 41.0,
+            "mean_s": 0.49910950660705566,
+            "single_process_min": 0.34
+          },
+          "mandelbrot": {
+            "units": 47.0,
+            "mean_s": 0.7846020062764486,
+            "single_process_min": 0.61
+          },
+          "multibrot3": {
+            "units": 43.0,
+            "mean_s": 0.5601867834726969,
+            "single_process_min": 0.4
+          },
+          "multibrot4": {
+            "units": 35.0,
+            "mean_s": 0.9200904766718546,
+            "single_process_min": 0.54
+          },
+          "multibrot5": {
+            "units": 47.0,
+            "mean_s": 1.1638585329055786,
+            "single_process_min": 0.91
+          },
+          "phoenix": {
+            "units": 44.0,
+            "mean_s": 0.7288670539855957,
+            "single_process_min": 0.53
+          }
+        },
+        "single_process_min": 4.2,
+        "wall_min_at_4x": 1.4
+      },
+      "keeper": {
+        "per_partition": {
+          "julia:mandelbrot": {
+            "units": 14.4,
+            "mean_s": 6.236934661865234,
+            "single_process_min": 1.49
+          },
+          "julia:multibrot3": {
+            "units": 15.6,
+            "mean_s": 3.7509833176930747,
+            "single_process_min": 0.98
+          },
+          "julia:multibrot4": {
+            "units": 16.9,
+            "mean_s": 2.5828676223754883,
+            "single_process_min": 0.73
+          },
+          "julia:multibrot5": {
+            "units": 16.2,
+            "mean_s": 4.683884938557942,
+            "single_process_min": 1.27
+          },
+          "mandelbrot": {
+            "units": 19.4,
+            "mean_s": 8.6635000705719,
+            "single_process_min": 2.8
+          },
+          "multibrot3": {
+            "units": 17.5,
+            "mean_s": 5.613601803779602,
+            "single_process_min": 1.64
+          },
+          "multibrot4": {
+            "units": 13.8,
+            "mean_s": 11.185155789057413,
+            "single_process_min": 2.56
+          },
+          "multibrot5": {
+            "units": 18.8,
+            "mean_s": 15.158188621203104,
+            "single_process_min": 4.74
+          },
+          "phoenix": {
+            "units": 17.5,
+            "mean_s": 8.55672570069631,
+            "single_process_min": 2.5
+          }
+        },
+        "single_process_min": 18.7,
+        "wall_min_at_4x": 6.2
+      }
+    },
+    "total_wall_min_at_4x": 7.6,
+    "phoenix": {
+      "share_of_keeper_units": 0.1167,
+      "per_partition": {
+        "phoenix": {
+          "units": 17.5,
+          "mean_s": 8.55672570069631,
+          "single_process_min": 2.5
+        }
+      },
+      "note": "phoenix:classic is the expensive slice (~54 s per keeper render against ~8 s for mandelbrot), which is why it carries its own location cap. It is empty whenever sheet C already spent its whole 7-location supply."
+    },
+    "projection_caveat": "the keeper stage projects the CANDIDATE partition mix scaled to the served row count; the served mix is not known until `select` runs its filters. Reproject from the run's own observed rate rather than restating this (CLAUDE.md, 'projecting a long run's wall clock')."
+  },
+  "split": {
+    "rule": "EVERY row is eval. This is not a stratified assignment and there is nothing to re-derive: the batch is an instrument, not a training set.",
+    "eval_rows": 150,
+    "train_rows": 0
+  },
+  "seeds": {
+    "draw_seed": 29,
+    "shuffle_seed": 20260811,
+    "id_salt": "render_mode_blind_v1/2026-08-11"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "filter": "lanczos3",
+    "jpg_quality": 95,
+    "interior_mode": "black",
+    "composition": "center",
+    "why_these_pins": "the July render-mode batches' own pins, which every other batch in this corpus carries \u2014 a corpus whose parts differ in geometry cannot be unioned, and the heads being refereed were trained on crops at these settings",
+    "screen_geometry": [
+      640,
+      360,
+      1
+    ]
+  },
+  "realized": {
+    "rows_by_mode": {
+      "composite_c13_smooth_stripe": 5,
+      "composite_c17_smooth_curvature": 5,
+      "composite_c7_smooth_trap_circle": 5,
+      "curv_linear": 25,
+      "direct_trap_lines": 25,
+      "direct_trap_multiply": 5,
+      "direct_trap_ring": 25,
+      "direct_trap_screen": 25,
+      "gaussian_int": 5,
+      "smooth_angle_min": 5,
+      "smooth_mean_angle": 5,
+      "stripe": 5,
+      "tia": 5,
+      "trap_circle": 5
+    },
+    "rows_by_kind": {
+      "composite": 25,
+      "direct": 80,
+      "pure": 45
+    },
+    "rows_by_bucket": {
+      "contested": 100,
+      "pooled_read": 50
+    },
+    "rows_by_partition": {
+      "julia:mandelbrot": 10,
+      "julia:multibrot3": 12,
+      "julia:multibrot4": 19,
+      "julia:multibrot5": 16,
+      "mandelbrot": 19,
+      "multibrot3": 19,
+      "multibrot4": 14,
+      "multibrot5": 18,
+      "phoenix": 23
+    },
+    "rows_by_hue_family": {
+      "fire": 23,
+      "gold": 6,
+      "green": 37,
+      "ice": 23,
+      "purple": 14,
+      "rose": 12,
+      "spectral": 27,
+      "neutral": 8
+    },
+    "rows_by_human_score": {
+      "3": 42,
+      "4": 108
+    },
+    "distinct_locations": 110,
+    "distinct_palettes": 110,
+    "transfer_dropped_rows": 0,
+    "cos_smooth": {
+      "n": 150,
+      "mean": 0.7916592852274577,
+      "q": {
+        "p5": 0.6800395458936691,
+        "p25": 0.7484771311283112,
+        "p50": 0.7983450591564178,
+        "p75": 0.8411911875009537,
+        "p95": 0.8832179844379425
+      },
+      "min": 0.5675626993179321,
+      "max": 0.9179339408874512,
+      "bands": {
+        "distinct": 150
+      }
+    },
+    "contested_rows": 100
+  },
+  "presentation": {
+    "order": "sheet_order \u2014 a SEEDED SHUFFLE of the drawn set, contiguous",
+    "sorted_on": "NOTHING. No score, machine or human, orders this sheet.",
+    "contiguous": true,
+    "image_id": "OPAQUE `<prefix><slot>_<hash8>` \u2014 slot is shuffled position, the hash a salted digest of the unit key, so the id encodes no mode, palette, family or band. route.json maps it back."
+  },
+  "labels_export": "labels/render_mode_blind_v1.json",
+  "labeling": {
+    "ui": "tools/viz/wallpaper_label.html?corpus=render_mode_corpus&tiers=3&order=file&batch=2026-08-11_render_mode_blind_v1",
+    "mode": "BLIND \u2014 no suggestion is prefilled and no row carries a machine tier. 1/2/3 label and advance; there is no confirm key and no bulk accept because there is nothing to accept.",
+    "blind_rows": 150,
+    "calibration_duplicates": 0,
+    "export_download": "scores.json (the page's export button)",
+    "save_export_as": "labels/scores_2026-08-11_render_mode_blind_v1.json",
+    "sidecar_written": "labels/render_mode_blind_v1.json",
+    "merge": "uv run python tools/wallpaper/merge_sitting.py --corpus render_mode_corpus --batch 2026-08-11_render_mode_blind_v1 --scores labels/scores_2026-08-11_render_mode_blind_v1.json --apply",
+    "then": "uv run python tools/mining/sheet_e_reverdict.py   # the one-command re-verdict, after labeling"
+  },
+  "render_failures": [],
+  "run_status": {
+    "drawn_rows": 150,
+    "rendered_rows": 150,
+    "n_failures": 0,
+    "n_unaccounted": 0,
+    "unaccounted_rows": [],
+    "unaccounted_note": "drawn but neither rendered nor failed \u2014 a bounded (--limit) or interrupted run; re-run `render` then `write`"
+  }
+}
