@@ -1,0 +1,77 @@
+{
+  "model": "wallpaper_head_v4b",
+  "target": "ordinal",
+  "num_classes": 4,
+  "loss": "CORN ordinal (K-1=3, K pinned=4)",
+  "geometry": "stretch",
+  "label_unit": "render (image_id) \u2014 NO max-over-crops",
+  "augmentation": "geometric only (border_crop + h/v flip); NO color, NO jpeg jitter",
+  "class_weighting": "none",
+  "epochs": 40,
+  "batch_size": 32,
+  "backbone_lr": 0.0002,
+  "head_lr": 0.001,
+  "weight_decay": 0.05,
+  "drop_rate": 0.2,
+  "drop_path_rate": 0.1,
+  "border_crop": 0.05,
+  "num_workers": 4,
+  "grad_clip": 1.0,
+  "amp": "off",
+  "selection": "max POOLED-eval AP>=3 (marginal P>=3); full schedule, no early stop. IDENTICAL to v4's objective and declared before the run \u2014 the v3->v4->v4b comparison basis is a controlled variable, and v2/v3's AP>=2 objective is the difference v4 already paid for, not one v4b re-opens.",
+  "selection_declared": "before training, in classifier/train_wallpaper_v4b.py",
+  "split": "the five prior batches keep v4's assignment VERBATIM (so v3 and v4 have not trained on any eval row); sheet A honours its stamped split_side except at the 73 locations it shares with a prior batch, where the prior side wins",
+  "batch_ids": [
+    "2026-07-05_wallpaper_bootstrap_v1",
+    "2026-07-05_wallpaper_humanq3_v1",
+    "2026-07-09_wallpaper_headbatch_dramatic_v1",
+    "2026-08-05_wallpaper_fresh_sheet_v1",
+    "2026-08-05_wallpaper_colorize_path_v1",
+    "2026-08-10_wallpaper_correction_v2"
+  ],
+  "unlabeled_batch_excluded": "2026-07-07_wallpaper_fresh_discovery_v1",
+  "init": "imagenet_backbone_fresh (NOT warm-started from v3 or v4)",
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "interpolation": "bicubic",
+  "input_size": [
+    3,
+    384,
+    384
+  ],
+  "src_dims": [
+    1280,
+    720
+  ],
+  "target_dims": [
+    384,
+    224
+  ],
+  "black_thresh": 0.3,
+  "split_seed": 0,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "pre_declared_slices": {
+    "motivating": [
+      "sheet_a_minibrot_maneuver"
+    ],
+    "no_worse": [
+      "fresh_colorize_path",
+      "fresh_pool_draw",
+      "overall"
+    ]
+  }
+}
