@@ -122,10 +122,10 @@ def load_rows(require_crops: bool = True) -> tuple[list, dict]:
     if not sidecar.exists():
         raise SystemExit(
             f"[sheet-d] no labels at {sidecar}.\nLabel the sheet, save the page's export as "
-            f"scratch/scores_{SHEET.batch_id}.json, then merge:\n"
+            f"labels/scores_{SHEET.batch_id}.json, then merge:\n"
             f"  uv run python tools/wallpaper/merge_sitting.py --corpus wallpaper_corpus "
             f"--batch {SHEET.batch_id} "
-            f"--scores scratch/scores_{SHEET.batch_id}.json --apply")
+            f"--scores labels/scores_{SHEET.batch_id}.json --apply")
     labels = json.loads(sidecar.read_text(encoding="utf-8"))
 
     rows, n_total, n_unlabeled = [], 0, 0

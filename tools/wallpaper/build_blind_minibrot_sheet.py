@@ -163,16 +163,26 @@ def _safe(unit_key: str) -> str:
 # =========================================================================== #
 # 1. Population — intake ∩ minibrot/maneuver ∩ fresh ∩ location-head-good, near-dup filtered.
 # =========================================================================== #
-def prior_wallpaper_locations() -> tuple[set, dict, dict]:
-    """`(location_keys, per_family_coords, per_batch_counts)` over EVERY wallpaper batch.
+def prior_wallpaper_locations(exclude_batch: str | None = None) -> tuple[set, dict, dict]:
+    """`(location_keys, per_family_coords, per_batch_counts)` over every OTHER wallpaper batch.
 
     Globbed, not listed. `build_fresh_discovery._head_corpus_exclusion` does the same job off
     a hardcoded `HEAD_CORPUS_BATCHES`, which predates three of the seven batches on disk — the
     exact failure mode a constant has here, since a sheet that silently stops excluding batch
-    eight is a sheet whose "fresh locations only" claim is false and invisible."""
+    eight is a sheet whose "fresh locations only" claim is false and invisible.
+
+    `exclude_batch` IS LOAD-BEARING AND THE GLOB IS WHY. Once this sheet has written its own
+    `images.jsonl` it is one of the batches under `batches/`, so a scan that does not skip it
+    excludes all 197 of its own locations and the population goes to zero. The observed
+    failure was ALTERNATING, which is the worst shape it could have taken: the empty run
+    still rewrote `images.jsonl` (empty), which made the NEXT run's scan find nothing to
+    exclude and succeed, which made the one after that fail again. Callers pass the spec's
+    own batch id; `None` means "no batch is being built", which is what an audit wants."""
     keys, coords, per_batch = set(), defaultdict(list), {}
     root = WALLPAPER_CORPUS / "batches"
     for bdir in sorted(root.iterdir()) if root.exists() else []:
+        if exclude_batch is not None and bdir.name == exclude_batch:
+            continue
         p = bdir / "images.jsonl"
         if not p.exists():
             continue
@@ -253,7 +263,7 @@ def population(spec: SheetSpec) -> tuple[list, dict]:
     srcs, pop_report = BWS.population()
     minibrot = [s for s in srcs if s["vein"] in BWS.MINIBROT_VEINS]
 
-    keys, coords, per_batch = prior_wallpaper_locations()
+    keys, coords, per_batch = prior_wallpaper_locations(exclude_batch=spec.batch_id)
     n_key = n_spatial = 0
     fresh = []
     for s in minibrot:
@@ -747,6 +757,15 @@ def run_write(spec: SheetSpec, args):
     if not done:
         raise SystemExit("[write] no rendered units — run `render` first")
     live = [s for s in selected if s["unit_key"] in done]
+    # FAIL BEFORE TRUNCATING. `images.jsonl` is opened "w" below, so a run that reaches that
+    # line with nothing to write REPLACES a good sheet with an empty one — and an empty
+    # images.jsonl then feeds back into the next run's own prior-batch scan. That is exactly
+    # how the self-exclusion bug turned into an ALTERNATING failure instead of a loud one.
+    if not live:
+        raise SystemExit(
+            f"[write] {len(selected)} selected, {len(done)} in the render ledger, 0 in both — "
+            f"refusing to overwrite {spec.batch_dir / 'images.jsonl'} with an empty sheet. "
+            f"The draw and the ledger disagree; re-run `select` and compare.")
 
     # PRESENTATION ORDER — a SEEDED SHUFFLE, stamped. Not sorted, not grouped, not scored.
     rng = np.random.default_rng([spec.shuffle_seed, 1])
@@ -922,16 +941,18 @@ def run_write(spec: SheetSpec, args):
             "calibration_duplicates": 0,
             # THREE DIFFERENT FILES, named explicitly because two of them are easy to
             # confuse and the confusion lands at the END of a labeling sitting: the page
-            # downloads `scores.json`, `--scores` READS whatever you save that as, and the
+            # downloads `scores.json`, `--scores` READS whatever you save that as (beside the
+            # sidecar, NOT under scratch/ — a label export is the one artifact in the
+            # pipeline with no rebuild path, and scratch/ is wiped wholesale), and the
             # merge WRITES the sidecar (`labels/<generator_version>.json`, derived by
             # `merge_sitting.sidecar_for` from this batch's own manifest). The re-verdict
             # then reads the sidecar, never the export.
             "export_download": "scores.json (the page's export button)",
-            "save_export_as": f"scratch/scores_{spec.batch_id}.json",
+            "save_export_as": f"labels/scores_{spec.batch_id}.json",
             "sidecar_written": spec.labels_export,
             "merge": f"uv run python tools/wallpaper/merge_sitting.py "
                      f"--corpus wallpaper_corpus --batch {spec.batch_id} "
-                     f"--scores scratch/scores_{spec.batch_id}.json --apply",
+                     f"--scores labels/scores_{spec.batch_id}.json --apply",
             "then": f"uv run python tools/wallpaper/sheet_d_reverdict.py   "
                     f"# the one-command re-verdict, after labeling",
         },

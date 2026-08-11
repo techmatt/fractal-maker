@@ -1,5 +1,5 @@
 {
-  "created": "2026-08-11T01:47:26",
+  "created": "2026-08-11T01:54:36",
   "batch_id": "2026-08-11_wallpaper_blind_minibrot_v1",
   "generator_version": "wallpaper_blind_minibrot_v1",
   "labeler": null,
@@ -256,9 +256,9 @@
     "blind_rows": 197,
     "calibration_duplicates": 0,
     "export_download": "scores.json (the page's export button)",
-    "save_export_as": "scratch/scores_2026-08-11_wallpaper_blind_minibrot_v1.json",
+    "save_export_as": "labels/scores_2026-08-11_wallpaper_blind_minibrot_v1.json",
     "sidecar_written": "labels/wallpaper_blind_minibrot_v1.json",
-    "merge": "uv run python tools/wallpaper/merge_sitting.py --corpus wallpaper_corpus --batch 2026-08-11_wallpaper_blind_minibrot_v1 --scores scratch/scores_2026-08-11_wallpaper_blind_minibrot_v1.json --apply",
+    "merge": "uv run python tools/wallpaper/merge_sitting.py --corpus wallpaper_corpus --batch 2026-08-11_wallpaper_blind_minibrot_v1 --scores labels/scores_2026-08-11_wallpaper_blind_minibrot_v1.json --apply",
     "then": "uv run python tools/wallpaper/sheet_d_reverdict.py   # the one-command re-verdict, after labeling"
   },
   "render_failures": [],

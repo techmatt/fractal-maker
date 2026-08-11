@@ -217,6 +217,34 @@ def test_draw_never_orders_on_a_score():
     assert picked != top10, "the draw reproduced the top-10 by score — it is ordering on it"
 
 
+def test_the_sheet_does_not_exclude_itself():
+    """THE ALTERNATING BUG, pinned. Once sheet D has written its own `images.jsonl` it is one
+    of the batches under `batches/`, so a prior-batch scan that does not skip it excludes all
+    197 of its own locations. That alone would be a loud zero — what made it vicious is that
+    the empty run still rewrote `images.jsonl`, which made the NEXT run's scan find nothing to
+    exclude and succeed, so the failure alternated instead of persisting."""
+    with_self, _c, per_batch = BD.prior_wallpaper_locations()
+    without_self, _c2, per_batch2 = BD.prior_wallpaper_locations(exclude_batch=SPEC.batch_id)
+    if SPEC.batch_id not in per_batch:
+        pytest.skip("sheet D is not built in this tree")
+    assert SPEC.batch_id not in per_batch2
+    assert len(without_self) < len(with_self), "the exclusion is not actually skipping it"
+    # ...and the built sheet's own locations are precisely what the skip removes
+    assert per_batch[SPEC.batch_id] == 197
+
+
+def test_population_is_stable_after_the_sheet_exists():
+    """A second `select` must reproduce the first. This is the property the bug broke, and it
+    is checked end to end rather than through the helper, because the helper is only one of
+    the two places the batch id has to be threaded."""
+    eligible1, rep1 = BD.population(SPEC)
+    eligible2, rep2 = BD.population(SPEC)
+    assert [s["unit_key"] for s in eligible1] == [s["unit_key"] for s in eligible2]
+    if (SPEC.batch_dir / "images.jsonl").exists():
+        assert rep1["n_eligible"] > 0, ("the population went to zero with the sheet on disk — "
+                                        "the self-exclusion regression is back")
+
+
 def test_good_floor_is_the_location_head_and_rejects_a_missing_score():
     assert F.passes_good_floor(0.5) and not F.passes_good_floor(0.499)
     assert not F.passes_good_floor(None)
