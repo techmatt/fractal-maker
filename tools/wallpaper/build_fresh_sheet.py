@@ -31,7 +31,8 @@ audited against the thing it was a proxy for; the run prints their agreement.
            oversampled inside each bin; PICKS_PER_LOC picks spread across each location's
            own screen range (so a location contributes its worst render, not only its best)
   render   the label-crop pins (label_crop.py: 1280x720 ss2 lanczos3 q90) -> score with v3
-           -> stamp head_v3 + suggested_tier (suggest_tier.py) + split_side
+           -> stamp head_v3 + suggested_tier (suggest_tier.INTAKE_CUTS — this sheet's own
+              population, not the dramatic slice's `CUTS`) + split_side
   write    images.jsonl (seeded-shuffled presentation order, `sheet_order` stamped) +
            batch.json
 
@@ -79,8 +80,17 @@ from label_crop import (                 # noqa: E402  THE label-crop pins (Reci
 from tools.emission import descriptor as D        # noqa: E402
 from tools.emission import ledger_rescore as LR   # noqa: E402
 from tools.wallpaper import wallpaper_pins as WP  # noqa: E402  the head pin (torch-free)
+# THE STAGE-2 CUTS, NOT THE DRAMATIC ONES (Matt, 2026-08-11). `suggest_tier.CUTS` is fitted
+# on the dramatic+humanq3 eval slice — curated and top-heavy, prior {1:17%, 2:43%, 3:27%,
+# 4:13%} — and this sheet draws from the stage-2 admitted intake, prior {1:43%, 2:38%, 3:14%,
+# 4:5%}. `INTAKE_CUTS` is fitted on THIS sheet's own population (the two 2026-08-05 intake
+# sheets, 1,140 labeled rows), so the suggestion it prefills reproduces the distribution the
+# rows actually come from instead of one that says the intake is a third better than it is.
+# Both sets were re-derived under the live head at the same flip, so this is a population
+# choice and not a scale one.
 from tools.wallpaper.suggest_tier import (        # noqa: E402
-    CUTS as SUGGEST_CUTS, DERIVATION as SUGGEST_DERIVATION, expected_tier, tier_from_pred)
+    INTAKE_CUTS as SUGGEST_CUTS, INTAKE_DERIVATION as SUGGEST_DERIVATION,
+    expected_tier, tier_from_pred)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -738,7 +748,9 @@ def run_render(args):
                     "ckpt": WP.HEAD_CKPT_REL, "head_version": WP.HEAD_VERSION,
                 },
                 "p_ge3": float(marg[j, 1]),          # flat, the prompt's stamp
-                "suggested_tier": tier_from_pred(pred),
+                # explicit, never the default: `tier_from_pred`'s default is the DRAMATIC
+                # `CUTS` and this sheet serves the intake set (see the import comment).
+                "suggested_tier": tier_from_pred(pred, SUGGEST_CUTS),
             })
 
         with _ledger_path().open("a", encoding="utf-8") as fh:
