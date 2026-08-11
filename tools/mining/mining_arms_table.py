@@ -75,6 +75,39 @@ def load(arm: Arm) -> dict | None:
     return out
 
 
+def derive_dose(uniform: bool) -> dict:
+    """Per-kind training weight removed, computed from the corpus rather than read.
+
+    `dedup_weighted` was trained before the trainer stamped `train_weight_by_kind`, so its
+    record has no dose. The dose is a PURE FUNCTION of the pooled corpus and the weighting
+    mode, so it is derived here for every arm and cross-checked against the stamp where one
+    exists — deriving it is better than back-editing a committed run record, and the
+    cross-check is what stops the derivation and the stamp drifting apart."""
+    from tools.mining.mining_corpus import load_corpus
+    tr = load_corpus(require_crops=False).train
+    out = {}
+    for k in sorted({r.kind for r in tr}):
+        ws = [1.0 if uniform else r.weight for r in tr if r.kind == k]
+        out[k] = {"train_rows": len(ws), "effective_weight": round(sum(ws), 2),
+                  "down_weighted_pct": round(100 * (1 - sum(ws) / len(ws)), 2)}
+    return out
+
+
+def dose_for(r: dict) -> tuple[dict, str]:
+    """`(dose, note)` — the stamped dose if the record has one, else the derived one."""
+    stamped = r["metrics"].get("train_weight_by_kind")
+    derived = derive_dose(r["arm"].weights == "UNIFORM")
+    if not stamped:
+        return derived, "derived"
+    for k, v in derived.items():
+        if abs(v["down_weighted_pct"] - stamped[k]["down_weighted_pct"]) > 0.01:
+            raise AssertionError(
+                f"{r['arm'].key}: stamped dose for {k} "
+                f"({stamped[k]['down_weighted_pct']}%) disagrees with the corpus "
+                f"({v['down_weighted_pct']}%) — one of them describes another run")
+    return stamped, "stamped"
+
+
 def _pct(share: dict | None, kind: str) -> str:
     if not share or kind not in share:
         return "—"
@@ -110,16 +143,15 @@ def build(rows: list[dict]) -> str:
           f"{bd('auc_ge3')} | {v} |")
 
     A("\n### Mechanism — training weight removed per kind (the dose, beside the outcome)\n")
-    A("| arm | direct | composite | pure | train rows | effective weight |")
-    A("|---|---:|---:|---:|---:|---:|")
+    A("| arm | direct | composite | pure | train rows | effective weight | source |")
+    A("|---|---:|---:|---:|---:|---:|---|")
     for r in rows:
-        a, m = r["arm"], r["metrics"]
-        share = m.get("train_weight_by_kind")
-        tot_rows = sum(v["train_rows"] for v in share.values()) if share else None
-        tot_w = sum(v["effective_weight"] for v in share.values()) if share else None
+        a = r["arm"]
+        share, src = dose_for(r)
+        tot_rows = sum(v["train_rows"] for v in share.values())
+        tot_w = sum(v["effective_weight"] for v in share.values())
         A(f"| `{a.key}` | {_pct(share, 'direct')} | {_pct(share, 'composite')} | "
-          f"{_pct(share, 'pure')} | {tot_rows or '—'} | "
-          f"{'—' if tot_w is None else f'{tot_w:.1f}'} |")
+          f"{_pct(share, 'pure')} | {tot_rows} | {tot_w:.1f} | {src} |")
 
     A("\n### Where best-epoch landed (the early-plateau caveat's test)\n")
     A("| arm | best epoch per seed | median | early (≤10 of 40)? |")
@@ -166,6 +198,11 @@ def main(argv=None):
     md = build(rows)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(md, encoding="utf-8")
+    # The FILE is the deliverable and it is written first. The console echo is a
+    # convenience and must never be able to fail the run: a redirected stdout on Windows
+    # is cp1252, and the table's "≥" killed the first pass AFTER the file was already on
+    # disk — an exit code that reported failure for work that had succeeded.
+    sys.stdout.reconfigure(errors="replace")
     print(md)
     print(f"-> {a.out}")
 

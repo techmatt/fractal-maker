@@ -1,0 +1,96 @@
+{
+  "model": "render_mode_head_v3",
+  "arm": "uniform",
+  "target": "ordinal",
+  "num_classes": 3,
+  "loss": "CORN ordinal (K-1=2, K pinned=3), PER-SAMPLE WEIGHTED (model.corn_loss_weighted)",
+  "geometry": "stretch",
+  "label_unit": "render (image_id)",
+  "augmentation": "geometric only (border_crop=0.05 per EDGE + axis_crop=0.0 per AXIS + h/v flip 0.5); NO color, NO jpeg jitter",
+  "aug_rationale": "palette/mode/color IS the label (same as v1/head-v3)",
+  "axis_crop": 0.0,
+  "uniform_weights": true,
+  "train_weight_by_kind": {
+    "composite": {
+      "train_rows": 348,
+      "effective_weight": 348.0,
+      "down_weighted_pct": 0.0
+    },
+    "direct": {
+      "train_rows": 568,
+      "effective_weight": 568.0,
+      "down_weighted_pct": 0.0
+    },
+    "pure": {
+      "train_rows": 571,
+      "effective_weight": 571.0,
+      "down_weighted_pct": 0.0
+    }
+  },
+  "class_weighting": "none",
+  "epochs": 40,
+  "batch_size": 32,
+  "backbone_lr": 0.0002,
+  "head_lr": 0.001,
+  "weight_decay": 0.05,
+  "drop_rate": 0.2,
+  "drop_path_rate": 0.1,
+  "border_crop": 0.05,
+  "num_workers": 4,
+  "grad_clip": 1.0,
+  "amp": "off",
+  "selection": "max eval AP>=3 (marginal P>=3) on the deduplicated pooled eval side; full schedule, no early stop",
+  "selection_metric": "ap_ge3",
+  "selection_declared": "before training, in classifier/train_mining_head_v3.py",
+  "init": "imagenet_backbone_fresh \u2014 NOT a finetune of v1 or v2",
+  "split": "re-derived GLOBALLY over the pooled corpus (split_units.build_split, union-find over Julia-seed == parent point, family-stratified over UNITS); the per-batch stamps are INCONSISTENT and are recorded, not honored",
+  "split_seed": 0,
+  "eval_frac": 0.4,
+  "row_weighting": "UNIFORM \u2014 the 1/group_size weights are LIFTED for this arm; the grouping still governs the split and the eval dedup",
+  "batches": [
+    "v1_sitting",
+    "sheetB",
+    "sheetC"
+  ],
+  "backbone": "mobilenetv4_conv_small.e2400_r224_in1k",
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "interpolation": "bicubic",
+  "input_size": [
+    3,
+    224,
+    224
+  ],
+  "src_dims": [
+    1280,
+    720
+  ],
+  "target_dims": [
+    384,
+    224
+  ],
+  "black_thresh": 0.3,
+  "gate": "marginal p_ge = cumprod(sigma); NEVER the CORN conditional",
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "deviations_from_v1": [
+    "DATA: pooled 3-batch corpus, not the lost dataset_v1/",
+    "SPLIT: re-derived globally over the pooled locations",
+    "WEIGHTS: 1/near_dup_group_size (v1 had no grouping)",
+    "SELECTION: AP>=3, where v1 selected AP>=2",
+    "MODES: every mode in the corpus; v1's trainer dropped three"
+  ]
+}
