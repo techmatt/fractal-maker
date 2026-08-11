@@ -676,6 +676,31 @@ __pycache__/
 !/data/render_mode_head/v3/per_seed.json
 !/data/render_mode_head/v3/report.md
 !/data/render_mode_head/v3/report.json
+# The three (28) ARMS of v3 — same corpus, same split, same objective, same eval, ONE
+# variable changed each (addenda 2 and 3). They are experiments, not versions: none is
+# pinnable and none may be, so they get v3's shape — weight and per-seed dirs are working
+# state, run record and winner-rule report are the tracked evidence.
+!/data/render_mode_head/v3_aug/
+/data/render_mode_head/v3_aug/*
+!/data/render_mode_head/v3_aug/config.json
+!/data/render_mode_head/v3_aug/metrics.json
+!/data/render_mode_head/v3_aug/per_seed.json
+!/data/render_mode_head/v3_aug/report.md
+!/data/render_mode_head/v3_aug/report.json
+!/data/render_mode_head/v3_augx/
+/data/render_mode_head/v3_augx/*
+!/data/render_mode_head/v3_augx/config.json
+!/data/render_mode_head/v3_augx/metrics.json
+!/data/render_mode_head/v3_augx/per_seed.json
+!/data/render_mode_head/v3_augx/report.md
+!/data/render_mode_head/v3_augx/report.json
+!/data/render_mode_head/v3_uniform/
+/data/render_mode_head/v3_uniform/*
+!/data/render_mode_head/v3_uniform/config.json
+!/data/render_mode_head/v3_uniform/metrics.json
+!/data/render_mode_head/v3_uniform/per_seed.json
+!/data/render_mode_head/v3_uniform/report.md
+!/data/render_mode_head/v3_uniform/report.json
 
 # data_large/ was deleted 2026-07-31 (repo-hygiene pass): it held one README and no
 # data, and its name collided with data/. Regenerable bulk goes out of tree via

@@ -130,6 +130,7 @@ class Transform:
                  mean: tuple[float, ...], std: tuple[float, ...],
                  train: bool,
                  border_crop: float = 0.05,
+                 axis_crop: float = 0.0,
                  jpeg_q: tuple[int, int] = (85, 95),
                  brightness: float = 0.03, contrast: float = 0.03,
                  hflip: float = 0.5, vflip: float = 0.5):
@@ -139,6 +140,17 @@ class Transform:
         self.std = torch.tensor(std).view(3, 1, 1)
         self.train = train
         self.border_crop = border_crop
+        # `axis_crop` is a SECOND, gentler crop shape, added 2026-08-10 for the (28)
+        # render-mode aug arms and DEFAULT OFF so no existing recipe moves. The difference
+        # from `border_crop` is not a factor of two — it is the shape:
+        #   border_crop=b : each of the four EDGES independently ~ U(0, b) of its dimension,
+        #                   so an axis loses U(0,b)+U(0,b) (up to 2b) and the frame TRANSLATES.
+        #   axis_crop=a   : each AXIS loses a single U(0, a) total, placed at a random offset
+        #                   within the axis. Bounded by a, not 2a, and the two axes are drawn
+        #                   independently of each other.
+        # Both resize back to the target through the same `resize_core`, so the deploy
+        # geometry is untouched either way. They compose: border first, then axis.
+        self.axis_crop = axis_crop
         self.jpeg_q = jpeg_q
         self.brightness = brightness
         self.contrast = contrast
@@ -159,6 +171,15 @@ class Transform:
                 b = int(round(r.uniform(0, self.border_crop) * h))
                 if l + rr < w - 8 and t + b < h - 8:
                     img = img.crop((l, t, w - rr, h - b))
+            # --- per-axis crop: ONE U(0, axis_crop) total per axis, random offset ---
+            if self.axis_crop > 0:
+                w, h = img.size
+                cw = int(round(r.uniform(0, self.axis_crop) * w))
+                ch = int(round(r.uniform(0, self.axis_crop) * h))
+                if cw < w - 8 and ch < h - 8:
+                    l = r.randint(0, cw) if cw else 0
+                    t = r.randint(0, ch) if ch else 0
+                    img = img.crop((l, t, w - (cw - l), h - (ch - t)))
             img = resize_core(img, self.geometry, self.interp)
             # --- flips (conjugate-symmetric set: h, v both valid) ---
             if r.random() < self.hflip:

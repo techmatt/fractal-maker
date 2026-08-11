@@ -78,6 +78,11 @@ from tools.v10.prereg import hanley_mcneil_se, min_detectable_auc       # noqa: 
 V1_CKPT = MP.ACTIVE_MINING_CKPT                       # the incumbent, read off the pin
 V3_DIR = ROOT / "data" / "render_mode_head" / "v3"
 V3_CKPT = "data/render_mode_head/v3/model_best.pt"
+# The candidate is a DIRECTORY, not a version: the (28) arms (`v3`, `v3_aug`, `v3_augx`,
+# `v3_uniform`) are four single-variable passes over the identical corpus, split, objective
+# and eval, and each is read against v1 through this same file. `--candidate-dir` moves it;
+# the arm NAME comes out of the candidate's own config.json rather than the path, so a
+# report cannot describe the wrong experiment because a directory was renamed.
 FANCY_KINDS = frozenset({"composite", "direct"})      # tools.mining.build_mining_correction
 
 # The metric set — K=3, so two boundaries and two statistics each. Fixed above the code.
@@ -223,15 +228,27 @@ def volume_matched(labels, base, cand) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-def build(rows, base, cand, seed_scores, pool, *, draws, seed) -> dict:
+def build(rows, base, cand, seed_scores, pool, *, draws, seed, cand_dir=None) -> dict:
     labels = np.array([r.label for r in rows])
     motivating, no_worse, diagnostic = slice_masks(rows)
+    cand_dir = Path(cand_dir or V3_DIR)
+    cand_rel = cand_dir.relative_to(ROOT).as_posix() if cand_dir.is_absolute() else str(cand_dir)
+    cand_cfg = {}
+    cfg_p = cand_dir / "config.json"
+    if cfg_p.exists():
+        cand_cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
 
     R = {
         "generated": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "command": "uv run python tools/mining/mining_v3_reads.py",
+        "command": f"uv run python tools/mining/mining_v3_reads.py "
+                   f"--candidate-dir {cand_rel}",
+        "arm": cand_cfg.get("arm", cand_dir.name),
+        "arm_dials": {k: cand_cfg.get(k) for k in
+                      ("border_crop", "axis_crop", "uniform_weights", "row_weighting")},
+        "train_weight_by_kind": cand_cfg.get("train_weight_by_kind"),
         "heads": {"v1": {"ckpt": V1_CKPT, "role": "incumbent (LIVE pin)"},
-                  "v3": {"ckpt": V3_CKPT, "role": "from-scratch candidate, STAGED"}},
+                  "v3": {"ckpt": f"{cand_rel}/model_best.pt",
+                         "role": "from-scratch candidate, STAGED"}},
         "live_pin": MP.ACTIVE_MINING_CKPT,
         "moves_nothing": "no pin, gate, floor, lock or annotation is written by this file",
         "eval_slice": {
@@ -315,7 +332,7 @@ def build(rows, base, cand, seed_scores, pool, *, draws, seed) -> dict:
         {k: v["delta_ci"] for k, v in R["motivating"].items()},
         pooled_arm="pooled", baseline="v1", candidate="v3")
     R["winner_rule"]["candidate_ckpt"] = (
-        V3_CKPT if R["winner_rule"]["winner"] == "v3" else V1_CKPT)
+        f"{cand_rel}/model_best.pt" if R["winner_rule"]["winner"] == "v3" else V1_CKPT)
     R["winner_rule"]["adoption"] = ("NOT decided here. BUILD != FLIP: adoption is a separate "
                                     "prompt after Matt reads this verdict.")
     return R
@@ -326,8 +343,11 @@ def md(R) -> str:
     L = []
     A = L.append
     wr = R["winner_rule"]
-    A("# mining v1 vs v3 — winner-rule verdict (STAGED, nothing adopted)\n")
+    A(f"# mining v1 vs v3 [arm: {R.get('arm', 'dedup_weighted')}] — winner-rule verdict "
+      f"(STAGED, nothing adopted)\n")
     A(f"Generated {R['generated']} · `{R['command']}`\n")
+    if R.get("arm_dials"):
+        A(f"Arm dials: `{R['arm_dials']}`\n")
     A(f"**WINNER: {wr['winner']}** (pooled-only reading: {wr['winner_pooled_only']})  ")
     A(f"clause (a) no-worse {'PASS' if wr['clause_a']['pass'] else 'FAIL'} over "
       f"{wr['clause_a']['n_tests']} arm x metric cells · clause (b) motivating "
@@ -409,13 +429,18 @@ def main(argv=None):
                          "incomplete and goes to scratch/, never the run dir")
     ap.add_argument("--draws", type=int, default=4000)
     ap.add_argument("--seed", type=int, default=20260810)
-    ap.add_argument("--v3-dir", type=Path, default=V3_DIR)
+    ap.add_argument("--candidate-dir", "--v3-dir", dest="v3_dir", type=Path, default=V3_DIR,
+                    help="the arm's run dir (default data/render_mode_head/v3)")
     a = ap.parse_args(argv)
 
-    for rel in (V1_CKPT, V3_CKPT):
-        if not (ROOT / rel).exists():
-            raise SystemExit(f"[v3-reads] missing checkpoint {rel} — train it first "
-                             f"(uv run python -m classifier.train_mining_head_v3)")
+    cand_dir = a.v3_dir if a.v3_dir.is_absolute() else (ROOT / a.v3_dir)
+    cand_ckpt = cand_dir / "model_best.pt"
+    if not (ROOT / V1_CKPT).exists():
+        raise SystemExit(f"[v3-reads] missing incumbent checkpoint {V1_CKPT}")
+    if not cand_ckpt.exists():
+        raise SystemExit(f"[v3-reads] missing candidate checkpoint {cand_ckpt} — train it "
+                         f"first (uv run python -m classifier.train_mining_head_v3 "
+                         f"--out-dir {cand_dir})")
 
     pool = load_corpus()
     rows = pool.eval_rows
@@ -424,18 +449,19 @@ def main(argv=None):
     log(f"[v3-reads] eval slice {len(rows)} rows  {label_hist(rows)}")
 
     base = score_with(V1_CKPT, rows)
-    cand = score_with(V3_CKPT, rows)
+    cand = score_with(str(cand_ckpt), rows)
     seed_scores = {}
     if not a.limit:
-        for d in sorted(a.v3_dir.glob("seed_*")):
+        for d in sorted(cand_dir.glob("seed_*")):
             ck = d / "model_best.pt"
             if ck.exists():
                 seed_scores[int(d.name.split("_")[1])] = score_with(str(ck), rows)
                 log(f"[v3-reads] scored {d.name}")
 
-    R = build(rows, base, cand, seed_scores, pool, draws=a.draws, seed=a.seed)
+    R = build(rows, base, cand, seed_scores, pool, draws=a.draws, seed=a.seed,
+              cand_dir=cand_dir)
     R["incomplete"] = bool(a.limit)
-    out = (ROOT / "scratch" / "mining_v3_reads") if a.limit else a.v3_dir
+    out = (ROOT / "scratch" / f"mining_reads_{cand_dir.name}") if a.limit else cand_dir
     out.mkdir(parents=True, exist_ok=True)
     (out / "report.json").write_text(json.dumps(R, indent=1, default=str), encoding="utf-8")
     (out / "report.md").write_text(md(R), encoding="utf-8")

@@ -188,7 +188,20 @@ def main():
     ap.add_argument("--drop-path-rate", type=float, default=0.1)
     ap.add_argument("--seeds", default="0 1 2 3 4", help="space-separated train seeds (>=3)")
     ap.add_argument("--num-workers", type=int, default=4)
-    ap.add_argument("--border-crop", type=float, default=0.05)
+    ap.add_argument("--border-crop", type=float, default=0.05,
+                    help="per-EDGE crop, U(0,b) off each of the four edges (v1's recipe)")
+    ap.add_argument("--axis-crop", type=float, default=0.0,
+                    help="per-AXIS crop, ONE U(0,a) total per axis at a random offset. "
+                         "Default off — this is the (28) aug-arm dial, and 0.0 reproduces "
+                         "the arm already run.")
+    ap.add_argument("--uniform-weights", action="store_true",
+                    help="LIFT the 1/near_dup_group_size training weights (the (28) "
+                         "settling arm). The grouping still governs the SPLIT and the eval "
+                         "dedup — only the training weights go uniform, so this arm differs "
+                         "from the default in exactly one variable.")
+    ap.add_argument("--arm", default=None,
+                    help="a name for this arm, stamped into config/metrics so a run dir "
+                         "cannot be read as the wrong experiment")
     ap.add_argument("--device", default="auto")
     ap.add_argument("--out-dir", default=str(OUT_DIR))
     args = ap.parse_args()
@@ -208,8 +221,22 @@ def main():
     # --- data: pooled corpus, global split, near-dup weights ---
     pool = load_corpus()
     tr, ev = pool.train, pool.eval_rows
-    weights = [r.weight for r in tr]
+    weights = [1.0 for _ in tr] if args.uniform_weights else [r.weight for r in tr]
     summ = corpus_summary(pool)
+    arm = args.arm or ("uniform" if args.uniform_weights else
+                       f"aug{args.axis_crop:g}" if args.axis_crop else "dedup_weighted")
+    log.info(f"ARM = {arm}  (border_crop={args.border_crop} axis_crop={args.axis_crop} "
+             f"weights={'UNIFORM' if args.uniform_weights else '1/group_size'})")
+
+    # The mechanism table the arms are read against: how much of each kind's gradient the
+    # weighting actually removes. Computed here from the weights this arm will use, so an
+    # arm's record cannot describe another arm's dose.
+    kind_share = {}
+    for k in sorted({r.kind for r in tr}):
+        rows_k = [w for r, w in zip(tr, weights) if r.kind == k]
+        kind_share[k] = {"train_rows": len(rows_k), "effective_weight": round(sum(rows_k), 2),
+                         "down_weighted_pct": round(100 * (1 - sum(rows_k) / len(rows_k)), 2)}
+    log.info(f"train weight by kind: {kind_share}")
     log.info(f"pooled corpus {len(pool.rows)} rows / {summ['n_locations']} loc / "
              f"{summ['n_units']} split units")
     log.info(f"  split re-derived globally; {pool.split_meta['rows_moved_off_stamped_side']} "
@@ -242,17 +269,24 @@ def main():
     del probe
     train_tf = Transform(geometry="stretch", interp=data_cfg["interpolation"],
                          mean=data_cfg["mean"], std=data_cfg["std"], train=True,
-                         border_crop=args.border_crop, jpeg_q=None,
+                         border_crop=args.border_crop, axis_crop=args.axis_crop,
+                         jpeg_q=None,
                          brightness=0.0, contrast=0.0, hflip=0.5, vflip=0.5)
     deploy_tf = Transform(geometry="stretch", interp=data_cfg["interpolation"],
                           mean=data_cfg["mean"], std=data_cfg["std"], train=False)
     cfg = {
-        "model": "render_mode_head_v3", "target": "ordinal", "num_classes": K,
+        "model": "render_mode_head_v3", "arm": arm,
+        "target": "ordinal", "num_classes": K,
         "loss": "CORN ordinal (K-1=2, K pinned=3), PER-SAMPLE WEIGHTED "
                 "(model.corn_loss_weighted)",
         "geometry": "stretch", "label_unit": "render (image_id)",
-        "augmentation": "geometric only (border_crop + h/v flip); NO color, NO jpeg jitter",
+        "augmentation": (f"geometric only (border_crop={args.border_crop} per EDGE + "
+                         f"axis_crop={args.axis_crop} per AXIS + h/v flip 0.5); "
+                         f"NO color, NO jpeg jitter"),
         "aug_rationale": "palette/mode/color IS the label (same as v1/head-v3)",
+        "axis_crop": args.axis_crop,
+        "uniform_weights": bool(args.uniform_weights),
+        "train_weight_by_kind": kind_share,
         "class_weighting": "none", "epochs": args.epochs, "batch_size": args.batch_size,
         "backbone_lr": args.backbone_lr, "head_lr": args.head_lr,
         "weight_decay": args.weight_decay, "drop_rate": args.drop_rate,
@@ -266,8 +300,11 @@ def main():
                  "family-stratified over UNITS); the per-batch stamps are INCONSISTENT "
                  "and are recorded, not honored",
         "split_seed": pool.split_meta["seed"], "eval_frac": pool.split_meta["eval_frac"],
-        "row_weighting": "1/near_dup_group_size on the TRAIN side; the eval side keeps one "
-                         "row per group (data/render_mode_corpus/near_dup_groups_v1.json)",
+        "row_weighting": ("UNIFORM — the 1/group_size weights are LIFTED for this arm; the "
+                          "grouping still governs the split and the eval dedup"
+                          if args.uniform_weights else
+                          "1/near_dup_group_size on the TRAIN side; the eval side keeps one "
+                          "row per group (data/render_mode_corpus/near_dup_groups_v1.json)"),
         "batches": list(summ["by_batch_side"]),
         "backbone": BACKBONE, "mean": data_cfg["mean"], "std": data_cfg["std"],
         "interpolation": data_cfg["interpolation"], "input_size": data_cfg["input_size"],
@@ -343,7 +380,10 @@ def main():
 
     good_base = overall_agg["n_good"] / max(overall_agg["n"], 1)
     metrics = {
-        "seeds": seeds, "backbone": BACKBONE, "num_classes": K,
+        "seeds": seeds, "backbone": BACKBONE, "num_classes": K, "arm": arm,
+        "arm_dials": {"border_crop": args.border_crop, "axis_crop": args.axis_crop,
+                      "uniform_weights": bool(args.uniform_weights)},
+        "train_weight_by_kind": kind_share,
         "selection": {"metric": SELECTION_METRIC, "text": SELECTION_TEXT,
                       "staged_seed": stage_seed, "staged_value": float(stage_sel)},
         "corpus": summ, "split": pool.split_meta, "near_dup": pool.group_meta,
