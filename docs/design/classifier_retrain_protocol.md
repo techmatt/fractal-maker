@@ -427,7 +427,7 @@ stored P(≥3):
 | constant | value | what it decides |
 |---|---|---|
 | `GOOD_FLOOR` | 0.50 | run-side admission and every run-side count — what a discovery run keeps |
-| `JUNK_FLOOR` | 0.20 | the colorize-pool draw — what stage 2 spends compute on |
+| `JUNK_FLOOR` | 0.20 | the colorize-pool draw — what stage 2 spends compute on. **PERMANENT shared-scale: never restated** (see below) |
 
 Neither is in `COUPLED_ARTIFACTS`, **deliberately**, and this is the part to understand before
 a flip. Both are cuts on a train-prior-calibrated CORN scale, so they are exactly as
@@ -437,12 +437,13 @@ correct new value depends on a measurement rather than on a version. A stamp che
 by moving a string. So they are held by this procedure plus a human:
 
 1. **Re-score the ledgers** (below) so every stored `p_good` is on the new head's scale.
-2. **Volume-match each floor**: recompute the score that keeps the same FRACTION of a fixed
-   reference pool under the new head, and move the constant there. Volume-matching is the only
-   restatement that keeps the thing each floor was chosen for invariant — how much obvious
-   waste `JUNK_FLOOR` removes, how much supply `GOOD_FLOOR` keeps. Keeping the float silently
-   moves the volume; re-deriving from an eval turns a coarse cut back into an operating point,
-   which is precisely the per-partition machinery this replaced.
+2. **Volume-match `GOOD_FLOOR`** (and each stamped floor): recompute the score that keeps the
+   same FRACTION of a fixed reference pool under the new head, and move the constant there.
+   Volume-matching is the only restatement that keeps the thing the floor was chosen for
+   invariant — how much supply it keeps. Keeping the float silently moves the volume;
+   re-deriving from an eval turns a coarse cut back into an operating point, which is precisely
+   the per-partition machinery this replaced. **`JUNK_FLOOR` is exempt and is not touched** —
+   see the shared-scale paragraph below.
 
    **The arithmetic has an owner as of 2026-08-11: `tools/scoring/volume_match.py`.** It
    scores a named reference pool under both heads in ONE pass through the harness that
@@ -455,14 +456,20 @@ by moving a string. So they are held by this procedure plus a human:
    constant that gets written, because rounding a midpoint can cross a tie; read
    `volume_preserved` before trusting a restatement.
 
-   **`JUNK_FLOOR` is read on TWO heads' scales and a single-head flip cannot volume-match
-   it.** `ranked_intake` applies it to the stage-1 location head's `p_good` and
-   `deploy_tail` to the mining head's `p_ge3`. That is deliberate — it is ONE semantic
-   constant — but it means a stage-2 flip has no correct move: matching it to the flipped
-   head corrupts the other reader, and leaving it silently moves the volume at one site. It
-   was LEFT at 0.20 through the 2026-08-11 stage-2 flip and the residual is stated rather
-   than fixed, because the fix is a decision about whether the constant should be per-head,
-   which is a larger change than a flip and not one a flip may take.
+   **`JUNK_FLOOR` IS EXEMPT — PERMANENT SHARED-SCALE, never restated at a flip** (Matt,
+   2026-08-11; this replaces the residual this section carried through the 2026-08-11 stage-2
+   flip, which said the question was open). It is read on TWO heads' scales — `ranked_intake`
+   on the stage-1 location head's `p_good`, `deploy_tail` on the mining head's `p_ge3` — so a
+   single-head flip has no correct volume-match: matching it to the flipped head moves the cut
+   at the other site by an amount nobody measured. The decision is that 0.20 is a **coarse
+   semantic floor valid on any CORN P(≥3) scale** ("the judging head is confident this is
+   junk") rather than an operating point on one, and the alternative — one constant per head —
+   is refused because it re-creates the per-head operating point this cut was deliberately
+   chosen not to be. **The cost is named, not hidden**: the exact volume it removes drifts a
+   little at each flip, which is accepted, because the floor's job is removing obvious waste
+   and not holding a rate. So step 2 above applies to `GOOD_FLOOR` and to the four stamped
+   floors; `JUNK_FLOOR` is left alone by every flip, and leaving it alone is now the checked
+   behaviour rather than an omission.
 3. Nothing else. There is no threshold sweep, no per-partition table to re-adopt and no
    conformance test to re-run — `tools/scoring/derive_t_good.py`,
    `production_seeder.T_GOOD_OVERRIDES`, `tools/atlas/keeper_cut.py` and their five per-version

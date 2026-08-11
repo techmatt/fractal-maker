@@ -115,10 +115,13 @@ def test_the_two_enforcing_floors_are_deliberately_NOT_in_this_set():
     """`floors.GOOD_FLOOR` / `JUNK_FLOOR` are cuts on the same train-prior-calibrated scale
     as everything above and are just as scale-bound — and they are still not registered here,
     because a stamp check is the wrong instrument for them. An artifact in this set is
-    RE-DERIVED at a flip and its stamp says which head it was derived under; a floor is
+    RE-DERIVED at a flip and its stamp says which head it was derived under; `GOOD_FLOOR` is
     RESTATED volume-matched against the re-scored pool, and the correct new value depends on a
     measurement rather than on a version. Registering them would make a flip pass by moving a
-    string. The procedure that does hold them is prose plus a human:
+    string. `JUNK_FLOOR` is not restated at all as of 2026-08-11 — permanent shared-scale,
+    since it is read on two heads at once (`test_floors.py` pins that declaration) — which is a
+    second, independent reason it does not belong in a set whose whole content is "re-derive
+    this when the head moves". The procedure that does hold them is prose plus a human:
     docs/design/classifier_retrain_protocol.md §5."""
     from tools.emission import floors as F
     assert not any("GOOD_FLOOR" in e["what"] or "JUNK_FLOOR" in e["what"] or

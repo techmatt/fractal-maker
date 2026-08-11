@@ -175,15 +175,42 @@ def test_the_summary_still_names_an_added_cut(monkeypatch):
 # 4. the ONE enforcing cut (2026-08-09)
 # --------------------------------------------------------------------------- #
 def test_the_junk_floor_is_the_only_enforcing_cut_and_it_is_semantic():
-    """It is a bare float, not a `Floor`, and that is the design: it reads on THREE different
+    """It is a bare float, not a `Floor`, and that is the design: it reads on TWO different
     heads (stage-1 at emission intake, mining at deploy_tail) and a stamp names one. What
-    keeps it honest across a head flip is the volume-matched restatement rule documented
-    beside it, not a stamp check."""
+    keeps it honest across a head flip is that it is DECLARED SCALE-FREE and left alone (see
+    the test below), not a stamp check and not a restatement."""
     assert F.JUNK_FLOOR == 0.20
     assert not any(f.value == F.JUNK_FLOOR for f in F.ALL_FLOORS)
     assert "ENFORCING" in F.summary() and str(F.JUNK_FLOOR) in F.summary()
     # it is below every retired floor — the retirement widened the funnel, it did not narrow it
     assert all(F.JUNK_FLOOR < f.value for f in F.ALL_FLOORS)
+
+
+def test_the_junk_floor_is_declared_PERMANENT_shared_scale_at_the_constant_and_in_the_protocol():
+    """Matt, 2026-08-11: `JUNK_FLOOR` is a coarse semantic floor read on BOTH heads' scales and
+    is never restated at a head flip — the settled answer to the residual §5a used to carry.
+
+    This is a PROSE assertion on purpose and it is the honest instrument available: the
+    decision is "do not change this number at a flip", and no runtime check can see a change
+    that does not happen. What it does catch is the failure that actually threatens it — the
+    next flip reading §5a's step 2, volume-matching all the floors it names, and leaving the
+    two declarations disagreeing about which ones those are. Both texts must carry the
+    exemption, and `GOOD_FLOOR` must still carry the opposite instruction, or the pair has
+    drifted (`verification_practice.md` §5: pin the claim where it can rot)."""
+    src = (Path(__file__).resolve().parent / "floors.py").read_text(encoding="utf-8")
+    junk, good = src.split("JUNK_FLOOR = 0.20")[0], src.split("GOOD_FLOOR = 0.50")[0]
+    assert "PERMANENT SHARED-SCALE" in junk, \
+        "floors.py must declare the exemption at the constant it exempts"
+    # the paragraph immediately above GOOD_FLOOR still orders the restatement for THAT floor
+    assert "VOLUME-MATCHED" in good.rsplit("JUNK_FLOOR = 0.20", 1)[-1]
+
+    proto = (ROOT / "docs" / "design" / "classifier_retrain_protocol.md").read_text(
+        encoding="utf-8")
+    sec = proto.split("### 5a.")[1].split("### 5b.")[0]
+    assert "PERMANENT shared-scale" in sec and "exempt" in sec, \
+        "protocol §5a must state the exemption, or a flip will volume-match it back"
+    assert "GOOD_FLOOR`** (and each stamped floor)" in sec, \
+        "§5a's restatement step must name what it DOES apply to, not 'each floor'"
 
 
 def test_passes_junk_floor_treats_a_missing_score_as_failing():

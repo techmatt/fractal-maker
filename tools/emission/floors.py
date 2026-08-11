@@ -144,13 +144,23 @@ LOCATION_HEAD = "location_head"         # the ACTIVE_CKPT quality head (intake-s
 # eval and do not make it per-partition — a per-partition derivation is exactly the frozen
 # enforcing state this restructure removed.
 #
-# HEAD-FLIP RULE. A CORN probability scale is train-prior-calibrated, so a raw float does NOT
-# transfer across heads: 0.20 on v11 is not 0.20 on v12. At a head flip, RESTATE the floor
-# VOLUME-MATCHED — recompute the score that passes the same FRACTION of a fixed reference pool
-# under the new head, and move this constant to that score. Volume-matching is the only
-# restatement that keeps the thing the floor was chosen for (how much obvious waste it removes)
-# invariant; keeping the float would silently move the volume, and re-deriving from an eval
-# would turn a coarse waste cut back into an operating point.
+# PERMANENT SHARED-SCALE — IT IS NEVER RESTATED AT A HEAD FLIP (Matt, 2026-08-11,
+# prompts/closure_sweep.md). This settles the residual `classifier_retrain_protocol.md` §5a
+# stated and did not fix, and it is a DECISION about what the constant is, not a deferral.
+#
+# The two readers are on two different heads' scales — `ranked_intake` on the stage-1 location
+# head's `p_good`, `deploy_tail` on the mining head's `p_ge3` — so there is no single scale to
+# volume-match onto. Matching it to whichever head just flipped would move the cut at the OTHER
+# site by exactly the amount nobody measured, and the alternative (one constant per head) buys
+# a per-head operating point for a cut that was deliberately chosen not to be one.
+#
+# So 0.20 is read as a COARSE SEMANTIC floor, valid on any CORN P(>=3) scale: "the judging head
+# is confident this is junk". It is the one cut in stage 2 whose meaning does not depend on
+# which head is live, which is why it is also the one cut a flip leaves alone. Its cost is
+# named rather than hidden: the exact VOLUME it removes drifts a little at each flip, and that
+# is accepted because the floor's job is removing obvious waste, not holding a rate. Contrast
+# `GOOD_FLOOR` below and the four stamped floors above — all single-scale, all volume-matched
+# at a flip (`tools/scoring/volume_match.py`, `classifier_retrain_protocol.md` §5a).
 JUNK_FLOOR = 0.20
 
 # --------------------------------------------------------------------------- #
@@ -187,12 +197,16 @@ JUNK_FLOOR = 0.20
 # alone, exactly as read-time selection does. The disagreement is a knife-edge set and the
 # point is not its size — it is that there is now one comparison to reason about.
 #
-# HEAD-FLIP RULE — THE SAME ONE AS `JUNK_FLOOR`, for the same reason. A CORN probability scale
-# is train-prior-calibrated, so 0.50 on v11 is not 0.50 on v12. At a head flip, RESTATE this
-# floor VOLUME-MATCHED: recompute the score that keeps the same FRACTION of a fixed reference
-# pool under the new head and move the constant there. Re-scoring the ledgers
-# (`tools/emission/ledger_rescore.py`) and volume-matching THESE TWO FLOORS is the whole flip
-# procedure on this axis now — there is no sweep to re-run and no table to re-adopt.
+# HEAD-FLIP RULE — AND IT IS *NOT* THE SAME ONE AS `JUNK_FLOOR` (corrected 2026-08-11; the two
+# were stated as one rule until Matt declared that one permanent shared-scale). A CORN
+# probability scale is train-prior-calibrated, so 0.50 on v11 is not 0.50 on v12. This floor has
+# ONE reader on ONE head — the run side, `production_seeder.is_good` / `steered_frontier.admit`
+# / `descriptor.load_admitted`, all on the stage-1 location head — so a flip HAS a correct move
+# and must take it: RESTATE this floor VOLUME-MATCHED, recomputing the score that keeps the same
+# FRACTION of a fixed reference pool under the new head. `JUNK_FLOOR` is read on two heads at
+# once and has no such move, which is exactly why it is fixed and this one is not. Re-scoring
+# the ledgers (`tools/emission/ledger_rescore.py`) and volume-matching THIS floor is the whole
+# flip procedure on this axis now — no sweep to re-run and no table to re-adopt.
 GOOD_FLOOR = 0.50
 
 # CORN'S OTHER TWO CUTPOINTS, beside the good floor because the three together are the whole
