@@ -566,6 +566,40 @@ id alone, and the `records/` that join an id to its (location, palette, coloring
 the same loss the PREF-HEAD JOIN row states from the other side. Re-classed unregenerable
 and population-defining.
 
+## The two standing residue classes the 2026-08-08 census opened — BOTH CLOSED
+
+The census that produced the numbers above also named two *classes* of file rather than two
+files, because a class is what a future write can fall into again. Both are now empty; what
+survives is each one's **definition**, since that is what the next census has to sort by.
+
+### Declared-durable-never-committed — CLOSED 2026-08-06
+
+A path routed through `paths.durable()` whose content was never actually in the index. The write
+site says durable, `git check-ignore` says nothing, and the file dies with the working tree —
+the failure `durable()`'s `--no-index` fix was aimed at, seen from the other side. Killed:
+`campaign1/intake.json`; the emission record stores (`release_records/`,
+`mining_gate_reports/`) went the other way and were properly canaried instead
+(`tests/test_tracked_artifacts.py`, relationally — run-keyed paths defeat a static list).
+
+**The class stays worth naming because a declaration is not an event.** `durable()` refusing a
+gitignored target catches the write; nothing catches "declared, written, never `git add`ed".
+
+### Orphaned calibration files — CLOSED 2026-08-10, all seven deleted
+
+**Orphaned = a tracked artifact with NO live consumer AND no live producer.** Both halves are
+required, and the two survivors are what make the definition testable rather than a vibe:
+
+| file | disposition | why |
+|---|---|---|
+| the seven under `data/calibration/` — `buffet_histograms`, `collision_distances`, `control_histograms`, `palette_muster`, `rescore_archetype`, `rescore_buffet`, `rescore_controls` | **DELETED** (`6df2035`, 2026-08-10) | neither end live; **65,415 B** total `[cmd: git cat-file -s 6df2035^:data/calibration/<f>.json]` |
+| `data/calibration/energy_calibration.json` | **KEPT** | **it was never one of the seven.** It is a separate size-guard registry row, and it has a live CONSUMER in the tree: `energy::ARTIFACT_PATH` and `generate.rs`'s `--energy-calibration` default. (The `calibrate`/`generate` subcommands are themselves parked — `CLAUDE.md` — so "live" here means a code path that resolves it, not a tool anyone runs.) |
+| `data/calibration/dedup_droplist.json` | **KEPT** | live **PRODUCER** (`palette_extractor/harvest_dedup.py`), no consumer. That is a **weaker condition than orphaned** and deliberately does not qualify: a file the tree can still regenerate is a rebuild-cost question, not a lost-population one. |
+
+**Two corrections the closure sweep produced, recorded because both were errors of the same
+shape** — reasoning about the class from the directory listing rather than from the two liveness
+questions: the count was **7 of 7, not 6**, and **the file with a live consumer was never in the
+seven** to begin with. An `ls data/calibration/` reads as one homogeneous class and is three.
+
 ## `outcome_feats.npz` is the ledger's SIDECAR, not a second ledger — TAKEN 2026-08-08
 
 The two files sat side by side in every run dir, in the same `.gitignore` re-include, under

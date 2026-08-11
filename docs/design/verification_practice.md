@@ -135,6 +135,15 @@ and its disablement is undetectable; a red suite is loud. `tools/hooks/pre-commi
 never installed in this checkout and was replaced by `tests/test_large_tracked_blobs.py`.
 `[verdict: Matt]`
 
+**★★ A RED TEST NOBODY RUNS PROTECTS NOTHING — and a manual lane is a lane nobody runs.**
+`test_flip_end_to_end` sat red in the `-m slow` lane for two days, calling a function deleted a
+commit earlier, and was found only because a flip finally went looking. **A lane that is not on
+any standing invocation is not coverage**; there is no CI here and every git hook is a git-lfs
+shim, so `-m slow` runs when someone types it or never (`pytest_suite_cost.md` §5 owns the lane
+split, `CLAUDE.md` owns when typing it is mandatory). Two consequences worth stating: putting a
+test in the manual lane is a decision to *lower* its protection, not a neutral placement; and a
+test whose only home is that lane needs a named trigger written beside it, or it is prose.
+
 ## 5. Express invariants relationally
 
 **Never bump the number, and never delete entries to go green.** A derived set self-adjusts
@@ -236,7 +245,48 @@ silently does not apply is worse than no bound (`CLAUDE.md`, "a backstop longer 
 job's budget is not a backstop").
 `[code: tools/atlas/steered_frontier.py::DIVE_IGNORES; test_steered_frontier.py]`
 
-## 11. Git as evidence
+## 11. Long unattended runs — what has to be verifiable while nobody is watching
+
+An external reaper kills long Python/GPU processes at random here, so every rule below is about
+a run that WILL be interrupted. They are verification rules, not orchestration ones: each is
+about being able to trust what a killed-and-resumed run produced. (Launch mechanics — detach,
+redirect to a log file, cap on ACTIVE time — are `CLAUDE.md`'s.)
+
+- **★★ AN INTERRUPTIBLE WRITE MUST BE ATOMIC, OR RESUME-BY-SKIP POISONS THE OUTPUT.** A
+  resume that skips outputs that already exist trusts a half-written file exactly as much as a
+  complete one, and the corruption is silent because the *next* stage reads it fine. `.tmp`
+  sibling + rename, byte-identity verified. **The legitimate alternative, where rename-per-record
+  is prohibitive** (multi-hundred-MB stores): append-only + an **fsync'd index** + self-healing
+  recovery — the record lands first, one index line names it, and the next open recomputes
+  position from the VALID prefix of the index. What both forms buy is the same thing: no state in
+  which a reader cannot tell complete from partial.
+- **★ AN APPEND-ONLY LOG IS A SUPERSET OF THE CHECKPOINTED COUNTERS AFTER A KILL.** The records
+  between the last checkpoint and the kill are on disk and are replayed on resume, so the log
+  double-counts them. **Dedup before quoting any log-derived rate** — and note this interacts
+  with §1.11: the un-deduped rate is not noisy, it is biased in a direction set by how often the
+  run died.
+- **★ VALIDATE RESUMABLE INPUTS UP FRONT, not via end-of-run assertions.** An
+  `assert_rows_current` placed after the render loop raises `SystemExit` at the end of six hours,
+  which is the most expensive possible time to learn the inputs were stale. Anything that can be
+  checked before the first unit of work is checked there.
+- **⚠ A LONG-RUN LOG NEEDS A LIVENESS SIGNAL.** A reaper-killed run died at 4,512 of 60,873 rows
+  and **its log's last line read like progress** — nothing said it had stopped. A tail that is
+  indistinguishable from a healthy run is not evidence the run is healthy: emit a heartbeat with
+  a monotone counter, and write a terminal line on both the clean and the failing path so the
+  ABSENCE of one is the signal.
+- **★ A SHAKEDOWN BEFORE A LONG UNATTENDED RUN PAYS FOR ITSELF.** **A cap that never fired is
+  untested, not working** — the same argument as §3's prove-it-red, aimed at the run's own
+  backstops. Pair with the bounded-end-to-end rule (`CLAUDE.md`): the flag that runs the whole
+  path on a few rows belongs on the stage that WRITES, not only on the dry-run, and a bounded run
+  that writes real files must stamp itself unusable.
+- **★★ A RUNNING TRAINER PINS EVERY MODULE IT IMPORTS.** Windows DataLoader workers are
+  **spawned**, so each re-imports the module tree fresh from disk: editing a source file mid-run
+  killed a seed with an `AttributeError` on a class pickled from the old definition. **Put
+  everything remaining in ONE chained script and touch no source file until it finishes.** The
+  log-file and detach rules do not cover this one, and neither does "the edit is unrelated" — the
+  worker re-imports the tree, not the file you were thinking about.
+
+## 12. Git as evidence
 
 `git ls-files` is an **index query** — it answers "is this tracked *now*", never "did this
 ever exist". An absence verdict needs
