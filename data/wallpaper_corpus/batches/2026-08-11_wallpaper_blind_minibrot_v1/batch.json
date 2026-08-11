@@ -1,0 +1,270 @@
+{
+  "created": "2026-08-11T01:47:26",
+  "batch_id": "2026-08-11_wallpaper_blind_minibrot_v1",
+  "generator_version": "wallpaper_blind_minibrot_v1",
+  "labeler": null,
+  "n_rows": 197,
+  "schema_note": "SHEET D \u2014 the BLIND minibrot/maneuver eval slice for the wallpaper heads. Fresh locations only (excluded against every prior wallpaper batch by key and by proximity), drawn from the stage-2 admitted intake's minibrot/maneuver veins, conditioned on quality through the LOCATION head alone. Coloured by the live emission colorize path (morph cluster -> deficit flavor -> pref-v3-gvo argmax -> canonical params) at the shared label-crop pins. NO wallpaper head score appears anywhere: no suggested_tier, no head_v3 block, no p_ge3, no score-ordered page. Presentation is a seeded shuffle stamped in sheet_order. EVAL-ONLY, PERMANENTLY.",
+  "sheet_incomplete": false,
+  "incomplete_note": null,
+  "blind": {
+    "row_keys": [
+      "image_id",
+      "sheet_order",
+      "render",
+      "provenance",
+      "label"
+    ],
+    "machine_prelabel": null,
+    "presentation": "seeded shuffle, stamped in sheet_order and served with &order=file",
+    "shuffle_seed": 20260811,
+    "why": "an incumbent-vs-challenger eval slice must come from blind or pre-incumbent labels; a slice served with the incumbent's suggestions measures agreement with the incumbent, never quality (classifier_retrain_protocol.md \u00a72b). Sheet A returned 84.9% of its labels equal to the served v3 suggestion."
+  },
+  "eval_only": true,
+  "eval_only_note": "PERMANENT. Every row is stamped split_side=eval and this slice must never enter any train split, for this head generation or any later one. It was bought to referee wallpaper v3 vs v4b on unanchored labels; training on it spends the only unanchored read of this population that exists.",
+  "heads_read": {
+    "wallpaper": "NONE \u2014 neither v3 nor v4b is loaded, scored, stamped or sorted on by this builder.",
+    "location": "tools/scoring/production_pins.ACTIVE_CKPT, indirectly: the intake ledger's p_good (kept current by ledger_rescore) is compared against floors.GOOD_FLOOR = 0.5. Selection only.",
+    "palette": "pref-v3-gvo (tools/studies/conditioned_colorize.Scorer) \u2014 the production colorize path's palette proposal, a PALETTE-preference head with no quality opinion about a location."
+  },
+  "population_report": {
+    "intake": {
+      "source": "the ten-ledger stage-2 admitted union (tools/emission/ledger_rescore.LEDGERS -> descriptor.load_union_admitted)",
+      "ledgers": [
+        "data/discovery/campaign1/breadth/outcome_ledger.jsonl",
+        "data/discovery/campaign1/dive/outcome_ledger.jsonl",
+        "data/discovery/campaign2/breadth/outcome_ledger.jsonl",
+        "data/discovery/campaign2/dive/outcome_ledger.jsonl",
+        "data/discovery/phoenix_grid/grid/outcome_ledger_v7_t45.jsonl",
+        "data/discovery/classic_phoenix/outcome_ledger.jsonl",
+        "data/emission/q4_harvest/outcome_ledger.jsonl",
+        "data/discovery/prod25_20260809/outcome_ledger.jsonl",
+        "data/discovery/prod25_20260809_dive/outcome_ledger.jsonl",
+        "data/discovery/prod25_phoenix_native/outcome_ledger.jsonl"
+      ],
+      "n_population": 2867,
+      "by_vein": {
+        "classic_phoenix": 22,
+        "descent": 1642,
+        "dive": 400,
+        "maneuver": 548,
+        "phoenix_grid": 147,
+        "q4_harvest": 108
+      }
+    },
+    "filters": [
+      {
+        "filter": "vein in MINIBROT_VEINS",
+        "rule": "build_wallpaper_sitting.MINIBROT_VEINS = maneuver/q4_harvest \u2014 the SAME definition sheet A's motivating bucket was drawn under",
+        "in": 2867,
+        "out": 656
+      },
+      {
+        "filter": "fresh locations only",
+        "rule": "excluded if the location key appears in ANY wallpaper batch, or if it is within DEDUP_FRAC*min(fw) of one at a matching c (build_fresh_discovery._spatially_in)",
+        "in": 656,
+        "out": 206,
+        "excluded_by_key": 395,
+        "excluded_by_proximity": 55,
+        "prior_batches": {
+          "2026-07-05_wallpaper_bootstrap_v1": 504,
+          "2026-07-05_wallpaper_humanq3_v1": 994,
+          "2026-07-07_wallpaper_fresh_discovery_v1": 364,
+          "2026-07-09_wallpaper_headbatch_dramatic_v1": 1000,
+          "2026-08-05_wallpaper_colorize_path_v1": 180,
+          "2026-08-05_wallpaper_fresh_sheet_v1": 960,
+          "2026-08-10_wallpaper_correction_v2": 960
+        },
+        "n_prior_location_keys": 1498
+      },
+      {
+        "filter": "LOCATION-head quality",
+        "rule": "floors.passes_good_floor(p_good) \u2014 p_good is the intake ledger's LOCATION-head P(>=3), kept current by ledger_rescore under the live ACTIVE_CKPT. Floor 0.5. NEITHER wallpaper head is read.",
+        "in": 206,
+        "out": 197
+      },
+      {
+        "filter": "near-dup",
+        "rule": "production_seeder.near_dup(k=0.25, scale='min', c_eps=1e-06) \u2014 read from the owner at call time",
+        "in": 197,
+        "out": 197,
+        "n_multi_row_groups": 0
+      }
+    ],
+    "near_dup": {
+      "rule": "production_seeder.near_dup(k=0.25, scale='min', c_eps=1e-06) \u2014 read from the owner at call time",
+      "n_in": 197,
+      "n_kept": 197,
+      "n_dropped": 0,
+      "n_multi_row_groups": 0,
+      "representative": "first by unit_key \u2014 a pure function of the population, never a score"
+    },
+    "n_eligible": 197,
+    "eligible_by_partition": {
+      "mandelbrot": 37,
+      "multibrot3": 160
+    },
+    "eligible_by_vein": {
+      "maneuver": 186,
+      "q4_harvest": 11
+    },
+    "eligible_by_source_tag": {
+      "triggered:snap_at_seed:k=None": 42,
+      "triggered:snap_at_seed:k=16.0": 32,
+      "triggered:neighborhood_expand:k=16.0": 26,
+      "maneuver:neighborhood_expand:k=16.0": 20,
+      "triggered:neighborhood_expand:k=None": 19,
+      "maneuver:neighborhood_expand:k=None": 18,
+      "maneuver:snap_to_nucleus:k=8.0": 13,
+      "q4_harvest": 11,
+      "maneuver:snap_to_nucleus:k=16.0": 6,
+      "maneuver:neighborhood_expand:k=8.0": 6,
+      "maneuver:lateral_to_sibling:k=None": 3,
+      "maneuver:snap_to_nucleus:k=None": 1
+    }
+  },
+  "draw_report": {
+    "rule": "TAKE ALL \u2014 supply is at or under the target, so there is no draw and no rule to bias",
+    "target_rows": 200,
+    "eligible": 197,
+    "drawn_rows": 197,
+    "supply_bound": true,
+    "seed": 28,
+    "partition_alloc": {
+      "mandelbrot": 37,
+      "multibrot3": 160
+    }
+  },
+  "colorize_path": {
+    "cluster": {
+      "library_seed_groups": {
+        "julia:mandelbrot": 91,
+        "julia:multibrot3": 8,
+        "julia:multibrot4": 2,
+        "julia:multibrot5": 10,
+        "mandelbrot": 7,
+        "multibrot3": 7,
+        "multibrot4": 2,
+        "multibrot5": 15,
+        "phoenix": 26
+      },
+      "seeded_joins": 0,
+      "distinct_clusters": 150,
+      "threshold": 0.974
+    },
+    "grid": {
+      "flavors": 19,
+      "styles": [
+        "smooth"
+      ],
+      "observed_type_cluster": 150,
+      "feasible_cells": 2850,
+      "release_shares": {
+        "mandelbrot": 0.75,
+        "multibrot3": 0.25
+      },
+      "attempt_cap": 6,
+      "softmax_temp": 0.35,
+      "target_source": "tools/scoring/release_mix.RATIO re-solved against the live feasible cells (cells.TargetMeasure.from_partition_shares)"
+    },
+    "ranker": "pref:v3_gvo",
+    "deficit_fill_rule": "a cell fills on ATTEMPT. The 2026-08-05 colorize batch filled a cell only when the render cleared the wallpaper pool floor; reading that floor here would put a wallpaper head into this sheet's substrate, so the bookkeeping is relaxed and the deviation is named."
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "filter": "lanczos3",
+    "jpg_quality": 90,
+    "interior_mode": "black",
+    "composition": "center",
+    "render_path": "render-one --dump-field + colormap.render_candidate (tools/wallpaper/label_crop.py \u2014 the locked label-crop pins)"
+  },
+  "sampling_metaparameters": {
+    "target_rows": 200,
+    "draw_seed": 28,
+    "cell_seed": 28,
+    "shuffle_seed": 20260811,
+    "maxiter_policy": "mi4000k0.3c200-67000",
+    "renders_per_location": 1
+  },
+  "split_summary": {
+    "eval_rows": 197,
+    "train_rows": 0,
+    "rule": "EVERY row is eval. This is not a stratified assignment and there is nothing to re-derive: the batch is an instrument, not a training set."
+  },
+  "realized": {
+    "rows_by_partition": {
+      "mandelbrot": 37,
+      "multibrot3": 160
+    },
+    "rows_by_vein": {
+      "maneuver": 186,
+      "q4_harvest": 11
+    },
+    "rows_by_flavor": {
+      "special:spectral": 17,
+      "k16:1": 15,
+      "k16:2": 13,
+      "k16:3": 13,
+      "k16:14": 12,
+      "k16:12": 11,
+      "k16:16": 11,
+      "k16:4": 11,
+      "k16:8": 11,
+      "k16:9": 10,
+      "k16:11": 10,
+      "k16:6": 10,
+      "special:outlier": 10,
+      "k16:7": 9,
+      "k16:5": 8,
+      "k16:15": 8,
+      "k16:13": 8,
+      "k16:10": 7,
+      "special:neutral": 3
+    },
+    "distinct_palettes": 82,
+    "palette_top10": {
+      "wallhaven_wallhaven-6d3zz6": 10,
+      "cmr.gothic": 10,
+      "795565-3840x2160-desktop-4k-fractal-wallpaper-image": 9,
+      "cet_linear_bmw_5_95_c86": 9,
+      "cmr.fusion": 7,
+      "sparks": 7,
+      "cmr.sunburst": 6,
+      "Ember Gate": 5,
+      "cmr.iceburn": 5,
+      "795548-3840x2160-desktop-4k-fractal-background": 5
+    },
+    "distinct_morph_clusters": 150,
+    "source_p_good": {
+      "min": 0.504,
+      "median": 0.9575,
+      "max": 0.9998
+    }
+  },
+  "presentation": {
+    "order": "sheet_order \u2014 a SEEDED SHUFFLE of the drawn set, contiguous",
+    "sorted_on": "NOTHING. No score, machine or human, orders this sheet.",
+    "contiguous": true,
+    "image_id": "OPAQUE `<prefix><slot>_<hash8>` \u2014 slot is shuffled position, the hash a salted digest of the unit key. route.json maps it back."
+  },
+  "labels_export": "labels/wallpaper_blind_minibrot_v1.json",
+  "labeling": {
+    "ui": "tools/viz/wallpaper_label.html?corpus=wallpaper_corpus&tiers=4&order=file&batch=2026-08-11_wallpaper_blind_minibrot_v1",
+    "mode": "BLIND \u2014 no suggestion is prefilled and no row carries a machine tier. 1/2/3/4 label and advance; there is no confirm key and no bulk accept because there is nothing to accept.",
+    "blind_rows": 197,
+    "calibration_duplicates": 0,
+    "export_download": "scores.json (the page's export button)",
+    "save_export_as": "scratch/scores_2026-08-11_wallpaper_blind_minibrot_v1.json",
+    "sidecar_written": "labels/wallpaper_blind_minibrot_v1.json",
+    "merge": "uv run python tools/wallpaper/merge_sitting.py --corpus wallpaper_corpus --batch 2026-08-11_wallpaper_blind_minibrot_v1 --scores scratch/scores_2026-08-11_wallpaper_blind_minibrot_v1.json --apply",
+    "then": "uv run python tools/wallpaper/sheet_d_reverdict.py   # the one-command re-verdict, after labeling"
+  },
+  "render_failures": [],
+  "run_status": {
+    "drawn_rows": 197,
+    "rendered_rows": 197,
+    "n_failures": 0
+  }
+}

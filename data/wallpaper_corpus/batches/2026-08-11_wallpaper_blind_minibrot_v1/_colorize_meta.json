@@ -1,0 +1,34 @@
+{
+ "cluster": {
+  "library_seed_groups": {
+   "julia:mandelbrot": 91,
+   "julia:multibrot3": 8,
+   "julia:multibrot4": 2,
+   "julia:multibrot5": 10,
+   "mandelbrot": 7,
+   "multibrot3": 7,
+   "multibrot4": 2,
+   "multibrot5": 15,
+   "phoenix": 26
+  },
+  "seeded_joins": 0,
+  "distinct_clusters": 150,
+  "threshold": 0.974
+ },
+ "grid": {
+  "flavors": 19,
+  "styles": [
+   "smooth"
+  ],
+  "observed_type_cluster": 150,
+  "feasible_cells": 2850,
+  "release_shares": {
+   "mandelbrot": 0.75,
+   "multibrot3": 0.25
+  },
+  "attempt_cap": 6,
+  "softmax_temp": 0.35,
+  "target_source": "tools/scoring/release_mix.RATIO re-solved against the live feasible cells (cells.TargetMeasure.from_partition_shares)"
+ },
+ "ranker": "pref:v3_gvo"
+}
