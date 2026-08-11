@@ -719,6 +719,14 @@ __pycache__/
 !/data/render_mode_head/v3_ap2/per_seed.json
 !/data/render_mode_head/v3_ap2/report.md
 !/data/render_mode_head/v3_ap2/report.json
+# The sheet-E re-verdict (mining v1 vs the five staged arms on the BLIND slice). Same class
+# as the sheet-D one under data/wallpaper_head/: the labels it reads are human judgement on
+# a population nobody will label unanchored twice, so the report is the only durable form of
+# what that slice said about the (28) clause-(a) failures.
+!/data/render_mode_head/sheet_e_reverdict/
+/data/render_mode_head/sheet_e_reverdict/*
+!/data/render_mode_head/sheet_e_reverdict/report.md
+!/data/render_mode_head/sheet_e_reverdict/report.json
 
 # data_large/ was deleted 2026-07-31 (repo-hygiene pass): it held one README and no
 # data, and its name collided with data/. Regenerable bulk goes out of tree via

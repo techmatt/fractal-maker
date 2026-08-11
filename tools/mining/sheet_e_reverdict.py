@@ -78,8 +78,10 @@ from tools.mining.build_blind_mining_sheet import (CONTESTED_MODES,   # noqa: E4
 from tools.scoring.winner_rule import paired_bootstrap, point_block   # noqa: E402
 
 SHEET = SHEETS["e"]
+CORPUS_NAME = "render_mode_corpus"
 HEAD_DIR = ROOT / "data" / "render_mode_head"
-OUT_DIR = HEAD_DIR / "sheet_e_reverdict"
+OUT_DIR_REL = "data/render_mode_head/sheet_e_reverdict"
+OUT_DIR = ROOT / OUT_DIR_REL
 
 # THE FIVE STAGED ARMS of (28) + (28b), declared above any number. Four single-variable
 # passes over the identical corpus/split/eval plus the (28b) objective arm; `v2` is a prior
@@ -181,6 +183,23 @@ def load_rows(require_crops: bool = True) -> tuple[list, dict]:
                                    f"verdict is on the labeled subset and the subset is NOT "
                                    f"a random one (labeling runs in sheet order)")
                                   if n_unlabeled else None}
+
+
+def _eval_only_block() -> dict:
+    """`{eval_only, eval_only_reason, eval_only_rows_stamped_eval}` read off the batch.
+
+    `assert_stamps` raises rather than reporting False: a slice this verdict rests on that
+    has stopped being eval-only invalidates the read, and printing numbers under a False
+    flag is what the flag exists to prevent."""
+    from tools.corpus.eval_only import assert_stamps, eval_only_batches   # noqa: PLC0415
+    blk = eval_only_batches(CORPUS_NAME).get(SHEET.batch_id)
+    rep = assert_stamps(CORPUS_NAME)
+    if blk is None:
+        raise SystemExit(f"[sheet-e] {SHEET.batch_id} is NOT stamped eval_only in its "
+                         f"batch.json — this verdict rests on the slice never having "
+                         f"trained; fix the batch, do not soften the check.")
+    return {"eval_only": True, "eval_only_reason": blk.reason,
+            "eval_only_rows_stamped_eval": rep["batches"][SHEET.batch_id]["n_rows"]}
 
 
 def tier_dist(labels) -> dict:
@@ -393,7 +412,10 @@ def build(rows, base, arm_scores, meta, *, draws, seed) -> dict:
                   "contested_modes": list(CONTESTED_MODES),
                   "contested_rows": int(sum(1 for r in rows if r.mode in CONTESTED_MODES)),
                   "blind": "no suggestion was served, no score ordered the page",
-                  "eval_only": True},
+                  # DERIVED from the batch's own stamp + row stamps, never a literal here
+                  # ("derive state in code; freeze it in records") — same fix sheet D's
+                  # re-verdict took: a hardcoded True outlives the property it records.
+                  **_eval_only_block()},
         "bootstrap": {"draws": draws, "seed": seed, "kind": "paired over slice rows"},
         "metric_set": [m.key for m in METRICS],
         "min_arm_n": MIN_ARM_N,
@@ -608,10 +630,20 @@ def main(argv=None):
 
     R = build(rows, base, arm_scores, meta, draws=a.draws, seed=a.seed)
     R["incomplete"] = bool(a.limit)
-    out = (ROOT / "scratch" / "sheet_e_reverdict") if a.limit else OUT_DIR
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "report.json").write_text(json.dumps(R, indent=1, default=str), encoding="utf-8")
-    (out / "report.md").write_text(md(R), encoding="utf-8")
+    # The class is declared at the WRITE SITE, and the two runs are not the same class: a
+    # bounded run is scratch, an unbounded one durable. `durable()` raises if a .gitignore
+    # rule would swallow the report — which it did, exactly as it did for sheet D's.
+    from paths import durable, scratch                   # noqa: PLC0415
+    if a.limit:
+        out = scratch("sheet_e_reverdict")
+        out.mkdir(parents=True, exist_ok=True)
+        paths = {n: out / f"report.{n}" for n in ("json", "md")}
+    else:
+        paths = {n: durable(f"{OUT_DIR_REL}/report.{n}", mkparents=True)
+                 for n in ("json", "md")}
+        out = paths["md"].parent
+    paths["json"].write_text(json.dumps(R, indent=1, default=str), encoding="utf-8")
+    paths["md"].write_text(md(R), encoding="utf-8")
     for name, arm in R["arms"].items():
         ca = arm["clause_a"]
         surv = sum(1 for c in arm["contested_survival"]["cells"]

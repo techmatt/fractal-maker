@@ -245,7 +245,10 @@ def test_nobody_else_reads_the_eval_only_flag_out_of_a_batch_json():
         ["git", "grep", "-lE", r'''(\[|get\()["']eval_only["']''', "--", "*.py"],
         cwd=ROOT, capture_output=True, text=True)
     allowed = {OWNER, "tools/corpus/test_eval_only.py",
-               "tools/wallpaper/build_blind_minibrot_sheet.py",       # writes the stamp
-               "tools/wallpaper/test_blind_minibrot_sheet.py"}
+               # the two sheet builders WRITE the stamp; nobody else may read it
+               "tools/wallpaper/build_blind_minibrot_sheet.py",
+               "tools/wallpaper/test_blind_minibrot_sheet.py",
+               "tools/mining/build_blind_mining_sheet.py",
+               "tools/mining/test_blind_mining_sheet.py"}
     hits = {ln.strip() for ln in out.stdout.splitlines() if ln.strip()}
     assert hits <= allowed, f"new eval_only reader(s): {sorted(hits - allowed)}"
