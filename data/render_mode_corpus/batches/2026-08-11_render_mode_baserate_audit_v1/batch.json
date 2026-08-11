@@ -1,0 +1,953 @@
+{
+  "created": "2026-08-11T15:17:30",
+  "batch_id": "2026-08-11_render_mode_baserate_audit_v1",
+  "generator_version": "render_mode_baserate_audit_v1",
+  "labeler": null,
+  "n_rows": 200,
+  "schema_note": "SHEET F \u2014 the BASE-RATE AUDIT correction sheet (state OPEN-1, reshaped by Matt). Sheet E's draw rule IMPORTED rather than restated \u2014 fresh (location, mode) pairs against every prior render-mode batch by key AND proximity, locations conditioned on HUMAN label quality alone, palettes a screened POOL draw, the canonical emission coloring at the frozen corpus pins \u2014 with the ONE difference that no mode cell is over-drawn: the whole page is a flat apportionment over the active roster, so the realized mix is the roster's. NO mining score is anywhere in the draw. The PAGE is anchored: mining v3's suggested tier is prefilled and the page is sorted good->bad by its continuous readout, so the label/score crossover is a position on the page. label.score is null on every row \u2014 a suggestion is not a label and the merge refuses to read one as one. TRAIN-SIDE, 100%, per classifier_retrain_protocol.md 2b.",
+  "sheet_incomplete": false,
+  "incomplete_note": null,
+  "registration": {
+    "source": "mining_baserate_audit",
+    "biased": true,
+    "eval_eligible": false,
+    "score_unconditioned": false,
+    "split": "train",
+    "registered_before_build": true,
+    "owner": "tools/scoring/batch_registry.py",
+    "why_the_flag_is_false": "`score_unconditioned` is the forced-eval-cascade exemption for eval INSTRUMENTS and the registry's own invariant forbids it on a train-side row; sheets C, D and E all carry False for the same reason. The fact it would have recorded \u2014 no mining head in the draw \u2014 is `draw_unconditioned` below, which is where a reader of a render-mode batch looks."
+  },
+  "draw_unconditioned": {
+    "of": "the MINING head, at every stage of the selection",
+    "held_by": "tools/mining/build_baserate_sheet.score_for_prefill is the only function in the builder that reaches a checkpoint, it is called from run_write alone, and it runs AFTER select has returned. Enforced by an AST walk in test_baserate_sheet.py, not by this sentence.",
+    "population": "imported from build_blind_mining_sheet (sheet E), so 'the same draw rule' is a call graph rather than a paraphrase",
+    "mode_axis": "flat apportion.deal_round_robin over the active roster \u2014 contested_modes=(), so no cell is over-drawn",
+    "palette": "screened POOL draw (rare_palette_draw against the declared rare hue-family target, palette_deficit.pick within family)",
+    "near_dup_tie_break": "DRAW ORDER \u2014 sheet C broke these ties by mining score; there is no score here to break them with",
+    "not_unconditioned_on": "the HUMAN label corpus. Locations carry a human 4 (falling back to 3 where a partition is short), which is why the registration is biased -> train on the LOCATION axis and why no rate here is a LOCATION base rate. It is the rate over the strange-mode RENDERING of that gated population \u2014 which is what the mining gate sees."
+  },
+  "anchored": {
+    "prefill_head": "v3",
+    "prefill_ckpt": "data/render_mode_head/v3/model_best.pt",
+    "prefill_ckpt_source": "tools/mining/mining_pins.ACTIVE_MINING_CKPT, read at write time \u2014 never a literal path",
+    "presentation_sorted_on": "the continuous readout (pred), NOT the suggested tier",
+    "cost": "labels returned on an anchored page are AGREEMENT-INFLATED. On the mining sitting 892/960 = 0.929 came back equal to what was served, and sheet A measured 815/960 = 0.849 on the wallpaper side. Every rate read off this sheet is a CEILING; sheet E is the unanchored bound on the same draw rule and the pair is what the audit reads.",
+    "correction_rate_is_computable": "every row stamps the suggested_tier it was SERVED with, so agreement is labeled_score == suggested_tier over the merged sidecar \u2014 the first convergence datum on the flipped head (v3), and the reason the prefill source is frozen into this record rather than recomputed later."
+  },
+  "suggested_tier_rule": {
+    "rule": "tier = 1 + #{c in cuts : expected_tier >= c}; expected_tier = 1 + sum_k marginal_k",
+    "rule_owner": "tools/wallpaper/suggest_tier.py (expected_tier / tier_from_pred / fit_cuts) \u2014 imported, not restated",
+    "k_tiers": 3,
+    "cuts": [
+      1.6671,
+      2.352
+    ],
+    "cut_method": "fit_cuts \u2014 prior-matched quantiles of the head's own readout on a LABELED SLICE, frozen and applied ABSOLUTELY. This replaces the per-batch `cuts_from_prior` fallback, which had no labeled slice to fit and therefore carried no information about a batch's absolute quality level.",
+    "derived": "2026-08-11",
+    "deriver": "tools/mining/suggest_tier_mining.derive_cuts()",
+    "fit_slice": {
+      "batch": "2026-08-06_render_mode_fresh_sheet_v1",
+      "labels": "labels/render_mode_fresh_sheet_v1.json",
+      "n": 960,
+      "tier_prior": {
+        "1": 577,
+        "2": 235,
+        "3": 148
+      },
+      "suggested_hist_on_the_fit_slice": {
+        "1": 577,
+        "2": 235,
+        "3": 148
+      }
+    },
+    "anchoring": "the fit slice's labels were collected on a CORRECTION sheet served with the per-batch quantile suggestion prefilled; agreement with what was served was 892/960 = 0.929, so the FIRST fit was anchored to its predecessor and largely reproduced it ((1.3893, 1.9331) -> (1.317, 1.8727) under v1). The anchoring is to the SERVED suggestion, not to a head, so it is unchanged by the 2026-08-11 re-derivation under v3.",
+    "supersedes": {
+      "cuts": [
+        1.317,
+        1.8727
+      ],
+      "head": "data/render_mode_head/v1/model_best.pt",
+      "derived": "2026-08-10",
+      "why_superseded": "the 2026-08-11 mining head flip (v1 -> v3). A cut on a CORN marginal sum is a point on one head's readout scale (classifier_retrain_protocol.md \u00a75a)."
+    },
+    "head": {
+      "ckpt": "data/render_mode_head/v3/model_best.pt",
+      "version": "v3"
+    },
+    "realized_suggestion_hist": {
+      "1": 94,
+      "2": 86,
+      "3": 20
+    },
+    "realized_suggestion_shares": {
+      "1": 0.47,
+      "2": 0.43,
+      "3": 0.1
+    },
+    "n_rows": 200,
+    "scope": "a SUGGESTION, never a label \u2014 nothing downstream may read it as one, and the merge refuses to."
+  },
+  "head": {
+    "ckpt": "data/render_mode_head/v3/model_best.pt",
+    "version": "v3",
+    "gate_version": "mining_v3",
+    "role": "PRE-LABEL ONLY \u2014 no gate, floor, threshold or pin is applied or moved here, and would_pass_gate is stamped and gates nothing. Setting the mining cut at the crossover is the FOLLOW-UP prompt's job.",
+    "scorer": "tools/mining/mining_gate.MiningScorer (fp32, no autocast; marginal p_ge = cumprod(sigmoid), NEVER the CORN conditional)",
+    "deploy_transform": "classifier.data.Transform(train=False) \u2014 384x224 bicubic stretch + the checkpoint's own mean/std",
+    "gate_threshold": 0.6691
+  },
+  "heads_read": {
+    "mining": "AT WRITE TIME ONLY, on already-selected crops \u2014 the prefill and the page order. Not in the draw, not in the screen, not in the selection.",
+    "location": "NONE \u2014 quality is conditioned on the HUMAN label corpus.",
+    "palette": "NONE \u2014 the palette is a screened POOL draw, not a head proposal."
+  },
+  "universe": {
+    "population": {
+      "population": {
+        "source": "data/label_corpus \u2014 corpus_reader.iter_labeled -> label_store.resolve_score (amendments applied); location label = MAX over its crops",
+        "n_locations": 2577,
+        "by_partition": {
+          "julia:mandelbrot": {
+            "score4": 200,
+            "score3": 609,
+            "total": 809
+          },
+          "julia:multibrot3": {
+            "score4": 30,
+            "score3": 60,
+            "total": 90
+          },
+          "julia:multibrot4": {
+            "score4": 43,
+            "score3": 61,
+            "total": 104
+          },
+          "julia:multibrot5": {
+            "score4": 44,
+            "score3": 115,
+            "total": 159
+          },
+          "mandelbrot": {
+            "score4": 103,
+            "score3": 368,
+            "total": 471
+          },
+          "multibrot3": {
+            "score4": 35,
+            "score3": 187,
+            "total": 222
+          },
+          "multibrot4": {
+            "score4": 36,
+            "score3": 115,
+            "total": 151
+          },
+          "multibrot5": {
+            "score4": 33,
+            "score3": 163,
+            "total": 196
+          },
+          "phoenix": {
+            "score4": 109,
+            "score3": 259,
+            "total": 368
+          },
+          "phoenix:classic": {
+            "score4": 1,
+            "score3": 6,
+            "total": 7
+          }
+        },
+        "totals": {
+          "score4": 634,
+          "score3": 1943
+        }
+      },
+      "exclusion": {
+        "rule": "a location is excluded if its key appears in ANY prior render-mode batch, or if it is within DEDUP_FRAC*min(fw) of one at a matching c (build_fresh_discovery._spatially_in). LOCATION level, which implies the prompt's (location, mode) pair rule and is stronger than it \u2014 affordable because the label corpus is ~30x the spent population.",
+        "prior_batches": {
+          "2026-08-06_render_mode_fresh_sheet_v1": 960,
+          "2026-08-10_render_mode_correction_v2": 1000,
+          "2026-08-10_render_mode_rare_palette_v1": 500,
+          "2026-08-11_render_mode_blind_v1": 150
+        },
+        "n_prior_location_keys": 449,
+        "n_prior_location_mode_pairs": 1963,
+        "excluded_by_key": 403,
+        "excluded_by_proximity": 193,
+        "n_fresh": 1981,
+        "self_excluded_batch": "2026-08-11_render_mode_baserate_audit_v1"
+      },
+      "fresh_by_partition": {
+        "julia:mandelbrot": 719,
+        "julia:multibrot3": 45,
+        "julia:multibrot4": 60,
+        "julia:multibrot5": 108,
+        "mandelbrot": 354,
+        "multibrot3": 166,
+        "multibrot4": 104,
+        "multibrot5": 152,
+        "phoenix": 273
+      },
+      "fresh_by_human_score": {
+        "3": 1726,
+        "4": 255
+      }
+    },
+    "location_draw": {
+      "rule": "apportion.deal_round_robin over partitions (balanced-or-drained), with phoenix:classic PRESEEDED take-all \u2014 a bucketed cut never reserves, so the classic slice needs its own floor or it is absent by construction",
+      "n_locations": 200,
+      "target": 200,
+      "location_caps": {
+        "phoenix": 21,
+        "phoenix:classic": 8
+      },
+      "reserved_take_all": {},
+      "available_after_caps": {
+        "julia:mandelbrot": 719,
+        "julia:multibrot3": 45,
+        "julia:multibrot4": 60,
+        "julia:multibrot5": 108,
+        "mandelbrot": 354,
+        "multibrot3": 166,
+        "multibrot4": 104,
+        "multibrot5": 152,
+        "phoenix": 21
+      },
+      "drawn_by_partition": {
+        "julia:mandelbrot": 23,
+        "julia:multibrot3": 22,
+        "julia:multibrot4": 22,
+        "julia:multibrot5": 22,
+        "mandelbrot": 23,
+        "multibrot3": 23,
+        "multibrot4": 22,
+        "multibrot5": 22,
+        "phoenix": 21
+      },
+      "drawn_by_score": {
+        "4": 81,
+        "3": 119
+      },
+      "score4_by_partition": {
+        "julia:mandelbrot": 23,
+        "julia:multibrot3": 2,
+        "julia:multibrot4": 3,
+        "julia:multibrot5": 4,
+        "mandelbrot": 23,
+        "multibrot3": 2,
+        "multibrot4": 3,
+        "phoenix": 21
+      },
+      "score3_by_partition": {
+        "julia:multibrot3": 20,
+        "julia:multibrot4": 19,
+        "julia:multibrot5": 18,
+        "multibrot3": 21,
+        "multibrot4": 19,
+        "multibrot5": 22
+      },
+      "balanced_excl_classic": true,
+      "balance": "max take 23, all cells within 1 or drained",
+      "fallback_note": "a partition reaches its human-3s only after its human-4s are exhausted; score3_by_partition IS the shortfall, per partition"
+    },
+    "palette_draw": {
+      "n_planned": 200,
+      "n_taken": 200,
+      "target_shares": {
+        "green": 0.28,
+        "spectral": 0.16,
+        "fire": 0.15,
+        "ice": 0.14,
+        "rose": 0.09,
+        "purple": 0.08,
+        "neutral": 0.06,
+        "gold": 0.04
+      },
+      "down_weighted": [
+        "purple",
+        "fire",
+        "ice"
+      ],
+      "over_drawn": [
+        "green",
+        "spectral",
+        "rose",
+        "neutral",
+        "gold"
+      ],
+      "distinct_supply": {
+        "fire": 438,
+        "gold": 9,
+        "green": 75,
+        "ice": 324,
+        "purple": 46,
+        "rose": 23,
+        "spectral": 57,
+        "neutral": 15
+      },
+      "planned_counts": {
+        "fire": 30,
+        "gold": 8,
+        "green": 56,
+        "ice": 28,
+        "purple": 16,
+        "rose": 18,
+        "spectral": 32,
+        "neutral": 12
+      },
+      "drawn_counts": {
+        "fire": 30,
+        "gold": 8,
+        "green": 56,
+        "ice": 28,
+        "purple": 16,
+        "rose": 18,
+        "spectral": 32,
+        "neutral": 12
+      },
+      "drawn_shares": {
+        "fire": 0.15,
+        "gold": 0.04,
+        "green": 0.28,
+        "ice": 0.14,
+        "purple": 0.08,
+        "rose": 0.09,
+        "spectral": 0.16,
+        "neutral": 0.06
+      },
+      "distinct_palettes_used": 200,
+      "family_distinct_used": {
+        "fire": 30,
+        "gold": 8,
+        "green": 56,
+        "ice": 28,
+        "purple": 16,
+        "rose": 18,
+        "spectral": 32,
+        "neutral": 12
+      },
+      "max_repeats": 1,
+      "sequence_prefix_deviation": 0.72,
+      "sequence_rule": "apportion.sequence_by_deficit over the planned family counts \u2014 every prefix near-target, which is what survives a truncating render budget",
+      "within_family_rule": "least-used members first, then palette_deficit.pick (deficit gain, no pref head) on intrinsic signatures"
+    },
+    "color_params": {
+      "reverse": false,
+      "log_premap": "none",
+      "gamma": 1.0,
+      "phase": 0.0,
+      "n_cycles": 1,
+      "transfer": "pct",
+      "transfer_gamma": 0.0,
+      "owner": "tools/mining/deploy_tail._color_params({}) \u2014 the canonical inherited coloring the LIVE emission path uses",
+      "one_palette_per": "LOCATION, shared by that location's rows, so the smooth twin is one render per location and two rows at a location differ ONLY in mode"
+    },
+    "roster": {
+      "n_modes": 15,
+      "n_active": 14,
+      "excluded": [
+        "exp_smoothing"
+      ],
+      "kinds": {
+        "pure": 5,
+        "composite": 5,
+        "direct": 4
+      }
+    },
+    "mode_targets": {
+      "rule": "the 0 contested modes take 0 rows each; the remaining 200 rows are apportion.deal_round_robin over the other 14 active modes (balanced-or-drained). NO score weights this.",
+      "contested_modes": [],
+      "excluded_modes": [
+        "exp_smoothing"
+      ],
+      "excluded_why": "measured ~100% smooth-equivalent (118/118 on sheet B at cos p50 0.9972; 249/250 on sheet C) \u2014 a blind label spent on a smooth twin buys nothing",
+      "active_modes": 14,
+      "target_rows": 200,
+      "rows_by_mode": {
+        "composite_c13_smooth_stripe": 15,
+        "composite_c17_smooth_curvature": 15,
+        "composite_c7_smooth_trap_circle": 15,
+        "curv_linear": 15,
+        "direct_trap_lines": 14,
+        "direct_trap_multiply": 14,
+        "direct_trap_ring": 14,
+        "direct_trap_screen": 14,
+        "gaussian_int": 14,
+        "smooth_angle_min": 14,
+        "smooth_mean_angle": 14,
+        "stripe": 14,
+        "tia": 14,
+        "trap_circle": 14
+      },
+      "supply_by_mode": {
+        "composite_c13_smooth_stripe": 200,
+        "composite_c17_smooth_curvature": 200,
+        "composite_c7_smooth_trap_circle": 200,
+        "curv_linear": 200,
+        "direct_trap_lines": 200,
+        "direct_trap_multiply": 200,
+        "direct_trap_ring": 200,
+        "direct_trap_screen": 200,
+        "gaussian_int": 200,
+        "smooth_angle_min": 200,
+        "smooth_mean_angle": 200,
+        "stripe": 200,
+        "tia": 200,
+        "trap_circle": 200
+      }
+    },
+    "candidate_draw": {
+      "rule": "round-robin over modes (contested first), each mode walking its own seeded permutation of the drawn locations, a location capped at 2 units. Deterministic in (population, seed, targets); NO score orders it.",
+      "oversample": 1.6,
+      "quota_by_mode": {
+        "composite_c13_smooth_stripe": 24,
+        "composite_c17_smooth_curvature": 24,
+        "composite_c7_smooth_trap_circle": 24,
+        "curv_linear": 24,
+        "direct_trap_lines": 23,
+        "direct_trap_multiply": 23,
+        "direct_trap_ring": 23,
+        "direct_trap_screen": 23,
+        "gaussian_int": 23,
+        "smooth_angle_min": 23,
+        "smooth_mean_angle": 23,
+        "stripe": 23,
+        "tia": 23,
+        "trap_circle": 23
+      },
+      "drawn_by_mode": {
+        "composite_c13_smooth_stripe": 24,
+        "composite_c17_smooth_curvature": 24,
+        "composite_c7_smooth_trap_circle": 24,
+        "curv_linear": 24,
+        "direct_trap_lines": 23,
+        "direct_trap_multiply": 23,
+        "direct_trap_ring": 23,
+        "direct_trap_screen": 23,
+        "gaussian_int": 23,
+        "smooth_angle_min": 23,
+        "smooth_mean_angle": 23,
+        "stripe": 23,
+        "tia": 23,
+        "trap_circle": 23
+      },
+      "short_of_quota": {},
+      "n_candidates": 326,
+      "n_locations_used": 185,
+      "rows_per_location_hist": {
+        "1": 44,
+        "2": 141
+      },
+      "seed": 41
+    },
+    "n_candidates": 326,
+    "n_smooth_twins": 185,
+    "candidates_by_mode": {
+      "composite_c13_smooth_stripe": 24,
+      "composite_c17_smooth_curvature": 24,
+      "composite_c7_smooth_trap_circle": 24,
+      "curv_linear": 24,
+      "direct_trap_lines": 23,
+      "direct_trap_multiply": 23,
+      "direct_trap_ring": 23,
+      "direct_trap_screen": 23,
+      "gaussian_int": 23,
+      "smooth_angle_min": 23,
+      "smooth_mean_angle": 23,
+      "stripe": 23,
+      "tia": 23,
+      "trap_circle": 23
+    },
+    "candidates_by_partition": {
+      "julia:mandelbrot": 34,
+      "julia:multibrot3": 36,
+      "julia:multibrot4": 39,
+      "julia:multibrot5": 33,
+      "mandelbrot": 37,
+      "multibrot3": 39,
+      "multibrot4": 34,
+      "multibrot5": 35,
+      "phoenix": 39
+    },
+    "direct_rule": "ONE cell per (location, direct mode), off a per-location permutation of the 3-cell DIRECT_GRID \u2014 so no direct mode appears twice at a location (sheet B's self-dup class). Distinct direct modes take successive cells; with 4 direct modes over 3 cells they cannot all differ",
+    "pair_freshness": {
+      "rule": "(location_key, render_mode) served by any prior render-mode batch",
+      "n_universe": 326,
+      "n_stale_pairs": 0,
+      "stale": []
+    }
+  },
+  "selection_report": {
+    "target_rows": 200,
+    "drawn_rows": 200,
+    "screened": 326,
+    "targets_by_mode": {
+      "composite_c13_smooth_stripe": 15,
+      "composite_c17_smooth_curvature": 15,
+      "composite_c7_smooth_trap_circle": 15,
+      "curv_linear": 15,
+      "direct_trap_lines": 14,
+      "direct_trap_multiply": 14,
+      "direct_trap_ring": 14,
+      "direct_trap_screen": 14,
+      "gaussian_int": 14,
+      "smooth_angle_min": 14,
+      "smooth_mean_angle": 14,
+      "stripe": 14,
+      "tia": 14,
+      "trap_circle": 14
+    },
+    "smooth_equivalence": {
+      "substrate": "colored_clip \u2014 palette-ON CLIP vit_base_patch16_clip_224.openai, timm eval transform (tools/curation/colored_clip.py)",
+      "pair": "the mode render vs a SMOOTH render of the same location at the same palette, colour params, geometry and render tail (mining_roster.SMOOTH_MODE through build_mining_sheet.render_one) \u2014 the mode is the only difference",
+      "strict_cut": 0.974,
+      "strict_cut_owner": "tools/emission/descriptor.NEAR_DUP_THRESHOLD",
+      "identity_interleave": [
+        0.934,
+        0.986
+      ],
+      "identity_interleave_source": "data/atlas/precanon_calibration/adoption.json (morph_gray-derived)",
+      "caveat": "BOTH anchors were derived on the GRAYSCALE morph embedding and the tree records that grayscale anchors do not transfer. On colored CLIP they are a borrowed yardstick, not a calibrated one \u2014 read every share next to `unrelated_reference`, which is the scale's actual floor here.",
+      "measured_at_geometry": [
+        640,
+        360,
+        1
+      ],
+      "excluded_smooth_equivalent": 0,
+      "unmeasured_dropped": 0,
+      "unmeasured_note": "counted APART from the smooth-equivalent exclusion: 'we could not measure this' must not read as 'this is a smooth twin'. Both are dropped \u2014 an unmeasured row must not read as distinct either.",
+      "n_rows_without_a_twin_embedding": 0,
+      "bands_over_candidates": {
+        "distinct": 326
+      },
+      "by_mode": {
+        "tia": {
+          "n": 23,
+          "share_distinct": 1.0,
+          "median_cos": 0.8612910509109497
+        },
+        "stripe": {
+          "n": 23,
+          "share_distinct": 1.0,
+          "median_cos": 0.8022254109382629
+        },
+        "gaussian_int": {
+          "n": 23,
+          "share_distinct": 1.0,
+          "median_cos": 0.7959317564964294
+        },
+        "trap_circle": {
+          "n": 23,
+          "share_distinct": 1.0,
+          "median_cos": 0.812308669090271
+        },
+        "curv_linear": {
+          "n": 24,
+          "share_distinct": 1.0,
+          "median_cos": 0.8206745088100433
+        },
+        "smooth_mean_angle": {
+          "n": 23,
+          "share_distinct": 1.0,
+          "median_cos": 0.7206217646598816
+        },
+        "smooth_angle_min": {
+          "n": 23,
+          "share_distinct": 1.0,
+          "median_cos": 0.7823597192764282
+        },
+        "composite_c7_smooth_trap_circle": {
+          "n": 24,
+          "share_distinct": 1.0,
+          "median_cos": 0.853823184967041
+        },
+        "composite_c13_smooth_stripe": {
+          "n": 24,
+          "share_distinct": 1.0,
+          "median_cos": 0.8116999268531799
+        },
+        "composite_c17_smooth_curvature": {
+          "n": 24,
+          "share_distinct": 1.0,
+          "median_cos": 0.8346760869026184
+        },
+        "direct_trap_ring": {
+          "n": 23,
+          "share_distinct": 1.0,
+          "median_cos": 0.8158050775527954
+        },
+        "direct_trap_screen": {
+          "n": 23,
+          "share_distinct": 1.0,
+          "median_cos": 0.8085238933563232
+        },
+        "direct_trap_multiply": {
+          "n": 23,
+          "share_distinct": 1.0,
+          "median_cos": 0.7973018288612366
+        },
+        "direct_trap_lines": {
+          "n": 23,
+          "share_distinct": 1.0,
+          "median_cos": 0.7970356941223145
+        }
+      }
+    },
+    "near_dup_filter": {
+      "cut": 0.974,
+      "substrate": "colored_clip",
+      "n_dropped": 2,
+      "dropped": [
+        {
+          "unit_key": "multibrot3|-0.09178877577159826|0.7700994477247156|7.632786715130387e-07|||composite_c17_smooth_curvature",
+          "mode": "composite_c17_smooth_curvature",
+          "partition": "multibrot3",
+          "palette": "cmr.copper",
+          "cos_smooth": 0.8368511199951172,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.981976330280304,
+          "dup_of": "multibrot3|-0.09178877577159826|0.7700994477247156|7.632786715130387e-07|||curv_linear"
+        },
+        {
+          "unit_key": "julia|0.0|0.0|0.75|-0.7484455171969645|-0.08322540135908364|curv_linear",
+          "mode": "curv_linear",
+          "partition": "julia:mandelbrot",
+          "palette": "curlv",
+          "cos_smooth": 0.80173659324646,
+          "why": "near-dup of a kept row",
+          "dup_cos": 0.9784672260284424,
+          "dup_of": "julia|0.0|0.0|0.75|-0.7484455171969645|-0.08322540135908364|composite_c17_smooth_curvature"
+        }
+      ],
+      "rule": "greedy in DRAW ORDER over the survivors \u2014 no two served rows within cos 0.974, INCLUDING two modes of one location. The survivor of a collision is the earlier-drawn row; NO score breaks the tie."
+    },
+    "buckets": {
+      "pooled_read": 200
+    },
+    "short_of_target": {},
+    "drawn_by_mode": {
+      "composite_c13_smooth_stripe": 15,
+      "composite_c17_smooth_curvature": 15,
+      "composite_c7_smooth_trap_circle": 15,
+      "curv_linear": 15,
+      "direct_trap_lines": 14,
+      "direct_trap_multiply": 14,
+      "direct_trap_ring": 14,
+      "direct_trap_screen": 14,
+      "gaussian_int": 14,
+      "smooth_angle_min": 14,
+      "smooth_mean_angle": 14,
+      "stripe": 14,
+      "tia": 14,
+      "trap_circle": 14
+    },
+    "drawn_by_kind": {
+      "composite": 73,
+      "direct": 56,
+      "pure": 71
+    },
+    "drawn_by_partition": {
+      "julia:mandelbrot": 15,
+      "julia:multibrot3": 21,
+      "julia:multibrot4": 27,
+      "julia:multibrot5": 22,
+      "mandelbrot": 21,
+      "multibrot3": 26,
+      "multibrot4": 19,
+      "multibrot5": 21,
+      "phoenix": 28
+    },
+    "drawn_by_hue_family": {
+      "fire": 26,
+      "gold": 10,
+      "green": 59,
+      "ice": 29,
+      "purple": 16,
+      "rose": 21,
+      "spectral": 32,
+      "neutral": 7
+    },
+    "drawn_by_human_score": {
+      "3": 119,
+      "4": 81
+    },
+    "distinct_locations": 131,
+    "distinct_palettes": 131,
+    "rows_per_location_hist": {
+      "1": 62,
+      "2": 69
+    },
+    "seed": 41,
+    "unused_candidates": 126
+  },
+  "render_bill": {
+    "basis": "data/render_mode_corpus/batches/2026-08-11_render_mode_blind_v1/batch.json (render_bill, measured 2026-08-10; its own scratch probe is wiped)",
+    "speedup_assumed": 3.0,
+    "speedup_basis": "4 workers x 3 rayon threads at BELOW_NORMAL \u2014 sheet C's measured screen speedup, not a core count",
+    "n_screen_units": 511,
+    "n_keeper_units": 200,
+    "stages": {
+      "screen": {
+        "per_partition": {
+          "julia:mandelbrot": {
+            "units": 56.0,
+            "mean_s": 0.5512148936589559,
+            "single_process_min": 0.51
+          },
+          "julia:multibrot3": {
+            "units": 56.0,
+            "mean_s": 0.4400656620661418,
+            "single_process_min": 0.41
+          },
+          "julia:multibrot4": {
+            "units": 60.0,
+            "mean_s": 0.3553570906321208,
+            "single_process_min": 0.36
+          },
+          "julia:multibrot5": {
+            "units": 52.0,
+            "mean_s": 0.49910950660705566,
+            "single_process_min": 0.43
+          },
+          "mandelbrot": {
+            "units": 58.0,
+            "mean_s": 0.7846020062764486,
+            "single_process_min": 0.76
+          },
+          "multibrot3": {
+            "units": 61.0,
+            "mean_s": 0.5601867834726969,
+            "single_process_min": 0.57
+          },
+          "multibrot4": {
+            "units": 54.0,
+            "mean_s": 0.9200904766718546,
+            "single_process_min": 0.83
+          },
+          "multibrot5": {
+            "units": 55.0,
+            "mean_s": 1.1638585329055786,
+            "single_process_min": 1.07
+          },
+          "phoenix": {
+            "units": 59.0,
+            "mean_s": 0.7288670539855957,
+            "single_process_min": 0.72
+          }
+        },
+        "single_process_min": 5.7,
+        "wall_min_at_4x": 1.9,
+        "unpriced_partitions": []
+      },
+      "keeper": {
+        "per_partition": {
+          "julia:mandelbrot": {
+            "units": 20.9,
+            "mean_s": 6.236934661865234,
+            "single_process_min": 2.17
+          },
+          "julia:multibrot3": {
+            "units": 22.1,
+            "mean_s": 3.7509833176930747,
+            "single_process_min": 1.38
+          },
+          "julia:multibrot4": {
+            "units": 23.9,
+            "mean_s": 2.5828676223754883,
+            "single_process_min": 1.03
+          },
+          "julia:multibrot5": {
+            "units": 20.2,
+            "mean_s": 4.683884938557942,
+            "single_process_min": 1.58
+          },
+          "mandelbrot": {
+            "units": 22.7,
+            "mean_s": 8.6635000705719,
+            "single_process_min": 3.28
+          },
+          "multibrot3": {
+            "units": 23.9,
+            "mean_s": 5.613601803779602,
+            "single_process_min": 2.24
+          },
+          "multibrot4": {
+            "units": 20.9,
+            "mean_s": 11.185155789057413,
+            "single_process_min": 3.89
+          },
+          "multibrot5": {
+            "units": 21.5,
+            "mean_s": 15.158188621203104,
+            "single_process_min": 5.42
+          },
+          "phoenix": {
+            "units": 23.9,
+            "mean_s": 8.55672570069631,
+            "single_process_min": 3.41
+          }
+        },
+        "single_process_min": 24.4,
+        "wall_min_at_4x": 8.1,
+        "unpriced_partitions": []
+      }
+    },
+    "total_wall_min_at_4x": 10.0,
+    "excluded_from_the_bill": "the colored-CLIP embed pass over every screen unit and the ONE mining-v3 scoring pass over the keeper crops at write time \u2014 both GPU, both minutes, neither in the per-partition engine means above",
+    "projection_caveat": "the keeper stage projects the CANDIDATE partition mix scaled to the served row count; the served mix is not known until `select` runs its filters. Reproject from the run's own observed rate rather than restating this (CLAUDE.md, 'projecting a long run's wall clock')."
+  },
+  "split": {
+    "rule": "EVERY row is train (protocol 2b: anchored correction-sheet labels are TRAIN-SIDE ONLY). Not a stratified assignment and nothing to re-derive \u2014 a seeded split here would only make it look as though there had been a decision.",
+    "eval_rows": 0,
+    "train_rows": 200,
+    "never": "this sheet must not join sheets D/E as an eval instrument, for this head generation or any later one"
+  },
+  "seeds": {
+    "draw_seed": 41,
+    "id_salt": "render_mode_baserate_audit_v1/2026-08-11",
+    "shuffle_seed": null,
+    "shuffle_note": "there is no shuffle \u2014 a correction sheet is SORTED, and the sort is a pure function of the head readout"
+  },
+  "render_defaults": {
+    "width": 1280,
+    "height": 720,
+    "ss": 2,
+    "filter": "lanczos3",
+    "jpg_quality": 95,
+    "interior_mode": "black",
+    "composition": "center",
+    "why_these_pins": "the July render-mode batches' own pins, which every other batch in this corpus carries \u2014 a corpus whose parts differ in geometry cannot be unioned, and the head pre-labeling this sheet was trained on crops at these settings",
+    "screen_geometry": [
+      640,
+      360,
+      1
+    ]
+  },
+  "realized": {
+    "rows_by_mode": {
+      "composite_c13_smooth_stripe": 15,
+      "composite_c17_smooth_curvature": 15,
+      "composite_c7_smooth_trap_circle": 15,
+      "curv_linear": 15,
+      "direct_trap_lines": 14,
+      "direct_trap_multiply": 14,
+      "direct_trap_ring": 14,
+      "direct_trap_screen": 14,
+      "gaussian_int": 14,
+      "smooth_angle_min": 14,
+      "smooth_mean_angle": 14,
+      "stripe": 14,
+      "tia": 14,
+      "trap_circle": 14
+    },
+    "rows_by_kind": {
+      "composite": 73,
+      "direct": 56,
+      "pure": 71
+    },
+    "rows_by_partition": {
+      "julia:mandelbrot": 15,
+      "julia:multibrot3": 21,
+      "julia:multibrot4": 27,
+      "julia:multibrot5": 22,
+      "mandelbrot": 21,
+      "multibrot3": 26,
+      "multibrot4": 19,
+      "multibrot5": 21,
+      "phoenix": 28
+    },
+    "rows_by_family": {
+      "julia": 15,
+      "julia_multibrot3": 21,
+      "julia_multibrot4": 27,
+      "julia_multibrot5": 22,
+      "mandelbrot": 21,
+      "multibrot3": 26,
+      "multibrot4": 19,
+      "multibrot5": 21,
+      "phoenix": 28
+    },
+    "rows_by_hue_family": {
+      "fire": 26,
+      "gold": 10,
+      "green": 59,
+      "ice": 29,
+      "purple": 16,
+      "rose": 21,
+      "spectral": 32,
+      "neutral": 7
+    },
+    "rows_by_human_score": {
+      "3": 119,
+      "4": 81
+    },
+    "suggested_tier_hist": {
+      "1": 94,
+      "2": 86,
+      "3": 20
+    },
+    "would_pass_mining_gate": 9,
+    "distinct_locations": 131,
+    "distinct_palettes": 131,
+    "transfer_dropped_rows": 0,
+    "cos_smooth": {
+      "n": 200,
+      "mean": 0.8041166269779205,
+      "q": {
+        "p5": 0.7044722616672516,
+        "p25": 0.7680919319391251,
+        "p50": 0.8081430196762085,
+        "p75": 0.8465540856122971,
+        "p95": 0.8828899979591369
+      },
+      "min": 0.5764380693435669,
+      "max": 0.9319763779640198,
+      "bands": {
+        "distinct": 200
+      }
+    },
+    "pred": {
+      "min": 1.0,
+      "max": 2.867,
+      "p50": 1.6943
+    },
+    "p_ge3": {
+      "min": 0.0,
+      "max": 0.8807
+    }
+  },
+  "presentation": {
+    "order": "sheet_order \u2014 DESCENDING pred (good -> bad), ties on the crop stem",
+    "sorted_on": "the continuous head readout (pred), NOT the suggested tier",
+    "contiguous": true,
+    "presentation_order": "file",
+    "image_id": "OPAQUE `<prefix><slot>_<hash8>` \u2014 slot is presentation position (published anyway: the sheet is sorted), hash a salted digest of the unit key, so the id encodes no mode, palette, family or band. route.json maps it back."
+  },
+  "labels_export": "labels/scores_2026-08-11_render_mode_baserate_audit_v1.json",
+  "labeling": {
+    "ui": "tools/viz/wallpaper_label.html?corpus=render_mode_corpus&tiers=3&order=file&batch=2026-08-11_render_mode_baserate_audit_v1",
+    "mode": "CORRECTION \u2014 every row shows its suggested tier PREFILLED; Enter confirms, 1-3 override. Only rows Matt acts on are exported; an unreviewed suggestion never leaves the page as a label.",
+    "bulk": "accept all remaining, and accept all BELOW THIS ROW \u2014 both behind a confirm",
+    "blind_rows": 0,
+    "calibration_duplicates": 0,
+    "export_download": "scores.json (the page's export button)",
+    "save_export_as": "labels/scores_2026-08-11_render_mode_baserate_audit_v1.json",
+    "sidecar_written": "labels/render_mode_baserate_audit_v1.json",
+    "merge": "uv run python tools/wallpaper/merge_sitting.py --corpus render_mode_corpus --batch 2026-08-11_render_mode_baserate_audit_v1 --scores labels/scores_2026-08-11_render_mode_baserate_audit_v1.json --apply",
+    "then": "the CUT is the follow-up prompt: read the label/score crossover off the merged sidecar against `pred`/`p_ge3`. Nothing here moves a threshold."
+  },
+  "not_yet_pooled": {
+    "what": "2026-08-11_render_mode_baserate_audit_v1 is deliberately absent from near_dup_groups.BATCHES and mining_corpus.BATCH_TAG",
+    "why": "it has no labels yet. Pooling an unlabeled batch into the training corpus is a decision about a retrain, and it is made once the sidecar exists \u2014 not as a side effect of building the sheet."
+  },
+  "render_failures": [],
+  "run_status": {
+    "drawn_rows": 200,
+    "rendered_rows": 200,
+    "n_failures": 0,
+    "n_unaccounted": 0,
+    "unaccounted_rows": [],
+    "unaccounted_note": "drawn but neither rendered nor failed \u2014 a bounded (--limit) or interrupted run; re-run `render` then `write`"
+  }
+}

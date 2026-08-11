@@ -162,6 +162,13 @@ class SheetSpec:
     # per keeper render against ~8 s for mandelbrot; an uncapped slice would own the bill.
     location_caps: dict = field(default_factory=dict)
     classic_partition: str = PART.CLASSIC_PHOENIX
+    # WHICH modes are over-drawn, as a SPEC field rather than a module constant. Sheet E's
+    # whole mode axis is "weight the four cells the staged arms contest"; a sheet drawn for a
+    # BASE RATE wants the opposite — a flat apportionment over the active roster, so the
+    # realized mix is the roster's and not an argument's. The default is sheet E's own tuple,
+    # so this generalization changes nothing it built; `()` means no cell is favoured and
+    # `mode_targets` deals the whole page round-robin.
+    contested_modes: tuple = CONTESTED_MODES
 
     @property
     def batch_dir(self) -> Path:
@@ -341,19 +348,23 @@ def _screen_stem(spec: SheetSpec, unit_key: str) -> str:
 def mode_targets(spec: SheetSpec, supply: dict) -> tuple[dict, dict]:
     """`(rows_per_mode, report)` — the contested cells first, the remainder dealt.
 
-    The contested four take `contested_per_mode` each; whatever is left of `target_rows` goes
+    The contested cells take `contested_per_mode` each; whatever is left of `target_rows` goes
     round-robin over the remaining active modes through `apportion.deal_round_robin`, so a
-    mode short on supply drains and its slack lands on the others instead of being lost."""
-    take = {m: min(spec.contested_per_mode, supply.get(m, 0)) for m in CONTESTED_MODES}
+    mode short on supply drains and its slack lands on the others instead of being lost.
+
+    With `spec.contested_modes == ()` the first term is empty and the whole page is one flat
+    deal over the active roster — the base-rate sheet's axis."""
+    contested = tuple(spec.contested_modes)
+    take = {m: min(spec.contested_per_mode, supply.get(m, 0)) for m in contested}
     rest = max(0, spec.target_rows - sum(take.values()))
-    others = {m: supply.get(m, 0) for m in ACTIVE_MODES if m not in CONTESTED_MODES}
+    others = {m: supply.get(m, 0) for m in ACTIVE_MODES if m not in contested}
     take.update(apportion.deal_round_robin(dict(sorted(others.items())), rest))
     rep = {
-        "rule": f"the {len(CONTESTED_MODES)} contested modes take "
+        "rule": f"the {len(contested)} contested modes take "
                 f"{spec.contested_per_mode} rows each; the remaining "
                 f"{rest} rows are apportion.deal_round_robin over the other "
                 f"{len(others)} active modes (balanced-or-drained). NO score weights this.",
-        "contested_modes": list(CONTESTED_MODES),
+        "contested_modes": list(contested),
         "excluded_modes": list(EXCLUDED_MODES),
         "excluded_why": "measured ~100% smooth-equivalent (118/118 on sheet B at cos p50 "
                         "0.9972; 249/250 on sheet C) — a blind label spent on a smooth twin "
@@ -389,7 +400,8 @@ def draw_pairs(spec: SheetSpec, drawn_locs, targets, oversample=None):
         idx = rng.permutation(len(order))
         seq[m] = [order[int(i)] for i in idx]
 
-    mode_order = list(CONTESTED_MODES) + [m for m in ACTIVE_MODES if m not in CONTESTED_MODES]
+    contested = tuple(spec.contested_modes)
+    mode_order = list(contested) + [m for m in ACTIVE_MODES if m not in contested]
     cursor = {m: 0 for m in ACTIVE_MODES}
     have = Counter()
     used = Counter()
@@ -771,7 +783,7 @@ def select(spec: SheetSpec, candidates, twins, emb: dict, targets: dict):
         if have[m] >= targets.get(m, 0):
             continue
         have[m] += 1
-        r["bucket"] = "contested" if m in CONTESTED_MODES else "pooled_read"
+        r["bucket"] = "contested" if m in tuple(spec.contested_modes) else "pooled_read"
         selected.append(r)
     selected.sort(key=lambda r: r["unit_key"])
 

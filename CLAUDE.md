@@ -26,10 +26,17 @@ cargo run --release -- sheet --builtins "default cubehelix viridis" --output she
 
 Background long renders / descents; release builds do deep production-res renders in seconds.
 
-**Where the prompts live.** Session prompts are in **`../fractal-maker-controller/prompts/`**
-(a sibling repo, e.g. `C:\Code\fractal-maker-controller\prompts\v10_flip.md`). This repo has
-its OWN `prompts/` directory holding a different set, so a prompt named in a session and not
-found here is in the sibling — check there before globbing the tree.
+**Where the prompts live.** A session that names a prompt `<name>.md` means exactly this file:
+
+```
+C:\Code\fractal-drive-sync\prompts\<name>.md      # Read it directly. Do not glob, do not search.
+```
+
+Same disposable sync tree the reports are copied back to (`..\reports\`), so a prompt is
+delivered and its report returned through one directory. It holds only the live prompt(s),
+is not a git repo, and is wiped freely. Only if that exact path misses: this repo's own
+`prompts/` is a different, older set. `../fractal-maker-controller/` holds the `fractal-*.md`
+operating docs and **no prompts** — never look there.
 
 **Run the full suite parallel; run a single file serial.** `-n 4 --dist loadfile` halves
 the suite (217s → 118s, re-measured 2026-08-06 at 2,223 tests; it was 185s → 90s at 1,439

@@ -333,6 +333,43 @@ REGISTRY: dict[str, tuple[Registration, ...]] = {
                          "record. It is deliberately NOT in `near_dup_groups.BATCHES`, so "
                          "`mining_corpus.load_corpus` never pools it into training. "
                          "See classifier_retrain_protocol.md §2b."),),
+    # ---- the BASE-RATE AUDIT sheet: sheet E's population, served ANCHORED ----
+    # Registered BEFORE it was built (prompts/audit_mining_sheet_200.md). State §OPEN-1: the
+    # four-sheet table differs by 11x at >=3 between sheet C (anchored, 46.4%) and sheet E
+    # (blind, 4.0%) on the SAME draw rule, and t_good, the mining gate and every downstream
+    # keeper rate were calibrated on anchored labels. Matt's reshaping of the audit is this
+    # sheet: not a second large blind instrument, but a standard correction sheet whose DRAW
+    # carries no mining score at all, so the label/score crossover can be read directly off
+    # the page and the mining cut set at it.
+    "2026-08-11_render_mode_baserate_audit_v1": (
+        Registration(source="mining_baserate_audit", biased=True,
+                     why="THE SCORE-UNCONDITIONED DRAW, SERVED ANCHORED — and the two halves "
+                         "of that sentence carry the two facts. THE DRAW: no mining "
+                         "checkpoint is loaded, scored, stamped or sorted on anywhere in the "
+                         "selection path; the population is sheet E's rule IMPORTED (fresh "
+                         "(location, mode) pairs against every prior render-mode batch by key "
+                         "AND proximity, globbed and self-excluding), the mode axis is a flat "
+                         "apportionment over the active roster with NO contested weighting, "
+                         "and the palette is a screened POOL draw. That is what makes a base "
+                         "rate on the mining gate's own population readable off it at all. "
+                         "THE PAGE: mining v3's suggested tier is prefilled and the page is "
+                         "ordered by its continuous score, so the LABELS are anchored to v3 "
+                         "even though the DRAW is not — protocol 2b, TRAIN-SIDE ONLY, and "
+                         "every row stamps split_side=train. It must never join sheets D/E as "
+                         "an eval instrument, and an incumbent-vs-challenger comparison scored "
+                         "on it measures agreement with v3. "
+                         "BIASED IS ABOUT THE LOCATION AXIS, as on sheets C, D and E: quality "
+                         "is conditioned on the HUMAN label corpus (score 4, falling back to 3 "
+                         "where a partition is short), so the locations are a top slice and no "
+                         "rate on it is a LOCATION base rate. What it does measure is the "
+                         "rate over the strange-mode RENDERING of that gated population, "
+                         "which is what the mining gate actually sees. "
+                         "score_unconditioned STAYS FALSE, with sheets C, D and E: that flag "
+                         "is the forced-eval-cascade exemption for eval INSTRUMENTS and its "
+                         "own invariant forbids it on a train-side row. The fact it would "
+                         "have carried — no mining head in the draw — is data in the batch "
+                         "record instead (`draw_unconditioned` / `heads_read`), which is "
+                         "where every reader of a render-mode batch already looks."),),
     "2026-08-10_render_mode_rare_palette_v1": (
         Registration(source="mining_rare_palette_sitting", biased=True,
                      why="the rare-palette strange sheet (sheet C of the (27) sittings). "
