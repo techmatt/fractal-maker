@@ -1,39 +1,38 @@
-r"""The mining gate lock — the frozen operating point the 0.50 release floor is set against.
+r"""The mining gate lock — the frozen operating point the release floor is set against.
 
-Writes ``data/render_mode_head/v1/mining_gate_lock.json`` (``mining_pins.LOCK_PATH``) and its
+Writes ``mining_pins.LOCK_PATH`` (the PINNED head's ``mining_gate_lock.json``) and its
 readable face, ``mining_gate_lock.md`` beside it (NOT ``report.md`` — that is the adoption
 sitting's own hand-written report and this must never clobber it). A floor is a point on ONE
 head's probability scale;
 this file is the record of what that point BUYS on a stated population, so a number in
 ``floors.py`` can be argued with instead of merely obeyed.
 
-WHY THIS FILE WAS REWRITTEN RATHER THAN RE-RUN. The July lock derived its curve from
-``data/render_mode_head/v1/seed_*/eval_scores.jsonl`` over
-``data/render_mode_corpus/dataset_v1/eval.jsonl``. BOTH are gone — the v1 dir holds only
-``model_best.pt`` and the dataset dir does not exist — so the old script could not run, and
-had not been able to since the corpus loss. `fresh_sheet_reads.py` still quotes the July
-operating point (precision 0.548 / recall 0.195 at 0.50) from the pin module's prose, which
-is the only surviving citation of it; that quote is about the LOST corpus and is not
-superseded by anything here. This is a different population and says so.
+WHERE THE NUMBERS COME FROM, AND WHY NOT RE-MEASURED HERE. The source is the flip's own
+VOLUME-MATCH record (``tools/scoring/volume_match.py`` -> ``data/render_mode_head/<v>/
+volume_match_mining.json``): the committed output of the pass that scored a named reference
+pool under the outgoing and incoming heads through ``MiningScorer`` — the gate's own harness,
+so harness parity here is by construction rather than by a separate check. Re-measuring in
+this file would need torch, a GPU and the crops, and would produce the same numbers or a
+discrepancy nobody could adjudicate; deriving from the frozen record keeps this file
+pure-Python, deterministic, and byte-identical on a re-run. What it does instead of measuring
+is REFUSE: the head the record was scored on must be the head the pin serves, the record's cut
+values must be the owner's live cut values, and every quoted cut must be an exact swept row of
+the frozen ladder (``volume_match.ladder`` unions the live cuts into its sweep for exactly
+this reason).
 
-WHAT IT IS DERIVED FROM, AND WHY NOT RE-MEASURED. The source is
-``data/render_mode_head/v2/report.json`` — the committed record of the 2026-08-06 sitting,
-whose numbers came from scoring the live pin through ``MiningScorer`` over the eval side of
-``2026-08-06_render_mode_fresh_sheet_v1``. Re-measuring here would need torch, a GPU and the
-crops, and would produce the same numbers or a discrepancy nobody could adjudicate; deriving
-from the frozen report keeps this file pure-Python, deterministic, and byte-identical on a
-re-run. What it does instead of measuring is REFUSE: the head the report calibrated must be
-the head the pin serves, the report's cut values must be the owner's live cut values, and
-every quoted cut must be an exact swept row of the frozen ladder.
+THE v1 LOCK IS NOT SUPERSEDED, IT IS RETAINED. ``data/render_mode_head/v1/mining_gate_lock.
+json`` stays tracked as the record of what 0.50 and 0.25 bought on the head they were measured
+on. A lock lives at its own head's path (``mining_pins.LOCK_PATH`` moves with the pin), so a
+flip WRITES A NEW ONE and never edits the old — the July lock's own ``supersedes`` note is the
+one exception in the tree and it describes a record whose inputs were lost, not one replaced.
 
-WHAT THE NUMBERS ARE AN OPTIMISTIC BOUND ON. Two caveats, carried verbatim from the sitting
-and repeated in the record itself, both leaning the same way:
-  * v1 trained on renders at these same 112 gate-passer locations, so it is read on a
-    population it has partly memorised; and
-  * the labels were PREFILLED with v1's own suggested tier (a correction sheet, sorted
-    good->bad, Enter confirming), so label and score are coupled by construction.
-Neither is subtractable here. Every precision below is therefore an optimistic bound on a
-FRESH location, which is the whole reason the record states them rather than filing them.
+WHAT THE NUMBERS ARE AN OPTIMISTIC BOUND ON. The reference pool is the (28) mining eval side,
+and three of its four known leans favour the INCUMBENT rather than the pinned head — v1 had
+trained at 630 of the 827 rows' locations, and every sheet in the corpus is a correction sheet
+served with v1's own suggestion. What leans toward the pinned head is that v3's staged
+checkpoint is the best of five seeds by eval AP>=3 on this very slice. So a precision here is
+an optimistic bound on a FRESH (location, mode) pair, and the honest use of this record is as
+a ceiling, not an estimate. ``tools/mining/sheet_e_reverdict.py`` is the unanchored read.
 
 FROZEN-RECORD WRITE RULE. A default run VERIFIES (derives the record and diffs it against
 what is on disk, exit 1 on drift); ``--write`` is what writes. That is the shape
@@ -64,13 +63,15 @@ from tools import paths as P                      # noqa: E402  storage-class de
 from tools.emission import floors as F            # noqa: E402  THE stage-2 cut owner
 from tools.mining import mining_pins as MP        # noqa: E402  torch-free pin
 
-# The sitting this record freezes. Both paths are committed artifacts.
-SOURCE_REPORT = "data/render_mode_head/v2/report.json"
-LOCK_PATH = MP.LOCK_PATH                          # data/render_mode_head/v1/mining_gate_lock.json
+# The measurement this record freezes: the flip's own volume-match pass, at the PINNED
+# head's path. Derived from the pin rather than spelled, so a lock cannot describe one head
+# while living beside another.
+SOURCE_REPORT = f"data/{MP.HEAD_NAME}/{MP.HEAD_VERSION}/volume_match_mining.json"
+LOCK_PATH = MP.LOCK_PATH                          # data/<head>/<version>/mining_gate_lock.json
 # The readable face of the SAME record, generated beside it — deliberately not `report.md`,
 # which is the sitting's own hand-written adoption report and would be clobbered by a --write.
 MD_PATH = str(Path(LOCK_PATH).with_suffix(".md"))
-SCHEMA = "mining_gate_lock/v2"                    # v1 = the July lock (curve + parity), gone
+SCHEMA = "mining_gate_lock/v3"                    # v1 = July (gone); v2 = the 2026-08-06 sitting
 
 # The two cuts this record is the authority for. Read from the owner, never restated: the
 # lock quotes what `floors.py` says is live, and refuses if the ladder cannot support it.
@@ -111,39 +112,73 @@ def _row_at(ladder: list, value: float) -> dict:
 # --------------------------------------------------------------------------- #
 # derive
 # --------------------------------------------------------------------------- #
-def build_lock(report: dict, *, source_sha: str) -> dict:
-    """The record, as a pure function of the frozen sitting + the live pin/owner state."""
-    live_head = MP.HEAD_VERSION
-    cal = report["calibration"]
+# The population's known leans. A judgement about the reference pool, not a computation over
+# it, so it is declared rather than read out of the record. Carried verbatim from
+# `mining_v3_reads.py`'s own statement of what leans that comparison.
+CAVEATS = {
+    "incumbent_trained_at_these_locations": (
+        "mining v1 trained at the 112 gate-passer locations the v1 sitting and sheet B draw "
+        "from, and its dataset is gone so the exact rows cannot be excluded: 630 of the 827 "
+        "rows sit at a location v1 has seen."),
+    "labels_are_anchored_to_v1": (
+        "every sheet in this corpus is a CORRECTION sheet - rows were served with v1's own "
+        "suggested tier prefilled and the page sorted by its score, so label and v1's score "
+        "are coupled by construction (0.929 of the v1 sitting's labels came back equal to "
+        "what was served)."),
+    "staged_is_eval_selected": (
+        "the pinned checkpoint is the best of five seeds by eval AP>=3 on this very slice, so "
+        "a number read here is optimistic for it. The five-seed band is in the (28) report."),
+    "direction": (
+        "the first two lean toward the INCUMBENT and the third toward the pinned head. They "
+        "do not cancel and none is subtractable."),
+}
 
-    # (1) the head the sitting calibrated must be the head the pin serves.
-    if cal["ckpt"] != MP.ACTIVE_MINING_CKPT:
+
+def build_lock(vm: dict, *, source_sha: str) -> dict:
+    """The record, as a pure function of the frozen volume-match pass + the live pin/owner
+    state."""
+    live_head = MP.HEAD_VERSION
+    pool = vm["reference_pool"]
+
+    # (1) the head the pass scored must be the head the pin serves.
+    if vm["head"]["incoming"] != MP.ACTIVE_MINING_CKPT:
         raise LockDerivationError(
-            f"the sitting calibrated {cal['ckpt']} but the live pin is "
+            f"the volume-match pass scored {vm['head']['incoming']} but the live pin is "
             f"{MP.ACTIVE_MINING_CKPT}. A lock is a statement about the DEPLOYED head; "
-            f"re-run the calibration against the live pin or move the pin back.")
-    for name, block in report["cuts"].items():
-        if block["stamp"] != f"{MP.HEAD_NAME}/{live_head}":
-            raise LockDerivationError(
-                f"the sitting's {name} was stamped {block['stamp']}, live head is "
-                f"{MP.HEAD_NAME}/{live_head}.")
+            f"re-run the pass against the live pin or move the pin back.")
+    if vm["head"]["name"] != MP.HEAD_NAME:
+        raise LockDerivationError(
+            f"the record is about {vm['head']['name']!r}, the pin about {MP.HEAD_NAME!r}.")
+    if vm.get("incomplete"):
+        raise LockDerivationError(
+            f"{SOURCE_REPORT} is stamped incomplete (a bounded --limit run). A lock derived "
+            f"from a partial pass would state an operating point nobody measured.")
+
+    by_name = {c["name"]: c for c in vm["cuts"]}
+    prev_head = Path(vm["head"]["outgoing"]).parent.name
 
     # (2) every locked cut must be the owner's live value AND an exact swept row.
     cuts = {}
     for f in LOCKED_CUTS:
         f.check()                                   # the owner's own stamp refusal
-        src = report["cuts"].get(f.name)
-        if src is None or abs(float(src["value"]) - f.value) > 1e-12:
+        src = by_name.get(f.name)
+        if src is None or abs(float(src["incoming_value"]) - f.value) > 1e-12:
             raise LockDerivationError(
                 f"{f.name} is {f.value} in floors.py but "
-                f"{None if src is None else src['value']} in the sitting. The record may only "
-                f"quote a cut the sitting actually swept at that value.")
-        r3 = _row_at(cal["ladder_ge3"], f.value)
+                f"{None if src is None else src['incoming_value']} in the volume-match "
+                f"record. The record may only quote a cut the pass actually placed.")
+        r3 = _row_at(vm["ladder_ge3"], f.value)
         cuts[f.name] = {
             "value": f.value, "site": f.site, "acts": False,
             "head": f"{f.head}/{f.stamp}", "basis": f.basis,
             "boundary": "p_ge3 (marginal P(label>=3))",
-            "fires": r3["fires"], "n": cal["n"], "pass_rate": r3["pass_rate"],
+            "restated_from": {
+                "value": src["outgoing_value"], "head": f"{f.head}/{prev_head}",
+                "how": "VOLUME-MATCHED - the same matched_volume below, under the previous "
+                       "head (classifier_retrain_protocol.md section 5a)",
+                "precision": src["outgoing"]["precision_ge3"]},
+            "matched_volume": src["matched_volume"],
+            "fires": r3["fires"], "n": pool["n"], "pass_rate": r3["pass_rate"],
             "tp": r3["tp"], "precision": r3["precision"],
             "precision_ci95": [r3["precision_lo"], r3["precision_hi"]],
             "recall": r3["recall"],
@@ -152,23 +187,14 @@ def build_lock(report: dict, *, source_sha: str) -> dict:
     return {
         "schema": SCHEMA,
         "what": ("The operating point of the render-mode (mining) quality gate: what each "
-                 "live cut fires at, and at what measured precision/recall, on the one "
-                 "labeled population that exists for this head."),
-        "supersedes": {
-            "path": LOCK_PATH,
-            "note": ("the July lock at this path (frozen PR curve + deployed-scorer parity "
-                     "over data/render_mode_corpus/dataset_v1/) did not survive the corpus "
-                     "loss; its inputs are gone and it cannot be re-derived. Its operating "
-                     "point (precision 0.548 / recall 0.195 / pass-rate 0.050 at 0.50, base "
-                     "0.139) survives only as prose quoted in fresh_sheet_reads.JULY_LOCK, "
-                     "measured on a DIFFERENT and genuinely held-out population."),
-        },
+                 "live cut fires at, and at what measured precision/recall, on the reference "
+                 "pool its value was volume-matched against."),
         "gate": {
             "version": MP.MINING_GATE_VERSION,
             "checkpoint": MP.ACTIVE_MINING_CKPT,
             "threshold": MP.MINING_GATE_THRESHOLD,
             "rollback": MP.MINING_V1_ROLLBACK,
-            "signal": "marginal p_ge3 = cumprod(sigma(logits)) — NEVER the CORN conditional",
+            "signal": "marginal p_ge3 = cumprod(sigma(logits)) - NEVER the CORN conditional",
             "deploy_transform": ("classifier.data.Transform(train=False): 384x224 bicubic "
                                  "stretch + the checkpoint's own mean/std"),
             "black_gate": "accept iff black_fraction < 0.30 (parity with the Rust render path)",
@@ -178,43 +204,42 @@ def build_lock(report: dict, *, source_sha: str) -> dict:
                  "checkpoint": MP.ACTIVE_MINING_CKPT,
                  "role": "LIVE mining gate (mining_pins.ACTIVE_MINING_CKPT)"},
         "corpus": {
-            "batch": report["batch"],
-            "slice": report["slice"],
-            "n": cal["n"],
-            "n_locations": report["n_locations"],
-            "n_modes": report["n_modes"],
-            "labels": report["label_dist"]["hist"],
-            "base_rate_ge3": cal["base_rate_ge3"],
-            "base_rate_ge2": cal["base_rate_ge2"],
+            "batch": pool["what"],
+            "slice": f"{pool['loader']} - {pool['by_batch']}",
+            "n": pool["n"],
+            "n_locations": pool["n_locations"],
+            "labels": pool["tiers"],
+            "base_rate_ge3": pool["base_rate_ge3"],
+            "base_rate_ge2": pool["base_rate_ge2"],
             "label_scale": "K=3 (1 bad / 2 okay / 3 good)",
         },
         "cuts": cuts,
         # BOTH boundaries, whole. A record that froze only the cut rows could not answer
-        # "what would 0.40 have bought" without re-running a sitting whose crops may be gone.
-        "ladder_ge3": cal["ladder_ge3"],
-        "ladder_ge2": cal["ladder_ge2"],
-        "caveats": {k: v for k, v in report["caveats"].items()
-                    if k in ("eval_is_held_out_for_v2_only", "labels_are_anchored_to_v1",
-                             "direction")},
-        "bound": ("OPTIMISTIC. Both caveats above inflate v1 and neither is subtractable "
-                  "from these numbers: the head trained at these locations, and the labels "
-                  "were prefilled with its own suggestions. Every precision here is an upper "
-                  "bound on what the same cut buys at a FRESH location, and the honest use "
-                  "of this record is as a ceiling, not an estimate."),
-        "harness_parity": report["harness_parity"],
-        "winner_rule": {
-            "winner": report["winner_rule"]["winner"],
-            "rule": report["winner_rule"]["rule"],
-            "note": ("v2 (a finetune of v1 on this batch's train side) lost this rule, so the "
-                     "calibration — and this lock — are on the incumbent."),
+        # "what would 0.40 have bought" without re-running a pass whose crops may be gone.
+        "ladder_ge3": vm["ladder_ge3"],
+        "ladder_ge2": vm["ladder_ge2"],
+        "caveats": dict(CAVEATS),
+        "bound": ("OPTIMISTIC. Two of the three leans above inflate the INCUMBENT and one "
+                  "inflates the pinned head; none is subtractable from these numbers. Every "
+                  "precision here is a bound on what the same cut buys at a FRESH (location, "
+                  "mode) pair, and the honest use of this record is as a ceiling, not an "
+                  "estimate. The unanchored read is tools/mining/sheet_e_reverdict.py."),
+        "harness_parity": {
+            "what": ("BY CONSTRUCTION, not by a separate check: the volume-match pass scores "
+                     "through mining_gate.MiningScorer - the gate's own scorer - so there is "
+                     "no sibling harness for these numbers to disagree with."),
+            "scorer": pool["scorer"],
         },
         "provenance": {
             "source_report": SOURCE_REPORT,
             "source_report_sha256": source_sha,
+            "source_generated": vm["generated"],
+            "source_command": vm["command"],
             "derived_by": "tools/mining/lock_mining_gate.py --write",
-            "sitting": report["batch"].split("_")[0],
-            "adoption": ("prompts/mining_adoption_prompt.md — the release floor went from "
-                         "report-only to enforcing on this record's numbers."),
+            "adoption": ("prompts/flip_29.md - mining v1 -> v3 (the `dedup_weighted` arm), "
+                         "2026-08-11. Both cuts were restated volume-matched at this flip; "
+                         "the v1 lock stays at data/render_mode_head/v1/ as the record of "
+                         "what 0.50 and 0.25 bought on v1."),
         },
     }
 
@@ -223,9 +248,9 @@ def derive(source: Path | None = None) -> dict:
     src = Path(source) if source else (ROOT / SOURCE_REPORT)
     if not src.exists():
         raise LockDerivationError(
-            f"the sitting record {src} is missing — it is a tracked artifact "
-            f"({SOURCE_REPORT}); restore it rather than re-deriving this lock from anything "
-            f"else.")
+            f"the volume-match record {src} is missing — it is a tracked artifact "
+            f"({SOURCE_REPORT}); write it with `uv run python tools/scoring/volume_match.py "
+            f"mining` rather than re-deriving this lock from anything else.")
     return build_lock(json.loads(src.read_text(encoding="utf-8")), source_sha=_sha256(src))
 
 
@@ -268,62 +293,62 @@ def _pct(x):
 
 def write_md(lock: dict) -> str:
     c, g, cor = lock["cuts"], lock["gate"], lock["corpus"]
-    w = [f"# Mining gate lock — `{g['version']}` @ {g['checkpoint']}\n",
+    pv = lock["provenance"]
+    w = [f"# Mining gate lock \u2014 `{g['version']}` @ {g['checkpoint']}\n",
          f"Frozen operating point of the render-mode (strange) quality gate. Written by "
-         f"`tools/mining/lock_mining_gate.py` from the committed sitting record "
-         f"`{lock['provenance']['source_report']}` "
-         f"(sha256 `{lock['provenance']['source_report_sha256'][:16]}…`); nothing here is "
-         f"re-measured, and a reader that finds the pin moved off "
+         f"`tools/mining/lock_mining_gate.py` from the committed volume-match record "
+         f"`{pv['source_report']}` "
+         f"(sha256 `{pv['source_report_sha256'][:16]}\u2026`); nothing here is re-measured, and "
+         f"a reader that finds the pin moved off "
          f"`{lock['head']['name']}/{lock['head']['version']}` must refuse the whole file.\n",
-         f"\n**Population.** `{cor['batch']}` — {cor['slice']}, **n = {cor['n']}** "
-         f"({cor['n_locations']} locations, {cor['n_modes']} roster modes), labels "
+         f"\n**Population.** {cor['batch']} \u2014 {cor['slice']}, **n = {cor['n']}** "
+         f"({cor['n_locations']} locations), labels "
          f"{cor['labels']} on {cor['label_scale']}: base rate **{_pct(cor['base_rate_ge3'])}** "
          f"at >=3, **{_pct(cor['base_rate_ge2'])}** at >=2.\n",
          "\n## The two cuts\n",
-         "| cut | value | site | acts | fires | pass rate | precision | 95% CI | recall |",
-         "|---|--:|---|:-:|--:|--:|--:|--:|--:|"]
+         "| cut | value | was | site | acts | fires | pass rate | precision | 95% CI | recall |",
+         "|---|--:|--:|---|:-:|--:|--:|--:|--:|--:|"]
     for name, cut in c.items():
         lo, hi = cut["precision_ci95"]
-        w.append(f"| `{name}` | {cut['value']:.2f} | {cut['site']} | "
-                 f"{'YES' if cut['acts'] else 'no'} | {cut['fires']}/{cut['n']} | "
+        rf = cut["restated_from"]
+        w.append(f"| `{name}` | {cut['value']:g} | {rf['value']:g} ({rf['head']}) | "
+                 f"{cut['site']} | {'YES' if cut['acts'] else 'no'} | "
+                 f"{cut['fires']}/{cut['n']} | "
                  f"{_pct(cut['pass_rate'])} | {_pct(cut['precision'])} | "
-                 f"{_pct(lo)}–{_pct(hi)} | {_pct(cut['recall'])} |")
-    w.append(f"\nBoth are on the gate signal — {c['mining_release']['boundary']}. Precision is "
-             f"of PASSERS and carries a Wilson interval: the top of the ladder is estimated "
-             f"from a handful of rows, and a bare 1.000 over 3 and a 0.90 over 90 are the "
-             f"same column otherwise.\n")
+                 f"{_pct(lo)}\u2013{_pct(hi)} | {_pct(cut['recall'])} |")
+    w.append(f"\nBoth are on the gate signal \u2014 {c['mining_release']['boundary']}. Every "
+             f"value is a VOLUME-MATCHED restatement of the `was` column: the same number of "
+             f"reference-pool rows passes, and only the precision beside it moved. Precision "
+             f"is of PASSERS and carries a Wilson interval: the top of the ladder is "
+             f"estimated from a handful of rows, and a bare 1.000 over 3 and a 0.90 over 90 "
+             f"are the same column otherwise.\n")
 
     w.append("\n## What this is an optimistic bound on\n")
     for k, v in lock["caveats"].items():
-        w.append(f"- **{k}** — {v}")
+        w.append(f"- **{k}** \u2014 {v}")
     w.append(f"\n**{lock['bound']}**\n")
     hp = lock["harness_parity"]
-    w.append(f"\n**Harness parity.** {hp['what']} Max abs diff over {hp['n']} rows: "
-             f"{hp['max_abs_diff']:.2e} (tolerance {hp['tol']:.0e}) — "
-             f"**{'PASS' if hp['ok'] else 'FAIL'}**. These are the gate's own numbers, not a "
-             f"sibling scorer's.\n")
+    w.append(f"\n**Harness parity.** {hp['what']} (scorer: `{hp['scorer']}`)\n")
 
     for key, label, base in (("ladder_ge3", ">=3 (the gate boundary)", cor["base_rate_ge3"]),
                              ("ladder_ge2", ">=2 (not-bad)", cor["base_rate_ge2"])):
-        w.append(f"\n## Frozen ladder — {label}, base rate {_pct(base)}\n")
+        w.append(f"\n## Frozen ladder \u2014 {label}, base rate {_pct(base)}\n")
         w.append("| threshold | fires | pass rate | TP | precision | 95% CI | recall | mark |")
         w.append("|--:|--:|--:|--:|--:|--:|--:|---|")
         for r in lock[key]:
-            ci = ("—" if r["precision"] is None
-                  else f"{_pct(r['precision_lo'])}–{_pct(r['precision_hi'])}")
-            w.append(f"| {r['threshold']:.2f} | {r['fires']} | {_pct(r['pass_rate'])} | "
+            ci = ("\u2014" if r["precision"] is None
+                  else f"{_pct(r['precision_lo'])}\u2013{_pct(r['precision_hi'])}")
+            w.append(f"| {r['threshold']:.4f} | {r['fires']} | {_pct(r['pass_rate'])} | "
                      f"{r['tp']} | {_pct(r['precision'])} | {ci} | {_pct(r['recall'])} | "
                      f"{' '.join(r.get('marks', []))} |")
 
-    sup = lock["supersedes"]
-    w.append(f"\n## Provenance\n")
-    w.append(f"- **Head** {lock['head']['name']}/{lock['head']['version']} — "
+    w.append("\n## Provenance\n")
+    w.append(f"- **Head** {lock['head']['name']}/{lock['head']['version']} \u2014 "
              f"{lock['head']['role']}. Threshold {g['threshold']} on {g['signal']}. "
              f"Rollback: {g['rollback']}.")
-    w.append(f"- **Winner rule** — the calibration ran on **{lock['winner_rule']['winner']}**. "
-             f"{lock['winner_rule']['note']}")
-    w.append(f"- **Supersedes** — {sup['note']}")
-    w.append(f"- **Adoption** — {lock['provenance']['adoption']}")
+    w.append(f"- **Source** `{pv['source_report']}`, generated {pv['source_generated']} "
+             f"by `{pv['source_command']}`.")
+    w.append(f"- **Adoption** \u2014 {pv['adoption']}")
     return "\n".join(w) + "\n"
 
 

@@ -1,0 +1,199 @@
+{
+  "adoption": "v3",
+  "family": "render_mode_head",
+  "adopted_on": "2026-08-11",
+  "prompt": "prompts/flip_29.md",
+  "checkpoint": "data/render_mode_head/v3/model_best.pt",
+  "pin": {
+    "module": "tools.mining.mining_pins",
+    "ckpt": "data/render_mode_head/v3/model_best.pt",
+    "version": "v3",
+    "gate": 0.6691,
+    "gate_version": "mining_v3",
+    "lock": "data/render_mode_head/v3/mining_gate_lock.json",
+    "rollback": "data/render_mode_head/v1/model_best.pt"
+  },
+  "rationale": [
+    "The (28)/(28b) clause-(a) verdict was measured entirely against a baseline the labels are coupled to: ALL THREE labeled render-mode batches are correction sheets served with mining v1's suggested tier prefilled and ordered by its score, so there is no clean arm anywhere in that corpus (protocol \u00a72b, 'a whole corpus can be anchored, and the mining corpus is'). Sheet E is the unanchored slice \u2014 150 blind (location, mode) pairs no prior sheet served. Clause (a) passes 0/7 there for v3, 38 of the 40 anchored failures across the five arms do not reproduce, and v1's anchoring price at the boundary every arm lost on is -0.278 (pooled AUC>=2 0.953 anchored -> 0.676 blind).",
+    "The anchor-broken motivating slices favour v3: busy_fp +0.142 AP>=3 [+0.024, +0.260] and +0.366 median AUC>=2, rare_palette +0.100 AUC>=3 [+0.014, +0.190], v1_unseen_locations +0.098 AUC>=3 [+0.010, +0.191].",
+    "At the release floor's own volume \u2014 129 of 827 rows, the cut restated to hold that volume fixed \u2014 precision>=3 goes 0.636 -> 0.760.",
+    "Both incumbents are pre-corpus-discipline heads that cannot be regenerated \u2014 their training-data provenance is incomplete \u2014 while both challengers are from-scratch retrains off fully tracked corpora. Comparable-plus-regenerable is sufficient: a head that cannot be rebuilt is a rung that decays, and holding an unrebuildable incumbent against a rebuildable challenger that is not measurably worse trades a permanent cost for no measured gain."
+  ],
+  "not_established": [
+    "PER-MODE ANCHORED COMPARISONS ARE NOT ESTABLISHED EITHER WAY. The (28) clause-(a) cells that v3 failed (curv_linear, direct_trap_lines, direct_trap_ring, direct_trap_screen) were measured on anchored labels and are therefore not evidence against v3; sheet E's per-mode cells are 25 rows each with 0-2 positives and are not evidence for it. Neither direction is shown. THE CORRECTION LOOP IS THE SAFETY NET: a mode v3 is wrong about surfaces as corrections on the next sheet.",
+    "THE BASE-RATE AUDIT IS DELIBERATELY NOT HERE. Sheet E's blind >=3 rate is ~4% against 21-46% on the anchored sheets, so the calibrations may be 5-11x off. That is next session's own prompt. Volume-matching preserves current volumes through this flip regardless of how it lands."
+  ],
+  "evidence": {
+    "blind_reverdict": {
+      "record": "data/render_mode_head/sheet_e_reverdict/report.json",
+      "generated": "2026-08-11T09:31:34",
+      "command": "uv run python tools/mining/sheet_e_reverdict.py",
+      "slice": {
+        "batch_id": "2026-08-11_render_mode_blind_v1",
+        "sidecar": "labels/render_mode_blind_v1.json",
+        "n_batch_rows": 150,
+        "n_labeled": 150,
+        "n_unlabeled": 0,
+        "partial": false,
+        "partial_note": null,
+        "n": 150,
+        "tiers": {
+          "n": 150,
+          "hist": {
+            "1": 74,
+            "2": 70,
+            "3": 6
+          },
+          "frac_ge2": 0.5066666666666667,
+          "frac_ge3": 0.04
+        },
+        "n_locations": 110,
+        "by_mode": {
+          "composite_c13_smooth_stripe": 5,
+          "composite_c17_smooth_curvature": 5,
+          "composite_c7_smooth_trap_circle": 5,
+          "curv_linear": 25,
+          "direct_trap_lines": 25,
+          "direct_trap_multiply": 5,
+          "direct_trap_ring": 25,
+          "direct_trap_screen": 25,
+          "gaussian_int": 5,
+          "smooth_angle_min": 5,
+          "smooth_mean_angle": 5,
+          "stripe": 5,
+          "tia": 5,
+          "trap_circle": 5
+        },
+        "by_kind": {
+          "composite": 25,
+          "direct": 80,
+          "pure": 45
+        },
+        "by_partition": {
+          "julia:mandelbrot": 10,
+          "julia:multibrot3": 12,
+          "julia:multibrot4": 19,
+          "julia:multibrot5": 16,
+          "mandelbrot": 19,
+          "multibrot3": 19,
+          "multibrot4": 14,
+          "multibrot5": 18,
+          "phoenix": 23
+        },
+        "by_hue_family": {
+          "fire": 23,
+          "gold": 6,
+          "green": 37,
+          "ice": 23,
+          "neutral": 8,
+          "purple": 14,
+          "rose": 12,
+          "spectral": 27
+        },
+        "contested_modes": [
+          "curv_linear",
+          "direct_trap_lines",
+          "direct_trap_ring",
+          "direct_trap_screen"
+        ],
+        "contested_rows": 100,
+        "blind": "no suggestion was served, no score ordered the page",
+        "eval_only": true,
+        "eval_only_reason": "PERMANENT. Every row is stamped split_side=eval and this slice must never enter any train split, for this head generation or any later one. It was bought to referee mining v1 against the five staged arms on unanchored labels; training on it spends the only unanchored read of this population that exists. It is also deliberately absent from near_dup_groups.BATCHES, so mining_corpus.load_corpus cannot pool it in by default.",
+        "eval_only_rows_stamped_eval": 150
+      }
+    },
+    "volume_match": {
+      "record": "data/render_mode_head/v3/volume_match_mining.json",
+      "generated": "2026-08-11T10:29:13",
+      "reference_pool": {
+        "what": "the (28) deduplicated mining eval side (mining_corpus.load_corpus)",
+        "n": 827,
+        "n_locations": 136,
+        "tiers": {
+          "1": 261,
+          "2": 352,
+          "3": 214
+        },
+        "base_rate_ge3": 0.2587666263603386
+      }
+    }
+  },
+  "moved_with_the_pin": {
+    "cuts": {
+      "mining_release": {
+        "old": 0.5,
+        "new": 0.6691,
+        "restated_how": "VOLUME-MATCHED (classifier_retrain_protocol.md \u00a75a) \u2014 the score that admits the same NUMBER of reference-pool rows",
+        "matched_volume": 129,
+        "n": 827,
+        "matched_rate": 0.15598548972188633,
+        "precision_ge3_old": 0.6356589147286822,
+        "precision_ge3_new": 0.7596899224806202,
+        "volume_preserved": true
+      },
+      "mining_pool": {
+        "old": 0.25,
+        "new": 0.3402,
+        "restated_how": "VOLUME-MATCHED (classifier_retrain_protocol.md \u00a75a) \u2014 the score that admits the same NUMBER of reference-pool rows",
+        "matched_volume": 322,
+        "n": 827,
+        "matched_rate": 0.3893591293833132,
+        "precision_ge3_old": 0.5341614906832298,
+        "precision_ge3_new": 0.5248447204968945,
+        "volume_preserved": true
+      }
+    },
+    "suggestion_cuts": {
+      "CUTS": {
+        "value": [
+          1.6671,
+          2.352
+        ],
+        "rederived": [
+          1.6671,
+          2.352
+        ],
+        "slice": "2026-08-06_render_mode_fresh_sheet_v1",
+        "n": 960,
+        "was": [
+          1.317,
+          1.8727
+        ]
+      }
+    },
+    "floors_summary": "junk_floor 0.2 (ENFORCING, colorize-pool draw) \u00b7 good_floor 0.5 (ENFORCING, run-side admission) \u00b7 wallpaper_pool 0.4698 (wallpaper_head/v4b, annotation-only) \u00b7 wallpaper_release 0.6052 (wallpaper_head/v4b, annotation-only) \u00b7 mining_pool 0.3402 (render_mode_head/v3, annotation-only) \u00b7 mining_release 0.6691 (render_mode_head/v3, annotation-only)"
+  },
+  "rollback_ladder": {
+    "ladder": [
+      "v3",
+      "v1"
+    ],
+    "why_two_rungs": "ACTIVE + PREVIOUS per model family (docs/design/storage_classes.md \u00a7 weights retention). Nothing de-tracked at this flip: each family gained a rung and the outgoing head became the rung below.",
+    "must_revert_together": [
+      {
+        "what": "tools.mining.mining_pins",
+        "why": "the pin; HEAD_VERSION and every stamp derive from it"
+      },
+      {
+        "what": "tools.mining.mining_pins gate threshold",
+        "why": "mining_release is a point on this head's probability scale",
+        "revert_to": 0.5
+      },
+      {
+        "what": "tools/emission/floors.MINING_POOL",
+        "why": "mining_pool is a point on this head's probability scale",
+        "revert_to": 0.25
+      },
+      {
+        "what": "tools/mining/suggest_tier_mining.CUTS",
+        "why": "cutpoints on `expected_tier`, a sum of CORN marginals \u2014 as scale-bound as a probability floor"
+      },
+      {
+        "what": "data/render_mode_head/v3/mining_gate_lock.json",
+        "why": "read_lock() refuses when the pin moves off the head it describes; v1's lock is still on disk and becomes live again on a rollback"
+      }
+    ]
+  },
+  "known_flip_cost": "Every accumulated record that carries this head's score \u2014 data/emission/release_records/*.jsonl and data/emission/mining_gate_reports/*.jsonl \u2014 holds numbers on the OUTGOING head's scale. They are records of decisions taken, not inputs to a decision, so they are not rewritten; the `floor` column beside each score says which cut it was judged against, which is what keeps an old row readable. A cross-flip precision read off them must not pool the two eras."
+}

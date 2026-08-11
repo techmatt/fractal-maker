@@ -33,6 +33,7 @@ from tools.wallpaper import wallpaper_pins as WP  # noqa: E402
 # --------------------------------------------------------------------------- #
 # 1. the stamp
 # --------------------------------------------------------------------------- #
+@pytest.mark.stage2_pinned
 def test_every_cut_is_stamped_against_its_live_head_today():
     """The baseline the refusal tests are the mirror of. Green here means the tree's floors
     and the tree's head pins currently agree — if this ever goes red, a head moved and a
@@ -96,6 +97,7 @@ def test_the_location_head_is_resolvable_even_though_no_cut_uses_it():
 # --------------------------------------------------------------------------- #
 # 2. the release floors are the heads' gates, not copies of them
 # --------------------------------------------------------------------------- #
+@pytest.mark.stage2_pinned
 def test_a_release_floor_moves_with_its_head_gate(monkeypatch):
     """The release floors are IMPORTED from the head pins, so a gate retune cannot leave the
     release floor calibrated against a head that no longer exists. Asserted on the resolution,
@@ -104,6 +106,7 @@ def test_a_release_floor_moves_with_its_head_gate(monkeypatch):
     assert F.MINING_RELEASE.value == MP.MINING_GATE_THRESHOLD
 
 
+@pytest.mark.stage2_pinned
 def test_pool_floors_sit_below_their_release_floors():
     F.check_below_gate()
     assert F.WALLPAPER_POOL.value < F.WALLPAPER_RELEASE.value
@@ -155,6 +158,7 @@ def test_a_Floor_cannot_cut_at_all():
     assert F.summary().count("annotation-only") == len(F.ALL_FLOORS)
 
 
+@pytest.mark.stage2_pinned
 def test_the_summary_still_names_an_added_cut(monkeypatch):
     """NON-VACUITY for the census above: the run-banner summary is derived from `ALL_FLOORS`,
     so an added cut appears in it — and appears as annotation-only, because there is no longer
@@ -162,7 +166,8 @@ def test_the_summary_still_names_an_added_cut(monkeypatch):
     ghost = F.Floor(name="ghost_release", value=0.99, head=F.MINING_HEAD,
                     stamp=MP.HEAD_VERSION, site="release", basis="injected")
     monkeypatch.setattr(F, "ALL_FLOORS", F.ALL_FLOORS + (ghost,))
-    assert "ghost_release 0.99 (render_mode_head/v1, annotation-only)" in F.summary()
+    assert f"ghost_release 0.99 ({F.MINING_HEAD}/{MP.HEAD_VERSION}, annotation-only)" \
+        in F.summary()
     assert F.summary().count("annotation-only") == len(F.ALL_FLOORS)
 
 

@@ -428,26 +428,29 @@ REGISTRY: list[Entry] = [
           "final weight.", canary=True),
     Entry("data/wallpaper_head/", RELOCATE, PRECIOUS, "mixed",
           "trained wallpaper-quality heads — not GPU-reproducible (the corpus that produced "
-          "each has moved on). v3 is the LIVE head (wallpaper_pins.HEAD_CKPT) and, under "
-          "ACTIVE+PREVIOUS retention, the only weight tracked here: v4 was staged and never "
-          "adopted, so its 34 MB weight de-tracked 2026-08-08 and only its config.json + "
-          "metrics.json stay — the record of what was staged, which is what stops the "
-          "rejection being re-litigated. Was 'ignored': v3's weight and v4's two records "
+          "each has moved on). Under ACTIVE+PREVIOUS retention TWO weights are tracked here "
+          "since the 2026-08-11 flip (prompts/flip_29.md): v4b/seed_1 is the LIVE head "
+          "(wallpaper_pins.HEAD_CKPT — the SEED file, picked on best blind sheet-D AUC>=4, "
+          "not the top-level v4b/model_best.pt which is seed 0) and v3 is the one rollback "
+          "rung. v4 stays de-tracked: it was staged and never adopted, so only its "
+          "config.json + metrics.json remain, and the ladder is v4b -> v3, not v4b -> v4. "
+          "Everything else under v4b — the other four seed dirs, eval_scores.jsonl, "
+          "train.log — is ignored working state (~170 MB). Was 'ignored': these weights "
           "were tracked by force-add at a gitignored path until 2026-08-08 and are now "
-          "declared by exact-path .gitignore negation, so durable() accepts them. CANARY. "
-          "v4b (2026-08-10, sheet A folded in, from scratch) is the same shape as v4: "
-          "STAGED, weight + per-seed dirs ignored, run record + winner-rule report tracked.",
+          "declared by exact-path .gitignore negation, so durable() accepts them. CANARY.",
           canary=True),
-    Entry("data/render_mode_head/", RELOCATE, PRECIOUS, "ignored",
-          "trained render-mode (strange-mode gate) head .pt — not GPU-reproducible. v1 is "
-          "the LIVE gate and its training corpus is gone, so it cannot be retrained at all; "
-          "v1/model_best.pt is tracked (LFS, negated by exact path in .gitignore) alongside "
-          "the small mining_gate_lock.{json,md}. v2 (the 2026-08-06 finetune that LOST the "
-          "winner rule) is ~60 MB of ignored working state — staged weight plus five "
-          "per-seed checkpoints, de-tracked once it was a rejected candidate; only its "
-          "small run record stays in the index. v3 (2026-08-10, the pooled three-batch "
-          "corpus trained FROM SCRATCH) is STAGED and has the same shape: weight and "
-          "per-seed dirs ignored, run record + winner-rule report tracked"),
+    Entry("data/render_mode_head/", RELOCATE, PRECIOUS, "mixed",
+          "trained render-mode (strange-mode gate) head .pt — not GPU-reproducible. Under "
+          "ACTIVE+PREVIOUS retention TWO weights are tracked since the 2026-08-11 flip "
+          "(prompts/flip_29.md): v3 (the `dedup_weighted` arm, trained FROM SCRATCH on the "
+          "pooled three-batch corpus) is the LIVE gate, and v1 is the one rollback rung — "
+          "v1's training corpus is gone, so it cannot be retrained at all. Each carries its "
+          "own mining_gate_lock.{json,md}; v3's adds volume_match_mining.{json,md} and "
+          "fit_slice_pred.json. v2 (the 2026-08-06 finetune that LOST the winner rule) is "
+          "~60 MB of ignored working state, de-tracked once it was a rejected candidate. "
+          "The four (28) sibling arms (v3_aug/v3_augx/v3_uniform/v3_ap2) keep v3's OLD "
+          "shape: weight and per-seed dirs ignored, run record + winner-rule report tracked "
+          "— none is pinnable, so none is a rung. CANARY.", canary=True),
 
     # === RELOCATE -> trash — dead / superseded ================================
     Entry("scratchpad/", RELOCATE, TRASH, "ignored",

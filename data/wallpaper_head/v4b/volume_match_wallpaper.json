@@ -1,0 +1,603 @@
+{
+  "generated": "2026-08-11T10:30:17",
+  "command": "uv run python tools/scoring/volume_match.py wallpaper",
+  "procedure": "classifier_retrain_protocol.md \u00a75a \u2014 re-score, then VOLUME-MATCH. The new constant is the score that admits the same NUMBER of reference-pool rows the outgoing constant admitted, placed at the midpoint between the k-th and (k+1)-th largest so `>` and `>=` realize the same k.",
+  "head": {
+    "name": "wallpaper_head",
+    "outgoing": "data/wallpaper_head/v3/model_best.pt",
+    "incoming": "data/wallpaper_head/v4b/seed_1/model_best.pt"
+  },
+  "reference_pool": {
+    "what": "the (28) six-batch eval union (train_wallpaper_v4b.split_v4b)",
+    "loader": "tools.scoring.volume_match.wallpaper_pool",
+    "scorer": "load_head",
+    "n": 1337,
+    "n_locations": 527,
+    "by_batch": {
+      "humanq3": 287,
+      "dramatic": 399,
+      "fresh_sheet": 296,
+      "colorize_path": 61,
+      "correction_v2": 294
+    },
+    "tiers": {
+      "1": 284,
+      "2": 495,
+      "3": 369,
+      "4": 189
+    },
+    "base_rate_ge3": 0.41735228122662676,
+    "base_rate_ge2": 0.787584143605086
+  },
+  "scored_in_s": 49.1,
+  "cuts": [
+    {
+      "name": "wallpaper_release",
+      "owner": "tools/wallpaper/wallpaper_pins.GATE_THRESHOLD (== tools/emission/floors.WALLPAPER_RELEASE)",
+      "site": "release",
+      "comparison": ">",
+      "outgoing_value": 0.9,
+      "incoming_value": 0.6052,
+      "incoming_value_unrounded": 0.6052392653612202,
+      "n": 1337,
+      "matched_volume": 416,
+      "matched_rate": 0.31114435302916976,
+      "realized_volume": 416,
+      "volume_preserved": true,
+      "outgoing": {
+        "n_selected": 416,
+        "pass_rate": 0.31114435302916976,
+        "tp": 332,
+        "precision_ge3": 0.7980769230769231,
+        "precision_lo": 0.7568529684664661,
+        "precision_hi": 0.833845999906368,
+        "recall_ge3": 0.5949820788530465
+      },
+      "incoming": {
+        "n_selected": 416,
+        "pass_rate": 0.31114435302916976,
+        "tp": 311,
+        "precision_ge3": 0.7475961538461539,
+        "precision_lo": 0.7037166252676097,
+        "precision_hi": 0.7869446145904702,
+        "recall_ge3": 0.557347670250896
+      }
+    },
+    {
+      "name": "wallpaper_pool",
+      "owner": "tools/emission/floors.WALLPAPER_POOL",
+      "site": "pool",
+      "comparison": ">=",
+      "outgoing_value": 0.75,
+      "incoming_value": 0.4698,
+      "incoming_value_unrounded": 0.4697991896094962,
+      "n": 1337,
+      "matched_volume": 503,
+      "matched_rate": 0.37621540762902017,
+      "realized_volume": 503,
+      "volume_preserved": true,
+      "outgoing": {
+        "n_selected": 503,
+        "pass_rate": 0.37621540762902017,
+        "tp": 376,
+        "precision_ge3": 0.7475149105367793,
+        "precision_lo": 0.707770092527735,
+        "precision_hi": 0.7835076557865313,
+        "recall_ge3": 0.6738351254480287
+      },
+      "incoming": {
+        "n_selected": 503,
+        "pass_rate": 0.37621540762902017,
+        "tp": 355,
+        "precision_ge3": 0.705765407554672,
+        "precision_lo": 0.6645019898653227,
+        "precision_hi": 0.7439096322272601,
+        "recall_ge3": 0.6362007168458781
+      }
+    }
+  ],
+  "ladder_ge3": [
+    {
+      "threshold": 0.0,
+      "fires": 1337,
+      "pass_rate": 1.0,
+      "tp": 558,
+      "precision": 0.41735228122662676,
+      "precision_lo": 0.39119300493866876,
+      "precision_hi": 0.4439851398921599,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.05,
+      "fires": 977,
+      "pass_rate": 0.7307404637247569,
+      "tp": 520,
+      "precision": 0.5322415557830092,
+      "precision_lo": 0.5008886275799708,
+      "precision_hi": 0.5633419270783963,
+      "recall": 0.931899641577061,
+      "marks": []
+    },
+    {
+      "threshold": 0.1,
+      "fires": 881,
+      "pass_rate": 0.6589379207180255,
+      "tp": 500,
+      "precision": 0.5675368898978433,
+      "precision_lo": 0.5345989946101396,
+      "precision_hi": 0.5998883531818268,
+      "recall": 0.8960573476702509,
+      "marks": []
+    },
+    {
+      "threshold": 0.15,
+      "fires": 811,
+      "pass_rate": 0.606581899775617,
+      "tp": 480,
+      "precision": 0.591861898890259,
+      "precision_lo": 0.5576791841772887,
+      "precision_hi": 0.6251784411575004,
+      "recall": 0.8602150537634409,
+      "marks": []
+    },
+    {
+      "threshold": 0.2,
+      "fires": 738,
+      "pass_rate": 0.5519820493642483,
+      "tp": 451,
+      "precision": 0.6111111111111112,
+      "precision_lo": 0.5754498970734119,
+      "precision_hi": 0.6456215553768148,
+      "recall": 0.8082437275985663,
+      "marks": []
+    },
+    {
+      "threshold": 0.25,
+      "fires": 697,
+      "pass_rate": 0.5213163799551234,
+      "tp": 440,
+      "precision": 0.6312769010043041,
+      "precision_lo": 0.5948304982730872,
+      "precision_hi": 0.6662841387575913,
+      "recall": 0.7885304659498208,
+      "marks": []
+    },
+    {
+      "threshold": 0.3,
+      "fires": 655,
+      "pass_rate": 0.48990276738967836,
+      "tp": 424,
+      "precision": 0.6473282442748092,
+      "precision_lo": 0.6099741830760956,
+      "precision_hi": 0.6829642106136775,
+      "recall": 0.7598566308243727,
+      "marks": []
+    },
+    {
+      "threshold": 0.35,
+      "fires": 597,
+      "pass_rate": 0.4465220643231114,
+      "tp": 401,
+      "precision": 0.6716917922948074,
+      "precision_lo": 0.6330286936304431,
+      "precision_hi": 0.7081593998704064,
+      "recall": 0.7186379928315412,
+      "marks": []
+    },
+    {
+      "threshold": 0.4,
+      "fires": 556,
+      "pass_rate": 0.4158563949139865,
+      "tp": 381,
+      "precision": 0.685251798561151,
+      "precision_lo": 0.645488904845282,
+      "precision_hi": 0.7224723184721705,
+      "recall": 0.6827956989247311,
+      "marks": []
+    },
+    {
+      "threshold": 0.45,
+      "fires": 514,
+      "pass_rate": 0.3844427823485415,
+      "tp": 359,
+      "precision": 0.6984435797665369,
+      "precision_lo": 0.6574157776586763,
+      "precision_hi": 0.7365270805435228,
+      "recall": 0.6433691756272402,
+      "marks": []
+    },
+    {
+      "threshold": 0.4698,
+      "fires": 503,
+      "pass_rate": 0.37621540762902017,
+      "tp": 355,
+      "precision": 0.705765407554672,
+      "precision_lo": 0.6645019898653227,
+      "precision_hi": 0.7439096322272601,
+      "recall": 0.6362007168458781,
+      "marks": [
+        "wallpaper_pool"
+      ]
+    },
+    {
+      "threshold": 0.5,
+      "fires": 478,
+      "pass_rate": 0.3575168287210172,
+      "tp": 341,
+      "precision": 0.7133891213389121,
+      "precision_lo": 0.6712769064158782,
+      "precision_hi": 0.7520987423450424,
+      "recall": 0.6111111111111112,
+      "marks": []
+    },
+    {
+      "threshold": 0.55,
+      "fires": 447,
+      "pass_rate": 0.3343305908750935,
+      "tp": 326,
+      "precision": 0.7293064876957495,
+      "precision_lo": 0.6862915041286712,
+      "precision_hi": 0.7684136517398201,
+      "recall": 0.5842293906810035,
+      "marks": []
+    },
+    {
+      "threshold": 0.6,
+      "fires": 417,
+      "pass_rate": 0.3118922961854899,
+      "tp": 312,
+      "precision": 0.7482014388489209,
+      "precision_lo": 0.7044040514111459,
+      "precision_hi": 0.7874674745976896,
+      "recall": 0.5591397849462365,
+      "marks": []
+    },
+    {
+      "threshold": 0.6052,
+      "fires": 416,
+      "pass_rate": 0.31114435302916976,
+      "tp": 311,
+      "precision": 0.7475961538461539,
+      "precision_lo": 0.7037166252676097,
+      "precision_hi": 0.7869446145904702,
+      "recall": 0.557347670250896,
+      "marks": [
+        "wallpaper_release"
+      ]
+    },
+    {
+      "threshold": 0.65,
+      "fires": 386,
+      "pass_rate": 0.2887060583395662,
+      "tp": 289,
+      "precision": 0.7487046632124352,
+      "precision_lo": 0.7031256160379795,
+      "precision_hi": 0.7893821101769756,
+      "recall": 0.517921146953405,
+      "marks": []
+    },
+    {
+      "threshold": 0.7,
+      "fires": 342,
+      "pass_rate": 0.25579655946148094,
+      "tp": 266,
+      "precision": 0.7777777777777778,
+      "precision_lo": 0.7307670927187506,
+      "precision_hi": 0.8186173653684199,
+      "recall": 0.4767025089605735,
+      "marks": []
+    },
+    {
+      "threshold": 0.75,
+      "fires": 308,
+      "pass_rate": 0.23036649214659685,
+      "tp": 247,
+      "precision": 0.801948051948052,
+      "precision_lo": 0.7538386633277644,
+      "precision_hi": 0.8426179992855624,
+      "recall": 0.44265232974910396,
+      "marks": []
+    },
+    {
+      "threshold": 0.8,
+      "fires": 272,
+      "pass_rate": 0.20344053851907254,
+      "tp": 218,
+      "precision": 0.8014705882352942,
+      "precision_lo": 0.7500110535981551,
+      "precision_hi": 0.8445330615751908,
+      "recall": 0.3906810035842294,
+      "marks": []
+    },
+    {
+      "threshold": 0.85,
+      "fires": 225,
+      "pass_rate": 0.1682872101720269,
+      "tp": 186,
+      "precision": 0.8266666666666667,
+      "precision_lo": 0.7718322258695778,
+      "precision_hi": 0.8705334978449915,
+      "recall": 0.3333333333333333,
+      "marks": []
+    },
+    {
+      "threshold": 0.9,
+      "fires": 177,
+      "pass_rate": 0.1323859386686612,
+      "tp": 152,
+      "precision": 0.8587570621468926,
+      "precision_lo": 0.799806662008331,
+      "precision_hi": 0.9024653815922564,
+      "recall": 0.2724014336917563,
+      "marks": []
+    },
+    {
+      "threshold": 0.95,
+      "fires": 117,
+      "pass_rate": 0.087509349289454,
+      "tp": 106,
+      "precision": 0.905982905982906,
+      "precision_lo": 0.8394630248893353,
+      "precision_hi": 0.9466900879459796,
+      "recall": 0.18996415770609318,
+      "marks": []
+    }
+  ],
+  "ladder_ge2": [
+    {
+      "threshold": 0.0,
+      "fires": 1337,
+      "pass_rate": 1.0,
+      "tp": 1053,
+      "precision": 0.787584143605086,
+      "precision_lo": 0.7648514950061731,
+      "precision_hi": 0.8086688969625724,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.05,
+      "fires": 1159,
+      "pass_rate": 0.8668661181750187,
+      "tp": 1013,
+      "precision": 0.8740293356341674,
+      "precision_lo": 0.8536818138274448,
+      "precision_hi": 0.8919055473402328,
+      "recall": 0.9620132953466287,
+      "marks": []
+    },
+    {
+      "threshold": 0.1,
+      "fires": 1110,
+      "pass_rate": 0.8302169035153328,
+      "tp": 987,
+      "precision": 0.8891891891891892,
+      "precision_lo": 0.8693635362079856,
+      "precision_hi": 0.9063302428715533,
+      "recall": 0.9373219373219374,
+      "marks": []
+    },
+    {
+      "threshold": 0.15,
+      "fires": 1082,
+      "pass_rate": 0.8092744951383695,
+      "tp": 968,
+      "precision": 0.8946395563770795,
+      "precision_lo": 0.8749285972572435,
+      "precision_hi": 0.9115581241945779,
+      "recall": 0.9192782526115859,
+      "marks": []
+    },
+    {
+      "threshold": 0.2,
+      "fires": 1060,
+      "pass_rate": 0.7928197456993269,
+      "tp": 953,
+      "precision": 0.8990566037735849,
+      "precision_lo": 0.8794553424739193,
+      "precision_hi": 0.9157758272791716,
+      "recall": 0.9050332383665717,
+      "marks": []
+    },
+    {
+      "threshold": 0.25,
+      "fires": 1043,
+      "pass_rate": 0.7801047120418848,
+      "tp": 940,
+      "precision": 0.9012464046021093,
+      "precision_lo": 0.8816417469126542,
+      "precision_hi": 0.9179061503050335,
+      "recall": 0.8926875593542261,
+      "marks": []
+    },
+    {
+      "threshold": 0.3,
+      "fires": 1027,
+      "pass_rate": 0.7681376215407629,
+      "tp": 930,
+      "precision": 0.9055501460564752,
+      "precision_lo": 0.8861217020613044,
+      "precision_hi": 0.9219558920132849,
+      "recall": 0.8831908831908832,
+      "marks": []
+    },
+    {
+      "threshold": 0.35,
+      "fires": 1005,
+      "pass_rate": 0.7516828721017202,
+      "tp": 916,
+      "precision": 0.9114427860696518,
+      "precision_lo": 0.8922745833952789,
+      "precision_hi": 0.9274774966141103,
+      "recall": 0.8698955365622032,
+      "marks": []
+    },
+    {
+      "threshold": 0.4,
+      "fires": 987,
+      "pass_rate": 0.7382198952879581,
+      "tp": 902,
+      "precision": 0.9138804457953394,
+      "precision_lo": 0.8947339827848005,
+      "precision_hi": 0.9298175903425289,
+      "recall": 0.8566001899335233,
+      "marks": []
+    },
+    {
+      "threshold": 0.45,
+      "fires": 966,
+      "pass_rate": 0.7225130890052356,
+      "tp": 888,
+      "precision": 0.9192546583850931,
+      "precision_lo": 0.9003669630918453,
+      "precision_hi": 0.9348209686281387,
+      "recall": 0.8433048433048433,
+      "marks": []
+    },
+    {
+      "threshold": 0.5,
+      "fires": 946,
+      "pass_rate": 0.7075542258788332,
+      "tp": 873,
+      "precision": 0.9228329809725159,
+      "precision_lo": 0.9040658847306916,
+      "precision_hi": 0.9381798118149219,
+      "recall": 0.8290598290598291,
+      "marks": []
+    },
+    {
+      "threshold": 0.55,
+      "fires": 924,
+      "pass_rate": 0.6910994764397905,
+      "tp": 853,
+      "precision": 0.9231601731601732,
+      "precision_lo": 0.9041811772576663,
+      "precision_hi": 0.9386350965545879,
+      "recall": 0.8100664767331434,
+      "marks": []
+    },
+    {
+      "threshold": 0.6,
+      "fires": 892,
+      "pass_rate": 0.6671652954375468,
+      "tp": 834,
+      "precision": 0.9349775784753364,
+      "precision_lo": 0.9168586100401438,
+      "precision_hi": 0.9493659546596872,
+      "recall": 0.792022792022792,
+      "marks": []
+    },
+    {
+      "threshold": 0.65,
+      "fires": 863,
+      "pass_rate": 0.6454749439042633,
+      "tp": 810,
+      "precision": 0.9385863267670915,
+      "precision_lo": 0.9205419717644076,
+      "precision_hi": 0.9527432974243347,
+      "recall": 0.7692307692307693,
+      "marks": []
+    },
+    {
+      "threshold": 0.7,
+      "fires": 830,
+      "pass_rate": 0.6207928197456993,
+      "tp": 785,
+      "precision": 0.9457831325301205,
+      "precision_lo": 0.9282226331011367,
+      "precision_hi": 0.959236088075643,
+      "recall": 0.7454890788224121,
+      "marks": []
+    },
+    {
+      "threshold": 0.75,
+      "fires": 796,
+      "pass_rate": 0.5953627524308153,
+      "tp": 754,
+      "precision": 0.9472361809045227,
+      "precision_lo": 0.9294463674459976,
+      "precision_hi": 0.9607298874524723,
+      "recall": 0.7160493827160493,
+      "marks": []
+    },
+    {
+      "threshold": 0.8,
+      "fires": 750,
+      "pass_rate": 0.5609573672400897,
+      "tp": 714,
+      "precision": 0.952,
+      "precision_lo": 0.9342637103135208,
+      "precision_hi": 0.9651294778575749,
+      "recall": 0.6780626780626781,
+      "marks": []
+    },
+    {
+      "threshold": 0.85,
+      "fires": 693,
+      "pass_rate": 0.518324607329843,
+      "tp": 662,
+      "precision": 0.9552669552669553,
+      "precision_lo": 0.9372047827607972,
+      "precision_hi": 0.9683094689715908,
+      "recall": 0.6286799620132953,
+      "marks": []
+    },
+    {
+      "threshold": 0.9,
+      "fires": 628,
+      "pass_rate": 0.46970830216903514,
+      "tp": 604,
+      "precision": 0.9617834394904459,
+      "precision_lo": 0.9437652756396367,
+      "precision_hi": 0.9741863122266893,
+      "recall": 0.5735992402659069,
+      "marks": []
+    },
+    {
+      "threshold": 0.95,
+      "fires": 518,
+      "pass_rate": 0.387434554973822,
+      "tp": 500,
+      "precision": 0.9652509652509652,
+      "precision_lo": 0.9457433421108998,
+      "precision_hi": 0.9779085859837557,
+      "recall": 0.4748338081671415,
+      "marks": []
+    }
+  ],
+  "score_scale": {
+    "why": "CORN marginals are calibrated to the training prior, so no raw-threshold comparison across the two heads appears in this record.",
+    "quantiles": {
+      "q10": {
+        "outgoing": 3.161497930288449e-07,
+        "incoming": 0.0004355716495311008
+      },
+      "q25": {
+        "outgoing": 0.00027792220948801016,
+        "incoming": 0.03644464052905105
+      },
+      "q50": {
+        "outgoing": 0.33725166030063747,
+        "incoming": 0.28611439271608674
+      },
+      "q75": {
+        "outgoing": 0.9547225986555645,
+        "incoming": 0.7213375753276097
+      },
+      "q90": {
+        "outgoing": 0.9969014017200933,
+        "incoming": 0.9380741820051293
+      },
+      "q95": {
+        "outgoing": 0.9994228076187675,
+        "incoming": 0.9804296695015587
+      },
+      "q99": {
+        "outgoing": 0.9999633837559054,
+        "incoming": 0.9980714593219736
+      }
+    }
+  },
+  "incomplete": false
+}

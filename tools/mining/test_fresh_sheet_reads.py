@@ -90,6 +90,7 @@ def test_cut_block_reports_the_live_pool_and_release_points():
     assert cb["precision_lo"] < cb["precision"] < cb["precision_hi"]
 
 
+@pytest.mark.stage2_pinned
 def test_a_head_stamp_mismatch_REFUSES_instead_of_reporting_a_number(monkeypatch):
     """The control for the whole read: 0.25 and 0.50 are points on v1's probability scale.
     If the mining pin ever moves, a readout that quietly kept comparing would annotate the
@@ -99,6 +100,7 @@ def test_a_head_stamp_mismatch_REFUSES_instead_of_reporting_a_number(monkeypatch
         FSR.cut_block([row(0, 3, 3, p3=0.9)], F.MINING_POOL)
 
 
+@pytest.mark.stage2_pinned
 def test_the_sweep_grid_contains_both_live_cuts_exactly():
     """Marked as exact rows, never nearest-bin: a ladder that reported the pool cut at 0.25
     while sweeping 0.2/0.3 would attribute a precision to a threshold nobody set."""
@@ -106,7 +108,11 @@ def test_the_sweep_grid_contains_both_live_cuts_exactly():
     assert F.MINING_RELEASE.value in FSR.SWEEP
     lad = FSR.ladder([row(i, 1, 1, p3=i / 100) for i in range(100)])
     marked = {r["threshold"]: r["marks"] for r in lad if r["marks"]}
-    assert marked == {0.25: ["mining_pool"], 0.5: ["mining_release"]}
+    # READ from the owner, never restated: these two values are volume-matched at every head
+    # flip (protocol section 5a), and a literal here would go red FOR the flip rather than
+    # for a fault -- which is the whole reason `version_pinned` exists.
+    assert marked == {F.MINING_POOL.value: ["mining_pool"],
+                      F.MINING_RELEASE.value: ["mining_release"]}
 
 
 # =========================================================================== #

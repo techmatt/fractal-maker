@@ -1,0 +1,179 @@
+{
+  "adoption": "v4b",
+  "family": "wallpaper_head",
+  "adopted_on": "2026-08-11",
+  "prompt": "prompts/flip_29.md",
+  "checkpoint": "data/wallpaper_head/v4b/seed_1/model_best.pt",
+  "pin": {
+    "module": "tools.wallpaper.wallpaper_pins",
+    "ckpt": "data/wallpaper_head/v4b/seed_1/model_best.pt",
+    "version": "v4b",
+    "gate": 0.6052,
+    "rollback": "data/wallpaper_head/v3/model_best.pt"
+  },
+  "rationale": [
+    "The (28) verdict made v3 the winner on an eval union whose MOTIVATING arm was sheet A's minibrot bucket \u2014 a correction sheet v3 itself served, 84.9% of whose labels came back equal to the suggestion. Sheet D re-drew that arm BLIND at fresh locations (protocol \u00a72b) and priced the anchoring at -0.224 AUC>=3: v3's 0.965 on the anchored bucket against 0.741 on the blind one. On the blind slice v4b is not distinguishable from v3 at >=3 and is AHEAD at the job boundary.",
+    "SEED PICK: best blind sheet-D AUC>=4. Production sees post-floor 3/4 material, so >=4 is the boundary the job actually turns on, and all five v4b seeds beat v3's 0.510 there. Seed 1 took it at 0.609 (band 0.567 \u00b1 0.032).",
+    "Both incumbents are pre-corpus-discipline heads that cannot be regenerated \u2014 their training-data provenance is incomplete \u2014 while both challengers are from-scratch retrains off fully tracked corpora. Comparable-plus-regenerable is sufficient: a head that cannot be rebuilt is a rung that decays, and holding an unrebuildable incumbent against a rebuildable challenger that is not measurably worse trades a permanent cost for no measured gain."
+  ],
+  "not_established": [
+    "THE SEED PICK SPENDS A 197-ROW SELECTION. Sheet D was the only unanchored read of the minibrot population that will ever exist, and choosing among five seeds on it consumes it: the picked seed's 0.609 is a selected maximum, not a held-out number, and the band is the honest read of what a fresh seed would do. Nothing here is a held-out estimate of v4b/seed_1 any more.",
+    "ONE SLICE, ~200 ROWS. A null on sheet D is 'not distinguishable at this n', not 'identical'."
+  ],
+  "evidence": {
+    "blind_reverdict": {
+      "record": "data/wallpaper_head/sheet_d_reverdict/report.json",
+      "generated": "2026-08-11T08:35:19",
+      "command": "uv run python tools/wallpaper/sheet_d_reverdict.py",
+      "slice": {
+        "batch_id": "2026-08-11_wallpaper_blind_minibrot_v1",
+        "sidecar": "labels/wallpaper_blind_minibrot_v1.json",
+        "n_batch_rows": 197,
+        "n_labeled": 197,
+        "n_unlabeled": 0,
+        "partial": false,
+        "partial_note": null,
+        "n": 197,
+        "tiers": {
+          "n": 197,
+          "hist": {
+            "1": 0,
+            "2": 6,
+            "3": 95,
+            "4": 96
+          },
+          "frac_ge2": 1.0,
+          "frac_ge3": 0.9695431472081218,
+          "frac_ge4": 0.4873096446700508
+        },
+        "by_vein": {
+          "maneuver": 186,
+          "q4_harvest": 11
+        },
+        "by_partition": {
+          "mandelbrot": 37,
+          "multibrot3": 160
+        },
+        "by_family": {
+          "mandelbrot": 37,
+          "multibrot3": 160
+        },
+        "blind": "no suggestion was served, no score ordered the page",
+        "eval_only": true,
+        "eval_only_reason": "PERMANENT. Every row is stamped split_side=eval and this slice must never enter any train split, for this head generation or any later one. It was bought to referee wallpaper v3 vs v4b on unanchored labels; training on it spends the only unanchored read of this population that exists.",
+        "eval_only_rows_stamped_eval": 197
+      }
+    },
+    "volume_match": {
+      "record": "data/wallpaper_head/v4b/volume_match_wallpaper.json",
+      "generated": "2026-08-11T10:30:17",
+      "reference_pool": {
+        "what": "the (28) six-batch eval union (train_wallpaper_v4b.split_v4b)",
+        "n": 1337,
+        "n_locations": 527,
+        "tiers": {
+          "1": 284,
+          "2": 495,
+          "3": 369,
+          "4": 189
+        },
+        "base_rate_ge3": 0.41735228122662676
+      }
+    }
+  },
+  "moved_with_the_pin": {
+    "cuts": {
+      "wallpaper_release": {
+        "old": 0.9,
+        "new": 0.6052,
+        "restated_how": "VOLUME-MATCHED (classifier_retrain_protocol.md \u00a75a) \u2014 the score that admits the same NUMBER of reference-pool rows",
+        "matched_volume": 416,
+        "n": 1337,
+        "matched_rate": 0.31114435302916976,
+        "precision_ge3_old": 0.7980769230769231,
+        "precision_ge3_new": 0.7475961538461539,
+        "volume_preserved": true
+      },
+      "wallpaper_pool": {
+        "old": 0.75,
+        "new": 0.4698,
+        "restated_how": "VOLUME-MATCHED (classifier_retrain_protocol.md \u00a75a) \u2014 the score that admits the same NUMBER of reference-pool rows",
+        "matched_volume": 503,
+        "n": 1337,
+        "matched_rate": 0.37621540762902017,
+        "precision_ge3_old": 0.7475149105367793,
+        "precision_ge3_new": 0.705765407554672,
+        "volume_preserved": true
+      }
+    },
+    "suggestion_cuts": {
+      "CUTS": {
+        "value": [
+          1.2573,
+          2.4007,
+          2.91
+        ],
+        "rederived": [
+          1.2573,
+          2.4007,
+          2.91
+        ],
+        "slice": "the dramatic + humanq3 EVAL rows of the six-batch union (train_wallpaper_v4b.split_v4b) \u2014 the same 686 renders / 98 locations the v3 cuts were fitted on, re-scored under v4b; readout sidecar data/wallpaper_head/v4b/july_slice_pred.json",
+        "n": 686,
+        "was": [
+          1.017,
+          2.615,
+          2.997
+        ]
+      },
+      "INTAKE_CUTS": {
+        "value": [
+          1.2304,
+          2.4197,
+          2.9713
+        ],
+        "rederived": [
+          1.2304,
+          2.4197,
+          2.9713
+        ],
+        "slice": "the two 2026-08-05 stage-2 intake correction sheets, whole: 2026-08-05_wallpaper_fresh_sheet_v1 (960) + 2026-08-05_wallpaper_colorize_path_v1 (180), pred re-scored under the live head (data/wallpaper_head/v4b/fit_slice_pred.json), tier = the merged human sidecar",
+        "n": 1140,
+        "was": [
+          1.0119,
+          2.4663,
+          3.0012
+        ]
+      }
+    },
+    "floors_summary": "junk_floor 0.2 (ENFORCING, colorize-pool draw) \u00b7 good_floor 0.5 (ENFORCING, run-side admission) \u00b7 wallpaper_pool 0.4698 (wallpaper_head/v4b, annotation-only) \u00b7 wallpaper_release 0.6052 (wallpaper_head/v4b, annotation-only) \u00b7 mining_pool 0.3402 (render_mode_head/v3, annotation-only) \u00b7 mining_release 0.6691 (render_mode_head/v3, annotation-only)"
+  },
+  "rollback_ladder": {
+    "ladder": [
+      "v4b",
+      "v3"
+    ],
+    "why_two_rungs": "ACTIVE + PREVIOUS per model family (docs/design/storage_classes.md \u00a7 weights retention). Nothing de-tracked at this flip: each family gained a rung and the outgoing head became the rung below.",
+    "must_revert_together": [
+      {
+        "what": "tools.wallpaper.wallpaper_pins",
+        "why": "the pin; HEAD_VERSION and every stamp derive from it"
+      },
+      {
+        "what": "tools.wallpaper.wallpaper_pins gate threshold",
+        "why": "wallpaper_release is a point on this head's probability scale",
+        "revert_to": 0.9
+      },
+      {
+        "what": "tools/emission/floors.WALLPAPER_POOL",
+        "why": "wallpaper_pool is a point on this head's probability scale",
+        "revert_to": 0.75
+      },
+      {
+        "what": "tools/wallpaper/suggest_tier.{CUTS,INTAKE_CUTS}",
+        "why": "cutpoints on `expected_tier`, a sum of CORN marginals \u2014 as scale-bound as a probability floor"
+      }
+    ]
+  },
+  "known_flip_cost": "Every accumulated record that carries this head's score \u2014 data/emission/release_records/*.jsonl and data/emission/mining_gate_reports/*.jsonl \u2014 holds numbers on the OUTGOING head's scale. They are records of decisions taken, not inputs to a decision, so they are not rewritten; the `floor` column beside each score says which cut it was judged against, which is what keeps an old row readable. A cross-flip precision read off them must not pool the two eras."
+}

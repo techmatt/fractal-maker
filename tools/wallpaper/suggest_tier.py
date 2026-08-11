@@ -23,35 +23,62 @@ purpose is spanning the range.
 
 THE RULE THAT IS USED — PRIOR-MATCHED CUTS. The cutpoints are the quantiles of the readout
 at the eval slice's own tier prior, so the suggestion distribution REPRODUCES the label
-distribution instead of collapsing onto one class. Exact 0.414, within-one 0.899, MAE 0.691,
-and the suggested histogram lands {116, 295, 183, 92} against a true {116, 295, 185, 90} —
-matched by construction up to the rounding of the frozen cuts.
+distribution instead of collapsing onto one class. On v4b: exact 0.427, within-one 0.889,
+MAE 0.691, and the suggested histogram lands {116, 295, 185, 90} against a true
+{116, 295, 185, 90} — matched by construction.
 The cuts are ABSOLUTE, not re-quantiled per batch: a genuinely worse population must receive
 genuinely more tier-1 suggestions, which is what an absolute cut does and a per-batch
 quantile would erase.
 
-DERIVATION (frozen; see `DERIVATION`). 2026-08-05, head `data/wallpaper_head/v3/model_best.pt`
-(CORN K=4), over the 686-render / 98-location held-out eval slice re-rendered by the eval
-revival pass (`prompts/wallpaper_eval_revival_prompt.md`: dramatic rows with stamped
-`provenance.split_side == "eval"` + humanq3 rows under `split_v2(seed=0, eval_frac=0.30)`,
-crops via `label_crop.render_label_crop`). True tiers {1:116, 2:295, 3:185, 4:90}.
+THE OBJECTIVE IS PRIOR REPRODUCTION, NOT EXACT AGREEMENT, and the 2026-08-11 head flip is
+what made the distinction bite. Under v3 the chosen rule ALSO beat `corn_0.5` on exact
+agreement (0.414 vs 0.376), so the two readings agreed and nothing forced a choice between
+them. Under v4b they separate: `corn_0.5` scores 0.452 against the chosen rule's 0.427 and is
+still rejected, because it puts 167 rows at tier 1 against a true 116 and 29 at tier 4 against
+a true 90 — the anchoring hazard the paragraph above describes, unchanged in kind. An exact-
+agreement win bought by mis-shaping the suggestion histogram is the same trade the
+accuracy-maximizing cut makes, and it is refused for the same reason.
+
+DERIVATION (frozen; see `DERIVATION`). RE-DERIVED 2026-08-11 at the wallpaper head flip
+(v3 -> v4b seed 1, `prompts/flip_29.md`) on the SAME 686-render / 98-location slice, whose
+crops now live in the six-batch union loader (`train_wallpaper_v4b.split_v4b`, the
+dramatic+humanq3 eval rows) rather than in a batch of their own. The v3 cuts it replaces were
+(1.017, 2.615, 2.997), fitted 2026-08-05 on the same slice under
+`data/wallpaper_head/v3/model_best.pt`. True tiers {1:116, 2:295, 3:185, 4:90}, unchanged —
+the slice is the same rows; only the readout moved.
 
   cuts = quantile(expected_tier, [116/686, 411/686, 596/686])
 
+WHY IT HAD TO BE RE-DERIVED. `expected_tier` is a sum of CORN marginals, which are
+train-prior-calibrated, so a cut on it is exactly as scale-bound as a probability floor
+(`classifier_retrain_protocol.md` §5a). Keeping the v3 cuts under v4b would have served a
+correction sheet a suggestion histogram nobody chose.
+
 SCOPE, STATED (measurement_practice.md, "Labels are distribution-bound"). That slice is the
 dramatic + humanq3 population — curated, top-heavy — and NOT the stage-2 intake a fresh sheet
-draws from. These cuts are the best anchor v3 has, not a calibration for an arbitrary
-population. The honest use is a suggestion the human overrides; nothing downstream may treat
-a suggested tier as a label. Re-derive with `fit_cuts` when a labeled slice from the new
-population exists.
+draws from. These cuts are the best anchor this population has, not a calibration for an
+arbitrary one. The honest use is a suggestion the human overrides; nothing downstream may
+treat a suggested tier as a label. `INTAKE_CUTS` below is the stage-2 sibling.
 
   from tools.wallpaper.suggest_tier import suggest, expected_tier, CUTS, DERIVATION
 """
 from __future__ import annotations
 
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+# The cuts are cutpoints on ONE head's readout, so which head is live is part of the
+# question, not context. Torch-free both sides (that is what `wallpaper_pins` is for).
+from tools.wallpaper import wallpaper_pins as _wp     # noqa: E402
+
 # Cutpoints on `expected_tier` ∈ [1, 4]. Tier = 1 + #{c in CUTS : pred >= c}. Ascending.
 # Frozen from the derivation below — do not re-quantile per batch (see the module docstring).
-CUTS = (1.017, 2.615, 2.997)
+CUTS = (1.2573, 2.4007, 2.91)
 
 # The derivation record, carried into every batch.json that uses the rule so the number is
 # never a bare literal in a run record. Freeze in records, derive in code
@@ -62,21 +89,43 @@ DERIVATION = {
     "cuts": list(CUTS),
     "cut_method": "quantiles of expected_tier at the derivation slice's own tier prior "
                   "(prior-matched), NOT accuracy-maximizing — see suggest_tier.py",
-    "derived": "2026-08-05",
-    "head": "data/wallpaper_head/v3/model_best.pt",
-    "slice": "wallpaper head v3 held-out eval: dramatic split_side==eval + humanq3 "
-             "split_v2(seed=0, eval_frac=0.30), crops re-rendered via "
-             "label_crop.render_label_crop (prompts/wallpaper_eval_revival_prompt.md)",
+    "derived": "2026-08-11",
+    "deriver": "tools/wallpaper/suggest_tier.derive_cuts()",
+    "head": "data/wallpaper_head/v4b/seed_1/model_best.pt",
+    "head_version": "v4b",
+    "slice": "the dramatic + humanq3 EVAL rows of the six-batch union "
+             "(train_wallpaper_v4b.split_v4b) — the same 686 renders / 98 locations the v3 "
+             "cuts were fitted on, re-scored under v4b; readout sidecar "
+             "data/wallpaper_head/v4b/july_slice_pred.json",
     "n": 686,
     "n_locations": 98,
     "tier_prior": {"1": 116, "2": 295, "3": 185, "4": 90},
-    "accuracy_on_slice": {"exact": 0.414, "within_one": 0.899, "mae": 0.691,
-                          "suggested_hist": {"1": 116, "2": 295, "3": 183, "4": 92}},
+    "accuracy_on_slice": {"exact": 0.427, "within_one": 0.889, "mae": 0.691,
+                          "suggested_hist": {"1": 116, "2": 295, "3": 185, "4": 90}},
     "alternatives_rejected": {
-        "corn_0.5": {"exact": 0.376, "within_one": 0.885, "mae": 0.755, "bias": -0.283,
-                     "why": "biased low; 268/686 suggested tier 1 against a true 116"},
-        "accuracy_max_cuts": {"exact": 0.497, "within_one": 0.915,
-                              "why": "collapses — 476/686 suggested tier 2"},
+        "corn_0.5": {"exact": 0.452, "within_one": 0.901, "mae": 0.655, "bias": -0.200,
+                     "suggested_hist": {"1": 167, "2": 269, "3": 221, "4": 29},
+                     "why": "REJECTED DESPITE A HIGHER EXACT AGREEMENT (0.452 vs 0.427) — "
+                            "exact agreement is not the objective. It mis-shapes the "
+                            "histogram in both tails: 167 tier-1 suggestions against a true "
+                            "116, and 29 tier-4 against a true 90."},
+        "accuracy_max_cuts": {"exact": 0.501, "cuts": [1.0757, 2.7387, 3.8593],
+                              "suggested_hist": {"1": 69, "2": 445, "3": 154, "4": 18},
+                              "why": "collapses — 445/686 (64.9%) suggested tier 2"},
+    },
+    "supersedes": {
+        "cuts": [1.017, 2.615, 2.997], "head": "data/wallpaper_head/v3/model_best.pt",
+        "derived": "2026-08-05", "n": 686,
+        "accuracy_on_slice": {"exact": 0.414, "within_one": 0.899, "mae": 0.691,
+                              "suggested_hist": {"1": 116, "2": 295, "3": 183, "4": 92}},
+        "alternatives_rejected": {
+            "corn_0.5": {"exact": 0.376, "within_one": 0.885, "mae": 0.755, "bias": -0.283,
+                         "why": "biased low; 268/686 suggested tier 1 against a true 116"},
+            "accuracy_max_cuts": {"exact": 0.497, "within_one": 0.915,
+                                  "why": "collapses — 476/686 suggested tier 2"}},
+        "why_superseded": "the 2026-08-11 wallpaper head flip (v3 -> v4b seed 1). "
+                          "`expected_tier` is a sum of CORN marginals and is train-prior "
+                          "calibrated, so these cutpoints are points on v3's readout scale.",
     },
     "scope": "derived on the dramatic+humanq3 population, applied to the stage-2 intake; "
              "a suggestion, never a label",
@@ -118,7 +167,10 @@ K_TIERS = 4
 # 43% of the rows, so the slice is anchored but far from a copy of the rule. A future
 # re-derivation off a BLIND slice of the same population would be strictly better evidence and
 # there is no reason it cannot exist.
-INTAKE_CUTS = (1.0119, 2.4663, 3.0012)
+# RE-DERIVED 2026-08-11 at the head flip, on the same 1,140 rows re-scored under v4b. The
+# v3 cuts were (1.0119, 2.4663, 3.0012) and the whole of that record is kept under
+# `supersedes` — the reason the second cut set exists is unchanged, only the readout moved.
+INTAKE_CUTS = (1.2304, 2.4197, 2.9713)
 
 INTAKE_DERIVATION = {
     "rule": "tier = 1 + #{c in cuts : expected_tier >= c}; "
@@ -126,32 +178,51 @@ INTAKE_DERIVATION = {
     "cuts": list(INTAKE_CUTS),
     "cut_method": "quantiles of expected_tier at the derivation slice's own tier prior "
                   "(prior-matched) via fit_cuts — ABSOLUTE, applied unchanged to new batches",
-    "derived": "2026-08-10",
-    "head": "data/wallpaper_head/v3/model_best.pt",
+    "derived": "2026-08-11",
+    "head": "data/wallpaper_head/v4b/seed_1/model_best.pt",
+    "head_version": "v4b",
     "deriver": "tools/wallpaper/suggest_tier.derive_intake_cuts()",
     "slice": "the two 2026-08-05 stage-2 intake correction sheets, whole: "
              "2026-08-05_wallpaper_fresh_sheet_v1 (960) + "
-             "2026-08-05_wallpaper_colorize_path_v1 (180), pred = head_v3.pred stamped on the "
-             "stored label crop, tier = the merged human sidecar",
+             "2026-08-05_wallpaper_colorize_path_v1 (180), pred re-scored under the live head "
+             "(data/wallpaper_head/v4b/fit_slice_pred.json), tier = the merged human sidecar",
     "n": 1140,
     "tier_prior": {"1": 493, "2": 431, "3": 163, "4": 53},
-    "accuracy_on_slice": {"exact": 0.687, "within_one": 0.994, "mae": 0.319,
-                          "suggested_hist": {"1": 495, "2": 429, "3": 163, "4": 53},
+    "accuracy_on_slice": {"exact": 0.665, "within_one": 0.972, "mae": 0.363,
+                          "suggested_hist": {"1": 493, "2": 431, "3": 163, "4": 53},
                           "hist_note": "the REALIZED histogram under the frozen 4-dp cuts; "
-                                       "the exact-prior fit is {493, 431, 163, 53} and two "
-                                       "rows sit on the tier-1/2 quantile tie"},
+                                       "here it lands on the exact prior fit, unlike the v3 "
+                                       "cuts, where two rows sat on the tier-1/2 tie"},
+    "alternatives_rejected": {
+        "corn_0.5": {"exact": 0.625, "within_one": 0.968, "mae": 0.407, "bias": -0.156,
+                     "suggested_hist": {"1": 619, "2": 325, "3": 175, "4": 21},
+                     "why": "biased low; 619/1140 suggested tier 1 against a true 493"},
+        "accuracy_max_cuts": {"exact": 0.685, "cuts": [1.2162, 2.7392, 2.9544],
+                              "suggested_hist": {"1": 485, "2": 541, "3": 57, "4": 57},
+                              "why": "collapses the middle — 57 tier-3 against a true 163"},
+    },
     "vs_the_dramatic_cuts": {
         "cuts": list(CUTS),
-        "exact": 0.707, "suggested_hist": {"1": 519, "2": 426, "3": 131, "4": 64},
-        "why_not_kept": "higher exact agreement, but it is not the objective — these cuts "
-                        "reproduce the intake prior exactly and the dramatic ones do not",
+        "why_not_kept": "the two populations' priors are not close (see the module comment); "
+                        "these cuts reproduce the intake prior exactly and the dramatic ones "
+                        "do not. Both sets were re-derived on v4b at the same flip.",
     },
     "anchoring": {
         "both_sources_were_correction_sheets": True,
         "agreement_with_what_was_served": {"fresh_sheet": 0.733, "colorize_path": 0.567},
-        "note": "the slice is anchored to CUTS, not a copy of it — 27% and 43% of the rows "
-                "were corrected. A blind slice of the same population would be better "
-                "evidence and nothing prevents one.",
+        "note": "the slice is anchored to the v3 CUTS it was served with, not a copy of them "
+                "— 27% and 43% of the rows were corrected. A blind slice of the same "
+                "population would be better evidence and nothing prevents one.",
+    },
+    "supersedes": {
+        "cuts": [1.0119, 2.4663, 3.0012], "head": "data/wallpaper_head/v3/model_best.pt",
+        "derived": "2026-08-10", "n": 1140,
+        "accuracy_on_slice": {"exact": 0.687, "within_one": 0.994, "mae": 0.319,
+                              "suggested_hist": {"1": 495, "2": 429, "3": 163, "4": 53}},
+        "vs_the_v3_dramatic_cuts": {"cuts": [1.017, 2.615, 2.997], "exact": 0.707,
+                                    "suggested_hist": {"1": 519, "2": 426, "3": 131,
+                                                       "4": 64}},
+        "why_superseded": "the 2026-08-11 wallpaper head flip (v3 -> v4b seed 1)",
     },
     "scope": "derived on the stage-2 admitted intake, applied to sittings drawn from it; "
              "a suggestion, never a label",
@@ -163,18 +234,69 @@ INTAKE_SLICE_SOURCES = (
     ("2026-08-05_wallpaper_colorize_path_v1", "wallpaper_colorize_path_v1"),
 )
 
+# --------------------------------------------------------------------------- #
+# WHERE A SLICE'S READOUT COMES FROM, per head version.
+# --------------------------------------------------------------------------- #
+# A fit slice needs `(pred, human tier)` pairs, and `pred` is a HEAD's number. The batches
+# carry the readout of the head that BUILT them (`head_v3.pred`), stamped at sheet-build
+# time; every later head's readout is a sibling record written by
+# `tools/scoring/rescore_fit_slices.py` — never a rewrite of the batch row, which is the
+# sheet's own record of what the human was anchored on.
+#
+# The version is in the PATH for the same reason `ledger_rescore`'s siblings carry it: the
+# next flip's reader looks for its own file, does not find it, and RAISES rather than fitting
+# cuts to another head's numbers under its name.
+INTAKE_PRED_SOURCES = {
+    "v3": ("in_row", "head_v3"),
+    "v4b": ("sidecar", "data/wallpaper_head/v4b/fit_slice_pred.json"),
+}
+# The July (dramatic + humanq3) slice has no in-row source at all: its crops were re-rendered
+# by the eval-revival pass and its v3 readout was never stamped anywhere, which is why the v3
+# `CUTS` record could only ever be prose. From v4b on it is a sidecar like the other.
+JULY_PRED_SOURCES = {
+    "v4b": ("sidecar", "data/wallpaper_head/v4b/july_slice_pred.json"),
+}
 
-def intake_slice(root=None, sources=INTAKE_SLICE_SOURCES):
+
+def live_head_version() -> str:
+    """The head these cuts are cutpoints ON, read off the pin at CALL time."""
+    return _wp.HEAD_VERSION
+
+
+def _sidecar(rel: str, root=None) -> dict:
+    p = (Path(root) if root else ROOT) / rel
+    if not p.exists():
+        raise FileNotFoundError(
+            f"suggest_tier: readout sidecar absent: {rel}. It is a tracked durable record; "
+            f"write it with `uv run python tools/scoring/rescore_fit_slices.py`.")
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def _resolve_source(table: dict, head: str | None, what: str):
+    head = head or live_head_version()
+    src = table.get(head)
+    if src is None:
+        raise KeyError(
+            f"suggest_tier: no {what} readout registered for head {head!r} "
+            f"(have {sorted(table)}). A cut on `expected_tier` is a point on ONE head's "
+            f"readout scale; re-score the slice under {head!r} "
+            f"(tools/scoring/rescore_fit_slices.py) and register it here rather than fitting "
+            f"to another head's numbers.")
+    return head, src
+
+
+def intake_slice(root=None, sources=INTAKE_SLICE_SOURCES, head: str | None = None):
     """`(pred, tiers)` — the labeled stage-2 intake slice `INTAKE_CUTS` was fitted on.
 
-    Derived from the batches and sidecars at call time, never restated as literals: a
-    hardcoded pair beside the paths it summarizes outlives the files the moment one changes
-    (`storage_classes.md`, "derive state in code"). Raises on an absent source rather than
-    fitting cuts to half the record — a prior read off part of a slice is not visibly wrong."""
-    import json
-    from pathlib import Path
+    Derived from the batches, sidecars and the live pin at call time, never restated as
+    literals: a hardcoded pair beside the paths it summarizes outlives the files the moment
+    one changes (`storage_classes.md`, "derive state in code"). Raises on an absent source
+    rather than fitting cuts to half the record — a prior read off part of a slice is not
+    visibly wrong."""
+    root = Path(root) if root else ROOT
+    head, (kind, ref) = _resolve_source(INTAKE_PRED_SOURCES, head, "intake")
+    readout = _sidecar(ref, root)["pred"] if kind == "sidecar" else None
 
-    root = Path(root) if root else Path(__file__).resolve().parents[2]
     pred, tiers = [], []
     for batch, sidecar in sources:
         images = root / "data" / "wallpaper_corpus" / "batches" / batch / "images.jsonl"
@@ -193,15 +315,42 @@ def intake_slice(root=None, sources=INTAKE_SLICE_SOURCES):
             t = lab.get(row["image_id"])
             if t is None:
                 continue
-            pred.append(float(row["head_v3"]["pred"]))
+            if readout is None:
+                pred.append(float(row[ref]["pred"]))
+            else:
+                pred.append(float(readout[row["image_id"]]))
             tiers.append(int(t))
     return pred, tiers
 
 
-def derive_intake_cuts(root=None, ndigits: int = 4) -> tuple:
+def july_slice(root=None, head: str | None = None):
+    """`(pred, tiers)` — the 686-row dramatic+humanq3 eval slice `CUTS` was fitted on.
+
+    Read wholly from the readout sidecar, which carries the human tier beside the score: the
+    rows are the union loader's eval side and there is no batch dir to walk. Same refusal on
+    an unregistered head as `intake_slice`."""
+    _head, (kind, ref) = _resolve_source(JULY_PRED_SOURCES, head, "july")
+    if kind != "sidecar":
+        raise KeyError(f"the july slice has no {kind!r} source")
+    d = _sidecar(ref, root)
+    ids = list(d["pred"])
+    return [float(d["pred"][i]) for i in ids], [int(d["tier"][i]) for i in ids]
+
+
+def derive_intake_cuts(root=None, ndigits: int = 4, head: str | None = None) -> tuple:
     """Re-derive `INTAKE_CUTS` from the live artifacts. Kept live so the frozen constant is
-    checkable rather than remembered (`test_suggest_tier.py` asserts the two agree)."""
-    pred, tiers = intake_slice(root)
+    checkable rather than remembered (`test_wallpaper_sitting.py` asserts the two agree)."""
+    pred, tiers = intake_slice(root, head=head)
+    return tuple(round(c, ndigits) for c in fit_cuts(pred, tiers, K_TIERS))
+
+
+def derive_cuts(root=None, ndigits: int = 4, head: str | None = None) -> tuple:
+    """Re-derive `CUTS` from the live artifacts — the sibling of `derive_intake_cuts`.
+
+    New at the 2026-08-11 flip. Through v3 this set had no live deriver at all: its slice's
+    readout was never stamped anywhere, so the constant could only be checked against prose.
+    """
+    pred, tiers = july_slice(root, head=head)
     return tuple(round(c, ndigits) for c in fit_cuts(pred, tiers, K_TIERS))
 
 

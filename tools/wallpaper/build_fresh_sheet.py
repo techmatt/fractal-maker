@@ -108,11 +108,20 @@ TARGET_LOCS = 240       # 240 x 4 = 960 renders, inside the prompt's 800-1000 ba
 PALETTE_POOL = 120      # palettes the per-location draw samples from (see palette_pool())
 SEED = 7
 
-# v3 score bins on a location's MAX screen p_ge3. Five bins straddling the deployed emission
-# gate (0.90) so the sheet spans "the head is certain this is junk" through "the head would
-# ship this today". Right edge open above 1.0 so p_ge3 == 1.0 lands in the top bin.
-SCORE_BINS = (0.0, 0.01, 0.10, 0.50, 0.90, 1.01)
-BIN_LABELS = ("b0_lt.01", "b1_.01-.10", "b2_.10-.50", "b3_.50-.90", "b4_ge.90")
+# Score bins on a location's MAX screen p_ge3. Five bins straddling the deployed emission
+# gate so the sheet spans "the head is certain this is junk" through "the head would ship
+# this today". Right edge open above 1.0 so p_ge3 == 1.0 lands in the top bin.
+#
+# THE TOP EDGE IS THE GATE, DERIVED. It was the literal 0.90 until the 2026-08-11 head flip
+# volume-matched the gate to 0.6052 and left this tuple describing a boundary nobody serves —
+# a bin that mixes "would ship" with "would not" is exactly the stratification this sheet
+# exists to avoid, and it would have failed silently. The low edges are this module's own
+# coarse "how junk is it" ladder and are unaffected by a head flip; `sorted(set(...))` keeps
+# the tuple ascending and de-duplicated if a future gate lands on one of them.
+_LOW_EDGES = (0.0, 0.01, 0.10, 0.50)
+SCORE_BINS = tuple(sorted(set(_LOW_EDGES) | {WP.GATE_THRESHOLD})) + (1.01,)
+BIN_LABELS = tuple(f"b{i}_{SCORE_BINS[i]:g}-{SCORE_BINS[i+1]:g}"
+                   for i in range(len(SCORE_BINS) - 1))
 
 # Floor-admitted share of the DRAWN locations, applied inside every score bin (so the
 # oversample cannot smuggle in a score shift). Population share is 276/919 = 30%.

@@ -5,6 +5,11 @@
 # someone added a version before editing this file) is the one that cannot be undone cheaply.
 data/classifier/*/model_best.pt filter=lfs diff=lfs merge=lfs -text
 data/wallpaper_head/v3/model_best.pt filter=lfs diff=lfs merge=lfs -text
+# v4b's PINNED weight is seed 1's, not the top-level model_best.pt (seed 0). The seed
+# was picked on best blind sheet-D AUC>=4 at the 2026-08-11 adoption; the rule names the
+# exact file the pin resolves to, because that is the only .pt under v4b/ that is
+# tracked and a broader glob would arm four weights nobody is committing.
+data/wallpaper_head/v4b/seed_1/model_best.pt filter=lfs diff=lfs merge=lfs -text
 # v4 (the five-seed retrain, 2026-08-05 sitting folded in) had a rule here while it was a
 # STAGED candidate. Its WEIGHT was DE-TRACKED on 2026-08-08: `wallpaper_pins` still pins v3,
 # so under ACTIVE+PREVIOUS retention v4 is neither — it is a staged candidate that was never
@@ -18,6 +23,11 @@ data/wallpaper_head/v3/model_best.pt filter=lfs diff=lfs merge=lfs -text
 #   .gitignore negations. What IS untracked working state: the weight, the five per-seed
 #   dirs, `eval_scores.jsonl`, `per_seed.json`, `inference.py`, the eval montage, train.log.
 data/render_mode_head/v1/model_best.pt filter=lfs diff=lfs merge=lfs -text
+# v3 (the `dedup_weighted` arm) became the LIVE mining gate on 2026-08-11
+# (prompts/flip_29.md); v1 stays as PREVIOUS. The four sibling arms (v3_aug, v3_augx,
+# v3_uniform, v3_ap2) get NO rule: they are experiments, none is pinnable, and their
+# weights stay untracked working state beside their tracked run records.
+data/render_mode_head/v3/model_best.pt filter=lfs diff=lfs merge=lfs -text
 # v2 (the 2026-08-06 finetune of v1 on the 960-row rebuilt correction sheet) had an LFS rule
 # here while it was a live candidate. It LOST the winner rule the same day — significantly
 # worse at both >=2 boundaries — and a REJECTED candidate is not a critical final weight, so

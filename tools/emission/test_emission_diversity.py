@@ -369,50 +369,68 @@ def _supply(eng, good=None, **per_partition):
     return eng
 
 
+# The four fixture scores are STRADDLES of the two retired release floors, derived from the
+# floors rather than typed: one above and one below each, at a fixed margin. They were the
+# literals 0.95/0.80/0.60/0.30 against v3's 0.90 and v1's 0.50 until the 2026-08-11 head flip
+# volume-matched both floors, at which point 0.80 stopped being "below the smooth floor" and
+# the test asserted a counterfactual that had silently changed sides.
+_MARGIN = 0.05
+
+
+def _straddle(floor_value: float) -> tuple:
+    """`(above, below)` — one score either side of `floor_value`, clamped into [0, 1]."""
+    return (min(1.0, floor_value + _MARGIN), max(0.0, floor_value - _MARGIN))
+
+
+def _straddle_recs():
+    """The four gate records the two tests below share, one pair per head."""
+    wp_hi, wp_lo = _straddle(FL.WALLPAPER_RELEASE.value)
+    mn_hi, mn_lo = _straddle(FL.MINING_RELEASE.value)
+    return [
+        _gate_rec("em_0", "l0", "smooth", wp_hi, ("mandelbrot", "m#0", "k16:1", "smooth")),
+        _gate_rec("em_1", "l1", "smooth", wp_lo, ("mandelbrot", "m#1", "k16:2", "smooth")),
+        _gate_rec("em_2", "l2", "tia",    mn_hi, ("mandelbrot", "m#2", "k16:3", "tia")),
+        _gate_rec("em_3", "l3", "tia",    mn_lo, ("mandelbrot", "m#3", "k16:4", "tia")),
+    ]
+
+
+@pytest.mark.stage2_pinned
 def test_sub_floor_rows_are_eligible_now_and_the_retired_floors_annotate(tmp_path):
     """THE restructure, at the eligibility boundary. Both per-head release floors are
-    ANNOTATION-ONLY as of 2026-08-09: a 0.80 smooth (below the retired 0.90) and a 0.30 strange
-    (below the retired 0.50) are release-eligible and can ship, and the run still REPORTS what
-    those cuts would have done.
+    ANNOTATION-ONLY as of 2026-08-09: a smooth row below the retired wallpaper floor and a
+    strange row below the retired mining floor are release-eligible and can ship, and the run
+    still REPORTS what those cuts would have done.
 
     This is the inverse of the assertion that stood here from 2026-08-06, and it is written as
     a pair on purpose — eligibility widened AND the counterfactual survived. Widening alone
     would have deleted the old cut's value rather than retiring it."""
     eng = _supply(B.EmissionDiversity(_args(tmp_path)), mandelbrot=40)
     eng.embs = {}
-    recs = [
-        _gate_rec("em_0", "l0", "smooth", 0.95, ("mandelbrot", "m#0", "k16:1", "smooth")),
-        _gate_rec("em_1", "l1", "smooth", 0.80, ("mandelbrot", "m#1", "k16:2", "smooth")),
-        _gate_rec("em_2", "l2", "tia",    0.60, ("mandelbrot", "m#2", "k16:3", "tia")),
-        _gate_rec("em_3", "l3", "tia",    0.30, ("mandelbrot", "m#3", "k16:4", "tia")),
-    ]
-    for r in recs:
+    for r in _straddle_recs():
         eng.pool.append(r)
     assert {r["id"] for r in eng.release_eligible()} == {"em_0", "em_1", "em_2", "em_3"}
     acct = eng.target_accounting()
     assert acct["post_floor"] == 4
-    # the retired floors' verdict, kept as a number: 0.95 smooth and 0.60 strange clear them.
+    # the retired floors' verdict, kept as a number: one row per head clears its own.
     assert acct["would_pass_release_floor"] == 2
     assert acct["would_pass_release_floor_smooth"] == 1
     assert acct["would_pass_release_floor_strange"] == 1
     assert acct["below_retired_release_floor"] == 2
-    assert acct["cut_by_release_floor_strange"] == 1          # the 0.30 tia
+    assert acct["cut_by_release_floor_strange"] == 1          # the sub-floor tia
     # and the annotation is per row, per head
     by_id = {r["id"]: r for r in eng.pool.rows}
-    assert eng.would_pass_release_floor(by_id["em_1"]) is False   # 0.80 smooth, retired 0.90
-    assert eng.would_pass_release_floor(by_id["em_2"]) is True    # 0.60 tia,    retired 0.50
+    assert eng.would_pass_release_floor(by_id["em_1"]) is False   # smooth, below its floor
+    assert eng.would_pass_release_floor(by_id["em_2"]) is True    # tia,    above its floor
 
 
+@pytest.mark.stage2_pinned
 def test_a_release_now_ships_rows_the_retired_floors_would_have_cut(tmp_path):
     """The consequence at SELECTION, not just at eligibility: with 4 slots and one partition
     with ample supply, all four rows ship — including the two below the retired floors. Under
     the pre-2026-08-09 rule this release was 2 tiles."""
     eng = _supply(B.EmissionDiversity(_args(tmp_path, release_n=4)), mandelbrot=40)
     eng.embs = {}
-    for r in (_gate_rec("em_0", "l0", "smooth", 0.95, ("mandelbrot", "m#0", "k16:1", "smooth")),
-              _gate_rec("em_1", "l1", "smooth", 0.80, ("mandelbrot", "m#1", "k16:2", "smooth")),
-              _gate_rec("em_2", "l2", "tia",    0.60, ("mandelbrot", "m#2", "k16:3", "tia")),
-              _gate_rec("em_3", "l3", "tia",    0.30, ("mandelbrot", "m#3", "k16:4", "tia"))):
+    for r in _straddle_recs():
         eng.pool.append(r)
     selected, _log = eng.select_release()
     assert {e["_rec"]["id"] for e in selected} == {"em_0", "em_1", "em_2", "em_3"}
@@ -742,18 +760,30 @@ def test_the_default_target_is_three_times_release_n(tmp_path):
     assert eng.target_gated == 36
 
 
+@pytest.mark.stage2_pinned
 def test_the_retired_floor_annotation_is_per_head(tmp_path):
-    """Non-vacuity for the annotation: it is by HEAD, not one global number. A strange row at
-    0.70 clears the retired mining 0.50; a smooth row at 0.70 does not clear the retired
-    wallpaper 0.90. Both are eligible either way — that is the difference from before."""
+    """Non-vacuity for the annotation: it is by HEAD, not one global number. ONE score is
+    given to a smooth row and a strange row, chosen to sit BETWEEN the two retired floors, so
+    the two rows get opposite verdicts out of the same number. Both are eligible either way —
+    that is the difference from before.
+
+    WHICH HEAD IS THE HIGHER ONE IS DERIVED, not assumed. It was the wallpaper head (0.90 vs
+    0.50) until the 2026-08-11 flip volume-matched both floors and reversed them (0.6052 vs
+    0.6691); the invariant this test is for — that the annotation is per head — is
+    indifferent to the order, and the literal 0.70 that used to express it was not."""
+    wp, mn = FL.WALLPAPER_RELEASE.value, FL.MINING_RELEASE.value
+    assert wp != mn, "the two retired floors coincide — this test cannot separate the heads"
+    mid = (wp + mn) / 2.0                       # clears the lower floor, not the higher
     eng = B.EmissionDiversity(_args(tmp_path))
     eng.embs = {}
-    for r in (_gate_rec("em_a", "la", "smooth", 0.70, ("mandelbrot", "a#0", "k16:1", "smooth")),
-              _gate_rec("em_b", "lb", "tia",    0.70, ("mandelbrot", "b#0", "k16:1", "tia"))):
+    for r in (_gate_rec("em_a", "la", "smooth", mid, ("mandelbrot", "a#0", "k16:1", "smooth")),
+              _gate_rec("em_b", "lb", "tia",    mid, ("mandelbrot", "b#0", "k16:1", "tia"))):
         eng.pool.append(r)
     by_id = {r["id"]: r for r in eng.pool.rows}
-    assert eng.would_pass_release_floor(by_id["em_a"]) is False
-    assert eng.would_pass_release_floor(by_id["em_b"]) is True
+    assert eng.would_pass_release_floor(by_id["em_a"]) is (mid >= wp)
+    assert eng.would_pass_release_floor(by_id["em_b"]) is (mid >= mn)
+    assert eng.would_pass_release_floor(by_id["em_a"]) != \
+        eng.would_pass_release_floor(by_id["em_b"])
     assert {r["id"] for r in eng.post_floor()} == {"em_a", "em_b"}
 
 

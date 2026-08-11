@@ -108,6 +108,7 @@ def test_the_bins_tile_the_whole_score_range_with_no_gap(B):
     assert B.bin_of(0.0) == 0 and B.bin_of(1.0) == len(B.BIN_LABELS) - 1
 
 
+@pytest.mark.stage2_pinned
 def test_the_deployed_gate_is_a_bin_EDGE_not_a_bin_interior(B):
     """The sheet exists to span both sides of the emission gate. If 0.90 fell inside a bin,
     that bin would mix "would ship" with "would not" and the stratification could not show
@@ -248,6 +249,7 @@ def test_the_cut_rule_is_monotone_and_lands_in_range():
     assert ST.tier_from_pred(4.0) == ST.K_TIERS
 
 
+@pytest.mark.stage2_pinned
 def test_the_frozen_cuts_are_ascending_and_agree_with_their_own_deriver():
     assert list(ST.CUTS) == sorted(ST.CUTS)
     assert len(ST.CUTS) == ST.K_TIERS - 1
@@ -277,10 +279,19 @@ def test_the_rule_reproduces_a_slices_tier_prior_rather_than_collapsing():
         assert got[t] == pytest.approx(want[t], rel=0.02, abs=2), (got, want)
 
 
+@pytest.mark.stage2_pinned
 def test_the_recorded_derivation_carries_the_non_collapse_it_claims():
     """The frozen cuts' own record: the suggested histogram it produced on the derivation
     slice matches that slice's tier prior and puts no more than half the rows on one tier.
-    Keyed here so the claim in the docstring cannot rot into prose."""
+    Keyed here so the claim in the docstring cannot rot into prose.
+
+    THE COMPARISON WITH THE REJECTED RULES IS ON PRIOR REPRODUCTION, NOT EXACT AGREEMENT, and
+    that distinction is load-bearing rather than pedantic. This assertion read
+    `exact > corn_0.5.exact` until 2026-08-11, which happened to hold on v3 (0.414 vs 0.376)
+    and does NOT hold on v4b (0.427 vs 0.452) — while the module's own docstring says in two
+    places that exact agreement is not the objective and that accuracy bought by mis-shaping
+    the histogram is refused. The old form encoded one head's coincidence as the rule's
+    justification; this one encodes the rule."""
     d = ST.DERIVATION
     prior, hist = d["tier_prior"], d["accuracy_on_slice"]["suggested_hist"]
     assert set(prior) == set(hist) == {"1", "2", "3", "4"}
@@ -288,8 +299,14 @@ def test_the_recorded_derivation_carries_the_non_collapse_it_claims():
     for t in prior:
         assert abs(hist[t] - prior[t]) <= 3, (t, hist, prior)
     assert max(hist.values()) / d["n"] < 0.50, hist
-    # ...and it beats the rule it replaced on the axis it was chosen on.
-    assert d["accuracy_on_slice"]["exact"] > d["alternatives_rejected"]["corn_0.5"]["exact"]
+    # ...and it beats every rule it replaced on the axis it was CHOSEN on: reproducing the
+    # slice's own tier distribution. Each rejected alternative must miss by more than the
+    # chosen rule does, on its worst tier.
+    def worst(h):
+        return max(abs(h[t] - prior[t]) for t in prior)
+    assert worst(hist) <= 3
+    for name, alt in d["alternatives_rejected"].items():
+        assert worst(alt["suggested_hist"]) > worst(hist), (name, alt["suggested_hist"])
 
 
 def test_expected_tier_matches_the_head_readout_definition():

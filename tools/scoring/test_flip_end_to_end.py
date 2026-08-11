@@ -106,7 +106,7 @@ def _drive_production_path(scorer, mrow, tmp_path, monkeypatch):
     import production_seeder as ps
     import reframe  # tools/reframe/reframe.py — the production reframe search
     import guard
-    from score_lib import corn_decode
+    from tools.emission import floors as F
 
     ft = mrow["fractal_type"]
     partition = FT2FAM[ft]
@@ -116,17 +116,22 @@ def _drive_production_path(scorer, mrow, tmp_path, monkeypatch):
                                    workdir=tmp_path / f"rf_{mrow['loc_id']}", workers=4)
 
     # --- the ledger write path, verbatim from the discovery sites ---
+    # NO THRESHOLD AND NO FROZEN CLASS. The row carries RAW PROBABILITIES only, and what it
+    # decodes to is answered at READ time by `floors.good_class` against the one good floor.
+    # This block wrote `t_good = ps.t_good_for(partition)` and a frozen `decoded_class` until
+    # 2026-08-09, when the per-partition table and the whole decode-verdict family were
+    # deleted (prompts/selection_restructure_3.md, commit 551643c). The test kept calling
+    # them and has been red in the manual `-m slow` lane ever since — repaired 2026-08-11.
     p_notbad, p_good, p_ge4 = ps._chosen_probs(res)
-    t_good = ps.t_good_for(partition)
     guard_pass = res.score > guard.GUARD_SENTINEL + 1e-6
-    decoded = corn_decode(p_notbad, p_good, t_good, p_ge4) if guard_pass else None
     row = {
         "id": f"e2e_{mrow['loc_id']}", "family": partition,
         "outcome_cx": float(res.cx), "outcome_cy": float(res.cy), "outcome_fw": float(res.fw),
-        "k3": float(res.score), "decoded_class": decoded,
-        "p_notbad": p_notbad, "p_good": p_good, "p_ge4": p_ge4, "t_good": t_good,
+        "k3": float(res.score),
+        "p_notbad": p_notbad, "p_good": p_good, "p_ge4": p_ge4,
         "guard_pass": bool(guard_pass), "distinct": True,
     }
+    _ = F
     # append through the ledger itself so `scorer_version` is stamped by production code, not here
     ledger_path = tmp_path / "outcome_ledger.jsonl"
     monkeypatch.setattr(ps, "OUTCOME_LEDGER", ledger_path)
@@ -141,8 +146,7 @@ def _drive_production_path(scorer, mrow, tmp_path, monkeypatch):
 
 def test_a_class4_location_writes_an_active_stamped_q4_row(scorer, tmp_path, monkeypatch):
     import production_seeder as ps
-    from score_lib import corn_decode
-    from tools.emission import descriptor as desc
+    from tools.emission import floors as F
 
     _, mrow = _pick(4, key=lambda r: r[f"{ACTIVE_VERSION}_p_ge4"])
     row, partition = _drive_production_path(scorer, mrow, tmp_path, monkeypatch)
@@ -151,19 +155,20 @@ def test_a_class4_location_writes_an_active_stamped_q4_row(scorer, tmp_path, mon
     assert row["scorer_version"] == ACTIVE_VERSION, (
         f"ledger row is stamped {row['scorer_version']!r}, active is {ACTIVE_VERSION!r}")
 
-    # (3) the third probability is on disk, and the row re-decodes from what was persisted
+    # (3) the third probability is on disk, and the class is answered from what was persisted
     assert row["p_ge4"] is not None, "the third probability was dropped — the row cannot ever be q4"
     assert 0.0 <= row["p_ge4"] <= 1.0
-    assert corn_decode(row["p_notbad"], row["p_good"], row["t_good"], row["p_ge4"]) \
-        == row["decoded_class"], "the persisted row does not re-decode to its own stamped class"
+    assert "t_good" not in row and "decoded_class" not in row, (
+        "the run side writes raw probabilities and no frozen verdict since 2026-08-09")
 
-    # (4) the >= 3 boundary — a known-good class-4 location decodes to 4 and is admitted
-    assert row["decoded_class"] == 4, (
-        f"a human-labeled class-4 location decoded to {row['decoded_class']} "
+    # (4) the >= 3 boundary — a known-good class-4 location reads as 4 and is admitted
+    assert F.good_class(row["p_good"], row["p_ge4"]) == 4, (
+        f"a human-labeled class-4 location read as "
+        f"{F.good_class(row['p_good'], row['p_ge4'])} "
         f"(p_notbad={row['p_notbad']:.4f} p_good={row['p_good']:.4f} p_ge4={row['p_ge4']:.4f} "
-        f"t_good={row['t_good']}) — if this is 3, the pipeline is still q4-incapable")
-    assert ps.is_q3plus(row), "a class-4 row must clear the q3+ admission predicate"
-    assert desc.admit_quality(row), "a class-4 row must clear the emission intake predicate"
+        f"good_floor={F.GOOD_FLOOR}) — if this is 3, the pipeline is still q4-incapable")
+    assert ps.is_good(row), "a class-4 row must clear the run-side good floor"
+    assert F.passes_junk_floor(row["p_good"]), "a class-4 row must clear the junk floor"
     assert ps.build_cloud([row], partition), "a class-4 row must enter the coverage cloud"
 
 
@@ -171,7 +176,7 @@ def test_a_class1_location_is_refused_at_the_same_boundary(scorer, tmp_path, mon
     """The other half of the boundary. Without this, a decode that returned 4 unconditionally
     would pass the test above."""
     import production_seeder as ps
-    from tools.emission import descriptor as desc
+    from tools.emission import floors as F
 
     # the most confidently-bad label-1 location
     _, mrow = _pick(1, key=lambda r: -r[f"{ACTIVE_VERSION}_score"])
@@ -179,9 +184,9 @@ def test_a_class1_location_is_refused_at_the_same_boundary(scorer, tmp_path, mon
 
     assert row["scorer_version"] == ACTIVE_VERSION
     assert row["p_ge4"] is not None            # recorded even when it does not promote
-    assert row["decoded_class"] < 3, (
-        f"a human-labeled class-1 location decoded to {row['decoded_class']} — the q3+ boundary "
-        f"is not discriminating (p_notbad={row['p_notbad']:.4f} p_good={row['p_good']:.4f})")
-    assert not ps.is_q3plus(row)
-    assert not desc.admit_quality(row)
+    assert F.good_class(row["p_good"], row["p_ge4"]) is None, (
+        f"a human-labeled class-1 location read as "
+        f"{F.good_class(row['p_good'], row['p_ge4'])} — the good-floor boundary is not "
+        f"discriminating (p_notbad={row['p_notbad']:.4f} p_good={row['p_good']:.4f})")
+    assert not ps.is_good(row)
     assert not ps.build_cloud([row], partition)

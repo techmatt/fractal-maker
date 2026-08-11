@@ -373,6 +373,51 @@ three of which had hardcoded the outgoing version and went red *for* the flip ra
 a fault. A test that would need editing when the pin moves is mismarked as a guard; mark it,
 or make it resolve the version from the pin.
 
+### 5-0. THERE ARE THREE PINS, AND THEY MOVE INDEPENDENTLY (2026-08-11)
+
+`ACTIVE_CKPT` is the LOCATION head. The two **stage-2** heads —
+`wallpaper_pins.HEAD_CKPT_REL` (smooth) and `mining_pins.ACTIVE_MINING_CKPT` (promoted
+strange) — are separate pins on separate corpora, and a flip of either is governed by this
+section with **§5b and §5c not applicable**: τ_h and the discovery ledgers are cuts on the
+LOCATION head's `p_good` and are untouched by a stage-2 flip. Everything else transfers.
+
+```bash
+uv run pytest -m stage2_pinned --collect-only -q     # the stage-2-coupled tests, 56
+uv run python tools/scoring/volume_match.py wallpaper --incoming <ckpt>
+uv run python tools/scoring/rescore_fit_slices.py wallpaper --ckpt <ckpt>
+uv run python tools/scoring/adopt_head.py wallpaper --write
+```
+
+**`version_pinned` does not cover them, and listing it before a stage-2 flip lists the wrong
+set.** The 2026-08-11 flip (`prompts/flip_29.md`) moved both stage-2 pins while `ACTIVE_CKPT`
+stayed on v11, and went red in **ten places across six files** — every one a test that had
+hardcoded an outgoing value. That is precisely the failure `version_pinned` exists to
+prevent, on the pins it does not cover, so `stage2_pinned` is its sibling.
+
+**What moves with a stage-2 pin**, and all of it is scale-bound in the §5a sense:
+| what | owner |
+|---|---|
+| the gate | `wallpaper_pins.GATE_THRESHOLD` / `mining_pins.MINING_GATE_THRESHOLD` |
+| the pool floor | `floors.WALLPAPER_POOL` / `floors.MINING_POOL` |
+| the suggestion cuts | `suggest_tier.{CUTS,INTAKE_CUTS}` / `suggest_tier_mining.CUTS` |
+| the gate lock | `mining_pins.LOCK_PATH` — a NEW record at the new head's path |
+| the sheet's score bins | `build_fresh_sheet.SCORE_BINS` — derived from the gate |
+
+**The suggestion cuts are the non-obvious one.** `expected_tier = 1 + Σ marg` is a sum of
+CORN marginals, so a cutpoint on it is exactly as train-prior-calibrated as a probability
+floor — and unlike a floor, it is not restated volume-matched but **re-fitted** on its own
+labeled slice, because prior reproduction (not volume) is what it was chosen for. That needs
+the slice's readout under the new head, which the batch rows cannot supply: they carry the
+readout of the head that BUILT the sheet, stamped at sheet-build time and *never* rewritten
+(it is the record of what the human was anchored on). So the new head's readout goes to a
+sidecar — `data/<family>/<version>/fit_slice_pred.json`, written by
+`tools/scoring/rescore_fit_slices.py` — and the deriver resolves it through a per-version
+`PRED_SOURCES` table that **raises on an unregistered head**. Without that refusal the
+deriver silently returns the OLD head's cutpoints under the new head's name.
+
+`[code: tools/scoring/{volume_match,rescore_fit_slices,adopt_head}.py;
+test: tools/scoring/test_volume_match.py]`
+
 ### 5a. The two floors — RE-SCORE, then VOLUME-MATCH. This is the whole quality half of a flip.
 
 Since 2026-08-09 (`prompts/selection_restructure_3.md`) there is **one quality definition in
@@ -398,6 +443,26 @@ by moving a string. So they are held by this procedure plus a human:
    waste `JUNK_FLOOR` removes, how much supply `GOOD_FLOOR` keeps. Keeping the float silently
    moves the volume; re-deriving from an eval turns a coarse cut back into an operating point,
    which is precisely the per-partition machinery this replaced.
+
+   **The arithmetic has an owner as of 2026-08-11: `tools/scoring/volume_match.py`.** It
+   scores a named reference pool under both heads in ONE pass through the harness that
+   actually gates with each — never one head's frozen `eval_scores.jsonl` against the
+   other's live pass, which is a comparison across two rendering events — and places the new
+   cut at the **midpoint** between the k-th and (k+1)-th largest scores. The midpoint, not
+   the k-th score, because a report's `cut_at` IS the k-th and admits k under `>=` but k-1
+   under `>`, and the two stage-2 sites disagree (`emit_v1` gates `p_ge3 > gate`,
+   `MiningScorer.gate` uses `>=`). The realized volume is then RE-COUNTED under the rounded
+   constant that gets written, because rounding a midpoint can cross a tie; read
+   `volume_preserved` before trusting a restatement.
+
+   **`JUNK_FLOOR` is read on TWO heads' scales and a single-head flip cannot volume-match
+   it.** `ranked_intake` applies it to the stage-1 location head's `p_good` and
+   `deploy_tail` to the mining head's `p_ge3`. That is deliberate — it is ONE semantic
+   constant — but it means a stage-2 flip has no correct move: matching it to the flipped
+   head corrupts the other reader, and leaving it silently moves the volume at one site. It
+   was LEFT at 0.20 through the 2026-08-11 stage-2 flip and the residual is stated rather
+   than fixed, because the fix is a decision about whether the constant should be per-head,
+   which is a larger change than a flip and not one a flip may take.
 3. Nothing else. There is no threshold sweep, no per-partition table to re-adopt and no
    conformance test to re-run — `tools/scoring/derive_t_good.py`,
    `production_seeder.T_GOOD_OVERRIDES`, `tools/atlas/keeper_cut.py` and their five per-version

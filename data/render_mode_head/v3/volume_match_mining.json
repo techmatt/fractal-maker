@@ -1,0 +1,600 @@
+{
+  "generated": "2026-08-11T10:29:13",
+  "command": "uv run python tools/scoring/volume_match.py mining",
+  "procedure": "classifier_retrain_protocol.md \u00a75a \u2014 re-score, then VOLUME-MATCH. The new constant is the score that admits the same NUMBER of reference-pool rows the outgoing constant admitted, placed at the midpoint between the k-th and (k+1)-th largest so `>` and `>=` realize the same k.",
+  "head": {
+    "name": "render_mode_head",
+    "outgoing": "data/render_mode_head/v1/model_best.pt",
+    "incoming": "data/render_mode_head/v3/model_best.pt"
+  },
+  "reference_pool": {
+    "what": "the (28) deduplicated mining eval side (mining_corpus.load_corpus)",
+    "loader": "tools.scoring.volume_match.mining_pool",
+    "scorer": "mining_scorer",
+    "n": 827,
+    "n_locations": 136,
+    "by_batch": {
+      "sheetB": 227,
+      "v1_sitting": 393,
+      "sheetC": 207
+    },
+    "tiers": {
+      "1": 261,
+      "2": 352,
+      "3": 214
+    },
+    "base_rate_ge3": 0.2587666263603386,
+    "base_rate_ge2": 0.6844014510278114
+  },
+  "scored_in_s": 33.5,
+  "cuts": [
+    {
+      "name": "mining_release",
+      "owner": "tools/mining/mining_pins.MINING_GATE_THRESHOLD (== tools/emission/floors.MINING_RELEASE)",
+      "site": "release",
+      "comparison": ">=",
+      "outgoing_value": 0.5,
+      "incoming_value": 0.6691,
+      "incoming_value_unrounded": 0.6690970108370458,
+      "n": 827,
+      "matched_volume": 129,
+      "matched_rate": 0.15598548972188633,
+      "realized_volume": 129,
+      "volume_preserved": true,
+      "outgoing": {
+        "n_selected": 129,
+        "pass_rate": 0.15598548972188633,
+        "tp": 82,
+        "precision_ge3": 0.6356589147286822,
+        "precision_lo": 0.5498038353373884,
+        "precision_hi": 0.7136678482316141,
+        "recall_ge3": 0.38317757009345793
+      },
+      "incoming": {
+        "n_selected": 129,
+        "pass_rate": 0.15598548972188633,
+        "tp": 98,
+        "precision_ge3": 0.7596899224806202,
+        "precision_lo": 0.6791333389688067,
+        "precision_hi": 0.825226741006141,
+        "recall_ge3": 0.45794392523364486
+      }
+    },
+    {
+      "name": "mining_pool",
+      "owner": "tools/emission/floors.MINING_POOL",
+      "site": "pool",
+      "comparison": ">=",
+      "outgoing_value": 0.25,
+      "incoming_value": 0.3402,
+      "incoming_value_unrounded": 0.3402410687469821,
+      "n": 827,
+      "matched_volume": 322,
+      "matched_rate": 0.3893591293833132,
+      "realized_volume": 322,
+      "volume_preserved": true,
+      "outgoing": {
+        "n_selected": 322,
+        "pass_rate": 0.3893591293833132,
+        "tp": 172,
+        "precision_ge3": 0.5341614906832298,
+        "precision_lo": 0.4795937284723412,
+        "precision_hi": 0.5879237401381738,
+        "recall_ge3": 0.8037383177570093
+      },
+      "incoming": {
+        "n_selected": 322,
+        "pass_rate": 0.3893591293833132,
+        "tp": 169,
+        "precision_ge3": 0.5248447204968945,
+        "precision_lo": 0.4703277084241131,
+        "precision_hi": 0.578775905110807,
+        "recall_ge3": 0.7897196261682243
+      }
+    }
+  ],
+  "ladder_ge3": [
+    {
+      "threshold": 0.0,
+      "fires": 827,
+      "pass_rate": 1.0,
+      "tp": 214,
+      "precision": 0.2587666263603386,
+      "precision_lo": 0.23008088127375187,
+      "precision_hi": 0.2896831748351382,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.05,
+      "fires": 644,
+      "pass_rate": 0.7787182587666264,
+      "tp": 213,
+      "precision": 0.3307453416149068,
+      "precision_lo": 0.29550543901833365,
+      "precision_hi": 0.36799255184856966,
+      "recall": 0.9953271028037384,
+      "marks": []
+    },
+    {
+      "threshold": 0.1,
+      "fires": 581,
+      "pass_rate": 0.7025392986698912,
+      "tp": 213,
+      "precision": 0.36660929432013767,
+      "precision_lo": 0.3284208499254852,
+      "precision_hi": 0.40655012341156865,
+      "recall": 0.9953271028037384,
+      "marks": []
+    },
+    {
+      "threshold": 0.15,
+      "fires": 518,
+      "pass_rate": 0.626360338573156,
+      "tp": 210,
+      "precision": 0.40540540540540543,
+      "precision_lo": 0.3639708202040963,
+      "precision_hi": 0.4482327296853722,
+      "recall": 0.9813084112149533,
+      "marks": []
+    },
+    {
+      "threshold": 0.2,
+      "fires": 455,
+      "pass_rate": 0.5501813784764208,
+      "tp": 205,
+      "precision": 0.45054945054945056,
+      "precision_lo": 0.40543551145177337,
+      "precision_hi": 0.49649142804107116,
+      "recall": 0.9579439252336449,
+      "marks": []
+    },
+    {
+      "threshold": 0.25,
+      "fires": 404,
+      "pass_rate": 0.48851269649334944,
+      "tp": 194,
+      "precision": 0.4801980198019802,
+      "precision_lo": 0.4318956036248842,
+      "precision_hi": 0.5288734792739667,
+      "recall": 0.9065420560747663,
+      "marks": []
+    },
+    {
+      "threshold": 0.3,
+      "fires": 356,
+      "pass_rate": 0.43047158403869407,
+      "tp": 182,
+      "precision": 0.5112359550561798,
+      "precision_lo": 0.4594670068087915,
+      "precision_hi": 0.5627649974953245,
+      "recall": 0.8504672897196262,
+      "marks": []
+    },
+    {
+      "threshold": 0.3402,
+      "fires": 322,
+      "pass_rate": 0.3893591293833132,
+      "tp": 169,
+      "precision": 0.5248447204968945,
+      "precision_lo": 0.4703277084241131,
+      "precision_hi": 0.578775905110807,
+      "recall": 0.7897196261682243,
+      "marks": [
+        "mining_pool"
+      ]
+    },
+    {
+      "threshold": 0.35,
+      "fires": 318,
+      "pass_rate": 0.3845223700120919,
+      "tp": 169,
+      "precision": 0.5314465408805031,
+      "precision_lo": 0.47655133667658595,
+      "precision_hi": 0.5855910339802838,
+      "recall": 0.7897196261682243,
+      "marks": []
+    },
+    {
+      "threshold": 0.4,
+      "fires": 283,
+      "pass_rate": 0.3422007255139057,
+      "tp": 165,
+      "precision": 0.5830388692579506,
+      "precision_lo": 0.5248559424563447,
+      "precision_hi": 0.6389975571755079,
+      "recall": 0.7710280373831776,
+      "marks": []
+    },
+    {
+      "threshold": 0.45,
+      "fires": 256,
+      "pass_rate": 0.309552599758162,
+      "tp": 151,
+      "precision": 0.58984375,
+      "precision_lo": 0.5286946979346077,
+      "precision_hi": 0.6483362316778947,
+      "recall": 0.705607476635514,
+      "marks": []
+    },
+    {
+      "threshold": 0.5,
+      "fires": 219,
+      "pass_rate": 0.26481257557436516,
+      "tp": 136,
+      "precision": 0.6210045662100456,
+      "precision_lo": 0.5551869115911507,
+      "precision_hi": 0.6826501888425205,
+      "recall": 0.6355140186915887,
+      "marks": []
+    },
+    {
+      "threshold": 0.55,
+      "fires": 196,
+      "pass_rate": 0.2370012091898428,
+      "tp": 124,
+      "precision": 0.6326530612244898,
+      "precision_lo": 0.5632147699137943,
+      "precision_hi": 0.6969913133041145,
+      "recall": 0.5794392523364486,
+      "marks": []
+    },
+    {
+      "threshold": 0.6,
+      "fires": 166,
+      "pass_rate": 0.2007255139056832,
+      "tp": 112,
+      "precision": 0.6746987951807228,
+      "precision_lo": 0.6001783672106152,
+      "precision_hi": 0.7413162960520953,
+      "recall": 0.5233644859813084,
+      "marks": []
+    },
+    {
+      "threshold": 0.65,
+      "fires": 138,
+      "pass_rate": 0.16686819830713423,
+      "tp": 102,
+      "precision": 0.7391304347826086,
+      "precision_lo": 0.6600994975045447,
+      "precision_hi": 0.8052082824415359,
+      "recall": 0.4766355140186916,
+      "marks": []
+    },
+    {
+      "threshold": 0.6691,
+      "fires": 129,
+      "pass_rate": 0.15598548972188633,
+      "tp": 98,
+      "precision": 0.7596899224806202,
+      "precision_lo": 0.6791333389688067,
+      "precision_hi": 0.825226741006141,
+      "recall": 0.45794392523364486,
+      "marks": [
+        "mining_release"
+      ]
+    },
+    {
+      "threshold": 0.7,
+      "fires": 118,
+      "pass_rate": 0.14268440145102781,
+      "tp": 91,
+      "precision": 0.7711864406779662,
+      "precision_lo": 0.6875579079746161,
+      "precision_hi": 0.837714248661541,
+      "recall": 0.4252336448598131,
+      "marks": []
+    },
+    {
+      "threshold": 0.75,
+      "fires": 92,
+      "pass_rate": 0.11124546553808948,
+      "tp": 70,
+      "precision": 0.7608695652173914,
+      "precision_lo": 0.6643766513146702,
+      "precision_hi": 0.8364497121851046,
+      "recall": 0.32710280373831774,
+      "marks": []
+    },
+    {
+      "threshold": 0.8,
+      "fires": 70,
+      "pass_rate": 0.08464328899637243,
+      "tp": 52,
+      "precision": 0.7428571428571429,
+      "precision_lo": 0.6297364802928457,
+      "precision_hi": 0.8307085804859023,
+      "recall": 0.24299065420560748,
+      "marks": []
+    },
+    {
+      "threshold": 0.85,
+      "fires": 47,
+      "pass_rate": 0.056831922611850064,
+      "tp": 38,
+      "precision": 0.8085106382978723,
+      "precision_lo": 0.674557199356223,
+      "precision_hi": 0.8958418439468988,
+      "recall": 0.17757009345794392,
+      "marks": []
+    },
+    {
+      "threshold": 0.9,
+      "fires": 26,
+      "pass_rate": 0.03143893591293833,
+      "tp": 22,
+      "precision": 0.8461538461538461,
+      "precision_lo": 0.6646841558168644,
+      "precision_hi": 0.9385006600107053,
+      "recall": 0.102803738317757,
+      "marks": []
+    },
+    {
+      "threshold": 0.95,
+      "fires": 14,
+      "pass_rate": 0.016928657799274487,
+      "tp": 13,
+      "precision": 0.9285714285714286,
+      "precision_lo": 0.6853073044604219,
+      "precision_hi": 0.9872781138877085,
+      "recall": 0.06074766355140187,
+      "marks": []
+    }
+  ],
+  "ladder_ge2": [
+    {
+      "threshold": 0.0,
+      "fires": 827,
+      "pass_rate": 1.0,
+      "tp": 566,
+      "precision": 0.6844014510278114,
+      "precision_lo": 0.6519349369611773,
+      "precision_hi": 0.7151627143841572,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.05,
+      "fires": 759,
+      "pass_rate": 0.9177750906892382,
+      "tp": 565,
+      "precision": 0.7444005270092227,
+      "precision_lo": 0.7121909031811348,
+      "precision_hi": 0.7741485937734099,
+      "recall": 0.9982332155477032,
+      "marks": []
+    },
+    {
+      "threshold": 0.1,
+      "fires": 742,
+      "pass_rate": 0.8972188633615478,
+      "tp": 564,
+      "precision": 0.7601078167115903,
+      "precision_lo": 0.7280924855770766,
+      "precision_hi": 0.789443677597517,
+      "recall": 0.9964664310954063,
+      "marks": []
+    },
+    {
+      "threshold": 0.15,
+      "fires": 719,
+      "pass_rate": 0.8694074969770254,
+      "tp": 561,
+      "precision": 0.780250347705146,
+      "precision_lo": 0.7485375167760178,
+      "precision_hi": 0.8089843524689178,
+      "recall": 0.991166077738516,
+      "marks": []
+    },
+    {
+      "threshold": 0.2,
+      "fires": 704,
+      "pass_rate": 0.8512696493349455,
+      "tp": 558,
+      "precision": 0.7926136363636364,
+      "precision_lo": 0.761115184607224,
+      "precision_hi": 0.8209359409553311,
+      "recall": 0.9858657243816255,
+      "marks": []
+    },
+    {
+      "threshold": 0.25,
+      "fires": 685,
+      "pass_rate": 0.8282950423216445,
+      "tp": 555,
+      "precision": 0.8102189781021898,
+      "precision_lo": 0.7791542896334643,
+      "precision_hi": 0.8378235467805967,
+      "recall": 0.980565371024735,
+      "marks": []
+    },
+    {
+      "threshold": 0.3,
+      "fires": 658,
+      "pass_rate": 0.7956469165659008,
+      "tp": 552,
+      "precision": 0.8389057750759878,
+      "precision_lo": 0.8088620472666386,
+      "precision_hi": 0.8650152067470107,
+      "recall": 0.9752650176678446,
+      "marks": []
+    },
+    {
+      "threshold": 0.35,
+      "fires": 638,
+      "pass_rate": 0.7714631197097944,
+      "tp": 548,
+      "precision": 0.8589341692789969,
+      "precision_lo": 0.8297705018367181,
+      "precision_hi": 0.8838011956038967,
+      "recall": 0.9681978798586572,
+      "marks": []
+    },
+    {
+      "threshold": 0.4,
+      "fires": 625,
+      "pass_rate": 0.7557436517533253,
+      "tp": 543,
+      "precision": 0.8688,
+      "precision_lo": 0.840062640634961,
+      "precision_hi": 0.8930313531466209,
+      "recall": 0.9593639575971732,
+      "marks": []
+    },
+    {
+      "threshold": 0.45,
+      "fires": 605,
+      "pass_rate": 0.7315598548972189,
+      "tp": 534,
+      "precision": 0.8826446280991735,
+      "precision_lo": 0.854551357362724,
+      "precision_hi": 0.9059091630747756,
+      "recall": 0.9434628975265018,
+      "marks": []
+    },
+    {
+      "threshold": 0.5,
+      "fires": 584,
+      "pass_rate": 0.7061668681983071,
+      "tp": 522,
+      "precision": 0.8938356164383562,
+      "precision_lo": 0.8662266450593745,
+      "precision_hi": 0.9162970824209535,
+      "recall": 0.9222614840989399,
+      "marks": []
+    },
+    {
+      "threshold": 0.55,
+      "fires": 550,
+      "pass_rate": 0.6650544135429263,
+      "tp": 502,
+      "precision": 0.9127272727272727,
+      "precision_lo": 0.8861850974189456,
+      "precision_hi": 0.933543864796966,
+      "recall": 0.8869257950530035,
+      "marks": []
+    },
+    {
+      "threshold": 0.6,
+      "fires": 517,
+      "pass_rate": 0.6251511487303507,
+      "tp": 480,
+      "precision": 0.9284332688588007,
+      "precision_lo": 0.9029110661480816,
+      "precision_hi": 0.9476354339778682,
+      "recall": 0.8480565371024735,
+      "marks": []
+    },
+    {
+      "threshold": 0.65,
+      "fires": 490,
+      "pass_rate": 0.592503022974607,
+      "tp": 460,
+      "precision": 0.9387755102040817,
+      "precision_lo": 0.9139436534497789,
+      "precision_hi": 0.9567808865646712,
+      "recall": 0.8127208480565371,
+      "marks": []
+    },
+    {
+      "threshold": 0.7,
+      "fires": 450,
+      "pass_rate": 0.5441354292623942,
+      "tp": 430,
+      "precision": 0.9555555555555556,
+      "precision_lo": 0.9323511924596783,
+      "precision_hi": 0.971047702661439,
+      "recall": 0.7597173144876325,
+      "marks": []
+    },
+    {
+      "threshold": 0.75,
+      "fires": 401,
+      "pass_rate": 0.4848851269649335,
+      "tp": 386,
+      "precision": 0.9625935162094763,
+      "precision_lo": 0.9392053057609298,
+      "precision_hi": 0.9772024942280042,
+      "recall": 0.6819787985865724,
+      "marks": []
+    },
+    {
+      "threshold": 0.8,
+      "fires": 353,
+      "pass_rate": 0.4268440145102781,
+      "tp": 345,
+      "precision": 0.9773371104815864,
+      "precision_lo": 0.9559238889243523,
+      "precision_hi": 0.9884727285103864,
+      "recall": 0.6095406360424028,
+      "marks": []
+    },
+    {
+      "threshold": 0.85,
+      "fires": 296,
+      "pass_rate": 0.35792019347037485,
+      "tp": 292,
+      "precision": 0.9864864864864865,
+      "precision_lo": 0.9657744171897984,
+      "precision_hi": 0.9947327305842264,
+      "recall": 0.5159010600706714,
+      "marks": []
+    },
+    {
+      "threshold": 0.9,
+      "fires": 226,
+      "pass_rate": 0.27327690447400244,
+      "tp": 224,
+      "precision": 0.9911504424778761,
+      "precision_lo": 0.9683127716781466,
+      "precision_hi": 0.997569818766751,
+      "recall": 0.3957597173144876,
+      "marks": []
+    },
+    {
+      "threshold": 0.95,
+      "fires": 127,
+      "pass_rate": 0.15356711003627568,
+      "tp": 126,
+      "precision": 0.9921259842519685,
+      "precision_lo": 0.9567449252236082,
+      "precision_hi": 0.9986087237687615,
+      "recall": 0.2226148409893993,
+      "marks": []
+    }
+  ],
+  "score_scale": {
+    "why": "CORN marginals are calibrated to the training prior, so no raw-threshold comparison across the two heads appears in this record.",
+    "quantiles": {
+      "q10": {
+        "outgoing": 0.0029700487728654985,
+        "incoming": 0.00586364139854742
+      },
+      "q25": {
+        "outgoing": 0.028828493670934763,
+        "incoming": 0.07069809260959947
+      },
+      "q50": {
+        "outgoing": 0.1596242326882713,
+        "incoming": 0.23626622479380188
+      },
+      "q75": {
+        "outgoing": 0.3809785112077595,
+        "incoming": 0.52791101441208
+      },
+      "q90": {
+        "outgoing": 0.5950776808143822,
+        "incoming": 0.7768087239304237
+      },
+      "q95": {
+        "outgoing": 0.7385919053523476,
+        "incoming": 0.8636179262587501
+      },
+      "q99": {
+        "outgoing": 0.8802233230515458,
+        "incoming": 0.9581040314357923
+      }
+    }
+  },
+  "incomplete": false
+}

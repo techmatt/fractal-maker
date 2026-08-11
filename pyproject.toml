@@ -63,6 +63,17 @@ markers = [
     # that distinction had no expression until now. Mark a test if it would need editing
     # (or would legitimately fail) when ACTIVE_CKPT moves.
     "version_pinned: coupled to production_pins.ACTIVE_CKPT; list before a flip",
+    # The same label for the TWO STAGE-2 HEADS, and it is a separate marker rather than a
+    # widening of the one above because the three pins move independently: the 2026-08-11
+    # flip (prompts/flip_29.md) moved `wallpaper_pins.HEAD_CKPT_REL` and
+    # `mining_pins.ACTIVE_MINING_CKPT` while `ACTIVE_CKPT` stayed on v11, so listing
+    # `version_pinned` before it would have listed the wrong set. It went red in ten places
+    # across six files, every one of them a test that had hardcoded an outgoing value — the
+    # exact failure `version_pinned` exists to prevent, on the pins it does not cover.
+    #   uv run pytest -m stage2_pinned --collect-only -q
+    # Mark a test if it would need editing (or would legitimately fail) when either stage-2
+    # head pin, its gate, its pool floor, or its suggestion cuts move.
+    "stage2_pinned: coupled to wallpaper_pins / mining_pins; list before a stage-2 flip",
 ]
 # `slow` was described as opt-in in this file and in every marked module's docstring,
 # but nothing implemented it, so a bare `pytest` ran the whole opt-in lane anyway —

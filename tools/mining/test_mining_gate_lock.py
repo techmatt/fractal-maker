@@ -34,6 +34,10 @@ from tools.mining import lock_mining_gate as L         # noqa: E402
 from tools.mining import mining_pins as MP             # noqa: E402
 
 
+# EVERY test here reads a stage-2 pin: the lock IS the pinned head's record.
+pytestmark = pytest.mark.stage2_pinned
+
+
 @pytest.fixture(scope="module")
 def lock():
     return L.read_lock()
@@ -60,7 +64,14 @@ def test_the_lock_quotes_the_owner_cuts_and_their_measured_operating_points(lock
     # outliving it: the cut went annotation-only on 2026-08-09 and the frozen MEASUREMENT
     # beside it is unchanged, which is the whole reason the record survives the retirement.
     assert rel["acts"] is False and rel["site"] == "release"
-    assert (rel["fires"], rel["tp"], rel["n"]) == (33, 32, 422)
+    # The COUNTS are read off the same source the record derives from, not restated: they
+    # move with every head flip (the cut is volume-matched) and a literal here would go red
+    # FOR the flip rather than for a fault.
+    vm = json.loads((ROOT / L.SOURCE_REPORT).read_text(encoding="utf-8"))
+    src = next(c for c in vm["cuts"] if c["name"] == "mining_release")
+    assert rel["n"] == vm["reference_pool"]["n"]
+    assert rel["fires"] == src["incoming"]["n_selected"] == src["matched_volume"]
+    assert rel["tp"] == src["incoming"]["tp"]
     lo, hi = rel["precision_ci95"]
     assert lo < rel["precision"] < hi                       # a Wilson interval, not a point
     row = next(r for r in lock["ladder_ge3"]
@@ -68,23 +79,43 @@ def test_the_lock_quotes_the_owner_cuts_and_their_measured_operating_points(lock
     assert (row["fires"], row["precision"]) == (rel["fires"], rel["precision"])
 
 
+def test_every_cut_records_the_value_it_was_volume_matched_FROM(lock):
+    """A restatement that keeps no trace of what it restated is indistinguishable from a
+    retune, and the two are different claims: volume-matching asserts the cut's VOLUME is
+    unchanged, a retune asserts somebody chose a new operating point."""
+    for name, cut in lock["cuts"].items():
+        rf = cut["restated_from"]
+        assert "VOLUME-MATCHED" in rf["how"], name
+        assert rf["value"] != cut["value"], name
+        assert rf["head"].endswith("/v1"), (name, rf["head"])
+        assert 0.0 <= rf["precision"] <= 1.0, name
+        # the volume is what is held fixed; the precision beside it is what moved
+        assert cut["fires"] == cut["matched_volume"], name
+
+
 def test_both_boundaries_are_frozen_whole_not_only_the_cut_rows(lock):
     """A record holding only the two cut rows cannot answer "what would 0.40 have bought"
     without re-running a sitting whose crops may be gone by then."""
-    assert len(lock["ladder_ge3"]) == 20 and len(lock["ladder_ge2"]) == 20
-    assert {r["threshold"] for r in lock["ladder_ge3"]} >= {0.25, 0.5}
+    assert len(lock["ladder_ge3"]) >= 20 and len(lock["ladder_ge2"]) >= 20
+    # the two LIVE cuts must be exact rows of the >=3 ladder (that is what makes `_row_at`
+    # able to refuse rather than interpolate); read from the owner, never restated.
+    assert {r["threshold"] for r in lock["ladder_ge3"]} >= {F.MINING_POOL.value,
+                                                            F.MINING_RELEASE.value}
 
 
 def test_the_record_states_what_its_numbers_are_an_optimistic_bound_on(lock):
     """The two caveats are the reason this is a ceiling and not an estimate; a lock that
     dropped them would read as a measurement of a fresh population."""
-    assert set(lock["caveats"]) == {"eval_is_held_out_for_v2_only",
-                                    "labels_are_anchored_to_v1", "direction"}
+    assert set(lock["caveats"]) == set(L.CAVEATS)
+    assert "direction" in lock["caveats"]        # which way each lean points, stated
     assert "OPTIMISTIC" in lock["bound"]
-    assert lock["corpus"]["batch"] == "2026-08-06_render_mode_fresh_sheet_v1"
+    assert lock["corpus"]["n"] > 0 and lock["corpus"]["n_locations"] > 0
     assert lock["head"]["version"] == MP.HEAD_VERSION
     assert lock["provenance"]["source_report"] == L.SOURCE_REPORT
-    assert lock["harness_parity"]["ok"] is True
+    # Parity is BY CONSTRUCTION now: the source pass scores through the gate's own scorer,
+    # so there is no sibling harness for the numbers to disagree with. The record has to say
+    # which scorer that was, or the claim is unfalsifiable.
+    assert lock["harness_parity"]["scorer"] == "mining_scorer"
 
 
 # --------------------------------------------------------------------------- #
@@ -121,12 +152,23 @@ def test_a_cut_the_sitting_never_swept_is_an_error_not_a_nearest_bin():
         L._row_at(ladder, 0.50)
 
 
-def test_a_sitting_that_calibrated_another_checkpoint_cannot_lock_this_gate():
-    report = json.loads((ROOT / L.SOURCE_REPORT).read_text(encoding="utf-8"))
-    L.build_lock(report, source_sha="x")                             # non-vacuous
-    report["calibration"]["ckpt"] = "data/render_mode_head/v2/model_best.pt"
+def test_a_pass_that_scored_another_checkpoint_cannot_lock_this_gate():
+    vm = json.loads((ROOT / L.SOURCE_REPORT).read_text(encoding="utf-8"))
+    L.build_lock(vm, source_sha="x")                                 # non-vacuous
+    vm["head"]["incoming"] = "data/render_mode_head/v2/model_best.pt"
     with pytest.raises(L.LockDerivationError, match="DEPLOYED head"):
-        L.build_lock(report, source_sha="x")
+        L.build_lock(vm, source_sha="x")
+
+
+def test_a_BOUNDED_pass_cannot_lock_this_gate():
+    """`volume_match.py --limit` stamps `incomplete`, and a lock derived from a partial pass
+    would state an operating point nobody measured. Same shape as the `sitting_cut.INCOMPLETE`
+    rule: a bounded run that writes real files stamps itself unusable."""
+    vm = json.loads((ROOT / L.SOURCE_REPORT).read_text(encoding="utf-8"))
+    assert vm["incomplete"] is False                                 # non-vacuous
+    vm["incomplete"] = True
+    with pytest.raises(L.LockDerivationError, match="incomplete"):
+        L.build_lock(vm, source_sha="x")
 
 
 def test_a_floor_moved_off_the_sitting_cannot_be_quoted(monkeypatch):

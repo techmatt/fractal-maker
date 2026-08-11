@@ -58,10 +58,12 @@ def test_the_sheet_is_registered_train_side_before_it_is_built():
     assert (split, biased, source) == ("train", True, "mining_correction_sitting")
 
 
+@pytest.mark.stage2_pinned
 def test_the_frozen_cuts_reproduce_from_the_slice_they_were_fitted_on():
     assert ST.derive_cuts() == ST.CUTS
 
 
+@pytest.mark.stage2_pinned
 def test_the_fitted_cuts_replace_the_per_batch_quantile_fallback_and_differ_from_it():
     """The fallback is kept as the record of what was done while no labeled slice existed; it
     must not silently be what a new sheet uses. Non-vacuous: on the fit slice's own preds the

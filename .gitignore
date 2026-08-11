@@ -634,12 +634,19 @@ __pycache__/
 /data/wallpaper_head/v4/*
 !/data/wallpaper_head/v4/config.json
 !/data/wallpaper_head/v4/metrics.json
-# v4b (the (28) retrain: sheet A folded in, trained from scratch). STAGED and NOT adopted,
-# so under ACTIVE+PREVIOUS retention its WEIGHT is not tracked at all — v3 is ACTIVE and
-# there is no PREVIOUS. What is re-included is the RUN RECORD: the recipe, the split, the
-# per-seed band and the winner-rule report, which are what make the verdict readable
-# without the weight and what stop it being re-litigated. Adding the weight is part of an
-# ADOPTION, together with an LFS rule and the two allowlist entries — not part of a build.
+# v4b (the (28) retrain: sheet A folded in, trained from scratch). ADOPTED 2026-08-11
+# (prompts/flip_29.md) and it is now ACTIVE, so its WEIGHT is tracked — but the pinned
+# weight is SEED 1's, not the top-level `model_best.pt` (which is seed 0, the staged max on
+# the (28) pooled eval). The seed was picked on best blind sheet-D AUC>=4, so the negation
+# walks into the seed dir: a directory negation here would sweep in the other four seeds'
+# 34 MB weights and five eval_scores.jsonl (storage_classes.md, "never a directory
+# negation"). v3 stays tracked as PREVIOUS; nothing de-tracked at this flip.
+#
+# Beside the weight: the flip's own derived records. `volume_match_wallpaper.{json,md}` is
+# what the two wallpaper cuts were restated against (protocol §5a) — the first durable
+# record the wallpaper head's floors have ever had. `fit_slice_pred.json` and
+# `july_slice_pred.json` are the suggestion-cut fit slices' readouts under this head, which
+# is what keeps `suggest_tier.derive_{intake_,}cuts()` reproducible without a GPU.
 !/data/wallpaper_head/v4b/
 /data/wallpaper_head/v4b/*
 !/data/wallpaper_head/v4b/config.json
@@ -647,6 +654,14 @@ __pycache__/
 !/data/wallpaper_head/v4b/per_seed.json
 !/data/wallpaper_head/v4b/report.md
 !/data/wallpaper_head/v4b/report.json
+!/data/wallpaper_head/v4b/volume_match_wallpaper.json
+!/data/wallpaper_head/v4b/volume_match_wallpaper.md
+!/data/wallpaper_head/v4b/fit_slice_pred.json
+!/data/wallpaper_head/v4b/july_slice_pred.json
+!/data/wallpaper_head/v4b/adoption_record.json
+!/data/wallpaper_head/v4b/seed_1/
+/data/wallpaper_head/v4b/seed_1/*
+!/data/wallpaper_head/v4b/seed_1/model_best.pt
 # The sheet-D re-verdict (v3 vs v4b on the BLIND minibrot slice). Two files, ~27 KB, and
 # they are a RUN RECORD in the same sense as v4b's above: the labels they read are human
 # judgement on a population that will never be labeled unanchored twice, so the report is
@@ -675,16 +690,29 @@ __pycache__/
 !/data/render_mode_head/v2/report.md
 !/data/render_mode_head/v2/report.json
 # v3 (the (28) retrain: the pooled three-batch corpus, trained FROM SCRATCH — not a
-# finetune, which is what v2 was and what lost). Same shape as v2's block and for the same
-# reason: STAGED, so the weight and the five per-seed dirs are working state and only the
-# run record + the v1-vs-v3 winner-rule report are re-included.
+# finetune, which is what v2 was and what lost). ADOPTED 2026-08-11 (prompts/flip_29.md),
+# so the WEIGHT is now tracked and this is the LIVE gate; v1 stays tracked as PREVIOUS and
+# nothing de-tracked. The five per-seed dirs stay working state.
+#
+# Beside the weight: `mining_gate_lock.{json,md}` (the frozen operating point the release
+# floor is set against — the v1 lock is NOT superseded, it stays at v1's path as the record
+# of what 0.50 bought there), `volume_match_mining.{json,md}` (what both mining cuts were
+# restated against, protocol §5a, and the lock's own source), and `fit_slice_pred.json`
+# (the suggestion-cut fit slice re-scored under this head).
 !/data/render_mode_head/v3/
 /data/render_mode_head/v3/*
+!/data/render_mode_head/v3/model_best.pt
 !/data/render_mode_head/v3/config.json
 !/data/render_mode_head/v3/metrics.json
 !/data/render_mode_head/v3/per_seed.json
 !/data/render_mode_head/v3/report.md
 !/data/render_mode_head/v3/report.json
+!/data/render_mode_head/v3/mining_gate_lock.json
+!/data/render_mode_head/v3/mining_gate_lock.md
+!/data/render_mode_head/v3/volume_match_mining.json
+!/data/render_mode_head/v3/volume_match_mining.md
+!/data/render_mode_head/v3/fit_slice_pred.json
+!/data/render_mode_head/v3/adoption_record.json
 # The three (28) ARMS of v3 — same corpus, same split, same objective, same eval, ONE
 # variable changed each (addenda 2 and 3). They are experiments, not versions: none is
 # pinnable and none may be, so they get v3's shape — weight and per-seed dirs are working

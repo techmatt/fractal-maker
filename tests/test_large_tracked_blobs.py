@@ -145,14 +145,23 @@ ALLOWLIST = [
           "(docs/design/storage_classes.md); their config.json/metrics.json records stay and "
           "are text, so they never reach this allowlist. Not GPU-reproducible, so there is "
           "no rebuild path for either of the two."),
+    Entry("data/wallpaper_head/v4b/seed_1/model_best.pt", WEIGHTS,
+          "LIVE cross-location wallpaper-quality head (ADOPTED 2026-08-11, prompts/"
+          "flip_29.md). The pinned file is SEED 1's, not v4b/model_best.pt (seed 0): the "
+          "seed was picked on best blind sheet-D AUC>=4."),
     Entry("data/wallpaper_head/v3/model_best.pt", WEIGHTS,
-          "LIVE cross-location wallpaper-quality head."),
+          "PREVIOUS wallpaper head — the one rollback rung under ACTIVE+PREVIOUS retention "
+          "(wallpaper_pins.V3_CKPT_ROLLBACK)."),
     # data/wallpaper_head/v4/model_best.pt had a line here while it was a STAGED candidate.
-    # It de-tracked on 2026-08-08: wallpaper_pins still points at v3, so under ACTIVE+PREVIOUS
-    # retention v4 is a never-adopted candidate and not a critical final weight. Same shape as
-    # render_mode_head/v2 above. Its run record is untracked working-tree data and unchanged.
+    # It de-tracked on 2026-08-08 and STAYS de-tracked through the v4b flip: v4 is a
+    # never-adopted candidate, and the ladder is v4b -> v3, not v4b -> v4.
+    Entry("data/render_mode_head/v3/model_best.pt", WEIGHTS,
+          "LIVE strange-mode (mining_v3) gate — the `dedup_weighted` arm, ADOPTED "
+          "2026-08-11 (prompts/flip_29.md)."),
     Entry("data/render_mode_head/v1/model_best.pt", WEIGHTS,
-          "LIVE strange-mode (mining_v1) gate."),
+          "PREVIOUS strange-mode gate (mining_v1) — the one rollback rung "
+          "(mining_pins.MINING_V1_ROLLBACK). Its training corpus is gone, so it cannot be "
+          "retrained at all."),
     # data/render_mode_head/v2/model_best.pt had a line here while it was a live candidate.
     # It lost the winner rule on 2026-08-06 and was de-tracked the same day: a rejected
     # candidate is not a critical final weight, and this list is the policy's "essentially
@@ -261,11 +270,13 @@ BINARY_ALLOWLIST = [
                 "(v10). v5..v9 de-tracked 2026-08-08 (ACTIVE+PREVIOUS retention). Not "
                 "GPU-reproducible."),
     BinaryEntry("data/wallpaper_head/", ".pt",
-                "Wallpaper-quality head weight — v3, the live head (wallpaper_pins). v4 was "
-                "staged and de-tracked 2026-08-08 under ACTIVE+PREVIOUS retention."),
+                "Wallpaper-quality head weights — v4b/seed_1 (LIVE, wallpaper_pins) + v3 "
+                "(PREVIOUS) under ACTIVE+PREVIOUS retention. v4 was staged and de-tracked "
+                "2026-08-08 and stays de-tracked: the ladder is v4b -> v3."),
     BinaryEntry("data/render_mode_head/", ".pt",
-                "Render-mode (strange-mode) gate weight — v1, whose training corpus is "
-                "gone, so it cannot be retrained at all."),
+                "Render-mode (strange-mode) gate weights — v3 (LIVE, mining_pins) + v1 "
+                "(PREVIOUS), whose training corpus is gone so it cannot be retrained at "
+                "all. The four sibling (28) arms are experiments and stay untracked."),
     BinaryEntry("data/queries/scorer/", ".pt",
                 "Palette-preference ranker weight (pref-v3-gvo)."),
     BinaryEntry("data/library_embeddings/", ".npz",

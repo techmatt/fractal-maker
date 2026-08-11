@@ -195,18 +195,36 @@ TRACKED_CANARIES = [
     # Same rationale as the classifier weights: trained .pt, not GPU-reproducible, no
     # rebuild path. Only the LATEST canonical weight of each is kept (no v1/v2 history,
     # no seed variants) — see docs/design/storage_classes.md, "Git history is a durability tier".
-    "data/wallpaper_head/v3/model_best.pt",       # LIVE cross-location wallpaper-quality head
+    # ACTIVE + PREVIOUS per family, since the 2026-08-11 flip (prompts/flip_29.md).
+    "data/wallpaper_head/v4b/seed_1/model_best.pt",  # LIVE wallpaper head (ACTIVE)
+    "data/wallpaper_head/v3/model_best.pt",       # PREVIOUS wallpaper head (the rollback rung)
     # v4 — the five-seed retrain — was canaried here as a STAGED candidate on the argument
     # that v3+v4 were a live/rollback PAIR. The 2026-08-08 retention policy says otherwise:
-    # a pair is ACTIVE + PREVIOUS, and v4 is neither — `wallpaper_pins` still pins v3, so v4
-    # is a candidate that was never adopted, and the policy de-tracks those. Removed with the
-    # weight, same shape as render_mode_head/v2 in 2026-08-06.
-    "data/render_mode_head/v1/model_best.pt",     # LIVE strange-mode (mining_v1) gate
-    # The gate lock: the frozen ladder + operating point the LIVE 0.50 release floor is set
-    # against. Unregenerable in the strict sense — `lock_mining_gate.py` rebuilds it from
-    # data/render_mode_head/v2/report.json, so both must survive together; the sitting that
-    # produced THAT is a GPU pass over crops, and the head's earlier corpus is already gone.
+    # a pair is ACTIVE + PREVIOUS, and v4 is neither — it is a candidate that was never
+    # adopted, and the policy de-tracks those. It stays out through the v4b flip, whose
+    # ladder is v4b -> v3.
+    "data/render_mode_head/v3/model_best.pt",     # LIVE strange-mode (mining_v3) gate
+    "data/render_mode_head/v1/model_best.pt",     # PREVIOUS strange-mode gate (mining_v1)
+    # The gate locks, one per head that has served. The LIVE one is v3's: the frozen ladder
+    # + operating point the 0.6691 release floor is set against, rebuilt by
+    # `lock_mining_gate.py` from data/render_mode_head/v3/volume_match_mining.json, so both
+    # must survive together; the pass that produced THAT is a GPU sweep over crops.
+    "data/render_mode_head/v3/mining_gate_lock.json",
+    "data/render_mode_head/v3/volume_match_mining.json",
+    # v1's lock is NOT superseded — it is the record of what 0.50 and 0.25 bought on the head
+    # they were measured on, and its own source (v2/report.json) is canaried below.
     "data/render_mode_head/v1/mining_gate_lock.json",
+    # The wallpaper head's first durable floor record. `release_record.py` had been carrying
+    # the observation that "the gate that actually cuts — the wallpaper head's pool/release
+    # floors on smooth — has never had a durable record at all"; this is it.
+    "data/wallpaper_head/v4b/volume_match_wallpaper.json",
+    # The suggestion-cut fit slices' readouts under the live heads. Without them
+    # `suggest_tier.derive_{intake_,}cuts()` and `suggest_tier_mining.derive_cuts()` cannot
+    # reproduce their own frozen constants without a GPU, which is what makes those checks
+    # default-suite tests rather than prose.
+    "data/wallpaper_head/v4b/fit_slice_pred.json",
+    "data/wallpaper_head/v4b/july_slice_pred.json",
+    "data/render_mode_head/v3/fit_slice_pred.json",
     # v2's WEIGHT WAS DE-TRACKED on 2026-08-06: it lost the winner rule and a rejected
     # candidate is not a critical final weight (prompts/mining_adoption_prompt.md §3). The
     # run RECORD stays, and stays canaried — it is what the lock above is derived from, and

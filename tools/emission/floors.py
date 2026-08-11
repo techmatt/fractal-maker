@@ -42,11 +42,18 @@ on the paths that most need it.
 
 THE FOUR CUTS — all four ANNOTATION-ONLY since 2026-08-09
 -------------
-                       value  head
-  wallpaper pool        0.75  wallpaper_head/v3
-  wallpaper release     0.90  wallpaper_head/v3
-  mining pool           0.25  render_mode_head/v1
-  mining release        0.50  render_mode_head/v1
+                        value  head                     (was, on the previous head)
+  wallpaper pool       0.4698  wallpaper_head/v4b        0.75 on v3
+  wallpaper release    0.6052  wallpaper_head/v4b        0.90 on v3
+  mining pool          0.3402  render_mode_head/v3       0.25 on v1
+  mining release       0.6691  render_mode_head/v3       0.50 on v1
+
+All four moved on 2026-08-11 and NONE of them was retuned: both heads flipped
+(prompts/flip_29.md) and each value is the VOLUME-MATCHED restatement of its predecessor —
+the score that admits the same FRACTION of a fixed reference pool under the new head
+(classifier_retrain_protocol.md §5a, tools/scoring/volume_match.py). The volume each cut was
+chosen for is invariant across the flip; the precision beside it is not, and that difference
+is the head's, not the cut's.
 
 The paragraphs below are the record of what each cut WAS and what it was measured to buy. They
 are kept verbatim rather than rewritten in the past tense: the numbers are still the ones the
@@ -348,11 +355,14 @@ class Floor:
 # The cuts.
 # --------------------------------------------------------------------------- #
 WALLPAPER_POOL = Floor(
-    name="wallpaper_pool", value=0.75, head=WALLPAPER_HEAD, stamp=_wp.HEAD_VERSION,
+    name="wallpaper_pool", value=0.4698, head=WALLPAPER_HEAD, stamp=_wp.HEAD_VERSION,
     site="pool",
-    basis="permissive inventory bar, set below the v3 gate (0.90) so a weak-but-real smooth "
-          "wallpaper stays available to a later re-selection instead of being discarded at "
-          "colorize time. Not a quality claim; the release floor is.")
+    basis="permissive inventory bar, set below the gate so a weak-but-real smooth wallpaper "
+          "stays available to a later re-selection instead of being discarded at colorize "
+          "time. Not a quality claim; the release floor is. 0.75 -> 0.4698 at the 2026-08-11 "
+          "v4b flip, VOLUME-MATCHED: 0.4698 pools the same 503 of 1,337 reference-pool rows "
+          "(37.6%) that 0.75 pooled on v3, precision>=3 0.748 -> 0.706 there. "
+          "data/wallpaper_head/v4b/volume_match_wallpaper.json.")
 
 WALLPAPER_RELEASE = Floor(
     name="wallpaper_release", value=_wp.GATE_THRESHOLD, head=WALLPAPER_HEAD,
@@ -362,26 +372,27 @@ WALLPAPER_RELEASE = Floor(
           "head (prompts/prompt_gate_retune_v3.md).")
 
 MINING_POOL = Floor(
-    name="mining_pool", value=0.25, head=MINING_HEAD, stamp=_mn.HEAD_VERSION,
+    name="mining_pool", value=0.3402, head=MINING_HEAD, stamp=_mn.HEAD_VERSION,
     site="pool",
     basis="CAPACITY ORDERING, not curation: strange colorizes are cheap to make and expensive "
-          "to carry, so the bottom quarter of the mining scale is dropped before it reaches "
-          "the pool. It was already a hard cut through the period when the release floor "
-          "above it was report-only, and its value is unchanged by that floor's 2026-08-06 "
-          "flip — the would-cut verdict accrues at this site too (gate_report.py). Measured "
-          "at the flip: fires 70/422 (16.6%) at precision 75.7% [64.5%-84.2%], keeping 84.1% "
-          "of the good rows, which is the retention the pool cut is for.")
+          "to carry, so the bottom of the mining scale is dropped before it reaches the pool. "
+          "0.25 -> 0.3402 at the 2026-08-11 v3 flip, VOLUME-MATCHED: 0.3402 pools the same "
+          "322 of 827 reference-pool rows (38.9%) that 0.25 pooled on v1, precision>=3 "
+          "0.534 -> 0.525 there. data/render_mode_head/v3/volume_match_mining.json. "
+          "The v1 measurement it replaces, kept as the record of what that cut bought on its "
+          "own head: fires 70/422 (16.6%) at precision 75.7% [64.5%-84.2%], keeping 84.1% of "
+          "the good rows, which is the retention the pool cut is for.")
 
 MINING_RELEASE = Floor(
     name="mining_release", value=_mn.MINING_GATE_THRESHOLD, head=MINING_HEAD,
     stamp=_mn.HEAD_VERSION, site="release",
     basis="IS the mining head's production gate (mining_pins.MINING_GATE_THRESHOLD), imported "
-          "not copied. ENFORCING since 2026-08-06 (prompts/mining_adoption_prompt.md); it was "
-          "report-only from prompts/mining_gate_report_only.md until the head had a measured "
-          "operating point on strange renders. It now has one: 33/422 (7.8%) at precision "
-          "97.0% [84.7%-99.5%], recall 50.8%, base rate 14.9%, frozen in "
-          "data/render_mode_head/v1/mining_gate_lock.json. The value did not move; only "
-          "whether it cuts.")
+          "not copied. 0.50 -> 0.6691 at the 2026-08-11 v3 flip, VOLUME-MATCHED: same 129 of "
+          "827 reference-pool rows (15.6%), precision>=3 0.636 -> 0.760, frozen in "
+          "data/render_mode_head/v3/mining_gate_lock.json. Its v1 operating point — 33/422 "
+          "(7.8%) at precision 97.0% [84.7%-99.5%], recall 50.8%, base rate 14.9% — stays in "
+          "data/render_mode_head/v1/mining_gate_lock.json as the record of what 0.50 bought "
+          "on the head it was measured on.")
 
 ALL_FLOORS = (WALLPAPER_POOL, WALLPAPER_RELEASE, MINING_POOL, MINING_RELEASE)
 

@@ -143,6 +143,21 @@ REGISTRY = [
      "so durable() accepts them and a fresh clone's `git add -A` would re-add them. This is "
      "the shape every weight in the tree now has; the force-add class is empty for "
      "data/classifier/."),
+    ("data/wallpaper_head/v4b/{seed_1/model_best.pt,volume_match_wallpaper.{json,md},"
+     "fit_slice_pred.json,july_slice_pred.json,adoption_record.json}",
+     "classifier/train_wallpaper_v4b.py, tools/scoring/{volume_match,rescore_fit_slices,"
+     "adopt_head}.py", DUR,
+     "the WEIGHT: nothing — a retrain off the committed corpus produces a different head. "
+     "The four records: yes, each from its own committed deriver plus the weight, and the "
+     "two *_pred.json sidecars are a GPU pass over crops that are tracked", Y,
+     "OK, and NEW at the 2026-08-11 adoption (prompts/flip_29.md). The pinned file is "
+     "SEED 1's, not v4b/model_best.pt (seed 0): the seed was picked on best blind sheet-D "
+     "AUC>=4, so the .gitignore negation walks into seed_1/ by exact path and the other "
+     "four seeds stay ignored working state. POPULATION-DEFINING for the same reason v1's "
+     "mining weight is: every suggestion the next wallpaper correction sheet serves is "
+     "quoted against this exact file, through suggest_tier.{CUTS,INTAKE_CUTS}. The two "
+     "*_pred.json sidecars are what keep those cuts derivable WITHOUT a GPU — the batch "
+     "rows carry v3's readout and are never rewritten."),
     ("data/wallpaper_head/v{3/model_best.pt,4/{config,metrics}.json}",
      "classifier/train_wallpaper_v{3,4}.py", DUR,
      "a full GPU retrain from the wallpaper corpus (committed) — recipe-reproducible, not "
@@ -180,6 +195,19 @@ REGISTRY = [
      "unregenerable: it is the LIVE gate AND the head whose suggestions seeded the 960 "
      "labels of the 2026-08-06 correction sheet, so every read on that sheet is quoted "
      "against this exact weight file."),
+    ("data/render_mode_head/v3/{model_best.pt,mining_gate_lock.{json,md},"
+     "volume_match_mining.{json,md},fit_slice_pred.json,adoption_record.json}",
+     "classifier/train_mining_head_v3.py, tools/scoring/{volume_match,rescore_fit_slices,"
+     "adopt_head}.py, tools/mining/lock_mining_gate.py --write", DUR,
+     "the WEIGHT: nothing bit-identical (a GPU retrain off the committed three-batch corpus "
+     "reproduces the recipe, not the file). The lock: pure Python from "
+     "volume_match_mining.json. That record: a GPU pass over tracked crops", Y,
+     "OK, and NEW at the 2026-08-11 adoption (prompts/flip_29.md). v3 is the LIVE gate "
+     "(mining_pins.ACTIVE_MINING_CKPT) and v1 stays as PREVIOUS; nothing de-tracked. "
+     "POPULATION-DEFINING: every render-mode suggestion from here on is quoted against this "
+     "weight through suggest_tier_mining.CUTS. The lock lives at the PINNED head's path, so "
+     "v1's is not superseded — it is the record of what 0.50 and 0.25 bought on v1, and "
+     "read_lock() refuses whichever one the pin is not on."),
     ("data/render_mode_head/v1/mining_gate_lock.json",
      "tools/mining/lock_mining_gate.py --write", DUR,
      "re-derivable from data/render_mode_head/v2/report.json (pure Python, byte-identical) "
@@ -187,7 +215,12 @@ REGISTRY = [
      N,
      "OK. Negated by exact path. The frozen operating point the LIVE 0.50 release floor is "
      "set against; its reader (`read_lock`) refuses when the pin moves off v1. Its .md face "
-     "is generated beside it and is a view of the same record, not a second source."),
+     "is generated beside it and is a view of the same record, not a second source. NO "
+     "LONGER LIVE as of 2026-08-11: mining_pins.LOCK_PATH moved to v3's and this is now the "
+     "record of what v1's cuts bought, kept because a rollback makes it live again. Its "
+     "derivation source changed with the flip \u2014 lock_mining_gate now derives from the "
+     "pinned head's volume_match_mining.json, so a re-derivation of THIS file is no longer "
+     "possible without moving the pin back, which is the correct coupling."),
     ("data/render_mode_head/v2/{config.json,metrics.json,per_seed.json,report.{md,json}}",
      "classifier/train_mining_head_v2.py, tools/mining/mining_v2_reads.py", DUR,
      "a full GPU finetune + a GPU eval pass — reproducible in recipe from the committed "

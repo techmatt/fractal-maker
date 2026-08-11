@@ -81,12 +81,14 @@ def test_the_sitting_is_registered_train_side_before_it_is_built():
 # =========================================================================== #
 # the suggestion cuts
 # =========================================================================== #
+@pytest.mark.stage2_pinned
 def test_the_frozen_intake_cuts_reproduce_from_the_slice_they_were_fitted_on():
     """Freeze in records, DERIVE IN CODE. The constant is the record; `derive_intake_cuts` is
     the derivation, and this asserts they have not drifted apart."""
     assert ST.derive_intake_cuts() == ST.INTAKE_CUTS
 
 
+@pytest.mark.stage2_pinned
 def test_the_intake_cuts_reproduce_the_intake_prior_and_the_dramatic_cuts_do_not():
     """The whole reason for a second cut set: prior-matching is the objective, and only the
     fitted cuts achieve it ON THIS POPULATION. Non-vacuous — it also asserts the two rules

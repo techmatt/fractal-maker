@@ -69,14 +69,33 @@ K_TIERS = 3          # 1 bad / 2 okay / 3 good — PINNED by the head (train_min
 #
 # CIRCULARITY, NAMED. The slice's labels were collected on a CORRECTION sheet whose rows were
 # served with a suggestion prefilled from `cuts_from_prior`, and Matt agreed with 892 of 960
-# (92.9%). So this re-derivation is anchored to its predecessor and mostly reproduces it —
+# (92.9%). So the FIRST fit was anchored to its predecessor and mostly reproduced it —
 # (1.389, 1.933) -> (1.317, 1.873). It is still strictly better evidence than a prior read off
 # a corpus whose images no longer exist, and the honest description of the number is "the
-# cutpoints that reproduce Matt's OWN tier distribution on the one labeled slice v1 has".
-CUTS = (1.317, 1.8727)
+# cutpoints that reproduce Matt's OWN tier distribution on the one labeled slice this head
+# has". The anchoring is to the SERVED suggestion, not to a head, so it does not decay when
+# the head moves — the labels are what they are.
+#
+# RE-DERIVED 2026-08-11 at the mining head flip (v1 -> v3, `prompts/flip_29.md`) on the SAME
+# 960 rows, re-scored under v3. `expected_tier` is a sum of CORN marginals and is train-prior
+# calibrated, so the v1 cuts (1.317, 1.8727) are points on v1's readout scale and were
+# serving a suggestion histogram nobody chose the moment the pin moved
+# (`classifier_retrain_protocol.md` §5a). The move is large — the v3 readout sits much higher
+# on this population — and it is a scale move, not a quality claim.
+CUTS = (1.6671, 2.352)
 
 FIT_SLICE_BATCH = "2026-08-06_render_mode_fresh_sheet_v1"
 FIT_SLICE_LABELS = "labels/render_mode_fresh_sheet_v1.json"
+
+# WHERE THE SLICE'S READOUT COMES FROM, per head version — the mining twin of
+# `suggest_tier.INTAKE_PRED_SOURCES`, and the same rule: the batch row carries the readout of
+# the head that BUILT the sheet (`pred`, v1's), every later head's is a sibling record written
+# by `tools/scoring/rescore_fit_slices.py`, and an unregistered head RAISES rather than
+# fitting cuts to another head's numbers.
+PRED_SOURCES = {
+    "v1": ("in_row", "pred"),
+    "v3": ("sidecar", "data/render_mode_head/v3/fit_slice_pred.json"),
+}
 
 # The surviving human record. Flat `{image_id: 1..3}` maps; their crops and the manifest that
 # gave the ids meaning are gone, which is why these can supply a PRIOR and not a slice.
@@ -153,12 +172,19 @@ def suggest_all(pred, cuts) -> list:
     return [tier_from_pred(float(p), cuts) for p in pred]
 
 
-def fit_slice(root: Path = ROOT) -> tuple:
+def live_head_version() -> str:
+    """The head these cuts are cutpoints ON, read off the pin at CALL time."""
+    from tools.mining import mining_pins as MP           # noqa: PLC0415  (torch-free)
+    return MP.HEAD_VERSION
+
+
+def fit_slice(root: Path = ROOT, head: str | None = None) -> tuple:
     """`(pred, tiers)` — the labeled slice `CUTS` was fitted on, derived at call time.
 
     Raises on an absent source rather than fitting to the remainder: cutpoints read off part
     of a slice are not visibly wrong (`tier_prior`'s own reasoning, applied to the thing that
-    replaced it)."""
+    replaced it). Raises on an UNREGISTERED HEAD for the sibling reason — a cut on a CORN
+    marginal sum is a point on one head's scale."""
     images = root / "data" / "render_mode_corpus" / "batches" / FIT_SLICE_BATCH / "images.jsonl"
     labels = root / FIT_SLICE_LABELS
     for p in (images, labels):
@@ -167,6 +193,25 @@ def fit_slice(root: Path = ROOT) -> tuple:
                 f"[suggest-tier-mining] fit slice absent: {p}. CUTS was fitted on the WHOLE "
                 f"of {FIT_SLICE_BATCH}; a re-derivation over what survives would be a "
                 f"different number, not a smaller one.")
+    head = head or live_head_version()
+    src = PRED_SOURCES.get(head)
+    if src is None:
+        raise KeyError(
+            f"[suggest-tier-mining] no readout registered for head {head!r} "
+            f"(have {sorted(PRED_SOURCES)}). Re-score the fit slice under {head!r} "
+            f"(tools/scoring/rescore_fit_slices.py mining --ckpt ...) and register it here "
+            f"rather than fitting to another head's numbers.")
+    kind, ref = src
+    readout = None
+    if kind == "sidecar":
+        sc = root / ref
+        if not sc.exists():
+            raise SystemExit(
+                f"[suggest-tier-mining] readout sidecar absent: {ref}. It is a tracked "
+                f"durable record; write it with `uv run python "
+                f"tools/scoring/rescore_fit_slices.py mining --ckpt <the pinned head>`.")
+        readout = json.loads(sc.read_text(encoding="utf-8"))["pred"]
+
     lab = json.loads(labels.read_text(encoding="utf-8"))
     pred, tiers = [], []
     for line in images.read_text(encoding="utf-8").splitlines():
@@ -176,14 +221,14 @@ def fit_slice(root: Path = ROOT) -> tuple:
         t = lab.get(row["image_id"])
         if t is None:
             continue
-        pred.append(float(row["pred"]))
+        pred.append(float(row[ref]) if readout is None else float(readout[row["image_id"]]))
         tiers.append(int(t))
     return pred, tiers
 
 
-def derive_cuts(root: Path = ROOT, ndigits: int = 4) -> tuple:
+def derive_cuts(root: Path = ROOT, ndigits: int = 4, head: str | None = None) -> tuple:
     """Re-derive `CUTS` from the live artifacts, so the frozen constant is checkable."""
-    pred, tiers = fit_slice(root)
+    pred, tiers = fit_slice(root, head=head)
     return tuple(round(c, ndigits) for c in fit_cuts(pred, tiers, K_TIERS))
 
 
@@ -206,7 +251,7 @@ def fit_derivation(cuts, pred, ckpt: str, head_version: str, root: Path = ROOT) 
                       "per-batch `cuts_from_prior` fallback, which had no labeled slice to "
                       "fit and therefore carried no information about a batch's absolute "
                       "quality level.",
-        "derived": "2026-08-10",
+        "derived": "2026-08-11",
         "deriver": "tools/mining/suggest_tier_mining.derive_cuts()",
         "fit_slice": {"batch": FIT_SLICE_BATCH, "labels": FIT_SLICE_LABELS,
                       "n": len(slice_pred),
@@ -215,10 +260,17 @@ def fit_derivation(cuts, pred, ckpt: str, head_version: str, root: Path = ROOT) 
                       "suggested_hist_on_the_fit_slice": {
                           str(t): fit_hist.get(t, 0) for t in range(1, K_TIERS + 1)}},
         "anchoring": "the fit slice's labels were collected on a CORRECTION sheet served with "
-                     "the previous (per-batch quantile) suggestion prefilled; agreement with "
-                     "what was served was 892/960 = 0.929, so these cuts are anchored to "
-                     "their predecessor and largely reproduce it "
-                     "((1.3893, 1.9331) -> (1.317, 1.8727)).",
+                     "the per-batch quantile suggestion prefilled; agreement with what was "
+                     "served was 892/960 = 0.929, so the FIRST fit was anchored to its "
+                     "predecessor and largely reproduced it "
+                     "((1.3893, 1.9331) -> (1.317, 1.8727) under v1). The anchoring is to the "
+                     "SERVED suggestion, not to a head, so it is unchanged by the "
+                     "2026-08-11 re-derivation under v3.",
+        "supersedes": {"cuts": [1.317, 1.8727], "head": "data/render_mode_head/v1/model_best.pt",
+                       "derived": "2026-08-10",
+                       "why_superseded": "the 2026-08-11 mining head flip (v1 -> v3). A cut "
+                                         "on a CORN marginal sum is a point on one head's "
+                                         "readout scale (classifier_retrain_protocol.md §5a)."},
         "head": {"ckpt": ckpt, "version": head_version},
         "realized_suggestion_hist": {str(t): served.get(t, 0) for t in range(1, K_TIERS + 1)},
         "realized_suggestion_shares": {str(t): (served.get(t, 0) / n if n else None)
