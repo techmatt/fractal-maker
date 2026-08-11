@@ -243,8 +243,13 @@ def build(rows, base, cand, seed_scores, pool, *, draws, seed, cand_dir=None) ->
         "command": f"uv run python tools/mining/mining_v3_reads.py "
                    f"--candidate-dir {cand_rel}",
         "arm": cand_cfg.get("arm", cand_dir.name),
+        # `selection_metric` is the (28b) fifth arm's dial and belongs beside the other three:
+        # an arm read without it looks identical to `dedup_weighted` in this block, which is
+        # exactly the confusion the arm exists to resolve.
         "arm_dials": {k: cand_cfg.get(k) for k in
-                      ("border_crop", "axis_crop", "uniform_weights", "row_weighting")},
+                      ("border_crop", "axis_crop", "uniform_weights", "row_weighting",
+                       "selection_metric")},
+        "candidate_selection": cand_cfg.get("selection"),
         "train_weight_by_kind": cand_cfg.get("train_weight_by_kind"),
         "heads": {"v1": {"ckpt": V1_CKPT, "role": "incumbent (LIVE pin)"},
                   "v3": {"ckpt": f"{cand_rel}/model_best.pt",

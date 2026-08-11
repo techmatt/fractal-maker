@@ -455,7 +455,7 @@ def load_ledger(spec: SheetSpec) -> dict:
         for line in p.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 rec = json.loads(line)
-                if (crops / f"{rec['image_id']}.jpg").exists():
+                if (crops / f"{rec['crop_stem']}.jpg").exists():
                     done[rec["unit_key"]] = rec
     return done
 
@@ -623,7 +623,7 @@ def run_render(spec: SheetSpec, args):
         model.record_fill(cell)
         with _ledger_path(spec).open("a", encoding="utf-8") as fh:
             fh.write(json.dumps({
-                "unit_key": uk, "image_id": stem_id, "cell": list(cell),
+                "unit_key": uk, "crop_stem": stem_id, "cell": list(cell),
                 "palette": palette, "palette_type": ptype,
                 "morph_cluster": clus, "palette_flavor": flavor, "render_style": style,
                 "cell_deficit": round(float(deficit), 6), "n_cell_options": n_opts,
@@ -758,7 +758,7 @@ def run_write(spec: SheetSpec, args):
     for i, s in enumerate(order):
         rec = done[s["unit_key"]]
         loc = s["loc"]
-        image_id = f"{spec.img_prefix}{i:04d}_{rec['image_id'][:8]}"
+        image_id = f"{spec.img_prefix}{i:04d}_{rec['crop_stem'][:8]}"
         rows.append({
             "image_id": image_id,
             "sheet_order": i,
@@ -769,7 +769,7 @@ def run_write(spec: SheetSpec, args):
             # correction mode iff a row carries `suggested_tier`, so their absence is what
             # makes the sheet blind, and it is enforced by test_blind_minibrot_sheet.py.
             "label": {"score": None, "labeler": None, "labeled_at": None},
-            "_unit_key": s["unit_key"], "_crop_stem": rec["image_id"],
+            "_unit_key": s["unit_key"], "_crop_stem": rec["crop_stem"],
         })
     assert len({r["image_id"] for r in rows}) == len(rows), "opaque ids collided"
     for r in rows:
@@ -920,9 +920,18 @@ def run_write(spec: SheetSpec, args):
                     "because there is nothing to accept.",
             "blind_rows": len(rows),
             "calibration_duplicates": 0,
+            # THREE DIFFERENT FILES, named explicitly because two of them are easy to
+            # confuse and the confusion lands at the END of a labeling sitting: the page
+            # downloads `scores.json`, `--scores` READS whatever you save that as, and the
+            # merge WRITES the sidecar (`labels/<generator_version>.json`, derived by
+            # `merge_sitting.sidecar_for` from this batch's own manifest). The re-verdict
+            # then reads the sidecar, never the export.
+            "export_download": "scores.json (the page's export button)",
+            "save_export_as": f"scratch/scores_{spec.batch_id}.json",
+            "sidecar_written": spec.labels_export,
             "merge": f"uv run python tools/wallpaper/merge_sitting.py "
                      f"--corpus wallpaper_corpus --batch {spec.batch_id} "
-                     f"--scores {spec.labels_export} --apply",
+                     f"--scores scratch/scores_{spec.batch_id}.json --apply",
             "then": f"uv run python tools/wallpaper/sheet_d_reverdict.py   "
                     f"# the one-command re-verdict, after labeling",
         },

@@ -121,9 +121,11 @@ def load_rows(require_crops: bool = True) -> tuple[list, dict]:
     sidecar = ROOT / SHEET.labels_export
     if not sidecar.exists():
         raise SystemExit(
-            f"[sheet-d] no labels at {sidecar}.\nLabel the sheet, then merge:\n"
+            f"[sheet-d] no labels at {sidecar}.\nLabel the sheet, save the page's export as "
+            f"scratch/scores_{SHEET.batch_id}.json, then merge:\n"
             f"  uv run python tools/wallpaper/merge_sitting.py --corpus wallpaper_corpus "
-            f"--batch {SHEET.batch_id} --scores {SHEET.labels_export} --apply")
+            f"--batch {SHEET.batch_id} "
+            f"--scores scratch/scores_{SHEET.batch_id}.json --apply")
     labels = json.loads(sidecar.read_text(encoding="utf-8"))
 
     rows, n_total, n_unlabeled = [], 0, 0
