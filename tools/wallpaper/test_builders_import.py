@@ -29,6 +29,7 @@ BUILDERS = [
     "build_fresh_sheet.py",
     "build_colorize_sheet.py",
     "build_wallpaper_sitting.py",
+    "build_blind_minibrot_sheet.py",
 ]
 
 

@@ -542,9 +542,6 @@ def run_render(spec: SheetSpec, args):
         cell = tuple(rec["cell"])
         model.record_attempt(cell)
         model.record_fill(cell)
-    rng = np.random.default_rng([spec.cell_seed, 3])
-    for _ in range(len(done)):
-        rng.random()                          # keep the choice stream aligned on resume
 
     crops = spec.batch_dir / "crops"
     crops.mkdir(parents=True, exist_ok=True)
@@ -568,6 +565,13 @@ def run_render(spec: SheetSpec, args):
         t0 = time.time()
         uk, loc = s["unit_key"], s["loc"]
         ftype, clus = s["partition"], tags[uk]
+        # PER-LOCATION rng, not a shared stream. `choose_option`'s softmax tie-break consumes
+        # a draw whose width depends on how many options that cell had, so a shared stream
+        # cannot be re-aligned on resume by counting completed rows — the 2026-08-05 sibling
+        # advances it with `rng.random()` per done row, which is an approximation nobody can
+        # check. Seeding off the unit key makes a resumed run byte-identical to an
+        # uninterrupted one, and the flavor sequence still varies across locations.
+        rng = np.random.default_rng([spec.cell_seed, _unit_seed(uk)])
         choice = C.choose_option(model, ftype, clus, flavors, RENDER_STYLES, rng)
         if choice is None:
             failures.append({"unit_key": uk, "stage": "cell", "error": "all cells capped"})
@@ -657,6 +661,13 @@ def crop_stem(spec: SheetSpec, unit_key: str) -> str:
     import hashlib
     return hashlib.blake2b(f"{spec.batch_id}|{unit_key}".encode(),
                            digest_size=8).hexdigest()
+
+
+def _unit_seed(unit_key: str) -> int:
+    """A stable 32-bit seed from a unit key. `hash()` is salted per process on Windows and
+    would make a resumed run draw different cells than the run it resumes."""
+    import hashlib
+    return int.from_bytes(hashlib.blake2b(unit_key.encode(), digest_size=4).digest(), "big")
 
 
 def _wipe_label_field(loc, fields_dir: Path):
