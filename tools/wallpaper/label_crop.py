@@ -1,8 +1,8 @@
 """Shared label-crop rendering spec for the wallpaper batches (Recipe-2 tail).
 
 Single source of truth for the LOCKED wallpaper label-crop geometry + the two
-render primitives that were previously copy-pasted across build_bootstrap.py,
-build_humanq3.py, and rerender_bootstrap_ss2.py:
+render primitives that were previously copy-pasted across build_bootstrap.py and
+build_humanq3.py:
 
   * the constants LABEL_W/H/SS, LABEL_FILTER, JPG_Q,
   * ensure_label_field  — dump (or reuse) the ss2 label-geometry smooth field,
@@ -14,9 +14,9 @@ is deliberately kept distinct from render_corpus_crop.
 
 The field-cache directory is a PARAMETER of ensure_label_field (default
 scratch/wallpaper_fields, shared by the bootstrap + humanq3 build scripts);
-rerender_bootstrap_ss2 passes its own scratch/wallpaper_fields_ss2 so its ss2 cache
-stays separate from the old ss4-era stems. The cache location never affects crop
-bytes — the field is a pure function of loc + geometry + maxiter.
+rerender_batch_crops passes its own scratch/wallpaper_rerender_fields so a rebuild's
+per-location dumps stay separate from the build-era stems. The cache location never
+affects crop bytes — the field is a pure function of loc + geometry + maxiter.
 """
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def ensure_label_field(loc, fields_dir=DEFAULT_FIELDS_DIR, timeout_s=None):
     This is the expensive Rust pass — one per location, shared by that location's
     picks (coloring-independent). `fields_dir` is the cache directory; distinct
     directories never change the rendered field (pure function of loc + geometry +
-    maxiter), so callers may keep separate caches (e.g. the ss2 rerender).
+    maxiter), so callers may keep separate caches (e.g. a whole-batch rebuild).
 
     `timeout_s` is a per-dump backstop, default OFF so the three 2026-07/08 builders keep
     their exact behaviour. A batch driver that runs hundreds of these in a worker pool should

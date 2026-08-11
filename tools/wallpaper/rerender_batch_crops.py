@@ -11,9 +11,10 @@ that one-off generalized to whole batches so the next rebuild is a command, not 
 script.
 
 Generalizes `rerender_bootstrap_ss2.py` (which re-rendered ONE batch to change its
-ss level) and `scratch/wallpaper_eval_revival/render_eval_crops.py` (which rendered a
-ROW SUBSET to a side directory). Here: named batches, crops written back into
-`<batch>/crops/` where the trainer reads them, existing crops skipped.
+ss level — deleted 2026-08-11, superseded here; `retired.md`) and
+`scratch/wallpaper_eval_revival/render_eval_crops.py` (which rendered a ROW SUBSET to a
+side directory). Here: named batches, crops written back into `<batch>/crops/` where
+the trainer reads them, existing crops skipped.
 
     uv run python tools/wallpaper/rerender_batch_crops.py --list
     uv run python tools/wallpaper/rerender_batch_crops.py july --limit 2   # bounded e2e

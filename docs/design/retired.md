@@ -772,3 +772,21 @@ an item's evidence, the line points at it rather than restating it.
     now gone. The path was already wiped, so nothing changes today, and the ledger row in
     `tests/test_scratch_dependency_allowlist.py` says so instead of naming a live producer.
   `[decision: prompts/closure_sweep.md §2, Matt, 2026-08-11]`
+
+- **2026-08-11 — `tools/wallpaper/rerender_bootstrap_ss2.py`**, the one-batch ss2 re-render.
+  The entry immediately above named it as NOT deleted *because it had not been evidence-checked*;
+  this is that check, and it came back dead. Zero importers, no `__main__` caller, no subprocess
+  or path-load reference, and nothing in `data/`, `docs/`, the batch's own `batch.json`, or any
+  registry names it as a producer or rebuild command — the only mentions were three docstrings
+  and the index rows, all now updated.
+  * **Superseded, not merely unused.** `rerender_batch_crops.py` is the live generalization: it
+    lists the very batch (`2026-07-05_wallpaper_bootstrap_v1`) in its `BatchSpec` group, writes
+    crops back into `<batch>/crops/` through the same `label_crop` primitives, and is the rebuild
+    command `classifier/train_wallpaper_v4.py` prints on a missing-crop precondition.
+  * **Its reason to exist is now a constant.** The script existed to move ONE batch from ss4 to
+    ss2 so ss-level would stop correlating with tier; `label_crop.LABEL_SS = 2` is the locked
+    spec for every wallpaper batch, so a fresh rebuild reproduces its output by default.
+  * **No orphans.** Its only private state was `scratch/wallpaper_fields_ss2`, a disposable field
+    cache with no other reader; `label_crop`'s `fields_dir` parameter stays, used by the
+    generalization.
+  `[decision: prompts/delete_rerender_bootstrap.md, Matt, 2026-08-11]`
