@@ -355,6 +355,15 @@ REGISTRY = [
      "defined nowhere. The tree now carries an exact negation (!/data/render_mode_corpus/ "
      "with crops/, _fields/ and _progress_ledger.jsonl re-excluded) and a REBUILT corpus "
      "under it (see the two rows below), so the next batch cannot repeat this."),
+    ("data/render_mode_corpus/gate_passers_v4b.json",
+     "tools/mining/build_gate_passers.py", DUR,
+     "re-derivable EXACTLY: score the same tracked 2026-07-09_wallpaper_headbatch_dramatic_v1 "
+     "crops with the live wallpaper pin at the live gate (fp32). No census exists for this "
+     "head — the counts are reported, not checked, and never re-baselined from v3's", N,
+     "OK. The 2026-08-11 v4b refresh of the row below: 374 rows / 102 locations at the "
+     "volume-matched 0.6052 gate, against v3's 401 / 112 at 0.90. It does NOT replace v3 — "
+     "the three mining corpora and their unserved-pair exclusions are defined against the v3 "
+     "universe, so both files stay and `build_mining_sheet.GATE_PASSERS` still names v3."),
     ("data/render_mode_corpus/gate_passers_v3.json",
      "tools/mining/build_gate_passers.py", DUR,
      "re-derivable EXACTLY: score the tracked 2026-07-09_wallpaper_headbatch_dramatic_v1 "

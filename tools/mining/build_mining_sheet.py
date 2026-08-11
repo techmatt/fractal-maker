@@ -86,6 +86,14 @@ except Exception:                                        # noqa: BLE001
 
 EXE = str(ROOT / "target" / "release" / "fractal-generator.exe")
 POOL_CMAPS = str(ROOT / "data" / "palettes" / "pool_colormaps.json")
+# PINNED TO v3 ON PURPOSE, and the pin is now a choice rather than the only file there
+# (2026-08-11). `build_gate_passers.py` writes one population per HEAD version, and the
+# wallpaper flip to v4b produced `gate_passers_v4b.json` — 374 rows / 102 locations at the
+# volume-matched 0.6052 gate, against v3's 401 / 112 at 0.90. This constant stays on v3
+# because three mining corpora are already cut from that universe and their "unserved
+# (location, mode) pair" exclusions are defined against it: moving the pin would silently
+# redefine what has and has not been served. Repointing is a corpus decision, made once with
+# its own sheet, not a side effect of a head flip.
 GATE_PASSERS = ROOT / "data" / "render_mode_corpus" / "gate_passers_v3.json"
 CORPUS = ROOT / "data" / "render_mode_corpus"
 

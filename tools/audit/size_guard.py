@@ -282,7 +282,9 @@ REGISTRY: list[Entry] = [
           "data/render_mode_corpus/batches/<id>/crops/ IN-TREE (it does not route through "
           "artifacts.resolve, same as the retired render_mode_pilot writers), and the v1 "
           "render-mode head they feed is the LIVE strange-mode gate. The tracked half is "
-          "gate_passers_v3.json (462 kB) + images.jsonl + batch.json; crops/, _fields/ and "
+          "gate_passers_<head>.json (v3 462 kB + the 2026-08-11 v4b refresh, 432 kB — one "
+          "population per head version, neither replacing the other) + images.jsonl + "
+          "batch.json; crops/, _fields/ and "
           "_progress_ledger.jsonl are gitignored by exact path. NO LONGER a forward "
           "declaration: the flag was dropped when the 2026-08-06 batch landed 545 MB of "
           "crops here, which is the condition it was declared against."),

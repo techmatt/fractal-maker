@@ -24,10 +24,18 @@ re-rendering would re-derive the population under today's colour tail and quietl
 boundary. The crops are already at the label-crop pins (1280x720 ss2 lanczos3), which is the
 resolution v3's deploy transform expects.
 
-OUTPUT — `data/render_mode_corpus/gate_passers_v3.json`, `paths.durable()`, tracked. Self
-describing: the `meta` block records the source batch, head pin, threshold, transform, the
-expected/realized counts and the command, so "record how it was built" lives IN the artifact
-rather than beside it where the two can drift apart.
+OUTPUT — `data/render_mode_corpus/gate_passers_<head version>.json`, `paths.durable()`,
+tracked, ONE FILE PER HEAD (2026-08-11). Self describing: the `meta` block records the source
+batch, head pin, threshold, transform, the expected/realized counts and the command, so
+"record how it was built" lives IN the artifact rather than beside it where the two can drift
+apart.
+
+WHY THE NAME CARRIES THE HEAD AND NOT AN ARTIFACT VERSION. The gate is a cut on a
+train-prior-calibrated CORN marginal, so the passing set is a property of (head, threshold)
+and of nothing else — v4b's volume-matched 0.6052 keeps a DIFFERENT set than v3's 0.90, and
+overwriting one with the other would silently move the universe under three frozen mining
+corpora that record which population they were cut from. The old file therefore stays where
+it is; a flip ADDS a file. The census check is keyed the same way (`CENSUS`).
 
     uv run python tools/mining/build_gate_passers.py            # write (verifies counts)
     uv run python tools/mining/build_gate_passers.py --report   # recount from disk, no write
@@ -55,15 +63,39 @@ from tools.wallpaper import wallpaper_pins as WP        # noqa: E402
 
 SOURCE_BATCH = "2026-07-09_wallpaper_headbatch_dramatic_v1"
 SOURCE_DIR = ROOT / "data" / "wallpaper_corpus" / "batches" / SOURCE_BATCH
-OUT_REL = "data/render_mode_corpus/gate_passers_v3.json"
+
+# THE OUTPUT PATH IS KEYED ON THE HEAD VERSION, DERIVED FROM THE LIVE PIN (2026-08-11). The
+# "v3" in the original name was never the artifact's version — it is the HEAD's, and writing
+# a v4b population into a file called `gate_passers_v3.json` would be a record that lies about
+# which head drew it. One file per head, so the frozen mining corpora keep naming the exact
+# population they were cut from.
+OUT_REL_FMT = "data/render_mode_corpus/gate_passers_{version}.json"
+
+
+def out_rel(version: str | None = None) -> str:
+    return OUT_REL_FMT.format(version=version or WP.HEAD_VERSION)
+
+
+OUT_REL = out_rel()
 
 # The census recorded while the old path still worked — the two counts the July samplers
 # print about the file they read. This is the whole verification (verification_practice.md
 # §3, "assert the COUNT against an independently recorded census").
-EXPECT_ROWS = 401
-EXPECT_LOCS = 112
-CENSUS_SOURCE = ("tools/render_mode_pilot/build_sample.py header ('gate-passers (401 rows)') "
-                 "and build_scale_sample.py docstring ('the 112 v3-gate-passer locations')")
+#
+# IT IS A FACT ABOUT ONE HEAD, so it is keyed on one. v3's counts verify a v3 REGENERATION and
+# say nothing about any other head's population: the gate is a cut on a train-prior-calibrated
+# CORN marginal, so v4b's volume-matched 0.6052 is a different cut on a different scale and the
+# set it keeps has no recorded census to check against. A head with no census entry is built
+# with the counts REPORTED and unchecked (`census_source: null` in the artifact) rather than
+# checked against a number nobody measured — and never by re-baselining v3's, which is the one
+# move `build`'s error message forbids.
+CENSUS = {
+    "v3": (401, 112,
+           "tools/render_mode_pilot/build_sample.py header ('gate-passers (401 rows)') "
+           "and build_scale_sample.py docstring ('the 112 v3-gate-passer locations')"),
+}
+EXPECT_ROWS, EXPECT_LOCS, CENSUS_SOURCE = CENSUS.get(
+    WP.HEAD_VERSION, (0, 0, None))
 
 
 def log(msg):
@@ -162,6 +194,14 @@ def build(expect_rows: int, expect_locs: int, threshold: float) -> dict:
         })
 
     locs = {p["location_key"] for p in passers}
+    if not passers:
+        # A derived set can pass by evaluating EMPTY (verification_practice.md §5). With no
+        # recorded census for this head the count check is off, so this is the only thing
+        # standing between an unreadable pin and a zero-row "population".
+        raise SystemExit(
+            f"[gate-passers] ZERO rows pass p_ge3 > {threshold} under head "
+            f"{WP.HEAD_VERSION} over {len(rows)} scanned crops. That is not a population; "
+            f"check the pin and the threshold before writing anything.")
     ok_rows = (expect_rows in (0, len(passers)))
     ok_locs = (expect_locs in (0, len(locs)))
     if not (ok_rows and ok_locs):
@@ -177,10 +217,11 @@ def build(expect_rows: int, expect_locs: int, threshold: float) -> dict:
 
     return {
         "meta": {
-            "what": "wallpaper-head-v3 gate-passer set — the population the render-mode "
-                    "(mining) corpus samplers draw from: one row per (location, palette) "
-                    "whose stored 1280x720 crop the deployed wallpaper head scores above "
-                    "the emission gate.",
+            "what": f"wallpaper-head-{WP.HEAD_VERSION} gate-passer set — the population the "
+                    "render-mode (mining) corpus samplers draw from: one row per (location, "
+                    "palette) whose stored 1280x720 crop the deployed wallpaper head scores "
+                    "above the emission gate.",
+            "artifact": out_rel(),
             "regenerated": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "replaces": "scratchpad/gate_passers_v3.json (disposable tree; lost in the "
                         "derived-artifact wipe — scratch/stage2_label_audit/report.md)",
@@ -202,16 +243,19 @@ def build(expect_rows: int, expect_locs: int, threshold: float) -> dict:
                      "pin": "tools/wallpaper/wallpaper_pins.GATE_THRESHOLD"},
             "deploy_transform": "classifier.data.Transform(train=False) — 1280x720 -> "
                                 "384x224 bicubic stretch + normalize (present.rs's JPG path)",
-            "precision": "fp32, no autocast. MEASURED: the same 1000 crops under "
-                         "torch.autocast give 403 passers, not 401 — two rows sit close "
-                         "enough to p_ge3 == 0.90 that fp16 accumulation moves them across "
-                         "the gate. A cut needs full precision; a ranking does not.",
+            "precision": "fp32, no autocast. MEASURED under v3 @ 0.90: the same 1000 crops "
+                         "under torch.autocast give 403 passers, not 401 — two rows sit "
+                         "close enough to the gate that fp16 accumulation moves them across "
+                         "it. A cut needs full precision; a ranking does not.",
             "verified_against_census": {
                 "expected_rows": expect_rows, "expected_locations": expect_locs,
                 "realized_rows": len(passers), "realized_locations": len(locs),
                 "census_source": CENSUS_SOURCE,
-                "note": "the two counts the July samplers printed about the file they read, "
-                        "recorded while the old path still worked",
+                "checked": bool(expect_rows or expect_locs),
+                "note": "the counts a census recorded for THIS head version "
+                        "(`CENSUS`), or — when that head has no entry — the realized "
+                        "counts reported and unchecked. A census is a fact about one head's "
+                        "cut on one scale and is never re-baselined onto another.",
             },
             "library_records_not_used": {
                 "path": "data/library/library_records.jsonl",
@@ -248,7 +292,8 @@ def report(path: Path) -> dict:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Regenerate the wallpaper-v3 gate-passer set.")
+    ap = argparse.ArgumentParser(
+        description=f"Regenerate the wallpaper-{WP.HEAD_VERSION} gate-passer set.")
     ap.add_argument("--report", action="store_true", help="recount the artifact on disk, no write")
     ap.add_argument("--threshold", type=float, default=WP.GATE_THRESHOLD)
     ap.add_argument("--expect-rows", type=int, default=EXPECT_ROWS, help="0 disables the check")
@@ -272,8 +317,11 @@ def main():
     log("=" * 74)
     log(f"GATE-PASSER SET REGENERATED -> {rep['path']}  ({out.stat().st_size/1e3:.0f} kB)")
     log("=" * 74)
-    log(f"rows {rep['rows']} / locations {rep['locations']}  "
-        f"(census {args.expect_rows}/{args.expect_locs} — MATCH)")
+    census = (f"census {args.expect_rows}/{args.expect_locs} — MATCH"
+              if (args.expect_rows or args.expect_locs)
+              else f"NO recorded census for head {WP.HEAD_VERSION} — counts reported, "
+                   f"not checked")
+    log(f"rows {rep['rows']} / locations {rep['locations']}  ({census})")
     log(f"families (locations): {rep['by_family_locations']}")
     log(f"palettes {rep['palettes']}  ·  rows/location {rep['rows_per_location']}  ·  "
         f"p_ge3 {rep['p_ge3']}")
