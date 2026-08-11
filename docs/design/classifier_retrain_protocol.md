@@ -152,6 +152,60 @@ permanently unmeasurable.
 classifier/train_wallpaper_v4b.split_v4b, tools/mining/mining_corpus.load_corpus;
 test: tools/mining/test_mining_corpus.py, tools/wallpaper/test_wallpaper_v4b_split.py]`
 
+### 2b. ANCHORED correction-sheet labels are TRAIN-SIDE ONLY
+
+> **An incumbent-vs-challenger eval slice must come from BLIND or PRE-INCUMBENT labels. A
+> slice served with the incumbent's suggestions measures agreement with the incumbent, never
+> quality — and no from-scratch challenger can win it.**
+
+This is a different disqualification from §2's biased-in-eval, and a slice can pass that one
+and still fail this. §2 is about how the POPULATION was *selected*; §2b is about how the
+LABELS were *elicited*. A correction sheet serves each row with the incumbent's decoded tier
+prefilled and the page ordered by the incumbent's continuous score, so the human's answer is
+a **correction of the incumbent** and the incumbent's own score is a predictor of it by
+construction. Confirming a suggestion is one keystroke and overriding it is a decision, which
+is exactly the asymmetry a correction sheet is built to exploit for label throughput — and it
+is fatal on the eval side.
+
+The measured size of the effect, on `2026-08-10_wallpaper_correction_v2` (sheet A):
+
+| | value |
+|---|---|
+| labels returned equal to the served suggestion | **815 / 960 = 84.9%** |
+| within one tier of it | 99.8% |
+| on the minibrot/maneuver bucket alone | 85.3% |
+| v3 AUC≥3 **there** | **0.965** |
+| v3 AUC≥3 on `humanq3` / `dramatic` (labels predate v3) | 0.746 / 0.750 |
+
+The (28) wallpaper retrain put that bucket on the eval side as its MOTIVATING arm. v4b lost
+clause (b) — the arm the retrain existed for — and the loss says nothing about v4b: 0.965 is
+not a quality number, and a head that never served those suggestions can only score below it.
+`batch_registry` had already written the reason down for this exact batch before it was built
+("a tier rate measured on it is a statement about agreement with v3 and never a base rate …
+which is exactly what makes it unusable on the eval side"), so the registration was right and
+the slice choice ignored it.
+
+**The rule.** An anchored batch may train, and should — correcting the incumbent is the
+cheapest way to buy the labels it is most wrong about. It may not be an eval arm against the
+head that anchored it, and it may not be one against a challenger to that head either. Where
+a comparison needs the population an anchored sheet covers, buy the eval slice separately:
+**fresh locations, blind serving (no prefilled tier, no score-ordered page, shuffled), and
+neither head touching the draw or the substrate** — `tools/wallpaper/build_blind_minibrot_
+sheet.py` (sheet D) is the worked instance, stamped `eval_only` at build time so it cannot
+drift onto the train side later.
+
+Two corollaries worth stating because both were nearly missed:
+- **Anchoring is per-HEAD, not per-batch.** A sheet anchored to v3 is unusable for v3-vs-v4b
+  and equally unusable for v3-vs-v5. The disqualification travels with the head that
+  suggested, and every descendant is compared against that head.
+- **A pre-incumbent batch is fine.** `humanq3` and `dramatic` were labeled before v3 existed,
+  which is why they are the two clean arms in the same report. "Blind" and "predates the
+  incumbent" are both acceptable; "corrected under the incumbent" is not.
+
+`[code: tools/scoring/batch_registry (the wallpaper_correction_sitting registration),
+tools/wallpaper/build_blind_minibrot_sheet.py, tools/wallpaper/sheet_d_reverdict.py;
+test: tools/wallpaper/test_blind_minibrot_sheet.py]`
+
 ## 3. Pre-register the success bar before training
 
 Set the credible-win bar **before** training, from **paired DeLong power** for the

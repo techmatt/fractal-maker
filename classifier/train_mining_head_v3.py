@@ -33,6 +33,12 @@ WHAT CHANGES, all four consequences of the corpus finally existing:
      boundary `mining_gate` actually cuts at. v1 selected on >=2. Recorded in
      `config.selection`.
 
+     `--selection-metric ap_ge2` is the (28b) FIFTH ARM and the only reason this is a dial
+     rather than a constant: it puts v1's own objective on an otherwise identical v3 arm, so
+     "v1 wins the >=2 boundary because it was SELECTED on it" becomes a one-flag test instead
+     of the last surviving explanation. Both objectives are declared in `SELECTION_METRICS`
+     above the code that computes either.
+
 STAGED, NOT ADOPTED. This writes `data/render_mode_head/v3/` and moves NOTHING: no pin, no
 gate, no floor, no lock. The winner-rule verdict against v1 is a separate two-checkpoint
 harness (`tools/mining/mining_v3_reads.py`) because a head must be compared on the same
@@ -40,6 +46,8 @@ crops through one scorer, which a trainer cannot do.
 
     uv run python -m classifier.train_mining_head_v3 --seeds "0 1 2 3 4"
     uv run python -m classifier.train_mining_head_v3 --seeds "0 1 2" --epochs 2   # bounded
+    uv run python -m classifier.train_mining_head_v3 --selection-metric ap_ge2 \
+        --arm ap2_selected --out-dir data/render_mode_head/v3_ap2      # the (28b) fifth arm
 
 Outputs -> data/render_mode_head/v3/ (per-seed under v3/seed_<s>/).
 """
@@ -75,11 +83,26 @@ from tools.mining.mining_corpus import (label_hist, load_corpus,       # noqa: E
 
 OUT_DIR = ROOT / "data" / "render_mode_head" / "v3"
 
-# The selection objective, fixed ABOVE the code that computes it so it cannot be chosen
-# after a number is seen. See §4 of the docstring.
-SELECTION_METRIC = "ap_ge3"
-SELECTION_TEXT = ("max eval AP>=3 (marginal P>=3) on the deduplicated pooled eval side; "
-                  "full schedule, no early stop")
+# The selection objective. TWO of them now, and both are fixed ABOVE the code that computes
+# them so neither can be chosen after a number is seen. `--selection-metric` picks which one
+# a run uses; the DEFAULT is `ap_ge3` (§4 of the docstring) and every arm run before
+# 2026-08-11 used it.
+#
+# `ap_ge2` is the (28b) FIFTH ARM — the one-flag test of the objective story the four
+# geometry/weighting arms left as the only surviving explanation. v1 selects on AP>=2 and
+# every v3 arm selected on AP>=3; the four arms then won >=3 and lost >=2 in all five
+# failing cells, which is exactly what "v1 is optimised for the boundary v3 loses" predicts.
+# Nothing else about the arm moves: same corpus, same split, same near-dup weighting, same
+# geometry, same eval slice, same five seeds. Only the epoch each seed's checkpoint is taken
+# at.
+SELECTION_METRICS = {
+    "ap_ge3": "max eval AP>=3 (marginal P>=3) on the deduplicated pooled eval side; "
+              "full schedule, no early stop",
+    "ap_ge2": "max eval AP>=2 (marginal P>=2, 'not bad') on the deduplicated pooled eval "
+              "side; full schedule, no early stop — v1's OWN objective, the (28b) fifth arm",
+}
+SELECTION_METRIC = "ap_ge3"                      # the default; `--selection-metric` overrides
+SELECTION_TEXT = SELECTION_METRICS[SELECTION_METRIC]
 
 # A mode needs this many eval good rows before its per-mode AP is a CLAIM rather than a
 # direction. v1 hardcoded its rich/directional lists against a corpus that no longer exists;
@@ -91,6 +114,7 @@ log = logging.getLogger("train_mining_head_v3")
 
 def train_one_seed(seed, tr, ev, weights, args, device, train_tf, deploy_tf, cfg, seed_dir):
     seed_dir.mkdir(parents=True, exist_ok=True)
+    sel_metric = cfg["selection_metric"]
     set_seed(seed)
 
     model = build_mining_model(args.drop_rate, args.drop_path_rate, pretrained=True).to(device)
@@ -117,6 +141,7 @@ def train_one_seed(seed, tr, ev, weights, args, device, train_tf, deploy_tf, cfg
     eval_labels = np.asarray([r.label for r in ev])
 
     best_sel, best_epoch = -1.0, -1
+    best_ap = {"ap_ge2": None, "ap_ge3": None}
     best_state = best_cond = best_marg = best_sum = None
     history = []
     t_start = time.time()
@@ -140,17 +165,24 @@ def train_one_seed(seed, tr, ev, weights, args, device, train_tf, deploy_tf, cfg
         cond, marg, ssum = predict_all(model, eval_loader, len(ev), device)
         ap_nb = _ap((eval_labels >= 2).astype(int), marg[:, 0])
         ap_gd = _ap((eval_labels >= 3).astype(int), marg[:, 1])
-        sel = -1.0 if (ap_gd is None or not np.isfinite(ap_gd)) else float(ap_gd)
+        # The objective is whichever boundary this ARM declared, read off the arg rather than
+        # the module constant: an arm's checkpoint is taken at the epoch its OWN objective
+        # peaks, and both APs are logged either way so the two arms stay readable side by side.
+        raw = ap_gd if sel_metric == "ap_ge3" else ap_nb
+        sel = -1.0 if (raw is None or not np.isfinite(raw)) else float(raw)
         history.append({"epoch": epoch, "train_loss": train_loss,
                         "ap_not_bad": float(ap_nb), "ap_good": float(ap_gd),
-                        "selection_metric": sel})
+                        "selection_metric_key": sel_metric, "selection_metric": sel})
+        star3, star2 = ("*", " ") if sel_metric == "ap_ge3" else (" ", "*")
         log.info(f"[seed {seed}] epoch {epoch:2d}  loss {train_loss:.4f}  "
-                 f"AP>=3 {ap_gd:.4f}*  AP>=2 {ap_nb:.4f}  ({time.time()-t0:.1f}s)")
+                 f"AP>=3 {ap_gd:.4f}{star3}  AP>=2 {ap_nb:.4f}{star2} "
+                 f"({time.time()-t0:.1f}s)")
         if sel > best_sel:
             best_sel, best_epoch = sel, epoch
+            best_ap = {"ap_ge2": float(ap_nb), "ap_ge3": float(ap_gd)}
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
             best_cond, best_marg, best_sum = cond, marg, ssum
-    log.info(f"[seed {seed}] best epoch {best_epoch}: AP>=3 {best_sel:.4f} "
+    log.info(f"[seed {seed}] best epoch {best_epoch}: {sel_metric} {best_sel:.4f} "
              f"(wall {time.time()-t_start:.0f}s)")
 
     seed_cfg = dict(cfg, seed=seed, best_epoch=best_epoch)
@@ -170,7 +202,12 @@ def train_one_seed(seed, tr, ev, weights, args, device, train_tf, deploy_tf, cfg
     gc.collect()
     if device == "cuda":
         torch.cuda.empty_cache()
-    return ({"seed": seed, "best_epoch": best_epoch, "val_best_ap_good": float(best_sel),
+    # `val_best_selection` is the objective's own value and is what the staging rule reads.
+    # `val_best_ap_good` stays beside it as the AP>=3 AT THAT EPOCH — the two are equal on an
+    # `ap_ge3` arm and differ on the `ap_ge2` one, which is the whole point of the fifth arm.
+    return ({"seed": seed, "best_epoch": best_epoch,
+             "selection_metric": sel_metric, "val_best_selection": float(best_sel),
+             "val_best_ap_good": best_ap["ap_ge3"], "val_best_ap_not_bad": best_ap["ap_ge2"],
              "history": history, "checkpoint": str(seed_dir / "model_best.pt")},
             best_cond, best_marg, best_sum)
 
@@ -199,6 +236,11 @@ def main():
                          "settling arm). The grouping still governs the SPLIT and the eval "
                          "dedup — only the training weights go uniform, so this arm differs "
                          "from the default in exactly one variable.")
+    ap.add_argument("--selection-metric", default=SELECTION_METRIC,
+                    choices=sorted(SELECTION_METRICS),
+                    help="the epoch-selection objective (the (28b) fifth-arm dial). "
+                         "`ap_ge3` is the default and every pre-2026-08-11 arm; `ap_ge2` is "
+                         "v1's OWN objective and moves nothing else about the arm.")
     ap.add_argument("--arm", default=None,
                     help="a name for this arm, stamped into config/metrics so a run dir "
                          "cannot be read as the wrong experiment")
@@ -223,10 +265,14 @@ def main():
     tr, ev = pool.train, pool.eval_rows
     weights = [1.0 for _ in tr] if args.uniform_weights else [r.weight for r in tr]
     summ = corpus_summary(pool)
+    sel_metric = args.selection_metric
+    sel_text = SELECTION_METRICS[sel_metric]
     arm = args.arm or ("uniform" if args.uniform_weights else
-                       f"aug{args.axis_crop:g}" if args.axis_crop else "dedup_weighted")
+                       f"aug{args.axis_crop:g}" if args.axis_crop else
+                       "ap2_selected" if sel_metric == "ap_ge2" else "dedup_weighted")
     log.info(f"ARM = {arm}  (border_crop={args.border_crop} axis_crop={args.axis_crop} "
-             f"weights={'UNIFORM' if args.uniform_weights else '1/group_size'})")
+             f"weights={'UNIFORM' if args.uniform_weights else '1/group_size'} "
+             f"selection={sel_metric})")
 
     # The mechanism table the arms are read against: how much of each kind's gradient the
     # weighting actually removes. Computed here from the weights this arm will use, so an
@@ -252,7 +298,7 @@ def main():
     log.info(f"eval  {len(ev)} rows (deduped from {len(pool.eval_all)})  {label_hist(ev)}")
     log.info(f"eval by batch {summ['eval_by_batch']}  by kind {summ['eval_by_kind']}")
     log.info(f"eval by mode {summ['eval_by_mode']}")
-    log.info(f"SELECTION (declared): {SELECTION_TEXT}")
+    log.info(f"SELECTION (declared): {sel_text}")
 
     eval_labels = np.asarray([r.label for r in ev])
     eval_modes = np.asarray([r.mode for r in ev])
@@ -292,7 +338,7 @@ def main():
         "weight_decay": args.weight_decay, "drop_rate": args.drop_rate,
         "drop_path_rate": args.drop_path_rate, "border_crop": args.border_crop,
         "num_workers": args.num_workers, "grad_clip": 1.0, "amp": "off",
-        "selection": SELECTION_TEXT, "selection_metric": SELECTION_METRIC,
+        "selection": sel_text, "selection_metric": sel_metric,
         "selection_declared": "before training, in classifier/train_mining_head_v3.py",
         "init": "imagenet_backbone_fresh — NOT a finetune of v1 or v2",
         "split": "re-derived GLOBALLY over the pooled corpus "
@@ -334,7 +380,7 @@ def main():
         overall_blocks.append(eval_block(eval_labels, cond, marg, ssum, np.ones(len(ev), bool)))
         for mode in sorted(good_by_mode):
             mode_blocks[mode].append(per_mode_good_ap(eval_labels, marg, eval_modes, mode))
-        sel = info["val_best_ap_good"]
+        sel = info["val_best_selection"]
         if best_for_stage is None or sel > best_for_stage[0]:
             best_for_stage = (sel, seed, out_dir / f"seed_{seed}")
         (out_dir / "per_seed.json").write_text(json.dumps(per_seed, indent=2))
@@ -382,9 +428,10 @@ def main():
     metrics = {
         "seeds": seeds, "backbone": BACKBONE, "num_classes": K, "arm": arm,
         "arm_dials": {"border_crop": args.border_crop, "axis_crop": args.axis_crop,
-                      "uniform_weights": bool(args.uniform_weights)},
+                      "uniform_weights": bool(args.uniform_weights),
+                      "selection_metric": sel_metric},
         "train_weight_by_kind": kind_share,
-        "selection": {"metric": SELECTION_METRIC, "text": SELECTION_TEXT,
+        "selection": {"metric": sel_metric, "text": sel_text,
                       "staged_seed": stage_seed, "staged_value": float(stage_sel)},
         "corpus": summ, "split": pool.split_meta, "near_dup": pool.group_meta,
         "eval_n": len(ev), "eval_tier_hist": label_hist(ev),
@@ -395,9 +442,16 @@ def main():
         "per_mode_good_ap": mode_agg,
         "rich_modes": rich, "directional_modes": directional,
         "per_seed": per_seed,
-        "staged": {"seed": stage_seed, "ap_good": float(stage_sel),
+        # `selection_value` is the objective's own number and is what the staging rule
+        # maximised; `ap_good` is AP>=3 at that same epoch, so the two are equal on an
+        # `ap_ge3` arm and are NOT on the `ap_ge2` one. A reader that wants "the staged
+        # AP>=3" gets AP>=3 from either arm, which is what makes the arms table comparable.
+        "staged": {"seed": stage_seed, "selection_metric": sel_metric,
+                   "selection_value": float(stage_sel),
+                   "ap_good": next((s["val_best_ap_good"] for s in per_seed
+                                    if s["seed"] == stage_seed), None),
                    "checkpoint": str(out_dir / "model_best.pt"),
-                   "rule": f"best per-seed eval {SELECTION_METRIC}",
+                   "rule": f"best per-seed eval {sel_metric}",
                    "adopted": False,
                    "note": "STAGED ONLY — mining_pins.ACTIVE_MINING_CKPT still points at v1. "
                            "The winner-rule verdict is tools/mining/mining_v3_reads.py."},
@@ -410,7 +464,7 @@ def main():
     log.info(f"  OVERALL  AUC>=3 {fmt(overall_agg['auc_good_vs_rest'])}  "
              f"AP>=3 {fmt(overall_agg['ap_good'])}  AP>=2 {fmt(overall_agg['ap_not_bad'])}")
     log.info(f"  STAGED -> {out_dir / 'model_best.pt'} (seed {stage_seed}, "
-             f"AP>=3 {stage_sel:.3f}) — HELD; ACTIVE is still mining v1")
+             f"{sel_metric} {stage_sel:.3f}) — HELD; ACTIVE is still mining v1")
     log.info(f"  VERDICT is NOT decided here — run tools/mining/mining_v3_reads.py")
     log.info("DONE")
 

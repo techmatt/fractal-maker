@@ -10,11 +10,25 @@ THE ARMS DISCIPLINE, and it is the reason this file lists them rather than globb
 each arm changes exactly ONE thing against `dedup_weighted`. There is no combined
 aug+uniform arm — that needs Matt's explicit word (addendum 3 §6) and does not have it.
 
-    arm             geometry                                weights
-    dedup_weighted  border 0.05/edge + flips  (v1's recipe) 1/group_size
-    aug_gentle      axis 0.03/axis + flips                  1/group_size
-    aug_strong      border 0.10/edge + axis 0.03 + flips    1/group_size
-    uniform         border 0.05/edge + flips  (v1's recipe) UNIFORM
+    arm             geometry                                weights        objective
+    dedup_weighted  border 0.05/edge + flips  (v1's recipe) 1/group_size   AP>=3
+    aug_gentle      axis 0.03/axis + flips                  1/group_size   AP>=3
+    aug_strong      border 0.10/edge + axis 0.03 + flips    1/group_size   AP>=3
+    uniform         border 0.05/edge + flips  (v1's recipe) UNIFORM        AP>=3
+    ap2_selected    border 0.05/edge + flips  (v1's recipe) 1/group_size   AP>=2
+
+THE FIFTH ARM IS THE ONE THAT SETTLES THE OTHER FOUR (`prompts/settlement_28b.md` §1).
+Arms 1-4 moved geometry across a 4x range and lifted the near-dup weighting entirely, and
+the failure set never moved: the same five cells fail in all four, every arm wins the >=3
+boundary and loses the >=2 boundary. That is what "v1 was SELECTED on AP>=2 and every v3 arm
+was selected on AP>=3" predicts, and it was the only surviving explanation because nothing
+had tested it. `ap2_selected` is that test: v1's own objective on an otherwise identical arm,
+declared before the run in `classifier.train_mining_head_v3.SELECTION_METRICS`.
+
+READ IT AS A SETTLING TEST, NOT A CANDIDATE. The arm is selected on the SAME eval side its
+>=2 cells are then read on, so a >=2 gain here is partly the selection finding it; that is
+inherent to the question and is why the arm answers "is the objective the mechanism", not
+"should the objective change". Which objective the head's role needs is Matt's decision.
 
 `dedup_weighted`'s geometry is the row every reading of these arms turns on, and it is NOT
 "no augmentation": v1's recipe already crops U(0,5%) off each of the four edges and flips on
@@ -48,18 +62,21 @@ class Arm:
     dirname: str
     geometry: str
     weights: str
+    objective: str
     why: str
 
 
 ARMS = (
     Arm("dedup_weighted", "v3", "border 0.05/edge + flips (v1 recipe)", "1/group_size",
-        "the declared retrain"),
+        "ap_ge3", "the declared retrain"),
     Arm("aug_gentle", "v3_aug", "axis 0.03/axis + flips", "1/group_size",
-        "addendum 2 as written — GENTLER geometry than the declared arm"),
+        "ap_ge3", "addendum 2 as written — GENTLER geometry than the declared arm"),
     Arm("aug_strong", "v3_augx", "border 0.10/edge + axis 0.03/axis + flips", "1/group_size",
-        "the other bracket: stronger geometry than the declared arm"),
+        "ap_ge3", "the other bracket: stronger geometry than the declared arm"),
     Arm("uniform", "v3_uniform", "border 0.05/edge + flips (v1 recipe)", "UNIFORM",
-        "addendum 3 — the settling arm for the near-dup weighting"),
+        "ap_ge3", "addendum 3 — the settling arm for the near-dup weighting"),
+    Arm("ap2_selected", "v3_ap2", "border 0.05/edge + flips (v1 recipe)", "1/group_size",
+        "ap_ge2", "(28b) §1 — the settling arm for the SELECTION OBJECTIVE, v1's own"),
 )
 
 METRIC_KEYS = ("auc_ge3", "ap_ge3", "auc_ge2", "ap_ge2")
@@ -122,12 +139,22 @@ def build(rows: list[dict]) -> str:
       "locations, 214 good. Baseline is mining **v1** re-scored on the same crops through "
       "the same scorer in every row.\n")
 
-    A("| arm | geometry | weights | staged AP≥3 | 5-seed AP≥3 | 5-seed AUC≥3 | verdict |")
-    A("|---|---|---|---:|---|---|---|")
+    A("| arm | geometry | weights | objective | staged AP≥3 | 5-seed AP≥3 | 5-seed AUC≥3 "
+      "| 5-seed AUC≥2 | verdict |")
+    A("|---|---|---|---|---:|---|---|---|---|")
     for r in rows:
         a, m = r["arm"], r["metrics"]
         rep = r["report"]
+        # `staged.ap_good` is AP>=3 AT THE STAGED EPOCH on every arm, including the one whose
+        # OBJECTIVE is AP>=2 — so this column compares the same quantity across all five.
+        # (`staged.selection_value` is the objective's own number; the older four arms have
+        # no such key because their objective and this column were the same thing.)
         staged = m.get("staged", {}).get("ap_good")
+        obj = (m.get("selection") or {}).get("metric") or a.objective
+        if obj != a.objective:
+            raise AssertionError(
+                f"{a.key}: run record says objective {obj!r}, this table says "
+                f"{a.objective!r} — one of them describes another run")
         band = (rep or {}).get("v3_seed_band", {}).get("mean_sd", {})
         def bd(k):
             b = band.get(k)
@@ -138,9 +165,27 @@ def build(rows: list[dict]) -> str:
             v = ("**candidate**" if wr["winner"] == "v3" else "v1 keeps") + \
                 f" (a {'✓' if wr['clause_a']['pass'] else '✗'}/" \
                 f"b {'✓' if wr['clause_b']['pass'] else '✗'})"
-        A(f"| `{a.key}` | {a.geometry} | {a.weights} | "
+        A(f"| `{a.key}` | {a.geometry} | {a.weights} | `{a.objective}` | "
           f"{'—' if staged is None else f'{staged:.3f}'} | {bd('ap_ge3')} | "
-          f"{bd('auc_ge3')} | {v} |")
+          f"{bd('auc_ge3')} | {bd('auc_ge2')} | {v} |")
+
+    # The cell the fifth arm was run to settle, pulled out of the per-arm reports so the
+    # comparison is one table rather than five files. `pooled.auc_ge2` fails in all four
+    # AP>=3-selected arms; whether it still fails under v1's own objective is the answer.
+    A("\n### The pooled ≥2 boundary — the cell the objective story predicts\n")
+    A("| arm | objective | pooled AUC≥2 Δ (95% CI) | pooled AUC≥3 Δ (95% CI) |")
+    A("|---|---|---|---|")
+    for r in rows:
+        a = r["arm"]
+        nw = ((r["report"] or {}).get("no_worse") or {}).get("pooled")
+        def ci(key):
+            c = (nw or {}).get("delta_ci", {}).get(key)
+            if not c or c.get("n_draws", 0) == 0:
+                return "—"
+            tag = " **worse**" if c["significantly_worse"] else (
+                " **better**" if c["significantly_better"] else "")
+            return f"{c['median']:+.3f} [{c['lo']:+.3f}, {c['hi']:+.3f}]{tag}"
+        A(f"| `{a.key}` | `{a.objective}` | {ci('auc_ge2')} | {ci('auc_ge3')} |")
 
     A("\n### Mechanism — training weight removed per kind (the dose, beside the outcome)\n")
     A("| arm | direct | composite | pure | train rows | effective weight | source |")

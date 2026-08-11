@@ -278,6 +278,31 @@ REGISTRY: dict[str, tuple[Registration, ...]] = {
                          "positives) and at the page (mining-v1 suggestion prefilled, sorted "
                          "by its score). Its whole purpose is a non-representative slice, so "
                          "no rate on it is a base rate."),),
+    # ---- the (28b) sheet D: the BLIND minibrot eval slice for the wallpaper heads ----
+    # Registered BEFORE it was built (prompts/settlement_28b.md §2). The one registration in
+    # this table whose two audiences disagree, which is why the `why` says both out loud.
+    "2026-08-11_wallpaper_blind_minibrot_v1": (
+        Registration(source="wallpaper_blind_minibrot_eval", biased=True,
+                     why="THE ANSWER TO THE ONE THIS TABLE ALREADY WARNED ABOUT. The 2026-08-10 "
+                         "wallpaper sitting above is registered unusable on the eval side "
+                         "because its labels are ANCHORED to wallpaper v3; this slice re-buys "
+                         "that same minibrot/maneuver population with the anchoring removed — "
+                         "fresh locations only (excluded against every prior wallpaper batch by "
+                         "key AND by proximity), served BLIND (no prefilled suggestion, no "
+                         "score-ordered page, seeded shuffle), and with NEITHER wallpaper head "
+                         "touching the draw or the substrate: the palette comes from the "
+                         "colorize path's pref-v3-gvo proposal, which is a palette-preference "
+                         "head with no opinion about a location. It is stamped eval-only "
+                         "PERMANENTLY in its own batch.json and every row carries "
+                         "split_side=eval. "
+                         "BIASED IS ABOUT A DIFFERENT HEAD, and it is not a defect: quality is "
+                         "conditioned through the LOCATION head (floors.GOOD_FLOOR on the "
+                         "intake's p_good), so the draw IS a model score in the selection and "
+                         "no base rate read on it is a location-head base rate. That is exactly "
+                         "the classification this table exists to carry — biased -> train on "
+                         "the LOCATION side, which keeps it off the location-head eval side, "
+                         "while its wallpaper-side eval role lives in its own batch record. "
+                         "See classifier_retrain_protocol.md §2b."),),
     "2026-08-10_render_mode_rare_palette_v1": (
         Registration(source="mining_rare_palette_sitting", biased=True,
                      why="the rare-palette strange sheet (sheet C of the (27) sittings). "
