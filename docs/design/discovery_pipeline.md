@@ -506,7 +506,11 @@ not shadow each other, which errs toward LESS discount.
 - **Maneuver-originated nodes are exempt** — they build their own priority in
   `_consume_maneuver` (neutral prior, or the view/range screen percentile) and hold a reserved
   quota. A ranker cannot evaluate a population it was never trained on, and a slot is not a
-  probability (`measurement_practice.md` §2).
+  probability (`measurement_practice.md` §2). **The exemption is on the PROPOSAL, not on its
+  subtree**: a maneuver node's ordinary DESCENDANTS are found by ordinary descent, carry a
+  `cheap_eord` and compete in the ordinary queue, so they are discounted like any other breadth
+  candidate. Exempting a lineage would need a flag threaded down it, and would make a saturated
+  basin permanently cheap to re-enter through one operator.
 - **Dive mode is exempt** — `run_dive` never reaches `push_children`, so the index is not built
   at all there rather than built and unread (`run_config` stamps `n_a`).
 - **Cross-partition allocation is untouched.** `pop_batch_quota` / `pop_batch_scheduled` pick
@@ -572,3 +576,26 @@ measured novelty would be averaged in as a real observation by `campaign2_readou
 (`on` / `off` / `dive_n_a` — a run with the memory off and a run whose memory found nothing
 tally identical zeros and are opposite facts), the index census, and the per-partition
 discounted share.
+
+### 5.4 First exercise — run 25
+
+The first production run with the memory live. The index built in **0.1 s** over **34 ledgers /
+15,189 visits / 466 identity buckets**, and **2,188 of 24,833 scored candidates were discounted =
+8.81%**, at a **mean density of 1.3 where it fired** — i.e. the live population sits at the soft
+end of the curve, nowhere near §5.2's "saturated" bar of density ≥ 9.
+
+**8.81% against the 31.1% §5.2 projected at k=0.30, and the two are different estimands.** §5.2
+is leave-one-run-out over 46,798 *committed* `q4_candidates` rows from 8 runs; this is every
+candidate `push_children` saw in one run. Part of the gap is visible as pure mix in the run's own
+by-partition block: `multibrot3` alone is 10,243 of the 24,833 scored (13.7% discounted) while
+`julia:multibrot3/4/5` contribute **6,999 candidates at 0.0%**, which caps the pooled share on
+its own. **Read the calibration table as a bound on a run's discounted share, not a prediction of
+it.**
+
+Those three zeros are the **designed negative result**, not a broken index: four runs barely dent
+a whole parameter plane, and they are exactly the channels the identity-aware index exists to
+protect — a z-only index would have read `julia:multibrot5` as 8.5% shadowed and discounted
+material nothing has visited twice. Per partition the memory bites hardest where it should:
+`mandelbrot` 18.5%, `julia:mandelbrot` 16.3%, `phoenix` 8.7% at the highest mean density (1.87).
+
+`[measured 2026-08-09; data/discovery/prod25_20260809/summary.json § saturation_memory]`
