@@ -1,4 +1,5 @@
-//! `crop-batch` — the **extended-field crop executor** (v11 prep, plumbing only).
+//! `crop-batch` — the **extended-field crop executor**, the cache-build recipe from v11 on
+//! (`data/v11/aug_recipe.json`; decisions → `docs/design/crop_batch.md`).
 //!
 //! ## What changes versus `v4-render-batch`
 //!
@@ -211,8 +212,9 @@ impl AaLevel {
 /// Geometry 0 is always the **identity** — dead centre, scale exactly 1.0 — so the deploy
 /// composition is in front of the network in every (palette, AA) cell, exactly as v8b
 /// requires. Shift magnitude is a fraction of the **canonical** frame width (not the
-/// scaled slot width), which is what makes `extend ≥ scale_hi + 2·shift_max` the exact
-/// containment condition.
+/// scaled slot width), which is what puts the frame-width term in the containment bound
+/// `extend ≥ 1 + 2·shift_max + max(1, H/W)·(scale_hi − 1)` — derived in full at the
+/// CONTAINMENT block in [`run_crop_batch`].
 #[derive(Clone, Copy, Debug)]
 struct Geom {
     scale: f64,
@@ -1403,9 +1405,10 @@ pub struct CropBatchArgs {
     #[arg(long, default_value_t = 2)]
     pub field_ss: u32,
 
-    /// Extended-field factor (1.2 = +10% per side). Must be `>= scale_hi +
-    /// 2·shift_frac_max` or the widest shifted crop leaves the field; validated, not
-    /// clamped. Realized to whole subpixels per side (rounded up).
+    /// Extended-field factor (1.2 = +10% per side). Must be
+    /// `>= 1 + 2·shift_frac_max + max(1, H/W)·(scale_hi − 1)` or the widest shifted crop
+    /// leaves the field; validated, not clamped. Realized to whole subpixels per side
+    /// (rounded up).
     #[arg(long, default_value_t = 1.2)]
     pub extend: f64,
 

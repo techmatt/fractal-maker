@@ -298,7 +298,9 @@ def stage_morph_dedup(rows, ctx):
       * **the cap does not bound this stage.** Dedup runs BEFORE `draw_balanced`, and must —
         the cap is denominated in looks. So a live cut embeds the whole post-(a)-post-(c)
         population, 7,244 rows here, not the 1,000 that reach the page: **~1.9 h**, not the
-        15 minutes this bounded run took. `--embed-limit` is a dry-run instrument only.
+        15 minutes this bounded run took. `--embed-limit` bounds a PASS, never a real cut:
+        it is on `draw` as well as `dry-run` (see `run_draw`), and a bounded draw stamps
+        `sitting_cut.INCOMPLETE = true` precisely so it cannot be mistaken for one.
       * the duplicate rate is NOT a population constant — 30.5% at 400 embeds, 58.7% at
         1,000. A leader-radius accumulates leaders, so a cut sized from a small pilot will
         over-estimate how many looks survive."""

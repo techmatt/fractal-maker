@@ -1,7 +1,7 @@
 //! Direct coverage for [`energy::occupancy`] — the detail-occupancy gate on two
 //! live paths, both calling it with [`energy::OCC_GX`]/[`energy::OCC_GY`]/
 //! [`energy::OCC_FLOOR`]: `enrich`'s pre-scoring gate (`enrich.rs`, parity with
-//! `present`), and `guided_descend`'s Stage-2 best-of-N cull (`best_of_n_step`),
+//! the deleted `present`), and `guided_descend`'s Stage-2 best-of-N cull (`best_of_n_step`),
 //! which is what `guided-descend --expand` runs per frontier node.
 //!
 //! This is **not** a port of the deleted `tests/occupancy_parity.rs`. That test
@@ -21,7 +21,8 @@
 //!  - it is **monotone non-increasing in `floor`** — the property that makes
 //!    `OCC_FLOOR` a calibration knob rather than an arbitrary constant;
 //!  - it is exactly the floor reduction of [`energy::tile_energy`], which is the
-//!    documented relationship between the gate and `present`'s focus centroid.
+//!    documented relationship between the gate and the content-focus pooling
+//!    `guided_descend` inherited from the deleted `present`.
 //!    Two public functions sharing one primitive is a claim that can rot silently;
 //!  - degenerate geometry returns 0 rather than panicking or dividing by zero.
 //!
@@ -139,7 +140,7 @@ fn occupancy_is_monotone_non_increasing_in_the_floor() {
 #[test]
 fn occupancy_is_exactly_the_floor_reduction_of_tile_energy() {
     // `tile_energy` is documented as the same primitive with the floor reduction
-    // dropped, and `present`'s focus centroid depends on that being true. Checked
+    // dropped, and `guided_descend`'s content focus depends on that being true. Checked
     // over several floors so it is the *reduction* being pinned, not one value.
     let img = RgbImage::from_fn(W, H, |x, y| {
         let v = (((x / 7) ^ (y / 5)) % 256) as u8;
