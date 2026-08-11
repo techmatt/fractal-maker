@@ -140,6 +140,17 @@ of the same gate-passer population, so its 91 locations are a strict subset of t
   because a batch is stamped 100% train — **re-derive globally** over the pooled locations
   and record how many rows moved. (`tools/mining/mining_corpus.load_corpus`: 999 of 2,460.)
 
+**A batch stamped `eval_only` is pinned to eval by BOTH fixes, unconditionally.** The choice
+above is between two authorities for a *contested* location; an eval-only slice is not
+contested, it is **spent** the moment it trains — sheet D's 197 blind minibrot labels are the
+only unanchored read of that population that will ever exist. So the pin is a third
+constraint that outranks both fixes and lives in one owner rather than in each split pass.
+It keys on the **c-inclusive coordinate**, not the `image_id`: a later batch re-rendering a
+sheet-D location under a fresh id would otherwise train on it without ever naming it.
+`[code: tools/corpus/eval_only.py, wired into tools/mining/split_units.build_split (force_eval),
+mining_corpus.load_corpus, classifier/train_wallpaper_v4.split_union and v4b.split_v4b;
+test: tools/corpus/test_eval_only.py]`
+
 **A batch registered "never an eval INSTRUMENT" may still land in a HOLDOUT.** The two eval
 roles of §1 are not the same object: an instrument is an unbiased draw a base rate may be
 read from, a holdout is biased exactly as training is. Sheet C is stamped 100% train because

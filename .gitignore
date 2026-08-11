@@ -647,6 +647,15 @@ __pycache__/
 !/data/wallpaper_head/v4b/per_seed.json
 !/data/wallpaper_head/v4b/report.md
 !/data/wallpaper_head/v4b/report.json
+# The sheet-D re-verdict (v3 vs v4b on the BLIND minibrot slice). Two files, ~27 KB, and
+# they are a RUN RECORD in the same sense as v4b's above: the labels they read are human
+# judgement on a population that will never be labeled unanchored twice, so the report is
+# the only durable form of what that slice said. `anchoring_price()` already reads v4b's
+# report.json as data, which is what a report of this class is for.
+!/data/wallpaper_head/sheet_d_reverdict/
+/data/wallpaper_head/sheet_d_reverdict/*
+!/data/wallpaper_head/sheet_d_reverdict/report.md
+!/data/wallpaper_head/sheet_d_reverdict/report.json
 
 !/data/render_mode_head/
 /data/render_mode_head/*

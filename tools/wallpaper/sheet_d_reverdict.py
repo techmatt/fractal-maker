@@ -66,10 +66,12 @@ from tools.wallpaper import wallpaper_pins as WP                        # noqa: 
 from tools.wallpaper.build_blind_minibrot_sheet import SHEETS           # noqa: E402
 
 SHEET = SHEETS["d"]
+CORPUS_NAME = "wallpaper_corpus"
 V3_CKPT = ROOT / WP.HEAD_CKPT_REL
 V4B_DIR = ROOT / "data" / "wallpaper_head" / "v4b"
 V4B_CKPT = V4B_DIR / "model_best.pt"
-OUT_DIR = ROOT / "data" / "wallpaper_head" / "sheet_d_reverdict"
+OUT_DIR_REL = "data/wallpaper_head/sheet_d_reverdict"
+OUT_DIR = ROOT / OUT_DIR_REL
 
 # The anchored bucket this slice exists to replace. The NUMBER is read from the report, not
 # from here: this names WHERE, and `anchoring_price()` reads WHAT.
@@ -166,6 +168,23 @@ def score_with(ckpt: Path, rows, device: str) -> dict:
     _cond, marg, ssum = score([str(r.jpg) for r in rows])
     return {"p_ge2": marg[:, 0], "p_ge3": marg[:, 1], "p_ge4": marg[:, 2], "rank": ssum,
             "_cfg": cfg}
+
+
+def _eval_only_block() -> dict:
+    """`{eval_only, eval_only_reason, eval_only_rows_stamped}` read off the batch itself.
+
+    `assert_stamps` raises rather than reporting False: a slice this verdict is read from
+    that has stopped being eval-only invalidates the read, and continuing to print numbers
+    under a False flag is the failure mode a flag is supposed to prevent."""
+    from tools.corpus.eval_only import assert_stamps, eval_only_batches   # noqa: PLC0415
+    blk = eval_only_batches(CORPUS_NAME).get(SHEET.batch_id)
+    rep = assert_stamps(CORPUS_NAME)
+    if blk is None:
+        raise SystemExit(f"[sheet-d] {SHEET.batch_id} is NOT stamped eval_only in its "
+                         f"batch.json — this whole verdict rests on the slice never having "
+                         f"trained; fix the batch, do not soften the check.")
+    return {"eval_only": True, "eval_only_reason": blk.reason,
+            "eval_only_rows_stamped_eval": rep["batches"][SHEET.batch_id]["n_rows"]}
 
 
 def tier_dist(labels) -> dict:
@@ -279,7 +298,10 @@ def build(rows, base, cand, seed_scores, meta, *, draws, seed) -> dict:
                   "by_partition": dict(sorted(Counter(r.partition for r in rows).items())),
                   "by_family": dict(sorted(Counter(r.family for r in rows).items())),
                   "blind": "no suggestion was served, no score ordered the page",
-                  "eval_only": True},
+                  # DERIVED from the batch's own stamp + row stamps, never a literal here
+                  # ("derive state in code; freeze it in records"): a hardcoded True is how
+                  # a report keeps claiming eval-only after the property has been lost.
+                  **_eval_only_block()},
         "bootstrap": {"draws": draws, "seed": seed, "kind": "paired over slice rows"},
         "pre_declared": {"motivating": [MOTIVATING_ARM], "no_worse": [MOTIVATING_ARM],
                          "note": "sheet D was drawn to BE the motivating arm, so the two are "
@@ -305,11 +327,21 @@ def build(rows, base, cand, seed_scores, meta, *, draws, seed) -> dict:
             pb = point_block(labels, {k: v for k, v in sc.items() if not k.startswith("_")},
                              METRICS)
             band.append({"seed": s, **{m.key: pb[m.key] for m in METRICS}})
+        def band_stats(key) -> dict:
+            """mean/sd over the seeds a metric is DEFINED on. An undefined cell is not a
+            zero: this slice came back with no tier-1 label at all, so every `>=2` boundary
+            is all-positive and `value()` returns None for all five seeds. Averaging that
+            raised TypeError; reporting `n_seeds: 0` says the same thing the harness's
+            `n_draws: 0` says elsewhere — nobody could measure it."""
+            vals = [b[key] for b in band if b[key] is not None]
+            if not vals:
+                return {"mean": None, "sd": None, "n_seeds": 0}
+            return {"mean": float(np.mean(vals)), "sd": float(np.std(vals, ddof=0)),
+                    "n_seeds": len(vals)}
+
         R["v4b_seed_band"] = {
             "per_seed": band,
-            "mean_sd": {m.key: {"mean": float(np.mean([b[m.key] for b in band])),
-                                "sd": float(np.std([b[m.key] for b in band], ddof=0))}
-                        for m in METRICS},
+            "mean_sd": {m.key: band_stats(m.key) for m in METRICS},
             "note": "every v4b seed was selected on the (28) POOLED eval, not on this slice — "
                     "so sheet D is the first held-out population any of them has seen and the "
                     "staged max is NOT optimistic here, unlike in the (28) report."}
@@ -441,7 +473,9 @@ def md(R) -> str:
             bb = R["v4b_seed_band"]["mean_sd"][m.key]
             vals = " ".join(f"{x[m.key]:.3f}" if x[m.key] is not None else "—"
                             for x in R["v4b_seed_band"]["per_seed"])
-            A(f"| {m.label} | {bb['mean']:.3f} ± {bb['sd']:.3f} | {vals} |")
+            agg = ("undefined on this slice" if bb["n_seeds"] == 0
+                   else f"{bb['mean']:.3f} ± {bb['sd']:.3f}")
+            A(f"| {m.label} | {agg} | {vals} |")
     A(f"\n{wr['multiplicity_note']}\n")
     return "\n".join(L) + "\n"
 
@@ -480,10 +514,20 @@ def main(argv=None):
 
     R = build(rows, base, cand, seed_scores, meta, draws=a.draws, seed=a.seed)
     R["incomplete"] = bool(a.limit)
-    out = (ROOT / "scratch" / "sheet_d_reverdict") if a.limit else OUT_DIR
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "report.json").write_text(json.dumps(R, indent=1, default=str), encoding="utf-8")
-    (out / "report.md").write_text(md(R), encoding="utf-8")
+    # The class is declared at the WRITE SITE, and the two classes are not the same file:
+    # a bounded run is scratch, an unbounded one is durable — `durable()` raises here if a
+    # .gitignore rule would swallow the report, which it did until the negation was added.
+    from paths import durable, scratch                    # noqa: PLC0415
+    if a.limit:
+        out = scratch("sheet_d_reverdict")
+        out.mkdir(parents=True, exist_ok=True)
+        paths = {n: out / f"report.{n}" for n in ("json", "md")}
+    else:
+        paths = {n: durable(f"{OUT_DIR_REL}/report.{n}", mkparents=True)
+                 for n in ("json", "md")}
+        out = paths["md"].parent
+    paths["json"].write_text(json.dumps(R, indent=1, default=str), encoding="utf-8")
+    paths["md"].write_text(md(R), encoding="utf-8")
     wr = R["winner_rule"]
     log(f"[sheet-d] clause a {wr['clause_a']['pass']} / clause b {wr['clause_b']['pass']} "
         f"-> WINNER {wr['winner']}")
