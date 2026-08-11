@@ -743,6 +743,63 @@ def test_batch_aggregation_prices_both_streams_at_the_true_per_unit_cost():
     assert abs(got_cl - 12.0) < abs(_v1_price(CLUSTERED) - 12.0)
 
 
+# --------------------------------------------------------------------------- #
+# 5c. the UNITS-WEIGHTED step (2026-08-11) — batch aggregation fixed WHAT is sampled,
+# this fixes HOW MUCH each sample counts.
+# --------------------------------------------------------------------------- #
+def test_the_step_is_the_per_unit_weight_compounded_over_the_windows_units():
+    """The rule itself, on the pure function, so it is asserted rather than inferred from a
+    run: one unit gets exactly the configured weight, u units get the compounded weight of u
+    applications, and the step is monotone in units and never leaves [0, 1)."""
+    step = pq.CostToMine.step
+    assert step(0.30, 1.0) == pytest.approx(0.30)
+    assert step(0.30, 2.0) == pytest.approx(1 - 0.7 ** 2)     # two per-unit steps
+    assert step(0.30, 0.1) == pytest.approx(1 - 0.7 ** 0.1)   # one class-3: ~0.035, not 0.30
+    assert step(0.30, 0.1) < 0.05
+    prev = -1.0
+    for u in (0.0, 0.1, 0.5, 1.0, 4.0, 40.0):
+        a = step(0.30, u)
+        assert 0.0 <= a < 1.0 and a > prev
+        prev = a
+    assert step(1.0, 0.1) == pytest.approx(1.0), "a full-weight EMA still replaces outright"
+
+
+def test_a_thin_window_no_longer_pulls_as_hard_as_a_thick_one():
+    """THE DEFECT, bracketed. `end_window` fires once per batch whatever the batch held, so
+    under the flat per-window weight a single class-3 (0.1 units) moved the price exactly as
+    far as ten class-4s. Both partitions below see ONE window reading 30 min/unit against a
+    seed of 3.0; only the evidence behind it differs, by 40x.
+
+    The old behaviour is computed inline — `1 - (1-ema)` is the flat step — because the
+    assertion that matters is that the two used to be equal and no longer are."""
+    def one_window(units, minutes):
+        c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=0.3, cap_minutes=1e9,
+                                      price_clamp=1e9))
+        c.credit("p", units)
+        c.charge("p", minutes)
+        assert c.end_window() == pytest.approx({"p": 30.0})   # same sample, both arms
+        return c.raw["p"]
+
+    thin, thick = one_window(0.1, 3.0), one_window(4.0, 120.0)
+    flat = (1 - 0.3) * 3.0 + 0.3 * 30.0                       # what BOTH used to return
+    assert thick == pytest.approx(flat, rel=0.02) or thick > thin
+    assert thin < thick, "40x the evidence must move the price further"
+    assert thin - 3.0 < 0.15 * (flat - 3.0), \
+        "one class-3 should barely move a price; it used to move it the full step"
+    # and it does not over-correct: a one-unit window is the flat step, unchanged.
+    assert one_window(1.0, 30.0) == pytest.approx(flat)
+
+
+def test_units_weighting_leaves_the_batch_aggregation_bracket_intact():
+    """The 5b streams still price at the truth. Both carry 60 units in 720 minutes; the
+    clustered one now flushes 6 windows of 10 units each (a near-total step) and the drip one
+    60 windows of 1 unit, so the weighting changes the PATH to 12.0 without moving the
+    answer — which is the over-correction check for this change."""
+    got_cl, got_dr = _v2_price(CLUSTERED), _v2_price(DRIP)
+    for name, got in (("clustered", got_cl), ("drip", got_dr)):
+        assert 0.85 * 12.0 <= got <= 1.15 * 12.0, f"{name} read {got:.2f}, truth 12.0"
+
+
 def test_every_sample_the_window_emits_is_the_windows_own_aggregate_rate():
     """The property underneath both tests above, stated exactly rather than through an EMA:
     each emitted sample IS window-minutes / window-units. The EMA is then a smoother over

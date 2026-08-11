@@ -150,7 +150,11 @@ import supply_routing as _srt                    # noqa: E402  (THE channel tabl
 CLASS_WEIGHT = {4: 1.0, 3: 0.1}          # Matt's currency: n4 + 0.1*n3
 FLOOR_FRAC = 0.05                        # addendum: every partition floors at 5% of TOTAL time
 SEED_PRICE = 3.0                         # neutral seed: active-minutes per currency unit
-PRICE_EMA = 0.30                         # weight on the newest per-unit sample
+# The PER-UNIT EMA weight. A batch window's actual step is `1 - (1 - PRICE_EMA)**units`
+# (`CostToMine.step`), so this number is the weight at exactly one unit of currency and a
+# thinner window pulls proportionally less. It was the flat per-WINDOW weight until
+# 2026-08-11, which gave a 0.1-unit window the same pull as a 4.0-unit one.
+PRICE_EMA = 0.30
 PRICE_CLAMP = 4.0                        # price stays within [seed/4, seed*4]
 CAP_MINUTES = 25.0                       # dry-time before a partition is capped out of service
 JULIA_ROUTE_GAIN = 1.0                   # unservable julia intent folded into its c-plane parent
@@ -654,9 +658,32 @@ class CostToMine:
         self.min_since_credit[p] = 0.0
         self.capped.discard(p)
 
+    @staticmethod
+    def step(ema: float, units: float) -> float:
+        """The EMA weight for a sample that aggregates `units` of currency.
+
+        `1 - (1 - ema)**units` — the compounded weight of applying the per-unit step once per
+        unit. Pure and static so the test asserts the rule rather than a run's output."""
+        return 1.0 - (1.0 - float(ema)) ** max(0.0, float(units))
+
     def end_window(self) -> dict:
         """Close the price window: one EMA sample per partition that has both minutes and
         units in it. Called once per served batch (`PopQuota.charge`).
+
+        THE STEP IS UNITS-WEIGHTED (2026-08-11). Batch aggregation fixed WHAT is sampled; this
+        fixes HOW MUCH each sample counts. `end_window` fires once per batch whatever the batch
+        held, so a flat `ema` gives a window carrying 0.1 units — one class-3, the smallest
+        credit there is — the same 0.30 pull on the price as a window carrying 4.0 units of
+        forty times the evidence. That is the surviving half of the bias `price_aggregate` was
+        put beside `price_raw` to expose: the moving `ema_vs_aggregate` outlier
+        (`harvest_v2_readout.cost_to_mine`) is a partition whose EMA is being dragged by its
+        thinnest windows, and it moves run to run because WHICH window is thinnest does.
+
+        So the weight is `1 - (1 - ema)**units`: the sample counts as much as `units` per-unit
+        steps at the configured rate would, which is 0.30 at exactly one unit and shrinks
+        toward zero as the window thins. Nothing else moves — the same windows flush at the
+        same times with the same `m/u` sample, the seed table and the regularizer are
+        untouched, and the clamp still bounds the result.
 
         A partition with units but no charged minutes does NOT flush — a zero sample would
         drag the EMA toward zero and price it as free. Its units stay in the window and are
@@ -669,7 +696,8 @@ class CostToMine:
             if u <= 0 or m <= 0:
                 continue
             sample = m / u
-            self.raw[p] = (1 - self.ema) * self.raw[p] + self.ema * sample
+            a = self.step(self.ema, u)
+            self.raw[p] = (1 - a) * self.raw[p] + a * sample
             self.samples[p] = self.samples.get(p, 0) + 1
             self.win_units[p] = 0.0
             self.win_min[p] = 0.0
