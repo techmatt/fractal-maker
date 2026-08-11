@@ -66,13 +66,22 @@ def _fkey(v, ndig: int = 12) -> str:
     return f"{float(v):.{ndig}g}"
 
 
-def build_split(locs: dict, *, seed: int = SPLIT_SEED, eval_frac: float = EVAL_FRAC):
+def build_split(locs: dict, *, seed: int = SPLIT_SEED, eval_frac: float = EVAL_FRAC,
+                force_eval=()):
     """`locs`: `{location_key: row}` with `row["family"]` and `row["render"]`.
 
     Returns `(side, meta)` — `side` is `{location_key: "train"|"eval"}` and `meta` reports the
     component structure so a caller can print what the union-find actually did (how many
     multi-location units formed, how many base parents were linked) rather than assert it
-    happened."""
+    happened.
+
+    `force_eval` — location keys that must land on the eval side whatever the draw says
+    (`tools/corpus/eval_only.py`: a batch stamped `eval_only`). The pin is applied at UNIT
+    granularity, not per location: forcing one member of a component and letting the draw
+    place the rest is precisely the straddle this module exists to prevent. A forced unit is
+    then withheld from its family's draw, so `eval_frac` keeps meaning "of the units this
+    rule got to choose". Empty by default and the code path is inert when empty — the rng is
+    consumed identically, so an existing corpus's split is byte-identical."""
     uf = UF()
     for k in locs:
         uf.find(k)
@@ -118,12 +127,22 @@ def build_split(locs: dict, *, seed: int = SPLIT_SEED, eval_frac: float = EVAL_F
         base = [f for f in fams if f not in JULIA_PARENT]
         return collections.Counter(base or fams).most_common(1)[0][0]
 
+    forced = set(force_eval)
+    unknown_forced = sorted(forced - set(locs))
+    forced_units = [u for u in units if forced.intersection(u)]
+
     rng = np.random.default_rng(seed)
     strata = collections.defaultdict(list)
     for members in units:
+        if forced.intersection(members):
+            continue                       # pinned below, and withheld from the draw
         strata[unit_family(members)].append(tuple(sorted(members)))
 
     side, n_eval_units = {}, 0
+    for members in forced_units:
+        for m in members:
+            side[m] = "eval"
+    n_eval_units += len(forced_units)
     for fam in sorted(strata):
         us = sorted(strata[fam])
         order = rng.permutation(len(us))
@@ -144,6 +163,10 @@ def build_split(locs: dict, *, seed: int = SPLIT_SEED, eval_frac: float = EVAL_F
         "largest_unit": max((len(u) for u in units), default=0),
         "linked_base_parents": linked_parents,
         "n_eval_units": n_eval_units,
+        "n_forced_eval_keys": len(forced),
+        "n_forced_eval_units": len(forced_units),
+        "n_locations_pinned_by_force": sum(len(u) for u in forced_units),
+        "forced_keys_not_in_this_pool": unknown_forced[:20],
         "n_eval_loc": sum(1 for s in side.values() if s == "eval"),
         "n_train_loc": sum(1 for s in side.values() if s == "train"),
     }

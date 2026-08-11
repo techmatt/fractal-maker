@@ -70,7 +70,8 @@ from .model import data_config
 from .train_v2 import detect_device
 from .train_wallpaper_v2 import build_wallpaper_model, eval_block, label_hist
 from .train_wallpaper_v4 import (
-    BATCHES, SOURCES, WRow, agg, fmt, load_rows, split_union, train_one_seed)
+    BATCHES, SOURCES, WRow, agg, assert_eval_only_pinned, fmt, load_rows, split_union,
+    train_one_seed)
 from .train_wallpaper_v4 import BatchSource, K, SPLIT_SEED
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -212,6 +213,11 @@ def split_v4b(prior: list[ARow], sheet_a: list[ARow]):
     # The prior five must be untouched — this is what makes v3/v4 comparable on this slice.
     if any(side[r.image_id] != prior_side[r.image_id] for r in prior):
         raise AssertionError("a PRIOR row moved side — v4's split must be inert here")
+    # The eval-only pin, re-checked on the SIX-batch answer: `split_union` above asserted it
+    # for the prior five, and sheet A is placed after that call. A frozen-authority split is
+    # exactly as capable of training on a blind slice as a globally re-derived one.
+    eval_only_pin = assert_eval_only_pinned(rows, lambda r: side[r.image_id],
+                                            where="train_wallpaper_v4b.split_v4b")
 
     meta = {
         "prior_train": len(tr0), "prior_eval": len(ev0),
@@ -229,6 +235,7 @@ def split_v4b(prior: list[ARow], sheet_a: list[ARow]):
                     "the baseline."),
             "moved": moved,
         },
+        "eval_only_pin": eval_only_pin,
         "train_by_batch": dict(Counter(r.batch for r in train)),
         "eval_by_batch": dict(Counter(r.batch for r in ev)),
     }

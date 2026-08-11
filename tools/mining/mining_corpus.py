@@ -32,6 +32,12 @@ So: `split_units.build_split` over the POOLED 339 locations, at the module's own
 `EVAL_FRAC` and `SPLIT_SEED` — union-find over Julia-seed == parent-plane point, stratified
 by family, drawn over UNITS. Not re-chosen, imported.
 
+ONE THING OUTRANKS THAT DRAW: a batch stamped `eval_only` is pinned to the eval side before
+the draw and asserted after it (`tools/corpus/eval_only.py`). §2a's choice is between two
+authorities for a CONTESTED location; an eval-only slice is not contested, it is spent the
+moment it trains. No render-mode batch stamps it today (the pin reports 0), so it changes
+nothing here until a blind sheet joins this pool.
+
 NEAR-DUP GROUPS carry through from `near_dup_groups.py` (colored CLIP, cut 0.974, within a
 location). They are used TWO different ways, and the asymmetry is deliberate:
 
@@ -65,6 +71,7 @@ for _p in (ROOT, ROOT / "tools"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+from tools.corpus.eval_only import assert_eval, eval_only_ids          # noqa: E402
 from tools.mining.mining_roster import MODE_KIND                       # noqa: E402
 from tools.mining.near_dup_groups import ARTIFACT as NEAR_DUP_ARTIFACT  # noqa: E402
 from tools.mining.near_dup_groups import BATCHES as POOL_BATCHES        # noqa: E402
@@ -209,7 +216,20 @@ def load_corpus(*, batches=POOL_BATCHES, require_crops: bool = True,
     for o in recs:
         pv, rd = o["row"]["provenance"], o["row"]["render"]
         locs.setdefault(pv["location_key"], {"family": pv["family"], "render": rd})
-    side, split_meta = build_split(locs, seed=seed, eval_frac=eval_frac)
+    # An eval-only batch outranks the global re-derivation: §2a's two fixes both decide
+    # WHICH draw is authority, and neither has anything to say about a slice that may never
+    # train. No render-mode batch is stamped eval_only today, so this is inert here and live
+    # the day a blind sheet lands in this pool — which is the only moment it could be
+    # forgotten (`tools/corpus/eval_only.py`).
+    # NOT restricted to the pooled batches: the leak worth catching is a POOLED batch that
+    # shares a location with an eval-only slice, and that row is only findable by asking the
+    # eval-only batch for its keys. Keys absent from this split cost nothing (`assert_eval`
+    # reports `n_present_in_split`).
+    forced = eval_only_ids("render_mode_corpus",
+                           key_of=lambda r: (r.get("provenance") or {}).get("location_key"))
+    side, split_meta = build_split(locs, seed=seed, eval_frac=eval_frac,
+                                   force_eval=set(forced))
+    split_meta["eval_only_pin"] = assert_eval(side, forced, where="mining_corpus.load_corpus")
     ok, msg = units_are_disjoint(side, locs)
     if not ok:
         raise AssertionError(f"[mining-corpus] {msg}")

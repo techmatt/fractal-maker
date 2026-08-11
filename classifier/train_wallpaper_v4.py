@@ -64,6 +64,12 @@ from pathlib import Path
 import numpy as np
 import torch
 
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.corpus.eval_only import assert_eval, coord_key, eval_only_ids  # noqa: E402
+
 from .data import Transform
 from .model import BACKBONE, corn_loss, data_config
 from .train_v2 import detect_device, set_seed
@@ -73,7 +79,6 @@ from .train_wallpaper_v2 import (
     predict_all, split_rows as split_v2, _ap, _nan,
 )
 
-ROOT = Path(__file__).resolve().parent.parent
 BATCHES = ROOT / "data" / "wallpaper_corpus" / "batches"
 
 
@@ -219,6 +224,28 @@ def load_rows(require_crops: bool = True) -> list[WRow]:
 # See `reconcile_stamped_sides` for why this is needed at all and why it is the sheet.
 SPLIT_AUTHORITY = "fresh_sheet"
 
+WALLPAPER_CORPUS = "wallpaper_corpus"
+
+
+def assert_eval_only_pinned(rows, side_of, *, where: str) -> dict:
+    """No row at an EVAL-ONLY batch's coordinate may be on the train side. Ever.
+
+    Runs on the split this module BUILT, keyed on the same c-inclusive coordinate the
+    disjointness assert uses — so it also catches a future batch that re-renders a
+    sheet-D location under a fresh image_id. It is a THIRD constraint on top of the two
+    §2a offers (freeze one batch set, or re-derive globally): both of those choose an
+    authority for a contested location, and neither knows that some slices may never
+    train at all. Inert while no loaded batch is eval-only, which is every trainer
+    today — the assert exists for the retrain that folds sheet D in."""
+    forced = eval_only_ids(WALLPAPER_CORPUS, key_of=coord_key)
+    side = {}
+    for r in rows:
+        s = side_of(r)
+        if side.setdefault(r.full_coord, s) != s:
+            raise AssertionError(f"{r.full_coord} is on two sides before the eval-only "
+                                 f"pin is even checked — {where}")
+    return assert_eval(side, forced, where=where)
+
 
 def reconcile_stamped_sides(rows: list[WRow], stamped_side):
     """Resolve locations two batches stamped onto opposite sides. Returns
@@ -310,6 +337,7 @@ def split_union(rows: list[WRow]):
     # v2/v3/v4 comparison rests on.
     if any(r.era == "july" for r in rows if r.image_id in override):
         raise AssertionError("reconciliation moved a JULY row — the old-era slice must be inert")
+    assert_eval_only_pinned(rows, side_of, where="train_wallpaper_v4.split_union")
     return train, ev, hq3_eval_locs, strata, forced, sorted(old_slice_ids), conflicts
 
 
