@@ -1,10 +1,13 @@
 # tools/ — index
 
-538 tracked files, 504 of them `.py`, across 36 subdirectories. This file is the entry
+574 tracked files, 540 of them `.py`, across 35 subdirectories. This file is the entry
 point for **"what produces X?"**. It is an index, not a contract: nothing here is
 enforced by a test, so treat a verdict as evidence to check, not as permission to delete.
 
-**File counts re-derived 2026-08-10 at this commit** (555/521/35 on 2026-08-07;
+**File counts re-derived 2026-08-11 at this commit** (the 2026-08-10 header said
+538/504/36 and was already 36 `.py` low when it landed — the sheet-D/E and flip work of
+those two days is the difference, and the header being wrong on arrival is the SECOND
+time, see below) (555/521/35 on 2026-08-07;
 the closure sweep took 12 modules) (the 2026-07-31 header said 413/381,
 which the 2026-08-06 census measured 34% low; the per-directory rows below are from the
 older pass and are NOT re-derived, so they do not sum to these totals). Count `.py` with
@@ -129,7 +132,7 @@ why that pool is a **candidate** list and nothing more:
 | `atlas/` closed readouts (9) | Per-campaign reports (`campaign2_readout`, `dive_read_adjudicate`, `julia_fix_readout`, `confirm_report`, `v5_v6_anchor_diff`, …). Each answered one question, once. | `cross_family_shakeout.py` imports `step0_reanalysis` — retiring it does not free `atlas_probe/`. |
 | `corpus/` closed builders (9) | rev4 / anchor / revisit batch builders; their batches are built and labeled. | `merge_amendments.py` is the amendment-overlay writer — verify no future revision batch needs it before retiring. |
 | `render_mode_pilot/` (3 of 8) | 0 importers dir-wide; the 3 with no committed output are `build_sample`, `integrate_dataset`, `smooth_pass`. | The other 5 wrote `labels/render_mode_pilot_v1.json` and the mining-head dataset — retiring those makes the mining head's training set unrebuildable from committed code. |
-| `wallpaper/` (2 of 19) | Only `family_entropy_trace.py` and `rerender_bootstrap_ss2.py` are dead by both. | The two builders that *look* retirable (`build_headbatch_dramatic`, `build_humanq3`) are pinned live by `test_builders_import.py`. |
+| `wallpaper/` (1 of 18) | `family_entropy_trace.py` was **deleted 2026-08-11** (unrunnable since the migration — it hardcodes the pre-migration repo root), with `selector_montage.py` and `emit_v1.main` (`retired.md`). Only `rerender_bootstrap_ss2.py` is left dead by both, and it was not evidence-checked. | The two builders that *look* retirable (`build_headbatch_dramatic`, `build_humanq3`) are pinned live by `test_builders_import.py`. |
 
 **Explicitly NOT retirement candidates**, despite appearing on earlier candidate lists:
 `atlas_probe/` (`step0_reanalysis` is on the production reward path), `studies/`

@@ -738,3 +738,37 @@ an item's evidence, the line points at it rather than restating it.
   now merge. Reviving z-plane identity means calibrating it, not restoring 1.5 and 4.0.
   `[decision: prompts/closure_sweep_1.md §5, Matt, 2026-08-10]`
   `[code: tools/wallpaper/emission_selector.py (the block comment where the branch was)]`
+
+- **2026-08-11 — the v1 emission driver and two selector eyeball tools**
+  (`tools/wallpaper/emit_v1.py`'s `main()` + its whole render tail; `selector_montage.py`;
+  `family_entropy_trace.py`). Liveness established by the two-method index in `tools/README.md`
+  before anything was cut, not after.
+  * **`emit_v1.main`** and everything only it reached — `emit`, `ensure_emit_field`,
+    `config_from_params`, `_coloring_recipe`, `_recipe_row`, `contact_sheet`, `_font`. The v1
+    emission back end: gate the 2026-07-05 humanq3 crops, run the Stage-2d selector, render the
+    winners at the 2560x1440 ss4 canon into `scratch/wallpaper/emit_v1/`. Superseded by
+    `build_emission_diversity_v1`, output home already wiped. **The module STAYS** — its library
+    half has three live importers (`build_emission_diversity_v1` and `q4_harvest_readout` take
+    `load_v2_scorer` + `GATE_THRESHOLD`, `palettes/viz_render_winners` takes
+    `build_and_select`), which is the "delete only the dead `main()` half" case.
+  * **`_emit_field_stem` is deliberately KEPT** although its only writer went with the tail.
+    The stem scheme is a frozen contract — `corpus/location.py` names it as the reference for
+    which params a field key hashes, and `corpus/test_location.py` asserts its four token axes
+    (render mode / field source / maxiter policy / geometry) against a frozen digest. Deleting
+    the function would have deleted that gate, which is the opposite of a cleanup.
+  * **`selector_montage.py`** — a contact-sheet eyeball of `emission_selector.select` on the
+    2026-07-05 bootstrap batch. Zero importers; referenced only by `retired.md` and one
+    `emission_selector` comment, both of which now record that it is gone.
+  * **`family_entropy_trace.py`** — a palette family-entropy trace through the emission
+    pipeline. Zero importers, and **UNRUNNABLE since the repo migration**: it hardcodes
+    `REPO = "C:/Code/fractal-generator"`, a path that has not existed since 2026-07-24. It was
+    already named as dead-by-both in the `tools/README.md` index.
+  * **NOT deleted, and named so the next sweep does not re-open them:**
+    `emit_v1.build_and_select` and the selector it drives (one live importer each);
+    `rerender_bootstrap_ss2.py`, the other module `tools/README.md` scores dead-by-both in
+    `wallpaper/` — it was outside this prompt's list and is not evidence-checked here.
+  * **The one cost, recorded rather than left to be found:** `deploy_tail`'s default
+    `--manifest` is `scratch/wallpaper/emit_v1/manifest.jsonl`, and the tool that wrote it is
+    now gone. The path was already wiped, so nothing changes today, and the ledger row in
+    `tests/test_scratch_dependency_allowlist.py` says so instead of naming a live producer.
+  `[decision: prompts/closure_sweep.md §2, Matt, 2026-08-11]`

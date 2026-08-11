@@ -173,9 +173,11 @@ class ColorGrid:
 #     under a local `VIEWPORT_K = 1.5` and `ZOOM_RATIO = 4.0`, plus a julia seed-`c` match —
 #     and BOTH constants were uncalibrated: named for what they govern, never fitted to any
 #     verdict set, and explicitly not the c-plane pair (which has 135 hand verdicts behind
-#     it). Nothing live reached them. `select()` is called only by `emit_v1.main` (the
+#     it). Nothing live reached them. `select()` was called only by `emit_v1.main` (the
 #     humanq3 emission, whose home is `scratch/wallpaper/emit_v1` and which the diversity-v1
-#     driver replaced), `selector_montage.py` and two archived studies; the LIVE release path
+#     driver replaced), `selector_montage.py` and two archived studies — the first two of
+#     those were themselves deleted on 2026-08-11, leaving `emit_v1.build_and_select` (through
+#     `palettes/viz_render_winners.py`) as the one non-archived caller; the LIVE release path
 #     (`tools/emission/`) does its own morph clustering and never calls `same_fractal`. So
 #     the branch was an uncalibrated policy with no caller, and it went with the closure
 #     sweep (docs/design/retired.md). Every family now takes `same_place_c_plane`.

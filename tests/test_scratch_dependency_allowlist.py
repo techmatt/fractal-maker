@@ -154,9 +154,15 @@ ALLOWLIST = [
     # (prompts/selection_restructure_3.md), so the entry named a path nothing writes and a
     # tool nothing runs. The keeper calibration is not re-derivable and does not need to be:
     # there is one flat `floors.GOOD_FLOOR` and no per-partition bar to calibrate.
-    Entry("scratch/wallpaper/emit_v1/manifest.jsonl", "tools/wallpaper/emit_v1.py", INPUT,
-          "deploy_tail's EMIT_MANIFEST — the emission it scores the tail of.",
-          "until deploy_tail is re-run from a durable emission record"),
+    Entry("scratch/wallpaper/emit_v1/manifest.jsonl",
+          "tools/wallpaper/emit_v1.py `main()` — DELETED 2026-08-11", INPUT,
+          "deploy_tail's EMIT_MANIFEST — the emission it scores the tail of. The directory "
+          "was already wiped when the v1 emission driver was retired (docs/design/"
+          "retired.md), so the row now names a path with NO producer: deploy_tail's default "
+          "--manifest cannot be regenerated and must be pointed at a real emission record. "
+          "Kept rather than deleted because the literal is still in deploy_tail.py, and a "
+          "dead default that reads as live is exactly what this ledger is for.",
+          "DEAD — the producer is gone; wipe freely"),
     Entry("scratch/wallpaper/emission_dryrun_colorcells.json",
           "tools/studies/archive/emission_dryrun_v2gate.py", INPUT,
           "self-cache of an ARCHIVED study; listed so the archive is not mistaken for a "

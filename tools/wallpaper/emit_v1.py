@@ -1,47 +1,42 @@
-"""Ship the v1 emission — real 2560x1440 wallpapers from the humanq3 pool.
+"""The v1 emission's LIBRARY HALF — the gate head, the gate+select pass and the emit
+field-stem scheme. **This module no longer emits anything.**
 
-The emission back-end, end-to-end. Deploys **v2 as the gate head** (no retrain) and
-wires gate -> select -> full-res emit so it outputs actual wallpaper PNGs.
+WHAT LEFT ON 2026-08-11 (prompts/closure_sweep.md, `docs/design/retired.md`). `main()` and the
+whole render tail under it — `emit`, `ensure_emit_field`, `config_from_params`,
+`_coloring_recipe`, `_recipe_row`, `contact_sheet`, `_font`. It was the v1 emission driver:
+gate the 2026-07-05 humanq3 crops on the wallpaper head, run the Stage-2d selector, and render
+the winners at the 2560x1440 ss4 Lanczos-3 canon into `scratch/wallpaper/emit_v1/`. Nothing has
+invoked it since the diversity-aware emission replaced it (`build_emission_diversity_v1`), its
+output home has been wiped, and it was dead by both liveness methods. The three importers of
+this module reach only into the half kept below.
 
-Pipeline (see prompts/ship_v1_emission_prompt.md):
-  1. GATE-SCORE  run v2 inference on the existing humanq3 crops (already the head's
-     ss2 label-crop input spec) -> marginal p_ge3 + continuous readout `score`. No
-     re-render for scoring.
-  2. GATE        keep marginal p_ge3 > threshold (v3 default 0.90). Good-only.
-  3. SELECT      the Stage-2d emission selector: family x Lab-cell MAP-Elites,
-     <=1/location, palette cap; fitness = the continuous readout.
-  4. EMIT        full-res render ONLY the selected winners at 2560x1440 ss4 Lanczos-3
-     (wallpaper canon) via the render_candidate (Recipe 2) path: ONE field dump per
-     emitted location + the colormap tail. NOT render-one --palette. normal_map OFF,
-     smooth-only (v1). Same (location, palette, params) the head approved, higher res.
+WHAT IS LIVE, and who reads it:
+  * `HEAD_CKPT` / `GATE_THRESHOLD` / `HEAD_VERSION` — re-exported from the torch-free
+    `wallpaper_pins` under this module's own names, because callers spell them
+    `emit_v1.GATE_THRESHOLD` (`build_emission_diversity_v1`, `q4_harvest_readout`,
+    `test_floors_one_source`).
+  * `load_v2_scorer` — the v2-parity head loader those same two readouts score with.
+  * `build_and_select` — the gate+select pass, called by `palettes/viz_render_winners.py`.
+  * `_emit_field_stem` — the emit field-identity hash. It outlives its own writer on purpose:
+    the stem scheme is a FROZEN contract (`corpus/location.py` names it as the reference for
+    which params a field key hashes) and `corpus/test_location.py` asserts its four token axes
+    against a frozen digest. Deleting it would have deleted that gate.
 
-Output: emitted PNGs + manifest.jsonl (durable, appended per emission; each row is a
-COMPLETE replayable recipe: location + resolved colouring + render_spec + wallpaper_canon
-+ gate score) + a contact sheet to eyeball. `--eval-res` renders at 1024x576 ss2 (fast,
-gate-invariant) while the recipe still reproduces the 2560x1440 ss4 Lanczos-3 canon.
-
-CAVEAT (report, don't fix): these locations were in v2's training set, so p_ge3 here
-is OPTIMISTIC — true quality is closer to the held-out dry-run (~0.60 precision). Fine
-for a first real output; the eyeball is the judge. Honest gating arrives with the
-fresh-discovery front-end (unseen locations).
-
-    uv run python -u tools/wallpaper/emit_v1.py --limit 2   # smoke: emit 2 winners
-    uv run python -u tools/wallpaper/emit_v1.py             # full emission
+CAVEAT, kept because `build_and_select` still carries it: the humanq3 locations were in the
+head's training set, so `p_ge3` on that pool is OPTIMISTIC.
 """
 from __future__ import annotations
 
-import argparse
 import dataclasses
 import importlib.util
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
@@ -49,9 +44,7 @@ sys.path.insert(0, str(REPO / "tools"))
 sys.path.insert(0, str(REPO / "tools" / "queries"))
 sys.path.insert(0, str(REPO / "tools" / "corpus"))
 
-import colormap as cm                # noqa: E402  load_field / stretch_field / render_candidate
-import location as loc_mod           # noqa: E402  from_render_block / render_one_flags
-import query_sampler as qs           # noqa: E402  load_pool_library
+import location as loc_mod           # noqa: E402  from_render_block / *_token (the stem axes)
 
 # emission_selector by file path (module isn't a package).
 _spec = importlib.util.spec_from_file_location(
@@ -72,19 +65,18 @@ from tools.wallpaper.wallpaper_pins import (  # noqa: E402,F401
 PALETTE_CAP_FRAC = 0.05          # selector palette cap = max(2, ceil(frac * N_reachable_cells))
 GRID = es.ColorGrid()            # 3x3 a/b x 2 L = 18 color cells; family x cell = behavior space
 
-# wallpaper canon (render-one locked default): 2560x1440 grid ss4 Lanczos-3, linear-light.
-# This is the INTENDED full-res target every emitted recipe reproduces, recorded verbatim
-# in each manifest row's `wallpaper_canon` so a morning "render at full-res" pass is
-# unambiguous even when the run itself emitted at eval-res.
+# The wallpaper canon the emit stems were hashed at: 2560x1440 grid ss4 Lanczos-3. The renderer
+# that used it is gone; these survive as the STEM KEY's geometry, which is a frozen contract
+# (`_emit_field_stem`, `corpus/test_location.py`) and must not be edited to match a future
+# canon — a stem is an identity, not a target.
 CANON_W, CANON_H, CANON_SS, CANON_FILTER = 2560, 1440, 4, "lanczos3"
 
 
 @dataclasses.dataclass(frozen=True)
 class RenderSpec:
-    """The ACTUAL render geometry a run emits at. Defaults to the wallpaper canon;
-    `--eval-res` drops it to 1024x576 ss2 for a fast, gate-invariant preview (the gate
-    scores head-fixed 384x224 crops, wholly independent of this res). `eval_res` marks a
-    row as NOT the canon so eval PNGs can never be mistaken for finished wallpapers."""
+    """The render geometry a field stem is keyed at. `eval_res` marked a row as NOT the canon
+    back when rows were emitted; it is carried because `EVAL_SPEC` is the second geometry the
+    stem scheme has to keep disjoint from the canon one."""
     width: int
     height: int
     ss: int
@@ -95,11 +87,8 @@ class RenderSpec:
 CANON_SPEC = RenderSpec(CANON_W, CANON_H, CANON_SS, CANON_FILTER)
 EVAL_SPEC = RenderSpec(1024, 576, 2, CANON_FILTER, eval_res=True)
 
-EXE = REPO / "target" / "release" / "fractal-generator.exe"
 OUT_DIR = REPO / "scratch" / "wallpaper" / "emit_v1"
-FIELD_DIR = OUT_DIR / "fields"         # disposable full-res field dumps (one per location)
-WALL_DIR = OUT_DIR / "wallpapers"      # emitted PNGs
-CELL_CACHE = OUT_DIR / "colorcells.json"
+CELL_CACHE = OUT_DIR / "colorcells.json"    # `load_color_cells`'s own dominant-Lab cache
 
 
 # ===========================================================================
@@ -274,253 +263,3 @@ def _emit_field_stem(loc, field_mode=None, spec=CANON_SPEC, field_source=None,
     geom = f"{spec.width}x{spec.height}ss{spec.ss}"
     h = hashlib.sha1(f"{loc.key()}|{geom}|{loc.maxiter}{suffix}".encode()).hexdigest()[:16]
     return f"{loc.family}_{h}_{geom}"
-
-
-def ensure_emit_field(loc, field_mode=None, spec=CANON_SPEC):
-    """Dump (or reuse) the field for `loc` at `spec`'s geometry — ONE dump per emitted
-    (location, geometry). Canon is 2560x1440 ss4 -> 10240x5760 raw field; eval-res is
-    1024x576 ss2 -> 2048x1152."""
-    FIELD_DIR.mkdir(parents=True, exist_ok=True)
-    stem = _emit_field_stem(loc, field_mode, spec)
-    bin_path, json_path = FIELD_DIR / f"{stem}.bin", FIELD_DIR / f"{stem}.json"
-    if not (bin_path.exists() and json_path.exists()):
-        cmd = [str(EXE), "render-one",
-               "--cx", loc.cx, "--cy", loc.cy, "--fw", loc.fw,
-               "--width", str(spec.width), "--height", str(spec.height),
-               "--supersample", str(spec.ss), "--maxiter", str(loc.maxiter),
-               "--dump-field", str(bin_path)]
-        cmd += loc_mod.render_one_flags(loc)
-        r = subprocess.run(cmd, cwd=str(REPO), capture_output=True, text=True)
-        if r.returncode != 0:
-            raise RuntimeError(f"emit dump-field failed for {stem}:\n{r.stderr[-600:]}")
-    return cm.load_field(str(bin_path), str(json_path)), bin_path
-
-
-def config_from_params(params: dict, loc, spec=CANON_SPEC) -> cm.CandidateConfig:
-    """Reconstruct the exact colouring recipe the head approved, rendered at `spec`'s
-    geometry + filter. The stored eval_filter (box) was the sampler's scoring filter and
-    is deliberately NOT used here; the actual render filter is spec.filter (lanczos3 by
-    default). The colour params are resolution-independent — only eval_width/height/filter
-    track the spec, so the same recipe replays at canon by swapping in CANON_SPEC."""
-    return cm.CandidateConfig(
-        palette=params["palette"],
-        location=cm.LocationRef(kind=loc.family, cx=loc.cx, cy=loc.cy, fw=loc.fw,
-                                maxiter=loc.maxiter, c_re=loc.c_re, c_im=loc.c_im),
-        eval_width=spec.width, eval_height=spec.height,
-        reverse=bool(params.get("reverse", False)),
-        log_premap=params.get("log_premap", "none"),
-        gamma=float(params.get("gamma", 1.0)),
-        phase=float(params.get("phase", 0.0)),
-        n_cycles=int(params.get("n_cycles", 1)),
-        transfer=params.get("transfer", "pct"),
-        transfer_gamma=float(params.get("transfer_gamma", 0.0)),
-        interior_color=tuple(params.get("interior_color", (0.0, 0.0, 0.0))),
-        filter=spec.filter,
-    )
-
-
-def _coloring_recipe(cfg: cm.CandidateConfig) -> dict:
-    """Resolution-INDEPENDENT colouring recipe (the colour params only; geometry/filter
-    live in render_spec/wallpaper_canon). Replaying this dict at any resolution
-    reproduces the identical colouring the head approved."""
-    return {
-        "palette": cfg.palette,
-        "reverse": cfg.reverse,
-        "log_premap": cfg.log_premap,
-        "gamma": cfg.gamma,
-        "phase": cfg.phase,
-        "n_cycles": cfg.n_cycles,
-        "transfer": cfg.transfer,
-        "transfer_gamma": cfg.transfer_gamma,
-        "interior_color": list(cfg.interior_color),
-    }
-
-
-def _recipe_row(i, c, loc, params, cfg, spec, gate_thr, out_png) -> dict:
-    """The COMPLETE, replayable emission recipe (B3). Backward-compatible superset of the
-    pre-fix row — `image_id`/`png`/`location`/`params` are preserved verbatim for
-    deploy_tail — with the render geometry, mode, canon target, resolved colouring, and
-    gate score added so an eval-res PNG is (a) unmistakably NOT a finished wallpaper and
-    (b) reproducible at full-res from this row alone."""
-    locblock = {"cx": loc.cx, "cy": loc.cy, "fw": loc.fw, "maxiter": loc.maxiter,
-                "fractal_type": loc.family, "c_re": loc.c_re, "c_im": loc.c_im}
-    locblock.update({k: v for k, v in loc.family_params})   # phoenix p / future extra-constants
-    return {
-        "emit_index": i, "image_id": c.image_id, "png": str(out_png.relative_to(REPO)),
-        "family": c.family, "palette": c.palette_id, "color_cell": c.color_cell,
-        "p_ge3": c.meta["p_ge3"], "fitness": c.fitness,
-        "location": locblock,               # deploy_tail dep (loc_mod.from_render_block)
-        "maxiter": loc.maxiter,             # maxiter policy (also in location)
-        "params": params,                   # raw approved params (deploy_tail dep)
-        # --- B3: complete, resolution-explicit recipe ---
-        "render_mode": "smooth",            # v1 emits smooth-only (normal_map OFF)
-        "render_spec": {"width": spec.width, "height": spec.height,
-                        "supersample": spec.ss, "filter": spec.filter,
-                        "eval_res": spec.eval_res},
-        "wallpaper_canon": {"width": CANON_W, "height": CANON_H, "supersample": CANON_SS,
-                            "filter": CANON_FILTER, "linear_light": True},
-        "coloring": _coloring_recipe(cfg),  # resolved, resolution-independent colour recipe
-        "gate": {"head": HEAD_CKPT.parent.name, "p_ge3": c.meta["p_ge3"],
-                 "fitness": c.fitness, "threshold": gate_thr},
-    }
-
-
-def emit(picks, lib, limit, spec, gate_thr, fail_at=-1):
-    """Full-res emit with a DURABLE incremental manifest (B2): each recipe row is
-    appended to manifest.jsonl the instant its PNG lands, so a crash / bad render at
-    winner N keeps every prior row on disk. Render failures are ISOLATED — a bad
-    location is caught, logged, and skipped; the run continues.
-
-    `fail_at` (testing only) forces a synthetic failure at that emit index to exercise
-    the isolation path."""
-    WALL_DIR.mkdir(parents=True, exist_ok=True)
-    manifest_path = OUT_DIR / "manifest.jsonl"
-    manifest_path.write_text("", encoding="utf-8")     # fresh file; rows appended below
-    manifest, n_fail = [], 0
-    todo = picks[:limit] if limit else picks
-    tag = "  [EVAL-RES → recipe reproduces wallpaper canon]" if spec.eval_res else ""
-    print(f"\n[emit] rendering {len(todo)} winners at {spec.width}x{spec.height} "
-          f"ss{spec.ss} {spec.filter}{tag}")
-    for i, c in enumerate(todo):
-        row = c.meta["row"]
-        loc = loc_mod.from_render_block(row["render"])
-        params = (row.get("provenance", {}) or {}).get("params", {})
-        t0 = time.time()
-        try:
-            if i == fail_at:
-                raise RuntimeError("injected failure (--fail-at, isolation test)")
-            field, bin_path = ensure_emit_field(loc, spec=spec)
-            cfg = config_from_params(params, loc, spec)
-            img = cm.render_candidate(field, cfg, lib)     # (H,W,3) uint8 sRGB
-            assert img.shape[:2] == (spec.height, spec.width), (c.image_id, img.shape)
-            del field
-            bin_path.unlink(missing_ok=True)               # distinct per winner — drop after use
-            out_png = WALL_DIR / f"emit_{i:03d}_{c.image_id}.png"
-            Image.fromarray(img).save(out_png)
-        except Exception as e:                             # B2: isolate — skip, keep going
-            n_fail += 1
-            print(f"[emit] {i:03d}/{len(todo)} FAILED {c.family:16} {c.palette_id:22} "
-                  f"{type(e).__name__}: {str(e)[:200]}  -- skipped, {len(manifest)} rows persist")
-            continue
-        rec = _recipe_row(i, c, loc, params, cfg, spec, gate_thr, out_png)
-        manifest.append(rec)
-        with manifest_path.open("a", encoding="utf-8") as f:   # B2: durable append
-            f.write(json.dumps(rec) + "\n")
-        print(f"[emit] {i:03d}/{len(todo)} {c.family:16} {c.palette_id:22} "
-              f"p_ge3={c.meta['p_ge3']:.3f} fit={c.fitness:.3f}  [{time.time()-t0:.0f}s]  -> {out_png.name}")
-    print(f"[emit] wrote {manifest_path} ({len(manifest)} rows"
-          + (f", {n_fail} failed/skipped" if n_fail else "") + ")")
-    return manifest
-
-
-# ===========================================================================
-# Contact sheet.
-# ===========================================================================
-def _font(size):
-    for name in ("arialbd.ttf", "arial.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans.ttf"):
-        try:
-            return ImageFont.truetype(name, size)
-        except OSError:
-            continue
-    return ImageFont.load_default()
-
-
-def contact_sheet(manifest, gate_thr, n_pass, n_pool, spec):
-    if not manifest:
-        print("[sheet] nothing emitted, skipping")
-        return
-    COLS = min(6, len(manifest))
-    TW, TH = 360, 203
-    BORDER, CAP, PAD, HEADER = 4, 56, 12, 90
-    cell_w, cell_h = TW + 2 * BORDER, TH + 2 * BORDER + CAP
-    rows_n = (len(manifest) + COLS - 1) // COLS
-    W = COLS * cell_w + (COLS + 1) * PAD
-    H = HEADER + rows_n * cell_h + (rows_n + 1) * PAD
-    sheet = Image.new("RGB", (W, H), (18, 18, 20))
-    d = ImageDraw.Draw(sheet)
-    f_title, f_sub, f_cap, f_capb = _font(30), _font(17), _font(14), _font(15)
-    res_tag = f"{spec.width}x{spec.height} ss{spec.ss}" + (" · EVAL-RES" if spec.eval_res else "")
-    d.text((PAD, 12), f"v1 emission · v2 gate p_ge3 > {gate_thr:g} · {res_tag}",
-           font=f_title, fill=(235, 235, 235))
-    d.text((PAD, 50), f"{len(manifest)} wallpapers emitted  ·  {n_pass}/{n_pool} passed gate  ·  "
-                      f"CAVEAT: locations in v2 train set → p_ge3 optimistic (dry-run precision ~0.60)",
-           font=f_sub, fill=(170, 170, 175))
-    for i, rec in enumerate(manifest):
-        rr, col = divmod(i, COLS)
-        x = PAD + col * (cell_w + PAD)
-        y = HEADER + PAD + rr * (cell_h + PAD)
-        with Image.open(REPO / rec["png"]) as im:
-            im = im.convert("RGB").resize((TW, TH), Image.LANCZOS)
-        d.rectangle([x, y, x + cell_w - 1, y + TH + 2 * BORDER - 1], fill=(60, 60, 66))
-        sheet.paste(im, (x + BORDER, y + BORDER))
-        cy = y + TH + 2 * BORDER
-        d.rectangle([x, cy, x + cell_w - 1, cy + CAP - 1], fill=(30, 30, 34))
-        d.text((x + 6, cy + 5), f"p{rec['p_ge3']:.2f}  fit{rec['fitness']:.2f}",
-               font=f_capb, fill=(230, 230, 230))
-        d.text((x + 6, cy + 22), rec["family"], font=f_cap, fill=(150, 200, 235))
-        pal = rec["palette"][:30]
-        d.text((x + 6, cy + 38), pal, font=f_cap, fill=(150, 150, 155))
-    out = OUT_DIR / "contact_sheet.png"
-    sheet.save(out)
-    print(f"[sheet] wrote {out} ({W}x{H}, {len(manifest)} tiles)")
-
-
-# ===========================================================================
-def main():
-    ap = argparse.ArgumentParser(description="Ship the v1 emission — real wallpapers.")
-    ap.add_argument("--pool", type=Path, default=POOL_DEFAULT, help="candidate pool batch dir")
-    ap.add_argument("--gate", type=float, default=GATE_THRESHOLD,
-                    help="marginal p_ge3 quality-floor gate (v3 default 0.90; lower=more volume)")
-    ap.add_argument("--limit", type=int, default=0, help="emit only the first N winners (smoke)")
-    ap.add_argument("--no-emit", action="store_true", help="gate+select only, skip full-res render")
-    ap.add_argument("--eval-res", action="store_true",
-                    help="render emitted PNGs at 1024x576 ss2 (fast, gate-invariant preview). "
-                         "Recipe still reproduces the full-res wallpaper canon (see manifest).")
-    ap.add_argument("--width", type=int, help="override actual render width (advanced)")
-    ap.add_argument("--height", type=int, help="override actual render height (advanced)")
-    ap.add_argument("--ss", type=int, help="override actual render supersample (advanced)")
-    ap.add_argument("--filter", help="override actual render filter: box|mitchell|lanczos3")
-    ap.add_argument("--out-dir", type=Path,
-                    help="override the emission home (use a THROWAWAY dir for tests; "
-                         "default scratch/wallpaper/emit_v1 is the production home)")
-    ap.add_argument("--fail-at", type=int, default=-1,
-                    help="testing only: force a render failure at this emit index "
-                         "(exercises the failure-isolation path)")
-    args = ap.parse_args()
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, ValueError):
-            pass
-
-    global OUT_DIR, FIELD_DIR, WALL_DIR, CELL_CACHE
-    if args.out_dir:
-        OUT_DIR = args.out_dir.resolve()
-        FIELD_DIR, WALL_DIR = OUT_DIR / "fields", OUT_DIR / "wallpapers"
-        CELL_CACHE = OUT_DIR / "colorcells.json"
-        print(f"[emit] emission home -> {OUT_DIR}")
-
-    # Resolve the ACTUAL render spec. --eval-res picks the eval preset; explicit
-    # geometry flags override any field; eval_res is recomputed as "not the canon".
-    spec = EVAL_SPEC if args.eval_res else CANON_SPEC
-    if any(v is not None for v in (args.width, args.height, args.ss, args.filter)):
-        spec = RenderSpec(width=args.width or spec.width, height=args.height or spec.height,
-                          ss=args.ss or spec.ss, filter=args.filter or spec.filter)
-    spec = dataclasses.replace(spec, eval_res=(
-        (spec.width, spec.height, spec.ss, spec.filter)
-        != (CANON_W, CANON_H, CANON_SS, CANON_FILTER)))
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    picks, res, n_pass = build_and_select(args.pool, args.gate)
-    n_pool = res.report["n_candidates"]
-    if args.no_emit:
-        print("[emit] --no-emit: stopping after selection")
-        return
-    lib = qs.load_pool_library()
-    manifest = emit(picks, lib, args.limit, spec, args.gate, fail_at=args.fail_at)
-    contact_sheet(manifest, args.gate, n_pass, n_pool, spec)
-    print(f"\n[done] {len(manifest)} wallpapers -> {WALL_DIR}")
-
-
-if __name__ == "__main__":
-    main()
