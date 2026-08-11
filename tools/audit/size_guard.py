@@ -434,7 +434,9 @@ REGISTRY: list[Entry] = [
           "metrics.json stay — the record of what was staged, which is what stops the "
           "rejection being re-litigated. Was 'ignored': v3's weight and v4's two records "
           "were tracked by force-add at a gitignored path until 2026-08-08 and are now "
-          "declared by exact-path .gitignore negation, so durable() accepts them. CANARY.",
+          "declared by exact-path .gitignore negation, so durable() accepts them. CANARY. "
+          "v4b (2026-08-10, sheet A folded in, from scratch) is the same shape as v4: "
+          "STAGED, weight + per-seed dirs ignored, run record + winner-rule report tracked.",
           canary=True),
     Entry("data/render_mode_head/", RELOCATE, PRECIOUS, "ignored",
           "trained render-mode (strange-mode gate) head .pt — not GPU-reproducible. v1 is "
@@ -443,7 +445,9 @@ REGISTRY: list[Entry] = [
           "the small mining_gate_lock.{json,md}. v2 (the 2026-08-06 finetune that LOST the "
           "winner rule) is ~60 MB of ignored working state — staged weight plus five "
           "per-seed checkpoints, de-tracked once it was a rejected candidate; only its "
-          "small run record stays in the index"),
+          "small run record stays in the index. v3 (2026-08-10, the pooled three-batch "
+          "corpus trained FROM SCRATCH) is STAGED and has the same shape: weight and "
+          "per-seed dirs ignored, run record + winner-rule report tracked"),
 
     # === RELOCATE -> trash — dead / superseded ================================
     Entry("scratchpad/", RELOCATE, TRASH, "ignored",

@@ -65,6 +65,38 @@ def corn_loss(logits: torch.Tensor, ranks: torch.Tensor, num_classes: int = 3) -
     return total / n_tasks
 
 
+def corn_loss_weighted(logits: torch.Tensor, ranks: torch.Tensor,
+                       weights: torch.Tensor, num_classes: int = 3) -> torch.Tensor:
+    """`corn_loss` with a PER-SAMPLE weight — same conditional-subset BCE, but each
+    subset's mean is weighted rather than uniform.
+
+    Added for the render-mode retrain, where a near-duplicate group of `g` rows carries
+    weight `1/g` each so one duplicated look contributes one look's worth of gradient
+    (`tools/mining/near_dup_groups.py`). Written as a generalisation rather than a fork:
+    with all-ones weights it is `corn_loss` to floating-point equality, which is what
+    `test_corn_loss_weighted.py` asserts — a weighted loss that quietly differs at uniform
+    weights would make every previous head's recipe unreproducible through it.
+
+    logits: (N, K-1). ranks: (N,) in 0..K-1. weights: (N,) non-negative."""
+    total = logits.new_zeros(())
+    n_tasks = num_classes - 1
+    w = weights.to(logits.dtype)
+    for k in range(n_tasks):
+        mask = ranks > (k - 1)               # examples with rank >= k
+        if mask.sum() < 1:
+            continue
+        tgt = (ranks[mask] > k).float()
+        pred = logits[mask, k]
+        wk = w[mask]
+        denom = wk.sum()
+        if denom <= 0:
+            continue
+        ls = F.logsigmoid(pred)
+        loss = -torch.sum(wk * (ls * tgt + (ls - pred) * (1.0 - tgt)))
+        total = total + loss / denom
+    return total / n_tasks
+
+
 def binary_loss(logits: torch.Tensor, labels123: torch.Tensor) -> torch.Tensor:
     """logits: (N,1). labels123: raw 1/2/3. Target = (label>=2)."""
     tgt = (labels123 >= 2).float().view(-1, 1)

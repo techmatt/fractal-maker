@@ -634,6 +634,19 @@ __pycache__/
 /data/wallpaper_head/v4/*
 !/data/wallpaper_head/v4/config.json
 !/data/wallpaper_head/v4/metrics.json
+# v4b (the (28) retrain: sheet A folded in, trained from scratch). STAGED and NOT adopted,
+# so under ACTIVE+PREVIOUS retention its WEIGHT is not tracked at all — v3 is ACTIVE and
+# there is no PREVIOUS. What is re-included is the RUN RECORD: the recipe, the split, the
+# per-seed band and the winner-rule report, which are what make the verdict readable
+# without the weight and what stop it being re-litigated. Adding the weight is part of an
+# ADOPTION, together with an LFS rule and the two allowlist entries — not part of a build.
+!/data/wallpaper_head/v4b/
+/data/wallpaper_head/v4b/*
+!/data/wallpaper_head/v4b/config.json
+!/data/wallpaper_head/v4b/metrics.json
+!/data/wallpaper_head/v4b/per_seed.json
+!/data/wallpaper_head/v4b/report.md
+!/data/wallpaper_head/v4b/report.json
 
 !/data/render_mode_head/
 /data/render_mode_head/*
@@ -652,6 +665,17 @@ __pycache__/
 !/data/render_mode_head/v2/per_seed.json
 !/data/render_mode_head/v2/report.md
 !/data/render_mode_head/v2/report.json
+# v3 (the (28) retrain: the pooled three-batch corpus, trained FROM SCRATCH — not a
+# finetune, which is what v2 was and what lost). Same shape as v2's block and for the same
+# reason: STAGED, so the weight and the five per-seed dirs are working state and only the
+# run record + the v1-vs-v3 winner-rule report are re-included.
+!/data/render_mode_head/v3/
+/data/render_mode_head/v3/*
+!/data/render_mode_head/v3/config.json
+!/data/render_mode_head/v3/metrics.json
+!/data/render_mode_head/v3/per_seed.json
+!/data/render_mode_head/v3/report.md
+!/data/render_mode_head/v3/report.json
 
 # data_large/ was deleted 2026-07-31 (repo-hygiene pass): it held one README and no
 # data, and its name collided with data/. Regenerable bulk goes out of tree via
