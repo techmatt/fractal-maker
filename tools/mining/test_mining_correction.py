@@ -111,9 +111,11 @@ def test_every_mode_has_supply_and_the_universe_is_deterministic(uni):
 
 
 def test_direct_modes_spread_the_grid_and_the_others_spread_palettes(uni):
-    """Sheet v1's rule, unchanged: `direct_*` is palette-INDIFFERENT, so its axis is the
-    9-cell opacity x threshold grid on ONE palette per location."""
+    """`direct_*` is palette-INDIFFERENT, so its axis is the `DIRECT_GRID` cell on ONE palette
+    per location. The v2 spec spreads the WHOLE grid inside a location — as it was built, and
+    the reason for the test below."""
     entries, _rep = uni
+    assert SPEC.direct_cells_per_location is None, "v2 must rebuild as it was built"
     for mode in MR.DIRECT_MODES:
         rows = [e for e in entries if e["mode"] == mode]
         assert len({e["palette"] for e in rows if e["location_key"] == rows[0]["location_key"]}) == 1
@@ -122,6 +124,36 @@ def test_direct_modes_spread_the_grid_and_the_others_spread_palettes(uni):
         assert cells == set(MR.DIRECT_GRID)
     pure = [e for e in entries if e["kind"] != "direct"]
     assert all(not e["mode_params"] for e in pure)
+
+
+def test_the_default_spec_takes_one_grid_cell_per_location_and_direct_mode():
+    """THE FIX (2026-08-11). Spreading the whole grid inside a location is what minted sheet
+    v2's self-duplicates — 877 of its 993 same-location co-grouped pairs were one direct mode
+    at two cells. Any new sitting takes one cell per (location, mode), and the cells still
+    spread ACROSS locations so the grid is covered by the sheet rather than by each row of it.
+
+    Asserted against a spec that only differs in that field, so it is the RULE under test and
+    not some other difference between two sittings."""
+    import dataclasses                                       # noqa: PLC0415
+    assert BC.SheetSpec.__dataclass_fields__[
+        "direct_cells_per_location"].default == 1, "the default must be the fixed rule"
+    one = dataclasses.replace(SPEC, direct_cells_per_location=1)
+    entries, rep = BC.universe(one)
+    per_pair = Counter((e["location_key"], e["mode"])
+                       for e in entries if e["kind"] == "direct")
+    assert per_pair, "no direct entries — the property is untested"
+    assert max(per_pair.values()) == 1, "a (location, direct mode) took two sweep cells"
+    # ...and the grid is still covered, across locations.
+    cells = {(e["mode_params"]["direct_opacity"], e["mode_params"]["direct_threshold"])
+             for e in entries if e["kind"] == "direct"}
+    assert cells == set(MR.DIRECT_GRID)
+    assert rep["direct_cells_per_location"] == 1
+    # the whole point, in one number: the universe shrinks by the cells no longer minted.
+    assert len(entries) < len(uni_entries(SPEC))
+
+
+def uni_entries(spec):
+    return BC.universe(spec)[0]
 
 
 def test_an_absent_prior_sheet_is_a_hard_stop_not_an_empty_exclusion(monkeypatch):
@@ -179,7 +211,8 @@ def test_the_fancy_oversample_is_where_the_prompt_put_it_the_MID_band(drawn):
 
     The OVERALL fancy share is deliberately NOT asserted. The mode floor and the balanced fill
     both spread over modes, and the six pure modes have far less supply per mode than the nine
-    fancy ones (`direct_*` alone spreads a 9-cell grid), so a correct draw comes out BELOW the
+    fancy ones (`direct_*` alone spreads the whole grid under v2's spec), so a correct draw
+    comes out BELOW the
     population's fancy share overall — 0.663 against 0.721 on the live screen. Asserting the
     overall share would go red on a draw doing exactly what it was asked to do."""
     # A population where the PURE modes dominate the mid band, so a draw that merely balanced

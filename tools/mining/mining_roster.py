@@ -26,10 +26,10 @@ THREE RENDER KINDS, and the kind decides colour fidelity:
   direct   `transfer=grad`, so that one knob is DROPPED and the row stamps
             `transfer_dropped: true` rather than pretending it was honoured.
 
-`direct_*` additionally sweeps a 3x3 opacity x threshold grid (the thresholds span the
-measured p75..p95 across trap shapes), and the family is palette-INDIFFERENT by construction
-— which is why the samplers dedupe it to one palette per location and spread the grid
-instead.
+`direct_*` additionally sweeps a THRESHOLD grid — three points spanning the measured p75..p95
+across trap shapes, at one fixed opacity since 2026-08-11 (the opacity axis was measured null;
+see `DIRECT_GRID`). The family is palette-INDIFFERENT by construction, which is why the
+samplers dedupe it to one palette per location and spread the grid instead.
 
 ROLLOFF is gated to `direct_trap_screen` alone (soft_knee @ 0.35, the screen-family blowout
 recovery). Every other mode renders rolloff-off, and `Rolloff::None` is exact identity, so
@@ -45,9 +45,33 @@ ROOT = Path(__file__).resolve().parents[2]
 SPECS_DIR = ROOT / "specs"
 
 # --- the direct-trap sweep --------------------------------------------------- #
-DIRECT_OPACITY = (0.15, 0.30, 0.45)
+# COARSENED 3x3 -> 1x3 ON 2026-08-11 (prompts/closure_sweep.md), and the axis that went is the
+# one MEASURED to do nothing. Read on sheet B's own 485 direct crops through the same colored
+# CLIP substrate and the same `smooth_equivalence.STRICT_CUT` (0.974) the near-dup grouping
+# uses (`scratch/closure_sweep/direct_axis_read.txt`), over same-location same-mode pairs:
+#
+#     differing in OPACITY only    298/313 = 0.952 are the SAME PICTURE
+#     differing in THRESHOLD only  207/293 = 0.706
+#     differing in both            372/550 = 0.676
+#
+# So the opacity axis was minting three copies of every cell for a 4.8% chance of a different
+# render. It is collapsed to ONE value and the threshold axis keeps all three of its points —
+# threshold is the axis with a derivation (the measured p75..p95 across trap shapes) and it is
+# the one still doing work, though at 0.706 it is far from clean either.
+#
+# WHICH opacity is NOT evidence-driven and says so: the threshold sweep separates at 0.719 /
+# 0.731 / 0.673 under opacity 0.15 / 0.30 / 0.45, which is ~1 standard error apart on ~100
+# pairs per cell. 0.30 is taken as the midpoint — the least committed choice on an axis the
+# same measurement just called null.
+#
+# WHAT THIS DOES NOT DO is get self-dup pairs to zero; see `near_dup_groups.py`. Nine cells
+# spread within one location minted 877 co-grouped same-mode pairs on sheet B and three cells
+# would have minted 68. Zero comes from drawing ONE cell per (location, direct mode) — which
+# every sampler except `build_mining_correction` already did, and which is now that module's
+# default too (`SheetSpec.direct_cells_per_location`).
+DIRECT_OPACITY = (0.30,)
 DIRECT_THRESHOLD = (0.05, 0.08, 0.12)          # spans measured p75..p95 across shapes
-DIRECT_GRID = tuple((op, th) for op in DIRECT_OPACITY for th in DIRECT_THRESHOLD)  # 9 cells
+DIRECT_GRID = tuple((op, th) for op in DIRECT_OPACITY for th in DIRECT_THRESHOLD)  # 3 cells
 
 # --- the SMOOTH baseline ------------------------------------------------------- #
 # `smooth` is the base carrier every composite builds on (`specs/smooth.json`,

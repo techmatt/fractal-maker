@@ -38,9 +38,15 @@ row and the run prints their rank agreement.
 THE UNIVERSE is the same one sheet v1 drew from — `gate_passers_v3.json` (401 (location,
 palette) rows over 112 locations, the wallpaper head's own gate passers) x the 15-mode roster
 — MINUS every (location, mode) pair v1 already served. Nothing Matt has judged is served
-twice. `direct_*` is palette-INDIFFERENT by construction, so it spreads the 9-cell
-opacity x threshold grid on one deterministic palette per location instead of spreading
-palettes; that is sheet v1's rule, unchanged.
+twice. `direct_*` is palette-INDIFFERENT by construction, so it draws one deterministic
+palette per location and varies the `DIRECT_GRID` cell instead.
+
+HOW MANY CELLS PER LOCATION IS A SPEC FIELD NOW (2026-08-11). v2 spread the WHOLE grid inside
+each (location, direct mode), and that is where its self-duplicates came from: 877 of its 993
+same-location co-grouped pairs were one direct mode duplicating itself at two cells
+(`near_dup_groups.py`). The default is 1 — the rule every other sampler in `tools/mining/`
+already used — walked round a seeded permutation so cells spread ACROSS locations instead. v2's
+spec pins the old value so it rebuilds as it was built.
 
   uv run python -u tools/mining/build_mining_correction.py estimate
   uv run python -u tools/mining/build_mining_correction.py screen --limit 8      # smoke
@@ -118,6 +124,15 @@ class SheetSpec:
     eval_frac: float
     mode_floor: int = MODE_FLOOR
     fancy_mid_share: float = FANCY_MID_SHARE
+    # How many DIRECT_GRID cells one (location, direct mode) pair spreads over. 1 is the rule
+    # every other sampler in `tools/mining/` already used — a per-location permutation of the
+    # grid, one cell taken — and it is the default here from 2026-08-11 because spreading the
+    # whole grid inside one location is what mints self-duplicates: sheet v2's 9-cell spread
+    # produced 877 of its 993 same-location co-grouped pairs as one direct mode duplicating
+    # ITSELF at two cells (`near_dup_groups.py`; the coarsened 3-cell grid would still have
+    # produced 68). `None` means "spread every cell" and exists so v2 rebuilds as it was
+    # built, not as it should have been.
+    direct_cells_per_location: int | None = 1
 
     @property
     def batch_dir(self) -> Path:
@@ -152,6 +167,11 @@ SHEETS = {
         draw_seed=20260810,
         split_seed=0,            # the July split seed — the design is reused, not re-rolled
         eval_frac=0.40,
+        # AS BUILT, not as it should have been. v2 spread all nine cells of the then-3x3 grid
+        # inside each (location, direct mode), and that is the batch on disk and labeled. The
+        # field is pinned here so a rebuild reproduces it; the DEFAULT for any new sitting is
+        # 1 cell (see `SheetSpec.direct_cells_per_location`).
+        direct_cells_per_location=None,
     ),
 }
 
@@ -192,14 +212,41 @@ def universe(spec: SheetSpec):
     entries = []
     for mode in MR.MODES:
         kind = MR.MODE_KIND[mode]
+        # direct-trap: a permuted cycle over the grid cells, so every cell is used about
+        # equally within the mode and a location's cell does not correlate with its family.
+        # The permutation is seeded off (spec, mode) alone, so it is a pure function of the
+        # spec — `universe` is recomputed by `screen`/`select`/`render`/`write` and all four
+        # must agree. It is only consulted when the spec takes ONE cell per pair; the
+        # spread-everything path (v2 as built) does not use it.
+        n_cells = spec.direct_cells_per_location
+        cell_order = list(range(len(MR.DIRECT_GRID)))
+        if kind == "direct" and n_cells:
+            seed = int(hashlib.blake2b(f"{spec.id_salt}|{mode}".encode(),
+                                       digest_size=4).hexdigest(), 16)
+            cell_order = [int(j) for j in
+                          np.random.default_rng(seed).permutation(len(MR.DIRECT_GRID))]
+        cursor = 0
         for k in sorted(loc_rows):
             if (k, mode) in sv:
                 continue
             members = sorted((rows[i] for i in loc_rows[k]), key=lambda r: r["image_id"])
             if kind == "direct":
-                # palette-INDIFFERENT: spread the opacity x threshold grid on ONE palette.
+                # palette-INDIFFERENT: spread the threshold grid on ONE palette. `n_cells`
+                # None spreads EVERY cell (v2 as built); an int walks the permuted cycle so
+                # cells are used about equally ACROSS locations while no ONE location carries
+                # two of them — the self-duplicate this sheet used to mint.
                 src = members[0]
-                for ci, (op, th) in enumerate(MR.DIRECT_GRID):
+                if n_cells is None:
+                    picks = cell_order
+                else:
+                    picks = [cell_order[(cursor + j) % len(cell_order)]
+                             for j in range(min(int(n_cells), len(cell_order)))]
+                    cursor += len(picks)
+                # `variant` is the index into DIRECT_GRID, not the position in the draw, so a
+                # unit key names WHICH cell it is and two locations taking different cells
+                # cannot collide on it.
+                for ci in picks:
+                    op, th = MR.DIRECT_GRID[ci]
                     entries.append(_entry(mode, kind, k, loc_fam[k], src,
                                           {"direct_opacity": op, "direct_threshold": th}, ci))
             else:
@@ -224,9 +271,17 @@ def universe(spec: SheetSpec):
         "n_universe": len(entries),
         "universe_by_mode": {m: sum(1 for e in entries if e["mode"] == m) for m in MR.MODES},
         "universe_by_kind": dict(Counter(e["kind"] for e in entries)),
-        "direct_rule": "direct_* is palette-INDIFFERENT by construction, so it spreads the "
-                       "9-cell DIRECT_GRID on one deterministic palette per location instead "
-                       "of spreading palettes (sheet v1's rule, unchanged)",
+        "direct_rule": (
+            "direct_* is palette-INDIFFERENT by construction, so it draws ONE deterministic "
+            "palette per location and varies the DIRECT_GRID cell instead of the palette. "
+            + (f"{len(MR.DIRECT_GRID)} cells spread WITHIN each location (v2 as built — the "
+               f"rule that minted 877 self-duplicate pairs)" if
+               spec.direct_cells_per_location is None else
+               f"{spec.direct_cells_per_location} cell per (location, mode), walked round a "
+               f"seeded permutation of the {len(MR.DIRECT_GRID)}-cell grid so cells spread "
+               f"ACROSS locations and no location carries two")),
+        "direct_cells_per_location": spec.direct_cells_per_location,
+        "direct_grid": [list(c) for c in MR.DIRECT_GRID],
     }
     return entries, report
 

@@ -26,7 +26,9 @@ DRAW, per mode: distinct locations, family-apportioned through `apportion.deal_r
 (so the eight families are balanced-or-drained rather than proportional — mandelbrot supplies
 63 of 112 locations and would otherwise own the sheet), one gate-passing palette per drawn
 location. `direct_*` is palette-INDIFFERENT by construction, so it is palette-deduped and
-spreads a permuted 3x3 opacity x threshold cell per location instead.
+spreads a permuted `DIRECT_GRID` cell per location instead (3 threshold cells since the
+2026-08-11 coarsening; it was a 3x3 opacity x threshold grid when this sheet was built, and
+this module takes ONE cell per location either way).
 
 SPLIT — `split_units.build_split`: union-find over Julia-seed == parent-plane point,
 family-stratified, `EVAL_FRAC=0.40`, seed 0. Stamped in-row as `provenance.split_side`.

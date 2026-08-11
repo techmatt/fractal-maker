@@ -1,12 +1,30 @@
 r"""near_dup_groups.py — THE near-duplicate grouping over the pooled render-mode corpus.
 
-WHY THIS EXISTS. Sheet B (`2026-08-10_render_mode_correction_v2`) draws a 3x3
-opacity x threshold sweep per `direct_*` mode, and at many locations two cells of that
-sweep are the SAME picture: 631 of its 688 same-location near-dup pairs are a `direct_*`
-mode duplicating ITSELF at two cells (`sittings_27c_report.md` correction 3). A retrain
-that counts both copies gives one location's one look double the weight of every other,
-and a split that puts one copy in train and the other in eval is training-on-eval wearing
-two image_ids.
+WHY THIS EXISTS. Sheet B (`2026-08-10_render_mode_correction_v2`) drew a 3x3
+opacity x threshold sweep per `direct_*` mode WITHIN each location, and at many locations two
+cells of that sweep are the SAME picture: 631 of its 688 same-location near-dup pairs are a
+`direct_*` mode duplicating ITSELF at two cells (`sittings_27c_report.md` correction 3; the
+same class counted over co-grouped rather than LINKING pairs is 877 of 993). A retrain that
+counts both copies gives one location's one look double the weight of every other, and a split
+that puts one copy in train and the other in eval is training-on-eval wearing two image_ids.
+
+THE SOURCE OF THAT CLASS IS FIXED AS OF 2026-08-11 (prompts/closure_sweep.md), so this
+grouping is a cleanup of what exists rather than a permanent tax on new sheets. Two changes,
+and the SECOND is the one that matters: `mining_roster.DIRECT_GRID` lost its opacity axis
+(measured null — pairs differing only in opacity are the same picture 95.2% of the time), and
+`build_mining_correction` now draws ONE cell per (location, direct mode) like every other
+sampler here. Re-counted over sheet B's own crops and this artifact's own groups
+(`scratch/closure_sweep/direct_grid_reverify.txt` — a re-count, not a rebuild; the coarsened
+cells cannot be rendered into an already-labeled batch):
+
+    as built                    1000 rows, 993 co-grouped same-location pairs, 877 self-dup
+    coarsened grid alone         675 rows, 103                                ,  68 self-dup
+    one cell per pair alone      629 rows,  23                                ,   0 self-dup
+    both (what landed)           602 rows,  25                                ,   0 self-dup
+
+The grid coarsening alone does NOT reach zero and could not: self-duplication is a
+within-location property, so it is the number of cells spread inside one location that sets
+it, not the size of the grid they come from.
 
 So the pooled corpus is grouped BEFORE it is split or weighted:
 

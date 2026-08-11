@@ -434,16 +434,29 @@ def draw_pairs(spec: SheetSpec, drawn_locs, targets, oversample=None):
 def _entry(spec: SheetSpec, v, key: str, mode: str, order: int) -> dict:
     """One candidate unit. The `direct_*` grid cell is ONE per (location, mode) — never two
     sweep cells of the same direct mode at one location, which is the self-duplication class
-    sheet B produced 631 times (631 of its 688 same-location near-dup pairs). Distinct direct
-    modes at a location DO get distinct cells, off a per-location permutation, so the 3x3
-    sweep is still covered across the sheet."""
+    sheet B produced 631 times (631 of its 688 same-location near-dup pairs).
+
+    Distinct direct modes at a location take successive cells of a per-location permutation,
+    which SPREAD them while the grid was 9 cells and can no longer make them all distinct: the
+    grid was coarsened to 3 cells on 2026-08-11 (the opacity axis measured null,
+    `mining_roster.DIRECT_GRID`) against 4 direct modes, so by pigeonhole one cell is reused at
+    every location. That is a weakening and it is a small one — two DIFFERENT direct modes are
+    two different trap shapes, so the cell is not what makes them different pictures, and the
+    duplication class that mattered was always the SAME mode twice."""
     loc = v["loc"]
     kind = MR.kind_of(mode)
     mode_params = {}
     if kind == "direct":
         rng = np.random.default_rng([spec.draw_seed, _mode_seed(key)])
         perm = [MR.DIRECT_GRID[int(j)] for j in rng.permutation(len(MR.DIRECT_GRID))]
-        op, th = perm[MR.DIRECT_MODES.index(mode) % len(perm)]
+        # WHICH mode takes which cell is permuted per location too. With 4 direct modes over a
+        # 3-cell grid some pair must share, and a fixed `DIRECT_MODES.index(mode) % 3` makes it
+        # ALWAYS the same pair (ring and lines), everywhere — a systematic confound rather than
+        # a pigeonhole. Permuting the modes as well moves which pair collides from location to
+        # location, so no two direct modes are cell-identical across the sheet.
+        slot = {m: int(j) for m, j in
+                zip(MR.DIRECT_MODES, rng.permutation(len(MR.DIRECT_MODES)))}
+        op, th = perm[slot[mode] % len(perm)]
         mode_params = {"direct_opacity": op, "direct_threshold": th}
     cp = dict(v["color_params"])
     e = {
@@ -521,10 +534,12 @@ def universe(spec: SheetSpec):
         "n_smooth_twins": len(twins),
         "candidates_by_mode": dict(sorted(Counter(e["mode"] for e in candidates).items())),
         "candidates_by_partition": dict(sorted(Counter(e["partition"] for e in candidates).items())),
-        "direct_rule": "ONE opacity x threshold cell per (location, direct mode), off a "
-                       "per-location permutation of DIRECT_GRID — so no direct mode appears "
-                       "twice at a location (sheet B's self-dup class) and distinct direct "
-                       "modes at a location still land on distinct cells",
+        "direct_rule": f"ONE cell per (location, direct mode), off a per-location permutation "
+                       f"of the {len(MR.DIRECT_GRID)}-cell DIRECT_GRID — so no direct mode "
+                       f"appears twice at a location (sheet B's self-dup class). Distinct "
+                       f"direct modes take successive cells; with "
+                       f"{len(MR.DIRECT_MODES)} direct modes over {len(MR.DIRECT_GRID)} cells "
+                       f"they cannot all differ",
         "pair_freshness": pair_freshness(candidates, exclude_batch=spec.batch_id),
     }
     return candidates, twins, loc_meta, rep

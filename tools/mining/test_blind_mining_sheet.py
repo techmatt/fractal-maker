@@ -23,8 +23,10 @@ the one-class cell that must vote neither way.
 """
 from __future__ import annotations
 
+import itertools
 import json
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -301,8 +303,16 @@ def test_oversample_is_a_reserve_the_filters_spend():
 
 def test_one_grid_cell_per_location_and_direct_mode():
     """Sheet B's self-dup class: 631 of its 688 same-location near-dup pairs were ONE direct
-    mode at two cells of the 3x3 sweep. Here a (location, mode) is one unit, so that cannot
-    happen; and distinct direct modes at a location still land on distinct cells."""
+    mode at two cells of the sweep. Here a (location, mode) is one unit, so that cannot happen.
+
+    Distinct direct modes at a location are no longer guaranteed distinct cells: the
+    2026-08-11 coarsening put 4 direct modes over a 3-cell grid
+    (`mining_roster.DIRECT_GRID`), so some pair must share. What is asserted instead is that
+    the sharing is not SYSTEMATIC — no ordered pair of direct modes takes the same cell at
+    every location, which is exactly what a fixed `DIRECT_MODES.index(mode) % n_cells` would
+    produce and what the per-location mode permutation exists to prevent. Every cell must also
+    be reached. The `if n_cells >= n_modes` clause keeps the strong all-distinct assertion
+    alive for a grid that can still afford it."""
     locs = [loc_entry(i) for i in range(40)]
     targets = {m: (20 if MR.MODE_KIND.get(m) == "direct" else 0) for m in BE.ACTIVE_MODES}
     ents, _ = BE.draw_pairs(SPEC, locs, targets, oversample=1.0)
@@ -314,12 +324,29 @@ def test_one_grid_cell_per_location_and_direct_mode():
         assert k not in by_pair, f"two sweep cells for {k}"
         by_pair[k] = (e["mode_params"]["direct_opacity"], e["mode_params"]["direct_threshold"])
     per_loc = {}
-    for (k, _m), cell in by_pair.items():
-        per_loc.setdefault(k, []).append(cell)
+    for (k, m), cell in by_pair.items():
+        per_loc.setdefault(k, {})[m] = cell
     multi = [v for v in per_loc.values() if len(v) > 1]
     assert multi, "no location carried two direct modes — the property is untested"
+    n_cells, n_modes = len(MR.DIRECT_GRID), len(MR.DIRECT_MODES)
+
+    assert {c for v in per_loc.values() for c in v.values()} == set(MR.DIRECT_GRID), \
+        "the draw does not reach every grid cell"
+
+    # no ordered pair of direct modes is cell-identical everywhere they co-occur.
+    shared, seen_pair = Counter(), Counter()
     for v in multi:
-        assert len(set(v)) == len(v), "two direct modes at one location share a grid cell"
+        for a, b in itertools.combinations(sorted(v), 2):
+            seen_pair[(a, b)] += 1
+            shared[(a, b)] += v[a] == v[b]
+    assert seen_pair, "no mode pair co-occurred — the property is untested"
+    always = [p for p, n in seen_pair.items() if n >= 3 and shared[p] == n]
+    assert not always, f"these mode pairs share a cell at EVERY location: {always}"
+
+    # non-vacuity: a grid at least as large as the mode count can still afford all-distinct,
+    # so the assertion above has not been weakened into one that cannot fail.
+    if n_cells >= n_modes:
+        assert all(len(set(v.values())) == len(v) for v in multi)
 
 
 # --------------------------------------------------------------------------- #
