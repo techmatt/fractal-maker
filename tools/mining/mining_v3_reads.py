@@ -89,6 +89,18 @@ METRICS = (Metric("auc_ge3", "AUC>=3", "p_ge3", 3, "auc"),
 SWEEP = sorted({round(x, 3) for x in np.arange(0.0, 1.0, 0.05)}
                | {F.MINING_POOL.value, F.MINING_RELEASE.value})
 
+# Which metrics each no-worse arm VOTES on. The prompt names the per-mode arms as "per-mode
+# AUCs where two classes exist" — AUCs, not APs — so a mode arm submits its two AUC cells and
+# nothing else. Everything is still COMPUTED and printed for every arm; this only decides
+# what the rule reads, and it is fixed here rather than after the cells are seen. It matters:
+# clause (a) is a conjunction, and doubling a 16-mode arm set from 32 cells to 64 doubles the
+# chance a head loses to one unlucky mode.
+AUC_ONLY = tuple(m for m in METRICS if m.kind == "auc")
+
+
+def voting_metrics(arm: str):
+    return AUC_ONLY if arm.startswith("mode:") else METRICS
+
 
 def log(m):
     print(m, flush=True)
@@ -296,8 +308,10 @@ def build(rows, base, cand, seed_scores, pool, *, draws, seed) -> dict:
     R["ladder_v1_ge3"] = ladder(labels, base["p_ge3"], thr=3)
 
     # --- the rule --------------------------------------------------------------
+    R["voting_cells"] = {k: [m.key for m in voting_metrics(k)] for k in R["no_worse"]}
     R["winner_rule"] = verdict(
-        {k: v["delta_ci"] for k, v in R["no_worse"].items()},
+        {k: {m.key: v["delta_ci"][m.key] for m in voting_metrics(k)}
+         for k, v in R["no_worse"].items()},
         {k: v["delta_ci"] for k, v in R["motivating"].items()},
         pooled_arm="pooled", baseline="v1", candidate="v3")
     R["winner_rule"]["candidate_ckpt"] = (
@@ -332,7 +346,9 @@ def md(R) -> str:
         A("| arm | n | ge3 | v1 AUC≥3 | v3 AUC≥3 | Δ 95% CI | v1 AP≥3 | v3 AP≥3 | Δ 95% CI |")
         A("|---|---:|---:|---:|---:|---|---:|---:|---|")
         for name in roles:
-            b = arms[name]
+            b = arms.get(name)
+            if b is None:          # an arm with no rows on this slice is absent, not blank
+                continue
             ci3, cia = b["delta_ci"]["auc_ge3"], b["delta_ci"]["ap_ge3"]
             def cell(x):
                 return "—" if x is None else f"{x:.3f}"

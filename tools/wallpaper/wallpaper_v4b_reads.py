@@ -244,7 +244,9 @@ def md(R) -> str:
         A("| arm | n | ≥3 | v3 AUC≥3 | v4b AUC≥3 | Δ 95% CI | v3 AP≥3 | v4b AP≥3 | Δ 95% CI |")
         A("|---|---:|---:|---:|---:|---|---:|---:|---|")
         for name in order:
-            b = arms[name]
+            b = arms.get(name)
+            if b is None:
+                continue
             def cell(x):
                 return "—" if x is None else f"{x:.3f}"
             def ic(c):
