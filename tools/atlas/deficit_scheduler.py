@@ -176,19 +176,14 @@ SEED_SOURCES = (
     ("library_seed_v2",
      ROOT / "data" / "emission" / "library_seed_v2" / "intake.json",
      _paths.bulk("data/emission/library_seed_v2/embs")),
-    # v3 — REGISTERED, DELIBERATELY NOT ADOPTED (2026-08-10, production_run_25).
-    # It is v2's 168 human->=3 looks UNIONED with that run's emission intake, 1,322 medoids
-    # over 9 types, and it is LAST on purpose: resolution is first-EXISTING-wins, v2 exists,
-    # so v2 still resolves and no discovery run changes behaviour by this line landing. What
-    # the entry buys is RESOLVABILITY — `descriptor.library_emb_source` walks this registry to
-    # find a snapshot's embeddings, so without it v3 falls back to an in-tree `<dir>/embs`
-    # that the resolver never relocates. Adoption is moving this tuple ABOVE v2, and it is a
-    # real decision, not a formality: v2 is 168 HUMAN verdicts and v3 is 92% machine-judged
-    # locations, so promoting it changes what "the library already holds" means to every
-    # deficit that reads it.
-    ("library_seed_v3",
-     ROOT / "data" / "emission" / "library_seed_v3" / "intake.json",
-     _paths.bulk("data/emission/library_seed_v3/embs")),
+    # library_seed_v3 WAS REGISTERED HERE FROM 2026-08-10 AND IS REJECTED (Matt, 2026-08-11,
+    # prompts/closure_sweep.md). It was v2's 168 human->=3 looks unioned with production run
+    # 25's emission intake — 1,322 medoids over 9 types, 92% of them MACHINE-judged. It sat
+    # last in the registry (first-EXISTING-wins, and v2 exists) so it never seeded a run, and
+    # the decision is that it never will: promoting it would redefine "the library already
+    # holds this" from Matt's own verdicts to the head's, on every deficit that reads the
+    # seed. Its intake snapshot and its embeddings were deleted with the entry — usefulness
+    # before recoverability — and nothing else read either. **v2 is the library seed.**
 )
 
 
