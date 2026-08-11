@@ -14,6 +14,10 @@ the render core and pipeline; these docs go a level deeper on specific decisions
 | [aesthetic_scoring.md](aesthetic_scoring.md) | How to read the signal: occupancy/busy-ness is anti-quality (report-only), and `p_good` is a badness filter, not a goodness ranker. |
 | [classifier_retrain_protocol.md](classifier_retrain_protocol.md) | Append-don't-rebuild manifests, forced eval/train split rules, pre-registered paired-eval bar, and per-version `t_good` re-derivation. |
 | [morphology_dedup.md](morphology_dedup.md) | Visual dedup: coordinate dedup is not visual dedup, the cone-compressed CLIP space, grayscale-CLIP descriptor choice, and dedup-key identity rules. |
+| [crop_batch.md](crop_batch.md) | The `crop-batch` extended-field crop executor (`src/crop_batch.rs`), the cache-build recipe from v11 on: the equal-plane-margin containment bound the live 1.2/[0.90,1.10]/5% triple sits exactly on, the `field_ss 2` pin and the grid fact behind it, canonical-frame maxiter per row as a ~3% accepted policy change, stream-and-discard (no field-cache key), `(seed_tag, loc_id, slot)` seeding + `--replay`, and the measured per-location/per-tile costs. |
+| [exposure_hdr.md](exposure_hdr.md) | **Measured, nothing adopted beyond one mode.** Highlight rolloff and the blown-highlight failure: the reachability map (8 of 15 roster modes can reach a rolloff, 1 has it on, `direct_trap_multiply` can never), the two failure classes with opposite verdicts, `transform=histeq` existing-parsed-unused, why any field-side arm splits, the NEVER-gate-on-clip-share rule, and the two PENDING TODOs. |
+| [corpus_batches.md](corpus_batches.md) | Per-batch **role** annotations — what a batch may be used for beyond its split (`batch_registry.py` owns the split): base-rate vs never-base-rate, anchored-is-train / blind-is-eval, the two permanent blind instruments and which boundary each can referee, the ranker batches whose join is wiped, and what the corpus cannot tell you. |
+| [sitting_builder.md](sitting_builder.md) | How one labelling sitting is cut, ordered and served (`sitting_cutter.py` + `build_combined_label_sheet.py`): the three non-optional filter stages, the calibration reservation and `MIN_POS`, apportionment sequencing and its population-dependent ±1 bound, correction-sheet vs blind-sheet serving, and the opaque-export row-count rule. |
 | [render_coloring_surface.md](render_coloring_surface.md) | The two coloring algorithms, three palette namespaces, the silent density fork, the open corpus-coloring hazard (P4), why the OKLab ports must not be merged, (§6) the Ultra Fractal originals four `render_modes` fields were ported against — incl. the three `DirectShape` names that collide with UF's while computing something different — and (§7) the two field-dump sources, the `FieldNeeds` gate that closed the ~35× `beautiful` gap, and why the field source belongs in the cache key. |
 | [auto_maxiter.md](auto_maxiter.md) | The depth-aware iteration cap: the closed form and its two load-bearing sites, the 32-atom measurement that showed base 500 was ×8 too low, the adopted base 4000 / clamp 67000, the **median-clean-not-clean** residual (tail runs to ×24), the aug cache's separate flat-8000 cap, and the four things a cap change moves. |
 | [discovery_pipeline.md](discovery_pipeline.md) | The guided-descend walk + reward split, the freshness-prior/dive incompatibility, the distinct-look deficit scheduler (incl. julia routing), and the cross-run saturation memory that discounts breadth candidates by visited density. |
@@ -43,7 +47,7 @@ doc's boundary note names those explicitly. If you want roster / screen / pre-fi
 window-label content, read `minibrot_sourcing.md`; if you want precision, the
 perturbation tier or deep-center production, read `deep_zoom_sourcing.md`.
 
-**The table indexes all 26 docs here** — every file gets a row, because an unindexed doc is
+**The table indexes all 30 docs here** — every file gets a row, because an unindexed doc is
 invisible, which is how one rots unnoticed. A new doc lands with its row or it does not land.
 
 **Three of them are practice docs, and they are consulted rather than read.**
@@ -55,8 +59,9 @@ point at it.
 
 The 1–4 human label scale is **not** here: it lives with the store it governs, in
 `data/label_corpus/CORPUS_SCHEMA.md` § label (`label_rubric.md` was retired into it).
-`[measured: 26 docs, 26 rows; 2026-07-31 — was stated as 24/24 while the tree held 23/23,
-stale by one since `label_rubric.md` was retired into the corpus schema]`
+`[measured: 30 docs, 30 rows; 2026-08-11 — four landed in the handoff-extraction pass
+(`crop_batch`, `exposure_hdr`, `corpus_batches`, `sitting_builder`). Previously 26/26 on
+2026-07-31, and 24/24 while the tree held 23/23 before that]`
 `[cmd: ls docs/design/*.md | grep -vc README; grep -c '^| \[' docs/design/README.md]`
 
 **The dated-readouts carve-out is withdrawn, and the readouts are gone.** This README used to
