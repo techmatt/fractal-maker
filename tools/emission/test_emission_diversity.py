@@ -1081,13 +1081,19 @@ def test_exhausted_locations_are_skipped_without_stalling_the_round():
 # plan built off the ranked intake, and the resume subtraction.
 # --------------------------------------------------------------------------- #
 def _budget_driver(sizes: dict, release_n=12, strange_frac=0.5, max_attempts=240,
-                   styles=("smooth", "tia", "stripe"), pool_rows=()):
-    """A bare EmissionDiversity carrying only what `plan_attempts`/`styles_for_head` touch."""
+                   styles=("smooth", "tia", "stripe"), pool_rows=(), good=None):
+    """A bare EmissionDiversity carrying only what `plan_attempts`/`styles_for_head` touch.
+
+    `good` is the `good_supply` census — the slot guarantee's trigger, which `plan_attempts`
+    hands to the attempt budget (2026-08-11). It defaults to "every ranked partition has
+    GOOD_FLOOR supply", the normal case: `ranked` is the junk-floor-passing intake and most of
+    it clears the higher floor too. Pass `{}` for the no-guarantee path."""
     from tools.emission.build_emission_diversity_v1 import EmissionDiversity
     d = object.__new__(EmissionDiversity)
     d.release_n, d.strange_frac, d.max_attempts = release_n, strange_frac, max_attempts
     d.styles = list(styles)
     d.ranked = {p: [{"id": f"{p}_{k:03d}"} for k in range(n)] for p, n in sizes.items()}
+    d.good_supply = dict(sizes) if good is None else dict(good)
     d.pool = type("_P", (), {"rows": list(pool_rows)})()
     return d
 

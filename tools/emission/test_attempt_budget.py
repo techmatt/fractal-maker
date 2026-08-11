@@ -110,13 +110,125 @@ def test_a_zero_budget_plans_nothing_rather_than_raising():
 # --------------------------------------------------------------------------- #
 def test_the_partition_split_is_the_release_mix_over_the_partitions_with_supply():
     """A partition with no floor-passing supply is not in the solve at all — it must not hold
-    attempts hostage, exactly as it does not hold a release slot hostage."""
+    attempts hostage, exactly as it does not hold a release slot hostage. The mix reaches the
+    attempts through the SEATED SLOTS now (`seated_slots` -> `partition_attempts`), so the
+    property is asserted end to end rather than on the old bare-mix call."""
     parts = ["mandelbrot", "multibrot3"]
-    got = AB.partition_attempts(parts, 20)
+    seated = AB.seated_slots(parts, 5)
+    assert sum(seated.values()) == 5 and set(seated) == set(parts)
+    got = AB.partition_attempts(seated, 20)
     assert sum(got.values()) == 20 and set(got) == set(parts)
     sh = RM.shares(parts)
     # the richer share gets the larger budget; the exact split is the apportionment owner's.
     assert (got["mandelbrot"] > got["multibrot3"]) == (sh["mandelbrot"] > sh["multibrot3"])
+
+
+def test_every_seated_partition_is_budgeted_the_full_multiple_of_its_slots():
+    """THE RULE, stated on the function that holds it: attempts are `multiplier ×` seats, not
+    the mix re-solved at `multiplier × N`. The second is what shipped until 2026-08-11 and it
+    is off by a whole attempt on a 2-seat partition even with no guarantee in play."""
+    seated = {"mandelbrot": 2, "multibrot3": 1}
+    got = AB.partition_attempts(seated, 12, multiplier=4)
+    assert got == {"mandelbrot": 8, "multibrot3": 4}
+    for p, k in seated.items():
+        assert got[p] >= 4 * k
+
+
+# --------------------------------------------------------------------------- #
+# 3b. the GUARANTEE (2026-08-11) — a partition the release is obliged to seat must be
+# budgeted enough colorize to fill that seat.
+# --------------------------------------------------------------------------- #
+_SMALL = dict(mandelbrot=50, multibrot3=50)
+_SMALL["phoenix:classic"] = 50
+
+
+def _old_split(parts, n):
+    """The SUPERSEDED rule — `release_mix` apportioned straight to the head's attempt total,
+    with no knowledge of the guarantee. Kept executable rather than described for the reason
+    `test_pop_quota._v1_price` is: "old was wrong" is unassertable once the old code is gone
+    (`verification_practice.md` §3)."""
+    from tools.emission import ranked_intake as RI       # noqa: PLC0415
+    return RI.partition_slots(RM.shares(sorted(parts)), n) if n else {p: 0 for p in parts}
+
+
+def test_the_old_split_starved_a_guaranteed_partition_at_small_release_n():
+    """THE DEFECT, asserted. `phoenix:classic` carries the lowest ratio in `release_mix` (0.2),
+    so the bare mix hands it almost nothing — while the slot guarantee obliges the release to
+    seat it. At N=6 the old rule budgeted it **1 attempt of 12** for a slot it was certain to
+    be asked to fill; the guaranteed seat needs `ATTEMPT_MULTIPLIER × 1 = 4`.
+
+    It is not only a small-N effect, which is the correction to the premise: at N=12 — twice
+    the 'below ≈7' band — the old rule still budgets it 1 attempt of 24 against the same
+    guaranteed seat, because the shortfall is set by the RATIO, not by N."""
+    parts = sorted(_SMALL)
+    for n, att in ((6, 12), (12, 24)):
+        old = _old_split(parts, att)
+        assert old["phoenix:classic"] <= 1, (n, old)
+        seated = AB.seated_slots(parts, AB.head_slots(n, 0.5)["wallpaper"],
+                                 {"phoenix:classic"})
+        assert seated["phoenix:classic"] == 1, "the guarantee seats it"
+        assert old["phoenix:classic"] < F.ATTEMPT_MULTIPLIER * seated["phoenix:classic"]
+
+
+def test_every_seated_partition_gets_the_full_multiple_at_small_release_n():
+    """THE FIX. Same populations, through `plan` with the guarantee declared: whichever head
+    is made to owe a partition its slot budgets `ATTEMPT_MULTIPLIER ×` that slot, at every N
+    the old rule starved. Asserted on the SEATED slots the plan recorded, so the property is
+    checked against what the run will actually be asked to fill."""
+    for n in (2, 4, 6, 8, 12):
+        _plan, budget = AB.plan(n, 0.5, 10_000, _supply(**_SMALL), guaranteed=sorted(_SMALL))
+        for h in AB.HEADS:
+            seated = budget["seated_slots"][h]
+            planned = budget["planned_by_partition"][h]
+            for p, k in seated.items():
+                assert planned.get(p, 0) >= F.ATTEMPT_MULTIPLIER * k, (n, h, p, budget)
+
+
+def test_the_guarantee_is_split_across_heads_rather_than_billed_to_one():
+    """Both heads' mixes are eroded evenly — `_guarantee_head`'s second key, which is the one
+    key that survives into a pre-colorize decision. Three guaranteed partitions at N=4 (2 slots
+    a head) cannot all be seated by one head, and a head is never asked to owe more guarantees
+    than it has slots."""
+    _plan, budget = AB.plan(4, 0.5, 10_000, _supply(**_SMALL), guaranteed=sorted(_SMALL))
+    owed = budget["guarantee_head"]
+    assert set(owed) == set(_SMALL) and not budget["guarantee_unplaced"]
+    per_head = {h: sum(1 for v in owed.values() if v == h) for h in AB.HEADS}
+    assert per_head == {"wallpaper": 1, "mining": 2} or per_head == {"wallpaper": 2, "mining": 1}
+    for h in AB.HEADS:
+        assert per_head[h] <= budget["head_slots"][h]
+
+
+def test_a_guarantee_no_head_has_room_for_is_recorded_not_raised():
+    """N=2 is two slots against three guaranteed partitions. The budget is not the place that
+    raises — the driver's fixed point knows the candidate counts and can say something true
+    about them — but the shortfall must be attributable, so it is in the record."""
+    _plan, budget = AB.plan(2, 0.5, 10_000, _supply(**_SMALL), guaranteed=sorted(_SMALL))
+    assert budget["guarantee_unplaced"], "an unplaceable guarantee must be visible"
+    assert len(budget["guarantee_head"]) + len(budget["guarantee_unplaced"]) == 3
+
+
+def test_declaring_no_guarantee_still_budgets_the_full_multiple_of_what_is_seated():
+    """The default path. With `guaranteed` unset the seats are the plain mix — and attempts are
+    still `multiplier ×` them, which is the half of the fix that has nothing to do with the
+    guarantee (`4N` apportioned directly ≠ `N` apportioned then multiplied)."""
+    _plan, budget = AB.plan(12, 0.5, 10_000, _supply(**_SMALL))
+    assert not budget["guaranteed_partitions"] and not budget["guarantee_head"]
+    for h in AB.HEADS:
+        for p, k in budget["seated_slots"][h].items():
+            assert budget["planned_by_partition"][h][p] == F.ATTEMPT_MULTIPLIER * k
+
+
+def test_a_budget_capped_run_truncates_the_guarantee_proportionally_not_onto_one_partition():
+    """`--max-attempts` below the pair's want still scales BOTH heads (the standing rule), and
+    inside a head the shortfall is spread by the same `sequence_by_deficit` truncation rather
+    than falling entirely on the smallest seat."""
+    _plan, budget = AB.plan(12, 0.5, 20, _supply(**_SMALL), guaranteed=sorted(_SMALL))
+    assert budget["scaled_to_budget"] is True
+    assert sum(sum(v.values()) for v in budget["planned_by_partition"].values()) <= 20
+    for h in AB.HEADS:
+        planned = budget["planned_by_partition"][h]
+        assert sum(1 for p, k in budget["seated_slots"][h].items() if planned.get(p, 0) == 0) \
+            <= 1, "a cap must not zero every small seat while a large one keeps its multiple"
 
 
 def test_a_partition_absent_from_supply_gets_no_attempts():

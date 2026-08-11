@@ -685,8 +685,15 @@ class EmissionDiversity:
         split and the budget) and then subtracts what the DURABLE pool already did, matched on
         (location, head). Nothing is restored from a checkpoint and nothing is re-colorized."""
         ranked_ids = {p: [r["id"] for r in rows] for p, rows in self.ranked.items()}
+        # THE GUARANTEE'S TRIGGER POPULATION, handed to the budget so the colorize can fund
+        # what the release is about to be obliged to seat. It is the same `good_supply` census
+        # `_plan_with_guarantees` triggers on, and it is available here because it comes from
+        # the INTAKE walk — no colorize has happened yet, which is the whole reason the attempt
+        # budget could be blind to it.
+        guaranteed = [p for p, n in sorted((self.good_supply or {}).items()) if n >= 1]
         plan, budget = AB.plan(release_n=self.release_n, strange_frac=self.strange_frac,
-                               total_budget=self.max_attempts, ranked_ids=ranked_ids)
+                               total_budget=self.max_attempts, ranked_ids=ranked_ids,
+                               guaranteed=guaranteed)
         done = Counter((r["location_id"], head_for_style(r["render_style"]))
                        for r in self.pool.rows)
         todo = []
