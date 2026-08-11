@@ -213,9 +213,24 @@ Two corollaries worth stating because both were nearly missed:
   which is why they are the two clean arms in the same report. "Blind" and "predates the
   incumbent" are both acceptable; "corrected under the incumbent" is not.
 
-`[code: tools/scoring/batch_registry (the wallpaper_correction_sitting registration),
-tools/wallpaper/build_blind_minibrot_sheet.py, tools/wallpaper/sheet_d_reverdict.py;
-test: tools/wallpaper/test_blind_minibrot_sheet.py]`
+**A whole corpus can be anchored, and the mining corpus is.** All three labeled render-mode
+batches are correction sheets — the 2026-08-06 v1 sitting, sheet B and sheet C each served
+mining v1's suggested tier prefilled and ordered the page by its score, with 0.929 of the
+mining sitting's labels returned equal to what was served. So there is no clean arm anywhere
+in it, and the (28)/(28b) clause-(a) verdict — five staged arms, every one of them losing on
+`pooled.auc_ge2` plus a handful of per-mode cells — is measured entirely against a baseline
+the labels are coupled to. That is the state §2b describes at corpus scale rather than batch
+scale: it is not fixable by choosing a different arm, only by buying an unanchored slice.
+`tools/mining/build_blind_mining_sheet.py` (sheet E) is that slice, and the shape generalizes
+— the unit of freshness follows the head's question, so where the wallpaper head judges a
+LOCATION and sheet D excludes prior locations, the mining head judges a (location, mode) pair
+and sheet E excludes prior pairs.
+
+`[code: tools/scoring/batch_registry (the wallpaper_correction_sitting and mining_blind_eval
+registrations), tools/wallpaper/build_blind_minibrot_sheet.py,
+tools/wallpaper/sheet_d_reverdict.py, tools/mining/build_blind_mining_sheet.py,
+tools/mining/sheet_e_reverdict.py; test: tools/wallpaper/test_blind_minibrot_sheet.py,
+tools/mining/test_blind_mining_sheet.py]`
 
 ## 3. Pre-register the success bar before training
 

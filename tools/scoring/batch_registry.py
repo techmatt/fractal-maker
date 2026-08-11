@@ -303,6 +303,36 @@ REGISTRY: dict[str, tuple[Registration, ...]] = {
                          "the LOCATION side, which keeps it off the location-head eval side, "
                          "while its wallpaper-side eval role lives in its own batch record. "
                          "See classifier_retrain_protocol.md §2b."),),
+    # ---- sheet E: the BLIND render-mode eval slice for the mining heads ----
+    # Registered BEFORE it was built (prompts/sheet_e_blind_mining.md). The mining analogue of
+    # sheet D above, and it exists for the same reason: the v1-vs-v3 clause-(a) comparison is
+    # currently scored entirely on labels that v1 itself suggested.
+    "2026-08-11_render_mode_blind_v1": (
+        Registration(source="mining_blind_eval", biased=True,
+                     why="THE UNANCHORED INSTRUMENT for the mining head. Every labeled "
+                         "render-mode batch is a CORRECTION sheet — the v1 sitting, sheet B "
+                         "and sheet C all served mining-v1's suggested tier prefilled and "
+                         "ordered the page by its score (0.929 agreement with what was "
+                         "served on the mining sheet), so the four contested per-mode "
+                         "clause-(a) regressions are measured on labels coupled to v1 by "
+                         "construction. This slice re-buys that population with the "
+                         "anchoring removed: FRESH (location, mode) pairs only (excluded "
+                         "against the v1 sitting, sheet B and sheet C by key AND by "
+                         "proximity, globbed, self-excluding), served BLIND (no prefilled "
+                         "suggestion, no head block, no score-ordered page, seeded shuffle), "
+                         "and with NEITHER mining checkpoint touching the draw or the "
+                         "substrate — the palette is a screened POOL draw and the mode draw "
+                         "is a seeded apportionment. Stamped eval_only PERMANENTLY in its "
+                         "own batch.json; every row carries split_side=eval. "
+                         "BIASED IS ABOUT THE LOCATION AXIS: quality is conditioned on the "
+                         "HUMAN label corpus (score 4, falling back to 3 where a partition "
+                         "is short — sheet C's standing rule), so the locations are a top "
+                         "slice and no rate on it is a location base rate. biased -> train "
+                         "on the LOCATION side, which keeps it off the location-head eval "
+                         "side, while its mining-side eval role lives in its own batch "
+                         "record. It is deliberately NOT in `near_dup_groups.BATCHES`, so "
+                         "`mining_corpus.load_corpus` never pools it into training. "
+                         "See classifier_retrain_protocol.md §2b."),),
     "2026-08-10_render_mode_rare_palette_v1": (
         Registration(source="mining_rare_palette_sitting", biased=True,
                      why="the rare-palette strange sheet (sheet C of the (27) sittings). "
