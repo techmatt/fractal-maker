@@ -1,0 +1,586 @@
+{
+  "schema": "mining_gate_lock/v4",
+  "what": "The operating point of the render-mode (mining) quality gate: what each live cut fires at, and at what measured precision/recall, on the reference pool its value was set against.",
+  "restatement": {
+    "kind": "CROSSOVER",
+    "how": "CROSSOVER - the head did NOT move. The cut is where an isotonic fit of 1[label >= 2] against this same signal reaches 0.5 on 200 human tiers, i.e. where a row becomes more likely than not to be at-least-okay. Volume is an OUTPUT of that and is not held fixed; contrast classifier_retrain_protocol.md section 5a, which is the other question.",
+    "volume_claim": "The `was` column is NOT volume-matched to the new value and the two do not pass the same rows: a crossover holds the label MEANING fixed and lets the volume move, which here it does by 4.6x on the flip's reference pool (129 -> 587 of 827). That is the audit's finding, not a side effect of it."
+  },
+  "gate": {
+    "version": "mining_v3",
+    "checkpoint": "data/render_mode_head/v3/model_best.pt",
+    "threshold": 0.0949,
+    "rollback": "data/render_mode_head/v1/model_best.pt",
+    "lock_rollback": "data/render_mode_head/v3/mining_gate_lock.json",
+    "signal": "marginal p_ge3 = cumprod(sigma(logits)) - NEVER the CORN conditional",
+    "deploy_transform": "classifier.data.Transform(train=False): 384x224 bicubic stretch + the checkpoint's own mean/std",
+    "black_gate": "accept iff black_fraction < 0.30 (parity with the Rust render path)"
+  },
+  "head": {
+    "name": "render_mode_head",
+    "version": "v3",
+    "checkpoint": "data/render_mode_head/v3/model_best.pt",
+    "role": "LIVE mining gate (mining_pins.ACTIVE_MINING_CKPT)"
+  },
+  "corpus": {
+    "batch": "sheet F \u2014 2026-08-11_render_mode_baserate_audit_v1, the base-rate audit sitting",
+    "slice": "tools.mining.baserate_audit_reads.load_sheet - {'2026-08-11_render_mode_baserate_audit_v1': 200}",
+    "n": 200,
+    "n_locations": 131,
+    "labels": {
+      "1": 93,
+      "2": 88,
+      "3": 19
+    },
+    "base_rate_ge3": 0.095,
+    "base_rate_ge2": 0.535,
+    "label_scale": "K=3 (1 bad / 2 okay / 3 good)"
+  },
+  "cuts": {
+    "mining_pool": {
+      "value": 0.0,
+      "site": "pool",
+      "acts": false,
+      "head": "render_mode_head/v3",
+      "basis": "CAPACITY ORDERING, not curation: strange colorizes are cheap to make and expensive to carry, so the bottom of the mining scale is dropped before it reaches the pool. 0.3402 -> 0.0 on 2026-08-11 (prompts/audit_mining_process.md) and this move is a CONSEQUENCE, not a measurement. A pool floor is defined RELATIVE to its release floor \u2014 the permissive inventory bar, strictly below it, which `check_below_gate` enforces at import. The sheet-F crossover put the release floor at 0.0949, BELOW the 0.3402 this cut held, so there was nothing left under the gate for a pool floor to be permissive about: it had become a second and STRICTER gate, pooling 322 of the 587 reference-pool rows the gate now passes. 0.0 keeps the invariant and says plainly that the pool no longer removes anything. Matt's call, taken with the crossover in front of him. The two measurements it supersedes stay where they were made: 0.3402 (322/827, precision>=3 0.525) in data/render_mode_head/v3/volume_match_mining.json, and 0.25 on v1 (70/422 at precision 75.7% [64.5%-84.2%], keeping 84.1% of the good rows) in v1's lock.",
+      "boundary": "p_ge3 (marginal P(label>=3))",
+      "restated_from": {
+        "value": 0.3402,
+        "head": "render_mode_head/v3",
+        "how": "CROSSOVER - the head did NOT move. The cut is where an isotonic fit of 1[label >= 2] against this same signal reaches 0.5 on 200 human tiers, i.e. where a row becomes more likely than not to be at-least-okay. Volume is an OUTPUT of that and is not held fixed; contrast classifier_retrain_protocol.md section 5a, which is the other question.",
+        "kind": "CROSSOVER",
+        "precision": 0.4166666666666667
+      },
+      "matched_volume": 200,
+      "fires": 200,
+      "n": 200,
+      "pass_rate": 1.0,
+      "tp": 19,
+      "precision": 0.095,
+      "precision_ci95": [
+        0.06166261364986359,
+        0.14360265114397636
+      ],
+      "recall": 1.0
+    },
+    "mining_release": {
+      "value": 0.0949,
+      "site": "release",
+      "acts": false,
+      "head": "render_mode_head/v3",
+      "basis": "IS the mining head's production gate (mining_pins.MINING_GATE_THRESHOLD), imported not copied. 0.6691 -> 0.0949 on 2026-08-11 \u2014 the label/score CROSSOVER off sheet F, NOT a volume match: the head did not move, and what moved is what the score is read to mean. Volume 129/827 -> 587/827 on the flip's reference pool (15.6% -> 71.0%), precision>=3 0.760 -> 0.363, recall>=3 0.458 -> 0.995; at the >=2 boundary the cut is actually reading, precision 0.992 -> 0.893 and recall 0.226 -> 0.926. Basis `[human n=200, prefill-anchored \u2014 ceiling]`, frozen in data/render_mode_head/v3/{baserate_audit,mining_gate_lock}_2026-08-11.json. What 0.6691 bought stays in data/render_mode_head/v3/mining_gate_lock.json as the rollback record, and the v1 operating point for 0.50 \u2014 33/422 (7.8%) at precision 97.0% [84.7%-99.5%], recall 50.8%, base rate 14.9% \u2014 stays in data/render_mode_head/v1/mining_gate_lock.json.",
+      "boundary": "p_ge3 (marginal P(label>=3))",
+      "restated_from": {
+        "value": 0.6691,
+        "head": "render_mode_head/v3",
+        "how": "CROSSOVER - the head did NOT move. The cut is where an isotonic fit of 1[label >= 2] against this same signal reaches 0.5 on 200 human tiers, i.e. where a row becomes more likely than not to be at-least-okay. Volume is an OUTPUT of that and is not held fixed; contrast classifier_retrain_protocol.md section 5a, which is the other question.",
+        "kind": "CROSSOVER",
+        "precision": 0.5555555555555556
+      },
+      "matched_volume": 119,
+      "fires": 119,
+      "n": 200,
+      "pass_rate": 0.595,
+      "tp": 19,
+      "precision": 0.15966386554621848,
+      "precision_ci95": [
+        0.10466269961883354,
+        0.2359515548356835
+      ],
+      "recall": 1.0
+    }
+  },
+  "ladder_ge3": [
+    {
+      "threshold": 0.0,
+      "fires": 200,
+      "pass_rate": 1.0,
+      "tp": 19,
+      "precision": 0.095,
+      "precision_lo": 0.06166261364986359,
+      "precision_hi": 0.14360265114397636,
+      "recall": 1.0,
+      "marks": [
+        "mining_pool"
+      ]
+    },
+    {
+      "threshold": 0.05,
+      "fires": 140,
+      "pass_rate": 0.7,
+      "tp": 19,
+      "precision": 0.1357142857142857,
+      "precision_lo": 0.08863403938424923,
+      "precision_hi": 0.20225260258858757,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.0949,
+      "fires": 119,
+      "pass_rate": 0.595,
+      "tp": 19,
+      "precision": 0.15966386554621848,
+      "precision_lo": 0.10466269961883354,
+      "precision_hi": 0.2359515548356835,
+      "recall": 1.0,
+      "marks": [
+        "mining_release"
+      ]
+    },
+    {
+      "threshold": 0.1,
+      "fires": 116,
+      "pass_rate": 0.58,
+      "tp": 19,
+      "precision": 0.16379310344827586,
+      "precision_lo": 0.10743884565005561,
+      "precision_hi": 0.24170202029298915,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.15,
+      "fires": 89,
+      "pass_rate": 0.445,
+      "tp": 19,
+      "precision": 0.21348314606741572,
+      "precision_lo": 0.14114687024752387,
+      "precision_hi": 0.3095304123499324,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.2,
+      "fires": 76,
+      "pass_rate": 0.38,
+      "tp": 17,
+      "precision": 0.2236842105263158,
+      "precision_lo": 0.1446106442066905,
+      "precision_hi": 0.3293477934999686,
+      "recall": 0.8947368421052632,
+      "marks": []
+    },
+    {
+      "threshold": 0.25,
+      "fires": 56,
+      "pass_rate": 0.28,
+      "tp": 16,
+      "precision": 0.2857142857142857,
+      "precision_lo": 0.18418621391703333,
+      "precision_hi": 0.4147549908635875,
+      "recall": 0.8421052631578947,
+      "marks": []
+    },
+    {
+      "threshold": 0.3,
+      "fires": 45,
+      "pass_rate": 0.225,
+      "tp": 16,
+      "precision": 0.35555555555555557,
+      "precision_lo": 0.23218891356904048,
+      "precision_hi": 0.5016445398804781,
+      "recall": 0.8421052631578947,
+      "marks": []
+    },
+    {
+      "threshold": 0.35,
+      "fires": 35,
+      "pass_rate": 0.175,
+      "tp": 15,
+      "precision": 0.42857142857142855,
+      "precision_lo": 0.27984333081678914,
+      "precision_hi": 0.5914287074102662,
+      "recall": 0.7894736842105263,
+      "marks": []
+    },
+    {
+      "threshold": 0.4,
+      "fires": 31,
+      "pass_rate": 0.155,
+      "tp": 15,
+      "precision": 0.4838709677419355,
+      "precision_lo": 0.3196998603127883,
+      "precision_hi": 0.6515988171302683,
+      "recall": 0.7894736842105263,
+      "marks": []
+    },
+    {
+      "threshold": 0.45,
+      "fires": 25,
+      "pass_rate": 0.125,
+      "tp": 15,
+      "precision": 0.6,
+      "precision_lo": 0.40739127785127344,
+      "precision_hi": 0.7659694233580909,
+      "recall": 0.7894736842105263,
+      "marks": []
+    },
+    {
+      "threshold": 0.5,
+      "fires": 19,
+      "pass_rate": 0.095,
+      "tp": 12,
+      "precision": 0.631578947368421,
+      "precision_lo": 0.4103915749815672,
+      "precision_hi": 0.8085072762372616,
+      "recall": 0.631578947368421,
+      "marks": []
+    },
+    {
+      "threshold": 0.55,
+      "fires": 15,
+      "pass_rate": 0.075,
+      "tp": 8,
+      "precision": 0.5333333333333333,
+      "precision_lo": 0.3011663015105079,
+      "precision_hi": 0.7519077474025355,
+      "recall": 0.42105263157894735,
+      "marks": []
+    },
+    {
+      "threshold": 0.6,
+      "fires": 11,
+      "pass_rate": 0.055,
+      "tp": 6,
+      "precision": 0.5454545454545454,
+      "precision_lo": 0.28008775568998817,
+      "precision_hi": 0.7872904245601196,
+      "recall": 0.3157894736842105,
+      "marks": []
+    },
+    {
+      "threshold": 0.65,
+      "fires": 9,
+      "pass_rate": 0.045,
+      "tp": 5,
+      "precision": 0.5555555555555556,
+      "precision_lo": 0.2666473457440297,
+      "precision_hi": 0.811224570528086,
+      "recall": 0.2631578947368421,
+      "marks": []
+    },
+    {
+      "threshold": 0.7,
+      "fires": 9,
+      "pass_rate": 0.045,
+      "tp": 5,
+      "precision": 0.5555555555555556,
+      "precision_lo": 0.2666473457440297,
+      "precision_hi": 0.811224570528086,
+      "recall": 0.2631578947368421,
+      "marks": []
+    },
+    {
+      "threshold": 0.75,
+      "fires": 5,
+      "pass_rate": 0.025,
+      "tp": 3,
+      "precision": 0.6,
+      "precision_lo": 0.23071993220883708,
+      "precision_hi": 0.8823817688407467,
+      "recall": 0.15789473684210525,
+      "marks": []
+    },
+    {
+      "threshold": 0.8,
+      "fires": 3,
+      "pass_rate": 0.015,
+      "tp": 2,
+      "precision": 0.6666666666666666,
+      "precision_lo": 0.2076549551264879,
+      "precision_hi": 0.9385096847238394,
+      "recall": 0.10526315789473684,
+      "marks": []
+    },
+    {
+      "threshold": 0.85,
+      "fires": 1,
+      "pass_rate": 0.005,
+      "tp": 0,
+      "precision": 0.0,
+      "precision_lo": 0.0,
+      "precision_hi": 0.7934567085261071,
+      "recall": 0.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.9,
+      "fires": 0,
+      "pass_rate": 0.0,
+      "tp": 0,
+      "precision": null,
+      "precision_lo": null,
+      "precision_hi": null,
+      "recall": 0.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.95,
+      "fires": 0,
+      "pass_rate": 0.0,
+      "tp": 0,
+      "precision": null,
+      "precision_lo": null,
+      "precision_hi": null,
+      "recall": 0.0,
+      "marks": []
+    }
+  ],
+  "ladder_ge2": [
+    {
+      "threshold": 0.0,
+      "fires": 200,
+      "pass_rate": 1.0,
+      "tp": 107,
+      "precision": 0.535,
+      "precision_lo": 0.46586521028994954,
+      "precision_hi": 0.6028155692957681,
+      "recall": 1.0,
+      "marks": [
+        "mining_pool"
+      ]
+    },
+    {
+      "threshold": 0.05,
+      "fires": 140,
+      "pass_rate": 0.7,
+      "tp": 107,
+      "precision": 0.7642857142857142,
+      "precision_lo": 0.6875051189138534,
+      "precision_hi": 0.8269496702431082,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.0949,
+      "fires": 119,
+      "pass_rate": 0.595,
+      "tp": 107,
+      "precision": 0.8991596638655462,
+      "precision_lo": 0.8319833684914806,
+      "precision_hi": 0.9413702836914934,
+      "recall": 1.0,
+      "marks": [
+        "mining_release"
+      ]
+    },
+    {
+      "threshold": 0.1,
+      "fires": 116,
+      "pass_rate": 0.58,
+      "tp": 105,
+      "precision": 0.9051724137931034,
+      "precision_lo": 0.8381455089440608,
+      "precision_hi": 0.9462231910732954,
+      "recall": 0.9813084112149533,
+      "marks": []
+    },
+    {
+      "threshold": 0.15,
+      "fires": 89,
+      "pass_rate": 0.445,
+      "tp": 85,
+      "precision": 0.9550561797752809,
+      "precision_lo": 0.8900679286731532,
+      "precision_hi": 0.9823857989661808,
+      "recall": 0.794392523364486,
+      "marks": []
+    },
+    {
+      "threshold": 0.2,
+      "fires": 76,
+      "pass_rate": 0.38,
+      "tp": 72,
+      "precision": 0.9473684210526315,
+      "precision_lo": 0.8723414339669251,
+      "precision_hi": 0.979344904984198,
+      "recall": 0.6728971962616822,
+      "marks": []
+    },
+    {
+      "threshold": 0.25,
+      "fires": 56,
+      "pass_rate": 0.28,
+      "tp": 53,
+      "precision": 0.9464285714285714,
+      "precision_lo": 0.8539246046357077,
+      "precision_hi": 0.9816145520713321,
+      "recall": 0.4953271028037383,
+      "marks": []
+    },
+    {
+      "threshold": 0.3,
+      "fires": 45,
+      "pass_rate": 0.225,
+      "tp": 43,
+      "precision": 0.9555555555555556,
+      "precision_lo": 0.8517222081611939,
+      "precision_hi": 0.9877261309595557,
+      "recall": 0.40186915887850466,
+      "marks": []
+    },
+    {
+      "threshold": 0.35,
+      "fires": 35,
+      "pass_rate": 0.175,
+      "tp": 34,
+      "precision": 0.9714285714285714,
+      "precision_lo": 0.8546659090672868,
+      "precision_hi": 0.9949386386341466,
+      "recall": 0.3177570093457944,
+      "marks": []
+    },
+    {
+      "threshold": 0.4,
+      "fires": 31,
+      "pass_rate": 0.155,
+      "tp": 30,
+      "precision": 0.967741935483871,
+      "precision_lo": 0.8380554282383037,
+      "precision_hi": 0.9942829259130554,
+      "recall": 0.2803738317757009,
+      "marks": []
+    },
+    {
+      "threshold": 0.45,
+      "fires": 25,
+      "pass_rate": 0.125,
+      "tp": 25,
+      "precision": 1.0,
+      "precision_lo": 0.8668035060468213,
+      "precision_hi": 1.0,
+      "recall": 0.2336448598130841,
+      "marks": []
+    },
+    {
+      "threshold": 0.5,
+      "fires": 19,
+      "pass_rate": 0.095,
+      "tp": 19,
+      "precision": 1.0,
+      "precision_lo": 0.8318156346315496,
+      "precision_hi": 1.0,
+      "recall": 0.17757009345794392,
+      "marks": []
+    },
+    {
+      "threshold": 0.55,
+      "fires": 15,
+      "pass_rate": 0.075,
+      "tp": 15,
+      "precision": 1.0,
+      "precision_lo": 0.7961107336956521,
+      "precision_hi": 1.0,
+      "recall": 0.14018691588785046,
+      "marks": []
+    },
+    {
+      "threshold": 0.6,
+      "fires": 11,
+      "pass_rate": 0.055,
+      "tp": 11,
+      "precision": 1.0,
+      "precision_lo": 0.7411599827511859,
+      "precision_hi": 1.0,
+      "recall": 0.102803738317757,
+      "marks": []
+    },
+    {
+      "threshold": 0.65,
+      "fires": 9,
+      "pass_rate": 0.045,
+      "tp": 9,
+      "precision": 1.0,
+      "precision_lo": 0.7008472464490407,
+      "precision_hi": 1.0,
+      "recall": 0.08411214953271028,
+      "marks": []
+    },
+    {
+      "threshold": 0.7,
+      "fires": 9,
+      "pass_rate": 0.045,
+      "tp": 9,
+      "precision": 1.0,
+      "precision_lo": 0.7008472464490407,
+      "precision_hi": 1.0,
+      "recall": 0.08411214953271028,
+      "marks": []
+    },
+    {
+      "threshold": 0.75,
+      "fires": 5,
+      "pass_rate": 0.025,
+      "tp": 5,
+      "precision": 1.0,
+      "precision_lo": 0.5655085052479191,
+      "precision_hi": 1.0,
+      "recall": 0.04672897196261682,
+      "marks": []
+    },
+    {
+      "threshold": 0.8,
+      "fires": 3,
+      "pass_rate": 0.015,
+      "tp": 3,
+      "precision": 1.0,
+      "precision_lo": 0.43849391955098227,
+      "precision_hi": 1.0,
+      "recall": 0.028037383177570093,
+      "marks": []
+    },
+    {
+      "threshold": 0.85,
+      "fires": 1,
+      "pass_rate": 0.005,
+      "tp": 1,
+      "precision": 1.0,
+      "precision_lo": 0.20654329147389294,
+      "precision_hi": 1.0,
+      "recall": 0.009345794392523364,
+      "marks": []
+    },
+    {
+      "threshold": 0.9,
+      "fires": 0,
+      "pass_rate": 0.0,
+      "tp": 0,
+      "precision": null,
+      "precision_lo": null,
+      "precision_hi": null,
+      "recall": 0.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.95,
+      "fires": 0,
+      "pass_rate": 0.0,
+      "tp": 0,
+      "precision": null,
+      "precision_lo": null,
+      "precision_hi": null,
+      "recall": 0.0,
+      "marks": []
+    }
+  ],
+  "caveats": {
+    "the_page_was_prefilled_by_the_head_being_cut": "sheet F is a CORRECTION page - every row was served with v3's own suggested tier prefilled and the page sorted by v3's readout, and 176 of 200 labels came back equal to what was served. Label and score are coupled by construction, so the crossover is where the human agreed with the head, not only where the head is right.",
+    "the_draw_however_was_score_unconditioned": "no mining head touched the SELECTION - sheet E's population imported, flat mode apportionment, a pool palette draw, near-dup ties broken by draw order. That is what makes the TIER MIX a base rate over the population the gate sees; it does nothing to un-anchor the labels, because the anchoring is in the page and not in the draw.",
+    "nineteen_positives_at_the_gate_boundary": "the >=3 columns are estimated from 19 rows of 200. The cut is read at >=2 (107 of 200) where the sheet has power; every >=3 precision beside it is a wide interval and the Wilson bounds in the ladder are the honest width.",
+    "direction": "the first lean inflates agreement and therefore the sharpness of the crossover; the third widens intervals rather than moving them. The second is not a lean at all, it is what makes the base rate readable. None is subtractable. Sheet E (tools/mining/sheet_e_reverdict.py) is the unanchored bound on the same draw rule."
+  },
+  "bound": "OPTIMISTIC, and more so than its predecessor. The crossover is read off a page the cut head prefilled and sorted, so it is where the human AGREED with v3 - an upper bound on the separation a fresh (location, mode) pair would show. Basis [human n=200, prefill-anchored - ceiling]. The unanchored bound on the same draw rule is tools/mining/sheet_e_reverdict.py.",
+  "harness_parity": {
+    "what": "BY CONSTRUCTION, not by a separate check: the measurement pass scores through mining_gate.MiningScorer - the gate's own scorer - so there is no sibling harness for these numbers to disagree with.",
+    "scorer": "mining_scorer"
+  },
+  "provenance": {
+    "source_report": "data/render_mode_head/v3/baserate_audit_2026-08-11.json",
+    "source_report_sha256": "c5d241f3296e093fee7eea7c894ec724467437935dc35869363db8813aa36d22",
+    "source_generated": "2026-08-11T16:03:36",
+    "source_command": "uv run python tools/mining/baserate_audit_reads.py",
+    "derived_by": "tools/mining/lock_mining_gate.py --write",
+    "adoption": "prompts/audit_mining_process.md - the sheet F base-rate audit, 2026-08-11. Matt's decision, pre-stated before the labels were read: land the gate at the crossover. The pool floor followed to 0.0 because a pool floor is defined relative to its release floor and floors.check_below_gate refuses the inversion. The un-suffixed lock beside this one stays as the record of what 0.6691 and 0.3402 bought, i.e. the rollback record (mining_pins.MINING_LOCK_ROLLBACK)."
+  }
+}

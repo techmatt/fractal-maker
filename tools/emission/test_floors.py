@@ -182,8 +182,30 @@ def test_the_junk_floor_is_the_only_enforcing_cut_and_it_is_semantic():
     assert F.JUNK_FLOOR == 0.20
     assert not any(f.value == F.JUNK_FLOOR for f in F.ALL_FLOORS)
     assert "ENFORCING" in F.summary() and str(F.JUNK_FLOOR) in F.summary()
-    # it is below every retired floor — the retirement widened the funnel, it did not narrow it
-    assert all(F.JUNK_FLOOR < f.value for f in F.ALL_FLOORS)
+    # It sits below both WALLPAPER cuts — on that head the retirement widened the funnel and
+    # did not narrow it, which is what the annotation-only claim needs to stay true.
+    assert all(F.JUNK_FLOOR < f.value for f in (F.WALLPAPER_POOL, F.WALLPAPER_RELEASE))
+
+
+def test_the_junk_floor_now_sits_ABOVE_both_mining_cuts_and_that_inversion_is_deliberate():
+    """The cost of the 2026-08-11 base-rate audit, pinned where it can rot.
+
+    Until that audit `JUNK_FLOOR < every floor` held on both heads, and the sentence it bought
+    was "the enforcing cut removes only what every annotation-only cut would also have
+    removed". The sheet-F crossover put the mining gate at 0.0949 and the pool floor at 0.0,
+    both BELOW 0.20, so on the mining head the one ENFORCING cut is now the STRICTEST cut in
+    stage 2: the colorize-pool draw removes rows the release floor would pass (455 of the 827
+    reference-pool rows clear 0.20 against 587 that clear the gate — 132 rows).
+
+    `JUNK_FLOOR` was deliberately NOT moved to fix it: it is permanent shared-scale, read on
+    two heads at once (the test below), and the prompt that moved the gate put it out of
+    scope. So the inversion is real, accepted, and asserted here rather than discovered later
+    as "why does the pool draw cut gate-passers" — the failure this file exists to prevent is
+    a floor relationship that changed and nothing said so."""
+    assert F.JUNK_FLOOR > F.MINING_RELEASE.value > F.MINING_POOL.value
+    assert F.MINING_POOL.value < F.MINING_RELEASE.value        # the invariant that still holds
+    assert "0.0949" in F.MINING_RELEASE.basis and "CROSSOVER" in F.MINING_RELEASE.basis
+    assert "CONSEQUENCE" in F.MINING_POOL.basis
 
 
 def test_the_junk_floor_is_declared_PERMANENT_shared_scale_at_the_constant_and_in_the_protocol():

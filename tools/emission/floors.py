@@ -42,18 +42,27 @@ on the paths that most need it.
 
 THE FOUR CUTS — all four ANNOTATION-ONLY since 2026-08-09
 -------------
-                        value  head                     (was, on the previous head)
+                        value  head                     (was)
   wallpaper pool       0.4698  wallpaper_head/v4b        0.75 on v3
   wallpaper release    0.6052  wallpaper_head/v4b        0.90 on v3
-  mining pool          0.3402  render_mode_head/v3       0.25 on v1
-  mining release       0.6691  render_mode_head/v3       0.50 on v1
+  mining pool          0.0     render_mode_head/v3       0.3402, 0.25 on v1
+  mining release       0.0949  render_mode_head/v3       0.6691, 0.50 on v1
 
-All four moved on 2026-08-11 and NONE of them was retuned: both heads flipped
-(prompts/flip_29.md) and each value is the VOLUME-MATCHED restatement of its predecessor —
-the score that admits the same FRACTION of a fixed reference pool under the new head
+All four moved on 2026-08-11 at the two-head flip (prompts/flip_29.md), and none of THOSE four
+moves was a retune: each value was the VOLUME-MATCHED restatement of its predecessor — the
+score that admits the same FRACTION of a fixed reference pool under the new head
 (classifier_retrain_protocol.md §5a, tools/scoring/volume_match.py). The volume each cut was
-chosen for is invariant across the flip; the precision beside it is not, and that difference
-is the head's, not the cut's.
+chosen for is invariant across a flip; the precision beside it is not, and that difference is
+the head's, not the cut's.
+
+THE TWO MINING CUTS MOVED AGAIN THE SAME DAY, AND THAT SECOND MOVE IS NOT A VOLUME MATCH.
+`prompts/audit_mining_process.md`: sheet F's 200 human tiers put the isotonic crossover of
+`1[label >= 2]` against the mining head's own gate signal at p_ge3 **0.0949**, and Matt's
+pre-stated decision was to land the gate there. Volume is an OUTPUT of a crossover, not a
+constraint on it, and it moved by 4.6x (129 -> 587 of the 827 reference-pool rows). The pool
+floor followed to 0.0 because a pool floor is defined relative to its release floor and
+`check_below_gate` refuses the inversion — see each cut's own `basis`. Every number behind the
+crossover is a CEILING: sheet F was a v3-prefilled, score-sorted correction page.
 
 The paragraphs below are the record of what each cut WAS and what it was measured to buy. They
 are kept verbatim rather than rewritten in the past tense: the numbers are still the ones the
@@ -386,27 +395,37 @@ WALLPAPER_RELEASE = Floor(
           "head (prompts/prompt_gate_retune_v3.md).")
 
 MINING_POOL = Floor(
-    name="mining_pool", value=0.3402, head=MINING_HEAD, stamp=_mn.HEAD_VERSION,
+    name="mining_pool", value=0.0, head=MINING_HEAD, stamp=_mn.HEAD_VERSION,
     site="pool",
     basis="CAPACITY ORDERING, not curation: strange colorizes are cheap to make and expensive "
           "to carry, so the bottom of the mining scale is dropped before it reaches the pool. "
-          "0.25 -> 0.3402 at the 2026-08-11 v3 flip, VOLUME-MATCHED: 0.3402 pools the same "
-          "322 of 827 reference-pool rows (38.9%) that 0.25 pooled on v1, precision>=3 "
-          "0.534 -> 0.525 there. data/render_mode_head/v3/volume_match_mining.json. "
-          "The v1 measurement it replaces, kept as the record of what that cut bought on its "
-          "own head: fires 70/422 (16.6%) at precision 75.7% [64.5%-84.2%], keeping 84.1% of "
-          "the good rows, which is the retention the pool cut is for.")
+          "0.3402 -> 0.0 on 2026-08-11 (prompts/audit_mining_process.md) and this move is a "
+          "CONSEQUENCE, not a measurement. A pool floor is defined RELATIVE to its release "
+          "floor — the permissive inventory bar, strictly below it, which `check_below_gate` "
+          "enforces at import. The sheet-F crossover put the release floor at 0.0949, BELOW "
+          "the 0.3402 this cut held, so there was nothing left under the gate for a pool floor "
+          "to be permissive about: it had become a second and STRICTER gate, pooling 322 of "
+          "the 587 reference-pool rows the gate now passes. 0.0 keeps the invariant and says "
+          "plainly that the pool no longer removes anything. Matt's call, taken with the "
+          "crossover in front of him. The two measurements it supersedes stay where they were "
+          "made: 0.3402 (322/827, precision>=3 0.525) in data/render_mode_head/v3/"
+          "volume_match_mining.json, and 0.25 on v1 (70/422 at precision 75.7% "
+          "[64.5%-84.2%], keeping 84.1% of the good rows) in v1's lock.")
 
 MINING_RELEASE = Floor(
     name="mining_release", value=_mn.MINING_GATE_THRESHOLD, head=MINING_HEAD,
     stamp=_mn.HEAD_VERSION, site="release",
     basis="IS the mining head's production gate (mining_pins.MINING_GATE_THRESHOLD), imported "
-          "not copied. 0.50 -> 0.6691 at the 2026-08-11 v3 flip, VOLUME-MATCHED: same 129 of "
-          "827 reference-pool rows (15.6%), precision>=3 0.636 -> 0.760, frozen in "
-          "data/render_mode_head/v3/mining_gate_lock.json. Its v1 operating point — 33/422 "
-          "(7.8%) at precision 97.0% [84.7%-99.5%], recall 50.8%, base rate 14.9% — stays in "
-          "data/render_mode_head/v1/mining_gate_lock.json as the record of what 0.50 bought "
-          "on the head it was measured on.")
+          "not copied. 0.6691 -> 0.0949 on 2026-08-11 — the label/score CROSSOVER off sheet F, "
+          "NOT a volume match: the head did not move, and what moved is what the score is read "
+          "to mean. Volume 129/827 -> 587/827 on the flip's reference pool (15.6% -> 71.0%), "
+          "precision>=3 0.760 -> 0.363, recall>=3 0.458 -> 0.995; at the >=2 boundary the cut "
+          "is actually reading, precision 0.992 -> 0.893 and recall 0.226 -> 0.926. Basis "
+          "`[human n=200, prefill-anchored — ceiling]`, frozen in data/render_mode_head/v3/"
+          "{baserate_audit,mining_gate_lock}_2026-08-11.json. What 0.6691 bought stays in "
+          "data/render_mode_head/v3/mining_gate_lock.json as the rollback record, and the v1 "
+          "operating point for 0.50 — 33/422 (7.8%) at precision 97.0% [84.7%-99.5%], recall "
+          "50.8%, base rate 14.9% — stays in data/render_mode_head/v1/mining_gate_lock.json.")
 
 ALL_FLOORS = (WALLPAPER_POOL, WALLPAPER_RELEASE, MINING_POOL, MINING_RELEASE)
 

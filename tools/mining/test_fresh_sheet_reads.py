@@ -172,14 +172,31 @@ def test_the_committed_batch_is_fully_merged_and_matches_its_manifest():
     assert all(1 <= r["label"] <= FSR.K_TIERS for r in rows)
 
 
-def test_the_swept_tail_never_reaches_the_lowest_live_cut():
-    """The claim read E's ladders rest on: the bulk-confirmed rows sit below 0.25, so
-    precision and recall at both live cuts are identical with and without them. If a future
-    re-merge changes that, the ladders stop being invariant to the sweep and E2 says so."""
+def test_the_swept_tail_reaches_exactly_the_cuts_that_sit_below_it():
+    """Read E's ladders are invariant to the bulk-accept sweep for a cut the swept tail never
+    reaches, and are NOT for one it does. The test asserts the boundary rather than a fixed
+    answer, because the answer moved.
+
+    Until 2026-08-11 both live cuts (0.25/0.3402 pool, 0.50/0.6691 release) sat above the
+    tail's ceiling and the whole read was invariant. The base-rate audit dropped the pool floor
+    to 0.0, so all 295 swept rows now clear it and the POOL row of every ladder is a statement
+    about ~665 adjudicated decisions dressed as 960 — precision 0.154 on the full sheet against
+    0.223 on the adjudicated one. The release cut is unaffected: the tail's highest `p_ge3` is
+    0.032, well under the 0.0949 crossover.
+
+    So the invariance claim is now per-cut, and the module already says so in its own
+    `verdict`. What this pins is that the verdict TRACKS the cuts instead of being a sentence
+    somebody wrote once."""
     E = FSR.build_E(FSR.load())
-    assert E["tail_sensitivity"]["pool_fires_inside_tail"] == 0
-    both = E["slices"]
-    for k in ("precision", "recall"):
-        assert both["all_960"]["release"][k] == both["adjudicated"]["release"][k]
-        assert both["all_960"]["pool"][k] == both["adjudicated"]["pool"][k]
+    both, ts = E["slices"], E["tail_sensitivity"]
+    ceiling = E["swept_tail"]["max_p_ge3"]
+    for name, cut in (("pool", F.MINING_POOL), ("release", F.MINING_RELEASE)):
+        reached = cut.value <= ceiling
+        for k in ("precision", "recall"):
+            same = both["all_960"][name][k] == both["adjudicated"][name][k]
+            # A cut the tail reaches MAY still read the same (the tail could be unanimous);
+            # a cut it does not reach MUST. Only the second direction is an invariant.
+            assert same or reached, (name, k, cut.value, ceiling)
+    assert (ts["pool_fires_inside_tail"] > 0) == (F.MINING_POOL.value <= ceiling)
+    assert ("NOT invariant" in ts["verdict"]) == (ts["pool_fires_inside_tail"] > 0)
     assert both["adjudicated"]["n"] < both["all_960"]["n"]      # the slices really differ

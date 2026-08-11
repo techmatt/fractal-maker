@@ -713,15 +713,26 @@ def test_the_target_counts_every_scored_row_now(tmp_path):
     (the 0.95 smooth and the 0.70 tia), which is the number that makes the weaker surplus
     readable instead of invisible.
 
-    The inverse assertion (`post_floor == 2`) stood here from 2026-08-06 to 2026-08-09."""
+    The inverse assertion (`post_floor == 2`) stood here from 2026-08-06 to 2026-08-09.
+
+    The `would_pass_release_floor` counts are DERIVED from the live floors rather than typed.
+    They were literals (2 / 3 / 3) until the 2026-08-11 base-rate audit dropped the mining
+    release floor to the sheet-F crossover, at which point all four strange rows clear it and
+    the literals went red FOR the move rather than for a fault — the exact mismarking
+    `classifier_retrain_protocol.md` §5 names. What the test is actually about is that the
+    counterfactual is still REPORTED, and that it is computed against the floor each row's own
+    head owns; that survives any cut move."""
     eng = _target_pool(tmp_path)
     assert {r["id"] for r in eng.release_eligible()} == {f"em_{k}" for k in range(5)}
     acct = eng.target_accounting()
     assert acct["post_floor"] == 5 and acct["release_eligible"] == 5
     assert acct["post_floor_smooth"] == 1 and acct["post_floor_strange"] == 4
-    assert acct["would_pass_release_floor"] == 2              # 0.95 smooth + 0.70 tia
-    assert acct["below_retired_release_floor"] == 3
-    assert acct["cut_by_release_floor_strange"] == 3          # 0.30 / 0.26 / 0.40
+    # the pool: one smooth at 0.95, four strange at 0.70 / 0.30 / 0.26 / 0.40
+    wp_pass = sum(p >= FL.WALLPAPER_RELEASE.value for p in (0.95,))
+    mn_pass = sum(p >= FL.MINING_RELEASE.value for p in (0.70, 0.30, 0.26, 0.40))
+    assert acct["would_pass_release_floor"] == wp_pass + mn_pass
+    assert acct["below_retired_release_floor"] == 5 - (wp_pass + mn_pass)
+    assert acct["cut_by_release_floor_strange"] == 4 - mn_pass
     assert {r["id"] for r in eng.post_floor()} == {f"em_{k}" for k in range(5)}
 
 

@@ -7,32 +7,38 @@ head's probability scale;
 this file is the record of what that point BUYS on a stated population, so a number in
 ``floors.py`` can be argued with instead of merely obeyed.
 
-WHERE THE NUMBERS COME FROM, AND WHY NOT RE-MEASURED HERE. The source is the flip's own
-VOLUME-MATCH record (``tools/scoring/volume_match.py`` -> ``data/render_mode_head/<v>/
-volume_match_mining.json``): the committed output of the pass that scored a named reference
-pool under the outgoing and incoming heads through ``MiningScorer`` — the gate's own harness,
-so harness parity here is by construction rather than by a separate check. Re-measuring in
-this file would need torch, a GPU and the crops, and would produce the same numbers or a
-discrepancy nobody could adjudicate; deriving from the frozen record keeps this file
-pure-Python, deterministic, and byte-identical on a re-run. What it does instead of measuring
-is REFUSE: the head the record was scored on must be the head the pin serves, the record's cut
-values must be the owner's live cut values, and every quoted cut must be an exact swept row of
-the frozen ladder (``volume_match.ladder`` unions the live cuts into its sweep for exactly
+WHERE THE NUMBERS COME FROM, AND WHY NOT RE-MEASURED HERE. The source is a committed
+MEASUREMENT RECORD — a pass that scored a named reference pool through ``MiningScorer``, the
+gate's own harness, so harness parity here is by construction rather than by a separate check.
+Re-measuring in this file would need torch, a GPU and the crops, and would produce the same
+numbers or a discrepancy nobody could adjudicate; deriving from the frozen record keeps this
+file pure-Python, deterministic, and byte-identical on a re-run. What it does instead of
+measuring is REFUSE: the head the record was scored on must be the head the pin serves, the
+record's cut values must be the owner's live cut values, and every quoted cut must be an exact
+swept row of the frozen ladder (both producers union the live cuts into their sweep for exactly
 this reason).
 
-THE v1 LOCK IS NOT SUPERSEDED, IT IS RETAINED. ``data/render_mode_head/v1/mining_gate_lock.
-json`` stays tracked as the record of what 0.50 and 0.25 bought on the head they were measured
-on. A lock lives at its own head's path (``mining_pins.LOCK_PATH`` moves with the pin), so a
-flip WRITES A NEW ONE and never edits the old — the July lock's own ``supersedes`` note is the
-one exception in the tree and it describes a record whose inputs were lost, not one replaced.
+THERE ARE TWO KINDS OF SOURCE AND THEY MAKE DIFFERENT CLAIMS — hence ``LockSpec``. A **volume
+match** (``tools/scoring/volume_match.py``, run at a head flip) says *the head moved and this
+cut keeps its volume*. A **crossover** (``tools/mining/baserate_audit_reads.py``, run when a
+labeled slice says what the score MEANS) says *the head did not move and this cut keeps its
+meaning, at whatever volume that costs*. Both emit the same record shape, so this file reads
+either; what it must not do is describe one as the other, which is why the restatement sentence,
+the schema tag, the caveats and the bound are per-spec rather than module constants. The live
+spec is resolved from ``mining_pins.LOCK_PATH`` — the pin names its own lock.
 
-WHAT THE NUMBERS ARE AN OPTIMISTIC BOUND ON. The reference pool is the (28) mining eval side,
-and three of its four known leans favour the INCUMBENT rather than the pinned head — v1 had
-trained at 630 of the 827 rows' locations, and every sheet in the corpus is a correction sheet
-served with v1's own suggestion. What leans toward the pinned head is that v3's staged
-checkpoint is the best of five seeds by eval AP>=3 on this very slice. So a precision here is
-an optimistic bound on a FRESH (location, mode) pair, and the honest use of this record is as
-a ceiling, not an estimate. ``tools/mining/sheet_e_reverdict.py`` is the unanchored read.
+A SUPERSEDED LOCK IS RETAINED, NEVER EDITED, AND STOPS BEING VERIFIABLE BY THIS FILE. That is
+the intended end state, not a gap: ``data/render_mode_head/v1/mining_gate_lock.json`` is what
+0.50 and 0.25 bought on v1, and ``v3/mining_gate_lock.json`` is what 0.6691 and 0.3402 bought
+on v3 before the 2026-08-11 base-rate audit (``mining_pins.MINING_LOCK_ROLLBACK``). Each names
+floor values that are no longer live, so re-deriving either would raise — correctly. Only the
+lock the pin points at is verified.
+
+WHAT THE NUMBERS ARE AN OPTIMISTIC BOUND ON. Every population this file has ever locked is
+anchored to a head that suggested its labels, so a precision here is an optimistic bound on
+what the same cut buys at a FRESH (location, mode) pair, and the honest use of this record is
+as a ceiling, not an estimate. The per-spec ``caveats`` say which leans apply to which pool and
+which way each points. ``tools/mining/sheet_e_reverdict.py`` is the unanchored read.
 
 FROZEN-RECORD WRITE RULE. A default run VERIFIES (derives the record and diffs it against
 what is on disk, exit 1 on drift); ``--write`` is what writes. That is the shape
@@ -52,6 +58,7 @@ import argparse
 import hashlib
 import json
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -63,20 +70,6 @@ from tools import paths as P                      # noqa: E402  storage-class de
 from tools.emission import floors as F            # noqa: E402  THE stage-2 cut owner
 from tools.mining import mining_pins as MP        # noqa: E402  torch-free pin
 
-# The measurement this record freezes: the flip's own volume-match pass, at the PINNED
-# head's path. Derived from the pin rather than spelled, so a lock cannot describe one head
-# while living beside another.
-SOURCE_REPORT = f"data/{MP.HEAD_NAME}/{MP.HEAD_VERSION}/volume_match_mining.json"
-LOCK_PATH = MP.LOCK_PATH                          # data/<head>/<version>/mining_gate_lock.json
-# The readable face of the SAME record, generated beside it — deliberately not `report.md`,
-# which is the sitting's own hand-written adoption report and would be clobbered by a --write.
-MD_PATH = str(Path(LOCK_PATH).with_suffix(".md"))
-SCHEMA = "mining_gate_lock/v3"                    # v1 = July (gone); v2 = the 2026-08-06 sitting
-
-# The two cuts this record is the authority for. Read from the owner, never restated: the
-# lock quotes what `floors.py` says is live, and refuses if the ladder cannot support it.
-LOCKED_CUTS = (F.MINING_POOL, F.MINING_RELEASE)
-
 
 class LockHeadMismatch(RuntimeError):
     """The lock was measured on a head the live pin no longer serves. Its precision/recall
@@ -86,6 +79,151 @@ class LockHeadMismatch(RuntimeError):
 class LockDerivationError(RuntimeError):
     """The frozen sitting cannot support the record being asked for — the report calibrated
     a different head than the pin serves, or a live cut is not a swept row of its ladder."""
+
+
+# --------------------------------------------------------------------------- #
+# The sources. One entry per measurement a lock has been derived from; the LIVE one is
+# whichever the pin names, so this table is looked up rather than chosen.
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class LockSpec:
+    """One lock: which measurement it freezes, and what kind of claim its cut values make.
+
+    A frozen instance from the start (CLAUDE.md, "writing a builder for one instance") — the
+    volume-match lock was the only one for a day, and the crossover lock would otherwise have
+    needed a refactor before it could exist."""
+    lock_path: str               # == mining_pins.LOCK_PATH when this spec is live
+    source_report: str
+    schema: str
+    restatement_kind: str        # "VOLUME-MATCHED" | "CROSSOVER" — the claim, in one token
+    restatement_how: str         # the sentence written into every cut's `restated_from`
+    volume_claim: str            # the paragraph under the .md cut table
+    adoption: str
+    bound: str
+    caveats: dict = field(default_factory=dict)
+
+
+# The population's known leans, per source. A judgement about the reference pool, not a
+# computation over it, so they are declared rather than read out of the record.
+VOLUME_MATCH_CAVEATS = {
+    "incumbent_trained_at_these_locations": (
+        "mining v1 trained at the 112 gate-passer locations the v1 sitting and sheet B draw "
+        "from, and its dataset is gone so the exact rows cannot be excluded: 630 of the 827 "
+        "rows sit at a location v1 has seen."),
+    "labels_are_anchored_to_v1": (
+        "every sheet in this corpus is a CORRECTION sheet - rows were served with v1's own "
+        "suggested tier prefilled and the page sorted by its score, so label and v1's score "
+        "are coupled by construction (0.929 of the v1 sitting's labels came back equal to "
+        "what was served)."),
+    "staged_is_eval_selected": (
+        "the pinned checkpoint is the best of five seeds by eval AP>=3 on this very slice, so "
+        "a number read here is optimistic for it. The five-seed band is in the (28) report."),
+    "direction": (
+        "the first two lean toward the INCUMBENT and the third toward the pinned head. They "
+        "do not cancel and none is subtractable."),
+}
+
+BASERATE_AUDIT_CAVEATS = {
+    "the_page_was_prefilled_by_the_head_being_cut": (
+        "sheet F is a CORRECTION page - every row was served with v3's own suggested tier "
+        "prefilled and the page sorted by v3's readout, and 176 of 200 labels came back equal "
+        "to what was served. Label and score are coupled by construction, so the crossover is "
+        "where the human agreed with the head, not only where the head is right."),
+    "the_draw_however_was_score_unconditioned": (
+        "no mining head touched the SELECTION - sheet E's population imported, flat mode "
+        "apportionment, a pool palette draw, near-dup ties broken by draw order. That is what "
+        "makes the TIER MIX a base rate over the population the gate sees; it does nothing to "
+        "un-anchor the labels, because the anchoring is in the page and not in the draw."),
+    "nineteen_positives_at_the_gate_boundary": (
+        "the >=3 columns are estimated from 19 rows of 200. The cut is read at >=2 (107 of "
+        "200) where the sheet has power; every >=3 precision beside it is a wide interval and "
+        "the Wilson bounds in the ladder are the honest width."),
+    "direction": (
+        "the first lean inflates agreement and therefore the sharpness of the crossover; the "
+        "third widens intervals rather than moving them. The second is not a lean at all, it "
+        "is what makes the base rate readable. None is subtractable. Sheet E "
+        "(tools/mining/sheet_e_reverdict.py) is the unanchored bound on the same draw rule."),
+}
+
+VOLUME_MATCH_V3 = LockSpec(
+    lock_path=f"data/{MP.HEAD_NAME}/{MP.HEAD_VERSION}/mining_gate_lock.json",
+    source_report=f"data/{MP.HEAD_NAME}/{MP.HEAD_VERSION}/volume_match_mining.json",
+    schema="mining_gate_lock/v3",             # v1 = July (gone); v2 = the 2026-08-06 sitting
+    restatement_kind="VOLUME-MATCHED",
+    restatement_how="VOLUME-MATCHED - the same matched_volume below, under the previous "
+                    "head (classifier_retrain_protocol.md section 5a)",
+    volume_claim="Every value is a VOLUME-MATCHED restatement of the `was` column: the same "
+                 "number of reference-pool rows passes, and only the precision beside it "
+                 "moved.",
+    adoption="prompts/flip_29.md - mining v1 -> v3 (the `dedup_weighted` arm), 2026-08-11. "
+             "Both cuts were restated volume-matched at this flip; the v1 lock stays at "
+             "data/render_mode_head/v1/ as the record of what 0.50 and 0.25 bought on v1.",
+    bound="OPTIMISTIC. Two of the three leans above inflate the INCUMBENT and one inflates "
+          "the pinned head; none is subtractable from these numbers. Every precision here is "
+          "a bound on what the same cut buys at a FRESH (location, mode) pair, and the honest "
+          "use of this record is as a ceiling, not an estimate. The unanchored read is "
+          "tools/mining/sheet_e_reverdict.py.",
+    caveats=VOLUME_MATCH_CAVEATS,
+)
+
+BASERATE_AUDIT_V3 = LockSpec(
+    lock_path=f"data/{MP.HEAD_NAME}/{MP.HEAD_VERSION}/mining_gate_lock_2026-08-11.json",
+    source_report=f"data/{MP.HEAD_NAME}/{MP.HEAD_VERSION}/baserate_audit_2026-08-11.json",
+    schema="mining_gate_lock/v4",             # v3 + a top-level `restatement` block
+    restatement_kind="CROSSOVER",
+    restatement_how="CROSSOVER - the head did NOT move. The cut is where an isotonic fit of "
+                    "1[label >= 2] against this same signal reaches 0.5 on 200 human tiers, "
+                    "i.e. where a row becomes more likely than not to be at-least-okay. "
+                    "Volume is an OUTPUT of that and is not held fixed; contrast "
+                    "classifier_retrain_protocol.md section 5a, which is the other question.",
+    volume_claim="The `was` column is NOT volume-matched to the new value and the two do not "
+                 "pass the same rows: a crossover holds the label MEANING fixed and lets the "
+                 "volume move, which here it does by 4.6x on the flip's reference pool "
+                 "(129 -> 587 of 827). That is the audit's finding, not a side effect of it.",
+    adoption="prompts/audit_mining_process.md - the sheet F base-rate audit, 2026-08-11. "
+             "Matt's decision, pre-stated before the labels were read: land the gate at the "
+             "crossover. The pool floor followed to 0.0 because a pool floor is defined "
+             "relative to its release floor and floors.check_below_gate refuses the "
+             "inversion. The un-suffixed lock beside this one stays as the record of what "
+             "0.6691 and 0.3402 bought, i.e. the rollback record "
+             "(mining_pins.MINING_LOCK_ROLLBACK).",
+    bound="OPTIMISTIC, and more so than its predecessor. The crossover is read off a page the "
+          "cut head prefilled and sorted, so it is where the human AGREED with v3 - an upper "
+          "bound on the separation a fresh (location, mode) pair would show. Basis "
+          "[human n=200, prefill-anchored - ceiling]. The unanchored bound on the same draw "
+          "rule is tools/mining/sheet_e_reverdict.py.",
+    caveats=BASERATE_AUDIT_CAVEATS,
+)
+
+SPECS = {s.lock_path: s for s in (VOLUME_MATCH_V3, BASERATE_AUDIT_V3)}
+
+
+def live_spec(lock_path: str | None = None) -> LockSpec:
+    """The spec for the lock the PIN names. Looked up, not chosen — a lock whose source this
+    file cannot name is a record nothing can re-derive, so an unregistered path raises."""
+    p = lock_path or MP.LOCK_PATH
+    spec = SPECS.get(p)
+    if spec is None:
+        raise LockDerivationError(
+            f"mining_pins.LOCK_PATH is {p!r}, which is not a registered lock source "
+            f"(have {sorted(SPECS)}). Every lock is DERIVED from a committed measurement; "
+            f"register the measurement that produced this one rather than hand-writing it.")
+    return spec
+
+
+# The LIVE spec, and the module-level aliases every caller and test already reads. Resolved at
+# import from the pin rather than spelled: a lock cannot describe one measurement while living
+# beside another. The readable face is generated beside the json — deliberately not `report.md`,
+# which is the sitting's own hand-written adoption report and would be clobbered by a --write.
+SPEC = live_spec()
+SOURCE_REPORT = SPEC.source_report
+LOCK_PATH = SPEC.lock_path
+MD_PATH = str(Path(LOCK_PATH).with_suffix(".md"))
+SCHEMA = SPEC.schema
+
+# The two cuts this record is the authority for. Read from the owner, never restated: the
+# lock quotes what `floors.py` says is live, and refuses if the ladder cannot support it.
+LOCKED_CUTS = (F.MINING_POOL, F.MINING_RELEASE)
 
 
 def log(m):
@@ -112,38 +250,27 @@ def _row_at(ladder: list, value: float) -> dict:
 # --------------------------------------------------------------------------- #
 # derive
 # --------------------------------------------------------------------------- #
-# The population's known leans. A judgement about the reference pool, not a computation over
-# it, so it is declared rather than read out of the record. Carried verbatim from
-# `mining_v3_reads.py`'s own statement of what leans that comparison.
-CAVEATS = {
-    "incumbent_trained_at_these_locations": (
-        "mining v1 trained at the 112 gate-passer locations the v1 sitting and sheet B draw "
-        "from, and its dataset is gone so the exact rows cannot be excluded: 630 of the 827 "
-        "rows sit at a location v1 has seen."),
-    "labels_are_anchored_to_v1": (
-        "every sheet in this corpus is a CORRECTION sheet - rows were served with v1's own "
-        "suggested tier prefilled and the page sorted by its score, so label and v1's score "
-        "are coupled by construction (0.929 of the v1 sitting's labels came back equal to "
-        "what was served)."),
-    "staged_is_eval_selected": (
-        "the pinned checkpoint is the best of five seeds by eval AP>=3 on this very slice, so "
-        "a number read here is optimistic for it. The five-seed band is in the (28) report."),
-    "direction": (
-        "the first two lean toward the INCUMBENT and the third toward the pinned head. They "
-        "do not cancel and none is subtractable."),
-}
+# The live spec's leans, under the name this module has always exposed them by. An alias, not
+# a copy: `test_mining_gate_lock` asserts the record carries exactly this set, and a second
+# literal would let the record and the check drift apart.
+CAVEATS = SPEC.caveats
 
 
-def build_lock(vm: dict, *, source_sha: str) -> dict:
-    """The record, as a pure function of the frozen volume-match pass + the live pin/owner
-    state."""
+def build_lock(vm: dict, *, source_sha: str, spec: LockSpec | None = None) -> dict:
+    """The record, as a pure function of the frozen measurement + the live pin/owner state.
+
+    `spec` says what KIND of restatement the cut values are (a §5a volume match or a
+    crossover); it defaults to the live one. The two make different claims and the record has
+    to make the right one — a crossover described as volume-matched asserts an invariant it
+    broke by 4.6x."""
+    spec = spec or SPEC
     live_head = MP.HEAD_VERSION
     pool = vm["reference_pool"]
 
     # (1) the head the pass scored must be the head the pin serves.
     if vm["head"]["incoming"] != MP.ACTIVE_MINING_CKPT:
         raise LockDerivationError(
-            f"the volume-match pass scored {vm['head']['incoming']} but the live pin is "
+            f"the measurement pass scored {vm['head']['incoming']} but the live pin is "
             f"{MP.ACTIVE_MINING_CKPT}. A lock is a statement about the DEPLOYED head; "
             f"re-run the pass against the live pin or move the pin back.")
     if vm["head"]["name"] != MP.HEAD_NAME:
@@ -151,8 +278,8 @@ def build_lock(vm: dict, *, source_sha: str) -> dict:
             f"the record is about {vm['head']['name']!r}, the pin about {MP.HEAD_NAME!r}.")
     if vm.get("incomplete"):
         raise LockDerivationError(
-            f"{SOURCE_REPORT} is stamped incomplete (a bounded --limit run). A lock derived "
-            f"from a partial pass would state an operating point nobody measured.")
+            f"{spec.source_report} is stamped incomplete (a bounded --limit run). A lock "
+            f"derived from a partial pass would state an operating point nobody measured.")
 
     by_name = {c["name"]: c for c in vm["cuts"]}
     prev_head = Path(vm["head"]["outgoing"]).parent.name
@@ -165,7 +292,7 @@ def build_lock(vm: dict, *, source_sha: str) -> dict:
         if src is None or abs(float(src["incoming_value"]) - f.value) > 1e-12:
             raise LockDerivationError(
                 f"{f.name} is {f.value} in floors.py but "
-                f"{None if src is None else src['incoming_value']} in the volume-match "
+                f"{None if src is None else src['incoming_value']} in the measurement "
                 f"record. The record may only quote a cut the pass actually placed.")
         r3 = _row_at(vm["ladder_ge3"], f.value)
         cuts[f.name] = {
@@ -174,8 +301,7 @@ def build_lock(vm: dict, *, source_sha: str) -> dict:
             "boundary": "p_ge3 (marginal P(label>=3))",
             "restated_from": {
                 "value": src["outgoing_value"], "head": f"{f.head}/{prev_head}",
-                "how": "VOLUME-MATCHED - the same matched_volume below, under the previous "
-                       "head (classifier_retrain_protocol.md section 5a)",
+                "how": spec.restatement_how, "kind": spec.restatement_kind,
                 "precision": src["outgoing"]["precision_ge3"]},
             "matched_volume": src["matched_volume"],
             "fires": r3["fires"], "n": pool["n"], "pass_rate": r3["pass_rate"],
@@ -185,15 +311,20 @@ def build_lock(vm: dict, *, source_sha: str) -> dict:
         }
 
     return {
-        "schema": SCHEMA,
+        "schema": spec.schema,
         "what": ("The operating point of the render-mode (mining) quality gate: what each "
                  "live cut fires at, and at what measured precision/recall, on the reference "
-                 "pool its value was volume-matched against."),
+                 "pool its value was set against."),
+        # WHAT KIND OF CLAIM THE `restated_from` VALUES MAKE. A record that only carried the
+        # numbers could be read as either, and the two assert opposite things about volume.
+        "restatement": {"kind": spec.restatement_kind, "how": spec.restatement_how,
+                        "volume_claim": spec.volume_claim},
         "gate": {
             "version": MP.MINING_GATE_VERSION,
             "checkpoint": MP.ACTIVE_MINING_CKPT,
             "threshold": MP.MINING_GATE_THRESHOLD,
             "rollback": MP.MINING_V1_ROLLBACK,
+            "lock_rollback": MP.MINING_LOCK_ROLLBACK,
             "signal": "marginal p_ge3 = cumprod(sigma(logits)) - NEVER the CORN conditional",
             "deploy_transform": ("classifier.data.Transform(train=False): 384x224 bicubic "
                                  "stretch + the checkpoint's own mean/std"),
@@ -218,40 +349,35 @@ def build_lock(vm: dict, *, source_sha: str) -> dict:
         # "what would 0.40 have bought" without re-running a pass whose crops may be gone.
         "ladder_ge3": vm["ladder_ge3"],
         "ladder_ge2": vm["ladder_ge2"],
-        "caveats": dict(CAVEATS),
-        "bound": ("OPTIMISTIC. Two of the three leans above inflate the INCUMBENT and one "
-                  "inflates the pinned head; none is subtractable from these numbers. Every "
-                  "precision here is a bound on what the same cut buys at a FRESH (location, "
-                  "mode) pair, and the honest use of this record is as a ceiling, not an "
-                  "estimate. The unanchored read is tools/mining/sheet_e_reverdict.py."),
+        "caveats": dict(spec.caveats),
+        "bound": spec.bound,
         "harness_parity": {
-            "what": ("BY CONSTRUCTION, not by a separate check: the volume-match pass scores "
+            "what": ("BY CONSTRUCTION, not by a separate check: the measurement pass scores "
                      "through mining_gate.MiningScorer - the gate's own scorer - so there is "
                      "no sibling harness for these numbers to disagree with."),
             "scorer": pool["scorer"],
         },
         "provenance": {
-            "source_report": SOURCE_REPORT,
+            "source_report": spec.source_report,
             "source_report_sha256": source_sha,
             "source_generated": vm["generated"],
             "source_command": vm["command"],
             "derived_by": "tools/mining/lock_mining_gate.py --write",
-            "adoption": ("prompts/flip_29.md - mining v1 -> v3 (the `dedup_weighted` arm), "
-                         "2026-08-11. Both cuts were restated volume-matched at this flip; "
-                         "the v1 lock stays at data/render_mode_head/v1/ as the record of "
-                         "what 0.50 and 0.25 bought on v1."),
+            "adoption": spec.adoption,
         },
     }
 
 
-def derive(source: Path | None = None) -> dict:
-    src = Path(source) if source else (ROOT / SOURCE_REPORT)
+def derive(source: Path | None = None, spec: LockSpec | None = None) -> dict:
+    spec = spec or SPEC
+    src = Path(source) if source else (ROOT / spec.source_report)
     if not src.exists():
         raise LockDerivationError(
-            f"the volume-match record {src} is missing — it is a tracked artifact "
-            f"({SOURCE_REPORT}); write it with `uv run python tools/scoring/volume_match.py "
-            f"mining` rather than re-deriving this lock from anything else.")
-    return build_lock(json.loads(src.read_text(encoding="utf-8")), source_sha=_sha256(src))
+            f"the measurement record {src} is missing — it is a tracked artifact "
+            f"({spec.source_report}); write it with its own producer rather than re-deriving "
+            f"this lock from anything else.")
+    return build_lock(json.loads(src.read_text(encoding="utf-8")), source_sha=_sha256(src),
+                      spec=spec)
 
 
 def serialize(lock: dict) -> str:
@@ -296,7 +422,7 @@ def write_md(lock: dict) -> str:
     pv = lock["provenance"]
     w = [f"# Mining gate lock \u2014 `{g['version']}` @ {g['checkpoint']}\n",
          f"Frozen operating point of the render-mode (strange) quality gate. Written by "
-         f"`tools/mining/lock_mining_gate.py` from the committed volume-match record "
+         f"`tools/mining/lock_mining_gate.py` from the committed measurement record "
          f"`{pv['source_report']}` "
          f"(sha256 `{pv['source_report_sha256'][:16]}\u2026`); nothing here is re-measured, and "
          f"a reader that finds the pin moved off "
@@ -316,10 +442,9 @@ def write_md(lock: dict) -> str:
                  f"{cut['fires']}/{cut['n']} | "
                  f"{_pct(cut['pass_rate'])} | {_pct(cut['precision'])} | "
                  f"{_pct(lo)}\u2013{_pct(hi)} | {_pct(cut['recall'])} |")
-    w.append(f"\nBoth are on the gate signal \u2014 {c['mining_release']['boundary']}. Every "
-             f"value is a VOLUME-MATCHED restatement of the `was` column: the same number of "
-             f"reference-pool rows passes, and only the precision beside it moved. Precision "
-             f"is of PASSERS and carries a Wilson interval: the top of the ladder is "
+    w.append(f"\nBoth are on the gate signal \u2014 {c['mining_release']['boundary']}. "
+             f"**{lock['restatement']['kind']}:** {lock['restatement']['volume_claim']} "
+             f"Precision is of PASSERS and carries a Wilson interval: the top of the ladder is "
              f"estimated from a handful of rows, and a bare 1.000 over 3 and a 0.90 over 90 "
              f"are the same column otherwise.\n")
 
@@ -345,7 +470,8 @@ def write_md(lock: dict) -> str:
     w.append("\n## Provenance\n")
     w.append(f"- **Head** {lock['head']['name']}/{lock['head']['version']} \u2014 "
              f"{lock['head']['role']}. Threshold {g['threshold']} on {g['signal']}. "
-             f"Rollback: {g['rollback']}.")
+             f"Rollback: {g['rollback']}; the lock this one supersedes, kept as the record of "
+             f"what the previous cuts bought: `{g['lock_rollback']}`.")
     w.append(f"- **Source** `{pv['source_report']}`, generated {pv['source_generated']} "
              f"by `{pv['source_command']}`.")
     w.append(f"- **Adoption** \u2014 {pv['adoption']}")

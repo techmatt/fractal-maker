@@ -92,7 +92,9 @@
         "matched_rate": 0.31114435302916976,
         "precision_ge3_old": 0.7980769230769231,
         "precision_ge3_new": 0.7475961538461539,
-        "volume_preserved": true
+        "volume_preserved": true,
+        "live_now": 0.6052,
+        "superseded_by": null
       },
       "wallpaper_pool": {
         "old": 0.75,
@@ -103,7 +105,9 @@
         "matched_rate": 0.37621540762902017,
         "precision_ge3_old": 0.7475149105367793,
         "precision_ge3_new": 0.705765407554672,
-        "volume_preserved": true
+        "volume_preserved": true,
+        "live_now": 0.4698,
+        "superseded_by": null
       }
     },
     "suggestion_cuts": {
@@ -146,7 +150,7 @@
         ]
       }
     },
-    "floors_summary": "junk_floor 0.2 (ENFORCING, colorize-pool draw) \u00b7 good_floor 0.5 (ENFORCING, run-side admission) \u00b7 wallpaper_pool 0.4698 (wallpaper_head/v4b, annotation-only) \u00b7 wallpaper_release 0.6052 (wallpaper_head/v4b, annotation-only) \u00b7 mining_pool 0.3402 (render_mode_head/v3, annotation-only) \u00b7 mining_release 0.6691 (render_mode_head/v3, annotation-only)"
+    "floors_summary": "junk_floor 0.2 (ENFORCING, colorize-pool draw) \u00b7 good_floor 0.5 (ENFORCING, run-side admission) \u00b7 wallpaper_pool 0.4698 (wallpaper_head/v4b, annotation-only) \u00b7 wallpaper_release 0.6052 (wallpaper_head/v4b, annotation-only) \u00b7 mining_pool 0 (render_mode_head/v3, annotation-only) \u00b7 mining_release 0.0949 (render_mode_head/v3, annotation-only)"
   },
   "rollback_ladder": {
     "ladder": [

@@ -37,18 +37,36 @@ HEAD_NAME = "render_mode_head"
 # v1's anchoring price at that boundary is -0.278 (0.953 anchored -> 0.676 blind).
 ACTIVE_MINING_CKPT = "data/render_mode_head/v3/model_best.pt"   # staged seed-0 (LIVE)
 MINING_V1_ROLLBACK = "data/render_mode_head/v1/model_best.pt"   # the PREVIOUS rung
-MINING_GATE_THRESHOLD = 0.6691  # marginal p_ge3 boundary; conservative / high-precision
-# 0.50 -> 0.6691 at the v3 flip: a VOLUME-MATCHED RESTATEMENT, not a retune. 0.6691 passes the
-# SAME 129 of the 827 reference-pool rows (15.6%) that 0.50 passed on v1. Precision>=3 of the
-# passers moves 0.636 -> 0.760 there — the head's gain, read at fixed volume. Record:
-# data/render_mode_head/v3/volume_match_mining.json; procedure protocol §5a.
+MINING_GATE_THRESHOLD = 0.0949  # marginal p_ge3 boundary; the label/score CROSSOVER
+# 0.6691 -> 0.0949 on 2026-08-11 (prompts/audit_mining_process.md), and this one IS a change of
+# what the gate MEANS — not a volume match. The head did not move. What moved is the reading:
+# sheet F (`2026-08-11_render_mode_baserate_audit_v1`, 200 human tiers over the population the
+# gate actually sees) puts the isotonic crossover of `1[label >= 2]` against this very signal at
+# p_ge3 0.0949 — the score at which a row is more likely than not to be at-least-okay. Below it,
+# 81 of 81 sheet-F rows are tier 1; above it, 107 of 119 are >= 2.
+#
+# THE VOLUME MOVES AND THAT IS THE FINDING, not a side effect: 129/827 -> 587/827 (15.6% ->
+# 71.0%) on the flip's reference pool, 9/200 -> 119/200 on sheet F. Precision>=3 of the passers
+# falls 0.760 -> 0.363 and recall>=3 rises 0.458 -> 0.995; at the >=2 boundary the cut is
+# reading, precision 0.992 -> 0.893 and recall 0.226 -> 0.926. The old cut was a high-precision
+# >=3 release bar; this one is a not-bad bar, and the two answer different questions.
+#
+# EVERY NUMBER ABOVE IS A CEILING. Sheet F's page was v3-PREFILLED and sorted by v3's own
+# readout, so label and score are coupled by construction (protocol §2b) and 176/200 labels came
+# back equal to what was served. The crossover is therefore an upper bound on the agreement a
+# fresh (location, mode) pair would show. Record: data/render_mode_head/v3/
+# baserate_audit_2026-08-11.json, basis `[human n=200, prefill-anchored — ceiling]`.
+# The superseded 0.6691 stays measured in data/render_mode_head/v3/volume_match_mining.json and
+# in the lock beside this one — that pair is the rollback record.
+#
 # The frozen operating point the release floor is set against: written by
-# `lock_mining_gate.py --write` from the committed volume-match record, read back through its
+# `lock_mining_gate.py --write` from a committed measurement record, read back through its
 # `read_lock()`, which REFUSES when HEAD_VERSION no longer matches the head it was measured
 # on. The path is the PINNED head's because the lock describes it; a pin flip needs a new
 # record at the new head's path, not an edit to the old one — v1's stays as the record of what
-# v1's cuts bought.
-LOCK_PATH = "data/render_mode_head/v3/mining_gate_lock.json"   # frozen ladder + operating point
+# v1's cuts bought, and v3's un-suffixed lock stays as the record of what 0.6691 bought.
+LOCK_PATH = "data/render_mode_head/v3/mining_gate_lock_2026-08-11.json"   # ladder + op point
+MINING_LOCK_ROLLBACK = "data/render_mode_head/v3/mining_gate_lock.json"   # what 0.6691 bought
 
 
 def head_version(ckpt: str | None = None) -> str:

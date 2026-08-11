@@ -226,6 +226,18 @@ scale: it is not fixable by choosing a different arm, only by buying an unanchor
 LOCATION and sheet D excludes prior locations, the mining head judges a (location, mode) pair
 and sheet E excludes prior pairs.
 
+**Per-sitting correction rates, the whole record.** Every one is *agreement with the head that
+served the page*, never quality — they live here so a new sitting can be read against them
+instead of against an impression. Sheet A (wallpaper, v3-served) 0.849 · the 2026-08-06 mining
+sitting (v1-served) 0.929 · **sheet F (mining, v3-served, 2026-08-11) 0.880 — 176/200 exact
+tiers, with 5 up and 4 down across the ≥2 boundary and 7 up / 8 down across ≥3.** Sheet F is
+the first convergence datum on the FLIPPED mining head, and the flat ≥2 boundary (9 flips
+either way on 200 rows) is what the crossover in
+`data/render_mode_head/v3/baserate_audit_2026-08-11.json` is read off — so that crossover is
+where the human agreed with v3, and its own record says so. Two comparisons that make the
+number readable: sheet F's ≥2 rate is 53.5% (107/200) against sheet E's BLIND 50.7% (76/150)
+on the same draw rule, and at ≥3 it is 9.5% against E's 4.0%.
+
 `[code: tools/scoring/batch_registry (the wallpaper_correction_sitting and mining_blind_eval
 registrations), tools/wallpaper/build_blind_minibrot_sheet.py,
 tools/wallpaper/sheet_d_reverdict.py, tools/mining/build_blind_mining_sheet.py,
@@ -470,6 +482,25 @@ by moving a string. So they are held by this procedure plus a human:
    and not holding a rate. So step 2 above applies to `GOOD_FLOOR` and to the four stamped
    floors; `JUNK_FLOOR` is left alone by every flip, and leaving it alone is now the checked
    behaviour rather than an omission.
+   **THE MIDPOINT CONVENTION IS REUSABLE; THE VOLUME INVARIANT IS NOT.** A cut can also move
+   when the head has *not* — a labeled slice says where the score crosses a label boundary, and
+   somebody decides to put the cut there. That is a **crossover**, not a restatement, and it is
+   the other question this section's question has: volume-matching holds VOLUME fixed and lets
+   meaning move, a crossover holds MEANING fixed and lets volume move. The two must not be
+   described as one. What carries over unchanged is the placement arithmetic — midpoint between
+   the adjacent scores, realized volume re-counted under the rounded constant — because that is
+   about `>` vs `>=` and has nothing to do with why the cut moved.
+   Worked instance, 2026-08-11 (`prompts/audit_mining_process.md`): sheet F's 200 human tiers
+   put the isotonic crossover of `1[label ≥ 2]` against the mining head's `p_ge3` at **0.0949**,
+   the gate went there from its own volume-matched 0.6691, and the volume moved **4.6×**
+   (129 → 587 of 827). `tools/mining/baserate_audit_reads.py` is the arithmetic;
+   `lock_mining_gate.LockSpec` is what stops the resulting lock from claiming a volume match.
+   Two things a crossover has to carry that a restatement does not: whether the slice was
+   **anchored** (sheet F was v3-prefilled, so every number is a ceiling), and what it does to
+   the cuts it did NOT move — the crossover landed below both `JUNK_FLOOR` and the mining pool
+   floor, which forced the pool floor to 0.0 to keep `floors.check_below_gate` satisfied and
+   left the enforcing junk floor as the strictest cut in stage 2.
+
 3. Nothing else. There is no threshold sweep, no per-partition table to re-adopt and no
    conformance test to re-run — `tools/scoring/derive_t_good.py`,
    `production_seeder.T_GOOD_OVERRIDES`, `tools/atlas/keeper_cut.py` and their five per-version

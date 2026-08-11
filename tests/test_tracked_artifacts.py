@@ -205,10 +205,14 @@ TRACKED_CANARIES = [
     # ladder is v4b -> v3.
     "data/render_mode_head/v3/model_best.pt",     # LIVE strange-mode (mining_v3) gate
     "data/render_mode_head/v1/model_best.pt",     # PREVIOUS strange-mode gate (mining_v1)
-    # The gate locks, one per head that has served. The LIVE one is v3's: the frozen ladder
-    # + operating point the 0.6691 release floor is set against, rebuilt by
-    # `lock_mining_gate.py` from data/render_mode_head/v3/volume_match_mining.json, so both
-    # must survive together; the pass that produced THAT is a GPU sweep over crops.
+    # The gate locks. There are now TWO on v3 and neither is spare. The LIVE one is the
+    # date-suffixed pair: `lock_mining_gate.py` rebuilds it from
+    # baserate_audit_2026-08-11.json (200 human tiers + the ladders), so lock and source must
+    # survive together. The un-suffixed pair is what 0.6691 and 0.3402 bought on the same head
+    # before the 2026-08-11 base-rate audit — `mining_pins.MINING_LOCK_ROLLBACK`, the rollback
+    # record — and its own source is the volume-match pass, a GPU sweep over crops.
+    "data/render_mode_head/v3/mining_gate_lock_2026-08-11.json",
+    "data/render_mode_head/v3/baserate_audit_2026-08-11.json",
     "data/render_mode_head/v3/mining_gate_lock.json",
     "data/render_mode_head/v3/volume_match_mining.json",
     # v1's lock is NOT superseded — it is the record of what 0.50 and 0.25 bought on the head

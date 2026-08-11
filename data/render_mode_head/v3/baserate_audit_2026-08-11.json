@@ -1,0 +1,977 @@
+{
+  "generated": "2026-08-11T16:03:36",
+  "command": "uv run python tools/mining/baserate_audit_reads.py",
+  "procedure": "the label/score CROSSOVER, not a \u00a75a volume match: an isotonic fit of 1[label >= 2] against the head's own gate signal (p_ge3), cut where the fitted probability reaches 0.5, placed at the \u00a75a midpoint and re-counted under the rounded constant.",
+  "head": {
+    "name": "render_mode_head",
+    "outgoing": "data/render_mode_head/v3/model_best.pt",
+    "incoming": "data/render_mode_head/v3/model_best.pt",
+    "served_at": [
+      "data/render_mode_head/v3/model_best.pt"
+    ],
+    "served_gate_threshold": [
+      0.6691
+    ]
+  },
+  "supersedes": {
+    "record": "data/render_mode_head/v3/volume_match_mining.json",
+    "values": {
+      "mining_release": 0.6691,
+      "mining_pool": 0.3402
+    },
+    "why": "the 2026-08-11 v1->v3 flip's VOLUME-MATCHED restatement. It is not wrong and is not being corrected: it answered 'the head moved, where does this cut go?' and this answers 'what does the human say the score means?'."
+  },
+  "reference_pool": {
+    "what": "sheet F \u2014 2026-08-11_render_mode_baserate_audit_v1, the base-rate audit sitting",
+    "loader": "tools.mining.baserate_audit_reads.load_sheet",
+    "scorer": "mining_scorer",
+    "basis": "[human n=200, prefill-anchored \u2014 ceiling]",
+    "n": 200,
+    "n_locations": 131,
+    "by_batch": {
+      "2026-08-11_render_mode_baserate_audit_v1": 200
+    },
+    "by_mode": {
+      "composite_c13_smooth_stripe": 15,
+      "composite_c17_smooth_curvature": 15,
+      "composite_c7_smooth_trap_circle": 15,
+      "curv_linear": 15,
+      "direct_trap_lines": 14,
+      "direct_trap_multiply": 14,
+      "direct_trap_ring": 14,
+      "direct_trap_screen": 14,
+      "gaussian_int": 14,
+      "smooth_angle_min": 14,
+      "smooth_mean_angle": 14,
+      "stripe": 14,
+      "tia": 14,
+      "trap_circle": 14
+    },
+    "tiers": {
+      "1": 93,
+      "2": 88,
+      "3": 19
+    },
+    "base_rate_ge3": 0.095,
+    "base_rate_ge2": 0.535
+  },
+  "audit": {
+    "human": {
+      "batch": "2026-08-11_render_mode_baserate_audit_v1",
+      "elicitation": "CORRECTION \u2014 v3's tier PREFILLED, page sorted by v3's readout",
+      "n": 200,
+      "tiers": {
+        "1": 93,
+        "2": 88,
+        "3": 19
+      },
+      "n_ge2": 107,
+      "rate_ge2": 0.535,
+      "n_ge3": 19,
+      "rate_ge3": 0.095
+    },
+    "v3_prefill": {
+      "what": "the suggested_tier each row was SERVED with (suggest_tier_mining.CUTS on v3)",
+      "n": 200,
+      "tiers": {
+        "1": 94,
+        "2": 86,
+        "3": 20
+      },
+      "n_ge2": 106,
+      "rate_ge2": 0.53,
+      "n_ge3": 20,
+      "rate_ge3": 0.1
+    },
+    "sheet_e_blind": {
+      "batch": "2026-08-11_render_mode_blind_v1",
+      "elicitation": "BLIND, shuffled",
+      "n_rows_in_batch": 150,
+      "n": 150,
+      "tiers": {
+        "1": 74,
+        "2": 70,
+        "3": 6
+      },
+      "n_ge2": 76,
+      "rate_ge2": 0.5066666666666667,
+      "n_ge3": 6,
+      "rate_ge3": 0.04
+    },
+    "correction": {
+      "n": 200,
+      "exact_tier_agreement": 176,
+      "exact_tier_agreement_rate": 0.88,
+      "confusion_served_by_human": {
+        "1": {
+          "1": 89,
+          "2": 5,
+          "3": 0
+        },
+        "2": {
+          "1": 4,
+          "2": 75,
+          "3": 7
+        },
+        "3": {
+          "1": 0,
+          "2": 8,
+          "3": 12
+        }
+      },
+      "flips_ge2": {
+        "served_below_human_at_or_above": 5,
+        "served_at_or_above_human_below": 4,
+        "net": 1,
+        "boundary_agreement": 191,
+        "boundary_agreement_rate": 0.955
+      },
+      "flips_ge3": {
+        "served_below_human_at_or_above": 7,
+        "served_at_or_above_human_below": 8,
+        "net": -1,
+        "boundary_agreement": 185,
+        "boundary_agreement_rate": 0.925
+      }
+    },
+    "would_pass_served_gate": 9,
+    "ceiling": "EVERY rate in this block is a CEILING. The page was v3-prefilled and score-sorted, so label and score are coupled by construction; a correction rate here measures agreement with v3 and never quality (classifier_retrain_protocol.md \u00a72b). Sheet E is the unanchored bound on the same draw rule."
+  },
+  "crossover": {
+    "target": "1[label >= 2]",
+    "n": 200,
+    "positives": 107,
+    "base_rate": 0.535,
+    "fit": "isotonic (PAVA), increasing, sklearn.isotonic.IsotonicRegression",
+    "placement": "MIDPOINT between the adjacent row scores (classifier_retrain_protocol.md \u00a75a), then the volume is RE-COUNTED under the rounded constant",
+    "convention": "first fitted value AT OR ABOVE 0.5",
+    "first_row_at_or_above": 0.09513702703735394,
+    "last_row_below": 0.09475047787472946,
+    "fitted_at_crossing": 0.5,
+    "constant_unrounded": 0.0949437524560417,
+    "constant": 0.0949,
+    "realized_volume": 119,
+    "realized_volume_strict": 119,
+    "tie_block_at_exactly_half": true,
+    "strictly_above": {
+      "first_row_at_or_above": 0.10474496828496793,
+      "last_row_below": 0.10301495808350047,
+      "fitted_at_crossing": 0.6,
+      "constant_unrounded": 0.1038799631842342,
+      "constant": 0.1039,
+      "realized_volume": 111,
+      "realized_volume_strict": 111
+    },
+    "blocks": [
+      {
+        "fit": 0.0,
+        "lo": 1.374809607880665e-10,
+        "hi": 0.09475047787472946,
+        "n": 81,
+        "positives": 0
+      },
+      {
+        "fit": 0.5,
+        "lo": 0.09513702703735394,
+        "hi": 0.10301495808350047,
+        "n": 8,
+        "positives": 4
+      },
+      {
+        "fit": 0.6,
+        "lo": 0.10474496828496793,
+        "hi": 0.11017645234229967,
+        "n": 5,
+        "positives": 3
+      },
+      {
+        "fit": 0.8,
+        "lo": 0.11554322724461219,
+        "hi": 0.12884333826868755,
+        "n": 10,
+        "positives": 8
+      },
+      {
+        "fit": 0.9393939393939394,
+        "lo": 0.13780076754086767,
+        "hi": 0.40143960988802974,
+        "n": 66,
+        "positives": 62
+      },
+      {
+        "fit": 1.0,
+        "lo": 0.425551540643788,
+        "hi": 0.8807480418097953,
+        "n": 30,
+        "positives": 30
+      }
+    ]
+  },
+  "crossover_cross_checks": {
+    "why": "the same fit against the head's other readouts. No cut is placed on them \u2014 no gate site compares against them \u2014 but if the crossover were an artifact of reading a >=2 question off a P(>=3) score, these would disagree about WHICH ROWS pass, and they do not.",
+    "signals": {
+      "p_ge2": {
+        "target": "1[label >= 2]",
+        "n": 200,
+        "positives": 107,
+        "base_rate": 0.535,
+        "fit": "isotonic (PAVA), increasing, sklearn.isotonic.IsotonicRegression",
+        "placement": "MIDPOINT between the adjacent row scores (classifier_retrain_protocol.md \u00a75a), then the volume is RE-COUNTED under the rounded constant",
+        "convention": "first fitted value AT OR ABOVE 0.5",
+        "first_row_at_or_above": 0.521980881690979,
+        "last_row_below": 0.501420259475708,
+        "fitted_at_crossing": 0.6,
+        "constant_unrounded": 0.5117005705833435,
+        "constant": 0.5117,
+        "realized_volume": 112,
+        "realized_volume_strict": 112,
+        "tie_block_at_exactly_half": false,
+        "strictly_above": {
+          "first_row_at_or_above": 0.521980881690979,
+          "last_row_below": 0.501420259475708,
+          "fitted_at_crossing": 0.6,
+          "constant_unrounded": 0.5117005705833435,
+          "constant": 0.5117,
+          "realized_volume": 112,
+          "realized_volume_strict": 112
+        }
+      },
+      "pred": {
+        "target": "1[label >= 2]",
+        "n": 200,
+        "positives": 107,
+        "base_rate": 0.535,
+        "fit": "isotonic (PAVA), increasing, sklearn.isotonic.IsotonicRegression",
+        "placement": "MIDPOINT between the adjacent row scores (classifier_retrain_protocol.md \u00a75a), then the volume is RE-COUNTED under the rounded constant",
+        "convention": "first fitted value AT OR ABOVE 0.5",
+        "first_row_at_or_above": 1.633073208202723,
+        "last_row_below": 1.6302635977443956,
+        "fitted_at_crossing": 0.5,
+        "constant_unrounded": 1.6316684029735593,
+        "constant": 1.6317,
+        "realized_volume": 111,
+        "realized_volume_strict": 111,
+        "tie_block_at_exactly_half": true,
+        "strictly_above": {
+          "first_row_at_or_above": 1.648639977270446,
+          "last_row_below": 1.6417121424999017,
+          "fitted_at_crossing": 0.9523809523809523,
+          "constant_unrounded": 1.645176059885174,
+          "constant": 1.6452,
+          "realized_volume": 109,
+          "realized_volume_strict": 109
+        }
+      },
+      "score": {
+        "target": "1[label >= 2]",
+        "n": 200,
+        "positives": 107,
+        "base_rate": 0.535,
+        "fit": "isotonic (PAVA), increasing, sklearn.isotonic.IsotonicRegression",
+        "placement": "MIDPOINT between the adjacent row scores (classifier_retrain_protocol.md \u00a75a), then the volume is RE-COUNTED under the rounded constant",
+        "convention": "first fitted value AT OR ABOVE 0.5",
+        "first_row_at_or_above": 0.7265856117010117,
+        "last_row_below": 0.7228745222091675,
+        "fitted_at_crossing": 0.8333333333333334,
+        "constant_unrounded": 0.7247300669550896,
+        "constant": 0.7247,
+        "realized_volume": 111,
+        "realized_volume_strict": 111,
+        "tie_block_at_exactly_half": false,
+        "strictly_above": {
+          "first_row_at_or_above": 0.7265856117010117,
+          "last_row_below": 0.7228745222091675,
+          "fitted_at_crossing": 0.8333333333333334,
+          "constant_unrounded": 0.7247300669550896,
+          "constant": 0.7247,
+          "realized_volume": 111,
+          "realized_volume_strict": 111
+        }
+      }
+    }
+  },
+  "cuts": [
+    {
+      "name": "mining_release",
+      "owner": "tools/mining/mining_pins.MINING_GATE_THRESHOLD (== tools/emission/floors.MINING_RELEASE)",
+      "site": "release",
+      "comparison": ">=",
+      "outgoing_value": 0.6691,
+      "incoming_value": 0.0949,
+      "n": 200,
+      "matched_volume": 119,
+      "realized_volume": 119,
+      "volume_preserved": false,
+      "matched_volume_note": "REALIZED, not matched \u2014 a crossover holds the label MEANING fixed and lets the volume move. The 'matched' spelling is the field the lock builder reads; \u00a75a's invariant does not apply.",
+      "outgoing": {
+        "n_selected": 9,
+        "pass_rate": 0.045,
+        "tp": 5,
+        "precision_ge3": 0.5555555555555556,
+        "precision_lo": 0.2666473457440297,
+        "precision_hi": 0.811224570528086,
+        "recall_ge3": 0.2631578947368421
+      },
+      "incoming": {
+        "n_selected": 119,
+        "pass_rate": 0.595,
+        "tp": 19,
+        "precision_ge3": 0.15966386554621848,
+        "precision_lo": 0.10466269961883354,
+        "precision_hi": 0.2359515548356835,
+        "recall_ge3": 1.0
+      },
+      "outgoing_ge2": {
+        "n_selected": 9,
+        "pass_rate": 0.045,
+        "tp": 9,
+        "precision_ge3": 1.0,
+        "precision_lo": 0.7008472464490407,
+        "precision_hi": 1.0,
+        "recall_ge3": 0.08411214953271028
+      },
+      "incoming_ge2": {
+        "n_selected": 119,
+        "pass_rate": 0.595,
+        "tp": 107,
+        "precision_ge3": 0.8991596638655462,
+        "precision_lo": 0.8319833684914806,
+        "precision_hi": 0.9413702836914934,
+        "recall_ge3": 1.0
+      }
+    },
+    {
+      "name": "mining_pool",
+      "owner": "tools/emission/floors.MINING_POOL",
+      "site": "pool",
+      "comparison": ">=",
+      "outgoing_value": 0.3402,
+      "incoming_value": 0.0,
+      "n": 200,
+      "matched_volume": 200,
+      "realized_volume": 200,
+      "volume_preserved": false,
+      "matched_volume_note": "REALIZED, not matched \u2014 a crossover holds the label MEANING fixed and lets the volume move. The 'matched' spelling is the field the lock builder reads; \u00a75a's invariant does not apply.",
+      "outgoing": {
+        "n_selected": 36,
+        "pass_rate": 0.18,
+        "tp": 15,
+        "precision_ge3": 0.4166666666666667,
+        "precision_lo": 0.2714033350508729,
+        "precision_hi": 0.5780003033572231,
+        "recall_ge3": 0.7894736842105263
+      },
+      "incoming": {
+        "n_selected": 200,
+        "pass_rate": 1.0,
+        "tp": 19,
+        "precision_ge3": 0.095,
+        "precision_lo": 0.06166261364986359,
+        "precision_hi": 0.14360265114397636,
+        "recall_ge3": 1.0
+      },
+      "outgoing_ge2": {
+        "n_selected": 36,
+        "pass_rate": 0.18,
+        "tp": 35,
+        "precision_ge3": 0.9722222222222222,
+        "precision_lo": 0.8582996626496918,
+        "precision_hi": 0.9950797197044302,
+        "recall_ge3": 0.32710280373831774
+      },
+      "incoming_ge2": {
+        "n_selected": 200,
+        "pass_rate": 1.0,
+        "tp": 107,
+        "precision_ge3": 0.535,
+        "precision_lo": 0.46586521028994954,
+        "precision_hi": 0.6028155692957681,
+        "recall_ge3": 1.0
+      }
+    }
+  ],
+  "cuts_match_the_live_owners": true,
+  "cuts_drifted_from_the_live_owners": [],
+  "ladder_ge3": [
+    {
+      "threshold": 0.0,
+      "fires": 200,
+      "pass_rate": 1.0,
+      "tp": 19,
+      "precision": 0.095,
+      "precision_lo": 0.06166261364986359,
+      "precision_hi": 0.14360265114397636,
+      "recall": 1.0,
+      "marks": [
+        "mining_pool"
+      ]
+    },
+    {
+      "threshold": 0.05,
+      "fires": 140,
+      "pass_rate": 0.7,
+      "tp": 19,
+      "precision": 0.1357142857142857,
+      "precision_lo": 0.08863403938424923,
+      "precision_hi": 0.20225260258858757,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.0949,
+      "fires": 119,
+      "pass_rate": 0.595,
+      "tp": 19,
+      "precision": 0.15966386554621848,
+      "precision_lo": 0.10466269961883354,
+      "precision_hi": 0.2359515548356835,
+      "recall": 1.0,
+      "marks": [
+        "mining_release"
+      ]
+    },
+    {
+      "threshold": 0.1,
+      "fires": 116,
+      "pass_rate": 0.58,
+      "tp": 19,
+      "precision": 0.16379310344827586,
+      "precision_lo": 0.10743884565005561,
+      "precision_hi": 0.24170202029298915,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.15,
+      "fires": 89,
+      "pass_rate": 0.445,
+      "tp": 19,
+      "precision": 0.21348314606741572,
+      "precision_lo": 0.14114687024752387,
+      "precision_hi": 0.3095304123499324,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.2,
+      "fires": 76,
+      "pass_rate": 0.38,
+      "tp": 17,
+      "precision": 0.2236842105263158,
+      "precision_lo": 0.1446106442066905,
+      "precision_hi": 0.3293477934999686,
+      "recall": 0.8947368421052632,
+      "marks": []
+    },
+    {
+      "threshold": 0.25,
+      "fires": 56,
+      "pass_rate": 0.28,
+      "tp": 16,
+      "precision": 0.2857142857142857,
+      "precision_lo": 0.18418621391703333,
+      "precision_hi": 0.4147549908635875,
+      "recall": 0.8421052631578947,
+      "marks": []
+    },
+    {
+      "threshold": 0.3,
+      "fires": 45,
+      "pass_rate": 0.225,
+      "tp": 16,
+      "precision": 0.35555555555555557,
+      "precision_lo": 0.23218891356904048,
+      "precision_hi": 0.5016445398804781,
+      "recall": 0.8421052631578947,
+      "marks": []
+    },
+    {
+      "threshold": 0.35,
+      "fires": 35,
+      "pass_rate": 0.175,
+      "tp": 15,
+      "precision": 0.42857142857142855,
+      "precision_lo": 0.27984333081678914,
+      "precision_hi": 0.5914287074102662,
+      "recall": 0.7894736842105263,
+      "marks": []
+    },
+    {
+      "threshold": 0.4,
+      "fires": 31,
+      "pass_rate": 0.155,
+      "tp": 15,
+      "precision": 0.4838709677419355,
+      "precision_lo": 0.3196998603127883,
+      "precision_hi": 0.6515988171302683,
+      "recall": 0.7894736842105263,
+      "marks": []
+    },
+    {
+      "threshold": 0.45,
+      "fires": 25,
+      "pass_rate": 0.125,
+      "tp": 15,
+      "precision": 0.6,
+      "precision_lo": 0.40739127785127344,
+      "precision_hi": 0.7659694233580909,
+      "recall": 0.7894736842105263,
+      "marks": []
+    },
+    {
+      "threshold": 0.5,
+      "fires": 19,
+      "pass_rate": 0.095,
+      "tp": 12,
+      "precision": 0.631578947368421,
+      "precision_lo": 0.4103915749815672,
+      "precision_hi": 0.8085072762372616,
+      "recall": 0.631578947368421,
+      "marks": []
+    },
+    {
+      "threshold": 0.55,
+      "fires": 15,
+      "pass_rate": 0.075,
+      "tp": 8,
+      "precision": 0.5333333333333333,
+      "precision_lo": 0.3011663015105079,
+      "precision_hi": 0.7519077474025355,
+      "recall": 0.42105263157894735,
+      "marks": []
+    },
+    {
+      "threshold": 0.6,
+      "fires": 11,
+      "pass_rate": 0.055,
+      "tp": 6,
+      "precision": 0.5454545454545454,
+      "precision_lo": 0.28008775568998817,
+      "precision_hi": 0.7872904245601196,
+      "recall": 0.3157894736842105,
+      "marks": []
+    },
+    {
+      "threshold": 0.65,
+      "fires": 9,
+      "pass_rate": 0.045,
+      "tp": 5,
+      "precision": 0.5555555555555556,
+      "precision_lo": 0.2666473457440297,
+      "precision_hi": 0.811224570528086,
+      "recall": 0.2631578947368421,
+      "marks": []
+    },
+    {
+      "threshold": 0.7,
+      "fires": 9,
+      "pass_rate": 0.045,
+      "tp": 5,
+      "precision": 0.5555555555555556,
+      "precision_lo": 0.2666473457440297,
+      "precision_hi": 0.811224570528086,
+      "recall": 0.2631578947368421,
+      "marks": []
+    },
+    {
+      "threshold": 0.75,
+      "fires": 5,
+      "pass_rate": 0.025,
+      "tp": 3,
+      "precision": 0.6,
+      "precision_lo": 0.23071993220883708,
+      "precision_hi": 0.8823817688407467,
+      "recall": 0.15789473684210525,
+      "marks": []
+    },
+    {
+      "threshold": 0.8,
+      "fires": 3,
+      "pass_rate": 0.015,
+      "tp": 2,
+      "precision": 0.6666666666666666,
+      "precision_lo": 0.2076549551264879,
+      "precision_hi": 0.9385096847238394,
+      "recall": 0.10526315789473684,
+      "marks": []
+    },
+    {
+      "threshold": 0.85,
+      "fires": 1,
+      "pass_rate": 0.005,
+      "tp": 0,
+      "precision": 0.0,
+      "precision_lo": 0.0,
+      "precision_hi": 0.7934567085261071,
+      "recall": 0.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.9,
+      "fires": 0,
+      "pass_rate": 0.0,
+      "tp": 0,
+      "precision": null,
+      "precision_lo": null,
+      "precision_hi": null,
+      "recall": 0.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.95,
+      "fires": 0,
+      "pass_rate": 0.0,
+      "tp": 0,
+      "precision": null,
+      "precision_lo": null,
+      "precision_hi": null,
+      "recall": 0.0,
+      "marks": []
+    }
+  ],
+  "ladder_ge2": [
+    {
+      "threshold": 0.0,
+      "fires": 200,
+      "pass_rate": 1.0,
+      "tp": 107,
+      "precision": 0.535,
+      "precision_lo": 0.46586521028994954,
+      "precision_hi": 0.6028155692957681,
+      "recall": 1.0,
+      "marks": [
+        "mining_pool"
+      ]
+    },
+    {
+      "threshold": 0.05,
+      "fires": 140,
+      "pass_rate": 0.7,
+      "tp": 107,
+      "precision": 0.7642857142857142,
+      "precision_lo": 0.6875051189138534,
+      "precision_hi": 0.8269496702431082,
+      "recall": 1.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.0949,
+      "fires": 119,
+      "pass_rate": 0.595,
+      "tp": 107,
+      "precision": 0.8991596638655462,
+      "precision_lo": 0.8319833684914806,
+      "precision_hi": 0.9413702836914934,
+      "recall": 1.0,
+      "marks": [
+        "mining_release"
+      ]
+    },
+    {
+      "threshold": 0.1,
+      "fires": 116,
+      "pass_rate": 0.58,
+      "tp": 105,
+      "precision": 0.9051724137931034,
+      "precision_lo": 0.8381455089440608,
+      "precision_hi": 0.9462231910732954,
+      "recall": 0.9813084112149533,
+      "marks": []
+    },
+    {
+      "threshold": 0.15,
+      "fires": 89,
+      "pass_rate": 0.445,
+      "tp": 85,
+      "precision": 0.9550561797752809,
+      "precision_lo": 0.8900679286731532,
+      "precision_hi": 0.9823857989661808,
+      "recall": 0.794392523364486,
+      "marks": []
+    },
+    {
+      "threshold": 0.2,
+      "fires": 76,
+      "pass_rate": 0.38,
+      "tp": 72,
+      "precision": 0.9473684210526315,
+      "precision_lo": 0.8723414339669251,
+      "precision_hi": 0.979344904984198,
+      "recall": 0.6728971962616822,
+      "marks": []
+    },
+    {
+      "threshold": 0.25,
+      "fires": 56,
+      "pass_rate": 0.28,
+      "tp": 53,
+      "precision": 0.9464285714285714,
+      "precision_lo": 0.8539246046357077,
+      "precision_hi": 0.9816145520713321,
+      "recall": 0.4953271028037383,
+      "marks": []
+    },
+    {
+      "threshold": 0.3,
+      "fires": 45,
+      "pass_rate": 0.225,
+      "tp": 43,
+      "precision": 0.9555555555555556,
+      "precision_lo": 0.8517222081611939,
+      "precision_hi": 0.9877261309595557,
+      "recall": 0.40186915887850466,
+      "marks": []
+    },
+    {
+      "threshold": 0.35,
+      "fires": 35,
+      "pass_rate": 0.175,
+      "tp": 34,
+      "precision": 0.9714285714285714,
+      "precision_lo": 0.8546659090672868,
+      "precision_hi": 0.9949386386341466,
+      "recall": 0.3177570093457944,
+      "marks": []
+    },
+    {
+      "threshold": 0.4,
+      "fires": 31,
+      "pass_rate": 0.155,
+      "tp": 30,
+      "precision": 0.967741935483871,
+      "precision_lo": 0.8380554282383037,
+      "precision_hi": 0.9942829259130554,
+      "recall": 0.2803738317757009,
+      "marks": []
+    },
+    {
+      "threshold": 0.45,
+      "fires": 25,
+      "pass_rate": 0.125,
+      "tp": 25,
+      "precision": 1.0,
+      "precision_lo": 0.8668035060468213,
+      "precision_hi": 1.0,
+      "recall": 0.2336448598130841,
+      "marks": []
+    },
+    {
+      "threshold": 0.5,
+      "fires": 19,
+      "pass_rate": 0.095,
+      "tp": 19,
+      "precision": 1.0,
+      "precision_lo": 0.8318156346315496,
+      "precision_hi": 1.0,
+      "recall": 0.17757009345794392,
+      "marks": []
+    },
+    {
+      "threshold": 0.55,
+      "fires": 15,
+      "pass_rate": 0.075,
+      "tp": 15,
+      "precision": 1.0,
+      "precision_lo": 0.7961107336956521,
+      "precision_hi": 1.0,
+      "recall": 0.14018691588785046,
+      "marks": []
+    },
+    {
+      "threshold": 0.6,
+      "fires": 11,
+      "pass_rate": 0.055,
+      "tp": 11,
+      "precision": 1.0,
+      "precision_lo": 0.7411599827511859,
+      "precision_hi": 1.0,
+      "recall": 0.102803738317757,
+      "marks": []
+    },
+    {
+      "threshold": 0.65,
+      "fires": 9,
+      "pass_rate": 0.045,
+      "tp": 9,
+      "precision": 1.0,
+      "precision_lo": 0.7008472464490407,
+      "precision_hi": 1.0,
+      "recall": 0.08411214953271028,
+      "marks": []
+    },
+    {
+      "threshold": 0.7,
+      "fires": 9,
+      "pass_rate": 0.045,
+      "tp": 9,
+      "precision": 1.0,
+      "precision_lo": 0.7008472464490407,
+      "precision_hi": 1.0,
+      "recall": 0.08411214953271028,
+      "marks": []
+    },
+    {
+      "threshold": 0.75,
+      "fires": 5,
+      "pass_rate": 0.025,
+      "tp": 5,
+      "precision": 1.0,
+      "precision_lo": 0.5655085052479191,
+      "precision_hi": 1.0,
+      "recall": 0.04672897196261682,
+      "marks": []
+    },
+    {
+      "threshold": 0.8,
+      "fires": 3,
+      "pass_rate": 0.015,
+      "tp": 3,
+      "precision": 1.0,
+      "precision_lo": 0.43849391955098227,
+      "precision_hi": 1.0,
+      "recall": 0.028037383177570093,
+      "marks": []
+    },
+    {
+      "threshold": 0.85,
+      "fires": 1,
+      "pass_rate": 0.005,
+      "tp": 1,
+      "precision": 1.0,
+      "precision_lo": 0.20654329147389294,
+      "precision_hi": 1.0,
+      "recall": 0.009345794392523364,
+      "marks": []
+    },
+    {
+      "threshold": 0.9,
+      "fires": 0,
+      "pass_rate": 0.0,
+      "tp": 0,
+      "precision": null,
+      "precision_lo": null,
+      "precision_hi": null,
+      "recall": 0.0,
+      "marks": []
+    },
+    {
+      "threshold": 0.95,
+      "fires": 0,
+      "pass_rate": 0.0,
+      "tp": 0,
+      "precision": null,
+      "precision_lo": null,
+      "precision_hi": null,
+      "recall": 0.0,
+      "marks": []
+    }
+  ],
+  "incomplete": false,
+  "reference_pool_cross_check": {
+    "what": "the (28) deduplicated mining eval side (mining_corpus.load_corpus), re-scored under the live pin",
+    "loader": "tools.scoring.volume_match.mining_pool",
+    "scorer": "mining_scorer",
+    "n": 827,
+    "n_locations": 136,
+    "by_batch": {
+      "sheetB": 227,
+      "v1_sitting": 393,
+      "sheetC": 207
+    },
+    "scored_in_s": 14.7,
+    "tiers": {
+      "1": 261,
+      "2": 352,
+      "3": 214
+    },
+    "base_rate_ge3": 0.2587666263603386,
+    "base_rate_ge2": 0.6844014510278114,
+    "cuts": {
+      "mining_release": {
+        "outgoing_value": 0.6691,
+        "incoming_value": 0.0949,
+        "outgoing": {
+          "n_selected": 129,
+          "pass_rate": 0.15598548972188633,
+          "tp": 98,
+          "precision_ge3": 0.7596899224806202,
+          "precision_lo": 0.6791333389688067,
+          "precision_hi": 0.825226741006141,
+          "recall_ge3": 0.45794392523364486
+        },
+        "incoming": {
+          "n_selected": 587,
+          "pass_rate": 0.7097944377267231,
+          "tp": 213,
+          "precision_ge3": 0.3628620102214651,
+          "precision_lo": 0.32497232487232414,
+          "precision_hi": 0.40253501381202034,
+          "recall_ge3": 0.9953271028037384
+        },
+        "outgoing_ge2": {
+          "n_selected": 129,
+          "pass_rate": 0.15598548972188633,
+          "tp": 128,
+          "precision_ge3": 0.9922480620155039,
+          "precision_lo": 0.9573955085729391,
+          "precision_hi": 0.9986303146631554,
+          "recall_ge3": 0.22614840989399293
+        },
+        "incoming_ge2": {
+          "n_selected": 587,
+          "pass_rate": 0.7097944377267231,
+          "tp": 524,
+          "precision_ge3": 0.8926746166950597,
+          "precision_lo": 0.8650327411450477,
+          "precision_hi": 0.9152102207587857,
+          "recall_ge3": 0.9257950530035336
+        }
+      },
+      "mining_pool": {
+        "outgoing_value": 0.3402,
+        "incoming_value": 0.0,
+        "outgoing": {
+          "n_selected": 322,
+          "pass_rate": 0.3893591293833132,
+          "tp": 169,
+          "precision_ge3": 0.5248447204968945,
+          "precision_lo": 0.4703277084241131,
+          "precision_hi": 0.578775905110807,
+          "recall_ge3": 0.7897196261682243
+        },
+        "incoming": {
+          "n_selected": 827,
+          "pass_rate": 1.0,
+          "tp": 214,
+          "precision_ge3": 0.2587666263603386,
+          "precision_lo": 0.23008088127375187,
+          "precision_hi": 0.2896831748351382,
+          "recall_ge3": 1.0
+        },
+        "outgoing_ge2": {
+          "n_selected": 322,
+          "pass_rate": 0.3893591293833132,
+          "tp": 312,
+          "precision_ge3": 0.968944099378882,
+          "precision_lo": 0.9437853163974194,
+          "precision_hi": 0.9830453890741963,
+          "recall_ge3": 0.5512367491166078
+        },
+        "incoming_ge2": {
+          "n_selected": 827,
+          "pass_rate": 1.0,
+          "tp": 566,
+          "precision_ge3": 0.6844014510278114,
+          "precision_lo": 0.6519349369611773,
+          "precision_hi": 0.7151627143841572,
+          "recall_ge3": 1.0
+        }
+      }
+    },
+    "junk_floor_inversion": {
+      "junk_floor": 0.2,
+      "fires_at_junk_floor": 455,
+      "note": "JUNK_FLOOR is PERMANENT shared-scale and was not moved (it is read on two heads' scales). With the gate below it, the colorize-pool draw now cuts rows the gate passes; the count above is how many of this pool survive it."
+    }
+  }
+}

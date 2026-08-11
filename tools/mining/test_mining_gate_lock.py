@@ -79,18 +79,30 @@ def test_the_lock_quotes_the_owner_cuts_and_their_measured_operating_points(lock
     assert (row["fires"], row["precision"]) == (rel["fires"], rel["precision"])
 
 
-def test_every_cut_records_the_value_it_was_volume_matched_FROM(lock):
+def test_every_cut_records_the_value_it_was_restated_FROM_and_what_kind_of_claim_that_is(lock):
     """A restatement that keeps no trace of what it restated is indistinguishable from a
-    retune, and the two are different claims: volume-matching asserts the cut's VOLUME is
-    unchanged, a retune asserts somebody chose a new operating point."""
+    retune, and the KIND matters as much as the trace: volume-matching asserts the cut's
+    VOLUME is unchanged, a crossover asserts the opposite (the label meaning is what is held
+    fixed and the volume is free to move). The record must say which — read from the live
+    `LockSpec`, never hardcoded, so the check follows a source change instead of going red for
+    one."""
+    kind = L.SPEC.restatement_kind
+    assert kind in ("VOLUME-MATCHED", "CROSSOVER"), kind
+    assert lock["restatement"]["kind"] == kind
     for name, cut in lock["cuts"].items():
         rf = cut["restated_from"]
-        assert "VOLUME-MATCHED" in rf["how"], name
+        assert rf["kind"] == kind, name
+        assert kind in rf["how"], name
         assert rf["value"] != cut["value"], name
-        assert rf["head"].endswith("/v1"), (name, rf["head"])
         assert 0.0 <= rf["precision"] <= 1.0, name
-        # the volume is what is held fixed; the precision beside it is what moved
+        # `fires` is read off the ladder and `matched_volume` off the source's own count, so
+        # their agreement is a cross-check of the record against itself under BOTH kinds — it
+        # is the volume the cut REALIZES either way.
         assert cut["fires"] == cut["matched_volume"], name
+    # And the two kinds differ in exactly one checkable place: a volume match restates from the
+    # PREVIOUS head, a crossover from the same one (the head did not move).
+    prev = {c["restated_from"]["head"].rsplit("/", 1)[-1] for c in lock["cuts"].values()}
+    assert prev == ({MP.HEAD_VERSION} if kind == "CROSSOVER" else {"v1"}), prev
 
 
 def test_both_boundaries_are_frozen_whole_not_only_the_cut_rows(lock):

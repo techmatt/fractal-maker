@@ -713,6 +713,15 @@ __pycache__/
 !/data/render_mode_head/v3/volume_match_mining.md
 !/data/render_mode_head/v3/fit_slice_pred.json
 !/data/render_mode_head/v3/adoption_record.json
+# The 2026-08-11 base-rate audit (sheet F, prompts/audit_mining_process.md): the crossover
+# measurement and the gate lock derived from it. DATE-SUFFIXED because the un-suffixed pair
+# above is not superseded — it is what 0.6691 and 0.3402 bought on the same head, i.e. the
+# rollback record (mining_pins.MINING_LOCK_ROLLBACK). Both survive together: the lock is
+# derived from the audit record and `lock_mining_gate.py` verifies one against the other.
+!/data/render_mode_head/v3/baserate_audit_2026-08-11.json
+!/data/render_mode_head/v3/baserate_audit_2026-08-11.md
+!/data/render_mode_head/v3/mining_gate_lock_2026-08-11.json
+!/data/render_mode_head/v3/mining_gate_lock_2026-08-11.md
 # The three (28) ARMS of v3 — same corpus, same split, same objective, same eval, ONE
 # variable changed each (addenda 2 and 3). They are experiments, not versions: none is
 # pinnable and none may be, so they get v3's shape — weight and per-seed dirs are working

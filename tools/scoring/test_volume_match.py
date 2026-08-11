@@ -124,15 +124,33 @@ def test_version_dir_reads_the_head_version_not_the_parent_directory():
 @pytest.mark.parametrize("key", sorted(VM.SPECS))
 def test_the_committed_volume_match_record_places_the_live_cuts(key):
     """The record and `floors.py` cannot drift: every cut the pass placed is the value the
-    owner serves, and every record is a COMPLETE pass."""
+    owner serves — or has a REGISTERED SUCCESSOR that placed the live value and started where
+    this pass finished.
+
+    The successor clause is not a loophole, it is the chain. A cut may be moved after a flip by
+    something that is not a flip (`prompts/audit_mining_process.md` moved both mining cuts to
+    the sheet-F crossover hours after the flip placed them), and without the clause this guard
+    can only be greened by undoing that decision or deleting the check. With it the guard is
+    strictly stronger: the live value must still be the last word of a chain of committed
+    records, and each link must start where the previous one ended. `adopt_head.SPECS[key].
+    superseded_by` is the ONE place that says a successor exists."""
+    from tools.scoring import adopt_head as A                          # noqa: PLC0415
     spec = VM.SPECS[key]
     ver = VM.version_dir(spec, spec.incoming_rel).split("/")[-1] if key == "mining" else "v4b"
     rec = json.loads((ROOT / f"data/{spec.head_name}/{ver}/volume_match_{key}.json")
                      .read_text(encoding="utf-8"))
     assert rec["incomplete"] is False, "a bounded pass is not a basis for moving a constant"
     live = {f.name: f for f in F.ALL_FLOORS}
+    superseded = A.SPECS[key].superseded_by
     for c in rec["cuts"]:
-        assert c["incoming_value"] == live[c["name"]].value, c["name"]
+        succ = superseded.get(c["name"])
+        if succ is None:
+            assert c["incoming_value"] == live[c["name"]].value, c["name"]
+        else:
+            s = {x["name"]: x for x in json.loads(
+                (ROOT / succ["record"]).read_text(encoding="utf-8"))["cuts"]}[c["name"]]
+            assert s["outgoing_value"] == c["incoming_value"], (c["name"], "chain start")
+            assert s["incoming_value"] == live[c["name"]].value, (c["name"], "chain end")
         assert c["volume_preserved"] is True, c["name"]
         assert c["matched_volume"] == c["outgoing"]["n_selected"] == c["incoming"]["n_selected"]
 

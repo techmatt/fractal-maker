@@ -29,7 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -69,6 +69,13 @@ class AdoptSpec:
     cut_names: tuple
     rationale: tuple
     not_established: tuple = ()
+    # A cut this flip restated that has SINCE BEEN MOVED AGAIN, by something that is not a
+    # flip. `{cut name: {"record": rel, "prompt": ..., "how": ...}}`. Without this the record
+    # asserts its own restatement is live, goes red the moment a later decision moves the same
+    # constant, and the only way to green it would be to un-do the later decision or to delete
+    # the check. THE ONE PLACE that says a stage-2 cut has a successor: `test_volume_match`
+    # resolves supersession through here rather than carrying a second list.
+    superseded_by: dict = field(default_factory=dict)
 
 
 WALLPAPER = AdoptSpec(
@@ -129,6 +136,17 @@ MINING = AdoptSpec(
         "against 21-46% on the anchored sheets, so the calibrations may be 5-11x off. That "
         "is next session's own prompt. Volume-matching preserves current volumes through "
         "this flip regardless of how it lands.",),
+    # It landed the same day (prompts/audit_mining_process.md) and it moved both cuts off the
+    # values this flip placed. Registered rather than left to go red: this record's claim was
+    # always "the flip restated these", not "these are final", and the successor is named so a
+    # reader lands on the measurement that superseded it instead of on a stale number.
+    superseded_by={
+        n: {"record": "data/render_mode_head/v3/baserate_audit_2026-08-11.json",
+            "prompt": "prompts/audit_mining_process.md",
+            "how": "the sheet-F label/score CROSSOVER — NOT a volume match. The head did not "
+                   "move; the cut moved because 200 human tiers said where the score crosses "
+                   "the >=2 boundary. Volume is an output of that and moved 4.6x."}
+        for n in ("mining_release", "mining_pool")},
 )
 
 SPECS = {s.key: s for s in (WALLPAPER, MINING)}
@@ -189,13 +207,32 @@ def build(spec: AdoptSpec) -> dict:
     cuts = {}
     for name in spec.cut_names:
         c, f = by_name[name], live[name]
-        if abs(f.value - c["incoming_value"]) > 1e-12:
+        # What this flip placed, and — if a later decision moved the same constant — what THAT
+        # placed. The live floor is checked against whichever is the last word, so the guard
+        # keeps its teeth (a hand-edited floor is still caught) without demanding that no
+        # decision may ever follow a flip.
+        succ = spec.superseded_by.get(name)
+        expected, later = c["incoming_value"], None
+        if succ:
+            s = {x["name"]: x for x in _read(succ["record"])["cuts"]}[name]
+            expected = s["incoming_value"]
+            later = {**succ, "value": s["incoming_value"], "from": s["outgoing_value"],
+                     "n": s["n"], "realized_volume": s["realized_volume"],
+                     "precision_ge3": s["incoming"]["precision_ge3"]}
+            if abs(s["outgoing_value"] - c["incoming_value"]) > 1e-12:
+                raise SystemExit(
+                    f"[adopt-head] {name}: the successor record says it moved from "
+                    f"{s['outgoing_value']}, but this flip placed it at {c['incoming_value']}. "
+                    f"A supersession that does not start where its predecessor ended leaves a "
+                    f"value nothing accounts for.")
+        if abs(f.value - expected) > 1e-12:
             raise SystemExit(
-                f"[adopt-head] {name} is {f.value} in floors.py but the volume-match record "
-                f"placed it at {c['incoming_value']}. The record may not claim a restatement "
+                f"[adopt-head] {name} is {f.value} in floors.py but the "
+                f"{'successor' if succ else 'volume-match'} record "
+                f"placed it at {expected}. The record may not claim a restatement "
                 f"nobody applied.")
         cuts[name] = {
-            "old": c["outgoing_value"], "new": f.value,
+            "old": c["outgoing_value"], "new": c["incoming_value"],
             "restated_how": "VOLUME-MATCHED (classifier_retrain_protocol.md §5a) — the score "
                             "that admits the same NUMBER of reference-pool rows",
             "matched_volume": c["matched_volume"], "n": c["n"],
@@ -203,6 +240,8 @@ def build(spec: AdoptSpec) -> dict:
             "precision_ge3_old": c["outgoing"]["precision_ge3"],
             "precision_ge3_new": c["incoming"]["precision_ge3"],
             "volume_preserved": c["volume_preserved"],
+            "live_now": f.value,
+            "superseded_by": later,
         }
 
     return {
@@ -242,13 +281,20 @@ def build(spec: AdoptSpec) -> dict:
                 *[{"what": f"tools/emission/floors.{n.upper()}"
                            if n.endswith("pool") else f"{spec.pin_module} gate threshold",
                    "why": f"{n} is a point on this head's probability scale",
-                   "revert_to": cuts[n]["old"]} for n in spec.cut_names],
+                   # Two rungs when the cut has moved twice: a PIN rollback goes all the way
+                   # back to what the previous head served, and the intermediate value is
+                   # named so the ladder is not silently one rung short.
+                   "revert_to": cuts[n]["old"],
+                   **({"intermediate": cuts[n]["new"],
+                       "why_intermediate": "this flip's volume-matched value, superseded "
+                                           "before the pin moved again"}
+                      if cuts[n]["superseded_by"] else {})} for n in spec.cut_names],
                 {"what": ("tools/wallpaper/suggest_tier.{CUTS,INTAKE_CUTS}"
                           if spec.key == "wallpaper"
                           else "tools/mining/suggest_tier_mining.CUTS"),
                  "why": "cutpoints on `expected_tier`, a sum of CORN marginals — as "
                         "scale-bound as a probability floor"},
-                *([{"what": "data/render_mode_head/v3/mining_gate_lock.json",
+                *([{"what": pin["lock"],
                     "why": "read_lock() refuses when the pin moves off the head it describes; "
                            "v1's lock is still on disk and becomes live again on a rollback"}]
                   if spec.key == "mining" else []),
