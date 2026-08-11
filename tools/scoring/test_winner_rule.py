@@ -156,10 +156,13 @@ def test_no_second_copy_of_the_rule():
     record of the v1-vs-v2 sitting — that file is frozen evidence, so it is named as the
     single permitted exception rather than silently skipped."""
     allowed = {Path("tools/mining/mining_v2_reads.py"), Path("tools/scoring/winner_rule.py")}
-    # The rule's signature is the CONJUNCTION: a clause-structured verdict computed off a
-    # significance flag. Either token alone is innocent — `sat_radius_calibrate` has a
-    # `verdict()` about saturation radii and nothing to do with head adoption.
-    sig = re.compile(r"significantly_worse")
+    # The rule's signature is a file that DEFINES the significance flag (writes it as a
+    # dict key) *and* structures clauses off it. Reading `ci["significantly_worse"]` and
+    # printing a clause is what every legitimate CONSUMER does — the two reads harnesses do
+    # exactly that — so the scan must separate producing the verdict from reporting it, or
+    # it fires on its own callers. `sat_radius_calibrate` has an unrelated `verdict()` about
+    # saturation radii and matches neither half.
+    sig = re.compile(r'["\']significantly_worse["\']\s*:')
     clause = re.compile(r"clause_[ab]")
     hits = []
     for p in list((ROOT / "tools").rglob("*.py")) + list((ROOT / "classifier").rglob("*.py")):

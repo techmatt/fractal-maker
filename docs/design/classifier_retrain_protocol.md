@@ -106,6 +106,52 @@ batch's stored crops never constrain training. But the **deploy presentation poi
 (geometry / palette / AA) must be covered by the aug fan-out, or the residual covariate
 shift stated explicitly.
 
+### 2a. A batch's STAMPED split side is a function of the draw, not of the location
+
+> **When you pool batches, either re-derive the split over the union or freeze one batch
+> set's assignment as authority. Honouring every batch's own stamp is the one option that
+> is always wrong.**
+
+A per-batch splitter is seeded and location-grouped and looks deterministic, but it draws
+over **the set it was given**. Two batches that overlap in locations ran two different
+draws, so the same location gets two answers, and a pooled run that honours both stamps
+puts one copy of a location in train and another in eval. Nothing is red; the eval side is
+simply no longer held out.
+
+It has now happened three times, each worse than the last:
+
+| pooled set | overlap | stamped onto opposite sides |
+|---|---|---|
+| wallpaper fresh pair (v4, 2026-08-06) | 107 locations | 19 |
+| wallpaper sheet A vs the prior five (v4b, 2026-08-10) | 73 locations | 37 |
+| mining v1 sitting vs sheet B (v3, 2026-08-10) | **91 of 91** | **33** |
+
+The mining case is the instructive one: sheet B draws the *unserved* (location, mode) pairs
+of the same gate-passer population, so its 91 locations are a strict subset of the sitting's
+112 and there is no non-overlapping part to reason about.
+
+**Which of the two fixes to take is decided by the BASELINE, not by taste.**
+- If the comparison is against a head that trained on some of these rows, **freeze** the
+  prior assignment and place only the new batch against it. A re-randomised split moves the
+  baseline's own training rows into the eval side and inflates it — and that leans the
+  verdict toward a false baseline win, which is the direction a retrain cannot detect.
+  (`classifier/train_wallpaper_v4b.split_v4b`.)
+- If no consistent prior assignment exists — because the stamps contradict each other, or
+  because a batch is stamped 100% train — **re-derive globally** over the pooled locations
+  and record how many rows moved. (`tools/mining/mining_corpus.load_corpus`: 999 of 2,460.)
+
+**A batch registered "never an eval INSTRUMENT" may still land in a HOLDOUT.** The two eval
+roles of §1 are not the same object: an instrument is an unbiased draw a base rate may be
+read from, a holdout is biased exactly as training is. Sheet C is stamped 100% train because
+its locations are conditioned on a human 4 — that disqualifies it from being an instrument
+and says nothing about a holdout. The render-mode corpus has never had an instrument at all,
+so reading its registration as "train-only forever" would have made the rare-palette slice
+permanently unmeasurable.
+
+`[code: classifier/train_wallpaper_v4.reconcile_stamped_sides,
+classifier/train_wallpaper_v4b.split_v4b, tools/mining/mining_corpus.load_corpus;
+test: tools/mining/test_mining_corpus.py, tools/wallpaper/test_wallpaper_v4b_split.py]`
+
 ## 3. Pre-register the success bar before training
 
 Set the credible-win bar **before** training, from **paired DeLong power** for the
