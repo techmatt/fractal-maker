@@ -701,6 +701,15 @@ __pycache__/
 !/data/render_mode_head/v3_uniform/per_seed.json
 !/data/render_mode_head/v3_uniform/report.md
 !/data/render_mode_head/v3_uniform/report.json
+# The FIFTH arm (28b): v1's own AP>=2 selection objective, everything else identical to
+# `v3`. Same shape and same reason as the other three — an experiment, never pinnable.
+!/data/render_mode_head/v3_ap2/
+/data/render_mode_head/v3_ap2/*
+!/data/render_mode_head/v3_ap2/config.json
+!/data/render_mode_head/v3_ap2/metrics.json
+!/data/render_mode_head/v3_ap2/per_seed.json
+!/data/render_mode_head/v3_ap2/report.md
+!/data/render_mode_head/v3_ap2/report.json
 
 # data_large/ was deleted 2026-07-31 (repo-hygiene pass): it held one README and no
 # data, and its name collided with data/. Regenerable bulk goes out of tree via
