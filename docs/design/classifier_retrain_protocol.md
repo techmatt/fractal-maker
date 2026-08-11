@@ -470,10 +470,13 @@ by moving a string. So they are held by this procedure plus a human:
 
    **`JUNK_FLOOR` IS EXEMPT — PERMANENT SHARED-SCALE, never restated at a flip** (Matt,
    2026-08-11; this replaces the residual this section carried through the 2026-08-11 stage-2
-   flip, which said the question was open). It is read on TWO heads' scales — `ranked_intake`
+   flip, which said the question was open). It was read on TWO heads' scales — `ranked_intake`
    on the stage-1 location head's `p_good`, `deploy_tail` on the mining head's `p_ge3` — so a
-   single-head flip has no correct volume-match: matching it to the flipped head moves the cut
-   at the other site by an amount nobody measured. The decision is that 0.20 is a **coarse
+   single-head flip had no correct volume-match: matching it to the flipped head moves the cut
+   at the other site by an amount nobody measured. **`deploy_tail` was repointed at the mining
+   gate later the same day** (below), leaving one live reader and making a volume match
+   arithmetically available again — and the exemption stands anyway, because the load-bearing
+   half was never the reader count. The decision is that 0.20 is a **coarse
    semantic floor valid on any CORN P(≥3) scale** ("the judging head is confident this is
    junk") rather than an operating point on one, and the alternative — one constant per head —
    is refused because it re-creates the per-head operating point this cut was deliberately
@@ -499,7 +502,12 @@ by moving a string. So they are held by this procedure plus a human:
    **anchored** (sheet F was v3-prefilled, so every number is a ceiling), and what it does to
    the cuts it did NOT move — the crossover landed below both `JUNK_FLOOR` and the mining pool
    floor, which forced the pool floor to 0.0 to keep `floors.check_below_gate` satisfied and
-   left the enforcing junk floor as the strictest cut in stage 2.
+   left the enforcing junk floor as the strictest cut in stage 2. **That inversion was resolved
+   the same day by moving a READER, not a number** (Matt): `deploy_tail`'s colorize-pool draw
+   filters through `mining_gate.MiningScorer.gate` instead of `JUNK_FLOOR`, so the mining side's
+   pool draw is the gate (455 → 587 of the 827 reference-pool rows) and `JUNK_FLOOR` keeps its
+   value and its stage-1 reader. Record:
+   `data/render_mode_head/v3/mining_gate_lock_2026-08-11.md`.
 
 3. Nothing else. There is no threshold sweep, no per-partition table to re-adopt and no
    conformance test to re-run — `tools/scoring/derive_t_good.py`,

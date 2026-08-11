@@ -187,25 +187,68 @@ def test_the_junk_floor_is_the_only_enforcing_cut_and_it_is_semantic():
     assert all(F.JUNK_FLOOR < f.value for f in (F.WALLPAPER_POOL, F.WALLPAPER_RELEASE))
 
 
-def test_the_junk_floor_now_sits_ABOVE_both_mining_cuts_and_that_inversion_is_deliberate():
-    """The cost of the 2026-08-11 base-rate audit, pinned where it can rot.
+def test_the_junk_floor_still_sits_above_both_mining_cuts_but_no_longer_reads_on_that_head():
+    """How the 2026-08-11 inversion was RESOLVED, pinned where it can rot.
 
-    Until that audit `JUNK_FLOOR < every floor` held on both heads, and the sentence it bought
-    was "the enforcing cut removes only what every annotation-only cut would also have
-    removed". The sheet-F crossover put the mining gate at 0.0949 and the pool floor at 0.0,
-    both BELOW 0.20, so on the mining head the one ENFORCING cut is now the STRICTEST cut in
-    stage 2: the colorize-pool draw removes rows the release floor would pass (455 of the 827
-    reference-pool rows clear 0.20 against 587 that clear the gate — 132 rows).
+    The sheet-F crossover put the mining gate at 0.0949 and the pool floor at 0.0, both BELOW
+    0.20, so the colorize-pool draw started removing rows the gate passes — 132 of them, 455 of
+    the 827 reference-pool rows clearing 0.20 against 587 clearing the gate. The arithmetic
+    inversion is still there (first assert) and is NOT what was fixed: Matt's call was to move
+    the READER, not the number. `deploy_tail` filters its allocation input through
+    `mining_gate.MiningScorer.gate` as of 2026-08-11, so nothing reads `JUNK_FLOOR` on the mining
+    scale and the inversion no longer cuts anything. The constant is untouched and its stage-1
+    reader is untouched (the two tests below).
 
-    `JUNK_FLOOR` was deliberately NOT moved to fix it: it is permanent shared-scale, read on
-    two heads at once (the test below), and the prompt that moved the gate put it out of
-    scope. So the inversion is real, accepted, and asserted here rather than discovered later
-    as "why does the pool draw cut gate-passers" — the failure this file exists to prevent is
-    a floor relationship that changed and nothing said so."""
+    Asserted at the source rather than by importing `deploy_tail`, which pulls torch: the claim
+    is that the ONE mining-scale reader is gone and the filter resolves through the gate's own
+    owner, and both are visible in the text. Record:
+    data/render_mode_head/v3/mining_gate_lock_2026-08-11.md."""
     assert F.JUNK_FLOOR > F.MINING_RELEASE.value > F.MINING_POOL.value
     assert F.MINING_POOL.value < F.MINING_RELEASE.value        # the invariant that still holds
     assert "0.0949" in F.MINING_RELEASE.basis and "CROSSOVER" in F.MINING_RELEASE.basis
     assert "CONSEQUENCE" in F.MINING_POOL.basis
+
+    dt = (ROOT / "tools" / "mining" / "deploy_tail.py").read_text(encoding="utf-8")
+    filt = [ln for ln in dt.splitlines() if ln.lstrip().startswith("alloc_input = [")]
+    assert len(filt) == 1, f"deploy_tail must build its allocation input once, got {filt}"
+    assert "scorer.gate(" in filt[0], \
+        "the allocation input must resolve through the gate's owner (MiningScorer.gate), " \
+        f"not a floor and not a fresh literal: {filt[0]!r}"
+    assert "passes_junk_floor" not in filt[0]
+
+
+def test_the_junk_floor_removes_a_row_at_ONE_site_and_it_is_the_location_scale_one():
+    """The consequence of the repoint above, stated as a census so a second mining-scale reader
+    cannot appear unnoticed. `ranked_intake` (stage-1 location head `p_good`) is THE site that
+    drops a row on this floor. `deploy_tail` still calls the comparison — that is deliberate and
+    is the difference this test has to see: it COUNTS the floor's counterfactual on the
+    candidates the gate admitted (`n_above_junk`, a report field) and never filters on it.
+
+    Not "no other file may mention it": `floors.py`'s own docs, the readouts that print the
+    number and the audit that measures the inversion all name it and none of them removes a row.
+    What is counted is CALLS to the comparison, and what each caller does with the answer."""
+    import re
+    import subprocess
+    out = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT, capture_output=True, text=True)
+    if out.returncode != 0:
+        pytest.skip("git unavailable")
+    call = re.compile(r"\b(?:F|floors|FLOORS)\.passes_junk_floor\s*\(")
+    callers = {}
+    for rel in out.stdout.splitlines():
+        norm = rel.replace("\\", "/")
+        if Path(norm).name.startswith("test_"):
+            continue
+        src = (ROOT / norm).read_text(encoding="utf-8", errors="ignore")
+        hits = [ln.strip() for ln in src.splitlines() if call.search(ln)]
+        if hits:
+            callers[norm] = hits
+    assert set(callers) == {"tools/emission/ranked_intake.py", "tools/mining/deploy_tail.py"}, \
+        (f"the junk floor's callers are {sorted(callers)}; since 2026-08-11 it is read at ONE "
+         f"colorize-pool draw (stage-1) plus one counterfactual count. A new caller is a "
+         f"decision about what 0.20 means on that site's head, not a detail.")
+    assert all(ln.startswith("n_above_junk =") for ln in callers["tools/mining/deploy_tail.py"]), \
+        (f"deploy_tail may only COUNT with the junk floor, never filter on it: "
+         f"{callers['tools/mining/deploy_tail.py']}")
 
 
 def test_the_junk_floor_is_declared_PERMANENT_shared_scale_at_the_constant_and_in_the_protocol():

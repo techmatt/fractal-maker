@@ -137,15 +137,24 @@ LOCATION_HEAD = "location_head"         # the ACTIVE_CKPT quality head (intake-s
 # --------------------------------------------------------------------------- #
 # ONE semantic constant, not a per-partition derivation and not one value per head. It says
 # the same thing everywhere it is read: **a candidate the judging head is confident is junk
-# must not spend colorize compute**. The judging head is whichever head owns the score at that
-# site — the stage-1 location head for emission intake, the mining head for `deploy_tail`'s
-# allocation draw — and the constant does not change when the head does.
+# must not spend colorize compute**. The judging head is whichever head owns the score at the
+# site that reads it — today only the stage-1 location head, at emission intake — and the
+# constant does not change when that head does.
 #
 # ONE SITE. It applies where the COLORIZE POOL IS DRAWN and nowhere else. Not at pool
 # admission, not at release: those are the four stamped cuts above and they annotate now.
-# Two readers today, both drawing a colorize pool:
+# ONE LIVE READER since 2026-08-11:
 #     tools/emission/ranked_intake.py   (stage-1 head `p_good`, the emission intake draw)
-#     tools/mining/deploy_tail.py       (mining head `p_ge3`, the allocation input draw)
+#
+# THE SECOND READER WAS REPOINTED, NOT RETIRED (Matt, 2026-08-11, recorded in
+# data/render_mode_head/v3/mining_gate_lock_2026-08-11.md). `tools/mining/deploy_tail.py` drew
+# its allocation input on the mining head's `p_ge3` against this floor from 2026-08-09; the
+# sheet-F crossover then put the mining gate at 0.0949, BELOW 0.20, so the pool draw was cutting
+# 132 of the 587 gate-good rows on the 827-row reference pool — the permissive cut had become
+# the strictest one on that head. Matt chose to move the READER rather than the number:
+# `deploy_tail` now filters through `mining_gate.MiningScorer.gate`, this constant is untouched,
+# and the SHARED-SCALE property below is a POLICY about what 0.20 means, not a claim about how
+# many sites read it today. A future mining-scale colorize-pool draw is free to read it again.
 #
 # 0.20 IS DELIBERATELY COARSE. It is not an operating point and no eval derived it; it is the
 # "confidently junk" end of a CORN P(>=3) scale, chosen so it removes the obvious waste and
@@ -157,11 +166,16 @@ LOCATION_HEAD = "location_head"         # the ACTIVE_CKPT quality head (intake-s
 # prompts/closure_sweep.md). This settles the residual `classifier_retrain_protocol.md` §5a
 # stated and did not fix, and it is a DECISION about what the constant is, not a deferral.
 #
-# The two readers are on two different heads' scales — `ranked_intake` on the stage-1 location
-# head's `p_good`, `deploy_tail` on the mining head's `p_ge3` — so there is no single scale to
-# volume-match onto. Matching it to whichever head just flipped would move the cut at the OTHER
-# site by exactly the amount nobody measured, and the alternative (one constant per head) buys
-# a per-head operating point for a cut that was deliberately chosen not to be one.
+# The argument that bought it was two readers on two different heads' scales — `ranked_intake`
+# on the stage-1 location head's `p_good`, `deploy_tail` on the mining head's `p_ge3` — with no
+# single scale to volume-match onto: matching it to whichever head just flipped would move the
+# cut at the OTHER site by exactly the amount nobody measured, and the alternative (one constant
+# per head) buys a per-head operating point for a cut that was deliberately chosen not to be one.
+# THE DECISION OUTLIVED ITS SECOND READER ON PURPOSE. Since the repoint above there is one live
+# reader, so a volume match against the location head is now arithmetically available — and it is
+# still refused, because what makes this floor exempt is that 0.20 is a SEMANTIC statement rather
+# than an operating point (next paragraph), which was always the load-bearing half. Volume-
+# matching it would silently turn it into the per-head operating point it was chosen not to be.
 #
 # So 0.20 is read as a COARSE SEMANTIC floor, valid on any CORN P(>=3) scale: "the judging head
 # is confident this is junk". It is the one cut in stage 2 whose meaning does not depend on

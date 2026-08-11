@@ -9,9 +9,10 @@ meaningless. This re-derives the numbers under the live head.
 
 THIS IS HALF THE FLIP PROCEDURE, AND THE OTHER HALF IS THE FLOORS (2026-08-09,
 prompts/selection_restructure_3.md). Re-scoring makes the stored probabilities current;
-VOLUME-MATCHING `GOOD_FLOOR` and `JUNK_FLOOR` against the re-scored pool makes the cuts
-current. Doing one without the other silently moves how much the pipeline keeps. See
-`docs/design/classifier_retrain_protocol.md` section 5.
+VOLUME-MATCHING `GOOD_FLOOR` (and each stamped floor) against the re-scored pool makes the cuts
+current. Doing one without the other silently moves how much the pipeline keeps. `JUNK_FLOOR`
+is EXEMPT and is never restated — permanent shared-scale, Matt 2026-08-11; see
+`docs/design/classifier_retrain_protocol.md` section 5a and the constant's own declaration.
 
 WHAT IT NO LONGER IS. Until 2026-08-09 this also existed to defeat a version FIREWALL: rows
 carried a frozen `decoded_class` + the `t_good` it was decoded at, and

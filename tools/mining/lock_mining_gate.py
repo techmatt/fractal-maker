@@ -101,6 +101,11 @@ class LockSpec:
     adoption: str
     bound: str
     caveats: dict = field(default_factory=dict)
+    # What the adopted cut then FORCED somewhere else, decided after the lock was first
+    # written. Empty for a lock that forced nothing; a section rather than more `adoption`
+    # prose because the decision has its own date and its own alternatives, and the record of
+    # a cut is the only place a reader looks for what the cut cost.
+    consequences: str = ""
 
 
 # The population's known leans, per source. A judgement about the reference pool, not a
@@ -193,6 +198,34 @@ BASERATE_AUDIT_V3 = LockSpec(
           "[human n=200, prefill-anchored - ceiling]. The unanchored bound on the same draw "
           "rule is tools/mining/sheet_e_reverdict.py.",
     caveats=BASERATE_AUDIT_CAVEATS,
+    consequences=(
+        "THE JUNK-FLOOR INVERSION, resolved 2026-08-11 (prompts/junk_floor_repoint.md). "
+        "Landing the gate at 0.0949 put it BELOW floors.JUNK_FLOOR (0.20), the one enforcing "
+        "stage-2 cut, which tools/mining/deploy_tail.py had read since 2026-08-09 to draw its "
+        "mining-side colorize pool. The permissive cut had become the strictest one on this "
+        "head: the pool draw removed 132 of the 587 gate-good rows on the 827-row reference "
+        "pool (455 clear 0.20 against 587 clearing the gate), so the compute-saving floor was "
+        "silently overruling the cut this record freezes. "
+        "MATT'S DECISION: REPOINT THE READER, not the number. deploy_tail filters its "
+        "allocation input through mining_gate.MiningScorer.gate - the gate's own comparison, "
+        "so this lock's threshold IS what draws that pool and a future pin flip moves both "
+        "together. Realized mining-side colorize pool on the reference pool: 455 -> 587 of "
+        "827 (55.0% -> 71.0%), precision>=2 of the drawn set 0.952 -> 0.893, recall>=3 0.958 "
+        "-> 0.995 - measured 2026-08-11 on tools.scoring.volume_match.mining_pool scored "
+        "through MiningScorer under this pin. That is the flip's 827-row reference pool, the "
+        "population the 129 -> 587 volume claim above is read on, NOT sheet F (n=200), which "
+        "is what the ladders below are read on. "
+        "THE THREE ALTERNATIVES, refused. (1) LEAVE IT STANDING - a documented inversion is "
+        "still an inversion, and it makes the gate advisory at the only mining site that "
+        "spends compute on the answer. (2) LOWER JUNK_FLOOR to sit under the gate - it is "
+        "PERMANENT shared-scale (floors.py; a coarse semantic 'the judging head is confident "
+        "this is junk', not an operating point) and moving it would have shifted the stage-1 "
+        "intake draw, on a different head's scale, by an amount nobody measured. (3) SPLIT it "
+        "per head - buys exactly the per-head operating point the cut was deliberately chosen "
+        "not to be, and doubles a constant to avoid changing a reader. "
+        "JUNK_FLOOR is untouched at 0.20 and still filters the stage-1 emission intake; it "
+        "keeps one live reader, and deploy_tail now only COUNTS with it (the counterfactual "
+        "in its run report)."),
 )
 
 SPECS = {s.lock_path: s for s in (VOLUME_MATCH_V3, BASERATE_AUDIT_V3)}
@@ -351,6 +384,7 @@ def build_lock(vm: dict, *, source_sha: str, spec: LockSpec | None = None) -> di
         "ladder_ge2": vm["ladder_ge2"],
         "caveats": dict(spec.caveats),
         "bound": spec.bound,
+        "consequences": spec.consequences,
         "harness_parity": {
             "what": ("BY CONSTRUCTION, not by a separate check: the measurement pass scores "
                      "through mining_gate.MiningScorer - the gate's own scorer - so there is "
@@ -454,6 +488,12 @@ def write_md(lock: dict) -> str:
     w.append(f"\n**{lock['bound']}**\n")
     hp = lock["harness_parity"]
     w.append(f"\n**Harness parity.** {hp['what']} (scorer: `{hp['scorer']}`)\n")
+
+    # Only for a lock whose cut forced a decision elsewhere. Rendered here, above the ladders,
+    # because it is about what the frozen cut DID and not about how it was measured.
+    if lock.get("consequences"):
+        w.append("\n## What this cut forced elsewhere\n")
+        w.append(f"{lock['consequences']}\n")
 
     for key, label, base in (("ladder_ge3", ">=3 (the gate boundary)", cor["base_rate_ge3"]),
                              ("ladder_ge2", ">=2 (not-bad)", cor["base_rate_ge2"])):

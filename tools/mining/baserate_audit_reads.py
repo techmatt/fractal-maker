@@ -370,9 +370,11 @@ def reference_pool_volumes(cuts: list, *, limit: int | None = None) -> dict:
         "junk_floor_inversion": {
             "junk_floor": F.JUNK_FLOOR,
             "fires_at_junk_floor": passing_volume(p3, F.JUNK_FLOOR, strict=False),
-            "note": "JUNK_FLOOR is PERMANENT shared-scale and was not moved (it is read on two "
-                    "heads' scales). With the gate below it, the colorize-pool draw now cuts "
-                    "rows the gate passes; the count above is how many of this pool survive it.",
+            "note": "JUNK_FLOOR is PERMANENT shared-scale and was not moved. With the gate "
+                    "below it, the mining-side colorize-pool draw briefly cut rows the gate "
+                    "passes; RESOLVED 2026-08-11 by repointing that draw (deploy_tail) at "
+                    "MiningScorer.gate, so nothing reads this floor on the mining scale now. "
+                    "The count above is the counterfactual: how many of this pool clear 0.20.",
         },
     }
 

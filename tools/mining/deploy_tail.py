@@ -16,21 +16,22 @@ shared lifecycle), not in the disposable mining scratch tree.
 
 For each already-emitted location (smooth winner + its approved palette/params chosen
 upstream by emit_v1), render a lean set of strange-mode candidate variants over the
-INHERITED approved palette, score each with the LOCKED `mining_v1` gate
-(`tools/mining/mining_gate.MiningScorer`, threshold 0.50 on marginal p_ge3), and keep
-a diversity-allocated set as alternate wallpapers.
+INHERITED approved palette, score each with the LOCKED mining gate
+(`tools/mining/mining_gate.MiningScorer`, `mining_pins.MINING_GATE_THRESHOLD` on marginal
+p_ge3), and keep a diversity-allocated set as alternate wallpapers.
 
-WHAT FILTERS THE ALLOCATION INPUT IS THE JUNK FLOOR (`floors.JUNK_FLOOR`, 0.20), as of
-2026-08-09. Drawing this allocation IS drawing a colorize pool, which is the one site that
-constant applies at, so this pass and the emission intake read the same number on their own
-judging head. The 0.50 mining release floor filtered it from 2026-08-06 to 2026-08-09 and is
-now ANNOTATION-ONLY along with the other three stage-2 cuts (`tools/emission/floors.py`);
-`gate_acts` survives as a report field only. Its verdict is still RECORDED per candidate in the
+WHAT FILTERS THE ALLOCATION INPUT IS THE GATE (`MiningScorer.gate`), as of 2026-08-11.
+Drawing this allocation IS drawing a colorize pool, and for that reason it read
+`floors.JUNK_FLOOR` (0.20) from 2026-08-09 — the same coarse constant the emission intake
+reads on its own judging head. The sheet-F crossover put the gate at 0.0949, BELOW that floor,
+so the pool draw had started cutting rows the gate passes (132 of 587 on the reference pool);
+Matt's 2026-08-11 call is that this site filters at the gate. `JUNK_FLOOR` did not move — it
+stays permanent shared-scale and still filters the emission intake — and its counterfactual on
+this run's candidates stays in the report. Every gate verdict is RECORDED per candidate in the
 committed log `data/emission/mining_gate_reports/deploy_tail.jsonl`
-(`tools/mining/gate_report.py`), paired with the keep decision — and "below the floor but kept
-anyway" is a REAL count again rather than 0 by construction, which is the labelled false-cut
-signal enforcing cost. The head/threshold stay LOCKED (we still never retrain or re-threshold
-here).
+(`tools/mining/gate_report.py`), paired with the keep decision; "below the gate but kept
+anyway" is 0 by construction again, because the gate is what draws the input. The
+head/threshold stay LOCKED (we never retrain or re-threshold here).
 
 Incremental / idempotent state (the load-bearing production delta over the pilot):
   * The durable state is `alternates.jsonl` (the kept strange alternates). On each run
@@ -64,10 +65,10 @@ Load-bearing (see prompts/deploy_tail_emit_wirein_prompt.md + the memories):
   * normal_map OFF for all modes (none of the specs enable it; `shade:none` composites).
 
 Keep / diversity allocation (tail_alloc.allocate_strange):
-  * The p_ge3 >= `floors.JUNK_FLOOR` (0.20) cut filters the allocation input; it was
-    p_ge3 >= 0.50 until 2026-08-09. AT MOST ONE strange alternate per location. The p_ge3
-    quality ORDER within the allocation is unchanged by which cut is used — the filter
-    decides the input set, not the order.
+  * `MiningScorer.gate` (p_ge3 >= the pinned threshold) filters the allocation input; it was
+    `floors.JUNK_FLOOR` from 2026-08-09 to 2026-08-11, and the 0.50 release floor before that.
+    AT MOST ONE strange alternate per location. The p_ge3 quality ORDER within the allocation
+    is unchanged by which cut is used — the filter decides the input set, not the order.
   * Strange budget B = round(0.25 * n_emitted) is a CEILING across the batch.
   * Keepers are SPREAD across modes for diversity (not abundance-biased): each mode
     gets a floor ~B/(n+2), the surplus (~2/(n+2)*B) lands on the abundant modes by
@@ -548,29 +549,32 @@ def main():
     #    modes for diversity. A location may pass in several modes -> batch-level (each
     #    location fills at most one mode's slot).
     #
-    #    WHAT FILTERS THE ALLOCATION INPUT IS THE JUNK FLOOR (2026-08-09). Drawing this
-    #    allocation IS drawing a colorize pool — the same question the emission intake asks
-    #    one stage earlier — so it reads the SAME semantic constant, `floors.JUNK_FLOOR`, on
-    #    the mining head's p_ge3. Confident junk does not spend the render budget; everything
-    #    above 0.20 competes on rank inside the per-mode allocation.
+    #    WHAT FILTERS THE ALLOCATION INPUT IS THE MINING GATE (2026-08-11, Matt). Drawing this
+    #    allocation IS drawing a colorize pool, and it read `floors.JUNK_FLOOR` for exactly that
+    #    reason from 2026-08-09 — the same coarse "the judging head is confident this is junk"
+    #    constant the emission intake reads on ITS head. The sheet-F crossover then put the gate
+    #    at 0.0949, BELOW the 0.20 floor, and inverted the pair: the pool draw began cutting rows
+    #    the gate passes — on the flip's 827-row reference pool the draw went 455 -> 587 when it
+    #    moved to the gate, i.e. 132 gate-good rows it had been cutting. Matt's call with that in
+    #    front of him: this site filters at THE GATE.
     #
-    #    IT USED TO BE THE 0.50 MINING RELEASE FLOOR, via `floors.MINING_RELEASE.acts`. That
-    #    floor is ANNOTATION-ONLY now (floors.py), and reading `.acts` here would have silently
-    #    turned this site into "no filter at all" the moment it flipped — which is why the
-    #    `.acts` read was replaced rather than left to resolve to False. The flag itself was
-    #    deleted on 2026-08-09; a Floor can no longer claim to act at all. The 0.50 verdict is
-    #    still logged per candidate in the gate report below, where it is a genuine
-    #    counterfactual again.
-    passers = [c for c in cands if c.get("passed")]          # the retired 0.50 verdict
-    gate_acts = False                                        # a Floor cannot act — report only
-    alloc_input = [c for c in cands if F.passes_junk_floor(c.get("p_ge3"))]
-    print(f"[gate] junk floor {F.JUNK_FLOOR}: {len(alloc_input)}/{len(cands)} candidates "
-          f"enter the allocation ({len(passers)} would also clear the retired "
-          f"{F.MINING_RELEASE.value} release floor)")
+    #    `JUNK_FLOOR` DID NOT MOVE — it is permanent shared-scale and its other reader
+    #    (`ranked_intake`, on the stage-1 location head) is untouched; what changed is which owner
+    #    THIS site asks. The comparison is `MiningScorer.gate` — the gate's own `>=`, from the
+    #    gate's own owner — so a pin or threshold flip moves this filter with it and no threshold
+    #    literal lives here. The junk floor's counterfactual on the same population is kept in the
+    #    print and the report, which is what the 0.50-release-floor read left behind when IT was
+    #    replaced here on 2026-08-09.
+    alloc_input = [c for c in cands if scorer.gate(c["p_ge3"])]   # THE gate, via its owner
+    gate_acts = True                                              # and it does filter, here
+    n_above_junk = sum(1 for c in alloc_input if F.passes_junk_floor(c.get("p_ge3")))
+    print(f"[gate] {MINING_GATE_VERSION} @ {scorer.threshold}: {len(alloc_input)}/{len(cands)} "
+          f"candidates enter the allocation ({n_above_junk} of them also clear the "
+          f"{F.JUNK_FLOOR} junk floor, which filtered this input from 2026-08-09 to 2026-08-11)")
     keepers, alloc = allocate_strange(alloc_input, n_emit, modes, STRANGE_BUDGET_FRAC,
                                       existing=existing_list)
     keepers.sort(key=lambda c: -c["p_ge3"])   # render/report in quality order
-    n_loc_passer = len({c["loc_id"] for c in passers})
+    n_loc_passer = len({c["loc_id"] for c in alloc_input})
     achieved = alloc["achieved"]               # corpus-wide (existing + new)
     thr_bite = 4 * (alloc["n_modes"] + 2)      # N at which floor >= 1 (round(0.25 N) >= n+2)
     floors_engaged = alloc["floor"] >= 1
@@ -579,16 +583,19 @@ def main():
           f"(bite at N>~{thr_bite}) · {len(existing_alts)} fixed + {len(keepers)} new "
           f"= {len(existing_alts)+len(keepers)} alternate(s) over {n_loc_passer} new passer-locs")
     for m, _ in ROSTER:
-        supply = len({c['loc_id'] for c in passers if c['mode'] == m})
+        supply = len({c['loc_id'] for c in alloc_input if c['mode'] == m})
         n_ex = sum(1 for v in existing_alts.values() if v["mode"] == m)
         print(f"       {m:32} floor={alloc['floor']} achieved={achieved[m]} "
               f"(existing={n_ex}, new-supply={supply} distinct-loc passers)")
 
-    # 5b. Report-only mining gate → durable would-cut log PAIRED with the actual keep
-    #     decision (point 3 of the prompt). One row per scored candidate: what the 0.50
-    #     gate WOULD have cut and whether the allocation kept it anyway. Committed under
+    # 5b. Mining-gate verdict → durable log PAIRED with the actual keep decision. One row per
+    #     scored candidate: what the gate did to it and whether it was kept. Committed under
     #     data/emission/ (survives `rm -r scratch/*`, unlike report.json/alternates.jsonl).
     #     Runs before the (optional) full-res block so --score-only still records it.
+    #     `would_cut ∧ selected` is ZERO BY CONSTRUCTION again as of 2026-08-11 — the gate is
+    #     what filters the allocation input above, so nothing below it can be kept. It was a
+    #     real labeled false-cut count only while the junk floor filtered here (2026-08-09 to
+    #     2026-08-11) and the two cuts disagreed; the durable population record is unchanged.
     from tools.mining import gate_report as GR
     keeper_cids = {c["cid"] for c in keepers}
     gr_rows = [GR.gate_report_row(
@@ -598,9 +605,9 @@ def main():
         selection_stage="keeper") for c in cands]
     # deploy_tail has no pool stage, so it logs no pool floor and `pool_c` is all zeros.
     gpath, n_tot, n_cut, n_cut_sel, _pool_c = GR.write_gate_report("deploy_tail", gr_rows)
-    print(f"[gate-report] retired mining release floor ({scorer.threshold}, ANNOTATION-ONLY): "
-          f"{n_tot} candidate(s) logged, {n_cut} below it ({n_cut_sel} kept anyway — a real "
-          f"count again, not 0 by construction) → {gpath.relative_to(REPO)}")
+    print(f"[gate-report] mining gate ({scorer.threshold}, FILTERS the allocation input): "
+          f"{n_tot} candidate(s) logged, {n_cut} below it ({n_cut_sel} kept anyway — 0 by "
+          f"construction now) → {gpath.relative_to(REPO)}")
 
     # 6. Full-res render the NEW keepers alongside the smooth wallpaper (skip-if-exists so
     #    a re-run / adopted pilot keeper never re-renders), + side-by-side for eyeball.
@@ -681,7 +688,7 @@ def main():
     # 10. Report.
     write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passer,
                  scorer, parity, checks, thr_bite, floors_engaged, args, gate_acts,
-                 alloc_input, passers)
+                 alloc_input, n_above_junk)
 
 
 def run_checks(smooth_before, smooth_paths, emit_fields_before, emit_field_dir,
@@ -760,7 +767,7 @@ def run_parity(keepers):
 
 def write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passer,
                  scorer, parity, checks, thr_bite, floors_engaged, args, gate_acts,
-                 considered_above_junk, passers_retired_floor):
+                 alloc_input, n_above_junk):
     keep_ids = {c["cid"] for c in keepers}
     n_total_alt = len(existing_alts) + len(keepers)
     degenerate = not floors_engaged
@@ -771,12 +778,14 @@ def write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passe
         # taken — not re-read here, where it could disagree with what the run did.
         "gate": {"version": MINING_GATE_VERSION, "threshold": scorer.threshold,
                  "acts": bool(gate_acts),
-                 "cut_owner": f"floors.MINING_RELEASE ({F.MINING_RELEASE})",
-                 # what ACTUALLY filtered this run's allocation input, and the retired
-                 # threshold's counterfactual on the same population.
-                 "alloc_filter": "floors.JUNK_FLOOR", "junk_floor": F.JUNK_FLOOR,
-                 "n_above_junk_floor": len(considered_above_junk),
-                 "n_above_retired_release_floor": len(passers_retired_floor)},
+                 "cut_owner": "mining_gate.MiningScorer.gate "
+                              "(mining_pins.MINING_GATE_THRESHOLD)",
+                 # what ACTUALLY filtered this run's allocation input, and the junk floor's
+                 # counterfactual on the same population (it filtered here until 2026-08-11).
+                 "alloc_filter": "mining_gate.MiningScorer.gate",
+                 "n_above_gate": len(alloc_input),
+                 "junk_floor": F.JUNK_FLOOR,
+                 "n_above_junk_floor": n_above_junk},
         "curation_pass": {
             "score_only": bool(args.score_only),
             "n_existing_alternates": len(existing_alts),
@@ -843,14 +852,15 @@ def write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passe
     ck = checks
     L.append(f"**Gate** `{rep['gate']['version']}` (LOCKED) · threshold "
              f"`{scorer.threshold}` on marginal p_ge3 · "
-             f"**{'ENFORCING' if gate_acts else 'ANNOTATION-ONLY'}** "
+             f"**{'FILTERS the allocation input' if gate_acts else 'ANNOTATION-ONLY'}** "
              f"(owner: {rep['gate']['cut_owner']})\n")
-    L.append(f"**Allocation input** filtered at the junk floor "
-             f"`{rep['gate']['junk_floor']}` — **{rep['gate']['n_above_junk_floor']}** of "
-             f"{len(cands)} candidates, of which "
-             f"**{rep['gate']['n_above_retired_release_floor']}** would also have cleared the "
-             f"retired {scorer.threshold} release floor. That floor filtered this input from "
-             f"2026-08-06 until 2026-08-09; it now annotates.\n")
+    L.append(f"**Allocation input** filtered at the gate — "
+             f"**{rep['gate']['n_above_gate']}** of {len(cands)} candidates, of which "
+             f"**{rep['gate']['n_above_junk_floor']}** also clear the "
+             f"`{rep['gate']['junk_floor']}` junk floor. That floor filtered this input from "
+             f"2026-08-09 until 2026-08-11, when the sheet-F crossover put the gate below it "
+             f"and Matt repointed this site at the gate; it still filters the emission intake "
+             f"on the stage-1 head.\n")
     L.append(f"**Corpus** N=**{q['n_emitted']}** emitted · budget "
              f"B=round({q['budget_frac']:.0%}×{q['n_emitted']})=**{q['budget_B']}** · "
              f"floor=**{q['floor_per_mode']}**/mode (n={q['n_modes']}) · floor-bite at "
