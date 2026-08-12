@@ -1,0 +1,62 @@
+{
+  "adoption": "band_autolevel/v1",
+  "adopted_on": "2026-08-11",
+  "decided_by": "Matt, on the build-stage report and its production sheet",
+  "switch": {
+    "where": "tools/palettes/autolevel.py::SWITCH_DEFAULT",
+    "default_now": true,
+    "env_override": "FRACTAL_AUTOLEVEL",
+    "read_at": "call time, via autolevel.enabled()"
+  },
+  "reference_record": {
+    "path": "data/palettes/levels_reference.json",
+    "version": "levels_v1",
+    "schema": "levels_reference/v1",
+    "sha256": "b8567686480079000f08efd8a2adee7a7395d2cda59a1424b53dcd2958bef951",
+    "derived": "2026-08-11",
+    "n_images": 48,
+    "bands": {
+      "black_pt": [
+        0.0,
+        0.3008176722330758
+      ],
+      "white_pt": [
+        0.8629887041113057,
+        0.9960350766711062
+      ],
+      "mid": [
+        0.26632904893221404,
+        0.7380826345879854
+      ]
+    },
+    "note": "The band is READ off this file, never off this record. A re-derivation that moves an edge is a new band and therefore a new adoption question \u2014 which is what the coherence test turns into a red suite."
+  },
+  "evidence": {
+    "build_stage_commit": "43a9328",
+    "report": "scratch/autolevel_build_stage_report.md",
+    "sheet": "scratch/autolevel_verify/sheet_autolevel_production.png",
+    "verdict": "scratch/autolevel_build_stage_verdict.json",
+    "what_it_showed": "12 production-path rows: 9 identity rows at max |delta| = 0 exactly (the operator returns the base render's own array), 3 acting rows all replaying to max |delta| = 0 from the stamp alone, pre-screen vs production render disagreeing on 0/12.",
+    "rebuild": "uv run python -u tools/palettes/build_autolevel_verify_sheet.py",
+    "caveat": "The evidence lives in scratch/ and scratch is wiped freely. The sheet rebuilds from the command above; the numbers above are the record."
+  },
+  "wired_sites": [
+    "tools/mining/deploy_tail.py::render_pure (pure modes)",
+    "tools/mining/deploy_tail.py::render_rust (composites; level=(kind != 'direct'))",
+    "tools/emission/build_emission_diversity_v1.py::render_smooth (base carrier)"
+  ],
+  "does_not_touch": [
+    "the mining gate and every floor in tools/emission/floors.py",
+    "the Rust<->Python LUT seam (the surgery ends in a stop list; the bake is colormap.build_lut on the Python tail and render-one --colormaps on the Rust tail, both unchanged)",
+    "the direct-trap family, which is palette-indifferent and excluded where the kind is known rather than disabled inside the render",
+    "any stored label row, ledger or release record written before this date"
+  ],
+  "not_covered": "`enrich --mode render` (the mining harvest colorizes inside Rust, src/enrich.rs) is the one palette-mapped production path the operator does not reach: it needs a measured base render before it can pick a curve. Named in the build-stage report's NOT-done list and still open at adoption.",
+  "known_flip_cost": "Renders stop being byte-comparable across the flip: an out-of-band location now ships a different image than it would have on 2026-08-10, and rows carry a new `autolevel` key. The 2,439-crop exposure census was measured against the earlier 35-image band and is stale in BOTH directions (band and switch); the 48-image band's own share was read on a 50-crop pre-screen (34/50 identity), not a census.",
+  "rollback": {
+    "one_run": "FRACTAL_AUTOLEVEL=0 in the run's environment \u2014 no source edit",
+    "permanent": "set SWITCH_DEFAULT back to False and re-run this writer; the OFF path is a live contract (test_switch_off_is_the_pre_operator_path), not dead code, so the revert is the boolean and nothing else",
+    "artifacts_to_revert": [],
+    "why_none": "Nothing was re-scored, re-derived or rewritten by this flip. The operator is additive per render: rows produced after it carry a stamp, rows produced before it do not."
+  }
+}

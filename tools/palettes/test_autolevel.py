@@ -2,8 +2,13 @@
 
 Five things are asserted here, in the order the prompt that staged this asked for them:
 identity-in-band comes back as the base render's own bytes, a stamp replays to the same stop
-list without the image, the reference record re-derives, the switch ships OFF and is the ONLY
-way in, and the wired call sites reach the operator through that one entry.
+list without the image, the reference record re-derives, the switch is the ONLY way in, and
+the wired call sites reach the operator through that one entry.
+
+The switch SHIPS ON since the 2026-08-11 adoption; what was "the shipped default" here is now
+two separate contracts — the default is ON and is checked against the adoption record, and the
+OFF path stays exercisable through `FRACTAL_AUTOLEVEL=0` because it is how a before/after pair
+is produced.
 
 Light lane: numpy + PIL + the committed colormap pool. No engine, no GPU, no torch.
 """
@@ -22,6 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools import colormap as cm                                   # noqa: E402
+from tools.palettes import adopt_autolevel as ADOPT                # noqa: E402
 from tools.palettes import autolevel as AL                         # noqa: E402
 from tools.palettes import levels_reference as LR                  # noqa: E402
 
@@ -71,24 +77,45 @@ class _Boom:
 # --------------------------------------------------------------------------- #
 # 1. The switch.
 # --------------------------------------------------------------------------- #
-def test_the_switch_ships_off():
-    assert AL.SWITCH_DEFAULT is False
-    assert AL.enabled() is False
+def test_the_switch_ships_on():
+    """ADOPTED 2026-08-11 (`data/palettes/autolevel_adoption.json`). This is the production
+    reality the rest of the suite is written against; the OFF path below is a contract that
+    survives the flip, not the default."""
+    assert AL.SWITCH_DEFAULT is True
+    assert AL.enabled() is True
+
+
+def test_the_adoption_record_matches_the_live_switch_and_reference():
+    """The flip's record is only a record while it agrees with the tree. Both halves matter:
+    a switch reverted without re-running the writer leaves a record claiming a state the tree
+    does not have, and a re-derived band leaves the record adopting a band nobody adopted —
+    which is a NEW adoption question, not a file to quietly refresh
+    (`uv run python tools/palettes/adopt_autolevel.py --write`)."""
+    rec = json.loads((ROOT / ADOPT.OUT_REL).read_text(encoding="utf-8"))
+    ref = AL.load_reference()
+    assert rec["switch"]["default_now"] is AL.SWITCH_DEFAULT
+    assert rec["adoption"] == AL.OPERATOR_VERSION
+    assert rec["reference_record"]["sha256"] == ref["_sha256"]
+    assert rec["reference_record"]["bands"] == {k: list(v) for k, v in AL.bands(ref).items()}
 
 
 @pytest.mark.parametrize("val,want", [("1", True), ("true", True), ("ON", True),
                                       ("0", False), ("no", False), ("", False),
-                                      ("perhaps", False)])
-def test_the_switch_is_read_at_call_time_and_a_typo_never_turns_it_on(monkeypatch, val, want):
+                                      ("perhaps", True)])
+def test_the_switch_is_read_at_call_time_and_a_typo_never_moves_it(monkeypatch, val, want):
     """Read at call time (never at import), so a run sets it without editing source — and an
-    unparseable value falls back to the shipped default rather than to True."""
+    unparseable value falls back to the shipped default rather than to a state of its own.
+    Before the flip that read as "a typo cannot turn it ON"; after it, the same rule is what
+    stops a typo turning a production colorize OFF."""
     monkeypatch.setenv(AL.SWITCH_ENV, val)
     assert AL.enabled() is want
 
 
-def test_switch_off_is_the_pre_operator_path(entry):
-    """OFF must be one boolean read in front of the old behaviour: the base image comes back
-    as the SAME object, no stamp, no reference load, no rerender."""
+def test_switch_off_is_the_pre_operator_path(monkeypatch, entry):
+    """The OFF-STATE CONTRACT, unchanged by the flip and now reached explicitly: with
+    `FRACTAL_AUTOLEVEL=0` the operator is one boolean read in front of the old behaviour —
+    the base image comes back as the SAME object, no stamp, no reference load, no rerender."""
+    monkeypatch.setenv(AL.SWITCH_ENV, "0")
     img = _ramp()
     lev = AL.maybe_level(img, entry, _Boom())
     assert lev.img is img and lev.stamp is None and lev.acted is False
@@ -285,7 +312,7 @@ def test_the_direct_trap_family_is_unreachable_by_construction():
 
 def test_the_switch_off_render_info_is_byte_identical_to_the_pre_operator_block():
     """With no stamp there is no key, so every record the wired passes write under the
-    shipped default is exactly what they wrote before the operator existed."""
+    switch forced OFF is exactly what they wrote before the operator existed."""
     from tools.mining import deploy_tail as dt           # noqa: PLC0415  (imports torch)
     before = {"transfer_dropped": False}
     assert dt._info(dict(before), None) == before

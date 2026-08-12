@@ -164,6 +164,10 @@ __pycache__/
 # folder lives OUTSIDE the repo, so nothing here rebuilds an earlier band — durable, and a
 # tracked canary (tests/test_tracked_artifacts.py).
 !/data/palettes/levels_reference.json
+# The auto-level ADOPTION record (tools/palettes/adopt_autolevel.py): the 2026-08-11 flip of
+# the operator's switch -- date, evidence, what it does not touch, how to revert. Regenerable
+# from the live modules by design, and durable because a decision is not a derived artifact.
+!/data/palettes/autolevel_adoption.json
 # Hand-picked reference test fixtures (load-bearing metadata, not regenerable):
 # the test render locations and the test palette selection.
 !/data/test_renders.json

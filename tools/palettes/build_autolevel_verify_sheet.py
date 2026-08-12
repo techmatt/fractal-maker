@@ -1,7 +1,8 @@
 r"""build_autolevel_verify_sheet.py — the band auto-level, through the PRODUCTION path.
 
-WHAT THIS IS FOR. `tools/palettes/autolevel.py` ships with its switch OFF. The unit tests
-prove the rule; this proves the WIRING — that the operator, turned on, does what the study
+WHAT THIS IS FOR. This sheet is the evidence the 2026-08-11 flip was adopted on, and it stays
+the way the wiring is re-proved: the unit tests prove the rule; this proves the WIRING — that
+the operator does what the study
 measured when it runs inside the real render functions (`deploy_tail.render_candidate` for
 the strange modes, `build_emission_diversity_v1.render_smooth` for the base carrier) rather
 than inside a study driver that merely resembles them.
@@ -309,7 +310,7 @@ def _caption(r: dict, arm: str) -> str:
     lines.append(f"in-mask chroma {st['in_mask_chroma']:.4f}  dark chroma "
                  f"{st['dark_chroma']:.4f}")
     if arm == "before":
-        lines.append("switch OFF — the shipped default")
+        lines.append("switch OFF — the pre-operator render (forced, not the default)")
         return "\n".join(lines)
     stamp = r.get("stamp")
     if stamp is None:

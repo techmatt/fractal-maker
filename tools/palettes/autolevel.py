@@ -1,4 +1,4 @@
-r"""autolevel.py — THE band-targeting auto-level operator. **SWITCH SHIPS OFF.**
+r"""autolevel.py — THE band-targeting auto-level operator. **SWITCH SHIPS ON** (2026-08-11).
 
 The production port of the rule the band study proposed and Matt adopted
 (`scratch/autolevel_band_study_report.md`, commit `1b4af7a`). This module is the ONE owner
@@ -34,11 +34,15 @@ STOP LIST: for the Python coloring tail it goes through `OverrideLibrary` (which
 JSON handed to `render-one --colormaps` — so the bake, the mirror flag and the spec stay
 bit-identical to the production call and only the stop COLOURS differ.
 
-THE SWITCH is `enabled()` and it is ONE switch: `SWITCH_DEFAULT` (False, shipped) overridden
-per-run by the `FRACTAL_AUTOLEVEL` environment variable. Read at CALL time, never at import,
-so a test monkeypatches it the same way `floors.active_head_version` is monkeypatched. Every
-wired production render goes through `maybe_level` and nothing else — a call site that
-reaches `plan()` directly would be a second switch.
+THE SWITCH is `enabled()` and it is ONE switch: `SWITCH_DEFAULT` (True since the 2026-08-11
+adoption — the build+stage was `43a9328`, the flip is recorded in
+`data/palettes/autolevel_adoption.json`) overridden per-run by the `FRACTAL_AUTOLEVEL`
+environment variable. Read at CALL time, never at import, so a test monkeypatches it the same
+way `floors.active_head_version` is monkeypatched. Every wired production render goes through
+`maybe_level` and nothing else — a call site that reaches `plan()` directly would be a second
+switch. The OFF path is still a CONTRACT, not dead code: `FRACTAL_AUTOLEVEL=0` returns the
+base render's own object with no stamp, no reference load and no re-render, which is how a
+before/after pair is produced and how a leveled row is falsified.
 
     uv run python tools/palettes/autolevel.py            # print the switch + the live band
 """
@@ -67,7 +71,8 @@ from tools.palettes.color import oklab_to_srgb, srgb_to_oklab      # noqa: E402
 OPERATOR_VERSION = "band_autolevel/v1"
 
 SWITCH_ENV = "FRACTAL_AUTOLEVEL"
-SWITCH_DEFAULT = False          # <-- THE SWITCH. The flip is a separate decision.
+SWITCH_DEFAULT = True           # <-- THE SWITCH. ADOPTED 2026-08-11; the flip is its own
+                                # decision and its own record: data/palettes/autolevel_adoption.json.
 
 _TRUTHY = ("1", "true", "yes", "on")
 
@@ -76,10 +81,11 @@ def enabled() -> bool:
     """Is the operator on for THIS render? Read at call time.
 
     One switch with two ways to set it, not two switches: `SWITCH_DEFAULT` is what the tree
-    ships (OFF), and `FRACTAL_AUTOLEVEL` sets it for one run without editing source — which
-    is how the verification sheet runs it ON while the shipped default stays OFF. An
-    unparseable value reads as the default rather than as True: a typo must not turn a
-    production colorize on."""
+    ships (ON since the 2026-08-11 adoption), and `FRACTAL_AUTOLEVEL` sets it for one run
+    without editing source — which is how the verification sheet runs both arms and how the
+    OFF path stays exercisable after the flip. An unparseable value reads as the DEFAULT and
+    never as its own state: a typo must not move a production colorize in either direction,
+    and after the flip that means it must not silently turn one OFF either."""
     raw = os.environ.get(SWITCH_ENV)
     if raw is None:
         return SWITCH_DEFAULT
