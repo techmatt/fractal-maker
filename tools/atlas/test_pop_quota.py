@@ -11,6 +11,7 @@ quota that only *steers* passes every other test in this file and fails that one
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -630,15 +631,16 @@ def test_the_floor_ledger_survives_a_resume(tmp_path):
 # 5. price model
 # =========================================================================== #
 def test_price_is_minutes_per_currency_unit_and_a_class2_is_not_a_credit():
-    c = pq.CostToMine(["a"], dict(seed_price=3.0, price_ema=1.0, cap_minutes=1e9))
+    c = pq.CostToMine(["a"], dict(seed_price=3.0, price_ema=1.0, price_clamp=1e9,
+                                  cap_minutes=1e9))
     c.charge("a", 10.0)
     c.credit("a", pq.CLASS_WEIGHT.get(2, 0.0))       # a decoded 2: zero units, no credit
-    c.end_window()
-    assert c.price("a") == pytest.approx(3.0)
+    assert c.win_units["a"] == 0.0
     assert c.min_since_credit["a"] == pytest.approx(10.0), "a non-credit must not reset the clock"
     c.credit("a", pq.CLASS_WEIGHT[4])                # 10 minutes for 1.0 unit
     c.end_window()
     assert c.price("a") == pytest.approx(10.0)
+    assert c.min_since_credit["a"] == 0.0, "a class-4 IS a credit and resets the clock"
 
 
 def test_a_class3_costs_ten_times_a_class4_per_unit():
@@ -686,16 +688,28 @@ def _v1_price(stream, seed=3.0, ema=0.30):
     return raw
 
 
-def _v2_price(stream, seed=3.0, ema=0.30):
-    """The live sampler, driven through the same stream."""
-    c = pq.CostToMine(["p"], dict(seed_price=seed, price_ema=ema, cap_minutes=1e9,
-                                  price_clamp=1e9))
+def _v2_prices(stream, seed=3.0, ema=None):
+    """The live estimator, driven through the same stream: the price after every batch."""
+    c = pq.CostToMine(["p"], dict(seed_price=seed, cap_minutes=1e9, price_clamp=1e9,
+                                  price_ema=(pq.PRICE_EMA if ema is None else ema)))
+    out = []
     for minutes, decodes in stream:
         for u in decodes:
             c.credit("p", u)
         c.charge("p", minutes)
         c.end_window()
-    return c.raw["p"]
+        out.append(c.raw["p"])
+    return out
+
+
+def _v2_price(stream, seed=3.0, ema=None):
+    return _v2_prices(stream, seed, ema)[-1]
+
+
+def _v2_cycle(stream, period, seed=3.0, ema=None):
+    """The last full cycle of prices — the estimator is recency-weighted, so a bursty stream
+    has no single answer and the cycle is what a phase-free read is taken over."""
+    return _v2_prices(stream, seed, ema)[-period:]
 
 
 def _truth(stream):
@@ -733,45 +747,76 @@ def test_v1_priced_two_identical_cost_streams_an_order_of_magnitude_apart():
 def test_batch_aggregation_prices_both_streams_at_the_true_per_unit_cost():
     """NEW BEHAVIOUR IS RIGHT, AND DOES NOT OVER-CORRECT — the bracket's other two halves.
 
-    Both streams land within 15% of 12.0 and within 15% of each other. The drip stream is the
-    over-correction check: v1 already priced it correctly, so a fix that moved it would be
-    trading one bias for another."""
-    got_cl, got_dr = _v2_price(CLUSTERED), _v2_price(DRIP)
+    v1's defect was a SYSTEMATIC one: clustering alone priced the same cost 8x apart, in the
+    same direction every cycle. So the property asserted is the absence of that bias, over the
+    burst cycle rather than at one phase of it — the estimator is recency-weighted, and a
+    partition whose yield arrives every sixth batch is read differently depending on where in
+    the cycle you ask (`PRICE_EMA`, the 2026-08-12 note). The GEOMETRIC mean over one full
+    cycle is the phase-free read, and it lands within 15% of both the truth and the drip
+    stream; the swing around it is bounded and is measured in the next test.
+
+    The drip stream is the over-correction check: v1 already priced it correctly, so a fix
+    that moved it would be trading one bias for another."""
+    cyc, got_dr = _v2_cycle(CLUSTERED, 6), _v2_price(DRIP)
+    got_cl = math.exp(sum(math.log(x) for x in cyc) / len(cyc))
     for name, got in (("clustered", got_cl), ("drip", got_dr)):
         assert 0.85 * 12.0 <= got <= 1.15 * 12.0, f"{name} read {got:.2f}, truth 12.0"
     assert abs(got_cl - got_dr) / max(got_cl, got_dr) < 0.15
     assert abs(got_cl - 12.0) < abs(_v1_price(CLUSTERED) - 12.0)
 
 
+def test_the_burst_phase_swing_is_bounded_and_symmetric_about_the_truth():
+    """What the recency weighting costs on a bursty partition, pinned as a number rather than
+    left as a caveat. A 6-batch cycle against a ~6.7-batch horizon reads 0.69x the truth just
+    after the burst is priced and 1.56x just before the next one — a factor of 2.3 end to end,
+    and the price MOVES every batch, which is the property the run-26 lockout lacked."""
+    cyc = _v2_cycle(CLUSTERED, 6)
+    lo, hi = min(cyc) / 12.0, max(cyc) / 12.0
+    assert 0.6 < lo < 0.8 and 1.4 < hi < 1.8, f"cycle {[round(x, 2) for x in cyc]}"
+    assert hi / lo < 2.5
+    assert len(set(round(x, 6) for x in cyc)) == 6, "every batch in the cycle moved the price"
+
+
 # --------------------------------------------------------------------------- #
 # 5c. the UNITS-WEIGHTED step (2026-08-11) — batch aggregation fixed WHAT is sampled,
 # this fixes HOW MUCH each sample counts.
 # --------------------------------------------------------------------------- #
-def test_the_step_is_the_per_unit_weight_compounded_over_the_windows_units():
+def test_the_sample_weight_is_the_windows_units_against_the_evidence_in_hand():
     """The rule itself, on the pure function, so it is asserted rather than inferred from a
-    run: one unit gets exactly the configured weight, u units get the compounded weight of u
-    applications, and the step is monotone in units and never leaves [0, 1)."""
-    step = pq.CostToMine.step
-    assert step(0.30, 1.0) == pytest.approx(0.30)
-    assert step(0.30, 2.0) == pytest.approx(1 - 0.7 ** 2)     # two per-unit steps
-    assert step(0.30, 0.1) == pytest.approx(1 - 0.7 ** 0.1)   # one class-3: ~0.035, not 0.30
-    assert step(0.30, 0.1) < 0.05
+    run. A window carrying as much currency as the accumulator already holds gets exactly the
+    configured weight; a thinner one gets proportionally less; the weight is monotone in units
+    and never leaves [0, 1)."""
+    w = pq.CostToMine.sample_weight
+    assert w(0.30, 1.0, 1.0) == pytest.approx(0.30)            # window == evidence in hand
+    assert w(0.30, 0.1, 1.0) < 0.05                            # one class-3 barely moves it
+    assert w(0.30, 40.0, 1.0) > 0.9                            # 40 units nearly replaces it
+    assert w(0.30, 0.0, 1.0) == 0.0, "no units, no ratio to average in"
     prev = -1.0
     for u in (0.0, 0.1, 0.5, 1.0, 4.0, 40.0):
-        a = step(0.30, u)
+        a = w(0.30, u, 1.0)
         assert 0.0 <= a < 1.0 and a > prev
         prev = a
-    assert step(1.0, 0.1) == pytest.approx(1.0), "a full-weight EMA still replaces outright"
+    assert w(1.0, 0.1, 1.0) == pytest.approx(1.0), "a full-weight EMA still replaces outright"
+
+
+def test_the_update_is_that_weight_applied_to_the_windows_own_rate():
+    """The identity that makes the pure function above a statement about the estimator:
+    stepping the two accumulators IS a sample EMA on `m/u` at `sample_weight`. Asserted
+    against the class rather than restated, so the two cannot drift apart."""
+    c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=0.3, cap_minutes=1e9,
+                                  price_clamp=1e9))
+    before, evidence = c.raw["p"], c.ema_units["p"]
+    c.credit("p", 4.0)
+    c.charge("p", 120.0)
+    c.end_window()
+    a = pq.CostToMine.sample_weight(0.3, 4.0, evidence)
+    assert c.raw["p"] == pytest.approx((1 - a) * before + a * 30.0)
 
 
 def test_a_thin_window_no_longer_pulls_as_hard_as_a_thick_one():
-    """THE DEFECT, bracketed. `end_window` fires once per batch whatever the batch held, so
-    under the flat per-window weight a single class-3 (0.1 units) moved the price exactly as
-    far as ten class-4s. Both partitions below see ONE window reading 30 min/unit against a
-    seed of 3.0; only the evidence behind it differs, by 40x.
-
-    The old behaviour is computed inline — `1 - (1-ema)` is the flat step — because the
-    assertion that matters is that the two used to be equal and no longer are."""
+    """THE 2026-08-11 DEFECT, still bracketed under the 2026-08-12 estimator. Both partitions
+    below see ONE window reading 30 min/unit against a seed of 3.0; only the evidence behind
+    it differs, by 40x. The flat per-window weight moved both the same distance."""
     def one_window(units, minutes):
         c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=0.3, cap_minutes=1e9,
                                       price_clamp=1e9))
@@ -782,28 +827,24 @@ def test_a_thin_window_no_longer_pulls_as_hard_as_a_thick_one():
 
     thin, thick = one_window(0.1, 3.0), one_window(4.0, 120.0)
     flat = (1 - 0.3) * 3.0 + 0.3 * 30.0                       # what BOTH used to return
-    assert thick == pytest.approx(flat, rel=0.02) or thick > thin
     assert thin < thick, "40x the evidence must move the price further"
     assert thin - 3.0 < 0.15 * (flat - 3.0), \
         "one class-3 should barely move a price; it used to move it the full step"
-    # and it does not over-correct: a one-unit window is the flat step, unchanged.
+    # and it does not over-correct: a window carrying the evidence already in hand (1.0 unit,
+    # the seed's weight) is the flat step, unchanged.
     assert one_window(1.0, 30.0) == pytest.approx(flat)
-
-
-def test_units_weighting_leaves_the_batch_aggregation_bracket_intact():
-    """The 5b streams still price at the truth. Both carry 60 units in 720 minutes; the
-    clustered one now flushes 6 windows of 10 units each (a near-total step) and the drip one
-    60 windows of 1 unit, so the weighting changes the PATH to 12.0 without moving the
-    answer — which is the over-correction check for this change."""
-    got_cl, got_dr = _v2_price(CLUSTERED), _v2_price(DRIP)
-    for name, got in (("clustered", got_cl), ("drip", got_dr)):
-        assert 0.85 * 12.0 <= got <= 1.15 * 12.0, f"{name} read {got:.2f}, truth 12.0"
 
 
 def test_every_sample_the_window_emits_is_the_windows_own_aggregate_rate():
     """The property underneath both tests above, stated exactly rather than through an EMA:
-    each emitted sample IS window-minutes / window-units. The EMA is then a smoother over
-    unbiased samples instead of over first-decode ratios."""
+    every window with units emits its own minutes/units rate, and every window WITHOUT units
+    emits `None` — closed and priced, but with no rate to report.
+
+    A window is now ONE BATCH, which is where this differs from the carried-forward rule it
+    replaced: the credited batch of each burst samples its own 20 minutes against its own 10
+    units (2.0), not the 120 minutes of the five dry batches before it (12.0). The five dry
+    batches paid for themselves as they happened, and the truth of 12.0 min/unit is what the
+    EMA over all six lands on rather than what any one of them reports."""
     c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=0.3, cap_minutes=1e9,
                                   price_clamp=1e9))
     samples = []
@@ -811,26 +852,106 @@ def test_every_sample_the_window_emits_is_the_windows_own_aggregate_rate():
         for u in decodes:
             c.credit("p", u)
         c.charge("p", minutes)
-        samples.append(c.end_window().get("p"))
-    emitted = [s for s in samples if s is not None]
-    assert len(emitted) == 6, "one sample per batch that carried units, and no others"
-    assert emitted == pytest.approx([12.0] * 6)
+        samples.append(c.end_window()["p"])
+    assert len(samples) == len(CLUSTERED), "every served batch closes a window"
+    assert samples.count(None) == 30, "the dry batches: closed and priced, but with no rate"
+    assert [s for s in samples if s is not None] == pytest.approx([2.0] * 6)
 
 
-def test_a_repeatedly_charged_dry_partition_samples_its_whole_gap_at_the_next_credit():
-    """The sparse-partition case the seed-pinning bias hid. Twenty dry batches then one
-    class-3: the sample is all twenty batches' minutes against 0.1 units, not the last
-    batch's."""
-    c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=1.0, cap_minutes=1e9,
+# --------------------------------------------------------------------------- #
+# 5d. EVERY SERVED BATCH PRICES (2026-08-12) — the run-26 one-way lockout.
+# --------------------------------------------------------------------------- #
+def test_a_zero_yield_batch_prices_finite_clamped_and_upward():
+    """The four properties the fix has to have at once, on a single dry batch: the price moves
+    (it is evidence, not a skip), it moves UP (a batch that bought nothing is a batch that says
+    the partition is expensive), it stays finite (no minutes/0), and `price` still respects the
+    band. Nothing here needs a credit to ever arrive."""
+    c = pq.CostToMine(["p"], dict(seed_price=3.0, price_clamp=4.0, cap_minutes=1e9))
+    c.charge("p", 5.0)
+    assert c.end_window() == {"p": None}, "closed and priced, with no rate to report"
+    assert math.isfinite(c.raw["p"]) and c.raw["p"] > 3.0
+    assert c.price("p") <= 3.0 * 4.0, "the clamp band still bounds a censored reading"
+    assert c.win_min["p"] == 0.0, "the minutes were spent on that price, not left pending"
+
+
+def test_one_zero_yield_batch_cannot_slam_the_price_to_the_ceiling():
+    """The other side of the same lever. A censored reading is `a*m / ((1-a)*U)` above the
+    price it started from — bounded by the batch, not by the ceiling — so an unlucky batch
+    nudges and a sustained dry spell is what actually re-prices a partition."""
+    c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=0.15, price_clamp=1e9,
+                                  cap_minutes=1e9))
+    c.charge("p", 5.0)
+    c.end_window()
+    one = c.raw["p"]
+    assert one == pytest.approx(3.0 + 0.15 * 5.0 / 0.85)
+    assert one < 2.0 * 3.0, "one dry batch must not double the price"
+    for _ in range(19):
+        c.charge("p", 5.0)
+        c.end_window()
+    assert c.raw["p"] > 4.0 * one, "twenty of them must"
+    # and it SETTLES rather than diverging: once the evidence in hand has decayed past the
+    # floor, the price is the censored reading `recent minutes / one class-3` and stays there.
+    assert c.ema_units["p"] < c.min_units
+    assert c.raw["p"] == pytest.approx(c.ema_min["p"] / c.min_units)
+    assert c.raw["p"] == pytest.approx(5.0 / pq.CLASS_WEIGHT[3], rel=0.05)
+
+
+def test_zero_yield_minutes_are_priced_at_the_time_not_dumped_on_the_next_credit():
+    """THE RUN-26 MECHANISM, bracketed. Twenty dry batches then one class-3. The superseded
+    rule emitted nothing for the dry batches and carried their minutes forward, so the whole
+    21 minutes landed on 0.1 units in one 210 min/unit sample — a partition's price set by
+    where its yield happened to fall rather than by what it cost.
+
+    Now the dry batches price themselves and the credited window samples its own 1.0 minutes
+    against its own 0.1 units, so no single moment carries twenty batches' minutes."""
+    c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=0.3, cap_minutes=1e9,
                                   price_clamp=1e9))
+    rising = []
     for _ in range(20):
         c.charge("p", 1.0)
-        c.end_window()                       # no units -> no sample, minutes carry
-    assert c.raw["p"] == pytest.approx(3.0), "a dry window must not emit a sample"
+        c.end_window()
+        rising.append(c.raw["p"])
+    # Rising until the `min_units` floor takes the denominator, then settling on the censored
+    # reading (1 minute per class-3 = 10.0). The first six are the un-floored stretch.
+    assert rising[:6] == sorted(rising[:6]) and rising[0] > 3.0, "each dry batch raised it"
+    assert rising[-1] == pytest.approx(10.0, rel=0.02)
+    before = c.raw["p"]
     c.credit("p", pq.CLASS_WEIGHT[3])
     c.charge("p", 1.0)
-    c.end_window()
-    assert c.raw["p"] == pytest.approx(21.0 / 0.1)
+    assert c.end_window() == pytest.approx({"p": 10.0}), "this batch's own minutes and units"
+    assert c.raw["p"] < before, "and it is CHEAPER than the dry run that preceded it"
+    assert c.raw["p"] < 210.0 / 4, "not the 210 min/unit the carried-forward rule reported"
+
+
+def test_a_partition_that_stops_being_served_is_not_frozen_by_its_unluckiest_batch():
+    """The lockout itself, at run-26's shape. A partition mines cheaply (1 min per 10 units)
+    and then has two dry batches and one thin one. Under the carried-forward rule those three
+    batches' minutes were charged to the thin batch's single unit and its price ended ABOVE the
+    dry spell's own cost; the estimator then had no way to revise it, because revision needs
+    service and the price is what buys service.
+
+    The assertion is that the thin batch samples ITS OWN cost, so the price the partition is
+    left with is bounded by the most expensive batch it actually ran rather than by the sum of
+    three of them."""
+    c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=0.3, cap_minutes=1e9,
+                                  price_clamp=1e9))
+    for _ in range(12):                     # a productive stretch: 0.1 min/unit
+        c.credit("p", 10.0)
+        c.charge("p", 1.0)
+        c.end_window()
+    productive = c.raw["p"]
+    assert productive == pytest.approx(0.1, rel=0.15)
+    for _ in range(2):                      # two batches that admitted nothing
+        c.charge("p", 1.0)
+        c.end_window()
+    dry = c.raw["p"]
+    c.credit("p", pq.CLASS_WEIGHT[4])       # then one thin batch: 1 minute, 1.0 unit
+    c.charge("p", 1.0)
+    assert dry > productive, "the dry batches are what raised the price, and they did it live"
+    assert c.end_window() == pytest.approx({"p": 1.0}), \
+        "the thin batch samples its OWN minute, not the three the carried rule pooled"
+    assert c.raw["p"] < 1.0, "so the price stays under the dearest batch the partition ran"
+    assert c.raw["p"] < 0.3 * 3.0, "well under the 3.0 min/unit the carried rule would sample"
 
 
 def test_units_credited_with_no_charged_minutes_are_never_priced_at_zero():
@@ -847,23 +968,43 @@ def test_units_credited_with_no_charged_minutes_are_never_priced_at_zero():
     assert c.raw["p"] == pytest.approx(4.0)
 
 
-def test_the_window_survives_a_resume():
-    """`state_dict`/`load_state` carry the open window. A resume that dropped it would throw
-    away the dry minutes a sparse partition had accumulated — pricing it cheap exactly at the
-    moment it is most expensive."""
-    a = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=1.0, cap_minutes=1e9,
-                                  price_clamp=1e9))
+def test_the_estimator_state_survives_a_resume():
+    """`state_dict`/`load_state` carry BOTH accumulators and the open window. A resume that
+    carried only `raw` would keep the price and lose the evidence behind it, so the first
+    batch of the new session would move it as far as the first batch of the run did."""
+    cfg = dict(seed_price=3.0, price_ema=0.3, cap_minutes=1e9, price_clamp=1e9)
+    a = pq.CostToMine(["p"], cfg)
     for _ in range(5):
+        a.credit("p", 2.0)
         a.charge("p", 2.0)
         a.end_window()
-    b = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=1.0, cap_minutes=1e9,
-                                  price_clamp=1e9))
+    a.charge("p", 7.0)                        # an OPEN window: charged, not yet priced
+    b = pq.CostToMine(["p"], cfg)
     b.load_state(json.loads(json.dumps(a.state_dict())))
-    assert b.win_min["p"] == pytest.approx(10.0)
-    b.credit("p", 1.0)
-    b.charge("p", 2.0)
-    b.end_window()
-    assert b.raw["p"] == pytest.approx(12.0)
+    assert (b.ema_min["p"], b.ema_units["p"]) == pytest.approx((a.ema_min["p"],
+                                                                a.ema_units["p"]))
+    assert b.win_min["p"] == pytest.approx(7.0), "the open window is carried, not dropped"
+    for c in (a, b):
+        c.credit("p", 1.0)
+        c.charge("p", 1.0)
+        c.end_window()
+    assert b.raw["p"] == pytest.approx(a.raw["p"])
+
+
+def test_a_checkpoint_written_before_the_accumulators_existed_resumes_at_its_price():
+    """Back-compat for a state dict that predates 2026-08-12: it carries `raw` and no
+    accumulators. The resumed model keeps the price it recorded and re-earns its confidence
+    from the seed's evidence weight — not the seed PRICE, which would discard the run."""
+    c = pq.CostToMine(["p"], dict(seed_price=3.0, price_ema=0.3, cap_minutes=1e9,
+                                  price_clamp=1e9))
+    legacy = dict(seed={"p": 3.0}, raw={"p": 0.4}, min_spent={"p": 40.0}, units={"p": 100.0},
+                  min_since_credit={"p": 0.0}, win_min={"p": 0.0}, win_units={"p": 0.0},
+                  samples={"p": 7}, capped=[])
+    c.load_state(legacy)
+    assert c.raw["p"] == pytest.approx(0.4)
+    assert c.ema_units["p"] == pytest.approx(c.seed_units)
+    assert c.ema_min["p"] / c.ema_units["p"] == pytest.approx(0.4), \
+        "the accumulators must reproduce the price they were rebuilt from"
 
 
 def test_the_quota_closes_the_price_window_once_per_charged_batch(tmp_path):

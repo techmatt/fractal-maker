@@ -52,7 +52,9 @@ THE PRICE IS MEASURED COST-TO-MINE, AND IT IS CLAMPED
 
 estimated from the run's own telemetry: a canonical decode of 4 credits 1.0 unit, a decode of
 3 credits 0.1, and the minutes charged to that partition are the cost. Seeded
-from config, EMA-smoothed, and **clamped to a bounded band around the seed**. The clamp is
+from config, EMA-smoothed over EVERY served batch — a batch that yielded nothing prices too,
+which is what stops a price freezing where it cannot be revised (`CostToMine`, run 26) — and
+**clamped to a bounded band around the seed**. The clamp is
 not tidiness: the numerator of a price is the classifier's decode, so a head that over-calls
 4s in one family would make that family look cheap and buy it more service — winner's curse
 climbing a level (`measurement_practice.md` §2). The clamp bounds that to a factor, and the
@@ -150,11 +152,30 @@ import supply_routing as _srt                    # noqa: E402  (THE channel tabl
 CLASS_WEIGHT = {4: 1.0, 3: 0.1}          # Matt's currency: n4 + 0.1*n3
 FLOOR_FRAC = 0.05                        # addendum: every partition floors at 5% of TOTAL time
 SEED_PRICE = 3.0                         # neutral seed: active-minutes per currency unit
-# The PER-UNIT EMA weight. A batch window's actual step is `1 - (1 - PRICE_EMA)**units`
-# (`CostToMine.step`), so this number is the weight at exactly one unit of currency and a
-# thinner window pulls proportionally less. It was the flat per-WINDOW weight until
-# 2026-08-11, which gave a 0.1-unit window the same pull as a 4.0-unit one.
-PRICE_EMA = 0.30
+# The PER-SERVED-BATCH EMA weight, applied to the minutes and the units accumulators alike
+# (`CostToMine.end_window`). A window's pull on the PRICE is therefore still units-weighted —
+# `sample_weight` is `a*u / ((1-a)*U + a*u)`, exactly `PRICE_EMA` for a window carrying as much
+# currency as the accumulator already holds and less for a thinner one. It was a per-WINDOW
+# weight on a ratio sample until 2026-08-11 and a per-UNIT one until 2026-08-12.
+#
+# HALVED 0.30 -> 0.15 ON 2026-08-12, and it is the same change rather than a second one: the
+# estimator now steps once per SERVED batch instead of once per YIELDING window, which is 2-3x
+# as often on a real run (run 26: mandelbrot 11 steps against 8 windows, multibrot3 24 against
+# 8). Holding the per-step weight would have shortened the memory by that factor, and the
+# horizon is what decides whether a bursty partition is averaged or chased: on the CLUSTERED
+# bracket in `test_pop_quota.py` a 6-batch burst cycle swings the price 0.49x-2.92x of truth at
+# 0.30 and 0.69x-1.56x at 0.15, with the cycle's geometric mean 1.20x and 1.04x of truth.
+# NOTE the deployed seed table pins its own `price_ema` (`data/atlas/quota_prices_*.json`), so
+# this default governs only a run whose table omits it, or a regenerated table.
+PRICE_EMA = 0.15
+# The two accumulators the price is a RATIO of (`CostToMine`, "EVERY SERVED BATCH PRICES").
+# `PRICE_SEED_UNITS` is how much currency the seed price is worth as evidence — one class-4 —
+# so the first measured batch of comparable size displaces about `PRICE_EMA` of it.
+# `PRICE_MIN_UNITS` floors the denominator at the SMALLEST credit there is, which is what
+# bounds a run of zero-yield batches: it prices as if one class-3 were about to arrive, not as
+# if nothing ever would.
+PRICE_SEED_UNITS = 1.0
+PRICE_MIN_UNITS = CLASS_WEIGHT[3]
 PRICE_CLAMP = 4.0                        # price stays within [seed/4, seed*4]
 CAP_MINUTES = 25.0                       # dry-time before a partition is capped out of service
 JULIA_ROUTE_GAIN = 1.0                   # unservable julia intent folded into its c-plane parent
@@ -586,13 +607,58 @@ class CostToMine:
     partitions — which is the whole failure this class is upstream of.
 
     So: minutes and units accumulate per partition into a WINDOW, and `end_window` (one call
-    per batch, from `PopQuota.charge`) emits at most ONE sample from the aggregate,
+    per batch, from `PopQuota.charge`) closes it against the aggregate,
     `window minutes / window units`. That is the estimand — total cost over total currency —
-    computed directly instead of approximated by a first-decode ratio. A window with no
-    units does not flush: its minutes carry forward, so a partition that goes dry for twenty
-    batches and then credits once samples the full twenty batches against that one credit.
+    computed directly instead of approximated by a first-decode ratio.
 
-    THE CLAMP. `price` never leaves `[seed/clamp, seed*clamp]`. The raw EMA is kept and
+    EVERY SERVED BATCH PRICES, ZERO-YIELD INCLUDED (fix, 2026-08-12)
+    ---------------------------------------------------------------
+    Run 26 lost `mandelbrot` — largest deficit of the nine, highest release ratio — for its
+    last 62 batches, and the mechanism was this class. A window with minutes and NO units did
+    not flush; its minutes carried forward to be priced whenever yield next arrived. Two
+    consequences, and the run hit both:
+
+      * the carried minutes land on whatever window happens to close next, so a partition's
+        cost is charged to a moment rather than spread over the batches that incurred it.
+        mandelbrot's batches 48 and 49 (0 admissions) were priced at batch 56 against that
+        batch's single unit: sample 1.478 min/unit, which took the price 0.188 -> 0.539
+        against a run aggregate of 0.153. One batch, 2.8x.
+      * a partition that is never served again never flushes, so its last sample is FINAL.
+        Allocation share is deficit/price, so an over-priced partition is served less, and
+        being served less is exactly what stops the price being revised. That is a one-way
+        lockout: mandelbrot's share gap was negative for 38 of its last 62 batches and it
+        ranked 7th of 9 in all of them.
+
+    So the estimator is now a RATIO OF TWO EMAs — minutes over units, each stepped once per
+    served batch — instead of one EMA over per-window RATIOS:
+
+        ema_min   <- (1-a)*ema_min   + a*window_minutes
+        ema_units <- (1-a)*ema_units + a*window_units
+        raw       =  ema_min / max(ema_units, min_units)
+
+    This is not a different estimand, it is the same one computed without the ratio-of-means
+    error: for a window that DOES carry units the update is algebraically a sample EMA on
+    `m/u` with weight `a*u / ((1-a)*ema_units + a*u)` (`sample_weight`) — the units-weighted
+    step of 2026-08-11, but normalized by the evidence actually in hand rather than by a fixed
+    per-unit rate. Thin windows still pull less than thick ones, which is what that change
+    bought and this keeps.
+
+    What it adds is that `u = 0` is now an ORDINARY case rather than a skipped one. The
+    numerator takes the minutes, the denominator decays, and the price RISES — strictly, by
+    `a*m / ((1-a)*ema_units)`, which is finite, bounded per batch, and bounded overall by the
+    clamp band. Nothing is dropped and nothing is deferred: a zero-yield batch is evidence
+    that a partition is expensive, and it is now evidence at the time it is incurred. A run of
+    them raises the price without limit-seeking behaviour because `min_units` floors the
+    denominator at one class-3 — the smallest credit that could arrive next.
+
+    Direction is deliberate. Sustained zero-yield service SHOULD raise a price; the defect was
+    a frozen price and evidence held hostage to a credit that never came, not a high price.
+
+    A window with units but NO charged minutes still does not flush — a zero numerator would
+    price the partition as free, the one direction the allocator amplifies. Its units stay in
+    the window and are spent against the minutes that follow.
+
+    THE CLAMP. `price` never leaves `[seed/clamp, seed*clamp]`. The raw estimate is kept and
     reported so the clamp is visible rather than silent."""
 
     def __init__(self, partitions: list[str], config: dict | None = None):
@@ -602,7 +668,17 @@ class CostToMine:
         self.ema = float(cfg.get("price_ema", PRICE_EMA))
         self.clamp = float(cfg.get("price_clamp", PRICE_CLAMP))
         self.cap_minutes = float(cfg.get("cap_minutes", CAP_MINUTES))
+        self.min_units = float(cfg.get("price_min_units", PRICE_MIN_UNITS))
+        # >= min_units so `raw` starts at exactly the seed: the seed is a price, and the pair
+        # (seed*seed_units, seed_units) is how much evidence it is being given.
+        self.seed_units = max(float(cfg.get("price_seed_units", PRICE_SEED_UNITS)),
+                              self.min_units)
         self.raw = dict(self.seed)
+        # THE TWO ACCUMULATORS `raw` IS THE RATIO OF. Held separately rather than folded into
+        # one EMA because that is the whole fix: a window with zero units has a numerator to
+        # contribute even though it has no ratio to sample.
+        self.ema_min = {p: self.seed[p] * self.seed_units for p in partitions}
+        self.ema_units = {p: self.seed_units for p in partitions}
         self.min_since_credit = {p: 0.0 for p in partitions}
         self.min_spent = {p: 0.0 for p in partitions}
         self.units = {p: 0.0 for p in partitions}
@@ -619,6 +695,8 @@ class CostToMine:
         if p not in self.raw:
             self.seed[p] = SEED_PRICE
             self.raw[p] = SEED_PRICE
+            self.ema_min[p] = SEED_PRICE * self.seed_units
+            self.ema_units[p] = self.seed_units
             self.min_since_credit[p] = 0.0
             self.min_spent[p] = 0.0
             self.units[p] = 0.0
@@ -659,49 +737,49 @@ class CostToMine:
         self.capped.discard(p)
 
     @staticmethod
-    def step(ema: float, units: float) -> float:
-        """The EMA weight for a sample that aggregates `units` of currency.
+    def sample_weight(ema: float, units: float, units_ema: float) -> float:
+        """How hard a window carrying `units` pulls the price, given the evidence already in
+        hand (`units_ema`).
 
-        `1 - (1 - ema)**units` — the compounded weight of applying the per-unit step once per
-        unit. Pure and static so the test asserts the rule rather than a run's output."""
-        return 1.0 - (1.0 - float(ema)) ** max(0.0, float(units))
+        The ratio-of-EMAs update is algebraically a sample EMA on `m/u` at this weight —
+        `a*u / ((1-a)*U + a*u)` — so the rule is assertable as a pure function rather than
+        inferred from a run. Monotone in `units`, in [0, 1), and exactly `ema` when the window
+        carries as much currency as the accumulator already holds.
+
+        ZERO IS THE RIGHT ANSWER AT `units == 0` AND IT IS NOT THE WHOLE STORY: a zero-yield
+        window has no `m/u` to average in, but it still moves the price, through the numerator
+        and through the decay of the denominator. See `end_window`."""
+        d = (1.0 - float(ema)) * float(units_ema) + float(ema) * max(0.0, float(units))
+        return (float(ema) * max(0.0, float(units)) / d) if d > 0 else 0.0
 
     def end_window(self) -> dict:
-        """Close the price window: one EMA sample per partition that has both minutes and
-        units in it. Called once per served batch (`PopQuota.charge`).
+        """Close the price window: one step of both accumulators for every partition with
+        CHARGED MINUTES in it. Called once per served batch (`PopQuota.charge`).
 
-        THE STEP IS UNITS-WEIGHTED (2026-08-11). Batch aggregation fixed WHAT is sampled; this
-        fixes HOW MUCH each sample counts. `end_window` fires once per batch whatever the batch
-        held, so a flat `ema` gives a window carrying 0.1 units — one class-3, the smallest
-        credit there is — the same 0.30 pull on the price as a window carrying 4.0 units of
-        forty times the evidence. That is the surviving half of the bias `price_aggregate` was
-        put beside `price_raw` to expose: the moving `ema_vs_aggregate` outlier
-        (`harvest_v2_readout.cost_to_mine`) is a partition whose EMA is being dragged by its
-        thinnest windows, and it moves run to run because WHICH window is thinnest does.
+        Every served batch prices — a zero-yield batch contributes its minutes to the
+        numerator and nothing to the denominator, which raises the price. The class docstring
+        ("EVERY SERVED BATCH PRICES") carries the mechanism and the run-26 failure it fixes.
 
-        So the weight is `1 - (1 - ema)**units`: the sample counts as much as `units` per-unit
-        steps at the configured rate would, which is 0.30 at exactly one unit and shrinks
-        toward zero as the window thins. Nothing else moves — the same windows flush at the
-        same times with the same `m/u` sample, the seed table and the regularizer are
-        untouched, and the clamp still bounds the result.
-
-        A partition with units but no charged minutes does NOT flush — a zero sample would
-        drag the EMA toward zero and price it as free. Its units stay in the window and are
+        A partition with units but no charged minutes does NOT flush — a zero numerator would
+        drag the price toward zero and quote it as free. Its units stay in the window and are
         spent against the minutes that follow, which is the aggregate the estimand asks for.
-        Returns {partition: sample} for the samples actually taken, so a caller can log what
-        moved rather than diff two price tables."""
+
+        Returns {partition: sample} for every window closed, where the sample is the window's
+        own `minutes/units` rate, or **None** for a zero-yield window — which has no rate but
+        did move the price. A caller can log what moved rather than diff two price tables."""
         taken = {}
         for p in list(self.win_units):
             u, m = self.win_units[p], self.win_min[p]
-            if u <= 0 or m <= 0:
+            if m <= 0:
                 continue
-            sample = m / u
-            a = self.step(self.ema, u)
-            self.raw[p] = (1 - a) * self.raw[p] + a * sample
+            a = self.ema
+            self.ema_min[p] = (1 - a) * self.ema_min[p] + a * m
+            self.ema_units[p] = (1 - a) * self.ema_units[p] + a * u
+            self.raw[p] = self.ema_min[p] / max(self.ema_units[p], self.min_units)
             self.samples[p] = self.samples.get(p, 0) + 1
             self.win_units[p] = 0.0
             self.win_min[p] = 0.0
-            taken[p] = sample
+            taken[p] = (m / u) if u > 0 else None
         return taken
 
     def reopen_caps(self):
@@ -713,14 +791,25 @@ class CostToMine:
         return dict(seed=self.seed, raw=self.raw, min_since_credit=self.min_since_credit,
                     min_spent=self.min_spent, units=self.units, capped=sorted(self.capped),
                     win_min=self.win_min, win_units=self.win_units, samples=self.samples,
-                    ema=self.ema, clamp=self.clamp, cap_minutes=self.cap_minutes)
+                    ema_min=self.ema_min, ema_units=self.ema_units,
+                    ema=self.ema, clamp=self.clamp, cap_minutes=self.cap_minutes,
+                    min_units=self.min_units, seed_units=self.seed_units)
 
     def load_state(self, d: dict):
         for k in ("seed", "raw", "min_since_credit", "min_spent", "units",
-                  "win_min", "win_units"):
+                  "win_min", "win_units", "ema_min", "ema_units"):
             getattr(self, k).update({p: float(v) for p, v in (d.get(k) or {}).items()})
         self.samples.update({p: int(v) for p, v in (d.get("samples") or {}).items()})
         self.capped = set(d.get("capped", []))
+        # A checkpoint written before 2026-08-12 carries `raw` and no accumulators. Rebuild
+        # them from the price it recorded, at the seed's evidence weight: the resumed run
+        # keeps the estimate it stopped on and re-earns its confidence from there. Deriving
+        # this rather than defaulting to the seed is the difference between resuming a run and
+        # restarting its price model.
+        for p in list(self.raw):
+            if p not in (d.get("ema_units") or {}):
+                self.ema_units[p] = self.seed_units
+                self.ema_min[p] = self.raw[p] * self.seed_units
 
     def summary(self) -> dict:
         return dict(price={p: round(v, 3) for p, v in sorted(self.prices().items())},
@@ -735,6 +824,14 @@ class CostToMine:
                     price_aggregate={p: round(self.min_spent[p] / self.units[p], 3)
                                      for p in sorted(self.units) if self.units.get(p, 0) > 0},
                     price_samples={p: v for p, v in sorted(self.samples.items()) if v},
+                    # The DENOMINATOR the EMA price is quoted over, in currency units, and
+                    # whether the `min_units` floor is holding it up. A floored partition is
+                    # one whose recent service produced essentially nothing — its price is a
+                    # censored reading, not a measured rate, and that distinction should not
+                    # need the state dict to recover.
+                    price_evidence={p: round(v, 4) for p, v in sorted(self.ema_units.items())},
+                    price_censored=sorted(p for p, v in self.ema_units.items()
+                                          if v < self.min_units),
                     capped=sorted(self.capped), clamp_factor=self.clamp)
 
 

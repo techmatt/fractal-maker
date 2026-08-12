@@ -45,8 +45,8 @@ ALPHA=0.7). Geometric and not arithmetic because a price is a RATE — the meani
 between 0.1 and 1.0 min/unit is the same as between 1.0 and 10.0.
 
 SEED ONLY — AND THE CLAMP, WHICH IS THE ONE THING HERE THAT IS NOT. `prices` is read exactly
-once by `pop_quota.CostToMine`, into `self.seed`; the in-run batch-aggregated pricing
-(`end_window` -> the EMA in `self.raw`) is untouched and converges to whatever the run
+once by `pop_quota.CostToMine`, into `self.seed`; the in-run per-batch pricing
+(`end_window` -> the estimate in `self.raw`) is untouched and converges to whatever the run
 actually measures. Regularizing a live EMA would be a different and much worse thing — a run
 that cannot learn its own costs. `price_clamp` is carried in the same file because
 `CostToMine` reads it from the same config, and it is a BAND AROUND THE SEED rather than a

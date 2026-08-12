@@ -10,8 +10,9 @@ is the flat seed, and a flat seed makes the first pop of every run allocate on d
 `harvest_v2_readout.cost_to_mine` has been reporting "the prices this run measured, for the
 next one" into a file nothing reads.
 
-THE ESTIMAND IS THE AGGREGATE, NOT THE EMA. `price_raw` is an EMA of per-batch window
-samples; `min_spent / units_mined` is the thing that EMA estimates. Pooling several runs
+THE ESTIMAND IS THE AGGREGATE, NOT THE EMA. `price_raw` is a recency-weighted estimate built
+per served batch (a ratio of two EMAs, minutes over units — `pop_quota.CostToMine`);
+`min_spent / units_mined` is the thing it estimates, over the whole run. Pooling several runs
 therefore sums MINUTES and UNITS and divides once — averaging their EMAs would weight a run
 by how many windows it happened to flush rather than by how much work it did. This is the
 same read that made the v1 sampler's inversion visible
@@ -48,10 +49,12 @@ derived from, and every earlier one stays as a record — `quota_prices_v1.json`
 run. `DEFAULT_OUT` therefore tracks the newest table rather than a stable name, and pointing a
 regeneration at an existing file overwrites a record.
 
-Consumed by `steered_frontier.py --quota-prices <path>`; the file's keys are exactly the
-config `CostToMine.__init__` reads (`prices`, `seed_price`, `price_ema`, `price_clamp`,
+Consumed by `steered_frontier.py --quota-prices <path>`; every key in the file is one
+`CostToMine.__init__` reads (`prices`, `seed_price`, `price_ema`, `price_clamp`,
 `cap_minutes`), and `test_derive_quota_prices.py` round-trips it through that constructor
-rather than re-deriving the expectation here.
+rather than re-deriving the expectation here. The constructor also accepts
+`price_seed_units` / `price_min_units`; those shape the estimator's own accumulators rather
+than the seed table, so they are left at their module defaults and are not written here.
 """
 from __future__ import annotations
 
