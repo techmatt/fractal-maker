@@ -254,6 +254,14 @@ deliberately comprehensive deliverable is the *prompt's* job to declare — it s
 larger target there. **Trivial tasks** (a single commit, a file move) get one console line and
 no file at all.
 
+**The report OPENS with a VERDICT block, ≤10 lines, pasteable into chat as-is.** Before any
+section, before the first work item. It is the whole report for a reader who stops there: per
+work item the outcome and its commit, the verdict on any question the prompt asked, and the
+suite in one line. Numbers carry their population and basis exactly as the body does. No
+preamble, no restating the prompt, no markdown that reads badly unwrapped — so no tables and
+no nested lists inside it. Everything below it is the evidence for it, which means a claim that
+appears only in the body and never in the verdict was not important enough to be in either.
+
 **Report delivery.** After writing the report, copy it and its appendices to
 **`C:\Code\fractal-drive-sync\reports\`**, creating the directory if absent — that tree is
 disposable sync scratch and may have been wiped. Best-effort: a failed copy is one noted line at
