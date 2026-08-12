@@ -41,12 +41,15 @@ factor around whatever seed it is handed, which is the bound that belongs to the
 
     uv run python tools/atlas/derive_quota_prices.py \
         --run-dir data/discovery/steady_state_v2_20260807 \
-        --out data/atlas/quota_prices_20260807.json
+        --out data/atlas/quota_prices_20260812.json
 
 EACH REGENERATION TAKES A NEW DATED `--out`. A measured table is the EVIDENCE a seed was
 derived from, and every earlier one stays as a record — `quota_prices_v1.json`
 (steady_state_v1_20260805) is not superseded by `quota_prices_20260807.json`, it is the other
-run. `DEFAULT_OUT` therefore tracks the newest table rather than a stable name, and pointing a
+run. The same holds for a re-derivation off the SAME run: `quota_prices_20260812.json` is the
+run-2 telemetry re-read after `PRICE_EMA` was halved (a table pins its own `price_ema`, so the
+constant only reaches production through a regeneration), and every price in it is identical to
+`quota_prices_20260807.json`'s — which is exactly why both stay, one per code state. `DEFAULT_OUT` therefore tracks the newest table rather than a stable name, and pointing a
 regeneration at an existing file overwrites a record.
 
 Consumed by `steered_frontier.py --quota-prices <path>`; every key in the file is one
@@ -73,7 +76,7 @@ import pop_quota as pquota                              # noqa: E402
 from tools import paths as _paths                       # noqa: E402
 from tools.corpus import artifacts as _artifacts        # noqa: E402
 
-DEFAULT_OUT = "data/atlas/quota_prices_20260807.json"     # the NEWEST measured table; a new
+DEFAULT_OUT = "data/atlas/quota_prices_20260812.json"     # the NEWEST measured table; a new
 #: derivation takes a new dated name (see the module docstring) — this is not a stable path.
 SCHEMA = "pop_quota_cost_to_mine/1"
 

@@ -476,7 +476,13 @@ ROOT_REFILL_SHARE = 0.25     # in-loop root-draw seconds may not exceed this sha
 # `steady_state_v2_20260807` (357 active min) at alpha=0.9 with a 16x live-EMA band. The
 # run-1 pair (`quota_prices_v1.json` / `..._regularized_v1.json`, 60 warm-up minutes,
 # alpha=0.7, 4x band) stays on disk as the record of what run 2 itself was seeded with.
-QUOTA_PRICES_DEFAULT_REL = "data/atlas/quota_prices_regularized_20260807.json"
+#
+# REGENERATED AT price_ema=0.15 (2026-08-12): `..._regularized_20260812.json`. The SAME run-2
+# telemetry re-derived after `pop_quota.PRICE_EMA` was halved for the per-served-batch
+# estimator — a one-variable change, every seed byte-identical to the 20260807 pair. The table
+# pins its own `price_ema`, so until this default moved, production ran the 0.30 rate the code
+# had already left. The 20260807 pair stays on disk as the previous rung.
+QUOTA_PRICES_DEFAULT_REL = "data/atlas/quota_prices_regularized_20260812.json"
 QUOTA_PRICES_DEFAULT = ROOT / QUOTA_PRICES_DEFAULT_REL
 
 

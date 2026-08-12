@@ -28,6 +28,13 @@ band on the seed. 16x is wide enough to hold every ratio run 2 actually produced
     CLAMP 4x -> 16x    the live EMA is free to reach what the run measures; the seed still
                        orders the early batches and still centres the band.
 
+REGENERATED AT price_ema=0.15 (2026-08-12), same inputs and same policy. `pop_quota.PRICE_EMA`
+was halved when the estimator moved to stepping once per SERVED BATCH, but a deployed table
+PINS its own `price_ema`, so the 20260807 pair kept handing production the 0.30 rate the code
+had already left. Both tables were re-derived from the same `steady_state_v2_20260807`
+telemetry at the same alpha and clamp: every one of the nine seeds is byte-identical and only
+`price_ema` moves. The 20260807 pair stays on disk as the previous rung.
+
 THE ESTIMATOR IS SHRINKAGE, NOT A BOUND, AND THAT IS THE POINT. `derive_quota_prices` refused
 a magnitude band (`[seed/4, seed*4]`) because a clamp cannot tell "implausible" from "the
 thing we ran the run to find out" — at the band edge it reports the BAND, discarding the
@@ -92,8 +99,8 @@ from tools import paths as _paths                       # noqa: E402
 SCHEMA = "pop_quota_cost_to_mine/1"                     # same schema as the measured table:
 #: the CONSUMER contract is identical, only the derivation of `prices` differs.
 
-DEFAULT_SOURCE = "data/atlas/quota_prices_20260807.json"
-DEFAULT_OUT = "data/atlas/quota_prices_regularized_20260807.json"
+DEFAULT_SOURCE = "data/atlas/quota_prices_20260812.json"
+DEFAULT_OUT = "data/atlas/quota_prices_regularized_20260812.json"
 
 # The shrinkage weight on the MEASURED price, in log space. Matt: 0.7 on 2026-08-05, 0.9 on
 # 2026-08-07. 1.0 would be the raw measured table; 0.0 a flat table at the median (the

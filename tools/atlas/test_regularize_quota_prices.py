@@ -190,6 +190,21 @@ def test_the_committed_artifact_loads_into_the_real_consumer():
 # --------------------------------------------------------------------------- #
 # the `--quota-prices` default + absence contract in steered_frontier
 # --------------------------------------------------------------------------- #
+def test_the_deployed_table_pins_the_LIVE_ema_rate():
+    """THE defect this catches, which is the one that happened: a deployed table pins its own
+    `price_ema`, and production reads the TABLE. `pop_quota.PRICE_EMA` went 0.30 -> 0.15 on
+    2026-08-12 when the estimator moved to stepping once per SERVED BATCH, and the seed table
+    kept feeding runs the 0.30 the code had already left — a silent divergence, because both
+    values are valid and neither end says which one the run got. Moving the constant therefore
+    obliges a regeneration (`derive_quota_prices` + `regularize_quota_prices`, same inputs, new
+    dated pair); a table that deliberately pins a different rate has to say so here."""
+    for t in (MEASURED, REGULARIZED):
+        doc = json.loads(t.read_text(encoding="utf-8"))
+        assert doc["price_ema"] == pytest.approx(pquota.PRICE_EMA), t.name
+    import steered_frontier as sf
+    assert sf.load_quota_prices(None)["price_ema"] == pytest.approx(pquota.PRICE_EMA)
+
+
 def test_the_quota_prices_default_is_the_regularized_artifact():
     import steered_frontier as sf
     assert sf.QUOTA_PRICES_DEFAULT == REGULARIZED

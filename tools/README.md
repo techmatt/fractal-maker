@@ -196,8 +196,10 @@ it replaced `tau_h_rederive`'s five-entry hand list with discovery over register
 `regularize_quota_prices.py` (2026-08-05) is the fourth: it shrinks that measured price table
 geometrically toward its own median into `data/atlas/quota_prices_regularized_<date>.json`,
 which is the **default** `--quota-prices` seed and fatal when absent. Reseeded off run 2 on
-2026-08-07 (α=0.7→0.9, live-EMA clamp 4×→16×, source `quota_prices_20260807.json`); the run-1
-pair stays as a record and the live paths are `rq.DEFAULT_SOURCE`/`rq.DEFAULT_OUT`, not literals
+2026-08-07 (α=0.7→0.9, live-EMA clamp 4×→16×, source `quota_prices_20260807.json`), and
+regenerated 2026-08-12 off the same run-2 telemetry at `price_ema` 0.15 (the deployed table pins
+its own rate, so a `pop_quota.PRICE_EMA` move only reaches production through a regeneration —
+every seed byte-identical, `..._20260812.json`); the earlier pairs stay as records and the live paths are `rq.DEFAULT_SOURCE`/`rq.DEFAULT_OUT`, not literals
 — so it is B-live, and A-live by reference (`steered_frontier.QUOTA_PRICES_DEFAULT` names its
 artifact).
 

@@ -295,6 +295,18 @@ at `SEED_PRICE` 3.0** — `julia:mandelbrot` (0 units) and `mandelbrot` (0.3 uni
 being measured. Neither moves an allocation today (both are floor-bound: deficits 0.0 and 3.8
 against price-weighted deficits two orders larger elsewhere), and the carry now guarantees
 they are served and priced next run.
+
+**Regenerated 2026-08-12 at `price_ema` 0.15 — a table pins its own rate, and production reads
+the table.** `pop_quota.PRICE_EMA` was halved 0.30 → 0.15 when the cost estimator moved to
+stepping once per SERVED BATCH (2–3× as often, so the halving preserves the intended memory),
+but the deployed seed carried `price_ema: 0.3` and would have kept handing every run the rate
+the code had already left. Both tables were re-derived from the same `steady_state_v2_20260807`
+telemetry at the same α = 0.9 and 16× band — `..._20260812.json` /
+`..._regularized_20260812.json`, now the `--quota-prices` default — and **all nine seeds are
+byte-identical to the 20260807 pair**, which is the point: it is a one-variable change, and the
+two pairs differ only by the code state each was derived under. The regression gate is
+`test_the_deployed_table_pins_the_LIVE_ema_rate` — moving the constant again obliges a
+regeneration rather than a silent divergence.
 `[code: tools/atlas/test_regularize_quota_prices.py; tools/atlas/test_derive_quota_prices.py]`
 
 ## 4. τ_h on record — the real per-partition curve
