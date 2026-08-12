@@ -159,6 +159,11 @@ __pycache__/
 # vivid blue/orange companion map (the roster pilot sheet's _blue_orange, baked as a
 # render-one colormap library): the label-crop vivid companions rebuild from it — durable.
 !/data/palettes/vivid_blue_orange.json
+# The levels reference (tools/palettes/levels_reference.py): the tone-statistic band the
+# production auto-level projects onto, read off Matt's read-only LevelsCheck folder. That
+# folder lives OUTSIDE the repo, so nothing here rebuilds an earlier band — durable, and a
+# tracked canary (tests/test_tracked_artifacts.py).
+!/data/palettes/levels_reference.json
 # Hand-picked reference test fixtures (load-bearing metadata, not regenerable):
 # the test render locations and the test palette selection.
 !/data/test_renders.json

@@ -1,0 +1,959 @@
+{
+ "schema": "levels_reference/v1",
+ "version": "levels_v1",
+ "what": "Tone-statistic BAND read off Matt's own LevelsCheck wallpapers \u2014 the target the production band auto-level projects onto. A render whose three statistics all sit inside these bands is left EXACTLY untouched.",
+ "source": "C:\\Users\\techm\\Desktop\\GreatWallpapers\\LevelsCheck",
+ "source_is_read_only": true,
+ "n_images": 48,
+ "band_pct": [
+  10.0,
+  90.0
+ ],
+ "band_choice": "[P10, P90] across images keeps the middle 80% of a set already judged good. Narrower (the `iqr` beside it) calls one reference image in four out of range; wider (`minmax`) is one image's opinion at each edge. Stated, not derived \u2014 the sensitivity is in the record.",
+ "definitions": {
+  "black_pt": "P0.5 of OKLab L over NEUTRAL pixels (chroma <= 0.06); null when the chroma guard declares it unmeasurable (neutral share < 0.05, or a neutral black more than 0.1 above the all-pixel black)",
+  "white_pt": "P99.5 of OKLab L, all pixels",
+  "mid": "median OKLab L over the structure mask (L > 0.04)"
+ },
+ "measured_by": "tools/palettes/autolevel.tone_stats (the operator's own measurement)",
+ "bands": {
+  "black_pt": {
+   "n": 43,
+   "band": [
+    0.0,
+    0.3008176722330758
+   ],
+   "median": 0.0731298155880619,
+   "iqr": [
+    0.019136568414915792,
+    0.14486991328445942
+   ],
+   "minmax": [
+    0.0,
+    0.48892890431519653
+   ],
+   "std": 0.1251487671258008,
+   "edge_se": [
+    0.003446272785885465,
+    0.07040525152650805
+   ]
+  },
+  "white_pt": {
+   "n": 48,
+   "band": [
+    0.8629887041113057,
+    0.9960350766711062
+   ],
+   "median": 0.9739716161199973,
+   "iqr": [
+    0.9266932963537081,
+    0.9908366294363604
+   ],
+   "minmax": [
+    0.6741266636647457,
+    0.9999999934735462
+   ],
+   "std": 0.06417577490293362,
+   "edge_se": [
+    0.03129473002910821,
+    0.0016813146622195387
+   ]
+  },
+  "mid": {
+   "n": 48,
+   "band": [
+    0.26632904893221404,
+    0.7380826345879854
+   ],
+   "median": 0.5145452149121339,
+   "iqr": [
+    0.3723720610284901,
+    0.6734484561965337
+   ],
+   "minmax": [
+    0.12416161410958355,
+    0.8634181534011102
+   ],
+   "std": 0.18984216586594083,
+   "edge_se": [
+    0.03878112569399236,
+    0.04422099286759921
+   ]
+  }
+ },
+ "black_unmeasurable": [
+  "command-of-empire-25.jpg",
+  "dolphin-dance-25.jpg",
+  "glowdon.jpg",
+  "orbits-25.jpg",
+  "purple-gourds-25.jpg"
+ ],
+ "derived": "2026-08-11",
+ "command": "uv run python tools/palettes/levels_reference.py --write",
+ "per_image": [
+  {
+   "black_pt": 0.042201499517181794,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.07668521280930217,
+   "black_pt_neutral": 0.042201499517181794,
+   "neutral_frac": 0.1532626953125,
+   "white_pt": 0.9906603934538727,
+   "mid": 0.6384711911043162,
+   "mask_frac": 0.999415771484375,
+   "in_mask_chroma": 0.12164599474466659,
+   "dark_chroma": 0.03912788156939806,
+   "L_mean": 0.5935546786056132,
+   "file": "103489.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.1586255460809887,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.17437857970745255,
+   "black_pt_neutral": 0.1586255460809887,
+   "neutral_frac": 0.6615003171308309,
+   "white_pt": 0.9932187620507251,
+   "mid": 0.6733527751963471,
+   "mask_frac": 0.9996791624451199,
+   "in_mask_chroma": 0.04652684942654054,
+   "dark_chroma": 0.04404661249289875,
+   "L_mean": 0.6621578553295006,
+   "file": "A.png",
+   "size": [
+    1974,
+    1230
+   ]
+  },
+  {
+   "black_pt": 0.193102217258803,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.19775451241174805,
+   "black_pt_neutral": 0.193102217258803,
+   "neutral_frac": 0.573876953125,
+   "white_pt": 0.8650588510844522,
+   "mid": 0.43540794943303257,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.051212615630625465,
+   "dark_chroma": 0.010351218028991499,
+   "L_mean": 0.4666358223487896,
+   "file": "alina-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.12852087250022964,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.15311949826512603,
+   "black_pt_neutral": 0.12852087250022964,
+   "neutral_frac": 0.37200400518513593,
+   "white_pt": 0.9964713445406123,
+   "mid": 0.6518895937157312,
+   "mask_frac": 0.9999609452901682,
+   "in_mask_chroma": 0.07583595793033562,
+   "dark_chroma": 0.0682366267325013,
+   "L_mean": 0.6527656536835621,
+   "file": "B.png",
+   "size": [
+    1960,
+    1228
+   ]
+  },
+  {
+   "black_pt": 0.4197710357476081,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.3797593301120476,
+   "black_pt_neutral": 0.4197710357476081,
+   "neutral_frac": 0.44,
+   "white_pt": 0.9441556072712223,
+   "mid": 0.6854639204596034,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.07028189675638052,
+   "dark_chroma": 0.09575391070266058,
+   "L_mean": 0.6763892629211543,
+   "file": "brisbee.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.16334008775266792,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.16674169872195563,
+   "black_pt_neutral": 0.16334008775266792,
+   "neutral_frac": 0.562939697265625,
+   "white_pt": 0.9223912223617217,
+   "mid": 0.41378092016955675,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.061576318232118225,
+   "dark_chroma": 0.04728051465084124,
+   "L_mean": 0.4435195522206606,
+   "file": "carnival-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.06318755642165338,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.06963529165508729,
+   "black_pt_neutral": 0.06318755642165338,
+   "neutral_frac": 0.800166015625,
+   "white_pt": 0.9958481047270322,
+   "mid": 0.5578517317397053,
+   "mask_frac": 0.998336669921875,
+   "in_mask_chroma": 0.043433503245116654,
+   "dark_chroma": 0.029930345970690993,
+   "L_mean": 0.5537893759279573,
+   "file": "clokette.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": null,
+   "black_unmeasurable": "chromatic dark tail (neutral black 0.531 vs all 0.178)",
+   "black_pt_all": 0.17774532187444023,
+   "black_pt_neutral": 0.5307005457624318,
+   "neutral_frac": 0.333138671875,
+   "white_pt": 0.9701757181143823,
+   "mid": 0.4912249255982836,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.10667295249148086,
+   "dark_chroma": 0.08357770601608897,
+   "L_mean": 0.525636480092668,
+   "file": "command-of-empire-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.05822874226617823,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0676109092645484,
+   "black_pt_neutral": 0.05822874226617823,
+   "neutral_frac": 0.5979975110382373,
+   "white_pt": 0.9859195850460077,
+   "mid": 0.5536052644972155,
+   "mask_frac": 0.9987659009559328,
+   "in_mask_chroma": 0.07144472193840361,
+   "dark_chroma": 0.02809929560345056,
+   "L_mean": 0.5448463246174924,
+   "file": "commons_Kalles_Fraktaler_adventurous-forest_00024_1.17e222.jpg",
+   "size": [
+    2304,
+    1296
+   ]
+  },
+  {
+   "black_pt": 0.48892890431519653,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.48234484257240184,
+   "black_pt_neutral": 0.48892890431519653,
+   "neutral_frac": 0.6340164184570313,
+   "white_pt": 0.9970251853321407,
+   "mid": 0.7994168416306545,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.05394284261285201,
+   "dark_chroma": 0.07887624038342947,
+   "L_mean": 0.7802654103145207,
+   "file": "commons_Mandelbrot_3_Xo_C3_A1y_B_C3_A1nh_Ng_E1_BB_8Dt.jpg",
+   "size": [
+    2560,
+    1280
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.052213097964731954,
+   "white_pt": 0.9076756529286474,
+   "mid": 0.487019020109408,
+   "mask_frac": 0.9717085948022767,
+   "in_mask_chroma": 0.1616198000926087,
+   "dark_chroma": 0.0,
+   "L_mean": 0.5636741717193428,
+   "file": "commons_Mandelbrot_5__E1_BB_90c_D_C3_A3y_B_C3_B4ng.png",
+   "size": [
+    1836,
+    1053
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.5130714708879952,
+   "white_pt": 0.9749482752143322,
+   "mid": 0.8568566205497666,
+   "mask_frac": 0.6729747488440047,
+   "in_mask_chroma": 0.09025392859956735,
+   "dark_chroma": 0.0,
+   "L_mean": 0.5510989670668034,
+   "file": "commons_Mandelbrot_6_R_E1_BB_ABng_Nhi_E1_BB_87t__C4_90_E1_BB_9Bi.png",
+   "size": [
+    2459,
+    1296
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.38744726594720247,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.210153981365085,
+   "white_pt": 0.9907592068593982,
+   "mid": 0.6737354991970937,
+   "mask_frac": 0.9984629288412589,
+   "in_mask_chroma": 0.11697020904553841,
+   "dark_chroma": 0.1192006563824292,
+   "L_mean": 0.6570818664373792,
+   "file": "commons_Mandelbrot_Hai__E1_BB_90c_M_E1_BB_8Bn.png",
+   "size": [
+    1489,
+    1053
+   ]
+  },
+  {
+   "black_pt": 0.24853923151203436,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.2336800670647033,
+   "black_pt_neutral": 0.24853923151203436,
+   "neutral_frac": 0.810431884765625,
+   "white_pt": 0.9625681075295062,
+   "mid": 0.6950657738681881,
+   "mask_frac": 0.999999755859375,
+   "in_mask_chroma": 0.03722579362000361,
+   "dark_chroma": 0.06281295441399774,
+   "L_mean": 0.6764362758894095,
+   "file": "council.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.11959421582987022,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.1270839472296666,
+   "black_pt_neutral": 0.11959421582987022,
+   "neutral_frac": 0.182894775390625,
+   "white_pt": 0.926786765019605,
+   "mid": 0.5105334533601705,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.09926457877502229,
+   "dark_chroma": 0.0517095638694594,
+   "L_mean": 0.4896165783071084,
+   "file": "crisis-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.05766873522356914,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0672046165836612,
+   "black_pt_neutral": 0.05766873522356914,
+   "neutral_frac": 0.5694213025020446,
+   "white_pt": 0.9860490100891287,
+   "mid": 0.5178890507191241,
+   "mask_frac": 0.9984020748000366,
+   "in_mask_chroma": 0.05673785645079037,
+   "dark_chroma": 0.0278789861819335,
+   "L_mean": 0.5317728225021363,
+   "file": "D.png",
+   "size": [
+    1958,
+    1204
+   ]
+  },
+  {
+   "black_pt": 0.3115522151789075,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.26862922116116217,
+   "black_pt_neutral": 0.3115522151789075,
+   "neutral_frac": 0.9470078125,
+   "white_pt": 0.9999999934735462,
+   "mid": 0.756614641521688,
+   "mask_frac": 0.999994384765625,
+   "in_mask_chroma": 0.013168843381903354,
+   "dark_chroma": 0.06022432493389071,
+   "L_mean": 0.7431063448061718,
+   "file": "delicacy.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": null,
+   "black_unmeasurable": "neutral pixels 0.041 < 0.05",
+   "black_pt_all": 0.2817392866627856,
+   "black_pt_neutral": 0.8501545280521535,
+   "neutral_frac": 0.041002685546875,
+   "white_pt": 0.9544686960076466,
+   "mid": 0.44977701988359226,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.11998585563910912,
+   "dark_chroma": 0.11152913994478975,
+   "L_mean": 0.4960954921280472,
+   "file": "dolphin-dance-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.11590681097666498,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.12817023663412935,
+   "black_pt_neutral": 0.11590681097666498,
+   "neutral_frac": 0.1862013683343824,
+   "white_pt": 0.920814884245928,
+   "mid": 0.5112013791051438,
+   "mask_frac": 0.9991922455573505,
+   "in_mask_chroma": 0.0983770774914348,
+   "dark_chroma": 0.049863251130093426,
+   "L_mean": 0.48903930733675316,
+   "file": "E.png",
+   "size": [
+    1966,
+    1238
+   ]
+  },
+  {
+   "black_pt": 0.13111428048793014,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.14479219220807532,
+   "black_pt_neutral": 0.13111428048793014,
+   "neutral_frac": 0.266094482421875,
+   "white_pt": 0.9001197002155464,
+   "mid": 0.5284378656689734,
+   "mask_frac": 0.999996826171875,
+   "in_mask_chroma": 0.0808584763709508,
+   "dark_chroma": 0.031148840984960686,
+   "L_mean": 0.5291411437906408,
+   "file": "echoes-of-the-mind-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0966439325299149,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.11366579602209698,
+   "black_pt_neutral": 0.0966439325299149,
+   "neutral_frac": 0.5027389299517426,
+   "white_pt": 0.9800153462500356,
+   "mid": 0.7020731251835372,
+   "mask_frac": 0.9995352569129502,
+   "in_mask_chroma": 0.060169994795115665,
+   "dark_chroma": 0.017638898013633896,
+   "L_mean": 0.6131204675999465,
+   "file": "F.png",
+   "size": [
+    1973,
+    1228
+   ]
+  },
+  {
+   "black_pt": 0.06327550525357041,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0672046165836612,
+   "black_pt_neutral": 0.06327550525357041,
+   "neutral_frac": 0.8137900390625,
+   "white_pt": 0.9854737341025009,
+   "mid": 0.8066735558496149,
+   "mask_frac": 0.999178466796875,
+   "in_mask_chroma": 0.03762187907835328,
+   "dark_chroma": 0.026769355347518446,
+   "L_mean": 0.6739045295308119,
+   "file": "forgery-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.39931494140625,
+   "white_pt": 0.9666526692611452,
+   "mid": 0.2968111768671142,
+   "mask_frac": 0.968057861328125,
+   "in_mask_chroma": 0.07245163444423228,
+   "dark_chroma": 0.0,
+   "L_mean": 0.3164227716401069,
+   "file": "freedor.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.2769739000243925,
+   "white_pt": 0.9006733590529606,
+   "mid": 0.491393624593246,
+   "mask_frac": 0.883802959062655,
+   "in_mask_chroma": 0.07921544756700152,
+   "dark_chroma": 0.0,
+   "L_mean": 0.4266292598271641,
+   "file": "G.png",
+   "size": [
+    1949,
+    1220
+   ]
+  },
+  {
+   "black_pt": null,
+   "black_unmeasurable": "neutral pixels 0.028 < 0.05",
+   "black_pt_all": 0.14600923984905773,
+   "black_pt_neutral": 0.038273136829831585,
+   "neutral_frac": 0.028200439453125,
+   "white_pt": 0.99345674924787,
+   "mid": 0.6677127304076611,
+   "mask_frac": 0.99974462890625,
+   "in_mask_chroma": 0.14052542056899814,
+   "dark_chroma": 0.06756077713820503,
+   "L_mean": 0.6808292004531943,
+   "file": "glowdon.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0981776704315724,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.1219976391720029,
+   "black_pt_neutral": 0.0981776704315724,
+   "neutral_frac": 0.62671435546875,
+   "white_pt": 0.986970875811594,
+   "mid": 0.5335522887377098,
+   "mask_frac": 0.9996630859375,
+   "in_mask_chroma": 0.051619115032768205,
+   "dark_chroma": 0.014935341428224336,
+   "L_mean": 0.538638285082665,
+   "file": "golden-egg-closeup-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.634027099609375,
+   "white_pt": 0.8581583611739636,
+   "mid": 0.21268354555200603,
+   "mask_frac": 0.915957275390625,
+   "in_mask_chroma": 0.05916254786943476,
+   "dark_chroma": 0.0,
+   "L_mean": 0.2179993906106049,
+   "file": "heat-wave-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.4484947919061583,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.4484947919061583,
+   "black_pt_neutral": 0.4484947919061583,
+   "neutral_frac": 0.949698974609375,
+   "white_pt": 0.9964713445406123,
+   "mid": 0.8634181534011102,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.028563316971309836,
+   "dark_chroma": 0.03306339920213422,
+   "L_mean": 0.8263548851080866,
+   "file": "ivory-and-lace-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.11260925643583374,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.12791872019346553,
+   "black_pt_neutral": 0.11260925643583374,
+   "neutral_frac": 0.31109326171875,
+   "white_pt": 0.9794860539048601,
+   "mid": 0.32359494830177943,
+   "mask_frac": 0.999992919921875,
+   "in_mask_chroma": 0.0787410550996606,
+   "dark_chroma": 0.01850139394505075,
+   "L_mean": 0.43686541285993746,
+   "file": "kirin-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.06699070472820982,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.08650047731039225,
+   "black_pt_neutral": 0.06699070472820982,
+   "neutral_frac": 0.163169921875,
+   "white_pt": 0.9889025941584209,
+   "mid": 0.29840270612203895,
+   "mask_frac": 0.999831298828125,
+   "in_mask_chroma": 0.11363152080300391,
+   "dark_chroma": 0.03533134741724735,
+   "L_mean": 0.40147888236754836,
+   "file": "krinshinda.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.401695556640625,
+   "white_pt": 0.9372198589083568,
+   "mid": 0.14893400722834288,
+   "mask_frac": 0.959052001953125,
+   "in_mask_chroma": 0.07437818615306441,
+   "dark_chroma": 0.01505935351776739,
+   "L_mean": 0.25519917548291987,
+   "file": "lander.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.25853452392235016,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.21601038498034064,
+   "black_pt_neutral": 0.25853452392235016,
+   "neutral_frac": 0.06212451171875,
+   "white_pt": 0.9913002898590506,
+   "mid": 0.7301403459021126,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.1498061941091683,
+   "dark_chroma": 0.1176721101613007,
+   "L_mean": 0.7017177963254565,
+   "file": "limelon.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.05766873522356914,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.062065687245478916,
+   "black_pt_neutral": 0.05766873522356914,
+   "neutral_frac": 0.677109130859375,
+   "white_pt": 0.9530432842818204,
+   "mid": 0.3105941795511904,
+   "mask_frac": 0.9990712890625,
+   "in_mask_chroma": 0.051133042921680485,
+   "dark_chroma": 0.029231414749666968,
+   "L_mean": 0.35789058607206664,
+   "file": "mardeline.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": null,
+   "black_unmeasurable": "neutral pixels 0.004 < 0.05",
+   "black_pt_all": 0.17096655588722845,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.004416748046875,
+   "white_pt": 0.8363008961164086,
+   "mid": 0.3503790467952774,
+   "mask_frac": 0.99967041015625,
+   "in_mask_chroma": 0.1359363517454372,
+   "dark_chroma": 0.06313413913666976,
+   "L_mean": 0.38155303316348727,
+   "file": "orbits-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": null,
+   "black_unmeasurable": "neutral pixels 0.044 < 0.05",
+   "black_pt_all": 0.060865093741945764,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.04381689453125,
+   "white_pt": 0.6741266636647457,
+   "mid": 0.31079073095386417,
+   "mask_frac": 0.99855810546875,
+   "in_mask_chroma": 0.16149778944705898,
+   "dark_chroma": 0.03417994560523068,
+   "L_mean": 0.3277647965533209,
+   "file": "purple-gourds-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.432262451171875,
+   "white_pt": 0.9710230367234445,
+   "mid": 0.6933584084165245,
+   "mask_frac": 0.99330859375,
+   "in_mask_chroma": 0.06642090273294764,
+   "dark_chroma": 0.022719000410505067,
+   "L_mean": 0.6247562612428046,
+   "file": "raishine.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0914878853502279,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.10901383414163783,
+   "black_pt_neutral": 0.0914878853502279,
+   "neutral_frac": 0.663665283203125,
+   "white_pt": 0.9821176342214823,
+   "mid": 0.507895397734215,
+   "mask_frac": 0.999377197265625,
+   "in_mask_chroma": 0.0340960765279468,
+   "dark_chroma": 0.02014652794694159,
+   "L_mean": 0.5273526576560182,
+   "file": "reciprocal-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.202297607421875,
+   "white_pt": 0.9925307560533597,
+   "mid": 0.6834772070392298,
+   "mask_frac": 0.993674072265625,
+   "in_mask_chroma": 0.09624218984010366,
+   "dark_chroma": 0.023893831719652363,
+   "L_mean": 0.6477095279213891,
+   "file": "rolling.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.16717133660767444,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.17887627002201015,
+   "black_pt_neutral": 0.16717133660767444,
+   "neutral_frac": 0.47468994140625,
+   "white_pt": 0.816733246016741,
+   "mid": 0.3828869578830918,
+   "mask_frac": 0.99999462890625,
+   "in_mask_chroma": 0.05807538598150179,
+   "dark_chroma": 0.027291727610906626,
+   "L_mean": 0.39657134734740984,
+   "file": "sevenfold-sapphire-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.042201499517181794,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.07668521280930217,
+   "black_pt_neutral": 0.042201499517181794,
+   "neutral_frac": 0.404164794921875,
+   "white_pt": 0.9599355795078022,
+   "mid": 0.37970306577289425,
+   "mask_frac": 0.998395751953125,
+   "in_mask_chroma": 0.07104106789243839,
+   "dark_chroma": 0.03127664662921917,
+   "L_mean": 0.42993768094342877,
+   "file": "shadalu.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.06976379500027678,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.203620849609375,
+   "white_pt": 0.9879143560503223,
+   "mid": 0.4978235782034781,
+   "mask_frac": 0.996885498046875,
+   "in_mask_chroma": 0.0960126543604295,
+   "dark_chroma": 0.037136572333279015,
+   "L_mean": 0.5288735581748765,
+   "file": "solipstic.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.060865093741945764,
+   "black_pt_neutral": 0.0,
+   "neutral_frac": 0.22497900390625,
+   "white_pt": 0.9936352708167814,
+   "mid": 0.6290570051607498,
+   "mask_frac": 0.99675830078125,
+   "in_mask_chroma": 0.10236002078222693,
+   "dark_chroma": 0.0263018294700458,
+   "L_mean": 0.6180381789385945,
+   "file": "triglandal.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.038273136829831585,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.06673840964046576,
+   "black_pt_neutral": 0.038273136829831585,
+   "neutral_frac": 0.29313134765625,
+   "white_pt": 0.8081710842216412,
+   "mid": 0.20860132506519105,
+   "mask_frac": 0.99782568359375,
+   "in_mask_chroma": 0.09056127058198539,
+   "dark_chroma": 0.035628923367101606,
+   "L_mean": 0.26131566084671354,
+   "file": "twilight-ascending-25.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.10716936272924012,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.11650732264257599,
+   "black_pt_neutral": 0.10716936272924012,
+   "neutral_frac": 0.716936767578125,
+   "white_pt": 0.9910688971672472,
+   "mid": 0.5884190414231337,
+   "mask_frac": 0.999611572265625,
+   "in_mask_chroma": 0.047161413818248545,
+   "dark_chroma": 0.02647718395275366,
+   "L_mean": 0.5809834184233953,
+   "file": "undula.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0676109092645484,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.06976379500027678,
+   "black_pt_neutral": 0.0676109092645484,
+   "neutral_frac": 0.32540380859375,
+   "white_pt": 0.999244334452711,
+   "mid": 0.260490174967928,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.08596330342240227,
+   "dark_chroma": 0.04823212394622692,
+   "L_mean": 0.3696925264317548,
+   "file": "valhalla.jpg",
+   "size": [
+    2560,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.0731298155880619,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.0731298155880619,
+   "black_pt_neutral": 0.0731298155880619,
+   "neutral_frac": 0.756375,
+   "white_pt": 0.9264128903560176,
+   "mid": 0.12416161410958355,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.05651463563132821,
+   "dark_chroma": 0.04426925393694048,
+   "L_mean": 0.19013660575992264,
+   "file": "wallhaven_wallhaven-1joljg.png",
+   "size": [
+    2000,
+    1200
+   ]
+  },
+  {
+   "black_pt": 0.3113884593107569,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.30464089334425226,
+   "black_pt_neutral": 0.3113884593107569,
+   "neutral_frac": 0.2282001953125,
+   "white_pt": 0.9617829345559374,
+   "mid": 0.5365761502440354,
+   "mask_frac": 1.0,
+   "in_mask_chroma": 0.07787823418316472,
+   "dark_chroma": 0.06523775268965987,
+   "L_mean": 0.5678265019310132,
+   "file": "wallhaven_wallhaven-47k2py.jpg",
+   "size": [
+    3200,
+    1600
+   ]
+  },
+  {
+   "black_pt": 0.10514046861692714,
+   "black_unmeasurable": null,
+   "black_pt_all": 0.11034157452460117,
+   "black_pt_neutral": 0.10514046861692714,
+   "neutral_frac": 0.6275913333333333,
+   "white_pt": 0.9729949570256623,
+   "mid": 0.2688314234883366,
+   "mask_frac": 0.9999742222222222,
+   "in_mask_chroma": 0.05989193693375159,
+   "dark_chroma": 0.028540409602642727,
+   "L_mean": 0.3058741722583715,
+   "file": "wallhaven_wallhaven-8xz1mk.jpg",
+   "size": [
+    3000,
+    1500
+   ]
+  }
+ ]
+}

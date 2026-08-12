@@ -150,6 +150,7 @@ def render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt):
     tail (no --coloring spec). Mirrors deploy_tail.render_pure minus the field spec."""
     dt.FIELD_TMP.mkdir(parents=True, exist_ok=True)
     binp = dt.FIELD_TMP / f"{dt._field_stem(loc, 'smooth', w, h, ss)}.bin"
+    lev = None
     try:
         dt._run([str(dt.EXE), "render-one"] + dt._locflags(loc) + [
             "--width", str(w), "--height", str(h), "--supersample", str(ss),
@@ -166,19 +167,26 @@ def render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt):
                                  filter=filt)
         prep = cm.stretch_field(fld)
         img = cm.render_candidate(fld, cfg, dt.lib(), prep=prep)
-        dt._save(img, out_path)
+        # BAND AUTO-LEVEL (switch default OFF) — smooth is a palette-mapped mode like any
+        # other, so the base carrier is in scope. Same seam as deploy_tail's pure path: the
+        # re-render is another LUT over the SAME cached field.
+        lev = dt._level_python(img, palette, out_path,
+                               lambda ovr: cm.render_candidate(fld, cfg, ovr, prep=prep))
+        dt._save(lev.img, out_path)
     finally:
         binp.unlink(missing_ok=True)
         binp.with_suffix(".json").unlink(missing_ok=True)
+    return dt._info({}, lev)
 
 
-def render_wallpaper(dt, cm, loc, style, palette, out_path, w, h, ss, filt):
+def render_wallpaper(dt, cm, loc, style, palette, out_path, w, h, ss, filt) -> dict:
+    """One production wallpaper render. Returns the render's info block — empty while the
+    auto-level switch is off, `{"autolevel": <stamp>}` when it ran."""
     cp = dt._color_params({})       # canonical inherited coloring (transfer=pct, γ1, no reverse)
     if style == "smooth":
-        render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt)
-    else:
-        dt.render_candidate(loc, style, _roster_kind(dt, style), palette, cp,
-                            out_path, w, h, ss, filt)
+        return render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt)
+    return dt.render_candidate(loc, style, _roster_kind(dt, style), palette, cp,
+                               out_path, w, h, ss, filt)
 
 
 # --------------------------------------------------------------------------- #
@@ -1121,8 +1129,10 @@ class EmissionDiversity:
         err = None
         head = None
         stats = None
+        rinfo = {}
         try:
-            render_wallpaper(dt, cm, loc, style, palette, jpg, POOL_W, POOL_H, POOL_SS, POOL_FILT)
+            rinfo = render_wallpaper(dt, cm, loc, style, palette, jpg,
+                                     POOL_W, POOL_H, POOL_SS, POOL_FILT) or {}
             head = heads.score(style, jpg)
             stats = realized_palette_stats(jpg)
             if tracker is not None:
@@ -1166,6 +1176,11 @@ class EmissionDiversity:
                 "scorer_version": row.get("scorer_version"),
             },
         }
+        # The band auto-level's stamp, present ONLY on rows the operator actually produced
+        # (`autolevel.maybe_level` returns no stamp while the switch is off), so a pool row
+        # written under the shipped default is byte-identical to a pre-operator one.
+        if rinfo.get("autolevel"):
+            rec["autolevel"] = rinfo["autolevel"]
         self.pool.append(rec)
         with open(self.colorize_log, "a", encoding="utf-8") as f:
             f.write(json.dumps({
@@ -1640,6 +1655,10 @@ class EmissionDiversity:
                 except Exception:              # noqa: BLE001  truncated/corrupt → re-render
                     png.unlink(missing_ok=True)
             try:
+                # The full-res release render is its OWN render, so the operator measures and
+                # stamps it at release geometry rather than inheriting the 960x540 pool row's
+                # curve. The stamp lands in `<release_dir>/autolevel_stamps.jsonl`, written by
+                # the operator itself (one row per leveled render, keyed by file name).
                 render_wallpaper(dt, cm, loc, r["render_style"], r["palette"], png,
                                  self.rel_w, self.rel_h, self.rel_ss, self.rel_filt)
                 out_paths.append((r["id"], png))

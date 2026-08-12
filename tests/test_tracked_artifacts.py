@@ -87,6 +87,12 @@ TRACKED_CANARIES = [
     # — a different quantity, not a rebuild. Promoted out of scratch/ on 2026-07-31,
     # where a routine `rm -r scratch/*` would have taken it.
     "data/orbital/maxiter_convergence_ladder.json",
+    # The levels reference (tools/palettes/levels_reference.py): the tone-statistic band the
+    # production band auto-level projects onto. Its producer survives, but its SOURCE is 48
+    # wallpapers in a read-only folder OUTSIDE the repo — so if that folder is edited, nothing
+    # in the tree rebuilds the band a released image was leveled against. Unregenerable in
+    # exactly the sense this list requires, and the record every autolevel stamp names.
+    "data/palettes/levels_reference.json",
     # Hand-labeled palette-preference tier stores.
     "data/queries/labels/coldstart_v2.json",
     "data/queries/labels/warmstart_v1.json",

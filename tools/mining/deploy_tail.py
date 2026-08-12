@@ -105,6 +105,7 @@ import colormap as cm                     # noqa: E402
 import location as loc_mod                 # noqa: E402
 import query_sampler as qs                 # noqa: E402
 from tools.emission import floors as F     # noqa: E402  THE stage-2 cut owner (torch-free)
+from tools.palettes import autolevel as AL  # noqa: E402  THE band auto-level (switch: OFF)
 from tools.mining.mining_gate import (  # noqa: E402
     MiningScorer, gate_stamp, MINING_GATE_THRESHOLD, MINING_GATE_VERSION)
 from tools.mining.tail_alloc import allocate_strange, BUDGET_FRAC  # noqa: E402
@@ -257,6 +258,7 @@ def render_pure(loc, mode, palette, cp, out_path, w, h, ss, filt):
     spec = dict(PURE_FIELD_SPEC[mode])
     FIELD_TMP.mkdir(parents=True, exist_ok=True)
     binp = FIELD_TMP / f"{_field_stem(loc, mode, w, h, ss)}.bin"
+    lev = None
     try:
         _run([EXE, "render-one"] + _locflags(loc) + ["--width", str(w), "--height", str(h),
              "--supersample", str(ss), "--coloring", json.dumps(spec), "--dump-field", str(binp)])
@@ -272,14 +274,48 @@ def render_pure(loc, mode, palette, cp, out_path, w, h, ss, filt):
         prep = cm.stretch_field(fld)
         prof = cm.gradient_transfer_profile(fld, prep) if cp["transfer"] == "grad" else None
         img = cm.render_candidate(fld, cfg, lib(), prep=prep, profile=prof)
-        _save(img, out_path)
+        # BAND AUTO-LEVEL (switch default OFF). The re-render is another LUT over the SAME
+        # cached field — no re-iteration, no second engine call — and it only happens when
+        # the curve actually acts; an in-band render comes back as its own bytes.
+        lev = _level_python(img, palette, out_path,
+                            lambda ovr: cm.render_candidate(fld, cfg, ovr, prep=prep,
+                                                            profile=prof))
+        _save(lev.img, out_path)
     finally:
         binp.unlink(missing_ok=True)
         binp.with_suffix(".json").unlink(missing_ok=True)
-    return {"transfer_dropped": False}
+    return _info({"transfer_dropped": False}, lev)
 
 
-def render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt):
+def _level_python(img, palette, out_path, recolor):
+    """The band auto-level over the PYTHON coloring tail: the leveled stops go through
+    `autolevel.OverrideLibrary`, which bakes with `colormap.build_lut` — the same bake, the
+    same mirror flag — so the Rust<->Python LUT seam is untouched and only the stop COLOURS
+    differ. `recolor(library) -> image` is the call site's own recolor, given a library."""
+    entry = lib().colormaps[palette]
+    mirror = bool(entry.get("mirror_needed"))
+    out_path = Path(out_path)
+    return AL.maybe_level(
+        img, entry,
+        lambda stops: recolor(AL.OverrideLibrary(lib(), palette, stops, mirror)),
+        key=out_path.name, log_dir=out_path.parent)
+
+
+def _info(info: dict, lev) -> dict:
+    """Attach the auto-level stamp to a render's info block — and ONLY when there is one.
+
+    With the switch OFF there is no stamp and no key, so every record this pass writes is
+    byte-identical to what it wrote before the operator existed. Presence of `autolevel` is
+    therefore exactly "this render was produced with the operator on"."""
+    if lev is not None and lev.stamp is not None:
+        info = dict(info, autolevel=lev.stamp)
+    return info
+
+
+def render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt, *, level=True):
+    """`level=False` is the DIRECT-trap family: palette-indifferent by construction (one
+    candidate per mode, no palette axis), so there is no LUT for the operator to act on and
+    the auto-level is unreachable there rather than merely disabled."""
     spec = json.loads((REPO / "specs" / f"{SPEC_FILE[mode]}.json").read_text())
     spec.pop("tier", None)
     spec.pop("note", None)
@@ -297,16 +333,43 @@ def render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt):
         spec["rolloff_strength"] = rolloff[1]
     transfer_dropped = cp["transfer"] == "grad"
     FIELD_TMP.mkdir(parents=True, exist_ok=True)
-    tmp_png = FIELD_TMP / f"{loc.family}_{mode}_{w}x{h}.png"
-    try:
+    # Keyed on the OUTPUT stem, not just (family, mode, geometry): the auto-level's second
+    # engine pass reuses this temp, and two renders of the same location at the same geometry
+    # (before/after arms in a verification sheet, two concurrent workers) would otherwise
+    # write and delete one file. Production drives this single-threaded, so the name change
+    # moves no bytes — it just stops the path from being an accident waiting for a caller.
+    stem = f"{Path(out_path).stem}__{loc.family}_{mode}_{w}x{h}"
+    tmp_png = FIELD_TMP / f"{stem}.png"
+    tmp_cmaps = FIELD_TMP / f"{stem}__autolevel.json"
+    lev = None
+
+    def _engine(cmaps_path):
         _run([EXE, "render-one"] + _locflags(loc) + ["--width", str(w), "--height", str(h),
              "--supersample", str(ss), "--filter", filt, "--palette", palette,
-             "--colormaps", POOL_CMAPS, "--coloring", json.dumps(spec), "--out", str(tmp_png)])
+             "--colormaps", str(cmaps_path), "--coloring", json.dumps(spec),
+             "--out", str(tmp_png)])
         with Image.open(tmp_png) as im:
-            _save(np.asarray(im.convert("RGB")), out_path)
+            return np.asarray(im.convert("RGB"))
+
+    try:
+        img = _engine(POOL_CMAPS)
+        if level:
+            # BAND AUTO-LEVEL over the RUST path (switch default OFF). The surgery stays
+            # Python-side and ends in a one-entry colormap JSON under the SAME palette name,
+            # so the engine's bake, mirror flag and spec are bit-identical to the call above
+            # and only the stop colours differ. A curve that acts costs a SECOND engine
+            # render; an in-band one costs nothing.
+            entry = lib().colormaps[palette]
+            lev = AL.maybe_level(
+                img, entry,
+                lambda stops: _engine(AL.one_entry_colormaps(entry, stops, tmp_cmaps)),
+                key=Path(out_path).name, log_dir=Path(out_path).parent)
+            img = lev.img
+        _save(img, out_path)
     finally:
         tmp_png.unlink(missing_ok=True)
-    return {"transfer_dropped": transfer_dropped, "rolloff": rolloff, "spec": spec}
+        tmp_cmaps.unlink(missing_ok=True)
+    return _info({"transfer_dropped": transfer_dropped, "rolloff": rolloff, "spec": spec}, lev)
 
 
 def _save(img_arr, out_path):
@@ -320,7 +383,10 @@ def _save(img_arr, out_path):
 def render_candidate(loc, mode, kind, palette, cp, out_path, w, h, ss, filt):
     if kind == "pure":
         return render_pure(loc, mode, palette, cp, out_path, w, h, ss, filt)
-    return render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt)
+    # The auto-level is a map on the PALETTE, so it reaches every palette-mapped kind and
+    # exactly none of the direct-trap family (palette-indifferent, `kind == "direct"`).
+    return render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt,
+                       level=(kind != "direct"))
 
 
 # --------------------------------------------------------------------------- #
@@ -646,8 +712,13 @@ def main():
             tk = time.time()
             skipped = keep_png.exists()
             if not skipped:
-                render_candidate(loc, c["mode"], c["kind"], c["palette"], c["cp"], keep_png,
-                                 EMIT_W, EMIT_H, EMIT_SS, EMIT_FILT)
+                kinfo = render_candidate(loc, c["mode"], c["kind"], c["palette"], c["cp"],
+                                         keep_png, EMIT_W, EMIT_H, EMIT_SS, EMIT_FILT)
+                # The keeper is a SECOND render (2560x1440 ss4) and the operator measures
+                # what it renders, so the full-res curve is derived at full res and stamped
+                # separately from the scoring crop's. Absent when the switch is off.
+                if kinfo.get("autolevel"):
+                    c["autolevel"] = kinfo["autolevel"]
             c["keep_png"] = str(keep_png.relative_to(REPO))
             smooth_png = REPO / c["row"]["png"].replace("\\", "/")
             sbs = SBS_DIR / f"{c['cid']}_sbs.png"
@@ -663,7 +734,7 @@ def main():
         # 7. Persist the new keepers into the durable alternates state (existing FIXED
         #    rows preserved verbatim). Idempotent: a re-run reads these back as `existing`.
         for c in keepers:
-            all_alts[c["loc_id"]] = {
+            rec = {
                 "loc_id": c["loc_id"], "mode": c["mode"], "kind": c["kind"],
                 "family": c["row"]["location"].get("fractal_type"),
                 "palette": c["palette"], "p_ge3": round(c["p_ge3"], 6),
@@ -671,6 +742,11 @@ def main():
                 "smooth_png": c["row"]["png"], "keeper_png": c.get("keep_png"),
                 "sidebyside": c.get("sbs"),
             }
+            # Only when the operator ran (see `_info`): the durable alternate row is
+            # byte-identical to a pre-operator one while the switch is off.
+            if c.get("autolevel"):
+                rec["autolevel"] = c["autolevel"]
+            all_alts[c["loc_id"]] = rec
         save_alternates(all_alts)
         print(f"[state] alternates.jsonl now holds {len(all_alts)} alternate(s)")
 
@@ -834,6 +910,8 @@ def write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passe
                   "p_ge2": round(c["p_ge2"], 4), "E_ord": round(c["ord"], 4),
                   "passed": c["passed"], "kept": c["cid"] in keep_ids,
                   "transfer_dropped": c["info"].get("transfer_dropped", False)}
+            if c["info"].get("autolevel"):
+                cd["autolevel"] = c["info"]["autolevel"]        # the SCORING crop's curve
             if c["cid"] in keep_ids:
                 cd["gate_stamp"] = c.get("gate_stamp", gate_stamp(c["p_ge3"], scorer.threshold))
                 cd["keeper_png"] = c.get("keep_png")

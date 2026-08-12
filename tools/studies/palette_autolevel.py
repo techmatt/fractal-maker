@@ -58,6 +58,13 @@ import location as loc_mod                              # noqa: E402
 from tools.mining import mining_roster as MR            # noqa: E402  THE mode recipe owner
 from tools.palettes.color import (                      # noqa: E402  THE numpy Oklab reference
     oklab_to_srgb, srgb_to_oklab)
+# The LUT-surgery primitives and the structure-mask floor moved to the PRODUCTION operator
+# (`tools/palettes/autolevel.py`) when the band rule was wired in; they are imported, not
+# re-declared, so the studied surgery and the shipped one cannot drift apart. Re-exported
+# under this module's own names because its own tests and `palette_autolevel_band` reach
+# them as `PA.densify` / `PA._gamut_fit` / `PA.MASK_L`.
+from tools.palettes.autolevel import (                  # noqa: E402,F401
+    DENSIFY, MASK_L, densify, _in_gamut, _gamut_fit)
 
 EXE = str(ROOT / "target/release/fractal-generator.exe")
 POOL_CMAPS = ROOT / "data/palettes/pool_colormaps.json"
@@ -115,13 +122,14 @@ SPECS = {
 #         (which rotates hue).
 # =========================================================================== #
 CLIP_LO, CLIP_HI = 0.5, 99.5      # percentiles for the robust black/white points
-MASK_L = 0.04                     # OKLab L floor of the "structure" mask
+# MASK_L (0.04, the OKLab L floor of the "structure" mask) is imported above from the
+# production operator, which now owns it.
 MID_TARGET = None                 # set from the labeled corpus — see MID_TARGET_BASIS
 MID_TARGET_BASIS = ROOT / "scratch" / "exposure_verify" / "mid_target.json"
 EXP_CLAMP = 2.0                   # p in [0.5, 2.0]
 RHO = 0.0                         # chroma is left alone (see the block comment)
 MIN_RANGE = 0.05                  # w-b below this ⇒ degenerate, no curve proposed
-DENSIFY = 8                       # stop-subdivision factor before the curve is applied
+# DENSIFY (8) is imported above with the surgery it parameterizes.
 
 
 def _mid_target() -> float:
@@ -194,64 +202,10 @@ def apply_curve_L(L: np.ndarray, cur: dict) -> np.ndarray:
 # --------------------------------------------------------------------------- #
 # LUT surgery. `stops` are the colormap-library `[pos, [r,g,b]]` pairs, i.e. exactly
 # what `palette_pick::parse_colormaps` hands to `Palette::from_srgb8_stops_mirrored`.
+# `densify` / `_in_gamut` / `_gamut_fit` are imported from `tools/palettes/autolevel.py`,
+# which owns them now; what stays here is the v2 rule's OWN application (the RHO chroma
+# scale), which the band rule replaced with a per-entry retention cap.
 # --------------------------------------------------------------------------- #
-def densify(stops: list, mirror: bool, k: int = DENSIFY) -> list:
-    """Subdivide each segment `k`-fold, interpolating in OKLab — the SAME space and the same
-    piecewise-linear rule `interp_oklab_cyclic` uses, so this is identity for the palette
-    (to sRGB8 rounding) and only makes the tone curve's sampling finer.
-
-    The wrap segment (last→first, through pos 1) is subdivided ONLY for cyclic maps: a
-    `mirror_needed` palette is re-based by `mirror_stops` onto [p0, p_last], so a stop placed
-    outside that span would change the bake instead of refining it."""
-    s = sorted(((float(p) % 1.0, [int(c) for c in rgb]) for p, rgb in stops), key=lambda x: x[0])
-    lab = [srgb_to_oklab(np.array(rgb, dtype=np.float64) / 255.0) for _, rgb in s]
-    segs = list(range(len(s) - 1))
-    out = []
-    for i in segs:
-        p0, p1 = s[i][0], s[i + 1][0]
-        for j in range(k):
-            f = j / k
-            out.append((p0 + (p1 - p0) * f, lab[i] + (lab[i + 1] - lab[i]) * f))
-    if mirror:
-        out.append((s[-1][0], lab[-1]))
-    else:
-        p0, p1 = s[-1][0], s[0][0] + 1.0
-        for j in range(k):
-            f = j / k
-            out.append(((p0 + (p1 - p0) * f) % 1.0, lab[-1] + (lab[0] - lab[-1]) * f))
-    return out
-
-
-def _in_gamut(lab: np.ndarray) -> tuple:
-    """(is_in_gamut, srgb). `oklab_to_srgb` CLIPS, so "did it clip?" is asked by round-trip:
-    an in-gamut color survives lab→sRGB→lab unchanged, an out-of-gamut one does not. Asking
-    the clipped output whether it is in range instead always answers yes — that bug silently
-    hard-clipped the darkened stops and cost the curve ~0.06 mean L of fidelity."""
-    rgb = oklab_to_srgb(lab.reshape(1, 3)).reshape(3)
-    back = srgb_to_oklab(rgb.reshape(1, 3)).reshape(3)
-    return float(np.max(np.abs(back - lab))) < 1e-6, rgb
-
-
-def _gamut_fit(lab: np.ndarray) -> list:
-    """OKLab → sRGB8, pulling an out-of-gamut color back by CHROMA reduction (bisection on
-    the a/b scale), never by per-channel clipping — clipping rotates hue AND moves L, which
-    is the one axis the curve is supposed to control."""
-    def at(scale):
-        return _in_gamut(np.array([lab[0], lab[1] * scale, lab[2] * scale]))
-
-    ok, rgb = at(1.0)
-    if not ok:
-        lo, hi = 0.0, 1.0
-        for _ in range(28):
-            mid = 0.5 * (lo + hi)
-            if at(mid)[0]:
-                lo = mid
-            else:
-                hi = mid
-        rgb = at(lo)[1]
-    return [int(round(float(np.clip(c, 0.0, 1.0)) * 255.0)) for c in rgb]
-
-
 def curved_stops(stops: list, mirror: bool, cur: dict) -> list:
     """The adjusted stop list: densify, push L through C, scale chroma by (L'/L)**RHO."""
     dense = densify(stops, mirror)

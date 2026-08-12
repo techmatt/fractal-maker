@@ -63,6 +63,14 @@ for _p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "qu
 
 from tools.palettes.color import oklab_to_srgb, srgb_to_oklab      # noqa: E402
 from tools.studies import palette_autolevel as PA                  # noqa: E402
+# THE RULE NOW SHIPS. What this study proposed was adopted and ported to
+# `tools/palettes/autolevel.py` (the production operator) and `tools/palettes/
+# levels_reference.py` (the reference deriver); both are imported here rather than kept as a
+# second copy, so the rule that was measured on these sheets IS the rule the colorize path
+# runs. Everything below is the study DRIVER — populations, arms, sheets, census — which is
+# the half nothing in production wants.
+from tools.palettes import autolevel as AL                         # noqa: E402
+from tools.palettes import levels_reference as LR                  # noqa: E402
 
 
 # =========================================================================== #
@@ -104,122 +112,45 @@ SPECS = {
 
 # =========================================================================== #
 # 2. Measurement (screen space). Same three statistics as v2, plus the chroma guard.
+#    ALL of it now lives in the production operator; these are aliases, not copies —
+#    `test_palette_autolevel_band.py` reaches every one of them as `PB.<name>` and a second
+#    literal would let the study's tests bless a rule the colorize path does not run.
 # =========================================================================== #
-CLIP_LO, CLIP_HI = 0.5, 99.5        # inherited: robust black/white percentiles of OKLab L
-MASK_L = PA.MASK_L                  # inherited: 0.04, the "structure" mask for the midtone
-CHROMA_NEUTRAL = 0.06               # OKLab chroma at or below which a pixel reads as neutral
-NEUTRAL_FRAC_MIN = 0.05             # a neutral subset thinner than this reads no black point
-DARK_MARGIN = 0.10                  # neutral black this far ABOVE the all-pixel black means
-                                    # the dark tail is chromatic -> unmeasurable
-CHROMA_RETAIN = 0.85                # per-entry: post-pullback chroma must keep this share
-EXP_CLAMP = 2.0                     # p in [0.5, 2.0] (inherited)
-MIN_RANGE = 0.05                    # w-b below this => degenerate, no curve proposed
-STAT_KEYS = ("black_pt", "white_pt", "mid")
+CLIP_LO, CLIP_HI = AL.CLIP_LO, AL.CLIP_HI
+MASK_L = AL.MASK_L
+CHROMA_NEUTRAL = AL.CHROMA_NEUTRAL
+NEUTRAL_FRAC_MIN = AL.NEUTRAL_FRAC_MIN
+DARK_MARGIN = AL.DARK_MARGIN
+CHROMA_RETAIN = AL.CHROMA_RETAIN
+EXP_CLAMP = AL.EXP_CLAMP
+MIN_RANGE = AL.MIN_RANGE
+STAT_KEYS = AL.STAT_KEYS
 
-
-def tone_stats(img: np.ndarray) -> dict:
-    """One rendered image (uint8 HxWx3) -> the statistics the band is read on.
-
-    `black_pt` is the GUARDED black point and is the one the rule acts on; `black_pt_all`
-    (every pixel, the v2 definition) is kept beside it so a report can say which images the
-    guard silenced and by how much."""
-    lab = srgb_to_oklab(img.astype(np.float32) / 255.0)
-    L = lab[..., 0]
-    C = np.hypot(lab[..., 1], lab[..., 2])
-    mask = L > MASK_L
-    b_all = float(np.percentile(L, CLIP_LO))
-    w = float(np.percentile(L, CLIP_HI))
-    m = float(np.median(L[mask])) if mask.any() else float(np.median(L))
-    neutral = C <= CHROMA_NEUTRAL
-    nfrac = float(neutral.mean())
-    b_neu = float(np.percentile(L[neutral], CLIP_LO)) if neutral.sum() > 64 else None
-    if b_neu is None or nfrac < NEUTRAL_FRAC_MIN:
-        black, why = None, f"neutral pixels {nfrac:.3f} < {NEUTRAL_FRAC_MIN}"
-    elif b_neu - b_all > DARK_MARGIN:
-        black, why = None, f"chromatic dark tail (neutral black {b_neu:.3f} vs all {b_all:.3f})"
-    else:
-        black, why = b_neu, None
-    return {"black_pt": black, "black_unmeasurable": why, "black_pt_all": b_all,
-            "black_pt_neutral": b_neu, "neutral_frac": nfrac,
-            "white_pt": w, "mid": m,
-            "mask_frac": float(mask.mean()),
-            "in_mask_chroma": float(C[mask].mean()) if mask.any() else 0.0,
-            "dark_chroma": float(C[L <= np.percentile(L, 2.0)].mean()),
-            "L_mean": float(L.mean())}
+tone_stats = AL.tone_stats
 
 
 # =========================================================================== #
 # 3. The reference band.
 # =========================================================================== #
 def measure_reference(sspec: BandSpec) -> dict:
-    """Per-image stats over the read-only LevelsCheck set -> a band per statistic.
+    """Per-image stats over the read-only LevelsCheck set -> a band per statistic, written
+    into the STUDY's own out_dir.
 
-    BAND = [P`band_lo_pct`, P`band_hi_pct`] of the statistic ACROSS images. P10-P90 keeps
-    the middle 80% of a set Matt has already called good: narrower (an IQR) would call one
-    reference image in four out of range, and wider (min-max) is a single image's opinion at
-    each edge. The choice is stated, not derived — the sensitivity of the band's width to
-    that choice is reported beside it."""
-    exts = {".jpg", ".jpeg", ".png", ".webp"}
-    files = sorted(p for p in sspec.ref_dir.iterdir()
-                   if p.is_file() and p.suffix.lower() in exts)
-    per = []
-    for p in files:
-        with Image.open(p) as im:
-            st = tone_stats(np.asarray(im.convert("RGB")))
-        st["file"] = p.name
-        st["size"] = list(Image.open(p).size)
-        per.append(st)
-        print(f"  {p.name:62s} blk {str(st['black_pt'])[:5]:>5s} "
-              f"(all {st['black_pt_all']:.3f})  wht {st['white_pt']:.3f}  "
-              f"mid {st['mid']:.3f}", flush=True)
-
-    def band(vals):
-        v = np.array([x for x in vals if x is not None], dtype=float)
-        if v.size == 0:
-            return None
-        return {"n": int(v.size),
-                "band": [float(np.percentile(v, sspec.band_lo_pct)),
-                         float(np.percentile(v, sspec.band_hi_pct))],
-                "median": float(np.median(v)),
-                "iqr": [float(np.percentile(v, 25)), float(np.percentile(v, 75))],
-                "minmax": [float(v.min()), float(v.max())],
-                "std": float(v.std(ddof=1)) if v.size > 1 else 0.0,
-                # half-width standard error of each band edge, bootstrap over images:
-                "edge_se": _edge_se(v, sspec)}
-    doc = {
-        "source": str(sspec.ref_dir),
-        "n_images": len(per),
-        "band_pct": [sspec.band_lo_pct, sspec.band_hi_pct],
-        "definitions": {
-            "black_pt": f"P{CLIP_LO} of OKLab L over NEUTRAL pixels (chroma <= "
-                        f"{CHROMA_NEUTRAL}); null when the guard declares it unmeasurable",
-            "white_pt": f"P{CLIP_HI} of OKLab L, all pixels",
-            "mid": f"median OKLab L over the structure mask (L > {MASK_L})"},
-        "bands": {k: band([r[k] for r in per]) for k in STAT_KEYS},
-        "black_unmeasurable": [r["file"] for r in per if r["black_pt"] is None],
-        "derived": time.strftime("%Y-%m-%d"),
-        "command": "uv run python tools/studies/palette_autolevel_band.py reference",
-        "per_image": per,
-    }
+    The derivation itself is `tools/palettes/levels_reference.py` — the production deriver,
+    which writes the committed `data/palettes/levels_reference.json`. This entry point stays
+    because the study's `load_bands`/`cmd_census`/`cmd_summary` all read a record beside their
+    own sheets; what it must NOT be is a second implementation of the band, which is why the
+    per-image measurement, the [P10, P90] cut and the bootstrap edge SE all come from there.
+    A study record is a scratch copy of the same derivation, never a rival to it."""
+    per = LR.measure_source(sspec.ref_dir)
+    doc = LR.build(per, src=sspec.ref_dir)
+    doc["command"] = "uv run python tools/studies/palette_autolevel_band.py reference"
     sspec.out_dir.mkdir(parents=True, exist_ok=True)
-    (sspec.out_dir / "levels_reference.json").write_text(json.dumps(doc, indent=1),
-                                                         encoding="utf-8")
+    (sspec.out_dir / "levels_reference.json").write_text(LR.serialize(doc), encoding="utf-8")
     print("\nbands:", json.dumps({k: doc["bands"][k] and doc["bands"][k]["band"]
                                   for k in STAT_KEYS}))
     print("wrote", sspec.out_dir / "levels_reference.json")
     return doc
-
-
-def _edge_se(v: np.ndarray, sspec: BandSpec) -> list:
-    """Bootstrap SE of each band edge over the reference IMAGES — the number that says
-    whether ~35 images is enough to place an edge, rather than whether the band is wide."""
-    rng = np.random.default_rng(0)
-    lo, hi = [], []
-    for _ in range(2000):
-        s = v[rng.integers(0, v.size, v.size)]
-        lo.append(np.percentile(s, sspec.band_lo_pct))
-        hi.append(np.percentile(s, sspec.band_hi_pct))
-    return [float(np.std(lo, ddof=1)), float(np.std(hi, ddof=1))]
 
 
 def load_bands(sspec: BandSpec) -> dict:
@@ -244,104 +175,17 @@ def load_bands(sspec: BandSpec) -> dict:
 # statistics are in band. The black end is skipped entirely (lo = b) when the chroma guard
 # calls it unmeasurable.
 # =========================================================================== #
-def project(x: float, band: tuple) -> tuple:
-    """(projected value, side) — side is -1 below the band, +1 above, 0 inside."""
-    lo, hi = band
-    if x < lo:
-        return lo, -1
-    if x > hi:
-        return hi, +1
-    return x, 0
-
-
-def derive_band_curve(st: dict, bands: dict) -> dict:
-    b_meas, w, m = st["black_pt"], st["white_pt"], st["mid"]
-    b = b_meas if b_meas is not None else st["black_pt_all"]
-    if w - b < MIN_RANGE:
-        return {"applies": False, "reason": f"degenerate range w-b={w - b:.3f} < {MIN_RANGE}",
-                "black_pt": b, "white_pt": w, "exponent": 1.0, "out_ends": [b, w]}
-    if b_meas is None:
-        lo, side_b = b, 0                      # chroma guard: black end left alone
-    else:
-        lo, side_b = project(b_meas, bands["black_pt"])
-    hi, side_w = project(w, bands["white_pt"])
-    m_t, side_m = project(m, bands["mid"])
-    t = (m - b) / (w - b)
-    tgt_n = (m_t - lo) / (hi - lo) if hi > lo else 0.5
-    if not (1e-4 < t < 1 - 1e-4) or not (1e-4 < tgt_n < 1 - 1e-4):
-        p = 1.0
-    else:
-        p = float(np.log(tgt_n) / np.log(t))
-    p = float(np.clip(p, 1.0 / EXP_CLAMP, EXP_CLAMP))
-    ident = (abs(lo - b) < 1e-9 and abs(hi - w) < 1e-9 and abs(p - 1.0) < 1e-9)
-    return {"applies": True, "reason": None, "black_pt": b, "white_pt": w, "mid_in": m,
-            "exponent": p, "out_ends": [lo, hi], "mid_target": m_t, "mid_norm": t,
-            "sides": {"black_pt": side_b, "white_pt": side_w, "mid": side_m},
-            "black_guarded": b_meas is None, "identity": ident,
-            "clamped": abs(p - EXP_CLAMP) < 1e-9 or abs(p - 1.0 / EXP_CLAMP) < 1e-9}
-
-
-def apply_curve_L(L: np.ndarray, cur: dict) -> np.ndarray:
-    """The piecewise curve. Exact identity when out_ends == (black_pt, white_pt) and p == 1."""
-    b, w, p = cur["black_pt"], cur["white_pt"], cur["exponent"]
-    lo, hi = cur["out_ends"]
-    L = np.asarray(L, dtype=np.float64)
-    out = np.empty_like(L)
-    below = L <= b
-    above = L >= w
-    core = ~(below | above)
-    out[below] = L[below] * (lo / b) if b > 1e-9 else lo
-    t = (L[core] - b) / max(w - b, 1e-9)
-    out[core] = lo + (hi - lo) * t ** p
-    out[above] = (hi + (1.0 - hi) * (L[above] - w) / (1.0 - w)) if w < 1.0 - 1e-9 else hi
-    return out
+project = AL.project
+derive_band_curve = AL.derive_band_curve
+apply_curve_L = AL.apply_curve_L
 
 
 # =========================================================================== #
-# 5. LUT surgery with the per-entry chroma cap.
+# 5. LUT surgery with the per-entry chroma cap — also the operator's, also aliased.
 # =========================================================================== #
-def _chroma_after(lab: np.ndarray) -> float:
-    """Chroma that SURVIVES the gamut pullback at this (L, a, b) — i.e. what `_gamut_fit`
-    actually emits, measured back in OKLab so the number is the same quantity as the input."""
-    rgb = np.array(PA._gamut_fit(lab), dtype=np.float64) / 255.0
-    out = srgb_to_oklab(rgb.reshape(1, 3)).reshape(3)
-    return float(np.hypot(out[1], out[2]))
-
-
-def cap_lightness(L: float, Lp: float, a: float, b: float, retain: float = CHROMA_RETAIN,
-                  iters: int = 18) -> tuple:
-    """Walk the new lightness back toward the original until the post-pullback chroma keeps
-    at least `retain` of the original. Returns (lightness, capped?).
-
-    Only the direction that COSTS chroma is capped, and the walk-back target is the entry's
-    own original lightness — where retention is 1.0 by construction (the stop came from a
-    real sRGB8 colour), so the bisection always has a valid bracket."""
-    c0 = float(np.hypot(a, b))
-    if c0 < 1e-6 or abs(Lp - L) < 1e-9:
-        return Lp, False
-    if _chroma_after(np.array([Lp, a, b])) >= retain * c0:
-        return Lp, False
-    good, bad = L, Lp                                  # good retains, bad does not
-    for _ in range(iters):
-        mid = 0.5 * (good + bad)
-        if _chroma_after(np.array([mid, a, b])) >= retain * c0:
-            good = mid
-        else:
-            bad = mid
-    return good, True
-
-
-def curved_stops(stops: list, mirror: bool, cur: dict) -> tuple:
-    """Adjusted stop list + how many entries the chroma cap had to hold back."""
-    dense = PA.densify(stops, mirror)
-    out, n_capped = [], 0
-    for pos, lab in dense:
-        L = float(lab[0])
-        Lp = float(apply_curve_L(np.array([L]), cur)[0])
-        Lc, capped = cap_lightness(L, Lp, float(lab[1]), float(lab[2]))
-        n_capped += int(capped)
-        out.append([round(pos, 9), PA._gamut_fit(np.array([Lc, lab[1], lab[2]]))])
-    return out, n_capped
+_chroma_after = AL._chroma_after
+cap_lightness = AL.cap_lightness
+curved_stops = AL.curved_stops
 
 
 # =========================================================================== #
