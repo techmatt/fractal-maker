@@ -238,6 +238,37 @@ class _Engine:
         return self.ED.write_release_record(self, selected)
 
 
+def test_the_autolevel_stamp_rides_on_the_rows_whose_render_carried_one(store, monkeypatch):
+    """Schema v4. The flip changed what the released IMAGE is, so a decision record that
+    cannot say which image a row was has stopped recording the decision. Two halves:
+
+      * the whole stamp travels (not a summary) — `autolevel.stops_from_stamp` replays the
+        stop list from it alone, so a record carrying only "it acted" would say that the
+        shipped bytes are unreproducible;
+      * a row whose render carried no stamp gets `None`, never a placeholder — after the flip
+        that means the switch was forced off for it, which is a different fact from the far
+        more common `acted: false` (the band accepted the render unchanged)."""
+    import tools.emission.build_emission_diversity_v1 as drv
+    monkeypatch.setattr(drv, "ROOT", store)
+    eng = _Engine(store)
+    stamp = {"operator": "band_autolevel/v1", "switch": "on", "acted": True,
+             "curve": {"applies": True, "identity": False, "black_pt": 0.10,
+                       "white_pt": 0.80, "exponent": 1.2, "out_ends": [0.10, 0.88]},
+             "reference": {"version": "levels_v1", "sha256": "a" * 64}}
+    eng.pool.rows[0]["autolevel"] = stamp                     # e0 -> L0, the selected row
+    eng.pool.rows[1]["autolevel"] = {"operator": "band_autolevel/v1", "acted": False}
+    eng.write_release_record([{"_rec": {"id": "e0"}}])
+
+    rows = RR.read_decisions(SITE)
+    by = {(r["stage"], r["join_key"]): r for r in rows}
+    for stage in (RR.STAGE_GATE, RR.STAGE_RELEASE):
+        got = by[(stage, "L0|smooth|viridis")]["autolevel"]
+        assert got == stamp, f"{stage} row lost the stamp (or summarized it): {got}"
+    assert by[(RR.STAGE_GATE, "L1|smooth|magma")]["autolevel"]["acted"] is False
+    assert by[(RR.STAGE_GATE, "L2|smooth|cubehelix")]["autolevel"] is None
+    assert all(r["schema_version"] == 4 for r in rows)
+
+
 def test_driver_end_to_end_records_gate_and_release(store, monkeypatch):
     import tools.emission.build_emission_diversity_v1 as drv
     monkeypatch.setattr(drv, "ROOT", store)

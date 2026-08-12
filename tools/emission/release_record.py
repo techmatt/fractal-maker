@@ -63,7 +63,16 @@ RECORD_DIR_REL = "data/emission/release_records"
 # it later means asking "which tiles only shipped because of it", which is unanswerable off a
 # record that says only that they shipped. Additive: every v2 field is unchanged, and a v2 row
 # read back simply has no `slot_source`.
-SCHEMA_VERSION = 3
+# v4 (2026-08-11): adds `autolevel` — the band auto-level's stamp for the render the decision
+# was taken on, or None. The operator's switch was flipped ON on this date
+# (`data/palettes/autolevel_adoption.json`), and it changes WHAT THE IMAGE IS: an out-of-band
+# render now ships under a tone curve derived from the committed band. A decision record that
+# says which row shipped, and cannot say which image that row was, has stopped being a record
+# of the decision. The WHOLE stamp is carried, not a summary, because the stamp's own contract
+# is that `autolevel.stops_from_stamp` replays the stop list from it alone — a summary would
+# record that the operator acted while losing the only thing that says how. Additive: every v3
+# field is unchanged, and a v3 row read back simply has no `autolevel`.
+SCHEMA_VERSION = 4
 
 STAGE_GATE = "gate"
 STAGE_RELEASE = "release"
@@ -101,7 +110,7 @@ def _key(run_id: str, stage: str, join_key: str) -> str:
 def decision_row(*, run_id, stage, join_key, location_id, location, partition,
                  morph_cluster, decision, score=None, reason=None, head=None,
                  floor=None, would_pass_floor=None, slot_source=None,
-                 style=None, palette=None) -> dict:
+                 style=None, palette=None, autolevel=None) -> dict:
     """One gate-time or release-time decision.
 
     `join_key`  the candidate's identity within the run (location_id|style|palette) — the join
@@ -123,6 +132,13 @@ def decision_row(*, run_id, stage, join_key, location_id, location, partition,
                 `release_mix` share) or `"mix"`. `None` on gate rows and on every
                 `not_selected` row: a row that took no slot has no slot provenance, and
                 defaulting it to `"mix"` would invent a decision.
+    `autolevel` PROVENANCE (schema v4): the band auto-level's stamp for the render this
+                decision was taken on — the SCORED render, not the full-res release render
+                (which is its own render, measured and stamped separately into
+                `<release_dir>/autolevel_stamps.jsonl`). `None` means the operator did not
+                run for that row, which after the 2026-08-11 flip means the switch was forced
+                off; `acted: false` inside a present stamp is the different and much more
+                common case — the band accepted the render and returned its own bytes.
     """
     return {
         "schema_version": SCHEMA_VERSION,
@@ -142,6 +158,7 @@ def decision_row(*, run_id, stage, join_key, location_id, location, partition,
         "floor": None if floor is None else float(floor),
         "would_pass_floor": None if would_pass_floor is None else bool(would_pass_floor),
         "slot_source": None if slot_source is None else str(slot_source),
+        "autolevel": autolevel or None,
         "reason": reason,
     }
 

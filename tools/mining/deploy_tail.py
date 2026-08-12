@@ -79,6 +79,7 @@ Keep / diversity allocation (tail_alloc.allocate_strange):
 
     uv run python -u tools/mining/deploy_tail.py            # curate the current corpus
     uv run python -u tools/mining/deploy_tail.py --score-only   # gate/select only, no full-res
+    uv run python -u tools/mining/deploy_tail.py --ephemeral --limit 4   # sink-isolated smoke
 """
 from __future__ import annotations
 
@@ -104,8 +105,9 @@ sys.path.insert(0, str(REPO / "tools" / "queries"))
 import colormap as cm                     # noqa: E402
 import location as loc_mod                 # noqa: E402
 import query_sampler as qs                 # noqa: E402
+from tools.emission import emission_sinks as ESINKS  # noqa: E402  central sink-isolation
 from tools.emission import floors as F     # noqa: E402  THE stage-2 cut owner (torch-free)
-from tools.palettes import autolevel as AL  # noqa: E402  THE band auto-level (switch: OFF)
+from tools.palettes import autolevel as AL  # noqa: E402  THE band auto-level (switch: ON, 2026-08-11)
 from tools.mining.mining_gate import (  # noqa: E402
     MiningScorer, gate_stamp, MINING_GATE_THRESHOLD, MINING_GATE_VERSION)
 from tools.mining.tail_alloc import allocate_strange, BUDGET_FRAC  # noqa: E402
@@ -304,9 +306,11 @@ def _level_python(img, palette, out_path, recolor):
 def _info(info: dict, lev) -> dict:
     """Attach the auto-level stamp to a render's info block — and ONLY when there is one.
 
-    With the switch OFF there is no stamp and no key, so every record this pass writes is
-    byte-identical to what it wrote before the operator existed. Presence of `autolevel` is
-    therefore exactly "this render was produced with the operator on"."""
+    Presence of `autolevel` is exactly "this render was produced with the operator on" — and
+    since the operator returns the base render's own bytes on an in-band image, an ON row with
+    `acted: false` is a row the band accepted unchanged. With the switch OFF (the contract the
+    flip kept, `FRACTAL_AUTOLEVEL=0`) there is no stamp and no key at all, so such a record is
+    byte-identical to what this pass wrote before the operator existed."""
     if lev is not None and lev.stamp is not None:
         info = dict(info, autolevel=lev.stamp)
     return info
@@ -509,6 +513,10 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="only the first N emitted locations")
     ap.add_argument("--reset", action="store_true",
                     help="deliberately wipe the durable alternates state and start fresh")
+    ap.add_argument("--ephemeral", action="store_true",
+                    help="THROWAWAY run (shakedown): redirect the mining-gate verdict log "
+                         "under scratch/ and refuse the full-res/alternates half, so nothing "
+                         "reaches data/emission/ or emit_v1's home. Implies --score-only.")
     args = ap.parse_args()
     for s in (sys.stdout, sys.stderr):
         try:
@@ -523,6 +531,24 @@ def main():
     emit_home = args.manifest.resolve().parent
     KEEP_DIR = emit_home / "alternates"
     ALTERNATES = emit_home / "alternates.jsonl"
+    # SINK ISOLATION for a throwaway run, decided BEFORE the first write. This pass has two
+    # durable sinks — the mining-gate verdict log under `data/emission/` (which UPSERTS AND
+    # ACCUMULATES, so a smoke ADDS rows a later calibration cannot tell from a real run's) and
+    # the alternates state + keeper pngs in emit_v1's home. `--ephemeral` redirects the first
+    # through the central binding and forbids the second by forcing `--score-only`; there is
+    # no ephemeral variant of "emit a durable product".
+    if args.ephemeral:
+        args.score_only = True
+        root = ESINKS.smoke_scratch_root(REPO, f"deploy_tail_smoke_{int(time.time())}")
+        ESINKS.use(root)
+        sinks = ESINKS.assert_isolated(REPO, root, "deploy_tail")
+        print(f"[sink] EPHEMERAL — gate log under {root.relative_to(REPO)}; "
+              f"score-only forced (no alternates, no keeper renders)")
+        for s in sinks:
+            print(f"[sink]   {s.relative_to(REPO)}")
+        if args.reset:
+            ap.error("--reset wipes the DURABLE alternates state; it is not a throwaway "
+                     "action and --ephemeral cannot make it one")
     if args.reset:
         _reset_state()
     else:

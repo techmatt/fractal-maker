@@ -167,7 +167,8 @@ def render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt):
                                  filter=filt)
         prep = cm.stretch_field(fld)
         img = cm.render_candidate(fld, cfg, dt.lib(), prep=prep)
-        # BAND AUTO-LEVEL (switch default OFF) — smooth is a palette-mapped mode like any
+        # BAND AUTO-LEVEL (switch default ON since 2026-08-11) — smooth is a palette-mapped
+        # mode like any
         # other, so the base carrier is in scope. Same seam as deploy_tail's pure path: the
         # re-render is another LUT over the SAME cached field.
         lev = dt._level_python(img, palette, out_path,
@@ -180,8 +181,9 @@ def render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt):
 
 
 def render_wallpaper(dt, cm, loc, style, palette, out_path, w, h, ss, filt) -> dict:
-    """One production wallpaper render. Returns the render's info block — empty while the
-    auto-level switch is off, `{"autolevel": <stamp>}` when it ran."""
+    """One production wallpaper render. Returns the render's info block — `{"autolevel":
+    <stamp>}` under the shipped switch (ON since 2026-08-11), empty only with the switch
+    forced off (`FRACTAL_AUTOLEVEL=0`)."""
     cp = dt._color_params({})       # canonical inherited coloring (transfer=pct, γ1, no reverse)
     if style == "smooth":
         return render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt)
@@ -963,6 +965,11 @@ class EmissionDiversity:
                 head=r.get("head"), floor=r.get("floor"),
                 would_pass_floor=(None if r.get("p_ge3") is None
                                   else self.above_pool_floor(r)),
+                # The band auto-level's stamp for the SCORED render — the image this verdict
+                # was actually taken on. Read off the pool row rather than re-derived: the
+                # pool row is what the operator stamped, and a second derivation here could
+                # describe a render nobody made.
+                autolevel=r.get("autolevel"),
                 style=r.get("render_style"), palette=r.get("palette")))
         return rows
 
@@ -1008,6 +1015,7 @@ class EmissionDiversity:
                 head=r.get("head"), floor=self.release_floor_for(r["render_style"]),
                 would_pass_floor=self.would_pass_release_floor(r),
                 slot_source=(self.slot_source or {}).get(r["id"]),
+                autolevel=r.get("autolevel"),      # the scored render's stamp; see decision_row
                 style=r.get("render_style"), palette=r.get("palette")))
         return rows
 
@@ -1176,9 +1184,10 @@ class EmissionDiversity:
                 "scorer_version": row.get("scorer_version"),
             },
         }
-        # The band auto-level's stamp, present ONLY on rows the operator actually produced
-        # (`autolevel.maybe_level` returns no stamp while the switch is off), so a pool row
-        # written under the shipped default is byte-identical to a pre-operator one.
+        # The band auto-level's stamp, present ONLY on rows the operator actually produced.
+        # Under the shipped switch (ON) that is every colored row, `acted` saying whether the
+        # band moved it; with the switch forced off `maybe_level` returns no stamp and the row
+        # is byte-identical to a pre-operator one.
         if rinfo.get("autolevel"):
             rec["autolevel"] = rinfo["autolevel"]
         self.pool.append(rec)
