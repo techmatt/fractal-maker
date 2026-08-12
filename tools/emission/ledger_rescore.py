@@ -140,7 +140,15 @@ def scored_by_active(row) -> bool:
 #
 # THEY COST NO RENDER. Every row is stamped `scorer_version: v11` by the run itself, so
 # `rescore_ledger` VERIFIES rather than re-scores them — the same reason `classic_phoenix` is
-# in the list. A future flip re-scores all ten together.
+# in the list. A future flip re-scores all twelve together.
+#
+# THE RUN-26 LEGS JOINED ON 2026-08-12 (prompts/run26_followup.md step 1), for the same
+# reason and on the same terms: breadth (1,418 admitted) and dive (86), both committed at
+# `28e91db`, both natively v11. Run 26 emitted from TWELVE ledgers — the ten registered plus
+# its own two, passed on the command line — so unlike run 25 its discovery did reach its own
+# release; registering them is what makes that the DEFAULT for the next run instead of a
+# per-run argument. Its phoenix supply came from `classic_phoenix`, already listed, so this
+# run adds two legs and not three.
 # ---------------------------------------------------------------------------- #
 LEDGERS = (
     ("c1_breadth",      "data/discovery/campaign1/breadth/outcome_ledger.jsonl"),
@@ -153,6 +161,8 @@ LEDGERS = (
     ("prod25_breadth",  "data/discovery/prod25_20260809/outcome_ledger.jsonl"),
     ("prod25_dive",     "data/discovery/prod25_20260809_dive/outcome_ledger.jsonl"),
     ("prod25_phoenix",  "data/discovery/prod25_phoenix_native/outcome_ledger.jsonl"),
+    ("prod26_breadth",  "data/discovery/prod26_20260812/outcome_ledger.jsonl"),
+    ("prod26_dive",     "data/discovery/prod26_20260812_dive/outcome_ledger.jsonl"),
 )
 
 SCRATCH = ROOT / "scratch" / "emission" / "ledger_rescore"

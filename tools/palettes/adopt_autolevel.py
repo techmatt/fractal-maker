@@ -35,6 +35,25 @@ OUT_REL = "data/palettes/autolevel_adoption.json"
 ADOPTED_ON = "2026-08-11"
 BUILD_COMMIT = "43a9328"        # the build+stage commit this record adopts
 
+# THE EVIDENCE IS THE DELIVERED REPORTS AND THEIR COMMITS — not scratch paths. Until
+# 2026-08-12 this block named three `scratch/` files, which is an evidence pointer with a
+# lifetime of "until somebody runs `rm -r scratch/*`": the tree is wiped freely and nothing
+# republishes it, so the record would have decayed to three dead paths while still reading as
+# sourced. A report NAME resolves in the delivery tree it was copied to
+# (`C:\Code\fractal-drive-sync\reports\`) and a COMMIT resolves in git forever, so the pair is
+# the durable form of the same claim. `tests/test_scratch_dependency_allowlist.py` is what
+# turned the decayable form into a red suite.
+EVIDENCE = (
+    ("autolevel_band_study_report.md", "1b4af7a",
+     "the band derived off Matt's own 48-image reference set — an in-range image is the "
+     "identity, which is what makes the operator safe to leave on"),
+    ("autolevel_build_stage_report.md", BUILD_COMMIT,
+     "the operator built and wired into the colorize path with the switch OFF, so the flip "
+     "stayed a decision; carries the 12-row production-path verdict quoted below"),
+    ("autolevel_flip_run26_shakedown_report.md", "acc9650",
+     "the switch shipped ON and shaken down end-to-end through deploy_tail"),
+)
+
 
 def record() -> dict:
     ref = AL.load_reference()
@@ -62,17 +81,20 @@ def record() -> dict:
         },
         "evidence": {
             "build_stage_commit": BUILD_COMMIT,
-            "report": "scratch/autolevel_build_stage_report.md",
-            "sheet": "scratch/autolevel_verify/sheet_autolevel_production.png",
-            "verdict": "scratch/autolevel_build_stage_verdict.json",
+            "reports": [{"report": name, "commit": sha, "what": what}
+                        for name, sha, what in EVIDENCE],
+            "where": ("report names as delivered to the sync tree "
+                      r"(C:\Code\fractal-drive-sync\reports\); each commit is the durable "
+                      "half and resolves in git whatever the sync tree holds today"),
             "what_it_showed": (
                 "12 production-path rows: 9 identity rows at max |delta| = 0 exactly (the "
                 "operator returns the base render's own array), 3 acting rows all replaying "
                 "to max |delta| = 0 from the stamp alone, pre-screen vs production render "
                 "disagreeing on 0/12."),
             "rebuild": "uv run python -u tools/palettes/build_autolevel_verify_sheet.py",
-            "caveat": ("The evidence lives in scratch/ and scratch is wiped freely. The sheet "
-                       "rebuilds from the command above; the numbers above are the record."),
+            "caveat": ("The verify sheet was a scratch artifact and is not durable evidence: "
+                       "it rebuilds from the command above. The numbers above and the commits "
+                       "beside each report are the record."),
         },
         "wired_sites": [
             "tools/mining/deploy_tail.py::render_pure (pure modes)",

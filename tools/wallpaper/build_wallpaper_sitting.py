@@ -196,8 +196,9 @@ def log(msg: str):
 # =========================================================================== #
 # 1. Population — the stage-2 admitted intake, and nothing else.
 # =========================================================================== #
-# The ten-ledger admitted union (`ledger_rescore.LEDGERS`, run 25's three legs included since
-# 2026-08-10). The `human_q3plus` library seed that `build_fresh_sheet` unions in is
+# The registered admitted union (`ledger_rescore.LEDGERS` — twelve ledgers since 2026-08-12,
+# run 25's three legs joined 2026-08-10 and run 26's two on 2026-08-12; the count lives there,
+# pinned by `test_ledger_rescore`, and is not restated here). The `human_q3plus` library seed that `build_fresh_sheet` unions in is
 # DELIBERATELY ABSENT: its 168 looks already carry a human 3-or-4 and were served whole on
 # 2026-08-05, and "remainder proportional to intake" is a statement about the intake, which a
 # library snapshot is not part of.
@@ -207,7 +208,7 @@ def population():
     for s in srcs:
         s["vein"] = vein_of(s)
     report = {
-        "source": "the ten-ledger stage-2 admitted union "
+        "source": "the registered stage-2 admitted union "
                   "(tools/emission/ledger_rescore.LEDGERS -> descriptor.load_union_admitted)",
         "ledgers": [rel for _t, rel in LR.LEDGERS],
         "n_population": len(srcs),

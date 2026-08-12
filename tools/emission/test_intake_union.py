@@ -29,11 +29,19 @@ from tools.emission import descriptor as D          # noqa: E402
 from tools.emission import ledger_rescore as LR     # noqa: E402
 from tools.emission import floors as F              # noqa: E402  THE cut owner
 
-# The live census, 2026-08-10, head v11. 2,867 admitted rows over the TEN intake ledgers,
+# The live census, 2026-08-12, head v11. 4,371 admitted rows over the TWELVE intake ledgers,
 # 0 cross-ledger same-location overlaps, 16 bare-id collisions that the namespacing keeps
 # apart. Per ledger: c1_breadth 149, c1_dive 140, c2_breadth 157, c2_dive 157,
 # phoenix_grid 147, classic_phoenix 22, q4_harvest 108, prod25_breadth 1867,
-# prod25_dive 103, prod25_phoenix 17.
+# prod25_dive 103, prod25_phoenix 17, prod26_breadth 1418, prod26_dive 86.
+#
+# 2,867 -> 4,371 (+1,504) ON 2026-08-12 (prompts/run26_followup.md step 1), and unlike the
+# move below it is ONE change: production run 26's two legs joined `ledger_rescore.LEDGERS`,
+# breadth 1,418 + dive 86. Run 26 had already emitted from them by passing them on the command
+# line alongside the ten, so this registration changes no number the run reported — it makes
+# the twelve-ledger union the DEFAULT the next run gets without an argument. Every row is
+# natively v11: no re-score, no render, no overlay. The run's phoenix supply came through
+# `classic_phoenix`, already listed, which is why this is two legs and not three.
 #
 # 881 -> 2,867 (+1,986) ON 2026-08-10 (prompts/sittings_27.md step 0), and it is TWO changes
 # in one edit, which is why both numbers are stated:
@@ -68,7 +76,7 @@ from tools.emission import floors as F              # noqa: E402  THE cut owner
 # THIS PIN IS SUPPOSED TO BREAK ON A RE-SCORE. It is a census — "what the union IS" — and its
 # job is to make a change in the intake population an explicit edit. The standing ALIVE check
 # is the relational floor in test_liveness_census.py, which a legitimate re-score leaves green.
-UNION_ADMITTED = 2867
+UNION_ADMITTED = 4371
 Q4_HARVEST_ADMITTED = 108        # the floor-admit ledger, whole (guard ∧ distinct)
 ID_COLLISIONS = 16
 LOCATION_OVERLAPS = 0
