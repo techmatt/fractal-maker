@@ -69,6 +69,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import paths as _paths                   # noqa: E402  (storage-class helper: bulk() -> out-of-tree)
 import apportion                         # noqa: E402  (THE two apportionment rules; stdlib-only)
 import run_record                        # noqa: E402  (THE segmented run-record layer; stdlib-only)
+from tools import stage_times as stimes  # noqa: E402  (THE per-unit stage timing stream; stdlib-only)
 import discovery_sinks as dsinks         # noqa: E402  (THE sink paths + the feats bulk() class)
 
 # production_seeder wires its own sub-imports (prescreen / reframe / guard / score_lib /
@@ -1435,6 +1436,11 @@ class SteeredFrontier:
         # through `_close_summary`), so it needs no DIVE_IGNORES exemption.
         self.retain_scratch = bool(getattr(args, "retain_scratch", False))
         self._stream_writers: dict = {}          # path -> run_record.SegmentWriter (see _writer)
+        # Per-unit stage timing. Every duration this crawl used to compute and drop —
+        # the pre-loop root draw, each in-loop refill, each served batch, each dive — lands
+        # here as one row, and its stage totals fold into `summary.json`. Purely additive:
+        # nothing reads it back in-run, so a stage timer cannot change what the run does.
+        self.stage_times = stimes.StageTimes(self.run_dir)
         self.state_path = self.run_dir / "state.json"
         self.stop_path = self.run_dir / "STOP"
         self.harvest_log = self.run_dir / "harvest_log.jsonl"
@@ -2204,6 +2210,8 @@ class SteeredFrontier:
         t0 = time.time()
         added = self.draw_roots(only=starved)
         self.root_draw_s += time.time() - t0
+        self.stage_times.record("root_refill", f"refill:{self.batch_i}", time.time() - t0,
+                                families=sorted(starved), roots_added=added)
         for fam in starved:
             self.last_refill_batch[fam] = self.batch_i
         self.totals["root_refills"] = self.totals.get("root_refills", 0) + 1
@@ -4358,6 +4366,14 @@ class SteeredFrontier:
             dt = time.time() - tb
             self.active_s += dt
             self.est_batch_s = dt if self.est_batch_s == 0 else 0.6 * self.est_batch_s + 0.4 * dt
+            # Same line as the crawl's, for the same reason: `dive_log` is keyed on the dive
+            # and has no duration, so a dive that ran 9x the median was previously visible
+            # only in the console. Recorded before the checkpoint, so a kill loses the resume
+            # position rather than the timing of the dive that was in flight.
+            self.stage_times.record(
+                "dive", rec["dive_id"], dt, partition=rec.get("partition"),
+                start_group=rec.get("start_group"), rungs=rec.get("rungs"),
+                end_cause=rec.get("end_cause"), n_admitted=rec.get("n_admitted"))
             done_idx += 1
             self.save_dive_state(plan, done_idx)
             print(f"  {rec['dive_id']} [{rec['start_group']}] start d{rec['start_depth']} "
@@ -4374,6 +4390,10 @@ class SteeredFrontier:
             n_dives_planned=len(plan), n_dives_done=done_idx,
             active_min=round(self.active_s / 60.0, 2), totals=self.totals,
             cloud_sizes={p: len(v) for p, v in self.clouds.items()},
+            # THIS SESSION's stage totals (tools/stage_times.py). The per-unit rows are in
+            # `stage_times.jsonl` beside this file; these are the roll-up, so a reader holding
+            # only the summary gets stage totals and learns the per-unit stream exists.
+            stage_times=self.stage_times.totals(),
         )
         if self.scheduler is not None:      # same stamp as finish(): a dive under --scheduler
             summary["scheduler"] = self.scheduler.summary()   # must be as readable afterwards
@@ -4496,6 +4516,9 @@ class SteeredFrontier:
             _pre_t0 = time.time()
             self.draw_roots()
             self.pre_loop_draw_s = time.time() - _pre_t0
+            self.stage_times.record("root_draw", "preloop", self.pre_loop_draw_s,
+                                    budget_s=round(self.root_draw_budget_s(), 1),
+                                    frontier=len(self.frontier))
             print(f"[root-draw] pre-loop draw took {self.pre_loop_draw_s/60:.1f}m "
                   f"(outside the active and wall caps by design; bounded at "
                   f"{self.root_draw_budget_s()/60:.0f}m)", flush=True)
@@ -4614,6 +4637,16 @@ class SteeredFrontier:
             dt = time.time() - tb
             self.active_s += dt
             self.est_batch_s = dt if self.est_batch_s == 0 else 0.5 * self.est_batch_s + 0.5 * dt
+            # THE per-batch duration, on record. `quota_trace` cannot carry it — that row is
+            # written at PICK time, before the batch it chose has run — and every other
+            # per-row stream here is keyed on a candidate, so until this line `dt` existed
+            # only in a console print and in the quota's aggregate minutes. Recorded BEFORE
+            # the charges below so a kill between the two loses the accounting, not the
+            # evidence of what the run was doing when it died.
+            self.stage_times.record(
+                "frontier_batch", f"batch:{self.batch_i}", dt,
+                partition=self._served_partition, n_expanded=len(batch),
+                n_cands=len(cands), admitted_cum=self.totals["admitted"])
             # scheduler: charge this batch's active time to the served partition (price EMA +
             # attempt-cap accounting). Cross-partition arithmetic only; no p_good.
             if self.scheduler is not None and self._served_partition is not None:
@@ -4672,6 +4705,10 @@ class SteeredFrontier:
             root_draw_min=round(self.root_draw_s / 60.0, 2),
             root_draw_share=(round(self.root_draw_s / (self.active_s + self.root_draw_s), 4)
                              if (self.active_s + self.root_draw_s) > 0 else None),
+            # THIS SESSION's stage totals; per-unit rows in `stage_times.jsonl` beside this
+            # file. `frontier_batch.total_s` is the same quantity `active_min` aggregates,
+            # quoted per stage — a disagreement between them is a batch that ran uncharged.
+            stage_times=self.stage_times.totals(),
             partition_low_water=self.partition_low_water,
             root_refill_cooldown=self.root_refill_cooldown,
             root_refill_share_cap=self.root_refill_share,

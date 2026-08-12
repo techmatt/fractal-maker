@@ -573,6 +573,12 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         "floor_overrides": getattr(eng, "floor_overrides", {}),
         "release_split": getattr(eng, "release_split", {}),
         "palette_ranker": selected[0]["_rec"]["ranker"] if selected else None,
+        # THIS SESSION's stage totals (tools/stage_times.py); the per-unit rows are in
+        # `stage_times.jsonl` beside this file. `release_render` is missing here on purpose
+        # when the release pass has not run yet — this report is written after it, so its
+        # absence means the renders were skipped, not that they were free.
+        "stage_times": (eng.stage_times.totals()
+                        if hasattr(eng, "stage_times") else None),
     }
     summary_path = out / "summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")

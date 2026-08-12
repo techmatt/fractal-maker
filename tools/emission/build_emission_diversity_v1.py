@@ -74,6 +74,7 @@ for p in (ROOT, ROOT / "tools", ROOT / "tools" / "corpus", ROOT / "tools" / "min
         sys.path.insert(0, str(p))
 
 import release_mix as RM                          # noqa: E402  THE release-mix ratio table
+from tools import stage_times as stimes           # noqa: E402  THE per-unit stage timing stream
 from tools.emission import attempt_budget as AB   # noqa: E402  THE colorize attempt budget
 from tools.emission import emission_sinks as ESINKS  # noqa: E402  central sink-isolation
 from tools.emission import floors as F           # noqa: E402  THE stage-2 cut owner
@@ -392,6 +393,11 @@ class EmissionDiversity:
         self.library_dir = (Path(args.library).resolve()
                             if getattr(args, "library", None) else None)
         self.colorize_log = self.out / "colorize_log.jsonl"
+        # Per-unit stage timing (tools/stage_times.py). This builder had NO timing at all
+        # before 2026-08-12 — not per attempt, not per stage — so a run that spent 40 of its
+        # 75 wall minutes in intake looked identical to one that spent them colorizing.
+        # Additive: nothing reads it back, and no cutoff consults it.
+        self.stage_times = stimes.StageTimes(self.out)
         self.floor = float(args.floor)                 # wallpaper-head POOL floor (smooth)
         self.mining_floor = float(args.mining_floor)   # mining-head POOL floor (strange styles)
         self.release_floor = float(args.release_floor)              # wallpaper-head RELEASE floor
@@ -1117,6 +1123,7 @@ class EmissionDiversity:
         Spelled `budget_head`, not `head`: `head` is this function's local for the SCORE dict
         the head returned, and a parameter of that name would be silently overwritten by it
         half way down — the log line would then report the score dict as the paying head."""
+        _t_attempt = time.time()
         loc_id = row["id"]
         ftype = self.partition_of[loc_id]
         cluster = self.cluster_tags[loc_id]
@@ -1204,6 +1211,14 @@ class EmissionDiversity:
                 "above_pool_floor": above_pool,
                 "capped_cell": bool(capped), "error": err,
             }) + "\n")
+        # The attempt's wall cost. Timed from the top of the call (the palette rank is part of
+        # what an attempt costs, not overhead beside it) and recorded here rather than in the
+        # two loops, so the `--cover-all` path and the budgeted path are timed identically.
+        # An attempt that RAISED is a row with `error` set and its seconds still spent —
+        # dropping it would make a failing run read as a fast one.
+        self.stage_times.record("colorize", emid, time.time() - _t_attempt,
+                                type=ftype, style=style, budget_head=budget_head,
+                                passed=passed, error=bool(err))
         return rec
 
     # ---- main colorize loop --------------------------------------------- #
@@ -1663,6 +1678,10 @@ class EmissionDiversity:
                     continue
                 except Exception:              # noqa: BLE001  truncated/corrupt → re-render
                     png.unlink(missing_ok=True)
+            # Timed per render: these are the run's most expensive individual units (ss4 at
+            # wallpaper canon) and their spread is wide, so a stage total alone cannot say
+            # whether a long release pass was N ordinary renders or one pathological one.
+            _t_rel = time.time()
             try:
                 # The full-res release render is its OWN render, so the operator measures and
                 # stamps it at release geometry rather than inheriting the 960x540 pool row's
@@ -1671,8 +1690,13 @@ class EmissionDiversity:
                 render_wallpaper(dt, cm, loc, r["render_style"], r["palette"], png,
                                  self.rel_w, self.rel_h, self.rel_ss, self.rel_filt)
                 out_paths.append((r["id"], png))
+                _rel_err = False
             except Exception as ex:                  # noqa: BLE001
                 print(f"[release] {r['id']} full-res render failed: {ex!r}", flush=True)
+                _rel_err = True
+            self.stage_times.record("release_render", r["id"], time.time() - _t_rel,
+                                    style=r["render_style"], w=self.rel_w, h=self.rel_h,
+                                    ss=self.rel_ss, error=_rel_err)
         return out_paths
 
 
@@ -1773,7 +1797,16 @@ def main():
     import corpus_common as cc
     print(f"[priority] {cc.set_below_normal_priority()}", flush=True)
     eng = EmissionDiversity(args)
-    eng.intake()
+    # The three coarse stages are timed AT THEIR CALL SITES, which is the only place the
+    # boundaries are unambiguous: `intake` and `select_release` are each one call, and
+    # colorize is per-attempt inside `colorize()`. `select` deliberately spans the release
+    # record write — it is part of what "gate/pool/select" costs, and billing it elsewhere
+    # would invite the reader to think the selection was cheap because the write was not
+    # counted.
+    with eng.stage_times.timed("intake", "all") as m:
+        eng.intake()
+        m["n_admitted"] = len(getattr(eng, "rows", ()) or ())
+        m["n_ledgers"] = len(eng.ledgers)
     if not args.select_only:
         eng.run_colorize()
     else:
@@ -1782,8 +1815,10 @@ def main():
         from tools.studies import conditioned_colorize as cond
         _, cell_to_names = cond.load_cell_map()
         eng.build_axes(dt, cell_to_names, dt.lib())
-    selected, sel_log = eng.select_release()
-    rpath, r_tot, r_new, runs_path = eng.write_release_record(selected)
+    with eng.stage_times.timed("select", "all") as m:
+        selected, sel_log = eng.select_release()
+        rpath, r_tot, r_new, runs_path = eng.write_release_record(selected)
+        m["n_selected"] = len(selected)
     print(f"[release-record] durable gate+release record: {r_new} new row(s), {r_tot} "
           f"accumulated → {rpath.relative_to(ROOT)} (population → {runs_path.relative_to(ROOT)})",
           flush=True)

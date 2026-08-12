@@ -1,0 +1,6 @@
+{"stage": "dive", "unit": "dive_003", "dur_s": 45.0, "seq": 0, "source": "log_backfill", "meta": {"start_group": "top", "rungs": 2, "end_cause": "gate_dead_or_floor", "n_admitted": 5, "start_depth": 4, "end_depth": 6}}
+{"stage": "dive", "unit": "dive_026", "dur_s": 62.0, "seq": 1, "source": "log_backfill", "meta": {"start_group": "control", "rungs": 8, "end_cause": "gate_dead_or_floor", "n_admitted": 7, "start_depth": 6, "end_depth": 14}}
+{"stage": "dive", "unit": "dive_014", "dur_s": 86.0, "seq": 2, "source": "log_backfill", "meta": {"start_group": "top", "rungs": 5, "end_cause": "gate_dead_or_floor", "n_admitted": 7, "start_depth": 3, "end_depth": 8}}
+{"stage": "dive", "unit": "dive_000", "dur_s": 359.0, "seq": 3, "source": "log_backfill", "meta": {"start_group": "top", "rungs": 18, "end_cause": "target_depth", "n_admitted": 31, "start_depth": 5, "end_depth": 23}}
+{"stage": "dive", "unit": "dive_001", "dur_s": 536.0, "seq": 4, "source": "log_backfill", "meta": {"start_group": "top", "rungs": 20, "end_cause": "target_depth", "n_admitted": 28, "start_depth": 3, "end_depth": 23}}
+{"stage": "dive", "unit": "dive_020", "dur_s": 257.0, "seq": 5, "source": "log_backfill", "meta": {"start_group": "control", "rungs": 4, "end_cause": "gate_dead_or_floor", "n_admitted": 8, "start_depth": 4, "end_depth": 8}}

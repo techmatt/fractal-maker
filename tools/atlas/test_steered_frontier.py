@@ -410,6 +410,14 @@ def _refill_obj(frontier, families, *, drawn=None, low_water=32, cooldown=10,
         partition_low_water=low_water, root_refill_cooldown=cooldown,
         root_refill_share=share, root_draw_s=root_draw_s, active_s=active_s,
         last_refill_batch={}, totals={})
+    # The refill path RECORDS its duration (tools/stage_times.py) as well as charging it, so
+    # the minimum object now needs a recorder. A collecting stub rather than a no-op: a refill
+    # that spent 212 s and left no row is the same defect as one that spent it and left no
+    # `root_draw_s`, and the tests below assert on both.
+    obj._stage_rows = []
+    obj.stage_times = types.SimpleNamespace(
+        record=lambda stage, unit, dur, **meta: obj._stage_rows.append(
+            dict(stage=stage, unit=unit, dur_s=dur, meta=meta)))
     calls = [] if drawn is None else drawn
     obj.draw_roots = lambda only=None: (calls.append(list(only) if only else None), 7)[1]
     obj._draw_calls = calls
@@ -450,6 +458,13 @@ def test_the_per_partition_mark_fires_on_exactly_the_starved_families():
     assert obj.refill_starved() == 7
     assert obj._draw_calls == [["multibrot3", "multibrot4", "multibrot5"]]
     assert obj.totals["root_refills"] == 1 and obj.totals["root_refill_families"] == 3
+    # ...and the refill leaves a timing row naming the families it drew for. In-loop root
+    # draws were 3.5 of this smoke's 14.4 wall minutes, so a refill that costs minutes and
+    # reports only a cumulative total is a stage nobody can size.
+    (row,) = obj._stage_rows
+    assert row["stage"] == "root_refill" and row["unit"] == f"refill:{obj.batch_i}"
+    assert row["meta"]["families"] == ["multibrot3", "multibrot4", "multibrot5"]
+    assert row["meta"]["roots_added"] == 7 and row["dur_s"] >= 0.0
 
 
 def test_a_healthy_frontier_draws_nothing():
@@ -460,6 +475,7 @@ def test_a_healthy_frontier_draws_nothing():
     obj = _refill_obj(frontier, ["mandelbrot", "multibrot3"])
     assert obj.refill_starved() == 0 and obj._draw_calls == []
     assert obj.totals.get("root_refills", 0) == 0
+    assert obj._stage_rows == [], "a refill that did not happen must not be timed as one"
 
 
 def test_julia_twins_and_phoenix_are_never_asked_for_a_root_draw():
