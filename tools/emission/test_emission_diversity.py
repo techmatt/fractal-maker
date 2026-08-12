@@ -826,16 +826,22 @@ def test_gate_report_pairs_the_pool_site_like_the_release_site(tmp_path, monkeyp
 
 
 def test_a_site_with_no_pool_stage_logs_no_pool_pairing(tmp_path, monkeypatch):
-    """`deploy_tail` has no pool stage. Its rows must not grow a `pooled` field claiming an
-    outcome nobody reported, and its pool counts must read zero rather than zero-of-zero
-    dressed as a measurement."""
+    """A site that gates straight to a keep decision has no pool stage. Its rows must not grow a
+    `pooled` field claiming an outcome nobody reported, and its pool counts must read zero rather
+    than zero-of-zero dressed as a measurement.
+
+    `deploy_tail` was the one such site and was retired 2026-08-12, leaving
+    `emission_diversity_v1` (which HAS a pool stage) as the only live writer. The property is
+    kept and exercised on a synthetic site rather than deleted with its one example: it is a
+    property of `gate_report`'s row shape, and the next site to log a one-stage gate is the
+    caller it protects."""
     from tools.mining import gate_report as GR
     monkeypatch.setattr(GR, "GATE_LOG_DIR", tmp_path / "gr2")
-    row = GR.gate_report_row(site="deploy_tail", key="k", location={}, style="tia",
+    row = GR.gate_report_row(site="keeper_only_site", key="k", location={}, style="tia",
                              palette="p", p_ge3=0.10, release_threshold=0.50,
                              selected=False, selection_stage="keeper")
     assert "pooled" not in row and "would_cut_pool" not in row
-    _p, _t, _c, _cs, pool_c = GR.write_gate_report("deploy_tail", [row])
+    _p, _t, _c, _cs, pool_c = GR.write_gate_report("keeper_only_site", [row])
     assert pool_c["n_with_pool_site"] == 0
 
 

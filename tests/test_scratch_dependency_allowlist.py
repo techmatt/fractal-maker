@@ -108,10 +108,15 @@ ALLOWLIST = [
           INPUT, "same FRAMES table.", "until q4_sweep_validation retires"),
     Entry("scratch/deep_centers/ladder_p35/fw_8p07e_10.png", "tools/sourcing/deep_center_finder.py",
           INPUT, "same FRAMES table.", "until q4_sweep_validation retires"),
-    Entry("scratch/mining/deploy_tail/report.json", "tools/mining/deploy_tail.py", INPUT,
+    Entry("scratch/mining/deploy_tail/report.json",
+          "tools/mining/deploy_tail.py `main()` — DELETED 2026-08-12", INPUT,
           "library_records_build reads the deploy-tail report to build data/library/"
-          "library_records.jsonl — a durable artifact with a scratch input.",
-          "until the library records are rebuilt"),
+          "library_records.jsonl — a durable artifact with a scratch input. The PRODUCER is "
+          "now gone with the deploy-tail driver, so this row names a path nothing writes: the "
+          "47 committed records were built 2026-07-13 from the pilot run's report and cannot "
+          "be re-derived. Kept as INPUT because the reader is still committed and the file is "
+          "still what it would read.",
+          "DEAD producer — the records are frozen; rebuilding needs a new mode-candidacy source"),
     Entry("scratch/palette_preview/dramatic-test/densified.json", "tools/palettes/densify.py",
           INPUT, "preview_render's --colormaps default.",
           "regenerable — a wipe costs a re-densify"),
@@ -154,15 +159,12 @@ ALLOWLIST = [
     # (prompts/selection_restructure_3.md), so the entry named a path nothing writes and a
     # tool nothing runs. The keeper calibration is not re-derivable and does not need to be:
     # there is one flat `floors.GOOD_FLOOR` and no per-partition bar to calibrate.
-    Entry("scratch/wallpaper/emit_v1/manifest.jsonl",
-          "tools/wallpaper/emit_v1.py `main()` — DELETED 2026-08-11", INPUT,
-          "deploy_tail's EMIT_MANIFEST — the emission it scores the tail of. The directory "
-          "was already wiped when the v1 emission driver was retired (docs/design/"
-          "retired.md), so the row now names a path with NO producer: deploy_tail's default "
-          "--manifest cannot be regenerated and must be pointed at a real emission record. "
-          "Kept rather than deleted because the literal is still in deploy_tail.py, and a "
-          "dead default that reads as live is exactly what this ledger is for.",
-          "DEAD — the producer is gone; wipe freely"),
+    # `scratch/wallpaper/emit_v1/manifest.jsonl` left this ledger on 2026-08-12. It was
+    # `deploy_tail`'s `EMIT_MANIFEST` default and had had no producer since `emit_v1.main` was
+    # deleted the day before; the row survived that deletion for one reason — "the literal is
+    # still in deploy_tail.py" — and the deploy-tail driver took the literal with it. Both ends
+    # of the dependency are now gone, which is the one condition under which a row leaves this
+    # file rather than being re-pointed (`test_no_dead_ledger_entry` would fail on it).
     Entry("scratch/wallpaper/emission_dryrun_colorcells.json",
           "tools/studies/archive/emission_dryrun_v2gate.py", INPUT,
           "self-cache of an ARCHIVED study; listed so the archive is not mistaken for a "

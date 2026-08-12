@@ -155,6 +155,10 @@ LOCATION_HEAD = "location_head"         # the ACTIVE_CKPT quality head (intake-s
 # `deploy_tail` now filters through `mining_gate.MiningScorer.gate`, this constant is untouched,
 # and the SHARED-SCALE property below is a POLICY about what 0.20 means, not a claim about how
 # many sites read it today. A future mining-scale colorize-pool draw is free to read it again.
+# THEN THE READER ITSELF WENT (2026-08-12): the deploy-tail driver was retired, taking both its
+# gate filter and its `n_above_junk` counterfactual count. So this constant now has exactly one
+# CALLER, not merely one enforcing site — and the mining scale has no acting cut of any kind
+# (`MiningScorer.gate` has no caller either). Neither number moved; only readers left.
 #
 # 0.20 IS DELIBERATELY COARSE. It is not an operating point and no eval derived it; it is the
 # "confidently junk" end of a CORN P(>=3) scale, chosen so it removes the obvious waste and

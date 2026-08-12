@@ -159,6 +159,8 @@ class MiningScorer:
         return out
 
     def gate(self, p_ge3: float) -> bool:
+        # NO ACTING SITE since 2026-08-12: its only caller was `deploy_tail`'s allocation-input
+        # filter, retired with that driver, so this threshold now annotates everywhere.
         return float(p_ge3) >= self.threshold
 
     def stamp(self, p_ge3: float) -> dict:

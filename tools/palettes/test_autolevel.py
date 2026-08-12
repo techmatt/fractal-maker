@@ -313,7 +313,7 @@ def test_the_direct_trap_family_is_unreachable_by_construction():
 def test_the_switch_off_render_info_is_byte_identical_to_the_pre_operator_block():
     """With no stamp there is no key, so every record the wired passes write under the
     switch forced OFF is exactly what they wrote before the operator existed."""
-    from tools.mining import deploy_tail as dt           # noqa: PLC0415  (imports torch)
+    from tools.mining import deploy_tail as dt           # noqa: PLC0415  (renders on import path)
     before = {"transfer_dropped": False}
     assert dt._info(dict(before), None) == before
     assert dt._info(dict(before), AL.Leveled(np.zeros((2, 2, 3), np.uint8), None)) == before

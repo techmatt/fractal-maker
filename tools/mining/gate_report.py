@@ -21,10 +21,17 @@ Why here and not scratch/: the log must survive `rm -r scratch/*`, so it is comm
 score already lives and is silently wiped). See CLAUDE.md "Persistent-store convention".
 
 Idempotent + accumulating: rows are UPSERT-by-`key` then rewritten sorted. A re-run over
-an unchanged corpus re-derives identical rows -> the file is byte-identical (so a
-deploy_tail no-op stays a no-op); a grown corpus adds new keys and preserves the rest.
-Deterministic because the mining head is fp32/no-autocast (mining_gate.py) -> p_ge3 is
-reproducible.
+an unchanged corpus re-derives identical rows -> the file is byte-identical; a grown corpus
+adds new keys and preserves the rest. Deterministic because the mining head is
+fp32/no-autocast (mining_gate.py) -> p_ge3 is reproducible.
+
+ONE LIVE WRITER since 2026-08-12: `emission/build_emission_diversity_v1` (site
+`emission_diversity_v1`). `deploy_tail` was the second and was retired with its driver; it
+never wrote a durable row under it — `data/emission/mining_gate_reports/` has only ever held
+`emission_diversity_v1.jsonl`, because deploy_tail's one run after the 2026-08-11 repoint was
+`--ephemeral` and redirected the log under `scratch/`. The accrued rows stay as the record they
+are; nothing here is site-specific (`site` is a parameter), so the retirement removed a caller
+and no code path.
 """
 from __future__ import annotations
 

@@ -175,10 +175,12 @@ def test_the_summary_still_names_an_added_cut(monkeypatch):
 # 4. the ONE enforcing cut (2026-08-09)
 # --------------------------------------------------------------------------- #
 def test_the_junk_floor_is_the_only_enforcing_cut_and_it_is_semantic():
-    """It is a bare float, not a `Floor`, and that is the design: it reads on TWO different
-    heads (stage-1 at emission intake, mining at deploy_tail) and a stamp names one. What
-    keeps it honest across a head flip is that it is DECLARED SCALE-FREE and left alone (see
-    the test below), not a stamp check and not a restatement."""
+    """It is a bare float, not a `Floor`, and that is the design: it was written to read on TWO
+    different heads (stage-1 at emission intake, mining at `deploy_tail`) and a stamp names one.
+    What keeps it honest across a head flip is that it is DECLARED SCALE-FREE and left alone (see
+    the test below), not a stamp check and not a restatement. The mining-scale reader is gone
+    twice over now — repointed 2026-08-11, retired with the deploy-tail driver 2026-08-12 — and
+    the constant is unchanged by either, which IS the property."""
     assert F.JUNK_FLOOR == 0.20
     assert not any(f.value == F.JUNK_FLOOR for f in F.ALL_FLOORS)
     assert "ENFORCING" in F.summary() and str(F.JUNK_FLOOR) in F.summary()
@@ -187,42 +189,82 @@ def test_the_junk_floor_is_the_only_enforcing_cut_and_it_is_semantic():
     assert all(F.JUNK_FLOOR < f.value for f in (F.WALLPAPER_POOL, F.WALLPAPER_RELEASE))
 
 
-def test_the_junk_floor_still_sits_above_both_mining_cuts_but_no_longer_reads_on_that_head():
-    """How the 2026-08-11 inversion was RESOLVED, pinned where it can rot.
+def test_the_junk_floor_still_sits_above_both_mining_cuts_and_no_mining_cut_acts_at_all():
+    """The 2026-08-11 inversion and the 2026-08-12 retirement that ended it, pinned together.
 
     The sheet-F crossover put the mining gate at 0.0949 and the pool floor at 0.0, both BELOW
     0.20, so the colorize-pool draw started removing rows the gate passes — 132 of them, 455 of
     the 827 reference-pool rows clearing 0.20 against 587 clearing the gate. The arithmetic
-    inversion is still there (first assert) and is NOT what was fixed: Matt's call was to move
-    the READER, not the number. `deploy_tail` filters its allocation input through
-    `mining_gate.MiningScorer.gate` as of 2026-08-11, so nothing reads `JUNK_FLOOR` on the mining
-    scale and the inversion no longer cuts anything. The constant is untouched and its stage-1
-    reader is untouched (the two tests below).
+    inversion is still there (first assert) and was never what was fixed: on 2026-08-11 Matt
+    moved the READER, repointing `deploy_tail` at `mining_gate.MiningScorer.gate`; on 2026-08-12
+    the deploy-tail DRIVER was retired and took that call site with it.
 
-    Asserted at the source rather than by importing `deploy_tail`, which pulls torch: the claim
-    is that the ONE mining-scale reader is gone and the filter resolves through the gate's own
-    owner, and both are visible in the text. Record:
-    data/render_mode_head/v3/mining_gate_lock_2026-08-11.md."""
+    So the mining scale now has NO acting cut anywhere: `MINING_RELEASE` is a `Floor` and a
+    `Floor` cannot remove a row, `MINING_POOL` is 0.0, `rank_select` holds no floor, and
+    `MiningScorer.gate` — the last comparison that removed anything on this head — has no caller
+    left. That is asserted by an AST scan rather than a text one, because the retirement's own
+    record NAMES the retired call site in prose and a text scan cannot tell a eulogy from a call.
+    Records, both untouched as provenance: data/render_mode_head/v3/mining_gate_lock_2026-08-11.md
+    (the 0.0949 crossover) and scratch/deploy_tail_recon_report.md (the retirement)."""
     assert F.JUNK_FLOOR > F.MINING_RELEASE.value > F.MINING_POOL.value
     assert F.MINING_POOL.value < F.MINING_RELEASE.value        # the invariant that still holds
     assert "0.0949" in F.MINING_RELEASE.basis and "CROSSOVER" in F.MINING_RELEASE.basis
     assert "CONSEQUENCE" in F.MINING_POOL.basis
 
-    dt = (ROOT / "tools" / "mining" / "deploy_tail.py").read_text(encoding="utf-8")
-    filt = [ln for ln in dt.splitlines() if ln.lstrip().startswith("alloc_input = [")]
-    assert len(filt) == 1, f"deploy_tail must build its allocation input once, got {filt}"
-    assert "scorer.gate(" in filt[0], \
-        "the allocation input must resolve through the gate's owner (MiningScorer.gate), " \
-        f"not a floor and not a fresh literal: {filt[0]!r}"
-    assert "passes_junk_floor" not in filt[0]
+    callers = _gate_call_sites()
+    assert callers == [], (
+        f"`MiningScorer.gate` has a caller again: {callers}. It has had NO acting site since "
+        f"2026-08-12, so a new one is a decision to make 0.0949 cut somewhere — re-derive it "
+        f"against the head that site scores on, or route the row past it.")
+
+
+def _gate_call_sites() -> list:
+    """`["<file>:<line>", ...]` for every `<x>.gate(...)` call in tracked non-test Python.
+
+    AST, not regex: the only remaining textual mentions of the retired call are in the prose
+    that records its retirement, and a scan that cannot distinguish those from a live call is a
+    scan that will be edited away the next time someone writes the history down."""
+    import ast
+    import subprocess
+    out = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT, capture_output=True, text=True)
+    if out.returncode != 0:
+        pytest.skip("git unavailable")
+    hits = []
+    for rel in out.stdout.splitlines():
+        norm = rel.replace("\\", "/")
+        if Path(norm).name.startswith("test_"):
+            continue
+        try:
+            tree = ast.parse((ROOT / norm).read_text(encoding="utf-8", errors="ignore"))
+        except SyntaxError:                    # not ours to police here
+            continue
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "gate"):
+                hits.append(f"{norm}:{node.lineno}")
+    return sorted(hits)
+
+
+def test_the_gate_call_scan_is_not_vacuous(tmp_path, monkeypatch):
+    """The assertion above passes by evaluating EMPTY, which is exactly the shape that goes
+    quiet when the scanner breaks (verification_practice.md §5). Point it at a planted tree and
+    it must SEE the call it is supposed to be watching for."""
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "planted.py").write_text(
+        "def f(scorer, p):\n    return [c for c in p if scorer.gate(c)]\n", encoding="utf-8")
+    import subprocess
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
+    assert _gate_call_sites() == ["tools/planted.py:2"]
 
 
 def test_the_junk_floor_removes_a_row_at_ONE_site_and_it_is_the_location_scale_one():
     """The consequence of the repoint above, stated as a census so a second mining-scale reader
     cannot appear unnoticed. `ranked_intake` (stage-1 location head `p_good`) is THE site that
-    drops a row on this floor. `deploy_tail` still calls the comparison — that is deliberate and
-    is the difference this test has to see: it COUNTS the floor's counterfactual on the
-    candidates the gate admitted (`n_above_junk`, a report field) and never filters on it.
+    drops a row on this floor, and since 2026-08-12 it is the ONLY caller of the comparison at
+    all: `deploy_tail` kept one counterfactual COUNT of it after the repoint (`n_above_junk`, a
+    report field), and that went with the deploy-tail driver.
 
     Not "no other file may mention it": `floors.py`'s own docs, the readouts that print the
     number and the audit that measures the inversion all name it and none of them removes a row.
@@ -242,13 +284,11 @@ def test_the_junk_floor_removes_a_row_at_ONE_site_and_it_is_the_location_scale_o
         hits = [ln.strip() for ln in src.splitlines() if call.search(ln)]
         if hits:
             callers[norm] = hits
-    assert set(callers) == {"tools/emission/ranked_intake.py", "tools/mining/deploy_tail.py"}, \
-        (f"the junk floor's callers are {sorted(callers)}; since 2026-08-11 it is read at ONE "
-         f"colorize-pool draw (stage-1) plus one counterfactual count. A new caller is a "
-         f"decision about what 0.20 means on that site's head, not a detail.")
-    assert all(ln.startswith("n_above_junk =") for ln in callers["tools/mining/deploy_tail.py"]), \
-        (f"deploy_tail may only COUNT with the junk floor, never filter on it: "
-         f"{callers['tools/mining/deploy_tail.py']}")
+    assert set(callers) == {"tools/emission/ranked_intake.py"}, \
+        (f"the junk floor's callers are {sorted(callers)}; since 2026-08-12 it is read at ONE "
+         f"colorize-pool draw (stage-1) and nowhere else. A new caller is a decision about what "
+         f"0.20 means on that site's head, not a detail — and on the MINING head specifically "
+         f"it would re-open the 2026-08-11 inversion, since 0.20 sits above both mining cuts.")
 
 
 def test_the_junk_floor_is_declared_PERMANENT_shared_scale_at_the_constant_and_in_the_protocol():

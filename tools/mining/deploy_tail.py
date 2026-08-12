@@ -1,100 +1,70 @@
-"""Render-mode deploy tail — production curation pass over the emission corpus.
+"""Render-mode candidate RENDERING — the roster, the recipes, and the three render paths.
 
-Runs ON DEMAND over the ACCUMULATED corpus of emitted wallpapers (the smooth winners
-`emit_v1` has already produced). NOT wired inline into `emit_v1`'s loop: at ~15-24
-emissions/run the 25% budget's per-mode floors round to 0 and never engage; they only
-bite across the accumulated corpus (floor >= 1 needs N >~ 4*(n+2) = 36 at n=7). `emit_v1`
-and the smooth emission path stay untouched — this pass only ADDS strange-mode alternates
-alongside the smooth wallpapers, never overwriting them.
+WHAT THIS IS NOW (2026-08-12). The deploy-tail DRIVER was retired on this date
+(prompts/deploy_tail_recon.md, Matt): `main()`, the `--ephemeral` lane, the alternates state
+and the diversity allocation behind it (`tail_alloc.py`) are gone. What is left is the LIBRARY
+HALF — six live importers take the roster, the canonical inherited coloring and the render
+dispatch from here, so the module stays exactly as `emit_v1` stayed when its own driver went:
+delete the dead `main()`, keep what has readers.
 
-The candidate roster is DERIVED from the mode registry (specs/modes_registry.json,
-`tier == "promoted"`), NOT hardcoded — deploy_tail follows whatever set is promoted there
-(the single source of truth), minus `smooth` (the base carrier emit_v1 already ships). See
-`load_promoted_roster`. Kept alternates are DURABLE product: they live in emit_v1's emission
-home alongside the smooth wallpapers they are alternates of (co-located manifest + pngs,
-shared lifecycle), not in the disposable mining scratch tree.
+WHY THE DRIVER WENT, in one paragraph, so this is not rediscovered. It curated the ACCUMULATED
+emission corpus of `emit_v1`: for each already-emitted smooth wallpaper it rendered the promoted
+strange modes over that location's INHERITED approved palette, scored them through the locked
+mining gate, and kept a diversity-allocated ~25% as alternate wallpapers alongside the smooth
+ones. Two facts ended it. Its input had no producer — `emit_v1.main` was deleted 2026-08-11 and
+`scratch/wallpaper/emit_v1/manifest.jsonl` has been unwritable since. And the run path already
+MAKES its product: `attempt_budget.plan` walks each partition's rank-ordered supply from index 0
+ONCE PER HEAD, so the same top location is planned for a smooth attempt and a strange attempt in
+one run, and both are released at the same 2560x1440 ss4 canon. The one capability that went
+with it, recorded rather than left to be found: this pass varied ONLY the mode over a palette a
+human had already approved (a controlled A/B on a known-good coloring), where the run path picks
+(flavor, style) jointly by deficit and never re-uses a released row's palette.
 
-For each already-emitted location (smooth winner + its approved palette/params chosen
-upstream by emit_v1), render a lean set of strange-mode candidate variants over the
-INHERITED approved palette, score each with the LOCKED mining gate
-(`tools/mining/mining_gate.MiningScorer`, `mining_pins.MINING_GATE_THRESHOLD` on marginal
-p_ge3), and keep a diversity-allocated set as alternate wallpapers.
+THE COST THE RETIREMENT BOOKED. `alloc_input = [c for c in cands if scorer.gate(...)]` lived
+here and was the ONLY caller of `mining_gate.MiningScorer.gate` in the tree. With it gone,
+`MINING_GATE_THRESHOLD` (0.0949) has no acting site anywhere: `floors.MINING_RELEASE` is a
+`Floor` and cannot remove a row, `floors.MINING_POOL` is 0.0, and `selection.rank_select` holds
+no floor. The gate is ANNOTATION EVERYWHERE as of this date. The 0.0949 lock and its
+superseded-by chain (`data/render_mode_head/v3/mining_gate_lock_2026-08-11.*`) are untouched as
+provenance — a frozen measurement record keeps what was true when it was written.
 
-WHAT FILTERS THE ALLOCATION INPUT IS THE GATE (`MiningScorer.gate`), as of 2026-08-11.
-Drawing this allocation IS drawing a colorize pool, and for that reason it read
-`floors.JUNK_FLOOR` (0.20) from 2026-08-09 — the same coarse constant the emission intake
-reads on its own judging head. The sheet-F crossover put the gate at 0.0949, BELOW that floor,
-so the pool draw had started cutting rows the gate passes (132 of 587 on the reference pool);
-Matt's 2026-08-11 call is that this site filters at the gate. `JUNK_FLOOR` did not move — it
-stays permanent shared-scale and still filters the emission intake — and its counterfactual on
-this run's candidates stays in the report. Every gate verdict is RECORDED per candidate in the
-committed log `data/emission/mining_gate_reports/deploy_tail.jsonl`
-(`tools/mining/gate_report.py`), paired with the keep decision; "below the gate but kept
-anyway" is 0 by construction again, because the gate is what draws the input. The
-head/threshold stay LOCKED (we never retrain or re-threshold here).
-
-Incremental / idempotent state (the load-bearing production delta over the pilot):
-  * The durable state is `alternates.jsonl` (the kept strange alternates). On each run
-    the pass reads it; existing alternates are FIXED — counted toward the 25% budget B
-    and toward their modes' floors (via tail_alloc's `existing=`), their locations
-    locked out. Only locations WITHOUT an alternate are re-rendered/scored, and only the
-    remaining shortfall (B - #existing) is allocated over them. Never churns or re-emits
-    an existing alternate; deterministic.
-  * Re-running over an UNCHANGED corpus is a no-op: budget is a ceiling that a correct
-    prior run already filled (or exhausted supply), so the shortfall is 0 -> no new
-    allocation; scoring crops are cached (skip-if-exists) and the full-res keeper render
-    is skip-if-exists too -> no new renders, no re-emits. Verified each run (§checks).
-
-Load-bearing (see prompts/deploy_tail_emit_wirein_prompt.md + the memories):
-  * GATE IS LOCKED — we IMPORT `MiningScorer`; never retrain / re-threshold. Keepers
-    carry `gate_stamp(p_ge3)`.
-  * SCORE CHEAP, FULL-RES ONLY FOR KEEPERS — candidates render + score at the head's
-    label geometry (1280x720 ss2 lanczos3 jpg, == render_mode dataset_v1). Only variants
-    that PASS the gate AND survive the quota render at 2560x1440 ss4 (wallpaper canon).
-  * MODE RENDER PATHS DIFFER (== tools/render_mode_pilot/render_scale_batch.py, the
-    dataset_v1 recipe the head learned):
+WHAT IS STILL HERE, and who reads it:
+  * `ROSTER` / `load_promoted_roster` — the candidate roster DERIVED from the mode registry
+    (`specs/modes_registry.json`, `tier == "promoted"`), minus `smooth` (the base carrier).
+    Promote or demote a mode there and every reader follows with no edit here. A promoted mode
+    with no render recipe below is RETURNED as `unmapped` and skipped, never guessed.
+    Read by `emission/build_emission_diversity_v1.render_styles` (the live emission driver).
+  * `_color_params` — THE canonical inherited coloring (transfer=pct, gamma 1, no
+    reverse/phase/cycles at its `{}` default). Four sheet builders call it for exactly that:
+    it is the recipe that applies to a palette nothing has ever fitted a head to.
+  * `render_candidate` / `render_pure` / `render_rust` — the three MODE RENDER PATHS, which
+    differ and must (== `render_mode_pilot/render_scale_batch.py`, the dataset_v1 recipe the
+    mining head learned):
       - pure  (tia, stripe): render-one --dump-field <mode field> -> colormap.render_candidate
-        with the FULL inherited param set. Bit-faithful. Field dump keyed with the
-        render-mode token (loc_mod.field_mode_token) so it NEVER collides with the cached
+        with the FULL inherited param set. Bit-faithful. The field dump is keyed with the
+        render-mode token (`loc_mod.field_mode_token`) so it can NEVER collide with the cached
         smooth field.
       - composite (C13, C17): render-one --coloring @spec --palette (Rust, grad-less).
       - direct  (direct_trap_multiply, direct_trap_screen): render-one --coloring @spec,
         palette-indifferent (ONE candidate per direct-trap mode, no palette axis).
-        direct_trap_screen at its sweet spot (opacity 0.15 / threshold 0.08, at/under the
-        source cap) + the dataset_v1 soft_knee@0.35 highlight rolloff.
-  * normal_map OFF for all modes (none of the specs enable it; `shade:none` composites).
-
-Keep / diversity allocation (tail_alloc.allocate_strange):
-  * `MiningScorer.gate` (p_ge3 >= the pinned threshold) filters the allocation input; it was
-    `floors.JUNK_FLOOR` from 2026-08-09 to 2026-08-11, and the 0.50 release floor before that.
-    AT MOST ONE strange alternate per location. The p_ge3 quality ORDER within the allocation
-    is unchanged by which cut is used — the filter decides the input set, not the order.
-  * Strange budget B = round(0.25 * n_emitted) is a CEILING across the batch.
-  * Keepers are SPREAD across modes for diversity (not abundance-biased): each mode
-    gets a floor ~B/(n+2), the surplus (~2/(n+2)*B) lands on the abundant modes by
-    quality. Starved modes degrade gracefully; total passers < B -> keep all, never
-    pad. Because a location may pass in several modes, this is a BATCH-LEVEL
-    assignment (each location fills at most one mode's slot). See tail_alloc.py.
-    Existing (fixed) alternates seed the allocation via `existing=` (above).
-
-    uv run python -u tools/mining/deploy_tail.py            # curate the current corpus
-    uv run python -u tools/mining/deploy_tail.py --score-only   # gate/select only, no full-res
-    uv run python -u tools/mining/deploy_tail.py --ephemeral --limit 4   # sink-isolated smoke
+        direct_trap_screen at its sweet spot (opacity 0.15 / threshold 0.08) + the dataset_v1
+        soft_knee@0.35 highlight rolloff.
+    `normal_map` is OFF for all modes (no spec enables it; `shade:none` composites).
+  * The BAND AUTO-LEVEL seam (`_level_python`, `_info`, and `level=(kind != "direct")`). The
+    operator is reached ONLY through `autolevel.maybe_level` — one switch, not two — and the
+    direct-trap family is excluded where the KIND is known rather than by a flag inside the
+    render, because a palette-indifferent mode has no LUT for it to act on.
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
-import os
-import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
@@ -105,41 +75,16 @@ sys.path.insert(0, str(REPO / "tools" / "queries"))
 import colormap as cm                     # noqa: E402
 import location as loc_mod                 # noqa: E402
 import query_sampler as qs                 # noqa: E402
-from tools.emission import emission_sinks as ESINKS  # noqa: E402  central sink-isolation
-from tools.emission import floors as F     # noqa: E402  THE stage-2 cut owner (torch-free)
 from tools.palettes import autolevel as AL  # noqa: E402  THE band auto-level (switch: ON, 2026-08-11)
-from tools.mining.mining_gate import (  # noqa: E402
-    MiningScorer, gate_stamp, MINING_GATE_THRESHOLD, MINING_GATE_VERSION)
-from tools.mining.tail_alloc import allocate_strange, BUDGET_FRAC  # noqa: E402
 
 EXE = str(REPO / "target/release/fractal-generator.exe")
 POOL_CMAPS = str(REPO / "data/palettes/pool_colormaps.json")
 MODES_REGISTRY = REPO / "specs" / "modes_registry.json"   # SOURCE OF TRUTH for mode promotion
 
-EMIT_MANIFEST = REPO / "scratch/wallpaper/emit_v1/manifest.jsonl"
-OUT_DIR = REPO / "scratch/mining/deploy_tail"   # DISPOSABLE scratch (scoring crops, fields, sbs, reports)
-SCORE_CROPS = OUT_DIR / "scoring_crops"     # 1280x720 candidate jpgs (kept for eyeball+parity)
-FIELD_TMP = OUT_DIR / "_fields"             # disposable field dumps (deploy-tail-owned, token'd)
-SBS_DIR = OUT_DIR / "sidebyside"            # smooth-vs-kept comparisons (regenerable eyeball view)
+OUT_DIR = REPO / "scratch/mining/deploy_tail"   # DISPOSABLE scratch (this module's own tree)
+FIELD_TMP = OUT_DIR / "_fields"             # disposable field dumps (module-owned, token'd)
 
-# DURABLE product lives in emit_v1's emission home, NOT the mining scratch tree: a finished
-# 2560x1440 alternate is product and must sit ALONGSIDE the smooth wallpaper it is an alternate
-# of, so the two share one lifecycle (co-located manifest + pngs; a manifest that outlives its
-# pngs is dangling state). Bound in main() from the manifest's parent so they track wherever
-# emit_v1 emits (default scratch/wallpaper/emit_v1/).
-KEEP_DIR = None                             # <emit_home>/alternates  — full-res keeper pngs
-ALTERNATES = None                           # <emit_home>/alternates.jsonl — DURABLE incremental state
-LEGACY_KEEP_DIR = OUT_DIR / "keepers"       # pilot home (pre-relocation) — migrated on first run
-LEGACY_ALTERNATES = OUT_DIR / "alternates.jsonl"
-
-# scoring geometry == render_mode dataset_v1 (the head's label crops).
-SC_W, SC_H, SC_SS, SC_FILT = 1280, 720, 2, "lanczos3"
 JPG_Q = 95
-# full-res keeper geometry == wallpaper canon (render-one locked default / emit_v1).
-EMIT_W, EMIT_H, EMIT_SS, EMIT_FILT = 2560, 1440, 4, "lanczos3"
-
-# strange budget as a fraction of emitted locations (diversity allocation, tail_alloc).
-STRANGE_BUDGET_FRAC = BUDGET_FRAC            # 0.25
 
 # ---- candidate roster (DERIVED from the mode registry, not hardcoded) ------ #
 # kind: pure -> dump field + colormap tail; composite/direct -> Rust --coloring.
@@ -169,11 +114,11 @@ MODE_PARAMS = {"direct_trap_screen": {"direct_threshold": 0.08, "direct_opacity"
 
 def load_promoted_roster():
     """Candidate roster = the modes promoted in the SOURCE OF TRUTH (modes_registry.json,
-    `tier == "promoted"`), NOT a hardcoded list. `smooth` is the base carrier emit_v1 already
-    ships, so it is excluded (an alternate that re-rendered smooth would dupe the shipped
-    wallpaper) — deploy_tail only adds STRANGE alternates alongside smooth. Each promoted mode
-    maps to its dataset_v1 render recipe (pure field vs composite/direct spec); a promoted mode
-    with NO recipe here is REPORTED and skipped, never guessed. Returns (roster, unmapped)."""
+    `tier == "promoted"`), NOT a hardcoded list. `smooth` is the base carrier the emission path
+    already ships, so it is excluded (a strange candidate that re-rendered smooth would dupe
+    it). Each promoted mode maps to its dataset_v1 render recipe (pure field vs composite/direct
+    spec); a promoted mode with NO recipe here is RETURNED as unmapped and skipped, never
+    guessed. Returns (roster, unmapped)."""
     reg = json.loads(MODES_REGISTRY.read_text(encoding="utf-8"))
     promoted = [e["spec"] for e in reg if e.get("tier") == "promoted" and e["spec"] != "smooth"]
     roster, unmapped = [], []
@@ -227,7 +172,8 @@ def _run(cmd, retries=1):
 
 
 def _color_params(emit_params: dict) -> dict:
-    """Inherited approved coloring, defaulted to what emit_v1 emitted (transfer=pct)."""
+    """THE canonical inherited coloring, defaulted to what the emission path emits
+    (transfer=pct). `_color_params({})` is the recipe four sheet builders reach for."""
     return {
         "reverse": bool(emit_params.get("reverse", False)),
         "log_premap": emit_params.get("log_premap", "none"),
@@ -254,7 +200,7 @@ def _field_stem(loc, mode, w, h, ss, maxiter_policy=None):
 
 
 # --------------------------------------------------------------------------- #
-# Render one candidate at (w,h,ss,filt) -> out_path (jpg for scoring, png for keeper).
+# Render one candidate at (w,h,ss,filt) -> out_path (jpg for scoring, png for a keeper).
 # --------------------------------------------------------------------------- #
 def render_pure(loc, mode, palette, cp, out_path, w, h, ss, filt):
     spec = dict(PURE_FIELD_SPEC[mode])
@@ -310,7 +256,7 @@ def _info(info: dict, lev) -> dict:
     since the operator returns the base render's own bytes on an in-band image, an ON row with
     `acted: false` is a row the band accepted unchanged. With the switch OFF (the contract the
     flip kept, `FRACTAL_AUTOLEVEL=0`) there is no stamp and no key at all, so such a record is
-    byte-identical to what this pass wrote before the operator existed."""
+    byte-identical to what this path wrote before the operator existed."""
     if lev is not None and lev.stamp is not None:
         info = dict(info, autolevel=lev.stamp)
     return info
@@ -340,8 +286,7 @@ def render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt, *, level=True)
     # Keyed on the OUTPUT stem, not just (family, mode, geometry): the auto-level's second
     # engine pass reuses this temp, and two renders of the same location at the same geometry
     # (before/after arms in a verification sheet, two concurrent workers) would otherwise
-    # write and delete one file. Production drives this single-threaded, so the name change
-    # moves no bytes — it just stops the path from being an accident waiting for a caller.
+    # write and delete one file.
     stem = f"{Path(out_path).stem}__{loc.family}_{mode}_{w}x{h}"
     tmp_png = FIELD_TMP / f"{stem}.png"
     tmp_cmaps = FIELD_TMP / f"{stem}__autolevel.json"
@@ -391,644 +336,3 @@ def render_candidate(loc, mode, kind, palette, cp, out_path, w, h, ss, filt):
     # exactly none of the direct-trap family (palette-indifferent, `kind == "direct"`).
     return render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt,
                        level=(kind != "direct"))
-
-
-# --------------------------------------------------------------------------- #
-# Side-by-side smooth (emit_v1) vs kept strange alternate.
-# --------------------------------------------------------------------------- #
-def _font(sz):
-    for name in ("arialbd.ttf", "arial.ttf", "DejaVuSans-Bold.ttf"):
-        try:
-            return ImageFont.truetype(name, sz)
-        except OSError:
-            continue
-    return ImageFont.load_default()
-
-
-def side_by_side(smooth_png: Path, keep_png: Path, out_png: Path, caption: str):
-    TW = 1100
-    def _load(p):
-        with Image.open(p) as im:
-            im = im.convert("RGB")
-            return im.resize((TW, round(TW * im.height / im.width)), Image.LANCZOS)
-    a, b = _load(smooth_png), _load(keep_png)
-    th = max(a.height, b.height)
-    pad, cap = 16, 46
-    W = TW * 2 + pad * 3
-    H = th + pad * 2 + cap
-    sheet = Image.new("RGB", (W, H), (18, 18, 20))
-    sheet.paste(a, (pad, pad + cap))
-    sheet.paste(b, (pad * 2 + TW, pad + cap))
-    d = ImageDraw.Draw(sheet)
-    d.text((pad, 12), caption, font=_font(22), fill=(235, 235, 235))
-    d.text((pad, pad + cap - 2), "smooth (shipped)", font=_font(18), fill=(150, 200, 235))
-    d.text((pad * 2 + TW, pad + cap - 2), "strange keeper", font=_font(18), fill=(235, 200, 150))
-    sheet.save(out_png)
-
-
-# --------------------------------------------------------------------------- #
-# Durable incremental state — the kept strange alternates (alternates.jsonl).
-# --------------------------------------------------------------------------- #
-def load_alternates() -> dict:
-    """loc_id -> alternate record for every already-emitted strange alternate.
-    This IS the incremental state: these are FIXED (never re-rendered / re-allocated)."""
-    if not ALTERNATES.exists():
-        return {}
-    out = {}
-    for line in ALTERNATES.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            r = json.loads(line)
-            out[r["loc_id"]] = r
-    return out
-
-
-def save_alternates(recs: dict):
-    """Rewrite alternates.jsonl from loc_id -> record (sorted for a stable diff)."""
-    ALTERNATES.parent.mkdir(parents=True, exist_ok=True)
-    lines = [json.dumps(recs[k]) for k in sorted(recs)]
-    ALTERNATES.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
-
-
-def _reset_state():
-    """Deliberate start-fresh (--reset): wipe the durable alternates state — manifest +
-    keeper pngs — in BOTH the emission home and the legacy pilot home. Explicit flag so a
-    wipe is a deliberate act, never a side effect of clearing scratch/."""
-    for p in (ALTERNATES, LEGACY_ALTERNATES):
-        Path(p).unlink(missing_ok=True)
-    for d in (KEEP_DIR, LEGACY_KEEP_DIR):
-        if Path(d).exists():
-            shutil.rmtree(d)
-    print("[reset] cleared durable alternates state (alternates.jsonl + keeper pngs)")
-
-
-def _migrate_legacy_home():
-    """One-time carry-over: relocate the pilot's alternates (scratch/mining/deploy_tail/) into the
-    durable emission home. Move each keeper png + rewrite its `keeper_png` path, then drop the
-    legacy manifest. Idempotent — no-op once the emission-home manifest exists. Any png that
-    fails to move is left for the self-heal pass to re-render from the surviving record."""
-    if ALTERNATES.exists() or not LEGACY_ALTERNATES.exists():
-        return
-    recs = [json.loads(l) for l in LEGACY_ALTERNATES.read_text(encoding="utf-8").splitlines()
-            if l.strip()]
-    KEEP_DIR.mkdir(parents=True, exist_ok=True)
-    moved = 0
-    for r in recs:
-        old = r.get("keeper_png")
-        if not old:
-            continue
-        src = REPO / old.replace("\\", "/")
-        dst = KEEP_DIR / src.name
-        if src.exists() and not dst.exists():
-            src.replace(dst)
-            moved += 1
-        r["keeper_png"] = str(dst.relative_to(REPO))
-    save_alternates({r["loc_id"]: r for r in recs})
-    LEGACY_ALTERNATES.unlink(missing_ok=True)
-    print(f"[migrate] carried {len(recs)} alternate(s) into {ALTERNATES.parent} "
-          f"({moved} png(s) moved from the legacy home)")
-
-
-def _sha1_file(p: Path) -> str:
-    return hashlib.sha1(p.read_bytes()).hexdigest()
-
-
-def _snapshot(paths) -> dict:
-    """path -> sha1 for the paths that exist (correctness before/after diff)."""
-    return {str(p): _sha1_file(p) for p in paths if Path(p).exists()}
-
-
-def _dir_snapshot(d: Path) -> dict:
-    """name -> (size, sha1) over a directory's files (emit field-dir tamper check)."""
-    if not d.exists():
-        return {}
-    return {f.name: (f.stat().st_size, _sha1_file(f)) for f in sorted(d.iterdir()) if f.is_file()}
-
-
-# --------------------------------------------------------------------------- #
-def main():
-    ap = argparse.ArgumentParser(
-        description="Render-mode deploy tail — production curation pass over the emission corpus.")
-    ap.add_argument("--manifest", type=Path, default=EMIT_MANIFEST)
-    ap.add_argument("--score-only", action="store_true", help="gate/select only; skip full-res")
-    ap.add_argument("--limit", type=int, default=0, help="only the first N emitted locations")
-    ap.add_argument("--reset", action="store_true",
-                    help="deliberately wipe the durable alternates state and start fresh")
-    ap.add_argument("--ephemeral", action="store_true",
-                    help="THROWAWAY run (shakedown): redirect the mining-gate verdict log "
-                         "under scratch/ and refuse the full-res/alternates half, so nothing "
-                         "reaches data/emission/ or emit_v1's home. Implies --score-only.")
-    args = ap.parse_args()
-    for s in (sys.stdout, sys.stderr):
-        try:
-            s.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
-
-    # Bind the DURABLE product paths to emit_v1's emission home (the manifest's parent), so
-    # alternates sit alongside the smooth wallpapers they are alternates of and share their
-    # lifecycle — not in the disposable mining scratch tree.
-    global KEEP_DIR, ALTERNATES
-    emit_home = args.manifest.resolve().parent
-    KEEP_DIR = emit_home / "alternates"
-    ALTERNATES = emit_home / "alternates.jsonl"
-    # SINK ISOLATION for a throwaway run, decided BEFORE the first write. This pass has two
-    # durable sinks — the mining-gate verdict log under `data/emission/` (which UPSERTS AND
-    # ACCUMULATES, so a smoke ADDS rows a later calibration cannot tell from a real run's) and
-    # the alternates state + keeper pngs in emit_v1's home. `--ephemeral` redirects the first
-    # through the central binding and forbids the second by forcing `--score-only`; there is
-    # no ephemeral variant of "emit a durable product".
-    if args.ephemeral:
-        args.score_only = True
-        root = ESINKS.smoke_scratch_root(REPO, f"deploy_tail_smoke_{int(time.time())}")
-        ESINKS.use(root)
-        sinks = ESINKS.assert_isolated(REPO, root, "deploy_tail")
-        print(f"[sink] EPHEMERAL — gate log under {root.relative_to(REPO)}; "
-              f"score-only forced (no alternates, no keeper renders)")
-        for s in sinks:
-            print(f"[sink]   {s.relative_to(REPO)}")
-        if args.reset:
-            ap.error("--reset wipes the DURABLE alternates state; it is not a throwaway "
-                     "action and --ephemeral cannot make it one")
-    if args.reset:
-        _reset_state()
-    else:
-        _migrate_legacy_home()
-    print(f"[roster] {len(ROSTER)} promoted strange mode(s) from {MODES_REGISTRY.name}: "
-          f"{', '.join(m for m, _ in ROSTER)}")
-    if UNMAPPED_PROMOTED:
-        print(f"[roster][WARN] promoted but no render recipe here (skipped): {UNMAPPED_PROMOTED}")
-
-    # 1. Enumerate the accumulated emission corpus (the smooth winners emit_v1 produced).
-    rows = [json.loads(l) for l in args.manifest.read_text().splitlines() if l.strip()]
-    if args.limit:
-        rows = rows[:args.limit]
-    n_emit = len(rows)                                    # N = corpus size
-    corpus_ids = {r["image_id"] for r in rows}
-    modes = [m for m, _ in ROSTER]
-
-    # 2. Read the strange alternates that already exist (the DURABLE incremental state).
-    #    These are FIXED: never re-rendered / re-allocated / re-emitted. Drop any stale
-    #    row whose location is no longer in the corpus (corpus can only grow in practice,
-    #    but stay robust to a shrunk/re-pointed manifest).
-    all_alts = load_alternates()
-    existing_alts = {k: v for k, v in all_alts.items() if k in corpus_ids}
-    existing_list = [{"loc_id": k, "mode": v["mode"]} for k, v in existing_alts.items()]
-
-    # Correctness snapshots taken BEFORE any work: the smooth wallpapers and emit_v1's
-    # own field dir must be byte-unchanged after the pass (§checks).
-    smooth_paths = [REPO / r["png"].replace("\\", "/") for r in rows]
-    smooth_before = _snapshot(smooth_paths)
-    emit_field_dir = args.manifest.parent / "fields"
-    emit_fields_before = _dir_snapshot(emit_field_dir)
-    # Field-bin self-containment (static guarantees): the pass dumps its OWN strange
-    # fields under a deploy-tail-owned dir, disjoint from emit_v1's, and every pure-mode
-    # dump carries a non-empty render-mode token so its key can NEVER collide with the
-    # cached smooth field. Assert both up front rather than trusting them.
-    assert FIELD_TMP.resolve() != emit_field_dir.resolve(), FIELD_TMP
-    assert emit_field_dir.resolve() not in FIELD_TMP.resolve().parents, FIELD_TMP
-    for mode, kind in ROSTER:
-        if kind == "pure":
-            assert loc_mod.field_mode_token(mode) not in ("", None), \
-                f"pure mode {mode!r} has empty field token — would collide with smooth"
-
-    # 3. Candidate locations = corpus locations WITHOUT an existing alternate. Only these
-    #    are (re-)rendered and scored; already-curated locations are left untouched.
-    new_rows = [r for r in rows if r["image_id"] not in existing_alts]
-    SCORE_CROPS.mkdir(parents=True, exist_ok=True)
-    print(f"[tail] corpus N={n_emit} · {len(existing_alts)} existing alternate(s) fixed · "
-          f"{len(new_rows)} not-yet-curated location(s) x {len(ROSTER)} modes "
-          f"= {len(new_rows)*len(ROSTER)} candidates @ {SC_W}x{SC_H} ss{SC_SS}")
-
-    cands = []   # dicts: emit_index, loc_id, mode, kind, crop path, palette, info
-    t0 = time.time()
-    for row in new_rows:
-        loc = loc_mod.from_render_block(row["location"])
-        palette = row["params"]["palette"]
-        cp = _color_params(row["params"])
-        for mode, kind in ROSTER:
-            cid = f"{row['image_id']}__{mode}"
-            crop = SCORE_CROPS / f"{cid}.jpg"
-            tc = time.time()
-            # transfer_dropped is deterministic (rust modes drop grad; inherited is pct
-            # here so it is False) — reconstructable without re-rendering, so a crop that
-            # already exists on disk is reused (resume / idempotent re-run / cheap backfill).
-            info = {"transfer_dropped": (kind != "pure" and cp["transfer"] == "grad")}
-            if not crop.exists():
-                try:
-                    info = render_candidate(loc, mode, kind, palette, cp, crop, SC_W, SC_H, SC_SS, SC_FILT)
-                except Exception as exc:
-                    print(f"  [ERR] {cid}: {str(exc)[:180]}")
-                    continue
-            cands.append({"emit_index": row["emit_index"], "loc_id": row["image_id"],
-                          "cid": cid, "mode": mode, "kind": kind, "crop": crop,
-                          "palette": palette, "row": row, "cp": cp, "info": info,
-                          "secs": time.time() - tc})
-    print(f"[tail] rendered {len(cands)} candidates in {time.time()-t0:.0f}s")
-
-    # 4. Score the new candidates through the LOCKED gate.
-    scorer = MiningScorer()
-    print(f"[gate] {scorer.__class__.__name__} thr={scorer.threshold} on {scorer.device}")
-    scores = scorer.score_paths([str(c["crop"]) for c in cands]) if cands else []
-    for c, s in zip(cands, scores):
-        c["p_ge3"], c["p_ge2"], c["ord"], c["passed"] = s.p_ge3, s.p_ge2, s.score, s.passed
-
-    by_loc = {}
-    for c in cands:
-        by_loc.setdefault(c["loc_id"], []).append(c)
-
-    # 5. Shortfall allocation: existing alternates are FIXED (count toward budget B and
-    #    per-mode floors); allocate only B-#existing over the candidates, spread across
-    #    modes for diversity. A location may pass in several modes -> batch-level (each
-    #    location fills at most one mode's slot).
-    #
-    #    WHAT FILTERS THE ALLOCATION INPUT IS THE MINING GATE (2026-08-11, Matt). Drawing this
-    #    allocation IS drawing a colorize pool, and it read `floors.JUNK_FLOOR` for exactly that
-    #    reason from 2026-08-09 — the same coarse "the judging head is confident this is junk"
-    #    constant the emission intake reads on ITS head. The sheet-F crossover then put the gate
-    #    at 0.0949, BELOW the 0.20 floor, and inverted the pair: the pool draw began cutting rows
-    #    the gate passes — on the flip's 827-row reference pool the draw went 455 -> 587 when it
-    #    moved to the gate, i.e. 132 gate-good rows it had been cutting. Matt's call with that in
-    #    front of him: this site filters at THE GATE.
-    #
-    #    `JUNK_FLOOR` DID NOT MOVE — it is permanent shared-scale and its other reader
-    #    (`ranked_intake`, on the stage-1 location head) is untouched; what changed is which owner
-    #    THIS site asks. The comparison is `MiningScorer.gate` — the gate's own `>=`, from the
-    #    gate's own owner — so a pin or threshold flip moves this filter with it and no threshold
-    #    literal lives here. The junk floor's counterfactual on the same population is kept in the
-    #    print and the report, which is what the 0.50-release-floor read left behind when IT was
-    #    replaced here on 2026-08-09.
-    alloc_input = [c for c in cands if scorer.gate(c["p_ge3"])]   # THE gate, via its owner
-    gate_acts = True                                              # and it does filter, here
-    n_above_junk = sum(1 for c in alloc_input if F.passes_junk_floor(c.get("p_ge3")))
-    print(f"[gate] {MINING_GATE_VERSION} @ {scorer.threshold}: {len(alloc_input)}/{len(cands)} "
-          f"candidates enter the allocation ({n_above_junk} of them also clear the "
-          f"{F.JUNK_FLOOR} junk floor, which filtered this input from 2026-08-09 to 2026-08-11)")
-    keepers, alloc = allocate_strange(alloc_input, n_emit, modes, STRANGE_BUDGET_FRAC,
-                                      existing=existing_list)
-    keepers.sort(key=lambda c: -c["p_ge3"])   # render/report in quality order
-    n_loc_passer = len({c["loc_id"] for c in alloc_input})
-    achieved = alloc["achieved"]               # corpus-wide (existing + new)
-    thr_bite = 4 * (alloc["n_modes"] + 2)      # N at which floor >= 1 (round(0.25 N) >= n+2)
-    floors_engaged = alloc["floor"] >= 1
-    print(f"[keep] budget B={alloc['B']} (round({STRANGE_BUDGET_FRAC:.0%} x {n_emit})) "
-          f"floor={alloc['floor']}/mode · floors {'ENGAGED' if floors_engaged else 'dormant'} "
-          f"(bite at N>~{thr_bite}) · {len(existing_alts)} fixed + {len(keepers)} new "
-          f"= {len(existing_alts)+len(keepers)} alternate(s) over {n_loc_passer} new passer-locs")
-    for m, _ in ROSTER:
-        supply = len({c['loc_id'] for c in alloc_input if c['mode'] == m})
-        n_ex = sum(1 for v in existing_alts.values() if v["mode"] == m)
-        print(f"       {m:32} floor={alloc['floor']} achieved={achieved[m]} "
-              f"(existing={n_ex}, new-supply={supply} distinct-loc passers)")
-
-    # 5b. Mining-gate verdict → durable log PAIRED with the actual keep decision. One row per
-    #     scored candidate: what the gate did to it and whether it was kept. Committed under
-    #     data/emission/ (survives `rm -r scratch/*`, unlike report.json/alternates.jsonl).
-    #     Runs before the (optional) full-res block so --score-only still records it.
-    #     `would_cut ∧ selected` is ZERO BY CONSTRUCTION again as of 2026-08-11 — the gate is
-    #     what filters the allocation input above, so nothing below it can be kept. It was a
-    #     real labeled false-cut count only while the junk floor filtered here (2026-08-09 to
-    #     2026-08-11) and the two cuts disagreed; the durable population record is unchanged.
-    from tools.mining import gate_report as GR
-    keeper_cids = {c["cid"] for c in keepers}
-    gr_rows = [GR.gate_report_row(
-        site="deploy_tail", key=c["cid"], location=c["row"]["location"],
-        style=c["mode"], palette=c["palette"], p_ge3=c["p_ge3"],
-        release_threshold=scorer.threshold, selected=(c["cid"] in keeper_cids),
-        selection_stage="keeper") for c in cands]
-    # deploy_tail has no pool stage, so it logs no pool floor and `pool_c` is all zeros.
-    gpath, n_tot, n_cut, n_cut_sel, _pool_c = GR.write_gate_report("deploy_tail", gr_rows)
-    print(f"[gate-report] mining gate ({scorer.threshold}, FILTERS the allocation input): "
-          f"{n_tot} candidate(s) logged, {n_cut} below it ({n_cut_sel} kept anyway — 0 by "
-          f"construction now) → {gpath.relative_to(REPO)}")
-
-    # 6. Full-res render the NEW keepers alongside the smooth wallpaper (skip-if-exists so
-    #    a re-run / adopted pilot keeper never re-renders), + side-by-side for eyeball.
-    if not args.score_only:
-        KEEP_DIR.mkdir(parents=True, exist_ok=True)
-        SBS_DIR.mkdir(parents=True, exist_ok=True)
-
-        # 6a. Self-heal: an EXISTING (fixed) alternate whose keeper png is MISSING on disk —
-        #     state desynced from reality (partial wipe, failed move) — is re-rendered from its
-        #     surviving record. Skip-if-exists keys on the PNG itself, not the manifest row, so
-        #     a lone missing png re-renders just that one alternate. Records are otherwise fixed
-        #     (same mode/palette; no re-score, no re-allocation).
-        row_by_id = {r["image_id"]: r for r in rows}
-        healed = 0
-        for lid, rec in existing_alts.items():
-            row = row_by_id.get(lid)
-            if row is None:
-                continue
-            keep_png = KEEP_DIR / f"{lid}__{rec['mode']}_{EMIT_W}x{EMIT_H}.png"
-            rec["keeper_png"] = str(keep_png.relative_to(REPO))   # pin to the durable home
-            if keep_png.exists():
-                continue
-            loc = loc_mod.from_render_block(row["location"])
-            render_candidate(loc, rec["mode"], rec["kind"], rec["palette"],
-                             _color_params(row["params"]), keep_png,
-                             EMIT_W, EMIT_H, EMIT_SS, EMIT_FILT)
-            healed += 1
-            print(f"[heal] {lid}__{rec['mode']}: keeper png missing -> re-rendered "
-                  f"-> {keep_png.name}")
-        if healed:
-            print(f"[heal] re-rendered {healed} missing keeper png(s) from surviving records")
-
-        for c in keepers:
-            loc = loc_mod.from_render_block(c["row"]["location"])
-            keep_png = KEEP_DIR / f"{c['cid']}_{EMIT_W}x{EMIT_H}.png"
-            tk = time.time()
-            skipped = keep_png.exists()
-            if not skipped:
-                kinfo = render_candidate(loc, c["mode"], c["kind"], c["palette"], c["cp"],
-                                         keep_png, EMIT_W, EMIT_H, EMIT_SS, EMIT_FILT)
-                # The keeper is a SECOND render (2560x1440 ss4) and the operator measures
-                # what it renders, so the full-res curve is derived at full res and stamped
-                # separately from the scoring crop's. Absent when the switch is off.
-                if kinfo.get("autolevel"):
-                    c["autolevel"] = kinfo["autolevel"]
-            c["keep_png"] = str(keep_png.relative_to(REPO))
-            smooth_png = REPO / c["row"]["png"].replace("\\", "/")
-            sbs = SBS_DIR / f"{c['cid']}_sbs.png"
-            cap_txt = (f"{c['loc_id']} · {c['mode']} · p_ge3={c['p_ge3']:.3f} "
-                       f"(gate>={scorer.threshold}) · {c['palette'][:28]}")
-            if smooth_png.exists():
-                side_by_side(smooth_png, keep_png, sbs, cap_txt)
-                c["sbs"] = str(sbs.relative_to(REPO))
-            c["gate_stamp"] = gate_stamp(c["p_ge3"], scorer.threshold)
-            tag = "skip (exists)" if skipped else f"{time.time()-tk:.0f}s"
-            print(f"[emit] {c['cid']:34} p_ge3={c['p_ge3']:.3f}  [{tag}] -> {keep_png.name}")
-
-        # 7. Persist the new keepers into the durable alternates state (existing FIXED
-        #    rows preserved verbatim). Idempotent: a re-run reads these back as `existing`.
-        for c in keepers:
-            rec = {
-                "loc_id": c["loc_id"], "mode": c["mode"], "kind": c["kind"],
-                "family": c["row"]["location"].get("fractal_type"),
-                "palette": c["palette"], "p_ge3": round(c["p_ge3"], 6),
-                "gate_stamp": c["gate_stamp"], "curated_at_N": n_emit,
-                "smooth_png": c["row"]["png"], "keeper_png": c.get("keep_png"),
-                "sidebyside": c.get("sbs"),
-            }
-            # Only when the operator ran (see `_info`): the durable alternate row is
-            # byte-identical to a pre-operator one while the switch is off.
-            if c.get("autolevel"):
-                rec["autolevel"] = c["autolevel"]
-            all_alts[c["loc_id"]] = rec
-        save_alternates(all_alts)
-        print(f"[state] alternates.jsonl now holds {len(all_alts)} alternate(s)")
-
-    # 8. Correctness checks (ship with checks, not just reasoning). The idempotency sim is
-    #    fed `alloc_input` — whatever the allocation above actually consumed — so it mirrors
-    #    the real next-run allocation under either gate mode. Feeding it a fixed set would
-    #    make the no-op claim true of a run that never happens.
-    checks = run_checks(smooth_before, smooth_paths, emit_fields_before, emit_field_dir,
-                        alloc_input, keepers, existing_list, n_emit, modes, args)
-
-    # 9. Parity: re-score 1-2 kept scoring crops through the standalone gate CLI
-    #    (deploy path == measurement path across two independent entry points).
-    parity = run_parity(keepers)
-
-    # 10. Report.
-    write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passer,
-                 scorer, parity, checks, thr_bite, floors_engaged, args, gate_acts,
-                 alloc_input, n_above_junk)
-
-
-def run_checks(smooth_before, smooth_paths, emit_fields_before, emit_field_dir,
-               considered, keepers, existing_list, n_emit, modes, args):
-    """Ship the correctness guarantees as verified checks, not just reasoning.
-
-      * additive/smooth untouched — every smooth wallpaper is byte-unchanged.
-      * field-bin self-containment — emit_v1's field dir is byte-unchanged (the pass
-        reached for no pre-existing smooth field bin) and the deploy-tail field dir is
-        empty afterward (every strange dump was token'd and cleaned up).
-      * idempotent — simulate the NEXT run's allocation given the just-persisted state:
-        existing = current alternates + these new keepers, passers = the same passers
-        minus the kept locations. A correct run leaves 0 shortfall -> the next run
-        allocates nothing new (and its scoring crops are cached, full-res is
-        skip-if-exists) -> a genuine no-op.
-    """
-    # -- smooth untouched.
-    smooth_after = _snapshot(smooth_paths)
-    smooth_changed = [p for p in smooth_before if smooth_before[p] != smooth_after.get(p)]
-    smooth_ok = not smooth_changed
-
-    # -- emit_v1 field dir untouched (no reach for a pre-existing smooth field bin).
-    emit_fields_after = _dir_snapshot(emit_field_dir)
-    emit_fields_ok = emit_fields_before == emit_fields_after
-
-    # -- deploy-tail field dir empty afterward (all token'd strange dumps cleaned up).
-    leftover = [f.name for f in FIELD_TMP.iterdir() if f.is_file()] if FIELD_TMP.exists() else []
-    field_tmp_clean = not leftover
-
-    # -- idempotency: next-run allocation over the persisted state is empty.
-    kept_ids = {c["loc_id"] for c in keepers}
-    existing_after = existing_list + [{"loc_id": c["loc_id"], "mode": c["mode"]} for c in keepers]
-    considered_after = [{"loc_id": c["loc_id"], "mode": c["mode"], "p_ge3": c["p_ge3"]}
-                        for c in considered if c["loc_id"] not in kept_ids]
-    sel2, _ = allocate_strange(considered_after, n_emit, modes, STRANGE_BUDGET_FRAC,
-                               existing=existing_after)
-    idempotent = (len(sel2) == 0)
-
-    checks = {
-        "smooth_untouched": {"ok": smooth_ok, "n_checked": len(smooth_before),
-                             "changed": smooth_changed},
-        "emit_field_dir_untouched": {"ok": emit_fields_ok, "n_files": len(emit_fields_before)},
-        "field_tmp_clean": {"ok": field_tmp_clean, "leftover": leftover},
-        "idempotent": {"ok": idempotent, "next_run_new_allocations": len(sel2)},
-    }
-    all_ok = all(v["ok"] for v in checks.values())
-    print(f"[check] smooth-untouched={smooth_ok} ({len(smooth_before)} pngs) · "
-          f"emit-field-dir-untouched={emit_fields_ok} · field-tmp-clean={field_tmp_clean} · "
-          f"idempotent={idempotent}  ->  {'ALL PASS' if all_ok else 'FAILED'}")
-    if not all_ok:
-        print(f"[check][WARN] failing checks: "
-              f"{[k for k, v in checks.items() if not v['ok']]}")
-    checks["all_ok"] = all_ok
-    return checks
-
-
-def run_parity(keepers):
-    out = []
-    for c in keepers[:2]:
-        r = subprocess.run([sys.executable, str(REPO / "tools/mining/mining_gate.py"), str(c["crop"])],
-                           cwd=str(REPO), capture_output=True, text=True)
-        cli_p = None
-        for line in r.stdout.splitlines():
-            if "p_ge3=" in line:
-                try:
-                    cli_p = float(line.split("p_ge3=")[1].split()[0])
-                except (IndexError, ValueError):
-                    pass
-        d = abs(cli_p - c["p_ge3"]) if cli_p is not None else None
-        out.append({"cid": c["cid"], "inproc_p_ge3": c["p_ge3"], "cli_p_ge3": cli_p,
-                    "delta": d, "verdict_agree": (cli_p is not None and (cli_p >= MINING_GATE_THRESHOLD) == c["passed"])})
-        print(f"[parity] {c['cid']}: in-proc {c['p_ge3']:.6f} vs CLI {cli_p} "
-              f"Δ={d if d is None else f'{d:.2e}'}")
-    return out
-
-
-def write_report(rows, cands, by_loc, keepers, existing_alts, alloc, n_loc_passer,
-                 scorer, parity, checks, thr_bite, floors_engaged, args, gate_acts,
-                 alloc_input, n_above_junk):
-    keep_ids = {c["cid"] for c in keepers}
-    n_total_alt = len(existing_alts) + len(keepers)
-    degenerate = not floors_engaged
-    # corpus-wide existing count per mode (existing alternates aren't in `cands`).
-    ex_by_mode = {m: sum(1 for v in existing_alts.values() if v["mode"] == m) for m, _ in ROSTER}
-    rep = {
-        # `acts` is the run's OWN allocation behaviour, passed down from where the branch was
-        # taken — not re-read here, where it could disagree with what the run did.
-        "gate": {"version": MINING_GATE_VERSION, "threshold": scorer.threshold,
-                 "acts": bool(gate_acts),
-                 "cut_owner": "mining_gate.MiningScorer.gate "
-                              "(mining_pins.MINING_GATE_THRESHOLD)",
-                 # what ACTUALLY filtered this run's allocation input, and the junk floor's
-                 # counterfactual on the same population (it filtered here until 2026-08-11).
-                 "alloc_filter": "mining_gate.MiningScorer.gate",
-                 "n_above_gate": len(alloc_input),
-                 "junk_floor": F.JUNK_FLOOR,
-                 "n_above_junk_floor": n_above_junk},
-        "curation_pass": {
-            "score_only": bool(args.score_only),
-            "n_existing_alternates": len(existing_alts),
-            "n_new_keepers": len(keepers),
-            "n_total_alternates": n_total_alt,
-        },
-        "allocation": {
-            "budget_frac": alloc["budget_frac"], "n_emitted": len(rows),
-            "budget_B": alloc["B"], "floor_per_mode": alloc["floor"],
-            "n_modes": alloc["n_modes"],
-            "floor_bite_threshold_N": thr_bite,       # floor >= 1 needs N >~ 4*(n+2)
-            "floors_engaged": floors_engaged,
-            "degenerate_small_N": degenerate,
-            "n_new_locations_with_passer": n_loc_passer,
-            "n_strange_kept_total": n_total_alt,
-            "pct_kept": (n_total_alt / len(rows)) if rows else 0.0,
-            "per_mode": [
-                {"mode": m, "floor": alloc["floor"], "achieved": alloc["achieved"][m],
-                 "existing": ex_by_mode[m],
-                 "new_supply": len({c["loc_id"] for c in cands
-                                    if c["mode"] == m and c.get("passed")}),
-                 "degraded": alloc["achieved"][m] < alloc["floor"]}
-                for m, _ in ROSTER],
-        },
-        "checks": checks,
-        "parity": parity,
-        "per_location": [],
-    }
-    for row in rows:
-        lid = row["image_id"]
-        entry = {"loc_id": lid, "family": row["location"].get("fractal_type"),
-                 "palette": row["params"]["palette"], "smooth_png": row["png"],
-                 "state": "new", "candidates": [], "kept": None}
-        if lid in existing_alts:                       # already-curated (fixed) — not re-scored.
-            ea = existing_alts[lid]
-            entry["state"] = "existing_alternate"
-            entry["kept"] = {"mode": ea["mode"], "kind": ea.get("kind"),
-                             "p_ge3": ea.get("p_ge3"), "gate_stamp": ea.get("gate_stamp"),
-                             "keeper_png": ea.get("keeper_png"),
-                             "sidebyside": ea.get("sidebyside"), "fixed": True}
-            rep["per_location"].append(entry)
-            continue
-        cs = sorted(by_loc.get(lid, []), key=lambda c: -c["p_ge3"])
-        for c in cs:
-            cd = {"mode": c["mode"], "kind": c["kind"], "p_ge3": round(c["p_ge3"], 4),
-                  "p_ge2": round(c["p_ge2"], 4), "E_ord": round(c["ord"], 4),
-                  "passed": c["passed"], "kept": c["cid"] in keep_ids,
-                  "transfer_dropped": c["info"].get("transfer_dropped", False)}
-            if c["info"].get("autolevel"):
-                cd["autolevel"] = c["info"]["autolevel"]        # the SCORING crop's curve
-            if c["cid"] in keep_ids:
-                cd["gate_stamp"] = c.get("gate_stamp", gate_stamp(c["p_ge3"], scorer.threshold))
-                cd["keeper_png"] = c.get("keep_png")
-                cd["sidebyside"] = c.get("sbs")
-                cd["fixed"] = False
-                entry["kept"] = cd
-            entry["candidates"].append(cd)
-        rep["per_location"].append(entry)
-
-    (OUT_DIR / "report.json").write_text(json.dumps(rep, indent=2), encoding="utf-8")
-
-    # markdown
-    L = []
-    L.append("# Render-mode deploy tail — production curation pass\n")
-    q = rep["allocation"]
-    ck = checks
-    L.append(f"**Gate** `{rep['gate']['version']}` (LOCKED) · threshold "
-             f"`{scorer.threshold}` on marginal p_ge3 · "
-             f"**{'FILTERS the allocation input' if gate_acts else 'ANNOTATION-ONLY'}** "
-             f"(owner: {rep['gate']['cut_owner']})\n")
-    L.append(f"**Allocation input** filtered at the gate — "
-             f"**{rep['gate']['n_above_gate']}** of {len(cands)} candidates, of which "
-             f"**{rep['gate']['n_above_junk_floor']}** also clear the "
-             f"`{rep['gate']['junk_floor']}` junk floor. That floor filtered this input from "
-             f"2026-08-09 until 2026-08-11, when the sheet-F crossover put the gate below it "
-             f"and Matt repointed this site at the gate; it still filters the emission intake "
-             f"on the stage-1 head.\n")
-    L.append(f"**Corpus** N=**{q['n_emitted']}** emitted · budget "
-             f"B=round({q['budget_frac']:.0%}×{q['n_emitted']})=**{q['budget_B']}** · "
-             f"floor=**{q['floor_per_mode']}**/mode (n={q['n_modes']}) · floor-bite at "
-             f"**N≥~{q['floor_bite_threshold_N']}** → floors "
-             f"**{'ENGAGED' if floors_engaged else 'DORMANT'}** at this N\n")
-    L.append(f"**Alternates** {rep['curation_pass']['n_existing_alternates']} fixed + "
-             f"{rep['curation_pass']['n_new_keepers']} new = **{n_total_alt}** total "
-             f"(**{q['pct_kept']:.0%}** of corpus) · new passer-locations "
-             f"**{q['n_new_locations_with_passer']}**\n")
-    if degenerate:
-        L.append(f"> ⚠️ **Degenerate small-N regime.** N={q['n_emitted']} < "
-                 f"{q['floor_bite_threshold_N']}, so the per-mode floor rounds to 0 and the "
-                 f"diversity spread degrades to a global top-{q['budget_B']}-by-quality fill. "
-                 f"The pass is **correct but degenerate** — the live floor/surplus/degradation "
-                 f"mechanics only show once the corpus grows past ~{q['floor_bite_threshold_N']} "
-                 f"emissions (via more `emit_v1` runs). The floor logic is exercised by "
-                 f"`test_tail_alloc.py` at synthetic N.\n")
-    L.append("**Correctness checks** — "
-             f"smooth-untouched **{_mk(ck['smooth_untouched']['ok'])}** "
-             f"({ck['smooth_untouched']['n_checked']} pngs) · "
-             f"emit-field-dir-untouched **{_mk(ck['emit_field_dir_untouched']['ok'])}** · "
-             f"field-tmp-clean **{_mk(ck['field_tmp_clean']['ok'])}** · "
-             f"idempotent **{_mk(ck['idempotent']['ok'])}** "
-             f"(next-run new allocs = {ck['idempotent']['next_run_new_allocations']})\n")
-    L.append("| mode | floor | achieved | existing | new-supply | degraded |")
-    L.append("|------|:-----:|:--------:|:--------:|:----------:|:--------:|")
-    for pm in q["per_mode"]:
-        L.append(f"| {pm['mode']} | {pm['floor']} | {pm['achieved']} | {pm['existing']} | "
-                 f"{pm['new_supply']} | {'⚠️' if pm['degraded'] else ''} |")
-    L.append("")
-    if parity:
-        L.append("**Parity** (in-proc MiningScorer vs `mining_gate.py` CLI):")
-        for p in parity:
-            L.append(f"- `{p['cid']}` — in-proc {p['inproc_p_ge3']:.6f} vs CLI {p['cli_p_ge3']} "
-                     f"· Δ={p['delta']:.2e} · verdict agree: {p['verdict_agree']}")
-        L.append("")
-    L.append("## Per-location\n")
-    for e in rep["per_location"]:
-        if e["state"] == "existing_alternate":
-            k = e["kept"]
-            L.append(f"### {e['loc_id']} · {e['family']} · `{e['palette'][:32]}`  🔒 FIXED ALTERNATE")
-            L.append(f"\n→ existing **{k['mode']}** (p_ge3={k.get('p_ge3')}) · side-by-side "
-                     f"`{k.get('sidebyside')}` — carried over, not re-rendered.\n")
-            continue
-        star = "  ✅ NEW KEEPER" if e["kept"] else ""
-        L.append(f"### {e['loc_id']} · {e['family']} · `{e['palette'][:32]}`{star}")
-        L.append("")
-        L.append("| mode | kind | p_ge3 | p_ge2 | E[ord] | pass | kept |")
-        L.append("|------|------|------:|------:|-------:|:----:|:----:|")
-        for c in e["candidates"]:
-            L.append(f"| {c['mode']} | {c['kind']} | {c['p_ge3']:.3f} | {c['p_ge2']:.3f} | "
-                     f"{c['E_ord']:.3f} | {'✓' if c['passed'] else ''} | {'★' if c['kept'] else ''} |")
-        if e["kept"]:
-            L.append(f"\n→ kept **{e['kept']['mode']}** · side-by-side `{e['kept'].get('sidebyside')}`")
-        L.append("")
-    (OUT_DIR / "report.md").write_text("\n".join(L), encoding="utf-8")
-    print(f"\n[report] {OUT_DIR/'report.md'}  +  report.json")
-    print(f"[done] {n_total_alt}/{len(rows)} strange alternates "
-          f"({rep['curation_pass']['n_new_keepers']} new this pass, {q['pct_kept']:.0%} of corpus)")
-
-
-def _mk(ok: bool) -> str:
-    return "✅" if ok else "❌"
-
-
-if __name__ == "__main__":
-    main()

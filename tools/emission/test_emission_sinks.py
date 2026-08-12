@@ -148,20 +148,12 @@ def test_the_ephemeral_run_never_touches_the_production_file(tmp_path):
         "the production record DIRECTORY was created by a run that declared itself ephemeral"
 
 
-def test_deploy_tails_ephemeral_flag_binds_the_sink_and_forbids_the_durable_product():
-    """`deploy_tail` gained `--ephemeral` for the run-26 shakedown, and it has to cover BOTH
-    of that pass's durable sinks: the accumulating gate log (bind the central root) and the
-    alternates state + keeper pngs in emit_v1's home (there is no ephemeral variant of
-    emitting a product, so the flag forces `--score-only` instead of redirecting it).
-
-    Asserted at the source, like `test_floors`' allocation-input check: importing
-    `deploy_tail` pulls torch, and the claim is visible in the text."""
-    src = (ROOT / "tools" / "mining" / "deploy_tail.py").read_text(encoding="utf-8")
-    assert "args.score_only = True" in src, \
-        "--ephemeral must force --score-only; the alternates/keeper half has no scratch home"
-    assert "ESINKS.use(" in src and "ESINKS.assert_isolated(" in src, \
-        "the gate log must be redirected through the central binding and ASSERTED before " \
-        "the first write, not merely intended"
+# `deploy_tail`'s `--ephemeral` lane was tested here from 2026-08-12 until later the same day,
+# when the deploy-tail driver was retired (prompts/deploy_tail_recon.md). The lane existed to
+# cover that pass's two durable sinks; both went with it, and `emission_diversity_v1` — the one
+# remaining writer at either sink — is covered by the binding tests above. Nothing about the
+# sink machinery is deploy_tail-shaped: `derive_sinks`/`assert_isolated` take the site as a
+# parameter, which is why the retirement removed a test and not a code path.
 
 
 if __name__ == "__main__":
