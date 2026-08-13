@@ -21,8 +21,10 @@ Design (calibrated by eye on the overnight_20260713 contact sheet):
     drop. Single-linkage within family (transitive: a-b, b-c tight => {a,b,c} one group).
 
 Non-destructive: reports the collapse set, a borderline band for eye-review, and the
-resulting distinct count. It does NOT mutate any manifest, lock, or launch. Slots into
-morning curation alongside `tools/mining/deploy_tail.py`.
+resulting distinct count. It does NOT mutate any manifest, lock, or launch. It is a
+hand-run morning curation pass; it used to sit alongside the strange-mode tail pass
+(`deploy_tail.main`), which was retired 2026-08-12 — `deploy_tail` is a library with no
+driver now, so nothing else runs beside it.
 
 The reference control band is cleaned to RECOLOR-ONLY (same geometry, different palette) —
 the phoenix cross_cycle pairs are dropped from the control set because they are distinct

@@ -20,6 +20,7 @@ for _p in (ROOT, ROOT / "tools"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+from tools import stage_times as stimes              # noqa: E402
 from tools.emission import emission_sinks as S       # noqa: E402
 from tools.emission import release_record as RR      # noqa: E402
 from tools.mining import gate_report as GR           # noqa: E402
@@ -86,6 +87,69 @@ def test_derive_sinks_covers_every_file_a_run_writes():
     actual = {RR.record_path(SITE).resolve(), RR.runs_path(SITE).resolve(),
               (GR.gate_log_dir() / f"{SITE}.jsonl").resolve()}
     assert actual == derived
+
+
+# --------------------------------------------------------------------------- #
+# 1b. the per-run telemetry sink (stage_times, durable since 2026-08-13)
+# --------------------------------------------------------------------------- #
+def test_the_run_telemetry_home_is_DURABLE_in_production():
+    """The whole point of the 2026-08-13 move: production emission timings land under `data/`,
+    where a `rm -r scratch/*` cannot reach them. `stage_times_home` goes through
+    `paths.durable()`, so a future `.gitignore` rule that would discard the stream raises at
+    resolution rather than after the run."""
+    home = S.stage_times_home(ROOT, "prod99")
+    assert home == ROOT / "data" / "emission" / S.RUN_TELEMETRY / "prod99"
+    assert S.resolves_under_data(ROOT, S.default_record_root(ROOT), SITE, run_id="prod99")
+
+
+def test_resolving_the_home_CREATES_NOTHING():
+    """`StageTimes` opens lazily, so a builder that never records a unit must not leave an
+    empty run dir in the durable store — an empty dir there reads as a run with no timings."""
+    parent = ROOT / "data" / "emission" / S.RUN_TELEMETRY
+    before = parent.exists()
+    home = S.stage_times_home(ROOT, "prod_never_ran")
+    assert parent.exists() == before and not home.exists()
+
+
+def test_a_throwaway_run_moves_its_telemetry_out_of_data_too(tmp_path):
+    """It does NOT accumulate across runs like the two record stores, so it cannot corrupt a
+    population — but a run that declared itself ephemeral still has no business writing `data/`,
+    and the discovery side already behaves this way (a smoke's frontier rows land in the
+    redirected discovery dir)."""
+    S.use(tmp_path / "rec")
+    assert S.stage_times_home(ROOT, "smoke_x") == tmp_path / "rec" / S.RUN_TELEMETRY / "smoke_x"
+    assert S.resolves_under_data(ROOT, tmp_path / "rec", SITE, run_id="smoke_x") == []
+
+
+def test_the_isolation_refusal_NAMES_the_telemetry_sink():
+    """Non-vacuity for the third sink: it must appear in the offender list, not just be
+    covered in principle by the root's own path."""
+    offenders = S.resolves_under_data(ROOT, S.default_record_root(ROOT), SITE, run_id="prod99")
+    assert S.run_telemetry_dir(S.default_record_root(ROOT), "prod99") in offenders
+    with pytest.raises(S.SinkNotIsolated):
+        S.assert_isolated(ROOT, S.default_record_root(ROOT), SITE, run_id="prod99")
+
+
+def test_the_telemetry_sink_is_where_the_WRITER_actually_appends(tmp_path):
+    """Completeness, cross-checked against the writer rather than a second literal: this module
+    owns the DIRECTORY, `tools/stage_times.py` owns the filename, and the sink entry has to be
+    the directory the writer's own path lands in — otherwise the assertion guards a path
+    nothing writes (`discovery_sinks`' `gather` failure)."""
+    root = tmp_path / "rec"
+    S.use(root)
+    w = stimes.StageTimes(S.stage_times_home(ROOT, "run_x"))
+    w.record("colorize", "em_0", 1.0)
+    assert w.path.name == stimes.STREAM
+    assert w.path.parent.resolve() == \
+        S.derive_sinks(root, SITE, run_id="run_x")["run_telemetry"].resolve()
+
+
+def test_derive_sinks_without_a_run_id_is_the_site_only_view():
+    """A caller asking where a SITE's records live should not have to invent a run id; the
+    driver passes one, and that is when the telemetry dir joins the set."""
+    root = ROOT / "scratch" / "emission" / "_ephemeral_records" / "coverage_probe"
+    assert "run_telemetry" not in S.derive_sinks(root, SITE)
+    assert "run_telemetry" in S.derive_sinks(root, SITE, run_id="r")
 
 
 # --------------------------------------------------------------------------- #

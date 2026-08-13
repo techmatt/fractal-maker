@@ -1,9 +1,11 @@
 """Corpus recolor pass — collision-aware palette curation over the emitted corpus.
 
-Runs ON DEMAND over the ACCUMULATED corpus of emitted locations. Structurally
-PARALLEL to `tools/mining/deploy_tail.py` (the strange-mode tail): a durable,
+Runs ON DEMAND over the ACCUMULATED corpus of emitted locations: a durable,
 incremental, non-destructive curation operation that sits at the CORPUS layer, NOT
-inline in `emit_v1`. Reason (see prompts/prompt-corpus-recolor-pass.md): colored_clip
+inline in `emit_v1`. (It was written as the structural PARALLEL of the strange-mode
+tail pass, `deploy_tail.main`; that pass was retired 2026-08-12 and `deploy_tail` is a
+library now, so the shape below stands on its own rather than on a live sibling.)
+Reason (see prompts/prompt-corpus-recolor-pass.md): colored_clip
 collisions are a corpus-SCALE phenomenon — they accumulate across runs; one ~20-loc
 emit run has almost none — so per-run emit is the wrong place to resolve them.
 
@@ -18,7 +20,7 @@ NON-DESTRUCTIVE: the shipped renders are never overwritten. Corrected versions r
 to a durable `corrected/` dir + a before/after side-by-side, and the assignment is
 recorded in `recolor_assignments.jsonl`, so before/after is fully inspectable.
 
-Incremental / idempotent state (the load-bearing production delta, mirrors deploy_tail):
+Incremental / idempotent state (the load-bearing production delta):
   * The durable state is `recolor_assignments.jsonl` — one row per already-considered
     location (its FIXED chosen candidate). On each run these are read back as
     `existing=` and LOCKED: their picks pre-seed colorize_assign's placed set and are

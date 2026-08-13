@@ -235,3 +235,83 @@ def test_torn_and_duplicate_counts_reach_the_rendered_output(tmp_path):
         f.write("{oops")
     txt = RP._fmt(RP.profile_dir(tmp_path), 8)
     assert "1 torn line(s)" in txt and "1 duplicate unit(s)" in txt
+
+
+# --------------------------------------------------------------------------- #
+# where the rows are (the emission leg's durable home, 2026-08-13)
+# --------------------------------------------------------------------------- #
+def test_an_emission_out_dir_FOLLOWS_its_run_id_to_the_durable_telemetry_home(tmp_path,
+                                                                             monkeypatch):
+    """The emission leg's two halves now live in different trees — `summary.json` in the scratch
+    out dir, the per-unit rows in `data/emission/run_telemetry/<run>/` — so a reader handed the
+    out dir has to find the rows and SAY where it read them. Reporting PER-UNIT TIMING
+    UNAVAILABLE for a run whose telemetry is on disk is §2 with the absence invented."""
+    out = tmp_path / "scratch_out" / "prod99"
+    out.mkdir(parents=True)
+    (out / "summary.json").write_text(json.dumps({"attempts": 6, "release_rendered": 2}),
+                                      encoding="utf-8")
+    rec = tmp_path / "rec"
+    monkeypatch.setattr(RP.esinks, "default_record_root", lambda root: rec)
+    home = RP.esinks.run_telemetry_dir(rec, "prod99")
+    _write(home, [("colorize", f"em_{i}", 4.0) for i in range(6)])
+    prof = RP.profile_dir(out)
+    assert prof["present"] and prof["stages"]["colorize"]["n"] == 6
+    assert Path(prof["stream_dir"]) == home
+    # the summary is still read from the dir that was asked for, not from the telemetry home
+    assert prof["summary_aggregates"]["attempts"] == 6
+    assert "the run-keyed telemetry home" in RP._fmt(prof, 8)
+
+
+def test_a_dir_that_HOLDS_the_stream_is_never_redirected(tmp_path, monkeypatch):
+    """The control: the fallback is one hop for a dir with no stream, not a rewrite of every
+    lookup. A discovery run dir must keep reading itself even when a same-named telemetry dir
+    exists — otherwise the reader silently profiles a different run."""
+    rec = tmp_path / "rec"
+    monkeypatch.setattr(RP.esinks, "default_record_root", lambda root: rec)
+    d = tmp_path / "prod99"
+    _write(d, [("frontier_batch", "b0", 7.0)])
+    _write(RP.esinks.run_telemetry_dir(rec, "prod99"), [("colorize", "em_0", 4.0)])
+    prof = RP.profile_dir(d)
+    assert prof["stream_dir"] is None
+    assert list(prof["stages"]) == ["frontier_batch"]
+
+
+def test_a_run_with_telemetry_NOWHERE_still_reports_the_absence_loudly(tmp_path, monkeypatch):
+    """The fallback must not turn a missing stream into a quiet empty table."""
+    monkeypatch.setattr(RP.esinks, "default_record_root", lambda root: tmp_path / "rec")
+    (tmp_path / "empty").mkdir()
+    txt = RP._fmt(RP.profile_dir(tmp_path / "empty"), 8)
+    assert "PER-UNIT TIMING UNAVAILABLE" in txt
+
+
+def test_the_path_the_run_RECORDED_wins_over_the_production_guess(tmp_path, monkeypatch):
+    """An ephemeral run's telemetry is under whatever `--record-root` it was given, which no
+    convention can reconstruct — so the summary carries the resolved path and the reader uses
+    it. Derived at the write site, read back here (`storage_classes.md` § derive in code)."""
+    rec = tmp_path / "prod_home"
+    monkeypatch.setattr(RP.esinks, "default_record_root", lambda root: rec)
+    _write(RP.esinks.run_telemetry_dir(rec, "prod99"), [("colorize", "wrong_run", 99.0)])
+    elsewhere = tmp_path / "some_ephemeral_root" / "run_telemetry" / "prod99"
+    _write(elsewhere, [("colorize", f"em_{i}", 4.0) for i in range(3)])
+    out = tmp_path / "out" / "prod99"
+    out.mkdir(parents=True)
+    (out / "summary.json").write_text(
+        json.dumps({"stage_times_path": str(elsewhere / stimes.STREAM)}), encoding="utf-8")
+    prof = RP.profile_dir(out)
+    assert Path(prof["stream_dir"]) == elsewhere
+    assert [t["unit"] for t in prof["top"]] == ["em_0", "em_1", "em_2"]
+
+
+def test_a_recorded_path_that_is_GONE_falls_through_instead_of_deciding(tmp_path, monkeypatch):
+    """The summary records where the run wrote, which is not a promise the file still exists —
+    a wiped ephemeral root must not shadow a stream that IS on disk."""
+    rec = tmp_path / "prod_home"
+    monkeypatch.setattr(RP.esinks, "default_record_root", lambda root: rec)
+    home = RP.esinks.run_telemetry_dir(rec, "prod99")
+    _write(home, [("colorize", "em_0", 4.0)])
+    out = tmp_path / "out" / "prod99"
+    out.mkdir(parents=True)
+    (out / "summary.json").write_text(
+        json.dumps({"stage_times_path": str(tmp_path / "wiped" / stimes.STREAM)}),
+        encoding="utf-8")
+    assert Path(RP.profile_dir(out)["stream_dir"]) == home

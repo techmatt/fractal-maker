@@ -393,11 +393,6 @@ class EmissionDiversity:
         self.library_dir = (Path(args.library).resolve()
                             if getattr(args, "library", None) else None)
         self.colorize_log = self.out / "colorize_log.jsonl"
-        # Per-unit stage timing (tools/stage_times.py). This builder had NO timing at all
-        # before 2026-08-12 — not per attempt, not per stage — so a run that spent 40 of its
-        # 75 wall minutes in intake looked identical to one that spent them colorizing.
-        # Additive: nothing reads it back, and no cutoff consults it.
-        self.stage_times = stimes.StageTimes(self.out)
         self.floor = float(args.floor)                 # wallpaper-head POOL floor (smooth)
         self.mining_floor = float(args.mining_floor)   # mining-head POOL floor (strange styles)
         self.release_floor = float(args.release_floor)              # wallpaper-head RELEASE floor
@@ -442,25 +437,42 @@ class EmissionDiversity:
         self.deficit_green_boost = float(getattr(args, "deficit_green_boost", 1.6))
         self.seed = int(args.seed)
         # SINK ISOLATION, decided and asserted here — before intake, before the first write.
-        # Everything under `--out` is scratch by construction; the two record stores are not
-        # (`data/emission/{release_records,mining_gate_reports}`) and they UPSERT-AND-
-        # ACCUMULATE, so a throwaway run adds rows a later calibration pass cannot tell from a
-        # real release's. `--ephemeral` redirects both under scratch/; `--record-root` names
-        # the root explicitly. See tools/emission/emission_sinks.py.
+        # Everything under `--out` is scratch by construction; three sinks are not
+        # (`data/emission/{release_records,mining_gate_reports,run_telemetry}`). The first two
+        # UPSERT-AND-ACCUMULATE, so a throwaway run adds rows a later calibration pass cannot
+        # tell from a real release's; the third is this run's own timings and accumulates
+        # nothing, but a throwaway run still must not write `data/`. `--ephemeral` redirects
+        # all three under scratch/; `--record-root` names the root explicitly. See
+        # tools/emission/emission_sinks.py.
         self.ephemeral = bool(getattr(args, "ephemeral", False))
         self.record_root = ESINKS.resolve_record_root(
             ROOT, smoke=self.ephemeral, explicit=getattr(args, "record_root", None),
             run_id=self.out.name)
         if self.ephemeral or getattr(args, "record_root", None):
             ESINKS.use(self.record_root)
-            sinks = ESINKS.assert_isolated(ROOT, self.record_root, self.RECORD_SITE)
+            sinks = ESINKS.assert_isolated(ROOT, self.record_root, self.RECORD_SITE,
+                                           run_id=self._run_id())
             print(f"[sinks] EPHEMERAL — record sinks isolated under "
                   f"{self.record_root}; nothing writes data/emission/. "
-                  + " ".join(p.name for p in sinks), flush=True)
+                  # parent/name, not name: the run-telemetry sink is a DIRECTORY named after
+                  # the run, and printed bare it reads as a stray file next to two .jsonl.
+                  + " ".join(f"{p.parent.name}/{p.name}" for p in sinks), flush=True)
         else:
             ESINKS.use(None)
             print(f"[sinks] PRODUCTION — records accumulate under "
                   f"{ESINKS.default_record_root(ROOT)}", flush=True)
+        # Per-unit stage timing (tools/stage_times.py). This builder had NO timing at all
+        # before 2026-08-12 — not per attempt, not per stage — so a run that spent 40 of its
+        # 75 wall minutes in intake looked identical to one that spent them colorizing.
+        # Additive: nothing reads it back, and no cutoff consults it.
+        #
+        # DURABLE SINCE 2026-08-13 (Matt), and built HERE rather than beside the other `--out`
+        # paths above because it is resolved through the sink binding, which is decided
+        # immediately above: production lands in `data/emission/run_telemetry/<run>/`, an
+        # ephemeral run under its bound scratch root. Before this the stream lived under
+        # `--out` and wiped with `rm -r scratch/*` while the discovery half was committed —
+        # the same telemetry, two storage classes, decided by which leg wrote it.
+        self.stage_times = stimes.StageTimes(ESINKS.stage_times_home(ROOT, self._run_id()))
         for d in (self.out, self.renders):
             d.mkdir(parents=True, exist_ok=True)
         self.rng = np.random.default_rng(self.seed)

@@ -573,12 +573,17 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         "floor_overrides": getattr(eng, "floor_overrides", {}),
         "release_split": getattr(eng, "release_split", {}),
         "palette_ranker": selected[0]["_rec"]["ranker"] if selected else None,
-        # THIS SESSION's stage totals (tools/stage_times.py); the per-unit rows are in
-        # `stage_times.jsonl` beside this file. `release_render` is missing here on purpose
-        # when the release pass has not run yet — this report is written after it, so its
-        # absence means the renders were skipped, not that they were free.
+        # THIS SESSION's stage totals (tools/stage_times.py). `release_render` is missing here
+        # on purpose when the release pass has not run yet — this report is written after it,
+        # so its absence means the renders were skipped, not that they were free.
         "stage_times": (eng.stage_times.totals()
                         if hasattr(eng, "stage_times") else None),
+        # ...and WHERE the per-unit rows went. They are no longer beside this file: since
+        # 2026-08-13 they land in the durable run-keyed home (`data/emission/run_telemetry/
+        # <run>/`, or the bound root on an ephemeral run), so a summary in a wiped scratch tree
+        # would otherwise be the only surviving half with no way to name the other one.
+        "stage_times_path": (str(eng.stage_times.path)
+                             if hasattr(eng, "stage_times") else None),
     }
     summary_path = out / "summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")

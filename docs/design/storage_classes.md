@@ -663,6 +663,45 @@ tripwire scanned `dirs` and was complete. This one sits beside the ledger it der
 the tripwire's discovery walk grew a `files` branch — otherwise the class would relocate
 correctly and never be checked, which is the gap `artifacts_resolver.md` §3 warns about.
 
+## `stage_times.jsonl` is DURABLE on both legs — TAKEN 2026-08-13
+
+The per-unit stage timing stream (`tools/stage_times.py`, one writer, one schema) shipped on
+2026-08-12 durable on the **discovery** leg and scratch on the **emission** leg — not by a
+decision but by where each leg happened to write: the frontier records into its run dir under
+`data/discovery/<run>/` (un-ignored, deny-listed, so it commits like `quota_trace`), and the
+emission builder recorded into `--out`, which is `scratch/` by convention. Same telemetry, two
+classes, chosen by the caller's output convention. The emission rows wiped with
+`rm -r scratch/*`.
+
+**Both legs are durable as of 2026-08-13** (Matt). The emission leg writes to
+`data/emission/run_telemetry/<run id>/stage_times.jsonl`, resolved through
+`emission_sinks.stage_times_home`, which is `release_record._sink`'s shape: production goes
+through `paths.durable()` (so a `.gitignore` rule that would discard the stream raises at
+resolution), an **ephemeral** run resolves the same layout under its bound scratch root. It is
+the third sink `derive_sinks`/`assert_isolated` cover — it does not upsert-and-accumulate like
+the other two, so a throwaway run cannot corrupt a population there, but a run that declared
+itself ephemeral still must not write `data/`, and the discovery side already behaves this way
+(a smoke's frontier rows land in the redirected discovery dir because they are written *into*
+it).
+
+**What did NOT change, deliberately.** It stays **out of `run_record.SEGMENTED_STREAMS`** —
+~150 B per unit, so an 8 h run at run 26's rate is ~18 KB, three orders under `ROTATE_BYTES`;
+registering it would buy nothing and would put its `.gz` segments under the
+`data/discovery/**/*.jsonl.gz` LFS rule, a real cost for a file this size. Readers still go
+through `run_record.iter_rows`, which short-circuits to the plain path for an unregistered
+stream, so registering it later still needs no reader change. And **the existing scratch copies
+are not migrated** — the run-27 emission rows stay where they were written and go when the tree
+does; a row moved into a durable store now would claim a class its run never had.
+
+**The reader cost, paid once.** An emission run's two halves are in different trees:
+`summary.json` (with the `stage_times` roll-up and, new, a `stage_times_path`) in the scratch
+out dir, the per-unit rows in the durable home. `run_profile.py` takes the out dir exactly as
+before and follows the run id to the durable home when the dir it was handed has no stream,
+printing which directory it read. The fallback is production-only and one hop: an ephemeral
+run's telemetry sits under whatever `--record-root` it was given, which a reader cannot know
+and must not guess. `[code: tools/emission/emission_sinks.py::{run_telemetry_dir,
+stage_times_home}; tools/run_profile.py::stream_dir_for]`
+
 ## Git history is a durability tier too, and this repo's floor is 2026-07-24
 
 `fractal-maker` begins at a **single squashed import commit** (`ff88da4`, 1247 tracked files,
@@ -693,7 +732,10 @@ hand in a generator drifts silently the day the thing it describes moves.
 `stamp_cap_policy.py` derives the legacy policy from `location.LEGACY_MAXITER_POLICY`
 rather than restating its four constants, so it cannot drift from the token;
 `verify_v6_gate.py` reads mean/std from the checkpoint rather than a constant;
-`deploy_tail.py` derives its candidate roster from the mode registry rather than a list.
+`deploy_tail.py` derives its candidate roster from the mode registry rather than a list —
+still true of the MODULE after its driver was retired (2026-08-12), since `ROSTER` /
+`load_promoted_roster` is one of the library entry points six modules import; the pass that
+consumed it is what went.
 `[code: tools/orbital/stamp_cap_policy.py; tools/atlas/verify_v6_gate.py;
 tools/mining/deploy_tail.py]`
 

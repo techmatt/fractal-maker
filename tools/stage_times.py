@@ -34,10 +34,14 @@ which is a real cost for a file this size. It is read through `run_record.iter_r
 (which short-circuits to the plain path for an unregistered stream), so registering it later
 costs nothing at the read sites.
 
-IT IS COMMITTED. `data/discovery/` is un-ignored with a deny-list; this file is not on it, so a
-discovery run's stage times are tracked exactly as `quota_trace` is. That is the point — "from
-durable telemetry alone" is the requirement, and a stream that lives only in a scratch tree
-answers it for as long as nobody runs `rm -r scratch/*`.
+IT IS COMMITTED, ON BOTH LEGS. `data/discovery/` is un-ignored with a deny-list; this file is
+not on it, so a discovery run's stage times are tracked exactly as `quota_trace` is. That is the
+point — "from durable telemetry alone" is the requirement, and a stream that lives only in a
+scratch tree answers it for as long as nobody runs `rm -r scratch/*`. The EMISSION leg wrote
+its rows under `--out` (scratch) until 2026-08-13, so the same telemetry had two storage classes
+depending on which leg produced it; it now writes to `data/emission/run_telemetry/<run>/`,
+resolved through `emission_sinks.stage_times_home` so an ephemeral run still lands in scratch.
+This class is the CALLER's to choose — this module only appends to the directory it is handed.
 
 APPEND-ONLY, AND WHAT THAT COSTS. Per `verification_practice.md` §11 an append-only log is a
 SUPERSET of the checkpointed counters after a kill: a resumed run re-runs the units between the

@@ -470,15 +470,19 @@ by moving a string. So they are held by this procedure plus a human:
 
    **`JUNK_FLOOR` IS EXEMPT — PERMANENT SHARED-SCALE, never restated at a flip** (Matt,
    2026-08-11; this replaces the residual this section carried through the 2026-08-11 stage-2
-   flip, which said the question was open). It was read on TWO heads' scales — `ranked_intake`
-   on the stage-1 location head's `p_good`, `deploy_tail` on the mining head's `p_ge3` — so a
-   single-head flip had no correct volume-match: matching it to the flipped head moves the cut
-   at the other site by an amount nobody measured. **`deploy_tail` was repointed at the mining
-   gate later the same day** (below), leaving one live reader and making a volume match
-   arithmetically available again — and the exemption stands anyway, because the load-bearing
-   half was never the reader count. The decision is that 0.20 is a **coarse
-   semantic floor valid on any CORN P(≥3) scale** ("the judging head is confident this is
-   junk") rather than an operating point on one, and the alternative — one constant per head —
+   flip, which said the question was open). **The ground is SEMANTIC, and it is the whole
+   argument**: 0.20 states what the shared scale MEANS — "the judging head is confident this is
+   junk" — so it is a **coarse semantic floor valid on any CORN P(≥3) scale** rather than an
+   operating point on one, and a volume match would silently convert it into the per-head
+   operating point it was deliberately chosen not to be. That holds however many sites read it
+   and on whichever heads' scales they read it. It is stated this way because the argument that
+   originally bought the exemption was arithmetic — two readers on two heads' scales, so a
+   single-head flip had no correct volume-match — and that argument has since expired twice
+   over: `deploy_tail` was repointed at the mining gate on 2026-08-11 (below), and its driver
+   was retired on 2026-08-12 (`d73a6c6`), leaving the caller set at exactly `{ranked_intake}`
+   on the stage-1 location head's `p_good` and no acting cut of any kind on the mining scale.
+   A volume match is therefore arithmetically available and is still refused; the decision is
+   unchanged, and it never depended on the reader count. The alternative — one constant per head —
    is refused because it re-creates the per-head operating point this cut was deliberately
    chosen not to be. **The cost is named, not hidden**: the exact volume it removes drifts a
    little at each flip, which is accepted, because the floor's job is removing obvious waste
@@ -504,10 +508,13 @@ by moving a string. So they are held by this procedure plus a human:
    floor, which forced the pool floor to 0.0 to keep `floors.check_below_gate` satisfied and
    left the enforcing junk floor as the strictest cut in stage 2. **That inversion was resolved
    the same day by moving a READER, not a number** (Matt): `deploy_tail`'s colorize-pool draw
-   filters through `mining_gate.MiningScorer.gate` instead of `JUNK_FLOOR`, so the mining side's
-   pool draw is the gate (455 → 587 of the 827 reference-pool rows) and `JUNK_FLOOR` keeps its
-   value and its stage-1 reader. Record:
-   `data/render_mode_head/v3/mining_gate_lock_2026-08-11.md`.
+   was repointed to filter through `mining_gate.MiningScorer.gate` instead of `JUNK_FLOOR`, so
+   the mining side's pool draw became the gate (455 → 587 of the 827 reference-pool rows) and
+   `JUNK_FLOOR` kept its value and its stage-1 reader. Record:
+   `data/render_mode_head/v3/mining_gate_lock_2026-08-11.md`. **That reader is gone as of
+   2026-08-12** (`d73a6c6` retired the deploy-tail driver): `MiningScorer.gate` has no caller,
+   so 0.0949 acts nowhere and the inversion is moot rather than resolved — the numbers above
+   are the record of what was measured, not a description of a live path.
 
 3. Nothing else. There is no threshold sweep, no per-partition table to re-adopt and no
    conformance test to re-run — `tools/scoring/derive_t_good.py`,

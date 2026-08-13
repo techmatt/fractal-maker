@@ -97,6 +97,16 @@ REGISTRY = [
      "tests/test_tracked_artifacts.py (every file present in the store must be tracked), not "
      "by the static canary list, which by construction cannot name a file that does not "
      "exist yet."),
+    ("data/emission/run_telemetry/*/stage_times.jsonl",
+     "tools/emission/build_emission_diversity_v1.py via emission_sinks.stage_times_home", DUR,
+     "NOTHING — a per-unit wall-clock measurement of one run's stages; re-running measures a "
+     "different run on a different machine load", Y,
+     "OK as of 2026-08-13, and NEW that day: these rows were written under `--out` (scratch) "
+     "from 2026-08-12 and wiped with it, while the discovery leg's identical stream committed. "
+     "Keyed by RUN, so a future run's dir is a new PATH — same coverage story as the two "
+     "record stores it sits between: the relational half of tests/test_tracked_artifacts.py, "
+     "not the static canary list. An EPHEMERAL run resolves it under its bound scratch root "
+     "and is deliberately not durable."),
     ("data/emission/mining_gate_reports/*.jsonl", "tools/mining/gate_report.py", DUR,
      "NOTHING — a would-cut log paired with the realized selections of one run", Y,
      "OK as of 2026-08-06 (this is one of the two that surfaced and was fixed). Same story "

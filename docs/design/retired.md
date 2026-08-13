@@ -790,3 +790,37 @@ an item's evidence, the line points at it rather than restating it.
     cache with no other reader; `label_crop`'s `fields_dir` parameter stays, used by the
     generalization.
   `[decision: prompts/delete_rerender_bootstrap.md, Matt, 2026-08-11]`
+
+- **2026-08-12 — the deploy-tail DRIVER and `tools/mining/tail_alloc.py`** (`d73a6c6`;
+  recon `prompts/deploy_tail_recon.md`, Matt's call). The strange-mode tail pass: gate the
+  promoted render modes' candidates, allocate attempts across them, render and report. The
+  same "delete only the dead `main()`" case as `emit_v1` the day before — the module STAYS,
+  because six live modules import its library half.
+  * **Two facts ended it, and either alone was enough.** Its input had no producer:
+    `emit_v1.main` was deleted on 2026-08-11 and its `scratch/wallpaper/emit_v1/manifest.jsonl`
+    has been unwritable since. And the run path already MAKES its product — `attempt_budget.plan`
+    walks each partition's rank-ordered supply from index 0 once per head, so one run plans the
+    same top location for a smooth attempt and a strange attempt and releases both at the same
+    2560x1440 ss4 canon.
+  * **DELETED:** `main()`, the `--ephemeral` lane, the alternates state (`load`/`save_alternates`,
+    `_reset_state`, `_migrate_legacy_home`, the self-heal pass), `run_checks` / `run_parity` /
+    `write_report` / `side_by_side`, and `tail_alloc.py` + `test_tail_alloc.py` (one importer,
+    this driver). **KEPT:** `ROSTER` / `load_promoted_roster`, `_color_params` (THE canonical
+    inherited coloring), the three render paths, the auto-level seam. The module no longer
+    imports torch.
+  * **THE COST, BOOKED RATHER THAN LEFT TO BE FOUND — the mining gate lost its last acting
+    site.** `alloc_input = [... scorer.gate(...)]` was the ONLY caller of `MiningScorer.gate`
+    in the tree, so the 0.0949 crossover now acts nowhere: `MINING_RELEASE` cannot remove a
+    row, `MINING_POOL` is 0.0, `rank_select` holds no floor, and the mining scale has no
+    enforcing cut of any kind. **Annotation-only EVERYWHERE is a deliberate demotion Matt took
+    as a policy call, not a cleanup's side effect** — the lock and its `superseded_by` chain
+    are untouched as provenance, and a one-line comment at `gate()` says the site is gone.
+    Consequence for the other floor: `JUNK_FLOOR`'s caller set is now exactly `{ranked_intake}`
+    on the stage-1 scale, which is why its permanence is restated on SEMANTIC grounds
+    (`classifier_retrain_protocol.md` §5a) rather than on the two-readers-two-scales argument.
+  * **The gate's acting-site claim is asserted by an AST scan** with a planted-tree non-vacuity
+    test beside it — a text scan cannot tell a eulogy from a call, and this register plus the
+    retirement's own comments are full of the retired call spelled out in prose.
+  `[decision: prompts/deploy_tail_recon.md, Matt, 2026-08-12]`
+  `[code: tools/mining/deploy_tail.py; tools/mining/mining_gate.py; tools/emission/floors.py;
+  tools/emission/test_floors.py]`

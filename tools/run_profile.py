@@ -7,6 +7,14 @@ the outliers visible.
                                        scratch/emission/prod26
     uv run python tools/run_profile.py <dir> --json --top 10
 
+THE EMISSION LEG'S ROWS ARE NOT IN ITS `--out` DIR (since 2026-08-13): they land in the durable
+`data/emission/run_telemetry/<run>/`, while `summary.json` stays in the scratch out dir. So an
+emission out dir is given here exactly as before and this reader FOLLOWS it — first to the path
+the run recorded for its own stream (`summary.stage_times_path`, which is also how an ephemeral
+run's `--record-root` is found), then to the production home for a run of that name — and prints
+the redirect, because a table drawn from a different directory than the one asked for must say
+so. The telemetry dir may also be named directly; it simply has no summary to check against.
+
 REPORT-SIDE ONLY, AND THAT IS THE DESIGN. Nothing here runs during a run, nothing here alerts,
 nothing in the run reads it back. An in-run outlier detector would need a threshold that is
 correct before the run has a median to compare against, and would then be a live cutoff on a
@@ -56,6 +64,9 @@ for _p in (str(ROOT), str(ROOT / "tools")):
         sys.path.insert(0, _p)
 
 from tools import stage_times as stimes           # noqa: E402
+# The emission leg's run-keyed telemetry home is `emission_sinks`' to name, not this reader's
+# to restate. It is pathlib-only, so importing it here costs nothing a reader would notice.
+from tools.emission import emission_sinks as esinks  # noqa: E402
 
 # A unit is an outlier at more than this multiple of its stage's median.
 OUTLIER_K = 3.0
@@ -183,16 +194,38 @@ def span_of(rows: list[dict]) -> dict:
 # --------------------------------------------------------------------------- #
 # one run dir
 # --------------------------------------------------------------------------- #
+def stream_dir_for(run_dir, summary: dict | None = None) -> Path:
+    """Where this run dir's per-unit rows actually are, in decreasing order of authority.
+
+    The dir itself if it holds the stream; else the path the run RECORDED for its own stream
+    (`summary.stage_times_path`, written at the write site from the resolved path, so it is
+    right for an ephemeral run's `--record-root` too — derived state, not a guess); else the
+    emission leg's production run-keyed home for a run of that name. A recorded path that no
+    longer exists falls through rather than deciding the answer: the record is of where the run
+    wrote, and the file can be gone."""
+    d = Path(run_dir)
+    if (d / stimes.STREAM).exists():
+        return d
+    recorded = (summary or {}).get("stage_times_path")
+    if recorded and Path(recorded).exists():
+        return Path(recorded).parent
+    alt = esinks.run_telemetry_dir(esinks.default_record_root(ROOT), d.name)
+    return alt if (alt / stimes.STREAM).exists() else d
+
+
 def profile_dir(run_dir, top: int = 8) -> dict:
     d = Path(run_dir)
-    rows, diag = stimes.read(d)
     summary = {}
     sp = d / "summary.json"
     if sp.exists():
         summary = json.loads(sp.read_text(encoding="utf-8"))
+    sd = stream_dir_for(d, summary)
+    rows, diag = stimes.read(sd)
     stats = stage_stats(rows)
     prof = {
         "run_dir": str(d), "present": diag["present"], "stream_diag": diag,
+        # Only when it is NOT the dir asked for — a null here means "read where you pointed".
+        "stream_dir": (str(sd) if sd != d else None),
         "mode": summary.get("mode"),
         "stages": stats,
         "span": span_of(rows),
@@ -271,10 +304,14 @@ def _fmt(prof: dict, top: int) -> str:
     L.append(f"=== {prof['run_dir']}  (mode={prof.get('mode')})")
     d = prof["stream_diag"]
     if not prof["present"]:
-        L.append(f"  !! PER-UNIT TIMING UNAVAILABLE - no `{stimes.STREAM}` in this run dir.")
+        L.append(f"  !! PER-UNIT TIMING UNAVAILABLE - no `{stimes.STREAM}` in this run dir, "
+                 f"nor in the durable emission telemetry home for a run of this name.")
         L.append("     Legitimate for any run started before 2026-08-12 (the stream did not "
                  "exist); for a later run it means the record is gone.")
     else:
+        if prof.get("stream_dir"):
+            L.append(f"  rows read from {prof['stream_dir']} (the run-keyed telemetry home; "
+                     f"this dir holds the summary)")
         extra = []
         if d["n_torn"]:
             extra.append(f"{d['n_torn']} torn line(s) (kill mid-append)")

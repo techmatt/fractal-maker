@@ -80,7 +80,7 @@ why that pool is a **candidate** list and nothing more:
 
 | dir | files | drives | verdict | n / A / B / ∪ |
 |---|---:|---|---|---|
-| *(top level)* | 13 | Shared helpers every subdir imports: `paths.py` (storage-class write gate, 42 importers), `colormap.py` (the Python coloring tail for the field⊗colormap split, 32), `run_record.py` (THE segmented per-row run-record layer), `_bootstrap.py` (`sys.path` for 4 of 36 subdirs), `kill_run.py`. **Plus, since 2026-08-12, the stage-timing pair**: `stage_times.py` is THE writer of a run's per-unit `stage_times.jsonl` (frontier batches, dives, root draws, emission intake/colorize/select/release renders) and `run_profile.py` is its post-run reader (stage table + distribution + top-N by ratio to the stage median). The reader never runs in-run and the run never reads it back. | **live** | 8 / 7 / 5 / 7 |
+| *(top level)* | 13 | Shared helpers every subdir imports: `paths.py` (storage-class write gate, 42 importers), `colormap.py` (the Python coloring tail for the field⊗colormap split, 32), `run_record.py` (THE segmented per-row run-record layer), `_bootstrap.py` (`sys.path` for 4 of 36 subdirs), `kill_run.py`. **Plus, since 2026-08-12, the stage-timing pair**: `stage_times.py` is THE writer of a run's per-unit `stage_times.jsonl` (frontier batches, dives, root draws, emission intake/colorize/select/release renders) and `run_profile.py` is its post-run reader (stage table + distribution + top-N by ratio to the stage median). The reader never runs in-run and the run never reads it back. **DURABLE on both legs since 2026-08-13** — discovery into `data/discovery/<run>/`, emission into `data/emission/run_telemetry/<run>/` (via `emission_sinks.stage_times_home`, so an ephemeral run still lands in scratch); `run_profile` follows an emission out dir's run id to that home. | **live** | 8 / 7 / 5 / 7 |
 | [`atlas/`](#notes-atlas) | 48 | **The standing discovery flow** — `production_seeder.py` (26 importers) → `guided-descend` → reward, plus `steered_frontier.py`, `guard.py`, `deficit_scheduler.py`, `minibrot_maneuvers.py`, the view-screen group, the label-seeded harvest and the cross-run saturation memory. | **live** | 40 / 14 / 22 / 28 |
 | `atlas_probe/` | 5 | Step-0 atlas measurement probes (a closed study) — **but `step0_reanalysis.py` is the k3 reward primitive `production_seeder` imports** via an explicit `sys.path.insert`. Not retirable. | **live** | 5 / 3 / 2 / 4 |
 | `audit/` | 6 | `size_guard.py` (the repo-size registry — exec'd by `tests/test_repo_size_guard.py` through a piecewise path the A pass cannot see), `disk_audit.py` (safe-delete classifier), `durability_map.py` (declared-vs-actual storage class). | **live** | 3 / 1 / 3 / 3 |
@@ -245,7 +245,8 @@ no stored-`decoded_class` q3 gate. `floors.py` (2026-08-04) is THE cut owner for
 pipeline as of 2026-08-09: its four stamped floors (wallpaper pool 0.75 / release 0.90, mining
 pool 0.25 / release 0.50) are **ANNOTATION-ONLY** — a `Floor` offers `annotates()` and nothing
 else, `gate()`/`acts` deleted — and the TWO enforcing cuts are `JUNK_FLOOR` = 0.20 at the
-colorize-pool draw (`ranked_intake`, `mining/deploy_tail`) and `GOOD_FLOOR` = 0.50 on the RUN
+colorize-pool draw (`ranked_intake` — its ONE caller since the deploy-tail driver was retired
+on 2026-08-12, which took the mining-scale draw with it) and `GOOD_FLOOR` = 0.50 on the RUN
 side (`production_seeder.is_good`, `steered_frontier.admit`, `descriptor.load_admitted`), both
 read against a row's stored raw P(>=3). `GOOD_FLOOR` replaced the per-partition `t_good` served
 predicate and the whole estimator behind it; `GREAT_CUT`/`NOTBAD_CUT` (CORN's own uncalibrated
@@ -279,8 +280,11 @@ deliberately NOT this convention (`descriptor.RESCORE_SUFFIX_FMT`).
 
 The strange/render-mode quality gate: `mining_pins.py` (the TORCH-FREE pin block — ckpt,
 threshold, derived version tag) + `mining_gate.py` (the pinned `mining_v1`, re-exporting it),
-`score_lib.py` (the v3 deploy-transform scorer, 28 importers), `dedup.py`, `tail_alloc.py`,
-`deploy_tail.py`.
+`score_lib.py` (the v3 deploy-transform scorer, 28 importers), `dedup.py`, and `deploy_tail.py`
+— **LIBRARY ONLY since 2026-08-12**: its `main()`, its `--ephemeral` lane and the alternates
+state were retired with `tail_alloc.py`, and what six live modules import is the roster
+(`ROSTER`/`load_promoted_roster`), `_color_params` (THE canonical inherited coloring), the
+three render paths and the auto-level seam.
 
 **The corpus rebuild (2026-08-06)** lives here too, since the head's label corpus was lost and
 `render_mode_pilot/` is retired: `build_gate_passers.py` (regenerates the wallpaper-v3
@@ -303,8 +307,11 @@ derives calibration ladders on whichever head wins →
 rewritten to derive the gate lock from that committed report rather than from the lost July
 corpus (→ the tracked `data/render_mode_head/v1/mining_gate_lock.{json,md}`, read back through
 `read_lock()`, which refuses on a pin move), the `mining_release` floor goes ENFORCING in
-`emission/floors.py` and here in `deploy_tail.py` (which now reads `.acts` instead of carrying
-its own answer), and v2's weights are de-tracked as a rejected candidate.
+`emission/floors.py` and here in `deploy_tail.py` (which read `.acts` rather than carrying its
+own answer), and v2's weights are de-tracked as a rejected candidate. **Both halves of that
+enforcement are gone now** — the four stamped floors went annotation-only on 2026-08-09
+(`acts` deleted with `gate()`), and the deploy-tail driver was retired on 2026-08-12, so
+`mining_release` annotates and nothing acts on the mining scale.
 
 **The 2026-08-10 (27) sheet**: `build_mining_correction.py` — mode x mining-score strata over
 the gate-passer universe MINUS every (location, mode) pair sheet v1 served, with the
