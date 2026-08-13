@@ -34,6 +34,14 @@ i.e. the percentile-stretch is applied to the RAW field FIRST, then the transfor
 curve operates on the [0,1]-stretched value (Rust `apply_transform`). Every numeric
 step mirrors the Rust source so the outputs match.
 
+Everything after the stretch is STREAMED in row chunks rather than evaluated whole
+(`_shade_rows` -> `_banded_pass` -> `_banded_axis0`): at the release geometry the
+supersampled linear-RGB buffer is 1.4 GB and the separable horizontal pass used to walk
+all of it once per filter tap. The chunking and the `_uniform_span` shortcut inside each
+banded pass are pure speedups — every destination pixel accumulates the same taps in the
+same order — and `test_colormap.py` pins that against a whole-array reference
+implementation. Chunk size is a cache-tuning knob, never a coloring parameter.
+
 Palette type is binary {cyclic, non_cyclic}. The former diverging **center-pivot**
 was the ONLY coloring knob with no Rust analog (it was Python-only); it has been
 dropped -- diverging balance is now handled by reverse + gamma -- so every remaining
@@ -238,15 +246,46 @@ def _bake_lut(stops, reverse=False, mirror=False):
     return lut
 
 
-def lookup_linear(lut, t):
-    """Cyclic LUT sample at t (array), linear RGB — Rust `lookup_linear` (index+lerp)."""
-    t = np.mod(np.asarray(t, dtype=np.float64), 1.0)
+def _lut_pairs(lut):
+    """(LUT_SIZE, 3, 2) [entry, next-entry] table so the cyclic sample is ONE gather.
+
+    `pairs[i,:,0] = lut[i]` and `pairs[i,:,1] = lut[(i+1) % LUT_SIZE]` — exactly the two
+    rows `lookup_linear` used to fetch separately, so the lerp that follows is unchanged
+    arithmetic (bit-identical) with half the fancy-index passes over the pixel grid. Built
+    per call: it is 4096x6 doubles (192 KB) against a gather over tens of millions of
+    pixels, so there is nothing to memoize and no second unbounded cache beside `_LUT_MEMO`."""
+    pairs = np.empty((LUT_SIZE, 3, 2), dtype=np.float64)
+    pairs[:, :, 0] = lut
+    pairs[:, :, 1] = np.roll(lut, -1, axis=0)
+    return pairs
+
+
+def _lookup_pairs(pairs, t, in_unit=False):
+    """`lookup_linear` against a prebuilt `_lut_pairs` table. Bit-identical to it.
+
+    `in_unit` asserts the caller's `t` already lies in [0,1] (or is NaN), which lets the
+    opening wrap and the floor be dropped — NOT reordered, dropped as provable no-ops:
+      * `np.mod(t, 1.0)` is the identity on [0,1), and at t == 1.0 it maps to 0.0, which
+        the `i0 % LUT_SIZE` two lines down reaches anyway (i0 = 4096 -> 0, f = 0.0), so
+        the sampled pair and the lerp weight are the same either way. NaN survives both.
+      * `np.floor` before an int64 cast is the identity for non-negative x, and x = t*4096
+        is non-negative under the same premise.
+    That drops one libm `fmod` and one `floor` pass over every subpixel, which is real
+    money at 59 M of them. Callers who cannot promise the range leave it False."""
+    t = np.asarray(t, dtype=np.float64)
+    if not in_unit:
+        t = np.mod(t, 1.0)
     x = t * LUT_SIZE
-    i0 = np.floor(x).astype(np.int64)
+    i0 = (x if in_unit else np.floor(x)).astype(np.int64)
     f = (x - i0)[..., None]
     i0 = i0 % LUT_SIZE
-    i1 = (i0 + 1) % LUT_SIZE
-    return lut[i0] * (1.0 - f) + lut[i1] * f
+    g = pairs[i0]                               # (..., 3, 2) — one gather, both entries
+    return g[..., 0] * (1.0 - f) + g[..., 1] * f
+
+
+def lookup_linear(lut, t):
+    """Cyclic LUT sample at t (array), linear RGB — Rust `lookup_linear` (index+lerp)."""
+    return _lookup_pairs(_lut_pairs(lut), t)
 
 
 # ---------------------------------------------------------------------------
@@ -389,17 +428,107 @@ def _build_banded_taps(dst_len, src_len, ss, name):
     return starts, weights
 
 
-def _banded_pass(src, starts, weights):
-    """Apply a 1-D banded filter along axis 1 of `src` (N, src_len, 3) -> (N, dst_len, 3)."""
+def _uniform_span(starts, weights, ss, src_len):
+    """`(lo, hi, W)` — the destination range whose tap row is the SHIFT-INVARIANT one.
+
+    For an integer supersample the tap geometry is a pure translation: `center = ss*d +
+    ss/2`, so a tap's offset `(sx + 0.5 - center)/ss` depends only on `sx - ss*d` and
+    every UNTRUNCATED destination pixel gets `starts[d] = starts[lo] + ss*(d-lo)` and the
+    IDENTICAL weight vector `W`. Only the handful of rows whose support runs off either
+    end of the source are different (6 of 2560 at ss4/lanczos3), and those are detected
+    here by their weights simply not matching (a truncated row renormalizes over fewer
+    taps). That turns the interior of a banded pass from a per-tap FANCY-INDEX GATHER into
+    a basic-slice VIEW times a SCALAR — bit-identical, because multiplying by `W[k]` and
+    by a broadcast array of that same value is the same IEEE operation in the same order.
+
+    Returns `(0, 0, None)` when there is no such span (non-integer geometry, tiny images),
+    which puts the caller back on the general per-destination path."""
+    dst_len, K = weights.shape
+    if dst_len < 3 or ss < 1:
+        return 0, 0, None
+    mid = dst_len // 2
+    W = weights[mid]
+    lo = mid
+    while lo > 0 and starts[lo - 1] == starts[lo] - ss and np.array_equal(weights[lo - 1], W):
+        lo -= 1
+    hi = mid + 1
+    while hi < dst_len and starts[hi] == starts[hi - 1] + ss and np.array_equal(weights[hi], W):
+        hi += 1
+    # The whole PADDED window has to sit inside the source, not just the nonzero taps: the
+    # fast path slices `starts[lo]+k` for every k up to K-1 as one basic slice, so a row
+    # whose padding runs off the end would silently shorten it. Such a row still gets the
+    # right answer from the general path below, so shrink rather than bail.
+    while hi > lo and int(starts[hi - 1]) + K > src_len:
+        hi -= 1
+    if hi <= lo or starts[lo] < 0:
+        return 0, 0, None
+    return lo, hi, W
+
+
+def _banded_pass(src, starts, weights, ss=None):
+    """Apply a 1-D banded filter along axis 1 of `src` (N, src_len, 3) -> (N, dst_len, 3).
+
+    `ss` (the supersample) is optional and only enables the `_uniform_span` fast path;
+    without it every destination goes through the general gather. Either way each output
+    accumulates its taps in ascending `k`, which is what keeps the two paths bit-identical."""
     N, src_len, C = src.shape
     dst_len, K = weights.shape
     out = np.zeros((N, dst_len, C), dtype=np.float64)
+    lo, hi, W = _uniform_span(starts, weights, ss, src_len) if ss else (0, 0, None)
+    if W is not None:
+        buf = np.empty((N, hi - lo, C), dtype=np.float64)
+        base = int(starts[lo])
+        for k in range(K):
+            a = base + k
+            np.multiply(src[:, a: a + ss * (hi - lo): ss, :], W[k], out=buf)
+            out[:, lo:hi, :] += buf
+        # the few truncated destinations left over — cheap enough one at a time
+        for d in list(range(0, lo)) + list(range(hi, dst_len)):
+            acc = out[:, d, :]
+            for k in range(K):
+                acc += src[:, min(max(int(starts[d]) + k, 0), src_len - 1), :] * weights[d, k]
+        return out
     for k in range(K):
         # start+k can run past the edge on short (padded) tap rows; the weight there
         # is 0, so clip the index into range and let the zero weight nullify it.
         cols = np.clip(starts + k, 0, src_len - 1)
-        contrib = src[:, cols, :]               # (N, dst_len, 3)
-        out += contrib * weights[:, k][None, :, None]
+        out += src[:, cols, :] * weights[:, k][None, :, None]
+    return out
+
+
+def _banded_axis0(src, starts, weights, ss, d0, d1):
+    """The vertical leg: filter along axis 0 of `src` (src_len, W, 3) over destination rows
+    [d0, d1) -> (d1-d0, W, 3) float64.
+
+    Filtering axis 0 directly is what the transposed `_banded_pass` call it replaces was
+    doing the expensive way: `out[d,n,c] = sum_k src[starts[d]+k, n, c] * w[d,k]` either way,
+    same ascending-`k` order, but here every tap is a CONTIGUOUS row slab instead of a
+    stride-`W` column. `src` may be float32 (the intermediate the Rust path stores); only
+    the band's own rows are widened to float64, so the arithmetic is the f64 the old path
+    did after its `.astype(np.float64)`."""
+    src_len = src.shape[0]
+    _, K = weights.shape
+    r0 = int(starts[d0])
+    r1 = min(int(starts[d1 - 1]) + K, src_len)
+    slab = np.asarray(src[r0:r1], dtype=np.float64)
+    out = np.zeros((d1 - d0,) + src.shape[1:], dtype=np.float64)
+    lo, hi, W = _uniform_span(starts, weights, ss, src_len)
+    lo, hi = max(lo, d0), min(hi, d1)
+    if W is not None and hi > lo:
+        buf = np.empty((hi - lo,) + src.shape[1:], dtype=np.float64)
+        base = int(starts[lo]) - r0
+        for k in range(K):
+            a = base + k
+            np.multiply(slab[a: a + ss * (hi - lo): ss], W[k], out=buf)
+            out[lo - d0: hi - d0] += buf
+        for d in list(range(d0, lo)) + list(range(hi, d1)):
+            acc = out[d - d0]
+            for k in range(K):
+                acc += slab[min(max(int(starts[d]) + k, 0), src_len - 1) - r0] * weights[d, k]
+        return out
+    for k in range(K):
+        rows = np.clip(starts[d0:d1] + k, 0, src_len - 1) - r0
+        out += slab[rows] * weights[d0:d1, k][:, None, None]
     return out
 
 
@@ -407,6 +536,15 @@ def _encode_srgb8(linear):
     """linear (...,3) -> uint8 sRGB, Rust `(linear_to_srgb(v)*255+0.5) as u8` (truncate)."""
     v = linear_to_srgb(linear) * 255.0 + 0.5
     return np.floor(v).clip(0, 255).astype(np.uint8)
+
+
+# Row-chunk sizes for the streamed tail. Both exist for ONE reason: to keep the working
+# set inside L3 (12 MB on the production box) so the tail is compute-bound instead of
+# walking a 1.4 GB linear-RGB buffer 25 times per separable pass. They change no output —
+# every destination pixel accumulates the same taps in the same order at any chunk size —
+# so they are a tuning knob, not a parameter of the coloring.
+SHADE_CHUNK_ROWS = 16       # supersampled rows shaded + horizontally filtered per chunk
+VPASS_BAND_ROWS = 32        # output rows per vertical-pass band
 
 
 def downsample(linear, ss, name):
@@ -423,10 +561,16 @@ def downsample(linear, ss, name):
     hstart, hw = _build_banded_taps(out_w, Ws, ss, name)
     vstart, vw = _build_banded_taps(out_h, Hs, ss, name)
     # Horizontal pass -> (Hs, out_w, 3), stored as f32 (Rust intermediate is f32).
-    inter = _banded_pass(linear, hstart, hw).astype(np.float32).astype(np.float64)
-    # Vertical pass: filter along rows -> transpose to put height on axis 1.
-    out = _banded_pass(np.transpose(inter, (1, 0, 2)), vstart, vw)  # (out_w, out_h, 3)
-    return _encode_srgb8(np.transpose(out, (1, 0, 2)))
+    inter = np.empty((Hs, out_w, 3), dtype=np.float32)
+    for r0 in range(0, Hs, SHADE_CHUNK_ROWS):
+        r1 = min(r0 + SHADE_CHUNK_ROWS, Hs)
+        inter[r0:r1] = _banded_pass(linear[r0:r1], hstart, hw, ss)
+    # Vertical pass, banded over output rows (the f32 store is widened per band).
+    img = np.empty((out_h, out_w, 3), dtype=np.uint8)
+    for d0 in range(0, out_h, VPASS_BAND_ROWS):
+        d1 = min(d0 + VPASS_BAND_ROWS, out_h)
+        img[d0:d1] = _encode_srgb8(_banded_axis0(inter, vstart, vw, ss, d0, d1))
+    return img
 
 
 # ---------------------------------------------------------------------------
@@ -641,12 +785,20 @@ class StretchedField:
 
 
 def stretch_field(field):
-    """(FieldData) -> StretchedField. Percentile-stretch on the RAW field (Rust PCT)."""
+    """(FieldData) -> StretchedField. Percentile-stretch on the RAW field (Rust PCT).
+
+    Computed DENSELY and then zeroed at the interior, rather than gathered through `valid`
+    and scattered back. The map is elementwise, so the exterior values are bit-identical to
+    the gathered form; the interior lands on 0.0 either way (NaN survives the clip and is
+    overwritten). Boolean gather+scatter over a 59 M-sample field is several times the cost
+    of the same arithmetic run straight through."""
     raw = field.values
     valid = np.isfinite(raw)
     lo, span = percentile_stretch(raw, valid=valid)   # reuse mask; no second np.isfinite
-    x = np.zeros_like(raw)
-    x[valid] = np.clip((raw[valid] - lo) / span, 0.0, 1.0)
+    x = raw - lo
+    x /= span
+    np.clip(x, 0.0, 1.0, out=x)
+    np.copyto(x, 0.0, where=~valid)
     return StretchedField(x=x, valid=valid)
 
 
@@ -746,29 +898,86 @@ def render_candidate(field, config, library, prep=None, profile=None):
     #     concentrates on high-gradient (edge) isovalues. 'pct' (default) SKIPS this ->
     #     bit-identical to the pre-transfer path; 'grad' at transfer_gamma=0 is the same
     #     identity edge. Field-only; interior pixels keep x=0 (overwritten below anyway).
-    if config.transfer == "grad":
-        if profile is None:
-            profile = gradient_transfer_profile(field, prep)
-        base = _apply_transfer(x, profile, config.transfer_gamma)
-    else:
-        base = x
+    if config.transfer == "grad" and profile is None:
+        profile = gradient_transfer_profile(field, prep)
+
+    lut = library.lut(config.palette, reverse=config.reverse)
+    # Steps 1b-5 are STREAMED in row chunks (`_shade_rows` + the two banded passes) rather
+    # than materialized whole: at the release geometry the (5760, 10240, 3) float64 linear
+    # buffer alone is 1.4 GB, and the separable horizontal pass walks it once per tap.
+    # Every pixel sees the identical arithmetic in the identical order — see `_uniform_span`.
+    return _shade_and_downsample(x, valid, lut, config, field.supersample, profile)
+
+
+def _shade_rows(x_rows, valid_rows, pairs, config, profile, ic):
+    """Steps 1b-4 on a slab of supersampled rows -> (n, W_sub, 3) linear RGB.
+
+    Exactly the per-pixel chain `render_candidate` used to run over the whole grid:
+    optional gradient transfer, transform curve + gamma, the cyclic n_cycles/phase move,
+    the OKLab LUT sample, then the interior fill."""
+    base = (_apply_transfer(x_rows, profile, config.transfer_gamma)
+            if config.transfer == "grad" else x_rows)
 
     # 2. transform curve + gamma.
     gray = apply_transform(base, config.log_premap, config.gamma)
 
     # 3. LUT stage: n_cycles, phase (Rust: gray*cycles+offset). Cyclic-only knobs;
-    #    non_cyclic palettes leave gray untouched (n_cycles=1, phase=0).
+    #    non_cyclic palettes leave gray untouched (n_cycles=1, phase=0) — and in that
+    #    case both wraps are dropped, not reordered: `apply_transform` already clamps to
+    #    [0,1], `gray * 1` and `gray + 0.0` are exact, and `_lookup_pairs` opens with the
+    #    same `np.mod(t, 1.0)` that would have folded the t == 1.0 endpoint. Any other
+    #    (n_cycles, phase) keeps the original two-wrap sequence verbatim, because
+    #    `mod(mod(a,1)+p, 1)` and `mod(a+p, 1)` genuinely differ at a == 1.0.
     t = gray
-    t = np.mod(t * config.n_cycles, 1.0)
-    t = np.mod(t + config.phase, 1.0)
-    lut = library.lut(config.palette, reverse=config.reverse)
-    linear = lookup_linear(lut, t)          # (H_sub, W_sub, 3) linear RGB
+    cyclic = config.n_cycles != 1 or config.phase != 0.0
+    if cyclic:
+        t = np.mod(t * config.n_cycles, 1.0)
+        t = np.mod(t + config.phase, 1.0)
+    # `t` is in [0,1] here — from `np.mod` on the cyclic branch, and otherwise from
+    # `apply_transform`'s own clamp (whose `** gamma` stays inside [0,1] for gamma >= 0;
+    # a negative gamma can send 0 to inf, so that case keeps the general wrap).
+    linear = _lookup_pairs(pairs, t, in_unit=cyclic or config.gamma >= 0.0)
 
     # 4. interior fill: NaN pixels -> interior_color (linear).
-    linear[~valid] = np.asarray(config.interior_color, dtype=np.float64)
+    np.copyto(linear, ic, where=~valid_rows[..., None])
+    return linear
 
-    # 5. linear-light downsample -> sRGB8.
-    return downsample(linear, field.supersample, config.filter)
+
+def _shade_and_downsample(x, valid, lut, config, ss, profile):
+    """The streamed tail: shade + linear-light downsample -> (H_out, W_out, 3) uint8 sRGB.
+
+    Chunked over source rows so the shaded linear-RGB slab is never materialized at full
+    supersampled size. `box` averages each output row from its own `ss` source rows, so it
+    needs no halo; the filtered path writes the horizontal leg into the SAME float32
+    intermediate the whole-array code stored, then runs the vertical leg banded over
+    output rows."""
+    Hs, Ws = x.shape
+    out_h, out_w = Hs // ss, Ws // ss
+    ic = np.asarray(config.interior_color, dtype=np.float64)
+    pairs = _lut_pairs(lut)
+    img = np.empty((out_h, out_w, 3), dtype=np.uint8)
+
+    if config.filter == "box":
+        step = max(SHADE_CHUNK_ROWS // ss, 1) * ss
+        for r0 in range(0, out_h * ss, step):
+            r1 = min(r0 + step, out_h * ss)
+            lin = _shade_rows(x[r0:r1], valid[r0:r1], pairs, config, profile, ic)
+            n = (r1 - r0) // ss
+            r = lin[:, : out_w * ss].reshape(n, ss, out_w, ss, 3).mean(axis=(1, 3))
+            img[r0 // ss: r0 // ss + n] = _encode_srgb8(r)
+        return img
+
+    hstart, hw = _build_banded_taps(out_w, Ws, ss, config.filter)
+    vstart, vw = _build_banded_taps(out_h, Hs, ss, config.filter)
+    inter = np.empty((Hs, out_w, 3), dtype=np.float32)      # Rust's f32 intermediate
+    for r0 in range(0, Hs, SHADE_CHUNK_ROWS):
+        r1 = min(r0 + SHADE_CHUNK_ROWS, Hs)
+        lin = _shade_rows(x[r0:r1], valid[r0:r1], pairs, config, profile, ic)
+        inter[r0:r1] = _banded_pass(lin, hstart, hw, ss)
+    for d0 in range(0, out_h, VPASS_BAND_ROWS):
+        d1 = min(d0 + VPASS_BAND_ROWS, out_h)
+        img[d0:d1] = _encode_srgb8(_banded_axis0(inter, vstart, vw, ss, d0, d1))
+    return img
 
 
 # ===========================================================================

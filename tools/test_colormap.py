@@ -184,6 +184,122 @@ def test_lut_memo_byte_identical(library):
 
 
 # --------------------------------------------------------------------------- #
+# Streamed tail — the fast paths must be BYTE-IDENTICAL to the whole-array form.
+#
+# `render_candidate` shades and downsamples in row chunks, and each banded pass takes a
+# basic-slice shortcut over the shift-invariant interior (`_uniform_span`). Both are pure
+# speedups whose ONLY contract is that they change nothing, so the gate is a differential
+# against a reference implementation kept here — the whole-array, no-fast-path code the
+# optimization replaced (verification_practice.md §7 "differential over frozen literals",
+# §8 "byte-identity only where ... depends on it": here it is the whole claim).
+# --------------------------------------------------------------------------- #
+
+def _ref_banded_pass(src, starts, weights):
+    """Reference: every destination through the general gather, no uniform-span path."""
+    N, src_len, C = src.shape
+    dst_len, K = weights.shape
+    out = np.zeros((N, dst_len, C), dtype=np.float64)
+    for k in range(K):
+        cols = np.clip(starts + k, 0, src_len - 1)
+        out += src[:, cols, :] * weights[:, k][None, :, None]
+    return out
+
+
+def _ref_render_candidate(field, config, library, prep=None, profile=None):
+    """Reference: the whole-array tail — one 3-D linear buffer, both passes over all of it."""
+    cm.validate_config(config, library)
+    if prep is None:
+        prep = cm.stretch_field(field)
+    x, valid = prep.x, prep.valid
+    if config.transfer == "grad":
+        if profile is None:
+            profile = cm.gradient_transfer_profile(field, prep)
+        base = cm._apply_transfer(x, profile, config.transfer_gamma)
+    else:
+        base = x
+    gray = cm.apply_transform(base, config.log_premap, config.gamma)
+    t = np.mod(gray * config.n_cycles, 1.0)
+    t = np.mod(t + config.phase, 1.0)
+    lut = library.lut(config.palette, reverse=config.reverse)
+    t = np.mod(np.asarray(t, dtype=np.float64), 1.0)
+    xi = t * cm.LUT_SIZE
+    i0 = np.floor(xi).astype(np.int64)
+    f = (xi - i0)[..., None]
+    i0 = i0 % cm.LUT_SIZE
+    i1 = (i0 + 1) % cm.LUT_SIZE
+    linear = lut[i0] * (1.0 - f) + lut[i1] * f
+    linear[~valid] = np.asarray(config.interior_color, dtype=np.float64)
+
+    ss, name = field.supersample, config.filter
+    Hs, Ws, _ = linear.shape
+    out_h, out_w = Hs // ss, Ws // ss
+    if name == "box":
+        r = linear[: out_h * ss, : out_w * ss].reshape(out_h, ss, out_w, ss, 3).mean(axis=(1, 3))
+        return cm._encode_srgb8(r)
+    hstart, hw = cm._build_banded_taps(out_w, Ws, ss, name)
+    vstart, vw = cm._build_banded_taps(out_h, Hs, ss, name)
+    inter = _ref_banded_pass(linear, hstart, hw).astype(np.float32).astype(np.float64)
+    out = _ref_banded_pass(np.transpose(inter, (1, 0, 2)), vstart, vw)
+    return cm._encode_srgb8(np.transpose(out, (1, 0, 2)))
+
+
+# Deliberately ragged so neither chunk loop divides evenly: at ss=2 the field is 106 rows
+# against SHADE_CHUNK_ROWS, and the output is 53 rows against VPASS_BAND_ROWS.
+_STREAM_KNOBS = [
+    dict(palette="twilight", filter="lanczos3"),
+    dict(palette="twilight", filter="mitchell"),
+    dict(palette="twilight", filter="box"),
+    dict(palette="twilight", filter="lanczos3", gamma=1.7, log_premap="log"),
+    dict(palette="twilight", filter="lanczos3", reverse=True, interior_color=(0.2, 0.05, 0.4)),
+    dict(palette="twilight", filter="lanczos3", n_cycles=3, phase=0.37),
+    dict(palette="twilight", filter="lanczos3", phase=0.5),
+    dict(palette="twilight", filter="lanczos3", transfer="grad", transfer_gamma=1.5),
+    dict(palette="twilight", filter="lanczos3", transfer="grad", transfer_gamma=0.0),
+    dict(palette="magma", filter="lanczos3"),
+]
+
+
+@pytest.mark.parametrize("ss", [1, 2, 4])
+@pytest.mark.parametrize("kw", _STREAM_KNOBS, ids=lambda k: f"{k['filter']}-{len(k)}")
+def test_streamed_tail_is_byte_identical_to_the_whole_array_form(library, ss, kw):
+    field = _synthetic_field(h=53, w=71, ss=ss, seed=ss)
+    ow, oh = field.out_size
+    cfg = cm.CandidateConfig(location=field.location, eval_width=ow, eval_height=oh, **kw)
+    prep = cm.stretch_field(field)
+    prof = cm.gradient_transfer_profile(field, prep) if kw.get("transfer") == "grad" else None
+    got = cm.render_candidate(field, cfg, library, prep=prep, profile=prof)
+    want = _ref_render_candidate(field, cfg, library, prep=prep, profile=prof)
+    assert np.array_equal(got, want), (
+        f"ss={ss} {kw}: max delta "
+        f"{np.abs(got.astype(int) - want.astype(int)).max()}")
+
+
+def test_the_uniform_span_fast_path_is_actually_taken(library):
+    """Non-vacuity for the test above: if `_uniform_span` returned "no span" everywhere the
+    differential would still pass while the fast path went dead. Assert it FIRES at the two
+    production geometries, and that it covers the interior while excluding the truncated
+    edge rows — a span of the whole axis would mean the edge detection is broken."""
+    for src_len, ss in ((10240, 4), (1920, 2)):
+        dst_len = src_len // ss
+        starts, weights = cm._build_banded_taps(dst_len, src_len, ss, "lanczos3")
+        lo, hi, W = cm._uniform_span(starts, weights, ss, src_len)
+        assert W is not None, (src_len, ss)
+        assert 0 < lo < hi < dst_len, (src_len, ss, lo, hi, dst_len)
+        assert (hi - lo) / dst_len > 0.99, (src_len, ss, lo, hi)
+        # the excluded rows are exactly the ones whose padded window runs off an end
+        for d in list(range(lo)) + list(range(hi, dst_len)):
+            assert starts[d] == 0 or starts[d] + weights.shape[1] > src_len, (d, starts[d])
+
+
+def test_the_chunk_loops_actually_iterate(library):
+    """Second non-vacuity leg: the fixture must be taller than BOTH chunk sizes, or the
+    streamed path degenerates to one pass and covers none of the boundary handling."""
+    field = _synthetic_field(h=53, w=71, ss=2)
+    assert field.values.shape[0] > cm.SHADE_CHUNK_ROWS
+    assert field.out_size[1] > cm.VPASS_BAND_ROWS
+
+
+# --------------------------------------------------------------------------- #
 # Reference-match — the headline gate (shells out to the release binary).
 # --------------------------------------------------------------------------- #
 
