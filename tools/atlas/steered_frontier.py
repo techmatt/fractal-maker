@@ -482,8 +482,17 @@ ROOT_REFILL_SHARE = 0.25     # in-loop root-draw seconds may not exceed this sha
 # telemetry re-derived after `pop_quota.PRICE_EMA` was halved for the per-served-batch
 # estimator — a one-variable change, every seed byte-identical to the 20260807 pair. The table
 # pins its own `price_ema`, so until this default moved, production ran the 0.30 rate the code
-# had already left. The 20260807 pair stays on disk as the previous rung.
-QUOTA_PRICES_DEFAULT_REL = "data/atlas/quota_prices_regularized_20260812.json"
+# had already left.
+#
+# RESEEDED OFF RUN 27 (2026-08-12): `..._regularized_20260812_run27.json`, derived from
+# `prod27_20260812` alone at the same alpha=0.9 and 16x band. Run 2 never priced `mandelbrot`
+# or `julia:mandelbrot` (0.3 and 0.0 units), so every table down to the 20260812 pair carried
+# them at the flat 3.0 — ~18x and ~16x above what run 27 measured, on the partition whose
+# lockout the run was launched to test. Run 27 prices all NINE rows above the evidence floor,
+# so the reseeded pair has NO defaulted row. Single-source and not pooled with run 2: `tau_h`
+# was enlarged on 2026-08-08, and `units_mined` is counted past `tau_h`, so run 2's units are
+# a different quantity. The 20260812 (run-2) pair stays on disk as the previous rung.
+QUOTA_PRICES_DEFAULT_REL = "data/atlas/quota_prices_regularized_20260812_run27.json"
 QUOTA_PRICES_DEFAULT = ROOT / QUOTA_PRICES_DEFAULT_REL
 
 

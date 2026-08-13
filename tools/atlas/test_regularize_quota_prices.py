@@ -26,8 +26,9 @@ import pop_quota as pquota                 # noqa: E402
 import regularize_quota_prices as rq       # noqa: E402
 
 # Both read off the module's OWN constants: the pair moves together every time the seed is
-# reseeded off a new run (run 1 -> run 2 on 2026-08-07), and a test pinned to a literal path
-# goes red against the previous run's record rather than against the live table.
+# reseeded off a new run (run 1 -> run 2 on 2026-08-07, run 2 -> run 27 on 2026-08-12), and a
+# test pinned to a literal path goes red against the previous run's record rather than against
+# the live table. This is what repoints the `price_ema` gate below at the deployed pair.
 MEASURED = ROOT / rq.DEFAULT_SOURCE
 REGULARIZED = ROOT / rq.DEFAULT_OUT
 

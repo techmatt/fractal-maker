@@ -1,0 +1,103 @@
+{
+  "_schema": "pop_quota_cost_to_mine/1",
+  "_doc": "pop-quota cost-to-mine SEED prices, REGULARIZED: the measured table shrunk geometrically toward its own median price at alpha=0.90. Consumed by `steered_frontier.py --quota-prices`, which DEFAULTS to this file. Regenerate with tools/atlas/regularize_quota_prices.py \u2014 never hand-edit a row, and never edit the measured table this is derived from.",
+  "prices": {
+    "julia:mandelbrot": 0.19,
+    "julia:multibrot3": 0.1171,
+    "julia:multibrot4": 0.1047,
+    "julia:multibrot5": 0.1425,
+    "mandelbrot": 0.1673,
+    "multibrot3": 0.6796,
+    "multibrot4": 0.4103,
+    "multibrot5": 0.9598,
+    "phoenix": 0.2195
+  },
+  "seed_price": 3.0,
+  "price_ema": 0.15,
+  "price_clamp": 16.0,
+  "cap_minutes": 25.0,
+  "_provenance": {
+    "estimand": "the measured seed, shrunk toward the measured median in LOG space",
+    "formula": "seed_p = exp(ALPHA * ln(price_p) + (1 - ALPHA) * ln(median(measured prices)))",
+    "alpha": 0.9,
+    "alpha_basis": "Matt, 2026-08-05 at 0.7: allocation biased toward the measured prices but not governed by a 32x spread read off a single 60-min all-warm-up run. Every log-ratio is multiplied by alpha, so the table's spread goes from S to S**alpha. RAISED to 0.9 on 2026-08-07: the source is now a 357-active-minute run mining 10-60x the currency per partition, so there is less uncertainty for the shrink to absorb.",
+    "price_clamp": 16.0,
+    "price_clamp_basis": "Matt, 2026-08-07: 4.0 (pop_quota.PRICE_CLAMP) bound 3 of 9 partitions for the whole of steady_state_v2_20260807 \u2014 price_raw/seed was 15.6x (multibrot4), 18.1x (multibrot3) and 5.0x (julia:multibrot3), every one reported at 4.0x. The clamp bounds the LIVE EMA around this seed, so at the band edge the run is quoting the band instead of its own measurement.",
+    "price_clamp_applies_to": "the in-run EMA only (CostToMine.price bounds `raw` into [seed/clamp, seed*clamp]); it moves no price in this file",
+    "shrink_target": "median",
+    "shrink_target_value": 0.19,
+    "shrink_target_population": "MEASURED rows only; a defaulted row carries SEED_PRICE because it has no measurement, and letting it into the median would drag the target toward the flat seed",
+    "source_table": "data/atlas/quota_prices_20260812_run27.json",
+    "source_schema": "pop_quota_cost_to_mine/1",
+    "source_estimand": "sum(min_spent) / sum(units_mined), pooled across the source runs",
+    "source_runs": [
+      {
+        "name": "prod27_20260812",
+        "path": "data\\discovery\\prod27_20260812"
+      }
+    ],
+    "source_measured": [
+      "julia:mandelbrot",
+      "julia:multibrot3",
+      "julia:multibrot4",
+      "julia:multibrot5",
+      "mandelbrot",
+      "multibrot3",
+      "multibrot4",
+      "multibrot5",
+      "phoenix"
+    ],
+    "source_defaulted": [],
+    "source_is_pristine": "the measured table is read-only to this tool and is never rewritten: it is the evidence, this is a policy on top of it, and a policy that edits its evidence cannot be re-derived at another alpha",
+    "applies_to": "SEED ONLY \u2014 pop_quota.CostToMine reads `prices` once into self.seed; the in-run batch-aggregated EMA (end_window -> self.raw) is untouched",
+    "columns": {
+      "julia:mandelbrot": {
+        "measured": 0.19,
+        "regularized": 0.19,
+        "status": "measured"
+      },
+      "julia:multibrot3": {
+        "measured": 0.111,
+        "regularized": 0.1171,
+        "status": "measured"
+      },
+      "julia:multibrot4": {
+        "measured": 0.098,
+        "regularized": 0.1047,
+        "status": "measured"
+      },
+      "julia:multibrot5": {
+        "measured": 0.138,
+        "regularized": 0.1425,
+        "status": "measured"
+      },
+      "mandelbrot": {
+        "measured": 0.165,
+        "regularized": 0.1673,
+        "status": "measured"
+      },
+      "multibrot3": {
+        "measured": 0.783,
+        "regularized": 0.6796,
+        "status": "measured"
+      },
+      "multibrot4": {
+        "measured": 0.447,
+        "regularized": 0.4103,
+        "status": "measured"
+      },
+      "multibrot5": {
+        "measured": 1.149,
+        "regularized": 0.9598,
+        "status": "measured"
+      },
+      "phoenix": {
+        "measured": 0.223,
+        "regularized": 0.2195,
+        "status": "measured"
+      }
+    },
+    "spread_measured": 11.724,
+    "spread_regularized": 9.167
+  }
+}

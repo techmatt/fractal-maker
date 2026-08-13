@@ -40,8 +40,8 @@ is defaulted to `SEED_PRICE` and stamped. `CostToMine.price` still bounds the LI
 factor around whatever seed it is handed, which is the bound that belongs to the run.
 
     uv run python tools/atlas/derive_quota_prices.py \
-        --run-dir data/discovery/steady_state_v2_20260807 \
-        --out data/atlas/quota_prices_20260812.json
+        --run-dir data/discovery/prod27_20260812 \
+        --out data/atlas/quota_prices_20260812_run27.json
 
 EACH REGENERATION TAKES A NEW DATED `--out`. A measured table is the EVIDENCE a seed was
 derived from, and every earlier one stays as a record — `quota_prices_v1.json`
@@ -49,8 +49,19 @@ derived from, and every earlier one stays as a record — `quota_prices_v1.json`
 run. The same holds for a re-derivation off the SAME run: `quota_prices_20260812.json` is the
 run-2 telemetry re-read after `PRICE_EMA` was halved (a table pins its own `price_ema`, so the
 constant only reaches production through a regeneration), and every price in it is identical to
-`quota_prices_20260807.json`'s — which is exactly why both stay, one per code state. `DEFAULT_OUT` therefore tracks the newest table rather than a stable name, and pointing a
-regeneration at an existing file overwrites a record.
+`quota_prices_20260807.json`'s — which is exactly why both stay, one per code state. Two tables
+derived on the SAME DAY off DIFFERENT runs therefore need the run in the name, not just the date
+(`quota_prices_20260812_run27.json`). `DEFAULT_OUT` tracks the newest table rather than a stable
+name, and pointing a regeneration at an existing file overwrites a record.
+
+A DEFAULTED ROW IS CLEARED BY A RUN THAT MINES THE PARTITION, NOT BY A RULE. Run 2 mined 0.3
+units of `mandelbrot` and 0.0 of `julia:mandelbrot`, so every table through the 20260812 pair
+carried both at the flat `SEED_PRICE` — 18.2x and 15.8x above what `prod27_20260812` went on to
+measure (0.165 and 0.190 min/unit off 84.2 and 54.9 units). The 20260812_run27 pair is that run
+re-read: 9 of 9 rows clear `MIN_UNITS`, so it has no defaulted row at all. Note the source is
+run 27 ALONE and is not pooled with run 2: `tau_h` was enlarged on 2026-08-08 (mandelbrot
+0.023 -> 0.315) and `units_mined` counts admissions past `tau_h`, so the two runs' denominators
+are not the same quantity and summing them would be pooling across an estimand change.
 
 Consumed by `steered_frontier.py --quota-prices <path>`; every key in the file is one
 `CostToMine.__init__` reads (`prices`, `seed_price`, `price_ema`, `price_clamp`,
@@ -76,7 +87,7 @@ import pop_quota as pquota                              # noqa: E402
 from tools import paths as _paths                       # noqa: E402
 from tools.corpus import artifacts as _artifacts        # noqa: E402
 
-DEFAULT_OUT = "data/atlas/quota_prices_20260812.json"     # the NEWEST measured table; a new
+DEFAULT_OUT = "data/atlas/quota_prices_20260812_run27.json"   # the NEWEST measured table; a new
 #: derivation takes a new dated name (see the module docstring) — this is not a stable path.
 SCHEMA = "pop_quota_cost_to_mine/1"
 

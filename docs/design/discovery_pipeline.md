@@ -307,6 +307,23 @@ byte-identical to the 20260807 pair**, which is the point: it is a one-variable 
 two pairs differ only by the code state each was derived under. The regression gate is
 `test_the_deployed_table_pins_the_LIVE_ema_rate` — moving the constant again obliges a
 regeneration rather than a silent divergence.
+
+**Reseeded off run 27 (2026-08-12) — the two defaulted rows are cleared, and every other seed
+moves with them.** `prod27_20260812` is the first source run to price `mandelbrot` and
+`julia:mandelbrot` (84.2 and 54.9 units, against run 2's 0.3 and 0.0), which is precisely what a
+`defaulted` row waits for: they land at **0.165 and 0.190 min/unit, i.e. 18.2× and 15.8× under
+the flat 3.0 the table had been asserting** for the partition whose lockout run 27 was launched
+to test. `..._20260812_run27.json` / `..._regularized_20260812_run27.json` is now the
+`--quota-prices` default and has **no defaulted row**; the run-2 (`..._20260812`) pair stays as
+the previous rung. Two things that did NOT hold and are worth stating, because a reseed off new
+telemetry is not the one-variable regeneration above: the other **seven seeds move as well**
+(0.58×–1.78× of the run-2 values; the three cheap julias reproduce to 0.94–1.19×, `multibrot5`
+moves most on 17.3 units), and the **shrink target moves with the population**, median 0.308 →
+0.190 over 9 measured rows instead of 7. α = 0.9 and the 16× band are unchanged, and the
+measured spread contracts 11.7× → 9.2×. The source is run 27 **alone, not pooled with run 2**:
+τ_h was enlarged on 2026-08-08 (`mandelbrot` 0.023 → 0.315) and `units_mined` counts admissions
+past τ_h, so the two runs' denominators are not the same quantity.
+`[measured: data/discovery/prod27_20260812, 179 min budget / 236 batches, 2026-08-12]`
 `[code: tools/atlas/test_regularize_quota_prices.py; tools/atlas/test_derive_quota_prices.py]`
 
 ## 4. τ_h on record — the real per-partition curve

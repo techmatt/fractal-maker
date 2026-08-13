@@ -35,6 +35,16 @@ had already left. Both tables were re-derived from the same `steady_state_v2_202
 telemetry at the same alpha and clamp: every one of the nine seeds is byte-identical and only
 `price_ema` moves. The 20260807 pair stays on disk as the previous rung.
 
+RESEEDED OFF RUN 27 (2026-08-12), and this one moves EVERY row. `prod27_20260812` is the first
+source run to price `mandelbrot` and `julia:mandelbrot` (84.2 and 54.9 units against run 2's 0.3
+and 0.0), which is exactly what a `defaulted` row waits for; the reseeded pair therefore has
+NO defaulted row and the two ex-defaulted seeds fall 3.0 -> 0.1673 and 3.0 -> 0.1900. ALPHA and
+CLAMP are unchanged at 0.9 / 16x, but the other seven seeds move too and the SHRINK TARGET moves
+with them (median 0.308 -> 0.190): the target is the median of the MEASURED rows, so it responds
+both to the population growing 7 -> 9 and to run 27 having re-measured all seven. That is a
+different regeneration from the 20260812 one, which held the telemetry fixed and moved one
+constant — here the telemetry itself is new, and nothing is expected to reproduce.
+
 THE ESTIMATOR IS SHRINKAGE, NOT A BOUND, AND THAT IS THE POINT. `derive_quota_prices` refused
 a magnitude band (`[seed/4, seed*4]`) because a clamp cannot tell "implausible" from "the
 thing we ran the run to find out" — at the band edge it reports the BAND, discarding the
@@ -99,8 +109,8 @@ from tools import paths as _paths                       # noqa: E402
 SCHEMA = "pop_quota_cost_to_mine/1"                     # same schema as the measured table:
 #: the CONSUMER contract is identical, only the derivation of `prices` differs.
 
-DEFAULT_SOURCE = "data/atlas/quota_prices_20260812.json"
-DEFAULT_OUT = "data/atlas/quota_prices_regularized_20260812.json"
+DEFAULT_SOURCE = "data/atlas/quota_prices_20260812_run27.json"
+DEFAULT_OUT = "data/atlas/quota_prices_regularized_20260812_run27.json"
 
 # The shrinkage weight on the MEASURED price, in log space. Matt: 0.7 on 2026-08-05, 0.9 on
 # 2026-08-07. 1.0 would be the raw measured table; 0.0 a flat table at the median (the
