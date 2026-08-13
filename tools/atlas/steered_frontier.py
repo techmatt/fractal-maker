@@ -47,11 +47,13 @@ import argparse
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -1305,6 +1307,129 @@ def measure_bulk_store(root=None) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# IN-RUN PRUNING of ledgered batches' pixel artifacts.
+#
+# The teardown above frees the whole tree at the CLEAN CLOSE, which bounds the footprint by
+# the run's LENGTH — and that is the wrong bound for the runs this is now sized for. Measured
+# off the two runs' own teardown records: run 26 freed 76.455 GB over 210.07 wall min (21.8
+# GB/h, 0.648 GB/batch across 118 batches), run 27 freed 61.855 GB over 183.11 (20.3 GB/h,
+# 0.262 GB/batch across 236), and run 27's dive leg 11.323 GB over 27.07 active min (25.1
+# GB/h). A 100 h run therefore projects to ~2 TB held until close, against a disk guard that
+# STOPs at 25 GB free. So the window is moved from the run to the BATCH: once a batch's rows
+# are in the ledger, its pixels are residue and go immediately.
+#
+# WHAT MAKES A BATCH PRUNABLE, and each half is load-bearing:
+#   * its reconciliation PASSED — `_reconcile_batch` exits loud on an imbalance, so any batch
+#     the loop has advanced past is a batch whose `found == written + dropped_*` closed. The
+#     pruner is called AFTER that check and AFTER `save_state`, i.e. at the same
+#     state-consistent boundary the STOP sentinel and the checkpoint use;
+#   * its rows are in `outcome_ledger.jsonl` / `harvest_log.jsonl` / `q4_candidates.jsonl`,
+#     all appended during `harvest()` — which is before the reconcile, hence before here. A
+#     rejected candidate needs nothing beyond its row; an admitted one regenerates from
+#     `outcome_cx/cy/fw` under seeded determinism. The ledger is the record, the pixels are not.
+#
+# THE RETENTION WINDOW (`--prune-retain-batches`, default 3) is what an interrupt or a mid-run
+# autopsy reads. It is not a safety margin for the pruner — the batches it covers are already
+# ledgered — it is fresh material for a HUMAN, so it is small on purpose.
+#
+# INTERRUPT SEMANTICS EXTEND UNCHANGED. The pruner is called from the two loop bodies and
+# nowhere else: no `finally`, no `atexit`, no signal handler (same reachability gate as
+# teardown, `test_steered_frontier.py`). A killed run deletes nothing further, exactly as it
+# tears nothing down. A RESUMED run does prune below its window on the first boundary it
+# reaches — the autopsy window is between the kill and the resume, and once you resume you
+# have decided to continue; an unbounded resumed run would give the whole feature back.
+#
+# WHAT ACTUALLY READS RUN SCRATCH AFTER A BATCH CLOSES — enumerated rather than assumed,
+# because the answer is what the keep-list below is:
+#   * the EMISSION leg does NOT. `descriptor.embed_locations` RE-RENDERS every location's
+#     640x360 ss2 field into its own `--out/fields` cache (`library_annotate.ensure_field`),
+#     off the ledger's coordinates. It never opens a discovery run's scratch, so no retention
+#     exception is needed for the run's own fresh ledgers.
+#   * the RESUME path does NOT. Every sidecar `load_state` reads is under `run_dir`, not under
+#     `run_dir/scratch`: `state.json`, `morph_mem.npz`, `node_embs.npz`, `distinct_looks.npz`,
+#     `view_fields/`, and the clouds, which are rebuilt from the ledger. A candidate's cheap
+#     JPG (`c["img"]`) is read only by `score_cheap`/`score_morph` INSIDE its own batch — what
+#     survives onto the frontier is the embedding, in `node_embs.npz`.
+#   * the DIVE leg does NOT. `_load_source_admissions` reads the source run's
+#     `outcome_ledger.jsonl` and nothing else.
+#   * the SEEDER trees are consumed-then-dead. `generate_native_seeds` and `depth2_probe` both
+#     parse the walks they just wrote and never reopen them.
+#   * TWO post-run readers do, both by the SEGMENTED `<run>/scratch` form that
+#     `tests/test_scratch_dependency_allowlist.py` is structurally blind to (its scanner
+#     matches single anchored `scratch/...` constants; that file's own docstring names the
+#     gap). They are why `expand_*` keeps its records and only loses its pixels:
+#       - `tools/studies/steered_pilot_morph.reconstruct_tree` globs
+#         `expand_b*/*/expand.jsonl` for the M-cap depth audit. KEPT — the jsonl is bytes
+#         against a directory of JPGs, so retaining it costs nothing and the audit stays
+#         runnable on a pruned run.
+#       - `tools/atlas/morph_anchor_calibrate` globs `expand_b*/**/cheap/*.jpg` as a
+#         CROSS-CHECK, guarded by `>= 30` files and degrading to `sample_med=None`. Not a
+#         retention exception: it reads a run you meant to keep (`--retain-scratch`, which
+#         disables pruning), and inside the window a live run still offers it hundreds of
+#         tiles. A pruned run answers "unavailable", never a wrong number.
+SCRATCH_PRUNE_KEY = "scratch_prune"
+
+# Small on purpose — see THE RETENTION WINDOW above. Three batches is 2-5 min of a production
+# run's material (run 27: 236 batches / 183.1 wall min; run 26: 118 / 210.1), which is what a
+# mid-run autopsy actually opens, and ~0.8 GB at run 27's 0.262 GB/batch.
+PRUNE_RETAIN_BATCHES_DEFAULT = 3
+
+
+@dataclass(frozen=True)
+class PruneRule:
+    """One family of per-batch scratch directory, and what survives pruning it.
+
+    `keep` is a set of FILE NAMES (any depth under the directory): a pruned directory loses
+    every other file and every now-empty subdirectory, and is removed outright when `keep` is
+    empty. Named per family rather than "delete the tree" because the one post-run reader that
+    still works on a pruned run is a `keep` entry (`expand.jsonl`)."""
+    kind: str                  # the `<kind>_b####` dir-name prefix
+    keep: frozenset            # file names that survive
+    writer: str                # the method that creates it
+    holds: str                 # what is in it, and why it is residue once the batch is ledgered
+
+
+PRUNE_RULES = (
+    PruneRule("expand", frozenset({"expand.jsonl", "nodes.jsonl"}), "expand_group",
+              "the cheap 384x216 twilight JPGs one --expand call produced, plus the "
+              "`expand.jsonl` record of every child it emitted. The JPGs are scored and "
+              "embedded inside the batch and never reopened; the two jsonl are the record "
+              "(and `expand.jsonl` is the post-run depth audit's only input)."),
+    PruneRule("harvest", frozenset(), "harvest",
+              "the 640x360 ss2 canonical confirmation tiles, the 12-render reframe workdirs "
+              "and the admitted outcome tiles. Every verdict they carry is already a row in "
+              "`harvest_log.jsonl` / `outcome_ledger.jsonl` / `q4_candidates.jsonl`, and the "
+              "admitted viewport is re-renderable from `outcome_cx/cy/fw`."),
+    PruneRule("roots", frozenset(), "draw_roots",
+              "the depth-2 descendability probe's walks and preview tiles for one root draw. "
+              "`depth2_probe` parses the walks it wrote and returns survivors in memory; "
+              "nothing reopens the directory."),
+)
+
+# `expand_b0007`, `harvest_b0007`, `roots_b0007_multibrot3` — the family suffix is optional so
+# one pattern covers all three writers. Anchored at both ends: a directory this does not match
+# is not a per-batch tree and is left alone (`native_<fam>/`, `sched_fields/`), which is the
+# safe direction — an unmatched tree costs bytes, a mis-matched one costs the run.
+_PRUNE_DIR_RE = re.compile(r"^(%s)_b(\d{4,})(?:_.+)?$"
+                           % "|".join(r.kind for r in PRUNE_RULES))
+_PRUNE_KEEP = {r.kind: r.keep for r in PRUNE_RULES}
+
+
+def prune_batch_target(name: str, cutoff: int):
+    """`(kind, batch_index)` if `name` is a per-batch scratch dir at or below `cutoff`, else
+    None. Split out from the walker so the MATCHING RULE is testable without a filesystem —
+    the deletion is the part that cannot be un-done, so the decision to delete is proved
+    separately from the doing of it."""
+    m = _PRUNE_DIR_RE.match(name)
+    if not m:
+        return None
+    idx = int(m.group(2))
+    if idx > cutoff:
+        return None
+    return m.group(1), idx
+
+
+# --------------------------------------------------------------------------- #
 # The driver.
 # --------------------------------------------------------------------------- #
 class SteeredFrontier:
@@ -1386,6 +1511,164 @@ class SteeredFrontier:
                    gb=round(n_bytes / 2**30, 3))
         return rec
 
+    # ------------------------------------------------------------- in-run pruning
+    def _prune_refusal(self) -> str | None:
+        """Why this run must not prune, or None. Derived at every call rather than decided
+        once at construction, for `teardown_scratch`'s reason: this is the predicate guarding
+        a delete, so it is evaluated on the line that deletes."""
+        if self.retain_scratch:
+            return "--retain-scratch"
+        if not self.prune_on:
+            return "--no-prune-scratch"
+        t = self.scratch
+        if t.name != "scratch" or t == self.run_dir or t in self.run_dir.parents:
+            return f"REFUSED: {t} is not a run scratch subtree"
+        return None
+
+    def _prune_dir(self, d: Path, keep: frozenset) -> tuple[int, int, int]:
+        """Delete everything under `d` except files named in `keep`; remove `d` itself when
+        `keep` leaves nothing. Returns (files, bytes, errors).
+
+        NEVER RAISES — the caller is inside a live loop, so a Windows file lock (the label
+        servers hold handles under this tree) must cost the batch's bytes, not the run. Sized
+        before unlinking, because "how much did this free" is unrecoverable afterwards."""
+        n_files = n_bytes = n_err = 0
+        survivors = 0
+        for dirpath, _dirs, names in os.walk(d):
+            for nm in names:
+                p = os.path.join(dirpath, nm)
+                if nm in keep:
+                    survivors += 1
+                    continue
+                try:
+                    sz = os.path.getsize(p)
+                except OSError:
+                    sz = 0
+                try:
+                    os.unlink(p)
+                except OSError:
+                    n_err += 1
+                    continue
+                n_files += 1
+                n_bytes += sz
+        if survivors:
+            # Files stayed, so the tree stays; drop the now-empty subdirectories under it so a
+            # 3,000-batch run does not carry one empty `cheap/` per group forever. Bottom-up,
+            # and a non-empty dir simply fails and is left — that is the correct outcome, not
+            # an error worth counting.
+            for dirpath, dirs, _names in os.walk(d, topdown=False):
+                for sub in dirs:
+                    try:
+                        os.rmdir(os.path.join(dirpath, sub))
+                    except OSError:
+                        pass
+        else:
+            try:
+                shutil.rmtree(d)
+            except OSError:
+                n_err += 1
+        return n_files, n_bytes, n_err
+
+    def prune_scratch(self) -> dict:
+        """Delete the pixel artifacts of every batch outside the retention window; return this
+        call's record. See the SCRATCH_PRUNE_KEY block above for what makes a batch prunable
+        and what was enumerated as reading run scratch after a batch closes.
+
+        Called from the crawl loop body and the dive loop body, and nowhere else. NEVER RAISES:
+        an unprunable tree is a counted error and the run keeps going — a pruner that can kill
+        a 100 h run at hour 90 is worse than the disk it saves.
+
+        THE DIVE LEG HAS NO RECONCILE IDENTITY (`_reconcile_batch` is on the crawl path only),
+        so what gates it there is the other half: `one_dive` has appended its ledger rows and
+        written its `dive_log` line, and `save_dive_state` has checkpointed, before this runs.
+        The window is counted in `batch_i` on both paths — a dive increments it per RUNG, so
+        the window is the last few rungs, which is the same guarantee."""
+        why = self._prune_refusal()
+        cutoff = int(self.batch_i) - int(self.prune_retain_batches)
+        rec = dict(through_batch=cutoff, retain_batches=int(self.prune_retain_batches),
+                   dirs=0, files=0, bytes=0, errors=0)
+        if why is not None:
+            return {**rec, "outcome": "prune_disabled", "reason": why}
+        if cutoff < 1 or not self.scratch.exists():
+            return {**rec, "outcome": "prune_nothing_due",
+                    "reason": (f"batch {self.batch_i} is inside the {self.prune_retain_batches}"
+                               f"-batch window" if cutoff < 1 else "no scratch tree yet")}
+        # ONE listing per call, filtered by the high-water mark. Already-pruned `expand_b*`
+        # directories survive (they keep their jsonl), so the listing grows with the run and
+        # re-walking it from zero every batch would turn a 3,000-batch run's prune into a
+        # quadratic scan. `_pruned_through` is NOT checkpointed: after a resume it starts at 0
+        # and the first call sweeps everything below the window, which is both correct and how
+        # a resumed run stays bounded.
+        #
+        # THE INVARIANT the mark relies on: no per-batch directory is ever created at an index
+        # at or below the current mark. `_pruned_through` is `batch_i - retain_batches` as of
+        # the last boundary, and `batch_i` moves backward only by the `batch_i -= 1` retries in
+        # the pop path — one step, before any prune of that iteration — so a new directory's
+        # index is always > the mark by at least `retain_batches - 1`. Note the direction the
+        # mark fails in if that ever stops holding: a skipped directory LEAKS BYTES. It cannot
+        # cause a live tree to be deleted, which is the only failure worth being paranoid about.
+        floor = int(self._pruned_through)
+        try:
+            names = os.listdir(self.scratch)
+        except OSError as e:
+            return {**rec, "outcome": "prune_failed", "errors": 1,
+                    "error": f"{type(e).__name__}: {e}"}
+        n_dirs = n_files = n_bytes = n_err = 0
+        lo = hi = None
+        for nm in sorted(names):
+            hit = prune_batch_target(nm, cutoff)
+            if hit is None:
+                continue
+            kind, idx = hit
+            if idx <= floor:
+                continue
+            d = self.scratch / nm
+            if not d.is_dir() or d.is_symlink():      # never follow a link out of the tree
+                continue
+            f, b, e = self._prune_dir(d, _PRUNE_KEEP[kind])
+            n_dirs += 1
+            n_files += f
+            n_bytes += b
+            n_err += e
+            lo = idx if lo is None else min(lo, idx)
+            hi = idx if hi is None else max(hi, idx)
+        self._pruned_through = cutoff
+        rec.update(outcome="pruned", dirs=n_dirs, files=n_files, bytes=n_bytes, errors=n_err,
+                   gb=round(n_bytes / 2**30, 3), batch_lo=lo, batch_hi=hi)
+        t = self.prune_totals
+        t["calls"] += 1
+        t["dirs"] += n_dirs
+        t["files"] += n_files
+        t["bytes"] += n_bytes
+        t["errors"] += n_err
+        t["through_batch"] = max(int(t["through_batch"]), cutoff)
+        t["gb"] = round(t["bytes"] / 2**30, 3)
+        if n_files or n_err:
+            print(f"[prune] b{lo:04d}-b{hi:04d}: {n_dirs} dirs / {n_files} files / "
+                  f"{n_bytes / 2**30:.2f} GB freed"
+                  + (f" / {n_err} ERRORS" if n_err else "")
+                  + f" (run total {t['gb']:.2f} GB, window "
+                    f"{self.prune_retain_batches} batches)", flush=True)
+        return rec
+
+    def prune_summary(self) -> dict:
+        """The run-cumulative prune record for `summary.json`. Carries the DISABLED reason when
+        nothing was pruned, so "the pruner freed nothing" and "the pruner was off" are
+        different readings of the same key rather than one absent number."""
+        rec = dict(self.prune_totals)
+        rec["retain_batches"] = int(self.prune_retain_batches)
+        why = self._prune_refusal()
+        if why is not None:
+            return {**rec, "outcome": "prune_disabled", "reason": why}
+        if not rec["calls"]:
+            # THREE readings, not two. A run shorter than its own window pruned nothing and was
+            # never off, and merging that into `pruned` would report a zero as a measurement.
+            return {**rec, "outcome": "prune_nothing_due",
+                    "reason": f"the run ended at batch {self.batch_i}, inside the "
+                              f"{self.prune_retain_batches}-batch window"}
+        rec["outcome"] = "pruned"
+        return rec
+
     def _close_summary(self, summary: dict) -> dict:
         """THE close path, shared by `finish` (crawl) and `finish_dive`. Compress the live
         tails, land `summary.json`, tear the scratch down, restamp the outcome.
@@ -1405,6 +1688,10 @@ class SteeredFrontier:
                  "partially deleted")
         summary[BULK_STORE_KEY] = {"measured": False,
                                    "note": "measured after teardown; see BULK_STORE_KEY"}
+        # The in-run pruner's cumulative record. Stamped on BOTH writes and read from the
+        # totals the loop accumulated, so it survives the case teardown cannot report: a run
+        # that pruned 2 TB across 100 h and then freed 12 GB at the close.
+        summary[SCRATCH_PRUNE_KEY] = self.prune_summary()
         path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
         summary[SCRATCH_TEARDOWN_KEY] = rec = self.teardown_scratch()
         # After teardown, so the store is measured as this run LEAVES it (this run's own
@@ -1444,6 +1731,23 @@ class SteeredFrontier:
         # SCRATCH_TEARDOWN_KEY). Read on BOTH entry points (finish / finish_dive both close
         # through `_close_summary`), so it needs no DIVE_IGNORES exemption.
         self.retain_scratch = bool(getattr(args, "retain_scratch", False))
+        # ...and the same tree is pruned batch-by-batch WHILE the run is alive, which is what
+        # makes the footprint window-deep instead of run-length-deep (see SCRATCH_PRUNE_KEY).
+        # `--retain-scratch` disables this too — one flag means "I intend to re-read this run's
+        # own tiles", and a pruner that honoured it only at the close would have eaten them.
+        self.prune_on = not bool(getattr(args, "no_prune_scratch", False))
+        self.prune_retain_batches = int(getattr(args, "prune_retain_batches",
+                                                PRUNE_RETAIN_BATCHES_DEFAULT))
+        # High-water mark of what has been pruned, and the run-cumulative tally that lands in
+        # `summary.json`. The tally IS checkpointed (a resumed run must report the whole run's
+        # freed bytes); the mark is not — see `prune_scratch`.
+        # -1, NOT 0: THE PRE-LOOP ROOT DRAW runs at `batch_i == 0` and writes `roots_b0000_*`,
+        # which on a short run is most of the tree. A mark of 0 would read batch 0 as already
+        # pruned and leak it for the whole run — found by the 12-batch sequence test, not by
+        # inspection.
+        self._pruned_through = -1
+        self.prune_totals = dict(calls=0, dirs=0, files=0, bytes=0, errors=0, through_batch=0,
+                                 gb=0.0)
         self._stream_writers: dict = {}          # path -> run_record.SegmentWriter (see _writer)
         # Per-unit stage timing. Every duration this crawl used to compute and drop —
         # the pre-loop root draw, each in-loop refill, each served batch, each dive — lands
@@ -4080,6 +4384,18 @@ class SteeredFrontier:
             frontier=self.frontier, rng=self.rng.bit_generator.state,
         )
         state["pool_cursor"] = self.pool_cursor
+        # Checkpointed for the reason `wall_s` and `root_draw_s` are: a resumed run must report
+        # the WHOLE run's freed bytes in `summary.json`, and a session-local tally would report
+        # the last session's. The high-water MARK is deliberately not here (`prune_scratch`).
+        #
+        # THE TALLY UNDER-REPORTS BY AT MOST ONE BATCH ACROSS A KILL, and that is the accepted
+        # cost of the call order rather than an oversight. This checkpoint runs BEFORE the
+        # prune (the prune must follow it — that is the whole safety argument), so batch N's
+        # prune reaches disk only in batch N+1's checkpoint, and a kill in between loses it.
+        # Observed: the leg-C kill lost one of its two prune calls from the tally. The BYTES
+        # were still freed — what is lost is the report of them, which is the right thing to
+        # lose, and re-ordering to save it would put the delete before the checkpoint.
+        state["prune_totals"] = self.prune_totals
         # Refill accounting is CHECKPOINTED for the same reason `wall_s` is: a kill/resume
         # loop that reset the root-draw spend would reset the bound that caps it, and a
         # resumed run could then spend its whole share again every session.
@@ -4156,6 +4472,9 @@ class SteeredFrontier:
         # much of each pool this run has already consumed, and a resume that reset it would
         # re-inject roots the ledger already carries.
         self.pool_cursor = dict(st.get("pool_cursor") or {})
+        # Absent on any pre-pruner checkpoint: the constructor's zeros are correct there (no
+        # pruning had happened), which is a default for a key that did not exist.
+        self.prune_totals.update(st.get("prune_totals") or {})
         self.root_draw_s = float(st.get("root_draw_s") or 0.0)
         self.last_refill_batch = {k: int(v)
                                   for k, v in (st.get("last_refill_batch") or {}).items()}
@@ -4325,6 +4644,7 @@ class SteeredFrontier:
             node_ctr=self.node_ctr, seq=self.seq, batch_i=self.batch_i,
             active_s=self.active_s, est_dive_s=self.est_batch_s,
             totals=self.totals, rng=self.rng.bit_generator.state,
+            prune_totals=self.prune_totals,      # same reason as the crawl checkpoint's
         )
         tmp = self.dive_state_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(state), encoding="utf-8")
@@ -4337,6 +4657,7 @@ class SteeredFrontier:
         self.active_s = st["active_s"]; self.est_batch_s = st["est_dive_s"]
         self.totals = st["totals"]
         self.totals.setdefault("nov_scored", 0); self.totals.setdefault("sat_hits", 0)
+        self.prune_totals.update(st.get("prune_totals") or {})
         self.rng.bit_generator.state = st["rng"]
         self.clouds = self.ledger.clouds(self.partitions)
         # the ledger is the durable source of truth; re-sync the admitted counter to it so a
@@ -4391,6 +4712,11 @@ class SteeredFrontier:
                 end_cause=rec.get("end_cause"), n_admitted=rec.get("n_admitted"))
             done_idx += 1
             self.save_dive_state(plan, done_idx)
+            # Same boundary, the dive's version of it: the dive's ledger rows and its
+            # `dive_log` line are written and the checkpoint has landed. The dive has no
+            # reconcile identity to wait on (see `prune_scratch`), and one dive is many rungs,
+            # so this is where a dive leg stops being run-length-deep too.
+            self.prune_scratch()
             print(f"  {rec['dive_id']} [{rec['start_group']}] start d{rec['start_depth']} "
                   f"-> d{rec['end_depth']} ({rec['rungs']} rungs, {rec['end_cause']}) "
                   f"admitted={rec['n_admitted']} | {dt:.0f}s active={self.active_s/60:.1f}m "
@@ -4688,6 +5014,11 @@ class SteeredFrontier:
                 self.quota.charge(self._served_partition, dt / 60.0)
                 self.quota.note_candidates(self._served_partition, len(cands))
             self.save_state()
+            # THE PRUNE BOUNDARY: after `_reconcile_batch` (which exits loud rather than
+            # advancing on an imbalance) and after the checkpoint, so the state the pixels
+            # belonged to is durable before they go. A plain body on purpose — an interrupt
+            # here deletes nothing further, exactly as it tears nothing down.
+            self.prune_scratch()
             if self.batch_i % 1 == 0:
                 sat = ""
                 if self.lambda_m > 0.0 and cands:
@@ -5349,8 +5680,28 @@ def main():
                          "it: a 6h run leaves ~118 GB / 138k render+field files whose "
                          "verdicts are already in the ledger. Pass this only when you intend "
                          "to re-read the run's own tiles/fields. An interrupted or crashed "
-                         "run keeps its scratch either way (see SCRATCH_TEARDOWN_KEY).")
+                         "run keeps its scratch either way (see SCRATCH_TEARDOWN_KEY). "
+                         "Also disables the in-run pruner.")
+    ap.add_argument("--no-prune-scratch", action="store_true",
+                    help="do not prune ledgered batches' pixels DURING the run. Default is to "
+                         "prune: run scratch draws 20.7-29.8 GB/h and is otherwise freed only "
+                         "at the clean close, so a 100h run projects into terabytes. Pass this "
+                         "to keep every batch's tiles for a mid-run autopsy while still "
+                         "getting the close-time teardown (see SCRATCH_PRUNE_KEY).")
+    ap.add_argument("--prune-retain-batches", type=int,
+                    default=PRUNE_RETAIN_BATCHES_DEFAULT,
+                    help=f"how many of the most recent batches the in-run pruner leaves alone, "
+                         f"so an interrupt or a mid-run autopsy always has fresh material "
+                         f"(default {PRUNE_RETAIN_BATCHES_DEFAULT})")
     args = ap.parse_args()
+    # A window below 1 would prune the batch currently in flight, whose tiles the next stage of
+    # the SAME batch is still reading. Refused rather than clamped: the flag's only plausible
+    # use for 0 is "prune harder", and silently getting a 1 back would look like it worked.
+    if int(args.prune_retain_batches) < 1:
+        raise SystemExit(
+            f"--prune-retain-batches must be >= 1 (got {args.prune_retain_batches}): batch "
+            f"`batch_i` is still being read when the prune boundary runs. Use "
+            f"--no-prune-scratch to turn pruning off.")
     if args.below_normal:
         print(f"[priority] {set_below_normal_priority()}", flush=True)
     preflight_library_seed(args)

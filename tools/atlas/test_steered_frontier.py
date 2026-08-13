@@ -13,6 +13,7 @@ import collections
 import inspect
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -1765,9 +1766,17 @@ def _scratch_run(tmp_path, *, retain=False, n_files=7, size=1024):
     # so the walk is over ~8 files, never the real 30+ GiB store — the same reason `scratch`
     # is a tmp_path here.
     stub = types.SimpleNamespace(run_dir=run_dir, scratch=scratch, retain_scratch=retain,
-                                 bulk_store_root=tmp_path)
+                                 bulk_store_root=tmp_path,
+                                 # the in-run pruner's state: the close stamps its cumulative
+                                 # record, so a stub missing these would only prove the close
+                                 # path against a shape the driver never has.
+                                 prune_on=True, batch_i=0, _pruned_through=-1,
+                                 prune_retain_batches=sf.PRUNE_RETAIN_BATCHES_DEFAULT,
+                                 prune_totals=dict(calls=0, dirs=0, files=0, bytes=0, errors=0,
+                                                   through_batch=0, gb=0.0))
     stub.finalize_streams = lambda: None
-    for m in ("teardown_scratch", "_close_summary"):
+    for m in ("teardown_scratch", "_close_summary", "prune_summary", "_prune_refusal",
+              "_prune_dir", "prune_scratch"):
         setattr(stub, m, types.MethodType(getattr(sf.SteeredFrontier, m), stub))
     return stub, run_dir, scratch, n_files * size
 
@@ -2096,3 +2105,429 @@ def test_the_flag_reaches_the_constructor_attribute(monkeypatch, tmp_path):
     # and the constructor really reads it (__init__ loads the scorer, too heavy to run here).
     init = inspect.getsource(sf).split("def __init__(self, args):", 1)[1]
     assert 'self.retain_scratch = bool(getattr(args, "retain_scratch"' in init[:8000]
+
+
+# =========================================================================== #
+# IN-RUN PRUNING (2026-08-13). Teardown bounds the footprint by the run's LENGTH, and at the
+# 20.3-25.1 GB/h runs 26/27 recorded in their own teardowns a 100 h run projects to ~2 TB
+# against a disk guard that STOPs at 25 GB free (`steered_frontier.SCRATCH_PRUNE_KEY`). The
+# pruner moves the bound to the BATCH: a ledgered batch's pixels go immediately, a small window
+# of recent batches stays for an autopsy. Two things have to be true and neither is provable by
+# "it deleted something": the batch currently in flight must NOT be touched, and the one
+# post-run reader that still works on a pruned run (`expand.jsonl`) must survive.
+# =========================================================================== #
+# What one batch leaves under run scratch, at the shapes the three writers actually produce.
+# Distinct sizes so the byte accounting is CHECKED rather than asserted non-zero.
+_PIX = {"expand": [("mandelbrot/cheap/c0.jpg", 300), ("mandelbrot/cheap/c1.jpg", 300),
+                   ("multibrot3/cheap/c0.jpg", 300)],
+        "harvest": [("confirm_0000.jpg", 500), ("reframe_n7/r00.jpg", 500),
+                    ("st_m_t_000001.jpg", 500)],
+        "roots": [("preview.png", 700)]}
+_REC = {"expand": [("mandelbrot/expand.jsonl", 11), ("mandelbrot/nodes.jsonl", 13),
+                   ("multibrot3/expand.jsonl", 11)],
+        "harvest": [], "roots": [("walks.jsonl", 17)]}
+
+
+def _prune_run(tmp_path, *, batch_i, n_batches=None, retain=False, prune_on=True, window=None):
+    """A run scratch tree carrying batches 1..n_batches, plus the two NON-batch trees that must
+    survive any prune (`native_<fam>/`, `sched_fields/`) as the control. Returns
+    (stub, scratch, per-batch pixel bytes)."""
+    import types
+    run_dir = tmp_path / "run"
+    scratch = run_dir / "scratch"
+    n_batches = batch_i if n_batches is None else n_batches
+    for b in range(1, n_batches + 1):
+        for kind in ("expand", "harvest", "roots"):
+            base = scratch / (f"{kind}_b{b:04d}" + ("_mandelbrot" if kind == "roots" else ""))
+            for rel, size in _PIX[kind] + _REC[kind]:
+                p = base / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(b"\x00" * size)
+    (scratch / "native_mandelbrot" / "native_0").mkdir(parents=True)
+    (scratch / "native_mandelbrot" / "native_0" / "walks.jsonl").write_bytes(b"\x00" * 23)
+    (scratch / "sched_fields").mkdir(parents=True)
+    (scratch / "sched_fields" / "f.bin").write_bytes(b"\x00" * 29)
+
+    stub = types.SimpleNamespace(
+        run_dir=run_dir, scratch=scratch, retain_scratch=retain, prune_on=prune_on,
+        batch_i=batch_i, _pruned_through=-1,
+        prune_retain_batches=(sf.PRUNE_RETAIN_BATCHES_DEFAULT if window is None else window),
+        prune_totals=dict(calls=0, dirs=0, files=0, bytes=0, errors=0, through_batch=0, gb=0.0))
+    for m in ("prune_scratch", "prune_summary", "_prune_refusal", "_prune_dir"):
+        setattr(stub, m, types.MethodType(getattr(sf.SteeredFrontier, m), stub))
+    # DERIVED from the two tables, never restated: a file goes iff its name is outside its
+    # family's `keep`, which is the rule under test, so the expectations move with the tables.
+    doomed = [(k, rel, s) for k in _PIX for rel, s in _PIX[k] + _REC[k]
+              if Path(rel).name not in sf._PRUNE_KEEP[k]]
+    per = types.SimpleNamespace(
+        files=len(doomed), bytes=sum(s for _k, _r, s in doomed),
+        pixels=sum(len(v) for v in _PIX.values()),
+        kept=sum(1 for k in _REC for rel, _s in _REC[k]
+                 if Path(rel).name in sf._PRUNE_KEEP[k]))
+    return stub, scratch, per
+
+
+def _pixels(scratch, b):
+    """Every pixel file batch `b` wrote that still exists."""
+    out = []
+    for kind in ("expand", "harvest", "roots"):
+        base = scratch / (f"{kind}_b{b:04d}" + ("_mandelbrot" if kind == "roots" else ""))
+        out += [base / rel for rel, _s in _PIX[kind] if (base / rel).exists()]
+    return out
+
+
+def _records(scratch, b):
+    out = []
+    for kind in ("expand", "harvest", "roots"):
+        base = scratch / (f"{kind}_b{b:04d}" + ("_mandelbrot" if kind == "roots" else ""))
+        out += [base / rel for rel, _s in _REC[kind] if (base / rel).exists()]
+    return out
+
+
+def test_prune_takes_the_pixels_outside_the_window_and_KEEPS_the_records(tmp_path):
+    """THE behaviour. At batch 5 with a 3-batch window, batches 1-2 lose their pixels and
+    batches 3-5 are untouched — including batch 5, the one still being read."""
+    stub, scratch, per = _prune_run(tmp_path, batch_i=5, window=3)
+    # NON-VACUITY first: the fixture really planted what the assertions below claim went.
+    assert (per.files, per.pixels, per.kept) == (8, 7, 3)
+    assert len(_pixels(scratch, 1)) == 7 and len(_records(scratch, 1)) == 4
+    rec = stub.prune_scratch()
+
+    assert rec["outcome"] == "pruned"
+    assert (rec["batch_lo"], rec["batch_hi"], rec["through_batch"]) == (1, 2, 2)
+    # 3 dir families x 2 batches, and every non-`keep` file of those two batches, COUNTED.
+    assert (rec["dirs"], rec["files"], rec["errors"]) == (6, 2 * per.files, 0)
+    assert rec["bytes"] == 2 * per.bytes == 6234
+    for b in (1, 2):
+        assert _pixels(scratch, b) == [], f"batch {b} kept pixels"
+        # ...and its RECORDS survived: `expand.jsonl` is the post-run depth audit's only input
+        # (steered_pilot_morph.reconstruct_tree), `walks.jsonl` is inside a `keep`-less family
+        # and correctly went with its tree.
+        assert sorted(p.name for p in _records(scratch, b)) == \
+            ["expand.jsonl", "expand.jsonl", "nodes.jsonl"]
+        assert not (scratch / f"harvest_b{b:04d}").exists()
+        assert not (scratch / f"roots_b{b:04d}_mandelbrot").exists()
+    for b in (3, 4, 5):
+        assert len(_pixels(scratch, b)) == 7, f"batch {b} is inside the window and lost pixels"
+    # the control: neither NON-batch tree is a per-batch tree, and neither is touched.
+    assert (scratch / "native_mandelbrot" / "native_0" / "walks.jsonl").exists()
+    assert (scratch / "sched_fields" / "f.bin").exists()
+
+
+def test_the_WINDOW_assertion_above_is_load_bearing(tmp_path):
+    """Prove it red (`verification_practice.md` §3). The defect is the obvious wrong
+    implementation — prune everything up to `batch_i` — and it is wrong because the batch in
+    flight is still being scored and embedded off exactly those JPGs. Injected past the CLI
+    refusal on purpose: what is under test is the CUTOFF ARITHMETIC, not the flag guard."""
+    stub, scratch, _ = _prune_run(tmp_path, batch_i=5, window=3)
+    stub.prune_retain_batches = 0                       # the defect
+    rec = stub.prune_scratch()
+    assert rec["batch_hi"] == 5, "the injection did not reproduce the defect"
+    assert _pixels(scratch, 5) == [], "batch 5's pixels survived a window of 0"
+
+
+def test_prune_drops_the_emptied_subdirectories_but_keeps_the_tree_that_kept_a_file(tmp_path):
+    """A 3,000-batch run must not carry one empty `cheap/` per group forever — and the tree
+    itself must stay, because a file in it did."""
+    stub, scratch, _ = _prune_run(tmp_path, batch_i=5, window=3)
+    stub.prune_scratch()
+    assert (scratch / "expand_b0001" / "mandelbrot").is_dir()          # holds expand.jsonl
+    assert not (scratch / "expand_b0001" / "mandelbrot" / "cheap").exists()
+
+
+def test_prune_is_a_noop_while_the_window_is_still_filling(tmp_path):
+    """Batch 2 under a 3-batch window: nothing is due, and the record SAYS nothing was due
+    rather than reporting a zero-byte prune."""
+    stub, scratch, _ = _prune_run(tmp_path, batch_i=2, window=3)
+    rec = stub.prune_scratch()
+    assert rec["outcome"] == "prune_nothing_due" and "window" in rec["reason"]
+    assert (rec["files"], rec["bytes"]) == (0, 0)
+    assert len(_pixels(scratch, 1)) == 7 and len(_pixels(scratch, 2)) == 7
+    # THREE readings in `summary.json`, not two: a run shorter than its own window is neither
+    # "pruned" nor "was off", and merging it into either reports a zero as a measurement.
+    assert stub.prune_summary()["outcome"] == "prune_nothing_due"
+
+
+@pytest.mark.parametrize("kw,reason", [(dict(retain=True), "--retain-scratch"),
+                                       (dict(prune_on=False), "--no-prune-scratch")])
+def test_prune_is_DISABLED_by_either_opt_out_and_says_which(tmp_path, kw, reason):
+    """`--retain-scratch` opts out of pruning as well as teardown: one flag means "I intend to
+    re-read this run's own tiles", and a pruner honouring it only at the close would have
+    already eaten them."""
+    stub, scratch, _ = _prune_run(tmp_path, batch_i=9, window=3, **kw)
+    rec = stub.prune_scratch()
+    assert rec["outcome"] == "prune_disabled" and rec["reason"] == reason
+    assert len(_pixels(scratch, 1)) == 7, "an opted-out run lost pixels"
+    # ...and the run-cumulative record carries the reason too, so `summary.json` distinguishes
+    # "pruned nothing" from "was off".
+    assert stub.prune_summary()["outcome"] == "prune_disabled"
+    assert stub.prune_summary()["reason"] == reason
+
+
+def test_prune_REFUSES_a_target_that_is_not_a_run_scratch_subtree(tmp_path):
+    """Same refusal as teardown's, for the same reason: if `_bulk_scratch` moved under us, a
+    recursive delete is the wrong response to that."""
+    stub, scratch, _ = _prune_run(tmp_path, batch_i=9, window=3)
+    stub.scratch = stub.run_dir
+    rec = stub.prune_scratch()
+    assert rec["outcome"] == "prune_disabled" and rec["reason"].startswith("REFUSED")
+    assert len(_pixels(scratch, 1)) == 7
+
+
+def test_a_locked_file_is_COUNTED_not_raised(tmp_path, monkeypatch):
+    """The pruner runs INSIDE the loop, so a Windows file lock must cost the batch's bytes and
+    not a 100 h run at hour 90. Injected on `os.unlink`, the line that can actually fail."""
+    stub, scratch, per = _prune_run(tmp_path, batch_i=5, window=3)
+    real = os.unlink
+
+    def _locked(p, *a, **k):
+        if str(p).endswith("c0.jpg"):
+            raise PermissionError("locked by serve.py")
+        return real(p, *a, **k)
+
+    monkeypatch.setattr(sf.os, "unlink", _locked)
+    rec = stub.prune_scratch()                       # no raise
+    assert rec["outcome"] == "pruned" and rec["errors"] == 4      # 2 expand dirs x 2 batches
+    assert rec["files"] == 2 * (per.files - 2) and rec["bytes"] == 2 * (per.bytes - 2 * 300)
+    # the locked files are still there, everything else went, and the run continued.
+    assert sorted(p.name for p in _pixels(scratch, 1)) == ["c0.jpg", "c0.jpg"]
+    assert stub.prune_totals["errors"] == 4
+
+
+def test_an_UNREADABLE_scratch_root_is_recorded_not_raised(tmp_path, monkeypatch):
+    stub, _scratch, _ = _prune_run(tmp_path, batch_i=5, window=3)
+
+    def _boom(_p):
+        raise PermissionError("nope")
+
+    monkeypatch.setattr(sf.os, "listdir", _boom)
+    rec = stub.prune_scratch()
+    assert rec["outcome"] == "prune_failed" and "PermissionError" in rec["error"]
+
+
+def test_prune_accounting_ACCUMULATES_across_boundaries_and_never_repeats_a_batch(tmp_path):
+    """The high-water mark: batch 6 must prune batch 3 ONLY, not re-walk 1-2. Checked through
+    the per-call record, because a second pass over an already-pruned tree would report zero
+    files and look identical to a correct call."""
+    stub, scratch, per = _prune_run(tmp_path, batch_i=5, n_batches=8, window=3)
+    first = stub.prune_scratch()
+    stub.batch_i = 6
+    second = stub.prune_scratch()
+    assert (second["batch_lo"], second["batch_hi"]) == (3, 3)
+    assert second["files"] == per.files and second["bytes"] == per.bytes
+    assert stub.prune_totals["calls"] == 2
+    assert stub.prune_totals["files"] == first["files"] + second["files"] == 3 * per.files
+    assert stub.prune_totals["bytes"] == 3 * per.bytes
+    assert stub.prune_totals["through_batch"] == 3
+    assert stub.prune_summary()["outcome"] == "pruned"
+    assert stub.prune_summary()["gb"] == round(3 * per.bytes / 2**30, 3)
+    assert len(_pixels(scratch, 4)) == 7             # still inside the window at batch 6
+
+
+def test_a_TWELVE_BATCH_sequence_never_strands_a_live_tree_and_stays_flat(tmp_path):
+    """The single-call tests above cannot see the two things a long run actually depends on:
+    that the HIGH-WATER MARK never skips a directory the run still needs, and that the residual
+    footprint is FLAT in the number of batches rather than growing with it.
+
+    Driven with the shapes the real loop produces, including the one that looks wrong: the
+    pre-loop `draw_roots` runs at `batch_i == 0` (so `roots_b0000_*` exists), and an in-loop
+    refill runs at the TOP of an iteration, i.e. it writes the PREVIOUS batch's index. Both are
+    what the mark's invariant is asserted against in `prune_scratch`."""
+    import types
+    run_dir = tmp_path / "run"
+    scratch = run_dir / "scratch"
+    scratch.mkdir(parents=True)
+    stub = types.SimpleNamespace(
+        run_dir=run_dir, scratch=scratch, retain_scratch=False, prune_on=True,
+        batch_i=0, _pruned_through=-1, prune_retain_batches=3,
+        prune_totals=dict(calls=0, dirs=0, files=0, bytes=0, errors=0, through_batch=0, gb=0.0))
+    for m in ("prune_scratch", "prune_summary", "_prune_refusal", "_prune_dir"):
+        setattr(stub, m, types.MethodType(getattr(sf.SteeredFrontier, m), stub))
+
+    def write(kind, idx, sub=""):
+        d = scratch / (f"{kind}_b{idx:04d}" + ("_mandelbrot" if kind == "roots" else ""))
+        d = d / sub if sub else d
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "pix.jpg").write_bytes(b"\x00" * 1000)
+        if kind == "expand":
+            (d / "expand.jsonl").write_bytes(b"\x00" * 10)
+
+    write("roots", 0)                                    # THE PRE-LOOP DRAW, at batch_i == 0
+    residual = []
+    for b in range(1, 13):
+        write("roots", b - 1)                            # in-loop refill: PREVIOUS index
+        stub.batch_i = b
+        write("expand", b, "mandelbrot")
+        write("harvest", b)
+        stub.prune_scratch()
+        # every tree the window covers is still whole — this is what a stranded mark would break
+        for keep in range(max(1, b - 2), b + 1):
+            assert (scratch / f"expand_b{keep:04d}" / "mandelbrot" / "pix.jpg").exists(), (b, keep)
+            assert (scratch / f"harvest_b{keep:04d}" / "pix.jpg").exists(), (b, keep)
+        residual.append(sum(f.stat().st_size for f in scratch.rglob("*") if f.is_file()))
+
+    # NOTHING IS STRANDED: the only pixels left are the window's, and the pre-loop draw went.
+    assert not (scratch / "roots_b0000_mandelbrot").exists()
+    assert sorted(p.name for p in scratch.glob("harvest_b*")) == \
+        ["harvest_b0010", "harvest_b0011", "harvest_b0012"]
+    # FLAT, not growing: from batch 6 on, the footprint moves only by the kept `expand.jsonl`
+    # (10 B/batch), never by a batch's worth of pixels (7,000 B here).
+    steady = residual[5:]
+    assert max(steady) - min(steady) <= 10 * len(steady), residual
+    # ...and non-vacuously flat: an unpruned run of the same shape would be ~12x this.
+    assert residual[-1] < 3 * 8000, residual
+
+
+# --------------------------------------------------------------------------- #
+# The matching rule, proved separately from the deleting. `prune_batch_target` is pure, and the
+# deletion is the part that cannot be un-done — so the decision to delete gets its own table.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("name,cutoff,want", [
+    ("expand_b0001", 2, ("expand", 1)),
+    ("harvest_b0002", 2, ("harvest", 2)),
+    ("roots_b0002_julia_multibrot3", 2, ("roots", 2)),
+    ("expand_b0003", 2, None),                       # inside the window
+    ("expand_b12345", 99999, ("expand", 12345)),     # >4 digits: a long run keeps working
+    ("native_mandelbrot", 99, None),                 # NOT a per-batch tree
+    ("sched_fields", 99, None),
+    ("expand_bXXXX", 99, None),
+    ("my_expand_b0001", 99, None),                   # anchored at the front
+    ("expand_b0001.bak", 99, None),                  # ...and at the digits
+])
+def test_the_prune_matching_rule(name, cutoff, want):
+    assert sf.prune_batch_target(name, cutoff) == want
+
+
+def test_every_prune_rule_names_a_directory_a_writer_actually_creates():
+    """A rule for a tree nothing writes is a rule that has gone stale in the direction that
+    matters — it stops covering the bytes it was added for (`verification_practice.md` §5)."""
+    import inspect
+    src = inspect.getsource(sf)
+    for r in sf.PRUNE_RULES:
+        assert f'self.scratch / f"{r.kind}_b' in src, r.kind
+        assert f"def {r.writer}(" in src, r.writer
+        assert r.holds.strip() and r.keep is not None
+    # the `keep` list is the retention exception, so it must name the reader's file.
+    keeps = {f for r in sf.PRUNE_RULES for f in r.keep}
+    assert "expand.jsonl" in keeps, (
+        "steered_pilot_morph.reconstruct_tree globs expand_b*/*/expand.jsonl; dropping it from "
+        "`keep` silently retires the post-run depth audit on every pruned run")
+
+
+# --------------------------------------------------------------------------- #
+# ...and the reachability gate, the pruner's half of teardown's "and nothing else".
+# --------------------------------------------------------------------------- #
+def test_prune_is_reachable_ONLY_from_the_two_loop_BODIES():
+    """An interrupted run deletes nothing further. That holds because the call sites are plain
+    bodies in the two loops — a `finally`/`except` placement would prune a killed run's scratch
+    on the way out, which is exactly the state an autopsy needs."""
+    import inspect
+    src = inspect.getsource(sf)
+    assert _self_call_contexts(src, "prune_scratch") == \
+        [("run", "body"), ("run_dive", "body")], _self_call_contexts(src, "prune_scratch")
+    # `_prune_dir` does the unlinking and must be reachable from `prune_scratch` alone.
+    assert _self_call_contexts(src, "_prune_dir") == [("prune_scratch", "body")]
+
+
+def test_the_prune_gate_catches_the_finally_shape():
+    """Injection proof for the gate above (`verification_practice.md` §3)."""
+    bad = ("class Runner:\n"
+           "    def run(self):\n"
+           "        try:\n"
+           "            self._loop()\n"
+           "        finally:\n"
+           "            self.prune_scratch()\n")
+    assert _self_call_contexts(bad, "prune_scratch") == [("run", "finally")]
+    ok = ("class Runner:\n"
+          "    def run(self):\n"
+          "        self._loop()\n"
+          "        self.prune_scratch()\n")
+    assert _self_call_contexts(ok, "prune_scratch") == [("run", "body")]
+
+
+def test_prune_runs_AFTER_the_reconcile_and_the_checkpoint_in_the_crawl_loop():
+    """ORDER is the whole safety argument on the crawl path: `_reconcile_batch` exits loud
+    rather than advancing on an imbalance, and `save_state` makes the state the pixels belonged
+    to durable. A prune before either would delete the evidence of a batch that never balanced.
+    Asserted over the statement order inside `run`, not on the text."""
+    import ast
+    import inspect
+    fn = next(n for n in ast.walk(ast.parse(inspect.getsource(sf.SteeredFrontier)))
+              if isinstance(n, ast.FunctionDef) and n.name == "run")
+    seq = [c.func.attr for c in ast.walk(fn)
+           if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+           and isinstance(c.func.value, ast.Name) and c.func.value.id == "self"
+           and c.func.attr in ("_reconcile_batch", "save_state", "prune_scratch")]
+    assert seq[-3:] == ["_reconcile_batch", "save_state", "prune_scratch"], seq
+    # ...and on the dive path the checkpoint precedes it for the same reason.
+    dv = next(n for n in ast.walk(ast.parse(inspect.getsource(sf.SteeredFrontier)))
+              if isinstance(n, ast.FunctionDef) and n.name == "run_dive")
+    dseq = [c.func.attr for c in ast.walk(dv)
+            if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+            and isinstance(c.func.value, ast.Name) and c.func.value.id == "self"
+            and c.func.attr in ("save_dive_state", "prune_scratch")]
+    assert dseq[-2:] == ["save_dive_state", "prune_scratch"], dseq
+
+
+def test_the_prune_flags_reach_the_constructor_attributes(monkeypatch, tmp_path):
+    """Parse -> args -> attributes, and the DEFAULT direction, which is the one that matters:
+    pruning ON at `PRUNE_RETAIN_BATCHES_DEFAULT` is what an unflagged run gets."""
+    import inspect
+    seen = []
+
+    class _Sentinel:
+        def __init__(self, args):
+            seen.append(args)
+
+        def run(self):
+            pass
+
+    monkeypatch.setattr(sf, "SteeredFrontier", _Sentinel)
+    base = ["steered_frontier.py", "--run-dir", str(tmp_path / "run")]
+    monkeypatch.setattr(sys, "argv", base)
+    sf.main()
+    assert seen[0].no_prune_scratch is False
+    assert seen[0].prune_retain_batches == sf.PRUNE_RETAIN_BATCHES_DEFAULT
+    seen.clear()
+    monkeypatch.setattr(sys, "argv", base + ["--no-prune-scratch",
+                                             "--prune-retain-batches", "7"])
+    sf.main()
+    assert seen[0].no_prune_scratch is True and seen[0].prune_retain_batches == 7
+    init = inspect.getsource(sf).split("def __init__(self, args):", 1)[1]
+    assert 'self.prune_on = not bool(getattr(args, "no_prune_scratch"' in init[:8000]
+    assert 'self.prune_retain_batches = int(getattr(args, "prune_retain_batches"' in init[:8000]
+
+
+@pytest.mark.parametrize("bad", ["0", "-1"])
+def test_a_window_below_one_is_REFUSED_not_clamped(monkeypatch, tmp_path, bad):
+    """A window of 0 prunes the batch in flight, whose tiles the same batch is still scoring.
+    Refused, because "prune harder" silently getting a 1 back would look like it worked."""
+    monkeypatch.setattr(sys, "argv", ["steered_frontier.py", "--run-dir", str(tmp_path / "run"),
+                                      "--prune-retain-batches", bad])
+    with pytest.raises(SystemExit, match="must be >= 1"):
+        sf.main()
+
+
+def test_the_close_stamps_the_run_cumulative_prune_record(tmp_path):
+    """`summary.json` must carry what the PRUNER freed, not only what teardown did: on a long
+    run those differ by orders of magnitude, and teardown's number alone reads as "this run
+    cost 12 GB"."""
+    stub, run_dir, _scratch, _ = _scratch_run(tmp_path)
+    stub.prune_totals.update(calls=40, dirs=120, files=9000, bytes=3 * 2**30, through_batch=40)
+    stub._close_summary(dict(run_ts="mini", mode="steered"))
+    rec = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))[sf.SCRATCH_PRUNE_KEY]
+    assert rec["outcome"] == "pruned" and rec["files"] == 9000
+    assert rec["through_batch"] == 40
+    assert rec["retain_batches"] == sf.PRUNE_RETAIN_BATCHES_DEFAULT
+
+
+def test_the_prune_tally_is_CHECKPOINTED_so_a_resumed_run_reports_the_whole_run(tmp_path):
+    """A session-local tally would report the last session's bytes on a run that was killed and
+    resumed five times — the same reason `wall_s` and `root_draw_s` are checkpointed."""
+    import inspect
+    src = inspect.getsource(sf)
+    assert 'state["prune_totals"] = self.prune_totals' in src
+    assert 'self.prune_totals.update(st.get("prune_totals") or {})' in src
+    # both checkpoints: the crawl's `save_state` and the dive's `save_dive_state`.
+    assert src.count('self.prune_totals.update(st.get("prune_totals") or {})') == 2
+    assert "prune_totals=self.prune_totals," in src

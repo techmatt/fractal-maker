@@ -53,6 +53,17 @@ of scratch":
   which is its own pass. Until then, a reader written in the segmented form is NOT protected
   by this file.
 
+  A THIRD SHAPE THIS FILE DOES NOT COVER AT ALL, stated because a 2026-08-13 pass had to
+  enumerate it by hand: a DISCOVERY RUN's own scratch (`<run_dir>/scratch`, relocated
+  out-of-tree by the artifacts resolver) is out of scope by construction — the anchor rule
+  above excludes it, and it is a different tree from the repo's `scratch/`. Its two post-run
+  readers are both written segmented AND run-relative, so neither shape reaches this ledger:
+  `tools/studies/steered_pilot_morph.reconstruct_tree` (`args.steered / "scratch"` ->
+  `expand_b*/*/expand.jsonl`) and `tools/atlas/morph_anchor_calibrate` (the same tree ->
+  `expand_b*/**/cheap/*.jpg`, a soft cross-check). That tree has its own owner and its own
+  retention declaration — `steered_frontier.PRUNE_RULES` keeps `expand.jsonl` past the in-run
+  pruner precisely because of the first reader — so this file is not the place to re-state it.
+
 Light lane: `git ls-files` + `ast`. No numpy/torch/GPU.
 
   uv run pytest tests/test_scratch_dependency_allowlist.py

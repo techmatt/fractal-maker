@@ -122,6 +122,29 @@ there again, so the line goes with the data.
    `[measured: 2026-08-07, scratch/artifacts_audit_report.md; code:
    steered_frontier.SCRATCH_TEARDOWN_KEY, tools/atlas/test_steered_frontier.py]`
 
+   **A close-time teardown bounds the footprint by the run's LENGTH, which is the wrong
+   bound once runs get long.** Read off the two runs' own teardown records: run 26 freed
+   76.455 GB over 210.07 wall min (21.8 GB/h; 0.648 GB/batch over 118 batches), run 27
+   freed 61.855 GB over 183.11 (20.3 GB/h; 0.262 GB/batch over 236), and run 27's dive leg
+   11.323 GB over 27.07 active min (25.1 GB/h). So a 100 h run projects to ~2 TB held
+   until close against a guard that STOPs at 25 GB free. `steered_frontier` therefore also
+   prunes **in-run**, at the batch boundary: a batch whose reconciliation passed and whose
+   rows are in the ledger loses its pixels immediately, and only the last
+   `--prune-retain-batches` (default 3) are kept for an interrupt or a mid-run autopsy.
+   The footprint becomes window-deep instead of run-length-deep. Three properties carry
+   it. The pruner is reachable only from the two loop bodies — no `finally`/`atexit`/signal
+   handler — so **an interrupted run deletes nothing further**, the same rule teardown
+   already had. `--retain-scratch` disables pruning as well as teardown, because one flag
+   means "I intend to re-read this run's own tiles". And the RECORDS survive the pixels:
+   `expand.jsonl` is kept, because the one post-run reader of a run's scratch that still
+   works on a pruned run (`tools/studies/steered_pilot_morph.reconstruct_tree`) reads it —
+   a retention exception declared as data in `steered_frontier.PRUNE_RULES` rather than as
+   a comment. What was enumerated as reading run scratch after a batch closes, and what it
+   turned out to read instead, is at `steered_frontier.SCRATCH_PRUNE_KEY`.
+   `[measured: 2026-08-13, from data/discovery/prod{26,27}_20260812{,_dive}/summary.json's
+   own scratch_teardown records; code: steered_frontier.SCRATCH_PRUNE_KEY / PRUNE_RULES,
+   tools/atlas/test_steered_frontier.py]`
+
 ## `scratch/` is about liveness, not just recovery cost
 
 Rules 1–3 read as if cheapness of rebuild were the test. It is not the whole test. A
