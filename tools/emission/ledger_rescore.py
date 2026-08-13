@@ -149,6 +149,15 @@ def scored_by_active(row) -> bool:
 # release; registering them is what makes that the DEFAULT for the next run instead of a
 # per-run argument. Its phoenix supply came from `classic_phoenix`, already listed, so this
 # run adds two legs and not three.
+#
+# THE RUN-27 LEGS JOINED ON 2026-08-12 (prompts/run27_launch.md, the closing step), on the
+# same terms again: breadth (1,143 admitted) and dive (202), both natively v11, so
+# `rescore_ledger` VERIFIES rather than re-scores them. Run 27 emitted from FOURTEEN ledgers —
+# these twelve read from this list plus its own two on the command line — so as with run 26
+# the registration changes no number the run reported; it makes the fourteen-ledger union the
+# default the next run gets without an argument. Phoenix again came through `classic_phoenix`,
+# so two legs and not three. Run 27's dive is the largest dive leg registered to date (202
+# against run 26's 86 and run 25's 103) because it ran 12 dives to run 26's 6.
 # ---------------------------------------------------------------------------- #
 LEDGERS = (
     ("c1_breadth",      "data/discovery/campaign1/breadth/outcome_ledger.jsonl"),
@@ -163,6 +172,8 @@ LEDGERS = (
     ("prod25_phoenix",  "data/discovery/prod25_phoenix_native/outcome_ledger.jsonl"),
     ("prod26_breadth",  "data/discovery/prod26_20260812/outcome_ledger.jsonl"),
     ("prod26_dive",     "data/discovery/prod26_20260812_dive/outcome_ledger.jsonl"),
+    ("prod27_breadth",  "data/discovery/prod27_20260812/outcome_ledger.jsonl"),
+    ("prod27_dive",     "data/discovery/prod27_20260812_dive/outcome_ledger.jsonl"),
 )
 
 SCRATCH = ROOT / "scratch" / "emission" / "ledger_rescore"

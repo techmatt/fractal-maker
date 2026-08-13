@@ -77,7 +77,7 @@ def test_the_intake_ledger_population_is_on_disk_and_its_siblings_are_distinct()
     # production run 25's three legs — breadth, dive, native phoenix — joined the seven. The
     # count is pinned so a ledger appearing or vanishing is an explicit edit;
     # `test_intake_union.UNION_ADMITTED` carries what the population then admits.
-    assert len(LR.LEDGERS) == 12
+    assert len(LR.LEDGERS) == 14
     missing = [rel for _t, rel in LR.LEDGERS if not LR.ledger_path(rel).exists()]
     assert not missing, f"intake ledgers missing: {missing}"
     sibs = [D.rescore_path(LR.ledger_path(rel)) for _t, rel in LR.LEDGERS]
