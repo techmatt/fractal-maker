@@ -4031,6 +4031,12 @@ class SteeredFrontier:
                 currency_targets=q.targets_source,
                 census=q.census.summary(), deficit={p: round(v, 3)
                                                     for p, v in q.deficit.items()},
+                # The deficit's two legs, recorded so a run's allocation can be attributed
+                # after the fact without re-censusing a corpus that has moved since.
+                deficit_labels_only={p: round(v, 3)
+                                     for p, v in q.deficit_labels_only.items()},
+                machine_stock_discount=q.census.machine_leg().discount,
+                stock={p: round(v, 3) for p, v in q.stock.items()},
                 intended=q.allocation().summary(),
                 seed_prices=q.cost.summary()["seed"],
                 # WHICH table the seed came from. The prices alone cannot say whether they
@@ -4506,14 +4512,25 @@ class SteeredFrontier:
                 print(f"[scheduler] launch look_frac={lf}\n[scheduler] launch deficits={df}", flush=True)
             if self.quota is not None:
                 a = self.quota.allocation()
+                mleg = self.quota.census.machine_leg()
                 print(f"[pop-quota] ON — floor={self.quota.floor:.0%} of total time per "
                       f"partition (up to {self.quota.floor*len(self.partitions):.0%} floored); "
-                      f"currency = n4 + 0.1*n3 through the amendment overlay + library",
-                      flush=True)
+                      f"currency = n4 + 0.1*n3 through the amendment overlay + library, "
+                      f"plus {mleg.discount:g}x the same currency on UNLABELED machine-scored "
+                      f"intake stock (per-location precedence)", flush=True)
                 print(f"[pop-quota] census={ {p: round(v, 1) for p, v in self.quota.census.currency.items()} } "
                       f"(defaulted_rows={self.quota.census.defaulted_rows}, "
                       f"sources={self.quota.census.sources})", flush=True)
-                print(f"[pop-quota] deficit={ {p: round(v, 1) for p, v in self.quota.deficit.items()} }",
+                # The machine leg beside the labeled one, never folded into it: a deficit that
+                # moved because the classifier is generous and one that moved because Matt
+                # labeled a sitting must not print as the same number.
+                print(f"[pop-quota] machine={ {p: round(v, 1) for p, v in mleg.contribution().items()} } "
+                      f"(admitted={mleg.n_admitted}, labeled-precedence={mleg.n_labeled}, "
+                      f"unclassed={mleg.n_unclassed}, unresolved={mleg.n_unresolved})", flush=True)
+                print(f"[pop-quota] stock={ {p: round(v, 1) for p, v in self.quota.stock.items()} }",
+                      flush=True)
+                print(f"[pop-quota] deficit={ {p: round(v, 1) for p, v in self.quota.deficit.items()} } "
+                      f"(labels-only={ {p: round(v, 1) for p, v in self.quota.deficit_labels_only.items()} })",
                       flush=True)
                 print(f"[pop-quota] INTENDED mix={ {p: round(v, 3) for p, v in sorted(a.share.items())} } "
                       f"floored={sorted(a.floored)}", flush=True)

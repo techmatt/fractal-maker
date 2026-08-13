@@ -40,11 +40,63 @@ low-ratio partition's demand is now bounded by what it is meant to be worth rath
 what the biggest family holds. Nothing else moves: the deficit definition, the price weighting
 and the universal 5% floor are unchanged; only the target vector.
 
-NO MACHINE SCORE ENTERS THE DEFICIT. This is the same hard boundary
-`deficit_scheduler.py` states and it survives verbatim: a q3/q4 COUNT from the classifier
-measures the classifier, not the family (`measurement_practice.md` §2), so the demand side is
-human labels only. The classifier is allowed into the PRICE — see the next section, and the
-clamp that bounds what it can do there.
+MACHINE-SCORED STOCK COUNTS TOO, AT A DISCOUNT (Matt, 2026-08-13)
+-----------------------------------------------------------------
+Until this change the demand side was human labels ONLY, on the ground that a q3/q4 COUNT from
+the classifier measures the classifier and not the family (`measurement_practice.md` §2). That
+boundary made the mining loop unable to close on itself: a run that mines 1,400 admitted
+locations and is never labeled moves the standing deficit by exactly zero, so the next
+allocation still reads that partition as empty and mines it again. It was protecting the
+deficit from a bad estimate, and the cost was an allocator that cannot see its own output.
+
+WHAT IS NOT RELAXED. `deficit_scheduler.py`'s HARD SCOPE INVARIANT — no `p_good` VALUE is ever
+compared across partitions — still holds here and is what bounds the damage. The machine leg
+compares no probabilities: each row is reduced to a class by ONE cut (`floors.GOOD_FLOOR` /
+`GREAT_CUT`) that is the same number in every partition, then counted. What crosses the
+partition boundary is a count of classes, at a fifth weight, which is the same shape of object
+the labeled leg contributes.
+
+So the deficit reads STOCK, and a location's stock is decided per location, never summed:
+
+    stock(partition) = Σ over LABELED locations   currency(human label)
+                     + Σ over UNLABELED locations MACHINE_STOCK_DISCOUNT * currency(machine class)
+
+PRECEDENCE, NOT ADDITION, and it is the whole correctness argument. The labeled corpus and the
+intake ledgers OVERLAP — a sitting is cut out of ledger rows, so a location can be both a
+ledger row and a labeled corpus row (132 of the 5,716 admitted union rows today). Adding the
+two legs would count those locations twice, at a weight nobody chose. A human label therefore
+SUPPRESSES the machine leg for that location outright: where a human has looked, the machine's
+opinion contributes nothing, which is also the only reading under which the discount means
+what it says.
+
+THE MACHINE LEG READS THE SAME UNION THE INTAKE READS — `descriptor.load_union_admitted` over
+the registered intake ledgers (`ledger_rescore.LEDGERS`), so it is guard ∧ distinct ∧ the good
+floor, ledger-namespaced ids, and deduplicated on LOCATION IDENTITY. A second walker would be a
+second definition of what supply exists. The class is `floors.good_class` on the row's STORED
+RAW probabilities, and a row with no machine class (a FLOOR_ADMIT source below `GOOD_FLOOR`
+bypasses the machine verdict entirely) contributes nothing rather than a guessed class.
+
+ONE FLAT DISCOUNT ACROSS PARTITIONS AND CLASSES. Per-partition survival rates exist, but they
+are anchored-sheet ceilings measured per HEAD, so nine of them would be nine numbers to
+re-derive at every flip in exchange for a second-order correction to a coarse constant.
+
+THE STOCK IS ONE QUANTITY AND BOTH SIDES OF THE SUBTRACTION READ IT. `currency_targets`
+anchors on the richest holding, and that anchor is taken over the SAME effective stock —
+otherwise `target(labels) - stock(labels + machine)` would be two different definitions of
+stock inside one deficit, which is the "two quality definitions" failure `floors.py` records.
+It also happens to be the only well-behaved choice: at the 2026-08-13 census, anchoring the
+target on labels alone while subtracting effective stock drives EIGHT of the ten partitions to
+exactly zero deficit, i.e. an allocation the floor decides.
+
+NOTHING ELSE MOVES. The floor, `release_mix` ratios, the price model, the floor carry and the
+in-run credit are untouched; the classifier reaches the PRICE exactly as before, under the
+clamp described in the next section.
+
+A HEAD FLIP NEEDS NO NEW PROTOCOL STEP. The machine leg reads `p_good`/`p_ge4` through
+`descriptor.resolve_rows`, which overlays each ledger's re-score sibling for the ACTIVE head —
+so `ledger_rescore.py`, already half of the flip procedure, refreshes the machine side of the
+deficit as a side effect of the pass that was going to run anyway
+(`classifier_retrain_protocol.md` §5).
 
 THE PRICE IS MEASURED COST-TO-MINE, AND IT IS CLAMPED
 -----------------------------------------------------
@@ -150,6 +202,20 @@ import supply_routing as _srt                    # noqa: E402  (THE channel tabl
 # denominated in the same thing.
 # ------------------------------------------------------------------------- #
 CLASS_WEIGHT = {4: 1.0, 3: 0.1}          # Matt's currency: n4 + 0.1*n3
+# What an UNLABELED machine-scored location is worth against the standing deficit, as a
+# fraction of what the same class would be worth as a human label (Matt, 2026-08-13). The
+# module docstring carries the rule; this is the number.
+#
+# 0.2 IS DELIBERATELY BELOW THE MEASURED SURVIVAL RATE. On the anchored sheets, ~54% of
+# machine-class-4 locations survive a human look at 4 — so a "fair" discount would be near a
+# half. It is set well under that on purpose: a machine-filled partition must keep MILD
+# STANDING APPETITE until human labels re-anchor it, and the failure this fixes (a partition
+# mined forever because unlabeled supply is invisible) is much cheaper to have half-fixed than
+# its mirror (a partition retired on the classifier's own say-so, which is the winner's curse
+# `measurement_practice.md` §2 names). It is a coarse constant, not an operating point: do not
+# re-derive it against an eval, and do not make it per-partition — see the docstring's "ONE
+# FLAT DISCOUNT".
+MACHINE_STOCK_DISCOUNT = 0.2
 FLOOR_FRAC = 0.05                        # addendum: every partition floors at 5% of TOTAL time
 SEED_PRICE = 3.0                         # neutral seed: active-minutes per currency unit
 # The PER-SERVED-BATCH EMA weight, applied to the minutes and the units accumulators alike
@@ -197,22 +263,106 @@ def cplane_of(partition: str) -> str | None:
 
 
 # ========================================================================== #
-# 1. The currency census — human labels through the amendment overlay + library.
+# 1. The currency census — human labels through the amendment overlay + library,
+#    plus the DISCOUNTED machine leg over the registered intake ledgers.
 # ========================================================================== #
 @dataclass
+class MachineStock:
+    """The UNLABELED machine-scored half of the stock, per partition.
+
+    `currency` is UNDISCOUNTED — the raw `n4 + 0.1*n3` of the machine classes, in the same
+    units as the labeled leg. The discount is applied by `contribution()` and nowhere else, so
+    "what the ledgers hold" and "what the deficit is allowed to read" are two numbers a reader
+    can compare rather than one number that has already been scaled.
+
+    Every counter here is a population, not a percentage, because each one is a different way
+    the leg can be quietly wrong: `n_labeled` is precedence doing its job (a suppressed row is
+    NOT a dropped row), `n_unclassed` is the floor-admit population that has no machine verdict
+    to contribute, and `n_unresolved` is the only genuinely bad one — a row whose location
+    identity could not be built, and therefore could not be checked against the labeled set."""
+    counts: dict                    # partition -> {3: n, 4: n}
+    currency: dict                  # partition -> UNDISCOUNTED n4 + 0.1*n3
+    discount: float
+    partitions: list
+    n_admitted: int                 # rows in the admitted union
+    n_labeled: int                  # of those, SUPPRESSED because a human has labeled the location
+    n_unclassed: int                # of those, no machine class (floor-admit below GOOD_FLOOR)
+    n_unresolved: int               # of those, no resolvable location identity — see class doc
+    per_ledger: dict                # ledger label -> admitted rows
+    union_diag: dict                # `load_union_admitted`'s own diagnostics, verbatim
+
+    def contribution(self) -> dict:
+        """THE discounted stock this leg contributes. The ONLY place the discount multiplies."""
+        return {p: self.discount * float(self.currency.get(p, 0.0)) for p in self.partitions}
+
+    def summary(self) -> dict:
+        return dict(discount=self.discount,
+                    currency={p: round(self.currency.get(p, 0.0), 3) for p in self.partitions},
+                    contribution={p: round(v, 3) for p, v in self.contribution().items()},
+                    counts={p: self.counts.get(p, {}) for p in self.partitions},
+                    n_admitted=self.n_admitted, n_labeled_precedence=self.n_labeled,
+                    n_unclassed=self.n_unclassed, n_unresolved=self.n_unresolved,
+                    per_ledger=self.per_ledger, union=self.union_diag)
+
+    @classmethod
+    def empty(cls, partitions: list[str], discount: float | None = None) -> "MachineStock":
+        """A leg that holds nothing — for a census assembled from an injected labeled currency,
+        and for `PopQuota`'s "labels only" readout. Explicit rather than `None` so a zero
+        machine contribution is a stated fact and never an unread default."""
+        return cls(counts={}, currency={p: 0.0 for p in partitions},
+                   discount=(MACHINE_STOCK_DISCOUNT if discount is None else float(discount)),
+                   partitions=list(partitions), n_admitted=0, n_labeled=0, n_unclassed=0,
+                   n_unresolved=0, per_ledger={}, union_diag={})
+
+
+@dataclass
 class CurrencyCensus:
-    """What each partition already holds, and enough provenance to argue about it."""
+    """What each partition already holds, and enough provenance to argue about it.
+
+    Two legs. `currency` is the LABELED one and keeps its old meaning exactly — every reader
+    that wants "what humans have said about this partition" reads it unchanged. `machine` is
+    the discounted unlabeled one, and `stock()` is the sum THE DEFICIT READS. A census built by
+    `label_currency` carries no machine leg, which is a stated zero (`MachineStock.empty`), not
+    an absence: `stock() == currency` there, byte for byte."""
     counts: dict                    # partition -> {1: n, 2: n, 3: n, 4: n}
-    currency: dict                  # partition -> n4 + 0.1*n3
+    currency: dict                  # partition -> n4 + 0.1*n3   (HUMAN LABELS ONLY)
     defaulted_rows: int             # rows with NO fractal_type, routed by the tree's default
     sources: dict                   # source name -> labeled rows contributed
     partitions: list
+    # Location identities carrying a human label — the PRECEDENCE set the machine leg is
+    # suppressed against. Derived by the same walk that counts the currency, so the two can
+    # never describe different populations.
+    labeled_keys: frozenset = frozenset()
+    # Labeled rows whose render block could not express a location identity (no cx/cy/fw).
+    # Counted rather than dropped silently: every one of them is a location the machine leg
+    # cannot suppress, i.e. a possible double-count, and the number is how you know it is small.
+    unkeyed_labeled_rows: int = 0
+    machine: MachineStock | None = None
+
+    def machine_leg(self) -> MachineStock:
+        return self.machine if self.machine is not None else MachineStock.empty(self.partitions)
+
+    def stock(self) -> dict:
+        """THE effective stock: labeled currency + the machine leg's discounted contribution.
+
+        This is what the target's anchor AND the deficit both read (module docstring, "THE
+        STOCK IS ONE QUANTITY"). Per-location precedence has already been applied inside the
+        machine leg, so this is a sum over DISJOINT location sets, not over two overlapping
+        populations."""
+        contrib = self.machine_leg().contribution()
+        keys = set(self.partitions) | set(self.currency) | set(contrib)
+        return {p: float(self.currency.get(p, 0.0)) + float(contrib.get(p, 0.0)) for p in keys}
 
     def summary(self) -> dict:
+        stock = self.stock()
         return dict(currency={p: round(self.currency.get(p, 0.0), 3) for p in self.partitions},
                     counts={p: self.counts.get(p, {}) for p in self.partitions},
                     defaulted_rows=self.defaulted_rows, sources=self.sources,
-                    weights={str(k): v for k, v in CLASS_WEIGHT.items()})
+                    weights={str(k): v for k, v in CLASS_WEIGHT.items()},
+                    labeled_locations=len(self.labeled_keys),
+                    unkeyed_labeled_rows=self.unkeyed_labeled_rows,
+                    machine=self.machine_leg().summary(),
+                    stock={p: round(stock.get(p, 0.0), 3) for p in self.partitions})
 
 
 def _partition_of_render(render: dict) -> str:
@@ -297,21 +447,70 @@ def _partition_of_render(render: dict) -> str:
     return partition_of_row(render, ft) if ft else "mandelbrot"
 
 
+def _identity_of_render(render: dict) -> str | None:
+    """The canonical location identity of a LABELED row's render block, or `None`.
+
+    `location.location_key` is THE identity (family + cx/cy/fw + c + family_params, maxiter
+    deliberately excluded — a re-render at a different iteration cap is the same location), and
+    this side reaches it through `location.from_render_block`, which is the corpus schema's own
+    parser. The ledger side reaches the same key through `descriptor.location_of`. Two adapters
+    onto ONE key rather than a bespoke join tuple: a precedence rule keyed on anything else
+    would be a third opinion about what "the same location" means.
+
+    `None` when the block cannot express one — a render block with no `cx`/`cy`/`fw` is not a
+    location, and the caller COUNTS those rather than pretending they matched nothing."""
+    from location import from_render_block, location_key     # noqa: E402 (tools/corpus)
+    try:
+        return location_key(from_render_block(render))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _identity_of_ledger_row(row: dict) -> str | None:
+    """The same canonical identity for an intake-LEDGER row (`_identity_of_render`'s sibling).
+
+    `descriptor.location_of` is the ledger schema's own parser: it resolves the reframed
+    `outcome_*` viewport, a julia twin's asserted campaign/walk schema, and a phoenix row's
+    whole `(c, p, z_-1)` point. `None` on a row it refuses (an untagged julia row raises rather
+    than infer a shape); the caller counts those as unresolved."""
+    from location import location_key                        # noqa: E402 (tools/corpus)
+    from tools.emission import descriptor as D               # noqa: E402
+    try:
+        return location_key(D.location_of(row))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def label_currency(partitions: list[str], corpus_dir: str | None = None,
                    library_globs: list[str] | None = None) -> CurrencyCensus:
-    """Census the human-label currency per partition.
+    """Census the human-label currency per partition. LABELS ONLY — no machine leg.
 
     `corpus_dir` -> the label corpus, read through `corpus_reader.iter_labeled`, which applies
     the amendment overlay (a registered revision wins over the merged label). `library_globs`
     -> the library's own `images.jsonl` files; today the wallpaper library carries zero scored
     rows, and that zero is DERIVED here rather than asserted, so the census self-updates the
-    day the library starts carrying human verdicts."""
+    day the library starts carrying human verdicts.
+
+    The same walk collects `labeled_keys`, the location identities the machine leg is
+    suppressed against (`stock_census`). Derived here rather than in a second pass because a
+    precedence set built from a different walk of the corpus is a precedence set that can
+    disagree with the currency it is supposed to take precedence over."""
     import glob
     import corpus_reader as cr                              # noqa: E402 (tools/corpus)
 
     counts: dict = {p: Counter() for p in partitions}
     sources: dict = {}
     defaulted = 0
+    keys: set = set()
+    unkeyed = 0
+
+    def _note_identity(render: dict):
+        nonlocal unkeyed
+        k = _identity_of_render(render)
+        if k is None:
+            unkeyed += 1
+        else:
+            keys.add(k)
 
     n = 0
     for lc in cr.iter_labeled(corpus_dir):
@@ -320,6 +519,7 @@ def label_currency(partitions: list[str], corpus_dir: str | None = None,
             defaulted += 1
         p = _partition_of_render(render)
         counts.setdefault(p, Counter())[int(lc.score)] += 1
+        _note_identity(render)
         n += 1
     sources["label_corpus"] = n
 
@@ -340,6 +540,7 @@ def label_currency(partitions: list[str], corpus_dir: str | None = None,
                 if not (render.get("fractal_type") or render.get("family")):
                     defaulted += 1
                 counts.setdefault(_partition_of_render(render), Counter())[int(score)] += 1
+                _note_identity(render)
                 n += 1
     sources["library"] = n
 
@@ -347,11 +548,93 @@ def label_currency(partitions: list[str], corpus_dir: str | None = None,
                 for p in set(partitions) | set(counts)}
     return CurrencyCensus(counts={p: dict(c) for p, c in counts.items()},
                           currency=currency, defaulted_rows=defaulted, sources=sources,
-                          partitions=list(partitions))
+                          partitions=list(partitions),
+                          labeled_keys=frozenset(keys), unkeyed_labeled_rows=unkeyed)
+
+
+# -------------------------------------------------------------------------- #
+# The MACHINE leg — the same admitted union stage-2 intake reads, at a discount.
+# -------------------------------------------------------------------------- #
+def registered_intake_ledgers() -> list:
+    """THE registered stage-2 intake ledgers, as paths. Read from
+    `ledger_rescore.LEDGERS` at CALL time — that tuple is the registry, and a second list here
+    would be a second answer to "what supply exists" that drifts the next time a run's legs are
+    registered. Imported lazily: the census is torch-free and must stay importable in a bare
+    `pop_quota` unit test."""
+    from tools.emission import ledger_rescore as LR          # noqa: E402
+    return [LR.ledger_path(rel) for _tag, rel in LR.LEDGERS]
+
+
+def machine_stock(partitions: list[str], labeled_keys=frozenset(),
+                  ledger_paths=None, discount: float | None = None) -> MachineStock:
+    """The UNLABELED machine-scored stock per partition, over the registered intake ledgers.
+
+    THE SAME READER STAGE-2 INTAKE USES — `descriptor.load_union_admitted`, which is
+    guard ∧ distinct ∧ (`floors.GOOD_FLOOR` on the stored raw P(>=3), or a FLOOR_ADMIT source
+    bypassing the machine verdict), with ids namespaced per ledger and locations deduplicated
+    on `descriptor.loc_key`. So a location present in two ledgers is counted ONCE, and the
+    deficit cannot be moved by re-registering a run's legs.
+
+    PRECEDENCE: a row whose location identity is in `labeled_keys` contributes NOTHING. It is
+    not that the human label wins a comparison — the machine leg simply does not apply to a
+    location a human has looked at, because the labeled leg already counted it.
+
+    `discount` defaults to `MACHINE_STOCK_DISCOUNT` at CALL time, so a test can move the
+    constant and see the deficit move rather than having to inspect the source for a literal."""
+    from partitions import partition_of_row                  # noqa: E402 (tools/scoring)
+    from tools.emission import descriptor as D               # noqa: E402
+    from tools.emission import floors as F                   # noqa: E402  THE class owner
+
+    rows, diag = D.load_union_admitted(
+        registered_intake_ledgers() if ledger_paths is None else list(ledger_paths))
+    counts: dict = {}
+    n_labeled = n_unclassed = n_unresolved = 0
+    for row in rows:
+        key = _identity_of_ledger_row(row)
+        if key is None:
+            # FAIL OPEN, and named as a choice: a row whose identity cannot be built still
+            # counts, because dropping real admitted supply over a missing schema tag would
+            # understate a partition's stock and re-open the very failure this leg fixes. The
+            # cost is that such a row cannot be SUPPRESSED, so if it is also labeled it is
+            # double-counted — which is why the population is reported (0 of 5,716 today).
+            n_unresolved += 1
+        elif key in labeled_keys:
+            n_labeled += 1
+            continue
+        cls = F.good_class(row.get("p_good"), row.get("p_ge4"))
+        if cls is None:
+            n_unclassed += 1
+            continue
+        counts.setdefault(partition_of_row(row, row.get("family")), Counter())[int(cls)] += 1
+
+    currency = {p: sum(CLASS_WEIGHT.get(k, 0.0) * v for k, v in counts.get(p, {}).items())
+                for p in set(partitions) | set(counts)}
+    return MachineStock(
+        counts={p: dict(c) for p, c in counts.items()}, currency=currency,
+        discount=(MACHINE_STOCK_DISCOUNT if discount is None else float(discount)),
+        partitions=list(partitions), n_admitted=len(rows), n_labeled=n_labeled,
+        n_unclassed=n_unclassed, n_unresolved=n_unresolved,
+        per_ledger=diag.get("per_ledger", {}),
+        union_diag={k: diag[k] for k in ("n_union", "n_id_collisions", "n_location_overlaps")
+                    if k in diag})
+
+
+def stock_census(partitions: list[str], corpus_dir: str | None = None,
+                 library_globs: list[str] | None = None, ledger_paths=None,
+                 discount: float | None = None) -> CurrencyCensus:
+    """THE census the deficit reads: the labeled leg with the discounted machine leg attached.
+
+    One function so the precedence set and the leg it suppresses are wired together in exactly
+    one place; `PopQuota` calls this when no census is injected."""
+    cen = label_currency(partitions, corpus_dir=corpus_dir, library_globs=library_globs)
+    cen.machine = machine_stock(partitions, labeled_keys=cen.labeled_keys,
+                                ledger_paths=ledger_paths, discount=discount)
+    return cen
 
 
 TARGET_RULE = ("ratio-weighted (release_mix.RATIO): target_p = anchor * ratio_p / max(ratio), "
-               "anchor = the richest partition's holding")
+               "anchor = the richest partition's STOCK (labeled currency + "
+               f"{MACHINE_STOCK_DISCOUNT:g} x unlabeled machine-class currency)")
 
 # The RUN-SCOPED override (2026-08-07). Not a second policy — a per-run instrument.
 TARGET_RULE_OVERRIDE = ("EXPLICIT run-scoped currency targets (--currency-targets): target_p is "
@@ -1047,7 +1330,13 @@ class PopQuota:
         self.external = set(external if external is not None
                             else _srt.externally_supplied_partitions(self.partitions))
         self.julia_route_gain = float(julia_route_gain)
-        self.census = census if census is not None else label_currency(self.partitions)
+        # `stock_census`, not `label_currency`: the deficit reads STOCK (labeled + discounted
+        # machine, per-location precedence — module docstring). An INJECTED census is used as
+        # given, machine leg and all; one built from `label_currency` carries a stated zero.
+        self.census = census if census is not None else stock_census(self.partitions)
+        # THE quantity both the target's anchor and the deficit read. Held once rather than
+        # recomputed at the two sites, so they cannot come to disagree about what is in stock.
+        self.stock = self.census.stock()
         # The target vector is resolved HERE, from the live table, and kept beside the deficit
         # it produced — the deficit alone cannot say whether a partition is quiet because it is
         # near its target or because its target is small.
@@ -1077,15 +1366,21 @@ class PopQuota:
             self.ratios = {p: (float(_decl[p]) if p in _decl else None)
                            for p in self.partitions}
         else:
-            self.target, self.anchor = currency_targets(self.census.currency, self.partitions,
-                                                        ratios)
+            self.target, self.anchor = currency_targets(self.stock, self.partitions, ratios)
             self.target_rule = TARGET_RULE
             if ratios is None:
                 import release_mix                            # noqa: E402 (tools/scoring)
                 ratios = release_mix.ratios(self.partitions)
             self.ratios = {p: float(ratios[p]) for p in self.partitions}
-        self.deficit = {p: max(0.0, self.target[p] - float(self.census.currency.get(p, 0.0)))
+        self.deficit = {p: max(0.0, self.target[p] - float(self.stock.get(p, 0.0)))
                         for p in self.partitions}
+        # The LABELS-ONLY deficit, alongside — what the standing deficit was before the machine
+        # leg, computed from the same target vector. Kept as a read rather than a
+        # reconstruction: "how much of this partition's quiet is the classifier's opinion" is
+        # the first question anybody asks of an allocation the machine leg moved.
+        self.deficit_labels_only = {
+            p: max(0.0, self.target[p] - float(self.census.currency.get(p, 0.0)))
+            for p in self.partitions}
         self.cost = CostToMine(self.partitions, prices_config)
         # The floor's CARRY. Constructed with the same `floor` and the same `external` set the
         # allocation uses, so the claim it accumulates is exactly the claim `allocate` grants.
@@ -1317,6 +1612,14 @@ class PopQuota:
         return dict(currency=self.census.summary(),
                     externally_supplied=sorted(self.external),
                     deficit={p: round(self.deficit.get(p, 0.0), 3) for p in self.partitions},
+                    # The two legs of the deficit, side by side. `deficit` is what the run
+                    # allocates against; these say how much of it the machine leg moved.
+                    deficit_labels_only={p: round(self.deficit_labels_only.get(p, 0.0), 3)
+                                         for p in self.partitions},
+                    machine_contribution={
+                        p: round(v, 3)
+                        for p, v in self.census.machine_leg().contribution().items()},
+                    stock={p: round(self.stock.get(p, 0.0), 3) for p in self.partitions},
                     target={p: round(self.target.get(p, 0.0), 3) for p in self.partitions},
                     ratio={p: self.ratios.get(p) for p in self.partitions},
                     anchor=(None if self.anchor is None else round(self.anchor, 3)),
@@ -1335,22 +1638,55 @@ class PopQuota:
 def main():
     import argparse
     from partitions import ALL_FAMS                          # noqa: E402
-    ap = argparse.ArgumentParser(description="census the label currency and the allocation "
-                                             "it implies")
+    ap = argparse.ArgumentParser(description="census the stock (labeled + discounted machine) "
+                                             "and the allocation it implies")
     ap.add_argument("--floor", type=float, default=FLOOR_FRAC)
     ap.add_argument("--partitions", default=",".join(ALL_FAMS))
+    ap.add_argument("--discount", type=float, default=None,
+                    help=f"machine-stock discount (default {MACHINE_STOCK_DISCOUNT:g}); "
+                         f"0 reproduces the labels-only deficit exactly")
     args = ap.parse_args()
     from release_mix import ratios as ratio_table              # noqa: E402
     parts = [p for p in args.partitions.split(",") if p]
-    cen = label_currency(parts)
+    cen = stock_census(parts, discount=args.discount)
     rt = ratio_table(parts)
-    tgt, anchor = currency_targets(cen.currency, parts, rt)
-    defc = deficits_from_currency(cen.currency, parts, rt)
-    alloc = allocate(defc, {p: SEED_PRICE for p in parts}, parts, args.floor)
-    print(json.dumps(dict(currency=cen.summary(), target_rule=TARGET_RULE, anchor=round(anchor, 3),
-                          ratio=rt, target={p: round(tgt[p], 2) for p in parts},
-                          deficits={p: round(defc[p], 2) for p in parts},
-                          allocation_at_seed_prices=alloc.summary()), indent=2))
+    stock = cen.stock()
+
+    # THE THREE READS, side by side and off ONE census, because the whole question this
+    # answers is what the machine leg MOVES: `labels_only` is the standing deficit as it was,
+    # `stock` is the standing deficit as it now is, and `machine_contribution` is the
+    # discounted currency that separates them. Each allocation is quoted at SEED prices — a
+    # price table is a fact about a run, and this is a census, so pricing them differently
+    # would put the difference between the two allocations partly in the prices.
+    tgt_lab, anchor_lab = currency_targets(cen.currency, parts, rt)
+    def_lab = {p: max(0.0, tgt_lab[p] - float(cen.currency.get(p, 0.0))) for p in parts}
+    tgt, anchor = currency_targets(stock, parts, rt)
+    defc = {p: max(0.0, tgt[p] - float(stock.get(p, 0.0))) for p in parts}
+    seed = {p: SEED_PRICE for p in parts}
+    alloc_lab = allocate(def_lab, seed, parts, args.floor)
+    alloc = allocate(defc, seed, parts, args.floor)
+
+    print(json.dumps(dict(
+        currency=cen.summary(), target_rule=TARGET_RULE, ratio=rt,
+        labels_only=dict(anchor=round(anchor_lab, 3),
+                         target={p: round(tgt_lab[p], 2) for p in parts},
+                         deficits={p: round(def_lab[p], 2) for p in parts},
+                         allocation_at_seed_prices=alloc_lab.summary()),
+        with_machine_stock=dict(
+            discount=cen.machine_leg().discount, anchor=round(anchor, 3),
+            stock={p: round(stock[p], 2) for p in parts},
+            target={p: round(tgt[p], 2) for p in parts},
+            deficits={p: round(defc[p], 2) for p in parts},
+            allocation_at_seed_prices=alloc.summary()),
+        machine_only=dict(
+            currency_undiscounted={p: round(cen.machine_leg().currency.get(p, 0.0), 2)
+                                   for p in parts},
+            contribution={p: round(v, 2)
+                          for p, v in cen.machine_leg().contribution().items()},
+            counts={p: cen.machine_leg().counts.get(p, {}) for p in parts}),
+        deficit_delta={p: round(defc[p] - def_lab[p], 2) for p in parts},
+        share_delta={p: round(alloc.share[p] - alloc_lab.share[p], 4) for p in parts},
+    ), indent=2))
 
 
 if __name__ == "__main__":

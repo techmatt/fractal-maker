@@ -118,10 +118,21 @@ evidence about the allocator.
 
 Three things changed with it, each a decision rather than a port:
 
-- **Currency.** Deficits are denominated in **human labels** — `count(label==4) + 0.1 ×
-  count(label==3)`, through the amendment overlay + library. §3's distinct-look denomination
-  measured variety; this measures the thing the corpus is short of. No machine score touches
-  the deficit: a q3/q4 count measures the classifier, not the family, until a human looks.
+- **Currency.** Deficits are denominated in **Matt's currency** — `count(4) + 0.1 × count(3)`.
+  §3's distinct-look denomination measured variety; this measures the thing the corpus is short
+  of. Human labels (amendment overlay + library) count at full weight. **Unlabeled
+  machine-scored stock counts at `pop_quota.MACHINE_STOCK_DISCOUNT` = 0.2** (Matt, 2026-08-13),
+  read off the same admitted union stage-2 intake reads, classed by `floors.good_class` on the
+  stored raw probabilities. Until then the deficit was human labels only, on the ground that a
+  q3/q4 count measures the classifier rather than the family — which left the mining loop
+  unable to close on itself, since an unlabeled run moved the standing deficit by exactly zero
+  and the allocator kept mining partitions it had already filled. **Precedence, never
+  addition**: the two populations overlap (a sitting is cut out of ledger rows), so a human
+  label suppresses the machine leg for that location outright. Both the deficit and the
+  target's richest-holding anchor read the same effective stock. On the 2026-08-13 census the
+  change moves 132 of 5,716 admitted union rows onto the labeled leg by precedence, and takes
+  four partitions (`multibrot3`, `julia:multibrot{3,4,5}`) from deficit-driven shares to the 5%
+  floor while `multibrot5` rises 0.112 → 0.305.
 - **Target: RATIO-WEIGHTED** (Matt, 2026-08-04; was uniform until then). The intended release
   mix is one table — `tools/scoring/release_mix.RATIO`, keyed off `ALL_FAMS` with an
   import-time completeness assertion in both directions — and `target_p ∝ ratio_p`, anchored so

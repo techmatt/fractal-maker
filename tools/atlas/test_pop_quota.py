@@ -180,6 +180,208 @@ def test_the_library_leg_is_derived_not_asserted(tmp_path, monkeypatch):
     cen = pq.label_currency(["multibrot4"], corpus_dir=str(corpus), library_globs=[str(lib)])
     assert cen.currency["multibrot4"] == pytest.approx(1.0)
     assert cen.sources["library"] == 1
+    # A render block with no cx/cy/fw cannot express a location identity, so it can never be
+    # SUPPRESSED out of the machine leg. Counted, not dropped silently — the number is how a
+    # reader knows how much of the corpus precedence cannot cover.
+    assert cen.unkeyed_labeled_rows == 1 and cen.labeled_keys == frozenset()   # L2 is unscored
+
+
+# =========================================================================== #
+# 1b. the MACHINE leg — unlabeled machine-scored stock, at a discount
+#
+# Fixtures are on-disk ledgers read through `descriptor.load_union_admitted`, never an
+# injected row list: the whole claim of the leg is that it reads the SAME population stage-2
+# intake reads (guard ∧ distinct ∧ the good floor, ledger-namespaced, location-deduped), and a
+# test that hands it rows directly would pass with a second walker underneath it.
+# =========================================================================== #
+# A location expressed BOTH ways, so a precedence test is a real join and not two spellings of
+# one dict. `descriptor.location_of` reads the ledger side (`outcome_*`), `location.
+# from_render_block` reads the corpus side, and both land on `location.location_key`.
+LOC_A = dict(cx="-0.5251", cy="0.5251", fw=0.0625)
+LOC_B = dict(cx="0.2625", cy="-0.1313", fw=0.0313)
+
+
+def _ledger_row(rid, loc, *, p_good=0.9, p_ge4=0.9, family="mandelbrot", **extra):
+    return dict(id=rid, family=family, outcome_cx=loc["cx"], outcome_cy=loc["cy"],
+                outcome_fw=loc["fw"], guard_pass=True, distinct=True,
+                p_good=p_good, p_ge4=p_ge4, **extra)
+
+
+def _write_ledger(path: Path, rows) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    return path
+
+
+def _corpus_with(tmp_path, monkeypatch, rows) -> str:
+    corpus = tmp_path / "corpus"
+    b = corpus / "batches" / "2026-08-13_t"
+    b.mkdir(parents=True)
+    (b / "images.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    (b / "batch.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("corpus_common.crops_dir", lambda bid: str(b / "crops"), raising=False)
+    return str(corpus)
+
+
+def _labeled_row(iid, loc, score, family="mandelbrot"):
+    return dict(image_id=iid, render=dict(fractal_type=family, **{**loc, "fw": str(loc["fw"])}),
+                label=dict(score=score))
+
+
+def test_a_human_labeled_location_contributes_LABELED_currency_ONLY(tmp_path, monkeypatch):
+    """PRECEDENCE, NOT ADDITION — the correctness claim of the whole change. The labeled corpus
+    is CUT OUT OF the ledgers, so the two populations overlap; summing them would count an
+    overlapping location twice, once at full weight and once at the discount.
+
+    The control is the same ledger read with an EMPTY precedence set, which is what makes this
+    a test of precedence rather than of a fixture that could not have double-counted
+    (`verification_practice.md` §9)."""
+    parts = ["mandelbrot"]
+    corpus = _corpus_with(tmp_path, monkeypatch, [_labeled_row("i1", LOC_A, 4)])
+    led = _write_ledger(tmp_path / "l1" / "outcome_ledger.jsonl",
+                        [_ledger_row("r_a", LOC_A), _ledger_row("r_b", LOC_B)])
+
+    cen = pq.stock_census(parts, corpus_dir=corpus, library_globs=[], ledger_paths=[led])
+    assert cen.currency["mandelbrot"] == pytest.approx(1.0)          # the human 4
+    m = cen.machine_leg()
+    assert m.n_admitted == 2 and m.n_labeled == 1                    # A suppressed, B kept
+    assert m.currency["mandelbrot"] == pytest.approx(1.0)            # B's machine 4 alone
+    assert cen.stock()["mandelbrot"] == pytest.approx(1.0 + 0.2 * 1.0)
+
+    # CONTROL: with nothing to take precedence, LOC_A is counted a SECOND time.
+    loose = pq.machine_stock(parts, labeled_keys=frozenset(), ledger_paths=[led])
+    assert loose.n_labeled == 0
+    assert loose.currency["mandelbrot"] == pytest.approx(2.0)
+    assert (cen.currency["mandelbrot"] + loose.contribution()["mandelbrot"]
+            > cen.stock()["mandelbrot"])
+
+
+def test_a_zero_discount_reproduces_the_labels_only_deficit_EXACTLY(tmp_path, monkeypatch):
+    """The enforcement-only proof (`verification_practice.md` §8): at discount 0 the machine
+    leg is arithmetically absent, so every target, anchor and deficit must be the number the
+    labels-only rule produced — equality, not approximation."""
+    parts = ["mandelbrot", "multibrot3"]
+    ratios = {p: 1.0 for p in parts}
+    corpus = _corpus_with(tmp_path, monkeypatch,
+                          [_labeled_row("i1", LOC_A, 4),
+                           _labeled_row("i2", LOC_B, 3, family="multibrot3")])
+    led = _write_ledger(tmp_path / "l1" / "outcome_ledger.jsonl",
+                        [_ledger_row("r_b2", dict(cx="1.5", cy="0.25", fw=0.5),
+                                     family="multibrot3")])
+
+    labels = pq.label_currency(parts, corpus_dir=corpus, library_globs=[])
+    zero = pq.stock_census(parts, corpus_dir=corpus, library_globs=[], ledger_paths=[led],
+                           discount=0.0)
+    assert zero.machine_leg().currency["multibrot3"] > 0.0        # the leg DID read something
+    assert zero.stock() == labels.stock()
+    assert (pq.deficits_from_currency(zero.stock(), parts, ratios)
+            == pq.deficits_from_currency(labels.currency, parts, ratios))
+    # ...and the live discount does NOT reproduce it, or the equality above is vacuous.
+    live = pq.stock_census(parts, corpus_dir=corpus, library_globs=[], ledger_paths=[led])
+    assert live.stock() != labels.stock()
+
+
+def test_the_discount_reaches_the_deficit_THROUGH_THE_CONSTANT(tmp_path, monkeypatch):
+    """`MACHINE_STOCK_DISCOUNT` is read at CALL time by every path that applies it, so moving
+    the constant moves the stock and the deficit. Asserted behaviourally rather than by
+    grepping the source for `0.2` — a literal at a use site fails this because the patched
+    constant would not reach it (`verification_practice.md` §9: prefer the behavioural form)."""
+    parts = ["mandelbrot"]
+    corpus = _corpus_with(tmp_path, monkeypatch, [])
+    led = _write_ledger(tmp_path / "l1" / "outcome_ledger.jsonl", [_ledger_row("r_b", LOC_B)])
+
+    monkeypatch.setattr(pq, "MACHINE_STOCK_DISCOUNT", 0.5)
+    cen = pq.stock_census(parts, corpus_dir=corpus, library_globs=[], ledger_paths=[led])
+    assert cen.machine_leg().discount == 0.5
+    assert cen.machine_leg().contribution()["mandelbrot"] == pytest.approx(0.5)
+    assert cen.stock()["mandelbrot"] == pytest.approx(0.5)
+    q = pq.PopQuota(parts, tmp_path / "run", census=cen, external=set(),
+                    ratios={"mandelbrot": 1.0})
+    assert q.stock["mandelbrot"] == pytest.approx(0.5)
+    # The anchor is this partition's own stock, so it sits at zero deficit; the labels-only
+    # read against the SAME target is the whole 0.5, which is the shift the change produces.
+    assert q.deficit["mandelbrot"] == 0.0
+    assert q.deficit_labels_only["mandelbrot"] == pytest.approx(0.5)
+    # `MachineStock.empty` reads it at call time too, so a stated zero leg still reports the
+    # live discount rather than the one that was live when the module was imported.
+    assert pq.MachineStock.empty(parts).discount == 0.5
+
+
+def test_a_location_in_two_ledgers_counts_ONCE(tmp_path):
+    """The union's location dedup, reached rather than reimplemented. A run's legs are
+    re-registered as they land (`ledger_rescore.LEDGERS` grew from 7 to 14 in three weeks), so
+    a leg counted twice would move the standing deficit by re-registration alone."""
+    parts = ["mandelbrot"]
+    l1 = _write_ledger(tmp_path / "l1" / "outcome_ledger.jsonl", [_ledger_row("x", LOC_A)])
+    l2 = _write_ledger(tmp_path / "l2" / "outcome_ledger.jsonl", [_ledger_row("y", LOC_A)])
+    m = pq.machine_stock(parts, ledger_paths=[l1, l2])
+    assert m.n_admitted == 1 and m.union_diag["n_location_overlaps"] == 1
+    assert m.currency["mandelbrot"] == pytest.approx(1.0)
+
+
+def test_the_machine_leg_weights_its_classes_like_the_labeled_leg_and_counts_the_unclassed(
+        tmp_path):
+    """One currency, two legs: `good_class` -> `CLASS_WEIGHT`, so a machine 3 is worth a tenth
+    of a machine 4 exactly as a human 3 is. A FLOOR_ADMIT row below `GOOD_FLOOR` is admitted
+    with NO machine verdict at all (`descriptor.FLOOR_ADMIT_SOURCES`); it contributes nothing
+    and is counted, because "the head said nothing about it" and "the head said it was bad"
+    must not report as the same zero."""
+    parts = ["mandelbrot"]
+    led = _write_ledger(tmp_path / "l1" / "outcome_ledger.jsonl", [
+        _ledger_row("g4", LOC_A, p_good=0.9, p_ge4=0.9),
+        _ledger_row("g3", LOC_B, p_good=0.9, p_ge4=0.1),
+        _ledger_row("fa", dict(cx="0.9", cy="0.9", fw=0.5), p_good=0.01, p_ge4=0.01,
+                    mix_source="q4_harvest"),
+    ])
+    m = pq.machine_stock(parts, ledger_paths=[led])
+    assert m.n_admitted == 3 and m.n_unclassed == 1 and m.n_unresolved == 0
+    assert m.counts["mandelbrot"] == {4: 1, 3: 1}
+    assert m.currency["mandelbrot"] == pytest.approx(1.1)
+    assert m.contribution()["mandelbrot"] == pytest.approx(0.2 * 1.1)
+
+
+def test_the_target_ANCHOR_reads_the_stock_not_the_labels(tmp_path):
+    """"THE STOCK IS ONE QUANTITY" (module docstring). `currency_targets` anchors on the
+    richest holding, and if that anchor read labels while the deficit subtracted stock the two
+    halves of one subtraction would be denominated differently — which at the 2026-08-13
+    census drives eight of ten partitions to exactly zero deficit."""
+    parts = ["a", "b"]
+    cen = pq.CurrencyCensus(counts={}, currency={"a": 10.0, "b": 0.0}, defaulted_rows=0,
+                            sources={}, partitions=parts,
+                            machine=pq.MachineStock(counts={}, currency={"a": 0.0, "b": 100.0},
+                                                    discount=0.2, partitions=parts, n_admitted=0,
+                                                    n_labeled=0, n_unclassed=0, n_unresolved=0,
+                                                    per_ledger={}, union_diag={}))
+    q = pq.PopQuota(parts, tmp_path / "run", census=cen, external=set(),
+                    ratios={p: 1.0 for p in parts})
+    assert q.stock == {"a": 10.0, "b": 20.0}
+    assert q.anchor == pytest.approx(20.0)                  # b's stock, not a's 10.0 of labels
+    assert q.deficit["a"] == pytest.approx(10.0) and q.deficit["b"] == 0.0
+    # ...and the labels-only read is kept beside it, so the shift stays visible in the summary.
+    assert q.deficit_labels_only["a"] == pytest.approx(10.0)
+    assert q.deficit_labels_only["b"] == pytest.approx(20.0)
+
+
+def test_a_census_with_no_machine_leg_is_a_STATED_zero(tmp_path, monkeypatch):
+    """`label_currency` is labels-only by name and must stay so: its census's `stock()` is its
+    `currency`, byte for byte, so every existing reader (and every injected-census test below)
+    is unchanged by the machine leg existing."""
+    corpus = _corpus_with(tmp_path, monkeypatch, [_labeled_row("i1", LOC_A, 4)])
+    cen = pq.label_currency(["mandelbrot"], corpus_dir=corpus, library_globs=[])
+    assert cen.machine is None
+    assert cen.stock() == cen.currency
+    assert cen.machine_leg().contribution() == {"mandelbrot": 0.0}
+
+
+def test_the_registered_intake_ledgers_are_THE_registry_not_a_second_list():
+    """A second list of intake ledgers here would drift the next time a run's legs are
+    registered, and the drift is silent — the deficit would simply be computed over less supply
+    than the intake sees. Derived + proved non-empty (`verification_practice.md` §5)."""
+    from tools.emission import ledger_rescore as LR
+    got = pq.registered_intake_ledgers()
+    assert len(got) == len(LR.LEDGERS) > 0
+    assert [p.as_posix() for p in got] == [LR.ledger_path(rel).as_posix()
+                                           for _t, rel in LR.LEDGERS]
 
 
 # =========================================================================== #
