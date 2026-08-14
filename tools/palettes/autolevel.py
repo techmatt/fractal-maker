@@ -487,13 +487,22 @@ def maybe_level(base_img, entry: dict, rerender, *, key: str | None = None,
     return Leveled(img, stamp)
 
 
-def _log_stamp(log_dir, key, stamp: dict) -> None:
+def append_stamp(log_dir, key, stamp: dict) -> None:
+    """THE stamp-log writer, public because a render that does not write its own stamp needs
+    somebody who does. `maybe_level` calls it for a render that levels in-process; the
+    concurrent release pass calls it from the PARENT for a render that levelled in a worker,
+    so `autolevel_stamps.jsonl` has exactly one writer either way and the row is the same row.
+    Passing `log_dir=None` is how a call site says "not mine to write" and is a no-op here."""
     if log_dir is None:
         return
     d = Path(log_dir)
     d.mkdir(parents=True, exist_ok=True)
     with open(d / STAMP_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps({"key": key, "autolevel": stamp}) + "\n")
+
+
+def _log_stamp(log_dir, key, stamp: dict) -> None:
+    append_stamp(log_dir, key, stamp)
 
 
 def one_entry_colormaps(entry: dict, stops: list, out_path) -> Path:

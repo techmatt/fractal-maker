@@ -555,6 +555,10 @@ def write_report(eng, selected: list, sel_log: list, rel_paths: list):
         "above_retired_release_floors": n_rel,
         "release_eligible": acct.get("release_eligible", n_rel),
         "release_n": len(selected), "release_rendered": len(rel_paths),
+        # What the release pass ACTUALLY did (worker count, per-engine threads, rows resumed,
+        # rows that fell back to serial on a broken pool) — read off the pass, never restated
+        # from the flag, so a run that degraded says so.
+        "release_pass": dict(getattr(eng, "release_stat", {}) or {}),
         "junk_floor": F.JUNK_FLOOR, "thin_supply_divisor": F.THIN_SUPPLY_DIVISOR,
         "good_floor": F.GOOD_FLOOR,
         "passing_supply": dict(getattr(eng, "passing_supply", {}) or {}),

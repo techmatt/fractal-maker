@@ -82,7 +82,9 @@ from tools.emission import descriptor as D       # noqa: E402
 from tools.emission import cells as C            # noqa: E402
 from tools.emission import selection as SEL       # noqa: E402
 from tools.emission import ranked_intake as RI    # noqa: E402  read-time ranked intake
+from tools.emission import release_pass as RP     # noqa: E402  THE release render pass
 from tools.emission.pool import Pool             # noqa: E402
+from tools.palettes import autolevel as AL       # noqa: E402  THE auto-level stamp writer
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -146,11 +148,17 @@ def _roster_kind(dt, style: str):
     raise KeyError(style)
 
 
-def render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt):
+def render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt, *, stamp_log=True):
     """Smooth base carrier: dump the plain smooth field, apply the palette via the colormap
-    tail (no --coloring spec). Mirrors deploy_tail.render_pure minus the field spec."""
+    tail (no --coloring spec). Mirrors deploy_tail.render_pure minus the field spec.
+
+    `stamp_log=False` suppresses only the auto-level STAMP WRITE (the stamp still rides back
+    on the returned info block) — for a render running in a release worker whose parent owns
+    `autolevel_stamps.jsonl`. The field dump carries `deploy_tail.field_tmp_token()` for the
+    same reason `render_pure`'s does: two workers must not share one temp name."""
     dt.FIELD_TMP.mkdir(parents=True, exist_ok=True)
-    binp = dt.FIELD_TMP / f"{dt._field_stem(loc, 'smooth', w, h, ss)}.bin"
+    binp = dt.FIELD_TMP / (f"{dt._field_stem(loc, 'smooth', w, h, ss)}"
+                           f"__{dt.field_tmp_token()}.bin")
     lev = None
     try:
         dt._run([str(dt.EXE), "render-one"] + dt._locflags(loc) + [
@@ -173,7 +181,8 @@ def render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt):
         # other, so the base carrier is in scope. Same seam as deploy_tail's pure path: the
         # re-render is another LUT over the SAME cached field.
         lev = dt._level_python(img, palette, out_path,
-                               lambda ovr: cm.render_candidate(fld, cfg, ovr, prep=prep))
+                               lambda ovr: cm.render_candidate(fld, cfg, ovr, prep=prep),
+                               stamp_log=stamp_log)
         dt._save(lev.img, out_path)
     finally:
         binp.unlink(missing_ok=True)
@@ -181,15 +190,21 @@ def render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt):
     return dt._info({}, lev)
 
 
-def render_wallpaper(dt, cm, loc, style, palette, out_path, w, h, ss, filt) -> dict:
+def render_wallpaper(dt, cm, loc, style, palette, out_path, w, h, ss, filt, *,
+                     stamp_log=True) -> dict:
     """One production wallpaper render. Returns the render's info block — `{"autolevel":
     <stamp>}` under the shipped switch (ON since 2026-08-11), empty only with the switch
-    forced off (`FRACTAL_AUTOLEVEL=0`)."""
+    forced off (`FRACTAL_AUTOLEVEL=0`).
+
+    THIS IS THE UNIT OF THE RELEASE PASS — `release_pass.py` calls exactly this, in-process at
+    `--release-workers 1` and in a spawned worker above it, with `stamp_log=False` there so the
+    parent writes the stamp row instead."""
     cp = dt._color_params({})       # canonical inherited coloring (transfer=pct, γ1, no reverse)
     if style == "smooth":
-        return render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt)
+        return render_smooth(dt, cm, loc, palette, cp, out_path, w, h, ss, filt,
+                             stamp_log=stamp_log)
     return dt.render_candidate(loc, style, _roster_kind(dt, style), palette, cp,
-                               out_path, w, h, ss, filt)
+                               out_path, w, h, ss, filt, stamp_log=stamp_log)
 
 
 # --------------------------------------------------------------------------- #
@@ -418,6 +433,10 @@ class EmissionDiversity:
         self.rel_h = int(getattr(args, "release_h", None) or REL_H)
         self.rel_ss = int(getattr(args, "release_ss", None) or REL_SS)
         self.rel_filt = getattr(args, "release_filt", None) or REL_FILT
+        # Release-pass process concurrency (release_pass.py). 1 = the untouched serial path.
+        self.release_workers = int(getattr(args, "release_workers", None)
+                                   or RP.DEFAULT_RELEASE_WORKERS)
+        self.release_stat = {}          # what the pass DID; stamped into summary.json
         # target counts POST-FLOOR rows (release-eligible AND above their head's release
         # floor — `post_floor()`), so the colorize builds a 3×N surplus of genuinely
         # release-grade candidates, not merely pool-admitted ones (§4 "3× post-floor
@@ -1664,52 +1683,72 @@ class EmissionDiversity:
               f"strange modes {self.release_split['strange_modes']}", flush=True)
         return selected, log
 
+    def _release_resumable(self, png: Path) -> bool:
+        """Per-file resume: selection is deterministic from the durable pool, so a relaunch
+        picks the same N — reuse any complete PNG already on disk (a reaper kill mid-pass then
+        only re-renders the missing tiles, never restarts all N). Validate the file is a whole
+        PNG so a truncated mid-write victim is re-rendered, not reused; a corrupt one is
+        removed here so the render below is never asked to overwrite a half file."""
+        if not png.exists():
+            return False
+        try:
+            with Image.open(png) as _im:
+                _im.verify()
+            return True
+        except Exception:                      # noqa: BLE001  truncated/corrupt → re-render
+            png.unlink(missing_ok=True)
+            return False
+
     def render_release(self, selected, skip_render=False):
         # skip_render: reuse the full-res PNGs already on disk (report/sheet regen without
         # re-paying the ~30-min wallpaper-canon render pass).
         if skip_render:
             return [(e["_rec"]["id"], self.release_dir / f"{e['_rec']['id']}.png")
                     for e in selected if (self.release_dir / f"{e['_rec']['id']}.png").exists()]
-        dt = _deploy_tail()
-        from tools import colormap as cm
         self.release_dir.mkdir(parents=True, exist_ok=True)
-        out_paths = []
+        geom = RP.Geom(self.rel_w, self.rel_h, self.rel_ss, self.rel_filt)
+        order, done, tasks = [], {}, []
         for e in selected:
             r = e["_rec"]
-            loc = D.location_of(self.by_id[r["location_id"]])
             png = self.release_dir / f"{r['id']}.png"
-            # Per-file resume: selection is deterministic from the durable pool, so a relaunch
-            # picks the same N — reuse any complete PNG already on disk (a reaper kill mid-pass
-            # then only re-renders the missing tiles, never restarts all N). Validate the file
-            # is a whole PNG so a truncated mid-write victim is re-rendered, not reused.
-            if png.exists():
-                try:
-                    with Image.open(png) as _im:
-                        _im.verify()
-                    out_paths.append((r["id"], png))
-                    continue
-                except Exception:              # noqa: BLE001  truncated/corrupt → re-render
-                    png.unlink(missing_ok=True)
+            order.append(r["id"])
+            if self._release_resumable(png):
+                done[r["id"]] = png
+                continue
+            tasks.append(RP.ReleaseTask(id=r["id"],
+                                        loc=D.location_of(self.by_id[r["location_id"]]),
+                                        style=r["render_style"], palette=r["palette"],
+                                        out=str(png)))
+
+        def sink(task, res):
+            """THE parent-side writer, called once per task in plan order. Everything durable
+            about a release render is written here and nowhere else — which is why a worker
+            renders with `stamp_log=False` and hands the stamp back instead of appending it."""
+            if res.ok:
+                done[task.id] = Path(task.out)
+            else:
+                print(f"[release] {task.id} full-res render failed: {res.error}", flush=True)
+            # The full-res release render is its OWN render, so the operator measures and stamps
+            # it at release geometry rather than inheriting the 960x540 pool row's curve. The
+            # stamp lands in `<release_dir>/autolevel_stamps.jsonl`, one row per leveled render
+            # keyed by file name — written by the operator itself on the serial path, and by
+            # this sink (through the same writer) when the render ran in a worker.
+            if res.stamp is not None:
+                AL.append_stamp(self.release_dir, Path(task.out).name, res.stamp)
             # Timed per render: these are the run's most expensive individual units (ss4 at
             # wallpaper canon) and their spread is wide, so a stage total alone cannot say
             # whether a long release pass was N ordinary renders or one pathological one.
-            _t_rel = time.time()
-            try:
-                # The full-res release render is its OWN render, so the operator measures and
-                # stamps it at release geometry rather than inheriting the 960x540 pool row's
-                # curve. The stamp lands in `<release_dir>/autolevel_stamps.jsonl`, written by
-                # the operator itself (one row per leveled render, keyed by file name).
-                render_wallpaper(dt, cm, loc, r["render_style"], r["palette"], png,
-                                 self.rel_w, self.rel_h, self.rel_ss, self.rel_filt)
-                out_paths.append((r["id"], png))
-                _rel_err = False
-            except Exception as ex:                  # noqa: BLE001
-                print(f"[release] {r['id']} full-res render failed: {ex!r}", flush=True)
-                _rel_err = True
-            self.stage_times.record("release_render", r["id"], time.time() - _t_rel,
-                                    style=r["render_style"], w=self.rel_w, h=self.rel_h,
-                                    ss=self.rel_ss, error=_rel_err)
-        return out_paths
+            self.stage_times.record("release_render", task.id, res.dur_s,
+                                    style=task.style, w=self.rel_w, h=self.rel_h,
+                                    ss=self.rel_ss, error=not res.ok)
+
+        self.release_stat = RP.run_pass(
+            tasks, geom, workers=self.release_workers, sink=sink,
+            log=lambda m: print(m, flush=True))
+        self.release_stat["n_resumed"] = len(selected) - len(tasks)
+        # Plan order, not completion order: a concurrent pass finishes out of order and the
+        # report/sheet downstream lay tiles out in the order this list arrives.
+        return [(rid, done[rid]) for rid in order if rid in done]
 
 
 # --------------------------------------------------------------------------- #
@@ -1769,6 +1808,12 @@ def main():
                     help=f"release supersample (default wallpaper canon {REL_SS})")
     ap.add_argument("--release-filt", default=None,
                     help=f"release downsample filter (default {REL_FILT})")
+    ap.add_argument("--release-workers", type=int, default=RP.DEFAULT_RELEASE_WORKERS,
+                    help=f"concurrent worker PROCESSES on the release render pass (default "
+                         f"{RP.DEFAULT_RELEASE_WORKERS}, the measured best). Each drives one "
+                         f"engine at RAYON_NUM_THREADS="
+                         f"{RP.engine_threads_for(RP.DEFAULT_RELEASE_WORKERS)}; 1 = the serial "
+                         f"path, byte-identical output either way (release_pass.py)")
     ap.add_argument("--max-attempts", type=int, default=240,
                     help="THE TOTAL COLORIZE ATTEMPT BUDGET (2026-08-09). Each head asks for "
                          f"{F.ATTEMPT_MULTIPLIER}× its release slots; if the pair exceeds this "

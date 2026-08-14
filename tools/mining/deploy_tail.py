@@ -53,12 +53,15 @@ WHAT IS STILL HERE, and who reads it:
   * The BAND AUTO-LEVEL seam (`_level_python`, `_info`, and `level=(kind != "direct")`). The
     operator is reached ONLY through `autolevel.maybe_level` — one switch, not two — and the
     direct-trap family is excluded where the KIND is known rather than by a flag inside the
-    render, because a palette-indifferent mode has no LUT for it to act on.
+    render, because a palette-indifferent mode has no LUT for it to act on. `stamp_log=False`
+    suppresses only the STAMP WRITE (never the levelling), for a render that runs in a worker
+    process whose parent writes the log — see `emission/release_pass.py`.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -202,10 +205,23 @@ def _field_stem(loc, mode, w, h, ss, maxiter_policy=None):
 # --------------------------------------------------------------------------- #
 # Render one candidate at (w,h,ss,filt) -> out_path (jpg for scoring, png for a keeper).
 # --------------------------------------------------------------------------- #
-def render_pure(loc, mode, palette, cp, out_path, w, h, ss, filt):
+def field_tmp_token() -> str:
+    """Per-PROCESS token appended to a disposable field dump's name.
+
+    The dump is written and unlinked inside one call, so within a process the name only has to
+    be unique against itself. Across processes it does not: two concurrent release workers
+    rendering the same (location, mode, geometry) — the same location released under two
+    palettes — would otherwise write and `finally`-unlink ONE file, and the loser reads a
+    truncated or already-deleted field. `render_rust` solved this for its own temps by keying
+    on the output stem; the field stem cannot take that (its whole job is to identify the
+    FIELD), so the process id rides alongside it instead. Nothing caches at these names."""
+    return f"p{os.getpid()}"
+
+
+def render_pure(loc, mode, palette, cp, out_path, w, h, ss, filt, *, stamp_log=True):
     spec = dict(PURE_FIELD_SPEC[mode])
     FIELD_TMP.mkdir(parents=True, exist_ok=True)
-    binp = FIELD_TMP / f"{_field_stem(loc, mode, w, h, ss)}.bin"
+    binp = FIELD_TMP / f"{_field_stem(loc, mode, w, h, ss)}__{field_tmp_token()}.bin"
     lev = None
     try:
         _run([EXE, "render-one"] + _locflags(loc) + ["--width", str(w), "--height", str(h),
@@ -227,7 +243,8 @@ def render_pure(loc, mode, palette, cp, out_path, w, h, ss, filt):
         # the curve actually acts; an in-band render comes back as its own bytes.
         lev = _level_python(img, palette, out_path,
                             lambda ovr: cm.render_candidate(fld, cfg, ovr, prep=prep,
-                                                            profile=prof))
+                                                            profile=prof),
+                            stamp_log=stamp_log)
         _save(lev.img, out_path)
     finally:
         binp.unlink(missing_ok=True)
@@ -235,18 +252,24 @@ def render_pure(loc, mode, palette, cp, out_path, w, h, ss, filt):
     return _info({"transfer_dropped": False}, lev)
 
 
-def _level_python(img, palette, out_path, recolor):
+def _level_python(img, palette, out_path, recolor, *, stamp_log=True):
     """The band auto-level over the PYTHON coloring tail: the leveled stops go through
     `autolevel.OverrideLibrary`, which bakes with `colormap.build_lut` — the same bake, the
     same mirror flag — so the Rust<->Python LUT seam is untouched and only the stop COLOURS
-    differ. `recolor(library) -> image` is the call site's own recolor, given a library."""
+    differ. `recolor(library) -> image` is the call site's own recolor, given a library.
+
+    `stamp_log=False` suppresses ONLY the stamp write, never the levelling: the stamp still
+    comes back on the returned `Leveled` and in this render's info block, so a caller that
+    renders in a worker process can have its PARENT write the row (`autolevel.append_stamp`).
+    That is the whole reason the flag exists — a shared append-only log with N writers has no
+    order, and the release record's stamp file must be identical to the serial one."""
     entry = lib().colormaps[palette]
     mirror = bool(entry.get("mirror_needed"))
     out_path = Path(out_path)
     return AL.maybe_level(
         img, entry,
         lambda stops: recolor(AL.OverrideLibrary(lib(), palette, stops, mirror)),
-        key=out_path.name, log_dir=out_path.parent)
+        key=out_path.name, log_dir=out_path.parent if stamp_log else None)
 
 
 def _info(info: dict, lev) -> dict:
@@ -262,7 +285,8 @@ def _info(info: dict, lev) -> dict:
     return info
 
 
-def render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt, *, level=True):
+def render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt, *, level=True,
+                stamp_log=True):
     """`level=False` is the DIRECT-trap family: palette-indifferent by construction (one
     candidate per mode, no palette axis), so there is no LUT for the operator to act on and
     the auto-level is unreachable there rather than merely disabled."""
@@ -312,7 +336,8 @@ def render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt, *, level=True)
             lev = AL.maybe_level(
                 img, entry,
                 lambda stops: _engine(AL.one_entry_colormaps(entry, stops, tmp_cmaps)),
-                key=Path(out_path).name, log_dir=Path(out_path).parent)
+                key=Path(out_path).name,
+                log_dir=Path(out_path).parent if stamp_log else None)
             img = lev.img
         _save(img, out_path)
     finally:
@@ -329,10 +354,11 @@ def _save(img_arr, out_path):
         im.save(out_path)
 
 
-def render_candidate(loc, mode, kind, palette, cp, out_path, w, h, ss, filt):
+def render_candidate(loc, mode, kind, palette, cp, out_path, w, h, ss, filt, *, stamp_log=True):
     if kind == "pure":
-        return render_pure(loc, mode, palette, cp, out_path, w, h, ss, filt)
+        return render_pure(loc, mode, palette, cp, out_path, w, h, ss, filt,
+                           stamp_log=stamp_log)
     # The auto-level is a map on the PALETTE, so it reaches every palette-mapped kind and
     # exactly none of the direct-trap family (palette-indifferent, `kind == "direct"`).
     return render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt,
-                       level=(kind != "direct"))
+                       level=(kind != "direct"), stamp_log=stamp_log)

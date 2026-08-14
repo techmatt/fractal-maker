@@ -307,7 +307,15 @@ def test_the_direct_trap_family_is_unreachable_by_construction():
     where the KIND is known — not left to a flag inside the render."""
     src = (ROOT / "tools/mining/deploy_tail.py").read_text(encoding="utf-8")
     assert 'level=(kind != "direct")' in src
-    assert "def render_rust(loc, mode, palette, cp, out_path, w, h, ss, filt, *, level=True)" in src
+    # The signature half is asked of the FUNCTION, not of the file's text. A literal
+    # `def render_rust(...)` string went red the first time an unrelated keyword-only
+    # parameter was added beside `level` — a source scan is the right tool for the dispatch
+    # expression above (which is a claim about how the call site is written) and the wrong one
+    # for a signature, which `inspect` answers exactly (`verification_practice.md` §9).
+    import inspect                                       # noqa: PLC0415
+    from tools.mining import deploy_tail as dt           # noqa: PLC0415
+    p = inspect.signature(dt.render_rust).parameters["level"]
+    assert p.kind is inspect.Parameter.KEYWORD_ONLY and p.default is True
 
 
 def test_the_switch_off_render_info_is_byte_identical_to_the_pre_operator_block():

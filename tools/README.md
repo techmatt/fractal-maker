@@ -231,7 +231,14 @@ discovery channel and went with it on 2026-08-10 (`retired.md`).
 **Diversity-aware emission v1**: `cells.py` (joint-count cells + the target measure DERIVED from
 `scoring/release_mix.RATIO`), `descriptor.py` (intake → namespaced cross-ledger union →
 partition-keyed morph cluster), `palette_deficit.py`, `pool.py`, `selection.py`,
-`release_record.py`, driven by `build_emission_diversity_v1.py`. `attempt_budget.py`
+`release_record.py`, driven by `build_emission_diversity_v1.py`. `release_pass.py` (2026-08-13)
+is THE release render pass — the driver's last stage run as N concurrent worker PROCESSES
+(`--release-workers`, default measured in `docs/design/release_concurrency.md`; `1` is the
+untouched serial path). Its one structural rule is that **workers render and the parent writes**:
+every record (auto-level stamp, stage time, manifest row) goes through one `sink` in PLAN order,
+so the concurrent pass's files are identical to the serial pass's rather than merely equivalent.
+`release_sweep.py` is the measurement that sets its two constants and the full-res parity check.
+`attempt_budget.py`
 (2026-08-09) is THE colorize VOLUME rule: attempts split head-first at
 `floors.ATTEMPT_MULTIPLIER` (4) x that head's release slots — both heads scaled down
 proportionally when `--max-attempts` cannot cover the pair, never one starved — then per
