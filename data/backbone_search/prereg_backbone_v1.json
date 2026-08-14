@@ -1,6 +1,15 @@
 {
   "study": "backbone_search_v1",
   "written": "BEFORE any arm was trained or scored. tools/backbone_search/eval_arms.py LOADS this file; it restates no threshold, population or rule.",
+  "amendments": [
+    {
+      "n": 1,
+      "when": "2026-08-14, during round 1, before ANY arm was scored",
+      "who": "Matt",
+      "what": "round 2 cut from per-arm seed bands to control-only seed replication; the study's question narrowed from ranking to screening. Full text and what it gives up: round_2_rule.AMENDED.",
+      "why_it_is_not_moving_a_bar": "No eval number existed when it was made \u2014 the metrics, populations, slices and honesty rule below are untouched, and the amendment REMOVES evidence rather than lowering a bar."
+    }
+  ],
   "adoption": "NOTHING IS ADOPTED. This is measurement: no production_pins edit, no ACTIVE_CKPT move, no floor restatement, no ledger rescore. If an arm ever becomes a flip candidate the Winner Rule and classifier_retrain_protocol.md \u00a75 apply then, not here.",
   "design_law": {
     "one_variable": "The backbone, and only the backbone. Every behavioural hyperparameter is read out of data/classifier/v11/model_best.pt[config] at train time and asserted unchanged (train_arm.assert_recipe_untouched).",
@@ -286,14 +295,19 @@
     "no_staged_pick": "Round-2 arms are summarized by their 3-seed BAND (min..max and mean), never by their best seed."
   },
   "round_2_rule": {
-    "advance": "the 2 non-control arms with the highest pooled PRIMARY AUC(>=3) in round 1, plus a 3rd iff its point estimate is within 0.005 of the 2nd (so a near-tie is not resolved by a coin-flip at the cut). The control always advances.",
-    "seeds": [
+    "AMENDED": "AMENDMENT 1 (Matt, 2026-08-14, BEFORE any arm was scored \u2014 round 1 was mid-flight and no eval number existed). The question this study has to answer was narrowed to SCREENING: is each backbone viable as an alternative worth pursuing, not which one wins. Per-arm seed bands are what a WINNER needs; a screen needs the NOISE FLOOR, which is one arm's band and not seven. So the per-arm seed replication is cut and the CONTROL alone is replicated. Cost: 2 runs (~1.7 h) instead of 6 (~5-12 h). What is GIVEN UP is stated rather than hidden: a single-seed arm delta cannot be decomposed into backbone effect and that ARM's own seed variance, so no arm may be RANKED against another here, and an arm that clears the bars below is a candidate for a multi-seed study rather than a winner of one.",
+    "superseded_rule": "top 2-3 non-control arms by pooled PRIMARY AUC(>=3) x 3 seeds, control always included, win = 3-seed min above the control's 3-seed max AND every matched-pair CI excluding 0.",
+    "control_seeds": [
       0,
       1,
       2
     ],
+    "arm_seeds": [
+      0
+    ],
     "what_a_seed_moves": "the fresh-head init, the WeightedRandomSampler draw and the per-epoch tile/aug draw. The corpus, split and selection population do not move.",
-    "reported": "band (min, mean, max) per arm; the control's own band is the noise floor every delta is read against."
+    "noise_floor": "The control's 3-seed spread on the pooled PRIMARY AUC(>=3) IS the retrain-variance floor, and it is assumed to apply to every arm \u2014 an assumption this design cannot check, and the one place a cheap-but-wrong screen would break (a backbone with a genuinely wider seed spread would be read as a mover). Stated as a limitation in the report, not buried.",
+    "screen_verdict": "Each arm gets one of three, and NEVER a rank against another arm: VIABLE \u2014 the delta clears BOTH the control's seed spread and a paired cluster-bootstrap CI excluding 0; TIE \u2014 inside either; WORSE \u2014 the delta is negative under both. A VIABLE verdict is a recommendation to run the multi-seed study that was cut, not an adoption case."
   },
   "cost_projection": {
     "source": "scratch/backbone_search/cost_smoke.json (measured on synthetic tensors before round 1)",

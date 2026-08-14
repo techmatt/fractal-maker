@@ -1,0 +1,79 @@
+{
+  "target": "ordinal",
+  "num_classes": 4,
+  "geometry": "stretch",
+  "epochs": 40,
+  "batch_size": 32,
+  "backbone_lr": 0.0002,
+  "head_lr": 0.001,
+  "weight_decay": 0.05,
+  "drop_rate": 0.2,
+  "drop_path_rate": 0.1,
+  "patience": 40,
+  "seed": 0,
+  "num_workers": 4,
+  "amp": "off",
+  "grad_clip": 1.0,
+  "no_jpeg_aug": false,
+  "beta_biased": 0.4,
+  "class_balance": "sqrt",
+  "black_thresh": 0.3,
+  "src_dims": [
+    512,
+    288
+  ],
+  "target_dims": [
+    384,
+    224
+  ],
+  "init": "imagenet_backbone_fresh (NOT warm-started from v8/v9/v10); recipe read verbatim from the v10 checkpoint config",
+  "loss": "CORN ordinal (K-1=3)",
+  "sampler": "per-location WeightedRandomSampler(w_class[sqrt] x w_group[1/group] x w_source[beta])",
+  "selection": "max eval not-bad AP (rank by sigma(logit0)); patience==epochs (full schedule)",
+  "eval_split_is_val": true,
+  "cache_manifest": "data/v11/cache_manifest.jsonl",
+  "recipe_vs_v7": "IDENTICAL recipe read from v7 config; only delta = 1..4 head (3 cutpoints)",
+  "backbone": "mobilenetv4_conv_medium.e250_r384_in12k",
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "interpolation": "bicubic",
+  "input_size": [
+    3,
+    384,
+    384
+  ],
+  "corpus_version": "v11",
+  "recipe_vs_v8": "IDENTICAL \u2014 every hyperparameter is v8's own config value. The ONLY change is the corpus underneath: the same 7,117 locations re-rendered at the raised iteration cap.",
+  "maxiter_policy": {
+    "base": 4000,
+    "k": 0.3,
+    "min": 200,
+    "max": 67000,
+    "fw_home": 3.0,
+    "applied": "per location, auto_maxiter(CANONICAL fw)",
+    "supersedes": "v9/v10's auto_maxiter(fw_SLOT)"
+  },
+  "cap_doc": "docs/design/auto_maxiter.md",
+  "recipe_vs_v9": "IDENTICAL \u2014 every hyperparameter is v9's own config value, which was itself asserted identical to v8's. The ONLY change is the population: 1,267 maneuver-view locations appended.",
+  "corpus_note": "11,303 labeled locations (v10: 8,382) \u2014 a FRESH build, not an append: protocol \u00a71's frozen prefix and a re-randomized split cannot both hold, and the split rule is what v11 changes. Comparability is carried by the instruments, reproduced location-for-location (data/v11/build_record.json).",
+  "selection_population": "census + floor (670) \u2014 v8/v9/v10-COMPARABLE, frozen on purpose. The uniform-90, the q4-uniform-290 and the 1,810-row holdout are held out of training AND of the checkpoint pick; the objective is a controlled variable (prereg_v10.json amendment 1).",
+  "recipe_vs_v10": "IDENTICAL \u2014 every hyperparameter is v10's own config value, itself asserted identical to v9's and v8's. What changes is the corpus, the split rule and the augmentation recipe.",
+  "split_rule": "forced-eval score-unconditioned instruments (1,050) + a stratified random holdout (1,810) drawn over leakage-closure split groups; 8,443 train. seed 20260808.",
+  "aug_recipe": "v11-independent-32: 32 tiles per location, each drawing its own palette (68-name pool), geometry, AA level and JPEG quality (q60..95). Supersedes v8b's 4x3x2 product.",
+  "backbone_kwargs": null,
+  "grad_checkpointing": false,
+  "arm": "mnv4_conv_medium",
+  "arm_pretrain": "in12k, 384px",
+  "arm_why": "CONTROL \u2014 v5..v11's backbone, retrained fresh under these exact conditions so every delta separates backbone effect from retrain variance.",
+  "round": 1,
+  "frozen_from": "data/classifier/v11/model_best.pt[config] \u2014 every behavioural key read verbatim and asserted unchanged (train_arm.assert_recipe_untouched). Moved: backbone, its create kwargs, the seed, and the normalization/input_size that belong to the pretrained weights.",
+  "best_epoch": 35
+}
