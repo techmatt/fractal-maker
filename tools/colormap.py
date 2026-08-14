@@ -1130,16 +1130,33 @@ def render_candidates_coarse(coarse, configs, library, profiles=None):
     luts = np.empty((K, LUT_SIZE, 3), dtype=np.float64)
     ts = np.empty((K, h, w), dtype=np.float64)
     ics = np.empty((K, 3), dtype=np.float64)
+    # The t-plane is a function of the coarse field and the TRANSFORM knobs only — the palette
+    # enters afterwards, at the LUT gather. The canonical pref pick hands K configs that differ
+    # in nothing but palette, so this loop used to build one plane K times and the branch below
+    # then discovered it was one plane: 235 ms of every 1440 ms call at K=32 on the live
+    # 512x288 scoring grid. Memoized on the knob tuple it is 7 ms, and the output is unchanged
+    # by construction — the same pure function on the same inputs returns the same array.
+    # A `transfer='grad'` config is excluded from the memo: its plane also depends on the
+    # per-config GradientTransferProfile, which is not in the key.
+    tmemo: dict = {}
     for k, cfg in enumerate(configs):
         validate_config(cfg, library)
-        xin = coarse.xmean
-        if cfg.transfer == "grad":
-            if profiles[k] is None:
-                raise ValueError("render_candidates_coarse needs a GradientTransferProfile for transfer='grad'")
-            xin = _apply_transfer(coarse.xmean, profiles[k], cfg.transfer_gamma)
-        gray = apply_transform(xin, cfg.log_premap, cfg.gamma)
-        t = np.mod(gray * cfg.n_cycles, 1.0)
-        ts[k] = np.mod(t + cfg.phase, 1.0)
+        key = None if cfg.transfer == "grad" else (
+            cfg.transfer, cfg.transfer_gamma, cfg.log_premap, cfg.gamma,
+            cfg.n_cycles, cfg.phase)
+        plane = tmemo.get(key) if key is not None else None
+        if plane is None:
+            xin = coarse.xmean
+            if cfg.transfer == "grad":
+                if profiles[k] is None:
+                    raise ValueError("render_candidates_coarse needs a GradientTransferProfile for transfer='grad'")
+                xin = _apply_transfer(coarse.xmean, profiles[k], cfg.transfer_gamma)
+            gray = apply_transform(xin, cfg.log_premap, cfg.gamma)
+            t = np.mod(gray * cfg.n_cycles, 1.0)
+            plane = np.mod(t + cfg.phase, 1.0)
+            if key is not None:
+                tmemo[key] = plane
+        ts[k] = plane
         luts[k] = library.lut(cfg.palette, reverse=cfg.reverse)
         ics[k] = np.asarray(cfg.interior_color, dtype=np.float64)
 

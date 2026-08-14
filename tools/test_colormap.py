@@ -313,3 +313,84 @@ def test_reference_match(test_id, filt):
     m = acc.run_gate(test_id, filt=filt, width=480, height=270, ss=2)
     assert m["max_diff"] <= acc.TOL_MAX, m
     assert m["frac_gt1"] <= acc.TOL_FRAC_GT1, m
+
+
+# --------------------------------------------------------------------------- #
+# The SCORING-ONLY coarse path. `render_candidates_coarse` claims its k-th slice is
+# byte-identical to `render_candidate_coarse` on the same config, and until now nothing
+# asserted it — the pref pick has run on that claim since it was written. It matters twice
+# over: the batched form takes a shared-t fast path AND memoizes the t-plane on the config's
+# transform knobs, so a collapse that is wrong would silently colour K candidates alike and
+# the palette ranker would pick by nothing.
+# --------------------------------------------------------------------------- #
+def _coarse(library, ss=2):
+    prep = cm.stretch_field(_synthetic_field(h=24, w=32, ss=ss))
+    return cm.coarse_field(prep, out_w=32, out_h=24)
+
+
+_COARSE_PALETTES = ["twilight", "viridis", "magma", "cividis"]
+
+
+def test_the_batched_coarse_recolor_matches_the_per_candidate_form(library):
+    """The canonical pref-pick case: K configs differing in NOTHING but palette, which is
+    exactly when the shared-t branch and the knob memo both fire."""
+    coarse = _coarse(library)
+    cfgs = [cm.CandidateConfig(palette=p, location=_synthetic_field().location,
+                               eval_width=32, eval_height=24, filter="box")
+            for p in _COARSE_PALETTES]
+    got = cm.render_candidates_coarse(coarse, cfgs, library)
+    assert got.shape == (len(cfgs), 24, 32, 3) and got.dtype == np.uint8
+    for k, cfg in enumerate(cfgs):
+        want = cm.render_candidate_coarse(coarse, cfg, library)
+        assert np.array_equal(got[k], want), f"slice {k} ({cfg.palette}) differs"
+    # Non-vacuity: distinct palettes must give distinct images, or "identical" is free.
+    assert len({got[k].tobytes() for k in range(len(cfgs))}) == len(cfgs)
+
+
+def test_the_coarse_knob_memo_never_collapses_two_different_t_planes(library):
+    """The memo's failure mode is the dangerous one: a key too coarse would hand candidate B
+    candidate A's plane and the batch would still look self-consistent. Every knob in the key
+    gets its own config here, all on ONE palette, so any collapse shows up as two identical
+    slices AND as a mismatch against the per-candidate form."""
+    coarse = _coarse(library)
+    loc = _synthetic_field().location
+    base = dict(palette="twilight", location=loc, eval_width=32, eval_height=24, filter="box")
+    cfgs = [
+        cm.CandidateConfig(**base),
+        cm.CandidateConfig(**base, gamma=1.7),
+        cm.CandidateConfig(**base, log_premap="log"),
+        cm.CandidateConfig(**base, n_cycles=3),
+        cm.CandidateConfig(**base, phase=0.37),
+    ]
+    got = cm.render_candidates_coarse(coarse, cfgs, library)
+    for k, cfg in enumerate(cfgs):
+        assert np.array_equal(got[k], cm.render_candidate_coarse(coarse, cfg, library)), \
+            f"slice {k} differs from the per-candidate form"
+    assert len({got[k].tobytes() for k in range(len(cfgs))}) == len(cfgs), \
+        "two knob settings produced the same image — the memo key is too coarse"
+
+    # `transfer_gamma` is in the key but INERT under `transfer='pct'` (only `_apply_transfer`,
+    # i.e. the grad path, reads it) — so it is a key that is finer than it has to be, never
+    # coarser. Asserted rather than left as a surprise, because the leg above deliberately
+    # requires every listed knob to move the image and this one does not.
+    pct_g = cm.CandidateConfig(**base, transfer_gamma=0.5)
+    assert np.array_equal(cm.render_candidate_coarse(coarse, pct_g, library), got[0])
+
+
+def test_a_grad_transfer_config_is_kept_out_of_the_knob_memo(library):
+    """`transfer='grad'` planes also depend on the per-config profile, which is NOT in the
+    key, so two grad configs sharing the knob tuple must still get their own planes."""
+    field = _synthetic_field(h=24, w=32)
+    prep = cm.stretch_field(field)
+    coarse = cm.coarse_field(prep, out_w=32, out_h=24)
+    prof = cm.gradient_transfer_profile(field, prep)
+    other = cm.gradient_transfer_profile(_synthetic_field(h=24, w=32, seed=3),
+                                         cm.stretch_field(_synthetic_field(h=24, w=32, seed=3)))
+    cfgs = [cm.CandidateConfig(palette="twilight", location=field.location, eval_width=32,
+                               eval_height=24, filter="box", transfer="grad",
+                               transfer_gamma=0.0) for _ in range(2)]
+    got = cm.render_candidates_coarse(coarse, cfgs, library, profiles=[prof, other])
+    for k, (cfg, p) in enumerate(zip(cfgs, [prof, other])):
+        assert np.array_equal(got[k], cm.render_candidate_coarse(coarse, cfg, library, profile=p))
+    with pytest.raises(ValueError):
+        cm.render_candidates_coarse(coarse, cfgs[:1], library, profiles=None)
