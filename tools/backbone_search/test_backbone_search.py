@@ -169,6 +169,68 @@ def test_paired_bootstrap_resamples_whole_groups():
     assert ci["lo"] == pytest.approx(ci["hi"])
 
 
+# ------------------------- the report, end to end --------------------------- #
+def test_report_runs_end_to_end_on_synthetic_scores(tmp_path, monkeypatch):
+    """The report path costs nothing to run and is where a 10-GPU-hour round gets read,
+    so it is exercised on fabricated scores rather than first met with real ones.
+
+    Every durable write is redirected to tmp; the prereg is the one real read, because the
+    populations and the min-positives rule are supposed to come out of the committed file
+    and a synthetic stand-in would be testing the stand-in."""
+    import argparse
+    import json
+
+    prereg_p = ROOT / "data/backbone_search/prereg_backbone_v1.json"
+    if not prereg_p.exists():
+        pytest.skip("prereg not written yet")
+    prereg = json.loads(prereg_p.read_text())
+    n_primary = prereg["eval_populations"]["PRIMARY (unseen)"]["n"]
+
+    real_durable = E.paths.durable
+
+    def fake_durable(rel, mkparents=False):
+        if "prereg" in str(rel):
+            return real_durable(rel)
+        p = tmp_path / str(rel)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+    monkeypatch.setattr(E.paths, "durable", fake_durable)
+
+    rng = np.random.default_rng(3)
+    keys = [A.CONTROL.name + "_s0", "convnextv2_tiny_s0"]
+    parts = list(prereg["declared_slices"]["per_partition"])
+    rows = []
+    for i in range(n_primary + 40):                       # 40 stand-ins for the selection pop
+        label = int(rng.integers(1, 5))
+        r = {"loc_id": i, "label": label, "source": "holdout_x",
+             "fractal_type": "mandelbrot", "partition": parts[i % len(parts)],
+             "eval_role": "holdout", "split_group": int(i // 7),
+             "population": "primary" if i < n_primary else "selection"}
+        for k in keys:
+            base = 0.2 * label + rng.random() * 0.5
+            for t in (2, 3, 4):
+                r[f"{k}_p{t}"] = float(min(0.99, max(0.01, base - 0.1 * t)))
+            r[f"{k}_score"] = sum(r[f"{k}_p{t}"] for t in (2, 3, 4))
+        rows.append(r)
+    with fake_durable(E.SCORES_REL).open("w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r) + "\n")
+    fake_durable("data/backbone_search/throughput.json").write_text(json.dumps(
+        {k: {"arm": k.rsplit("_s", 1)[0], "seed": 0, "e2e_s_per_1k": 3.0, "params_m": 9.0}
+         for k in keys}))
+
+    E.cmd_report(argparse.Namespace(boot=40, no_figure=False))
+
+    res = json.loads(fake_durable(E.RESULTS_REL).read_text())
+    assert set(res["arms"]) == set(keys)
+    pooled = res["deltas_vs_control"]["convnextv2_tiny_s0"]["slices"]["pooled"]["auc_ge3"]
+    assert pooled["verdict"] in {"TIE", "ARM", "CONTROL"}
+    assert set(pooled["ci95"]) >= {"lo", "hi"}
+    md = fake_durable(E.RESULTS_MD_REL).read_text()
+    assert "AUC>=3" in md and A.CONTROL.name in md
+    assert fake_durable(E.FIGURE_REL).stat().st_size > 5000
+
+
 # --------------------------- the pre-registration --------------------------- #
 def test_prereg_exists_and_declares_its_bars():
     p = ROOT / "data/backbone_search/prereg_backbone_v1.json"

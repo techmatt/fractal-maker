@@ -56,7 +56,8 @@ def fast_auc(y, s):
     """Binary AUC by mid-rank (ties handled), or None when one class is empty.
 
     Local rather than `eval_model.q_auc` because the bootstrap calls it ~10^5 times and
-    sklearn's per-call overhead dominates there; checked equal to it in test_eval_arms.py.
+    sklearn's per-call overhead dominates there; checked equal to it in
+    test_backbone_search.py.
     """
     y = np.asarray(y)
     n1 = int(y.sum())
@@ -343,7 +344,7 @@ def cmd_report(a):
         for k, v in bands.items()}
 
     out = paths.durable(RESULTS_REL, mkparents=True)
-    out.write_text(json.dumps(results, indent=2, default=float))
+    out.write_text(json.dumps(results, indent=2, default=float), encoding="utf-8")
     write_markdown(results, prereg)
     if not a.no_figure:
         write_figure(results)
@@ -414,7 +415,10 @@ def write_markdown(res, prereg):
         for k, v in sorted(bands.items(), key=lambda kv: -kv[1]["mean"]):
             L.append(f"| {k} | {v['n_seeds']} | {v['min']:.4f} | {v['mean']:.4f} | "
                      f"{v['max']:.4f} |")
-    paths.durable(RESULTS_MD_REL, mkparents=True).write_text("\n".join(L) + "\n")
+    # encoding pinned: Windows' default is cp1252 and this table carries an em-dash and
+    # the checkpointing mark, so the default would raise at the last line of the study.
+    paths.durable(RESULTS_MD_REL, mkparents=True).write_text("\n".join(L) + "\n",
+                                                             encoding="utf-8")
 
 
 def write_figure(res):
