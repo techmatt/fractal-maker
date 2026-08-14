@@ -1,0 +1,316 @@
+{
+  "study": "backbone_search_v1",
+  "written": "BEFORE any arm was trained or scored. tools/backbone_search/eval_arms.py LOADS this file; it restates no threshold, population or rule.",
+  "adoption": "NOTHING IS ADOPTED. This is measurement: no production_pins edit, no ACTIVE_CKPT move, no floor restatement, no ledger rescore. If an arm ever becomes a flip candidate the Winner Rule and classifier_retrain_protocol.md \u00a75 apply then, not here.",
+  "design_law": {
+    "one_variable": "The backbone, and only the backbone. Every behavioural hyperparameter is read out of data/classifier/v11/model_best.pt[config] at train time and asserted unchanged (train_arm.assert_recipe_untouched).",
+    "frozen": [
+      "the v11 crop-batch aug cache (361,696 tiles, NOT rebuilt)",
+      "the v11 registered split \u2014 identical train/eval populations across arms, so every comparison is PAIRED on the same locations",
+      "the deploy transform: stretch to 384x224, bicubic, no jitter. Both geometry AND interpolation are v11's, not the arm's timm data config (all 7 arms happen to resolve bicubic anyway \u2014 cost_smoke.json)",
+      "CORN ordinal head, K=4, Sum sigma(logit_k)",
+      "the model-selection objective: max not-bad AP over the frozen 670 census+floor, identical for every arm (a controlled variable)"
+    ],
+    "moves_with_the_backbone": {
+      "mean_std": "Normalization belongs to the pretrained weights \u2014 feeding in1k statistics to a 0.5/0.5-normalized checkpoint is a handicap, not a control. Stamped per arm.",
+      "head_pooling": "timm's own classifier for that backbone at num_classes=K-1=3; penultimate dim varies, everything downstream of features is identical.",
+      "vit_pos_embed": "vit_small_p16 is created with img_size=(224,384) so timm resamples the pretrained pos-embed to a 14x24 grid. The deploy transform is NOT changed to suit it.",
+      "grad_checkpointing": "effnetv2_s and convnextv2_tiny only. A memory-time trade with identical gradients \u2014 the alternative at 8 GB was dropping both arms or shrinking the frozen batch. Their TRAIN-TIME column is therefore not a clean architecture cost and is flagged in the table; their SCORE-TIME column is unaffected (inference runs unchecked)."
+    },
+    "control": "mnv4_conv_medium (mobilenetv4_conv_medium.e250_r384_in12k) RETRAINED FRESH under these conditions. Every delta is measured against THAT run, never against shipped v11, so backbone effect separates from retrain variance."
+  },
+  "arms": [
+    {
+      "name": "mnv4_conv_medium",
+      "timm_model": "mobilenetv4_conv_medium.e250_r384_in12k",
+      "pretrain": "in12k, 384px",
+      "create_kwargs": {},
+      "grad_checkpointing": false,
+      "is_control": true,
+      "why": "CONTROL \u2014 v5..v11's backbone, retrained fresh under these exact conditions so every delta separates backbone effect from retrain variance."
+    },
+    {
+      "name": "mnv4_hybrid_medium",
+      "timm_model": "mobilenetv4_hybrid_medium.ix_e550_r384_in1k",
+      "pretrain": "in1k, 384px (MQA-hybrid)",
+      "create_kwargs": {},
+      "grad_checkpointing": false,
+      "is_control": false,
+      "why": "The control's own family with attention blocks added at the same width \u2014 the cheapest read on whether attention buys anything here at all."
+    },
+    {
+      "name": "mnv4_conv_large",
+      "timm_model": "mobilenetv4_conv_large.e600_r384_in1k",
+      "pretrain": "in1k, 384px",
+      "create_kwargs": {},
+      "grad_checkpointing": false,
+      "is_control": false,
+      "why": "Same family, ~3x the compute: separates 'wrong architecture' from 'not enough capacity', which a cross-family win cannot."
+    },
+    {
+      "name": "effnetv2_s",
+      "timm_model": "tf_efficientnetv2_s.in21k_ft_in1k",
+      "pretrain": "in21k -> in1k",
+      "create_kwargs": {},
+      "grad_checkpointing": true,
+      "is_control": false,
+      "why": "The strongest conventional conv baseline at this size, and a different pretrain corpus (in21k) than the control's in12k."
+    },
+    {
+      "name": "convnextv2_tiny",
+      "timm_model": "convnextv2_tiny.fcmae_ft_in22k_in1k_384",
+      "pretrain": "FCMAE self-supervised -> in22k -> in1k, 384px",
+      "create_kwargs": {},
+      "grad_checkpointing": true,
+      "is_control": false,
+      "why": "A modern large-kernel conv with a SELF-SUPERVISED pretrain \u2014 the arm most likely to have learned texture statistics a supervised in1k head has not, which is what a fractal field mostly is. 384px fine-tune matches deploy scale."
+    },
+    {
+      "name": "fastvit_sa12",
+      "timm_model": "fastvit_sa12.apple_dist_in1k",
+      "pretrain": "in1k, distilled",
+      "create_kwargs": {},
+      "grad_checkpointing": false,
+      "is_control": false,
+      "why": "THE mobile-transformer pick: a self-attention/conv hybrid whose train-time overparameterized blocks re-parameterize away at inference \u2014 this head runs over every ledger rescore and intake, so an arm whose deploy cost falls below its train cost is the one worth measuring in a throughput comparison, and distillation makes it the strongest of its class at this size. repvit_m1_5 was the first pick and was REPLACED: timm's RepVit takes no `drop_path_rate`, so running it would have silently dropped stochastic depth from the frozen recipe \u2014 a second moved variable, which the design law forbids."
+    },
+    {
+      "name": "vit_small_p16",
+      "timm_model": "vit_small_patch16_224.augreg_in21k_ft_in1k",
+      "pretrain": "in21k -> in1k (AugReg)",
+      "create_kwargs": {
+        "img_size": [
+          224,
+          384
+        ]
+      },
+      "grad_checkpointing": false,
+      "is_control": false,
+      "why": "The small-ViT arm with strong pretraining. The deploy transform does NOT move: 224x384 is fed as-is and timm resamples the pretrained pos-embed to the 14x24 grid (both divide by patch 16). dinov2 was rejected for this slot \u2014 patch 14 does not divide 384, so it could only be fed by changing the deploy transform, which the design law forbids."
+    }
+  ],
+  "arms_dropped": [
+    {
+      "candidate": "repvit_m1_5.dist_450e_in1k",
+      "reason": "timm's RepVit takes no drop_path_rate, so running it would silently drop stochastic depth from the frozen recipe \u2014 a second moved variable. Replaced by fastvit_sa12.apple_dist_in1k, which accepts it.",
+      "when": "before any training"
+    },
+    {
+      "candidate": "dinov2 vit_small (patch 14)",
+      "reason": "384 is not divisible by 14, so it could only be fed by changing the deploy transform. Adapting pos-embeds is allowed; changing the deploy transform is not. Replaced by vit_small_patch16_224.augreg_in21k_ft_in1k.",
+      "when": "before any training"
+    }
+  ],
+  "eval_populations": {
+    "PRIMARY (unseen)": {
+      "what": "every eval location EXCEPT the 670 the checkpoint is selected on \u2014 the 1,810-row grouped holdout + uniform-90 + q4-uniform-290.",
+      "why": "Each arm's checkpoint is picked on the 670, and the size of that optimism differs by arm; the 2,190 touch neither training nor the pick for ANY arm, so they are the population on which arms are comparable to each other. NOTE the holdout is biased exactly as training is (protocol \u00a71) \u2014 it is a model-comparison population, and NO base rate is read from it here.",
+      "n": 2190,
+      "n_ge2": 975,
+      "n_ge3": 408,
+      "n_ge4": 98,
+      "by_label": {
+        "1": 1215,
+        "2": 567,
+        "3": 310,
+        "4": 98
+      },
+      "by_role": {
+        "holdout": 1810,
+        "instrument": 380
+      }
+    },
+    "SELECTION (contaminated, reported separately)": {
+      "what": "census-144 + loose0_v3_floor-526, the frozen v8..v11 selection objective.",
+      "why": "Reported for continuity with every previous version's battery, and labelled in-sample: an arm that overfits the pick is flattered here.",
+      "n": 670,
+      "n_ge2": 309,
+      "n_ge3": 91,
+      "n_ge4": 22,
+      "by_label": {
+        "1": 361,
+        "2": 218,
+        "3": 69,
+        "4": 22
+      }
+    }
+  },
+  "declared_metrics": {
+    "primary": "location-level AUC of P(label>=3) \u2014 rank by sigma(logit_1) \u2014 on the PRIMARY population, pooled.",
+    "secondary": [
+      "AUC of P(label>=4) (sigma(logit_2)), pooled and per slice",
+      "AUC of P(label>=2) (sigma(logit_0)) \u2014 the selection objective's own cutpoint",
+      "exact-tier agreement and adjacent (within-one-tier) agreement, decoded PARAMETER-FREE as tier = 1 + sum_k 1[sigma(logit_k) > 0.5] (CORN's own rank-consistent decode; no per-arm threshold is fitted, which would be a second moved variable)",
+      "calibration / prior reproduction: (a) total-variation distance between the decoded tier histogram and the label histogram, (b) per-cutpoint gap between mean sigma(logit_k) and the observed rate"
+    ],
+    "cost": [
+      "params (M)",
+      "peak train VRAM (MB) at the frozen batch 32",
+      "train wall clock (h)",
+      "END-TO-END score seconds per 1,000 canonical tiles \u2014 JPEG decode + deploy transform + forward, batch 64, the cost a ledger rescore pays",
+      "GPU-only score seconds per 1,000 tiles"
+    ]
+  },
+  "declared_slices": {
+    "pooled": "the whole PRIMARY population",
+    "per_partition": {
+      "julia:mandelbrot": {
+        "n": 302,
+        "n_ge2": 158,
+        "n_ge3": 78,
+        "n_ge4": 12,
+        "by_label": {
+          "1": 144,
+          "2": 80,
+          "3": 66,
+          "4": 12
+        }
+      },
+      "julia:multibrot3": {
+        "n": 25,
+        "n_ge2": 15,
+        "n_ge3": 3,
+        "n_ge4": 2,
+        "by_label": {
+          "1": 10,
+          "2": 12,
+          "3": 1,
+          "4": 2
+        }
+      },
+      "julia:multibrot4": {
+        "n": 44,
+        "n_ge2": 37,
+        "n_ge3": 28,
+        "n_ge4": 20,
+        "by_label": {
+          "1": 7,
+          "2": 9,
+          "3": 8,
+          "4": 20
+        }
+      },
+      "julia:multibrot5": {
+        "n": 58,
+        "n_ge2": 53,
+        "n_ge3": 28,
+        "n_ge4": 7,
+        "by_label": {
+          "1": 5,
+          "2": 25,
+          "3": 21,
+          "4": 7
+        }
+      },
+      "mandelbrot": {
+        "n": 809,
+        "n_ge2": 215,
+        "n_ge3": 90,
+        "n_ge4": 21,
+        "by_label": {
+          "1": 594,
+          "2": 125,
+          "3": 69,
+          "4": 21
+        }
+      },
+      "multibrot3": {
+        "n": 268,
+        "n_ge2": 146,
+        "n_ge3": 49,
+        "n_ge4": 6,
+        "by_label": {
+          "1": 122,
+          "2": 97,
+          "3": 43,
+          "4": 6
+        }
+      },
+      "multibrot4": {
+        "n": 224,
+        "n_ge2": 104,
+        "n_ge3": 32,
+        "n_ge4": 8,
+        "by_label": {
+          "1": 120,
+          "2": 72,
+          "3": 24,
+          "4": 8
+        }
+      },
+      "multibrot5": {
+        "n": 241,
+        "n_ge2": 121,
+        "n_ge3": 38,
+        "n_ge4": 6,
+        "by_label": {
+          "1": 120,
+          "2": 83,
+          "3": 32,
+          "4": 6
+        }
+      },
+      "phoenix": {
+        "n": 219,
+        "n_ge2": 126,
+        "n_ge3": 62,
+        "n_ge4": 16,
+        "by_label": {
+          "1": 93,
+          "2": 64,
+          "3": 46,
+          "4": 16
+        }
+      }
+    },
+    "named_up_front": [
+      "julia:mandelbrot",
+      "phoenix"
+    ],
+    "why_named": "the known weak partitions \u2014 v11 is the first build in which either has an eval population at all (protocol \u00a71), so they are where a backbone change is most likely to show and most likely to be over-read.",
+    "min_positives_for_a_slice_verdict": 10,
+    "underpowered_slices_are": "REPORTED WITH THEIR COUNTS AND NO VERDICT \u2014 never dropped, which would print 'no data' about data there is."
+  },
+  "honesty_rule": {
+    "statement": "Label noise forbids calling small differences at the >=3 boundary. Every quality delta is reported as a PAIRED bootstrap CI against the control, and an arm whose CI covers 0 is a TIE \u2014 not a rank.",
+    "bootstrap": {
+      "kind": "paired cluster bootstrap",
+      "unit": "split_group (the leakage-closure group the v11 holdout was drawn over \u2014 locations inside one are not independent)",
+      "B": 5000,
+      "seed": 0,
+      "statistic": "delta = metric(arm) - metric(control), recomputed on each resample with BOTH arms scored on the same resampled rows",
+      "interval": "percentile 2.5 / 97.5"
+    },
+    "secondary_test": "paired DeLong p for AUC deltas (tools/v7/eval_delong.delong_paired), reported alongside \u2014 the bootstrap is the declared rule.",
+    "multiplicity": "The pooled PRIMARY AUC(>=3) is the ONE confirmatory comparison. Per-partition deltas are DESCRIPTIVE: CIs are reported unadjusted and no winner is declared off them. A per-partition CI that excludes 0 is reported as 'suggestive, unadjusted, 9 slices'.",
+    "no_staged_pick": "Round-2 arms are summarized by their 3-seed BAND (min..max and mean), never by their best seed."
+  },
+  "round_2_rule": {
+    "advance": "the 2 non-control arms with the highest pooled PRIMARY AUC(>=3) in round 1, plus a 3rd iff its point estimate is within 0.005 of the 2nd (so a near-tie is not resolved by a coin-flip at the cut). The control always advances.",
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "what_a_seed_moves": "the fresh-head init, the WeightedRandomSampler draw and the per-epoch tile/aug draw. The corpus, split and selection population do not move.",
+    "reported": "band (min, mean, max) per arm; the control's own band is the noise floor every delta is read against."
+  },
+  "cost_projection": {
+    "source": "scratch/backbone_search/cost_smoke.json (measured on synthetic tensors before round 1)",
+    "cpu_floor_note": "v11's real epoch was 76.0 s for 8,443 locations = 111 img/s, and the train transform decodes+crops+resizes+RE-ENCODES a JPG on 4 workers. The control is CPU-bound, so 76 s/epoch is a floor every arm inherits and projections are max(gpu, floor).",
+    "per_arm_h": {
+      "mnv4_conv_medium": 0.84,
+      "mnv4_hybrid_medium": 0.84,
+      "mnv4_conv_large": 0.84,
+      "effnetv2_s": 1.38,
+      "convnextv2_tiny": 4.23,
+      "fastvit_sa12": 0.84,
+      "vit_small_p16": 1.2
+    },
+    "round1_total_h": 10.17
+  },
+  "what_would_falsify_the_whole_study": [
+    "The control arm failing to reproduce shipped v11's selection AP to within retrain noise \u2014 that would mean the harness, not the backbone, moved.",
+    "Any arm's eval reading a different tile set: all arms score the SAME 2,190 canonical renders from data/v11/eval_canon_manifest.jsonl, and eval_arms.py asserts the location id list is identical across arms before comparing."
+  ]
+}

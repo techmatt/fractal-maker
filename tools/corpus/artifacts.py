@@ -102,6 +102,14 @@ RELOCATED_PREFIXES = (
     # resolved it in-tree under scratch/ and a wipe took it. That is the failure this
     # literal (and `deficit_scheduler`'s resolve-time scratch refusal) exist to prevent.
     "data/emission/library_seed_v2/embs",
+    # The backbone-comparison arms' WEIGHTS (tools/backbone_search/). A LITERAL for the same
+    # reason as the three above — one fixed path, not a family that grows a member per run —
+    # and registered BEFORE the first train, per storage_classes.md rule 5. In-tree these
+    # would be COMMITTED rather than merely present, because `!/data/backbone_search/`
+    # re-includes the subtree for the RECORDS (config/metrics/eval scores), which are the
+    # durable half; the weights are staged arms, which ACTIVE+PREVIOUS retention does not
+    # track, and each is reproducible from its committed config plus the v11 cache.
+    "data/backbone_search/arms",
     # `data/emission/library_seed_v3/embs` WAS REGISTERED HERE and is GONE (2026-08-11):
     # library_seed_v3 was rejected as a seed (Matt), so its entry left
     # `deficit_scheduler.SEED_SOURCES` and its snapshot and vectors were deleted with it. The

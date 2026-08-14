@@ -127,9 +127,17 @@ def train_resumable(train_locs, eval_renders, eval_labels, cfg, data_cfg, device
                               num_workers=cfg["num_workers"], pin_memory=(device == "cuda"),
                               persistent_workers=False, drop_last=False)
 
+    # `backbone`/`backbone_kwargs` are absent from every v8..v11 cfg dict except as the
+    # default name, so this builds what it always built; the backbone comparison
+    # (tools/backbone_search/) is what puts a different name in cfg.
     model = build_model(target="ordinal", drop_rate=cfg["drop_rate"],
                         drop_path_rate=cfg["drop_path_rate"], pretrained=True,
-                        num_classes=K).to(device)
+                        num_classes=K, backbone=cfg.get("backbone"),
+                        backbone_kwargs=cfg.get("backbone_kwargs")).to(device)
+    if cfg.get("grad_checkpointing"):
+        # Absent from every v8..v11 cfg. A memory-time trade only: the recomputed graph
+        # yields the same gradients, so the recipe is untouched and only wall clock moves.
+        model.set_grad_checkpointing(True)
     head_params = list(model.get_classifier().parameters())
     head_ids = {id(p) for p in head_params}
     backbone_params = [p for p in model.parameters() if id(p) not in head_ids]
@@ -216,7 +224,8 @@ def train_resumable(train_locs, eval_renders, eval_labels, cfg, data_cfg, device
     if best_state is None:  # never improved (degenerate); fall back to last
         best_state = last_state
     ckpt_cfg = dict(cfg)
-    ckpt_cfg.update({"backbone": BACKBONE, "mean": data_cfg["mean"], "std": data_cfg["std"],
+    ckpt_cfg.update({"backbone": cfg.get("backbone") or BACKBONE,
+                     "mean": data_cfg["mean"], "std": data_cfg["std"],
                      "interpolation": data_cfg["interpolation"],
                      "input_size": data_cfg["input_size"], "best_epoch": best_epoch})
     out_dir.mkdir(parents=True, exist_ok=True)

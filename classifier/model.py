@@ -22,13 +22,25 @@ BACKBONE = "mobilenetv4_conv_medium.e250_r384_in12k"
 
 def build_model(target: str = "ordinal", drop_rate: float = 0.2,
                 drop_path_rate: float = 0.1, pretrained: bool = True,
-                num_classes: int = 3):
+                num_classes: int = 3, backbone: str | None = None,
+                backbone_kwargs: dict | None = None):
+    """The CORN/binary head on a timm backbone.
+
+    `backbone`/`backbone_kwargs` default to None so every existing call site builds
+    exactly what it always built. They exist for the backbone comparison
+    (`tools/backbone_search/`), which trains this same head over a set of pretrained
+    backbones — the arm's timm name and any create-time kwargs it needs (a ViT's
+    non-square `img_size`, which resamples the pretrained pos-embed) are STAMPED into
+    the checkpoint config, so `eval_model.load_model` rebuilds an arm without knowing
+    which arm it is.
+    """
     # ordinal CORN emits K-1 logits (num_classes=3 -> 2, the v1..v6 default; the
     # wallpaper head passes num_classes=4 -> 3). binary is always a single logit.
     n_out = (num_classes - 1) if target == "ordinal" else 1
     model = timm.create_model(
-        BACKBONE, pretrained=pretrained, num_classes=n_out,
+        backbone or BACKBONE, pretrained=pretrained, num_classes=n_out,
         drop_rate=drop_rate, drop_path_rate=drop_path_rate,
+        **(backbone_kwargs or {}),
     )
     return model
 

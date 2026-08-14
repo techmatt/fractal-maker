@@ -608,6 +608,18 @@ __pycache__/
 !/data/classifier/v11/config.json
 !/data/classifier/v11/metrics.json
 
+# Backbone comparison (prompts/backbone_search_v1.md, tools/backbone_search/). MEASUREMENT,
+# not a flip: nothing here is pinned, and under ACTIVE+PREVIOUS retention a staged arm's
+# weight is not trackable at all. What IS durable is the RECORD — the pre-registration, each
+# arm's config/metrics/history/log, the frozen paired eval scores and the results table —
+# because it is the only surviving description of runs whose weights are thrown away, and
+# re-earning it costs the whole GPU-day again.
+!/data/backbone_search/
+# The weights themselves. Registered in artifacts.RELOCATED_PREFIXES so they are born OUT of
+# the tree; this line is the belt-and-braces half — without it the `!` above would COMMIT any
+# weight that ever landed in-tree, which is exactly the trap /data/atlas/tau_h_rederive names.
+/data/backbone_search/arms/
+
 # ---------------------------------------------------------------------------
 # render-mode ("mining") heads — DURABLE by exact path, same wiring and same reason as
 # the v9/v10 classifier block above. v1 was force-added and had no rule saying it belongs;

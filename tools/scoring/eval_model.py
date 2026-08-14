@@ -36,9 +36,13 @@ def load_model(ckpt, device):
     ck = torch.load(ckpt, map_location="cpu", weights_only=False)
     cfg = ck["config"]
     K = int(cfg.get("num_classes", 3))
+    # `backbone`/`backbone_kwargs` come off the checkpoint's own config, so a staged
+    # backbone-comparison arm loads through this same function. Every v5..v11 config
+    # stamps `backbone` as the default name, so this is a no-op for them.
     m = build_model(target="ordinal", drop_rate=cfg.get("drop_rate", 0.2),
                     drop_path_rate=cfg.get("drop_path_rate", 0.1), pretrained=False,
-                    num_classes=K).to(device)
+                    num_classes=K, backbone=cfg.get("backbone"),
+                    backbone_kwargs=cfg.get("backbone_kwargs")).to(device)
     m.load_state_dict(ck["state_dict"])
     tf = Transform(cfg["geometry"], cfg["interpolation"], tuple(cfg["mean"]), tuple(cfg["std"]),
                    train=False)
