@@ -35,7 +35,7 @@ from corpus_common import default_creationflags  # noqa: E402
 # Cheapest-first by the cost smoke, control first. A name here that is not in ARMS is a
 # stale order, so the list is checked rather than trusted.
 ORDER = ["mnv4_conv_medium", "mnv4_hybrid_medium", "mnv4_conv_large", "fastvit_sa12",
-         "vit_small_p16", "effnetv2_s", "convnextv2_tiny"]
+         "vit_small_p16", "effnetv2_s"]
 assert set(ORDER) == set(ARMS_BY_NAME) and ORDER[0] == CONTROL.name, \
     "ORDER is stale against arms.ARMS"
 

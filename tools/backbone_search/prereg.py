@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "tools" / "scoring"))
 
 import partitions as P  # noqa: E402
 import paths  # noqa: E402
-from backbone_search.arms import ARMS, CONTROL  # noqa: E402
+from backbone_search.arms import ARMS, CONTROL, DROPPED  # noqa: E402
 
 OUT_REL = "data/backbone_search/prereg_backbone_v1.json"
 SMOKE = "backbone_search/cost_smoke.json"
@@ -66,7 +66,15 @@ def main():
          "and what it gives up: round_2_rule.AMENDED.",
          "why_it_is_not_moving_a_bar": "No eval number existed when it was made — the "
          "metrics, populations, slices and honesty rule below are untouched, and the "
-         "amendment REMOVES evidence rather than lowering a bar."}],
+         "amendment REMOVES evidence rather than lowering a bar."},
+        {"n": 2, "when": "2026-08-14, queued but not started; no arm had been scored",
+         "who": "Matt", "what": "convnextv2_tiny DROPPED on cost-suitability. Full reason "
+         "and what it gives up: arms_dropped.",
+         "why_it_is_not_moving_a_bar": "The arm was removed from the SET, not from the "
+         "comparison — no bar, population or metric changed, and the drop was decided on "
+         "cost columns (score s/1k, weight MB, train h) that were measured before any "
+         "quality number existed. The risk it creates is the opposite of bar-moving: an "
+         "arm that might have won is unmeasured, and the report says so."}],
       "adoption": "NOTHING IS ADOPTED. This is measurement: no production_pins edit, no "
                   "ACTIVE_CKPT move, no floor restatement, no ledger rescore. If an arm "
                   "ever becomes a flip candidate the Winner Rule and "
@@ -81,7 +89,7 @@ def main():
                    "arms, so every comparison is PAIRED on the same locations",
                    "the deploy transform: stretch to 384x224, bicubic, no jitter. Both "
                    "geometry AND interpolation are v11's, not the arm's timm data config "
-                   "(all 7 arms happen to resolve bicubic anyway — cost_smoke.json)",
+                   "(every arm happens to resolve bicubic anyway — cost_smoke.json)",
                    "CORN ordinal head, K=4, Sum sigma(logit_k)",
                    "the model-selection objective: max not-bad AP over the frozen 670 "
                    "census+floor, identical for every arm (a controlled variable)"],
@@ -95,12 +103,13 @@ def main():
           "vit_pos_embed": "vit_small_p16 is created with img_size=(224,384) so timm "
                            "resamples the pretrained pos-embed to a 14x24 grid. The deploy "
                            "transform is NOT changed to suit it.",
-          "grad_checkpointing": "effnetv2_s and convnextv2_tiny only. A memory-time trade "
-                                "with identical gradients — the alternative at 8 GB was "
-                                "dropping both arms or shrinking the frozen batch. Their "
-                                "TRAIN-TIME column is therefore not a clean architecture "
-                                "cost and is flagged in the table; their SCORE-TIME column "
-                                "is unaffected (inference runs unchecked)."},
+          "grad_checkpointing": (
+              "the arms that need it: "
+              + ", ".join(a.name for a in ARMS if a.grad_checkpointing)
+              + ". A memory-time trade with identical gradients — the alternative at 8 GB "
+                "was dropping the arm or shrinking the frozen batch. Its TRAIN-TIME column "
+                "is therefore not a clean architecture cost and is flagged in the table; "
+                "its SCORE-TIME column is unaffected (inference runs unchecked).")},
         "control": f"{CONTROL.name} ({CONTROL.timm_model}) RETRAINED FRESH under these "
                    f"conditions. Every delta is measured against THAT run, never against "
                    f"shipped v11, so backbone effect separates from retrain variance."},
@@ -110,6 +119,9 @@ def main():
                 "grad_checkpointing": a.grad_checkpointing,
                 "is_control": a.is_control, "why": a.why} for a in ARMS],
       "arms_dropped": [
+        *[{"candidate": d["timm_model"], "reason": d["why"],
+           "what_is_given_up": d["what_is_given_up"], "when": d["when"], "who": d["who"]}
+          for d in DROPPED],
         {"candidate": "repvit_m1_5.dist_450e_in1k",
          "reason": "timm's RepVit takes no drop_path_rate, so running it would silently "
                    "drop stochastic depth from the frozen recipe — a second moved "

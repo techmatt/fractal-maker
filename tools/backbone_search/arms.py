@@ -89,13 +89,6 @@ ARMS: tuple[ArmSpec, ...] = (
             "pretrain corpus (in21k) than the control's in12k.",
     ),
     ArmSpec(
-        name="convnextv2_tiny", timm_model="convnextv2_tiny.fcmae_ft_in22k_in1k_384",
-        pretrain="FCMAE self-supervised -> in22k -> in1k, 384px", grad_checkpointing=True,
-        why="A modern large-kernel conv with a SELF-SUPERVISED pretrain — the arm most "
-            "likely to have learned texture statistics a supervised in1k head has not, "
-            "which is what a fractal field mostly is. 384px fine-tune matches deploy scale.",
-    ),
-    ArmSpec(
         name="fastvit_sa12", timm_model="fastvit_sa12.apple_dist_in1k",
         pretrain="in1k, distilled",
         why="THE mobile-transformer pick: a self-attention/conv hybrid whose train-time "
@@ -122,3 +115,25 @@ ARMS: tuple[ArmSpec, ...] = (
 ARMS_BY_NAME = {a.name: a for a in ARMS}
 CONTROL = next(a for a in ARMS if a.is_control)
 assert sum(a.is_control for a in ARMS) == 1, "exactly one control arm"
+
+# Declared, then dropped BEFORE it ran. Kept here rather than deleted: the reason an arm was
+# not measured is part of the study's record, and a bare absence would read as an oversight.
+# Removing it from ARMS is also what STOPS it — an in-flight runner's plan is fixed at
+# launch, so `train_arm --arm convnextv2_tiny` now fails at argparse in a second and the
+# queue moves on, with no process surgery and a log line saying so.
+DROPPED = (
+    {"name": "convnextv2_tiny", "timm_model": "convnextv2_tiny.fcmae_ft_in22k_in1k_384",
+     "when": "2026-08-14, queued but not yet started; no arm had been scored",
+     "who": "Matt",
+     "why": "COST-SUITABILITY, decided ahead of the measurement rather than after it. "
+            "5.73 s/1k tiles GPU-only score cost against the control's 1.09 (5.3x) on a "
+            "head that runs over every ledger rescore and intake, a 106 MB weight against "
+            "34 MB (212 MB tracked under ACTIVE+PREVIOUS), and 4.7-5.7 h to train against "
+            "0.9 h. It would need a large quality win to be adoptable at that price and "
+            "there is no evidence predicting one.",
+     "what_is_given_up": "It was the ONLY self-supervised-pretrain arm, so the study does "
+                         "not test whether an FCMAE backbone reads fractal texture better "
+                         "than a supervised one. That hypothesis is untested, not refuted. "
+                         "convnextv2_nano.fcmae_ft_in22k_in1k_384 (15.6 M / ~60 MB, "
+                         "projected ~2.3 h) is the cheap way to buy it later."},
+)
