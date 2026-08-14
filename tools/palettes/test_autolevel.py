@@ -327,3 +327,166 @@ def test_the_switch_off_render_info_is_byte_identical_to_the_pre_operator_block(
     assert dt._info(dict(before), AL.Leveled(np.zeros((2, 2, 3), np.uint8), None)) == before
     stamped = dt._info(dict(before), AL.Leveled(np.zeros((2, 2, 3), np.uint8), {"acted": True}))
     assert stamped == {**before, "autolevel": {"acted": True}}
+
+
+# --------------------------------------------------------------------------- #
+# 7. The LUT surgery is VECTORIZED, and byte-identical to the per-entry form.
+#
+# `curved_stops` is resolution-independent — it sees the stops and the curve, never the
+# image — so its cost lands once per acting render at any geometry. Measured on the live
+# colorize path it was 0.13-24.6 s per acting attempt and 31% of every second of the stage
+# (`scratch/colorize_trace/`), which is what the row-wise rewrite in `autolevel.py` addresses.
+#
+# The stops it returns are BAKED INTO THE LUT, so the gate is equality and not a tolerance:
+# one LSB on one stop is a different render and a different head score. The reference below
+# is the loop the module ran before the rewrite, written out here rather than kept in the
+# module — it is genuinely independent code (per-row `(1,3)` numpy through the four scalar
+# helpers, which `tools/studies/palette_autolevel*.py` still import), not the fast path with
+# a different name.
+# --------------------------------------------------------------------------- #
+def _curved_stops_per_entry(stops: list, mirror: bool, cur: dict) -> tuple:
+    """THE REFERENCE: `curved_stops` as a Python loop over the densified entries."""
+    dense = AL.densify(stops, mirror)
+    out, n_capped = [], 0
+    for pos, lab in dense:
+        L = float(lab[0])
+        Lp = float(AL.apply_curve_L(np.array([L]), cur)[0])
+        Lc, capped = AL.cap_lightness(L, Lp, float(lab[1]), float(lab[2]))
+        n_capped += int(capped)
+        out.append([round(pos, 9), AL._gamut_fit(np.array([Lc, lab[1], lab[2]]))])
+    return out, n_capped
+
+
+# Two curves that ACT (an identity curve never reaches `curved_stops` — `maybe_level`
+# short-circuits it), pulling in opposite directions so the cap is exercised on both sides.
+CURVES = [
+    {"applies": True, "identity": False, "black_pt": 0.08, "white_pt": 0.92,
+     "exponent": 1.15, "out_ends": (0.03, 0.97)},
+    {"applies": True, "identity": False, "black_pt": 0.20, "white_pt": 0.99,
+     "exponent": 1.60, "out_ends": (0.00, 0.75)},
+]
+# The cheap default-lane slice: the two `mirror_needed` states at the pool's smallest stop
+# count, which is the only size whose per-entry reference is fast enough to run every suite
+# (33 stops -> ~257 densified entries; 256/512 stops go to the `slow` whole-pool leg below).
+SLICE = ["magma", "twilight"]
+
+
+def _pool_entry(name: str) -> dict:
+    for c in json.loads(POOL.read_text(encoding="utf-8")):
+        if c["name"] == name:
+            return c
+    raise AssertionError(f"{name} is not in {POOL}; the default slice needs a live palette")
+
+
+@pytest.mark.parametrize("name", SLICE)
+@pytest.mark.parametrize("ci", range(len(CURVES)))
+def test_curved_stops_is_byte_identical_to_the_per_entry_form(name, ci):
+    e = _pool_entry(name)
+    mirror = bool(e.get("mirror_needed"))
+    want, want_n = _curved_stops_per_entry(e["stops"], mirror, CURVES[ci])
+    got, got_n = AL.curved_stops(e["stops"], mirror, CURVES[ci])
+    assert got_n == want_n
+    assert got == want, f"{name} curve{ci}: stop lists differ"
+
+
+def test_the_default_slice_actually_reaches_the_cap_and_the_gamut_pullback():
+    """Non-vacuity. Both bisections are the expensive part AND the part a batching mistake
+    would break; a slice where neither fires is a green that checked the cheap path only."""
+    n_capped = 0
+    n_oog = 0
+    for name in SLICE:
+        e = _pool_entry(name)
+        mirror = bool(e.get("mirror_needed"))
+        for cur in CURVES:
+            _, n = AL.curved_stops(e["stops"], mirror, cur)
+            n_capped += n
+            lab = np.array([l for _, l in AL.densify(e["stops"], mirror)], dtype=np.float64)
+            Lp = AL.apply_curve_L(lab[:, 0], cur)
+            ok, _ = AL._in_gamut_rows(np.stack([Lp, lab[:, 1], lab[:, 2]], axis=-1))
+            n_oog += int((~ok).sum())
+    assert n_capped > 0, "no entry hit the chroma cap — the 18-step walk-back went untested"
+    assert n_oog > 0, "no entry left the gamut — the 28-step pullback went untested"
+
+
+def test_the_stacked_matmul_is_what_makes_the_batch_exact():
+    """The load-bearing fact, pinned so it fails out loud if numpy's dispatch moves: a plain
+    `(N,3) @ (3,3)` is NOT bit-identical to the per-row `(1,3) @ (3,3)` the scalar helpers do,
+    and the stacked `(N,1,3)` form IS. Without the second half the rewrite is only close;
+    without the first half nobody would know why the stacked form is written that way."""
+    from tools.palettes import color as C                          # noqa: PLC0415
+    rng = np.random.default_rng(0)
+    x = rng.random((512, 3))
+    per_row = np.concatenate([C.srgb_to_oklab(x[i:i + 1]) for i in range(len(x))])
+    assert np.array_equal(AL._rows_to_oklab(x), per_row)
+    assert not np.array_equal(C.srgb_to_oklab(x), per_row)         # the plain batch is NOT it
+
+    lab = per_row
+    per_row_back = np.concatenate([C.oklab_to_srgb(lab[i:i + 1]) for i in range(len(lab))])
+    assert np.array_equal(AL._rows_to_srgb(lab), per_row_back)
+    assert not np.array_equal(C.oklab_to_srgb(lab), per_row_back)
+
+
+def test_the_row_helpers_agree_with_their_scalar_twins_entry_by_entry():
+    """The three helpers under the loop, checked against the originals on a spread that
+    deliberately includes far-out-of-gamut chroma (where the pullback bisection runs)."""
+    rng = np.random.default_rng(7)
+    lab = np.stack([rng.uniform(0.05, 0.95, 96),
+                    rng.uniform(-0.35, 0.35, 96),
+                    rng.uniform(-0.35, 0.35, 96)], axis=-1)
+    ok_rows, _ = AL._in_gamut_rows(lab)
+    assert 0 < int((~ok_rows).sum()) < 96, "the spread must straddle the gamut boundary"
+    assert list(ok_rows) == [AL._in_gamut(r)[0] for r in lab]
+    assert AL._gamut_fit_rows(lab).tolist() == [AL._gamut_fit(r) for r in lab]
+    assert list(AL._chroma_after_rows(lab)) == [AL._chroma_after(r) for r in lab]
+
+    L = lab[:, 0]
+    Lp = np.clip(L - 0.25, 0.0, 1.0)
+    got_L, got_cap = AL._cap_lightness_rows(L, Lp, lab[:, 1], lab[:, 2])
+    want = [AL.cap_lightness(float(L[i]), float(Lp[i]), float(lab[i, 1]), float(lab[i, 2]))
+            for i in range(len(lab))]
+    assert int(got_cap.sum()) > 0, "no entry capped — the walk-back went untested"
+    assert list(got_L) == [w[0] for w in want]
+    assert list(got_cap) == [w[1] for w in want]
+
+
+def _stratified_pool_sample(pool: list, per_stratum: int = 8) -> list:
+    """A deterministic sample covering every (stop-count, mirror) stratum the pool holds.
+
+    NOT the whole pool, and the reason is a measurement, not a guess: the per-entry reference
+    costs ~8 ms per densified entry, so all 987 palettes is ~6.7 h — a lane that long is a lane
+    nobody runs (`verification_practice.md` §4), which is worse coverage than a sample somebody
+    does run. The strata are the thing that matters: the pool holds exactly three stop counts
+    (33/256/512 -> 257/2048/4096 densified entries) and both mirror states, and the widest
+    compressed subsets — the case a batching mistake would break — live at 512."""
+    strata: dict = {}
+    for c in pool:
+        strata.setdefault((len(c["stops"]), bool(c.get("mirror_needed"))), []).append(c)
+    out = []
+    for key in sorted(strata):
+        out.extend(strata[key][:per_stratum])
+    return out
+
+
+@pytest.mark.slow
+def test_curved_stops_matches_the_per_entry_form_across_every_pool_stratum():
+    """Opt-in: the per-entry reference over a stratified sample of the production pool. The
+    default slice above is 2 palettes at the smallest stop count; this is what covers the
+    256/512-stop palettes, both mirror states, and both curves."""
+    pool = json.loads(POOL.read_text(encoding="utf-8"))
+    sample = _stratified_pool_sample(pool)
+    seen = {(len(c["stops"]), bool(c.get("mirror_needed"))) for c in sample}
+    want_strata = {(len(c["stops"]), bool(c.get("mirror_needed"))) for c in pool}
+    assert seen == want_strata, f"sample missed strata {want_strata - seen}"
+    assert max(len(c["stops"]) for c in sample) == max(len(c["stops"]) for c in pool)
+
+    bad, n_capped = [], 0
+    for i, c in enumerate(sample):
+        mirror = bool(c.get("mirror_needed"))
+        for cur in CURVES:
+            want, want_n = _curved_stops_per_entry(c["stops"], mirror, cur)
+            got, got_n = AL.curved_stops(c["stops"], mirror, cur)
+            n_capped += got_n
+            if got != want or got_n != want_n:
+                bad.append(c["name"])
+    assert n_capped > 0, "no entry capped across the whole sample — the walk-back went untested"
+    assert not bad, f"{len(bad)}/{2*len(sample)} (palette,curve) pairs differ: {bad[:10]}"

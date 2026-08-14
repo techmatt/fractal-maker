@@ -63,6 +63,14 @@ for _p in (ROOT, ROOT / "tools"):
         sys.path.insert(0, str(_p))
 
 from tools.palettes.color import oklab_to_srgb, srgb_to_oklab      # noqa: E402
+# The row-wise twins below re-do `color.py`'s two conversions in a stacked-matmul form; they
+# BORROW its constants rather than restating them, because a twin built on a second copy of
+# the Ottosson matrices is not a twin (and `color.py` already carries four hand-synced copies
+# it explicitly refuses to grow). Aliased once here so the borrow is visible.
+from tools.palettes.color import (                                 # noqa: E402
+    _M1 as _COLOR_M1, _M1_INV as _COLOR_M1_INV,
+    _M2 as _COLOR_M2, _M2_INV as _COLOR_M2_INV,
+    linear_to_srgb, srgb_to_linear)
 
 
 # =========================================================================== #
@@ -342,17 +350,124 @@ def cap_lightness(L: float, Lp: float, a: float, b: float, retain: float = CHROM
     return good, True
 
 
+# --------------------------------------------------------------------------- #
+# The ROW-WISE twins of the four scalar helpers above, and the reason they exist.
+#
+# `curved_stops` is a pure function of (stops, mirror, curve) — it never sees the image — so
+# it costs the SAME on a 960x540 colorize render and a 2560x1440 release render, and a pool
+# palette carries 33-512 stops that `densify(k=8)` turns into up to 4096 entries. Run per
+# entry, each entry's `cap_lightness` is up to 18 bisection steps, each step a `_chroma_after`
+# that is itself a `_gamut_fit` of up to 29 `_in_gamut` calls — i.e. up to ~17k numpy calls on
+# (1,3) arrays for ONE stop. Measured on the live path (`scratch/colorize_trace/`): 0.13-24.6 s
+# per acting render, 31% of every second of a colorize attempt, the largest single term in the
+# stage and larger than the engine on the smooth styles.
+#
+# THE IDENTITY THIS RESTS ON, measured before any of it was written. A plain `(N,3) @ (3,3)`
+# matmul is NOT bit-identical to the per-row `(1,3) @ (3,3)` the scalar path does (max delta
+# 1.6e-14 on the OKLab round trip, because BLAS blocks the general case differently) — but the
+# STACKED `(N,1,3) @ (3,3)` form IS, exactly, because numpy dispatches each row as its own
+# small matmul. So every conversion below goes through the stacked form; every bisection runs
+# the same FIXED iteration count with masked updates; and the compressed subsets are safe for
+# the same reason the batch is (a row's arithmetic cannot depend on who it is batched with).
+# Each element therefore sees the identical sequence of float ops as the scalar path, which is
+# why `test_autolevel.py` can assert EQUALITY of the stop lists over the whole pool and not a
+# tolerance. That equality is the contract: these stops are baked into the LUT, so a one-LSB
+# stop is a changed render and a changed head score.
+#
+# The scalar four are NOT dead and must stay: `tools/studies/palette_autolevel*.py` import
+# them, and they are the reference the parity test compares against.
+# --------------------------------------------------------------------------- #
+def _rows_to_oklab(srgb: np.ndarray) -> np.ndarray:
+    """(N,3) sRGB in [0,1] -> (N,3) OKLab. Bit-identical to `color.srgb_to_oklab` called
+    once per row on a (1,3) array — see the stacked-matmul note above."""
+    lin = srgb_to_linear(np.asarray(srgb, dtype=np.float64))[:, None, :]
+    return (np.cbrt(lin @ _COLOR_M1.T) @ _COLOR_M2.T)[:, 0, :]
+
+
+def _rows_to_srgb(lab: np.ndarray) -> np.ndarray:
+    """(N,3) OKLab -> (N,3) clipped sRGB. Bit-identical to per-row `color.oklab_to_srgb`."""
+    lab = np.asarray(lab, dtype=np.float64)[:, None, :]
+    lin = ((lab @ _COLOR_M2_INV.T) ** 3 @ _COLOR_M1_INV.T)[:, 0, :]
+    return np.clip(linear_to_srgb(lin), 0.0, 1.0)
+
+
+def _in_gamut_rows(lab: np.ndarray) -> tuple:
+    """`_in_gamut` over (N,3): (ok (N,), srgb (N,3)). Same round-trip test, same 1e-6."""
+    rgb = _rows_to_srgb(lab)
+    back = _rows_to_oklab(rgb)
+    return np.max(np.abs(back - lab), axis=-1) < 1e-6, rgb
+
+
+def _gamut_fit_rows(lab: np.ndarray) -> np.ndarray:
+    """`_gamut_fit` over (N,3) -> (N,3) int sRGB8. The 28-step chroma bisection runs on the
+    COMPRESSED out-of-gamut subset; in-gamut rows keep their scale-1.0 colour untouched."""
+    lab = np.asarray(lab, dtype=np.float64)
+    ok, rgb = _in_gamut_rows(lab)
+    idx = np.flatnonzero(~ok)
+    if idx.size:
+        sub = lab[idx]
+        lo = np.zeros(idx.size)
+        hi = np.ones(idx.size)
+        for _ in range(28):
+            mid = 0.5 * (lo + hi)
+            okm, _ = _in_gamut_rows(
+                np.stack([sub[:, 0], sub[:, 1] * mid, sub[:, 2] * mid], axis=-1))
+            lo = np.where(okm, mid, lo)
+            hi = np.where(~okm, mid, hi)
+        _, rgb_lo = _in_gamut_rows(
+            np.stack([sub[:, 0], sub[:, 1] * lo, sub[:, 2] * lo], axis=-1))
+        rgb[idx] = rgb_lo
+    return np.rint(np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.int64)
+
+
+def _chroma_after_rows(lab: np.ndarray) -> np.ndarray:
+    """`_chroma_after` over (N,3) -> (N,)."""
+    out = _rows_to_oklab(_gamut_fit_rows(lab).astype(np.float64) / 255.0)
+    return np.hypot(out[:, 1], out[:, 2])
+
+
+def _cap_lightness_rows(L, Lp, a, b, retain: float = CHROMA_RETAIN, iters: int = 18) -> tuple:
+    """`cap_lightness` over N entries -> (lightness (N,), capped (N,) bool). The two scalar
+    early-outs become the `cand`/`act` compressions, so only the entries that actually cap
+    pay the 18-step walk-back — on a typical palette that is a small minority."""
+    L = np.asarray(L, dtype=np.float64)
+    Lp = np.asarray(Lp, dtype=np.float64)
+    a = np.asarray(a, dtype=np.float64)
+    b = np.asarray(b, dtype=np.float64)
+    c0 = np.hypot(a, b)
+    out = Lp.copy()
+    capped = np.zeros(L.shape, dtype=bool)
+    cand = np.flatnonzero((c0 >= 1e-6) & (np.abs(Lp - L) >= 1e-9))
+    if cand.size:
+        keep = _chroma_after_rows(
+            np.stack([Lp[cand], a[cand], b[cand]], axis=-1)) >= retain * c0[cand]
+        act = cand[~keep]
+        if act.size:
+            good, bad = L[act].copy(), Lp[act].copy()
+            aa, bb, thr = a[act], b[act], retain * c0[act]
+            for _ in range(iters):
+                mid = 0.5 * (good + bad)
+                ok = _chroma_after_rows(np.stack([mid, aa, bb], axis=-1)) >= thr
+                good = np.where(ok, mid, good)
+                bad = np.where(~ok, mid, bad)
+            out[act] = good
+            capped[act] = True
+    return out, capped
+
+
 def curved_stops(stops: list, mirror: bool, cur: dict) -> tuple:
-    """Adjusted stop list + how many entries the chroma cap had to hold back."""
+    """Adjusted stop list + how many entries the chroma cap had to hold back.
+
+    Vectorized over the densified entries through the row-wise helpers above; byte-identical
+    to the per-entry form, which `test_autolevel.py` pins over the whole production pool."""
     dense = densify(stops, mirror)
-    out, n_capped = [], 0
-    for pos, lab in dense:
-        L = float(lab[0])
-        Lp = float(apply_curve_L(np.array([L]), cur)[0])
-        Lc, capped = cap_lightness(L, Lp, float(lab[1]), float(lab[2]))
-        n_capped += int(capped)
-        out.append([round(pos, 9), _gamut_fit(np.array([Lc, lab[1], lab[2]]))])
-    return out, n_capped
+    lab = np.array([l for _, l in dense], dtype=np.float64)
+    Lp = apply_curve_L(lab[:, 0], cur)
+    Lc, capped = _cap_lightness_rows(lab[:, 0], Lp, lab[:, 1], lab[:, 2])
+    rgb = _gamut_fit_rows(np.stack([Lc, lab[:, 1], lab[:, 2]], axis=-1))
+    out = [[round(float(p), 9), [int(v) for v in row]]
+           for (p, _), row in zip(dense, rgb)]
+    return out, int(capped.sum())
 
 
 # =========================================================================== #
