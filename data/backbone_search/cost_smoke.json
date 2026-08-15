@@ -1,0 +1,255 @@
+{
+  "recipe_epochs": 40,
+  "batch_size": 32,
+  "train_locations": 8443,
+  "control_epoch_s_measured": 76.0,
+  "arms": [
+    {
+      "arm": "mnv4_conv_medium",
+      "timm_model": "mobilenetv4_conv_medium.e250_r384_in12k",
+      "pretrain": "in12k, 384px",
+      "grad_checkpointing": false,
+      "params_m": 8.44,
+      "build_s": 0.3,
+      "data_config": {
+        "mean": [
+          0.485,
+          0.456,
+          0.406
+        ],
+        "std": [
+          0.229,
+          0.224,
+          0.225
+        ],
+        "interpolation": "bicubic",
+        "input_size": [
+          3,
+          384,
+          384
+        ]
+      },
+      "batch_size": 32,
+      "train_step_s": 0.1388,
+      "peak_train_vram_mb": 2621,
+      "gpu_epoch_s": 36.6,
+      "cpu_floor_epoch_s": 76.0,
+      "proj_epoch_s": 76.0,
+      "proj_train_h": 0.84,
+      "gpu_infer_img_s": 919.5,
+      "gpu_score_s_per_1k": 1.09
+    },
+    {
+      "arm": "mnv4_hybrid_medium",
+      "timm_model": "mobilenetv4_hybrid_medium.ix_e550_r384_in1k",
+      "pretrain": "in1k, 384px (MQA-hybrid)",
+      "grad_checkpointing": false,
+      "params_m": 9.8,
+      "build_s": 0.3,
+      "data_config": {
+        "mean": [
+          0.485,
+          0.456,
+          0.406
+        ],
+        "std": [
+          0.229,
+          0.224,
+          0.225
+        ],
+        "interpolation": "bicubic",
+        "input_size": [
+          3,
+          384,
+          384
+        ]
+      },
+      "batch_size": 32,
+      "train_step_s": 0.1678,
+      "peak_train_vram_mb": 3136,
+      "gpu_epoch_s": 44.3,
+      "cpu_floor_epoch_s": 76.0,
+      "proj_epoch_s": 76.0,
+      "proj_train_h": 0.84,
+      "gpu_infer_img_s": 730.1,
+      "gpu_score_s_per_1k": 1.37
+    },
+    {
+      "arm": "mnv4_conv_large",
+      "timm_model": "mobilenetv4_conv_large.e600_r384_in1k",
+      "pretrain": "in1k, 384px",
+      "grad_checkpointing": false,
+      "params_m": 31.31,
+      "build_s": 0.6,
+      "data_config": {
+        "mean": [
+          0.485,
+          0.456,
+          0.406
+        ],
+        "std": [
+          0.229,
+          0.224,
+          0.225
+        ],
+        "interpolation": "bicubic",
+        "input_size": [
+          3,
+          384,
+          384
+        ]
+      },
+      "batch_size": 32,
+      "train_step_s": 0.2682,
+      "peak_train_vram_mb": 4511,
+      "gpu_epoch_s": 70.8,
+      "cpu_floor_epoch_s": 76.0,
+      "proj_epoch_s": 76.0,
+      "proj_train_h": 0.84,
+      "gpu_infer_img_s": 459.5,
+      "gpu_score_s_per_1k": 2.18
+    },
+    {
+      "arm": "effnetv2_s",
+      "timm_model": "tf_efficientnetv2_s.in21k_ft_in1k",
+      "pretrain": "in21k -> in1k",
+      "grad_checkpointing": true,
+      "params_m": 20.18,
+      "build_s": 0.5,
+      "data_config": {
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "interpolation": "bicubic",
+        "input_size": [
+          3,
+          300,
+          300
+        ]
+      },
+      "batch_size": 32,
+      "train_step_s": 0.4699,
+      "peak_train_vram_mb": 1678,
+      "gpu_epoch_s": 124.1,
+      "cpu_floor_epoch_s": 76.0,
+      "proj_epoch_s": 124.1,
+      "proj_train_h": 1.38,
+      "gpu_infer_img_s": 337.0,
+      "gpu_score_s_per_1k": 2.97
+    },
+    {
+      "arm": "convnextv2_tiny",
+      "timm_model": "convnextv2_tiny.fcmae_ft_in22k_in1k_384",
+      "pretrain": "FCMAE self-supervised -> in22k -> in1k, 384px",
+      "grad_checkpointing": true,
+      "params_m": 27.87,
+      "build_s": 0.5,
+      "data_config": {
+        "mean": [
+          0.485,
+          0.456,
+          0.406
+        ],
+        "std": [
+          0.229,
+          0.224,
+          0.225
+        ],
+        "interpolation": "bicubic",
+        "input_size": [
+          3,
+          384,
+          384
+        ]
+      },
+      "batch_size": 32,
+      "train_step_s": 1.4437,
+      "peak_train_vram_mb": 2472,
+      "gpu_epoch_s": 381.1,
+      "cpu_floor_epoch_s": 76.0,
+      "proj_epoch_s": 381.1,
+      "proj_train_h": 4.23,
+      "gpu_infer_img_s": 174.6,
+      "gpu_score_s_per_1k": 5.73
+    },
+    {
+      "arm": "fastvit_sa12",
+      "timm_model": "fastvit_sa12.apple_dist_in1k",
+      "pretrain": "in1k, distilled",
+      "grad_checkpointing": false,
+      "params_m": 10.56,
+      "build_s": 5.5,
+      "data_config": {
+        "mean": [
+          0.485,
+          0.456,
+          0.406
+        ],
+        "std": [
+          0.229,
+          0.224,
+          0.225
+        ],
+        "interpolation": "bicubic",
+        "input_size": [
+          3,
+          256,
+          256
+        ]
+      },
+      "batch_size": 32,
+      "train_step_s": 0.2771,
+      "peak_train_vram_mb": 4769,
+      "gpu_epoch_s": 73.2,
+      "cpu_floor_epoch_s": 76.0,
+      "proj_epoch_s": 76.0,
+      "proj_train_h": 0.84,
+      "gpu_infer_img_s": 385.5,
+      "gpu_score_s_per_1k": 2.59
+    },
+    {
+      "arm": "vit_small_p16",
+      "timm_model": "vit_small_patch16_224.augreg_in21k_ft_in1k",
+      "pretrain": "in21k -> in1k (AugReg)",
+      "grad_checkpointing": false,
+      "params_m": 21.72,
+      "build_s": 0.4,
+      "data_config": {
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "interpolation": "bicubic",
+        "input_size": [
+          3,
+          224,
+          224
+        ]
+      },
+      "batch_size": 32,
+      "train_step_s": 0.408,
+      "peak_train_vram_mb": 3493,
+      "gpu_epoch_s": 107.7,
+      "cpu_floor_epoch_s": 76.0,
+      "proj_epoch_s": 107.7,
+      "proj_train_h": 1.2,
+      "gpu_infer_img_s": 246.0,
+      "gpu_score_s_per_1k": 4.07
+    }
+  ],
+  "failed": [],
+  "round1_total_h": 10.17
+}

@@ -1,0 +1,58 @@
+{
+  "mnv4_conv_medium_s0": {
+    "arm": "mnv4_conv_medium",
+    "seed": 0,
+    "e2e_s_per_1k": 22.6,
+    "n_tiles": 1000,
+    "params_m": 8.438
+  },
+  "mnv4_conv_medium_s1": {
+    "arm": "mnv4_conv_medium",
+    "seed": 1,
+    "e2e_s_per_1k": 22.57,
+    "n_tiles": 1000,
+    "params_m": 8.438
+  },
+  "mnv4_conv_medium_s2": {
+    "arm": "mnv4_conv_medium",
+    "seed": 2,
+    "e2e_s_per_1k": 22.45,
+    "n_tiles": 1000,
+    "params_m": 8.438
+  },
+  "mnv4_hybrid_medium_s0": {
+    "arm": "mnv4_hybrid_medium",
+    "seed": 0,
+    "e2e_s_per_1k": 22.56,
+    "n_tiles": 1000,
+    "params_m": 9.797
+  },
+  "mnv4_conv_large_s0": {
+    "arm": "mnv4_conv_large",
+    "seed": 0,
+    "e2e_s_per_1k": 22.81,
+    "n_tiles": 1000,
+    "params_m": 31.314
+  },
+  "effnetv2_s_s0": {
+    "arm": "effnetv2_s",
+    "seed": 0,
+    "e2e_s_per_1k": 23.69,
+    "n_tiles": 1000,
+    "params_m": 20.181
+  },
+  "fastvit_sa12_s0": {
+    "arm": "fastvit_sa12",
+    "seed": 0,
+    "e2e_s_per_1k": 23.3,
+    "n_tiles": 1000,
+    "params_m": 10.559
+  },
+  "vit_small_p16_s0": {
+    "arm": "vit_small_p16",
+    "seed": 0,
+    "e2e_s_per_1k": 24.0,
+    "n_tiles": 1000,
+    "params_m": 21.721
+  }
+}

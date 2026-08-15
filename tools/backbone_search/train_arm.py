@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import shutil
 import sys
 import time
 from collections import Counter
@@ -128,8 +127,13 @@ def main():
         rec_dir = arm.record_dir(a.seed)       # durable: the record that survives them
     out_dir.mkdir(parents=True, exist_ok=True)
     rec_dir.mkdir(parents=True, exist_ok=True)
+    # The log goes beside the WEIGHTS, not into the tracked record: `metrics.json` already
+    # carries every epoch's loss and per-cutpoint AP as `history`, so a tracked train.log
+    # would be a second copy of the same rows in a form nothing reads — and
+    # `!/data/backbone_search/` would commit it (tests/test_large_tracked_blobs.py refuses
+    # an undeclared `.log`, correctly).
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
-                        handlers=[logging.FileHandler(rec_dir / "train.log"),
+                        handlers=[logging.FileHandler(out_dir / "train.log"),
                                   logging.StreamHandler(sys.stdout)])
     device = detect_device(a.device)
     v11 = torch.load(V11_CKPT, map_location="cpu", weights_only=False)["config"]
@@ -221,8 +225,6 @@ def main():
     }
     (rec_dir / "config.json").write_text(json.dumps(ckpt_cfg, indent=2))
     (rec_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
-    if rec_dir.resolve() != out_dir.resolve():   # a bounded run points both at scratch
-        shutil.copy(rec_dir / "train.log", out_dir / "train.log")
     log.info(f"DONE — record {rec_dir}, weights {out_dir}. Nothing is pinned; "
              f"ACTIVE_CKPT untouched.")
 

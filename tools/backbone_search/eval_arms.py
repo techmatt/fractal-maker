@@ -334,6 +334,39 @@ def cmd_report(a):
               f"{pooled['ci95']['hi']:+.4f}]  {pooled['verdict']}")
     results["deltas_vs_control"] = deltas
 
+    # Every arm against EVERY control seed, not just its seed-matched one. The matched
+    # pairing answers "is this arm better than that run of the control"; with the arms at
+    # one seed each, WHICH control run they are paired against is itself a coin flip, and
+    # the verdict moves with it. So the matrix is computed rather than the diagonal, and
+    # an arm is only reported as beating (or losing to) the control where the verdict
+    # holds against ALL THREE.
+    matrix = {}
+    for key in keys:
+        if key in ctrl_keys:
+            continue
+        row = {}
+        for ck in ctrl_keys:
+            cells = {}
+            for sname, srs in slices(prim):
+                if sname != "pooled":
+                    continue
+                labels = np.array([r["label"] for r in srs])
+                groups = np.array([r["split_group"] if r["split_group"] is not None
+                                   else -r["loc_id"] for r in srs])
+                pa, pc = probs_of(srs, key), probs_of(srs, ck)
+                st = lambda lb, pr: fast_auc((lb >= 3).astype(int), pr[:, 1])  # noqa: E731
+                ci = paired_cluster_boot(labels, groups, pa, pc, st, B, int(boot["seed"]))
+                cells = {"delta": st(labels, pa) - st(labels, pc), "ci95": ci,
+                         "verdict": ("TIE" if ci["lo"] <= 0 <= ci["hi"]
+                                     else ("ARM" if ci["lo"] > 0 else "CONTROL"))}
+            row[ck] = cells
+        verdicts = {v["verdict"] for v in row.values()}
+        row["ROBUST"] = ("ARM" if verdicts == {"ARM"} else
+                         "CONTROL" if verdicts == {"CONTROL"} else "TIE")
+        row["seed_dependent"] = len(verdicts) > 1
+        matrix[key] = row
+    results["control_seed_matrix_pooled_auc_ge3"] = matrix
+
     # seed bands (round 2)
     bands = defaultdict(list)
     for key in keys:
@@ -408,6 +441,19 @@ def write_markdown(res, prereg):
             else:
                 cells.append("n/a")
         L.append(f"| {k} | " + " | ".join(cells) + " |")
+    mtx = res.get("control_seed_matrix_pooled_auc_ge3", {})
+    if mtx:
+        cseeds = [k for k in next(iter(mtx.values())) if k.startswith(res["control"])]
+        L += ["", "## Pooled AUC>=3 vs EVERY control seed — the verdict's seed sensitivity",
+              "", "With one seed per arm, WHICH control run an arm is paired against is a "
+              "coin flip. ROBUST = the same verdict against all three.", "",
+              "| arm | " + " | ".join(s.rsplit('_', 1)[1] for s in cseeds) +
+              " | ROBUST | seed-dependent |",
+              "|---|" + "---|" * (len(cseeds) + 2)]
+        for k, row in sorted(mtx.items(), key=lambda kv: -kv[1][cseeds[0]]["delta"]):
+            cells = [f"{row[s]['delta']:+.4f} {row[s]['verdict']}" for s in cseeds]
+            L.append(f"| {k} | " + " | ".join(cells) +
+                     f" | **{row['ROBUST']}** | {'YES' if row['seed_dependent'] else 'no'} |")
     bands = res.get("seed_bands_primary_auc_ge3", {})
     if any(v["n_seeds"] > 1 for v in bands.values()):
         L += ["", "## Round-2 seed bands — pooled PRIMARY AUC>=3", "",

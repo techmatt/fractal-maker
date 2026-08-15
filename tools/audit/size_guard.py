@@ -204,6 +204,17 @@ REGISTRY: list[Entry] = [
           "prereg / eval_canon_record) plus eval_scores_v11.jsonl (1.4 MB, LFS) — the "
           "frozen eval slice tools/scoring/eval_slice resolves IN-TREE and a later cut "
           "re-cuts from without re-scoring.",),
+    Entry("data/backbone_search/", KEEP, None, "tracked",
+          "Backbone comparison (prompts/backbone_search_v1.md) — MEASUREMENT, nothing "
+          "pinned. Over threshold: eval_scores_backbone_v1.jsonl (4.6 MB), the frozen "
+          "PAIRED scores of all 8 runs on the same 2,860 canonical eval tiles, one column "
+          "block per (arm, seed). Same class and same reason as v11's eval_scores above: "
+          "it is what lets a cut be re-cut without re-scoring, and re-earning it costs the "
+          "GPU-day back. The rest is small records (prereg, per-arm config/metrics, "
+          "results, figure). The WEIGHTS are the bulk half and are out-of-tree "
+          "(artifacts.RELOCATED_PREFIXES 'data/backbone_search/arms'): staged arms are not "
+          "trackable under ACTIVE+PREVIOUS retention, and each rebuilds from its committed "
+          "config plus the v11 cache.",),
     Entry("data/v10/", KEEP, None, "tracked",
           "v10 classifier build — v8's manifest APPENDED with 1,267 maneuver-view "
           "locations from the 2026-08 supply crawl and label-seeded harvest. Same shape "

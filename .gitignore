@@ -615,6 +615,10 @@ __pycache__/
 # because it is the only surviving description of runs whose weights are thrown away, and
 # re-earning it costs the whole GPU-day again.
 !/data/backbone_search/
+# The per-arm train.log is NOT tracked: metrics.json already carries every epoch's loss and
+# per-cutpoint AP as `history`, so a tracked log is the same rows twice in a form nothing
+# reads. It is written beside the weights instead (train_arm.py).
+/data/backbone_search/records/**/train.log
 # The weights themselves. Registered in artifacts.RELOCATED_PREFIXES so they are born OUT of
 # the tree; this line is the belt-and-braces half — without it the `!` above would COMMIT any
 # weight that ever landed in-tree, which is exactly the trap /data/atlas/tau_h_rederive names.
