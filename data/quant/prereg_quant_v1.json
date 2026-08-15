@@ -1,0 +1,99 @@
+{
+  "study": "quant_recipe_v1",
+  "question": "What post-training quantization recipe should be applied by default to every trained head before its weights ship?",
+  "objective": "SMALLER STORED WEIGHTS at near-identical scores. NOT inference speed: backbone_search_v1 measured the backbone at 5-17% of end-to-end score time (22.45-24.00 s/1k tiles across six backbones), so the deploy path is decode-bound and no rung here can be justified on throughput.",
+  "written": "2026-08-14",
+  "written_before": "any quantized weight was produced and any agreement number was computed. This file is committed in its own commit, ahead of the tooling.",
+  "moves_nothing": "no production pin moves; every ACTIVE checkpoint is read-only; the big-repo deploy path stays fp32. This study decides what a FUTURE ship step does.",
+
+  "candidate_ladder": {
+    "rule": "evaluate in order, ADOPT THE SMALLEST RUNG THAT PASSES every bar below on all four heads. One default procedure; a per-head exception only where the data forces it, and then the sweep that forced it is reported.",
+    "rungs": [
+      {
+        "name": "fp16",
+        "spec": "every floating-point tensor of the state_dict stored as float16; integer buffers (num_batches_tracked) stored verbatim. Dequantized to the source dtype at load."
+      },
+      {
+        "name": "int8",
+        "spec": "weight-only, per-output-channel (dim 0) SYMMETRIC int8 for every floating tensor with ndim >= 2 (conv + linear weights, 98.0-98.4% of float params on these four heads); scale_c = max|W_c|/127 stored fp32; every other floating tensor (BN affine, biases, 1-D) stored fp16. Dequantized to fp32 at load; compute is unchanged fp32. NO activation quantization and NO backend engine (fbgemm/qnnpack/TensorRT) so the recipe re-applies in a clean-room repo with standard torch on any platform."
+      },
+      {
+        "name": "hybrid",
+        "spec": "int8 as above EXCEPT named layer groups kept at fp16, chosen by a per-group sensitivity sweep (quantize one group at a time against the fp32 reference scores). Only reached if int8 fails a head's bar; the sweep is reported so the exception is attributable."
+      }
+    ]
+  },
+
+  "instrument_controls": {
+    "inputs_actually_change": "Before any score is read, the max relative weight error introduced by the rung is computed and reported per head. An exact 0.0000 agreement delta is a measurement of nothing (measurement_practice.md, 'Before pre-registering a bar, verify the instrument's inputs actually change'), so a rung whose weight error is 0 is reported as VACUOUS rather than as a pass.",
+    "noise_floor": "The fp32 reference is scored TWICE in the same process, and max|delta p| between the two identical passes is reported as the instrument's own noise floor. Every agreement delta below is read against it.",
+    "pairing": "fp32 and quantized are scored over the same rows in the same order on the same device in the same process, so decode, transform and row order cancel.",
+    "round_trip": "Each quantized artifact is re-read from disk after writing and its dequantized tensors are asserted bit-identical to the ones computed at write time, and a sample is re-scored through the re-read artifact. sha256 of the artifact is recorded."
+  },
+
+  "yardstick": {
+    "what": "retrain noise on the location head",
+    "value": 0.0063599,
+    "basis": "control (mnv4_conv_medium) 3-seed band of pooled PRIMARY AUC(>=3), 0.9428393 to 0.9491992, data/backbone_search/results_backbone_v1.json seed_bands_primary_auc_ge3",
+    "used_as": "'well inside' is declared as one QUARTER of this spread, 0.0016 AUC."
+  },
+
+  "heads": {
+    "location": {
+      "pin": "tools/scoring/production_pins.ACTIVE_CKPT",
+      "population": "PRIMARY — the 2,190 v11 eval locations that touch neither training nor a checkpoint pick (975 at >=2, 408 at >=3, 98 at >=4), the frozen backbone-search population, scored at the deploy-canonical render",
+      "bars": {
+        "abs_delta_auc_ge3_max": 0.0016,
+        "abs_delta_auc_ge4_max": 0.0016,
+        "decoded_tier_agreement_min": 0.99,
+        "mean_abs_delta_p_max": 0.005,
+        "max_abs_delta_p_max": 0.05
+      },
+      "delta_p_is_over": "all K-1 = 3 cumulative rank probabilities P(>=2), P(>=3), P(>=4)"
+    },
+    "wallpaper": {
+      "pin": "tools/wallpaper/wallpaper_pins.HEAD_CKPT_REL",
+      "population": "sheet D — the 197 labeled BLIND minibrot rows of 2026-08-11_wallpaper_blind_minibrot_v1. READ-ONLY use of an eval instrument; nothing anchors on it and no verdict about the head is drawn from it.",
+      "bars": {
+        "gate_verdict_agreement_min": 0.98,
+        "decoded_tier_agreement_min": 0.98,
+        "spearman_p_ge3_min": 0.999
+      },
+      "no_auc_bar_because": "at n=197 with this tier mix an AUC delta is dominated by row noise, not by the rung. AUC is reported as descriptive."
+    },
+    "mining": {
+      "pin": "tools/mining/mining_pins.ACTIVE_MINING_CKPT",
+      "population": "sheet E — the labeled BLIND render-mode rows of 2026-08-11_render_mode_blind_v1 (150 sheet rows). READ-ONLY, same standing as sheet D.",
+      "bars": {
+        "gate_verdict_agreement_min": 0.98,
+        "decoded_tier_agreement_min": 0.98,
+        "spearman_p_ge3_min": 0.999
+      }
+    },
+    "pref": {
+      "pin": "tools/queries/scorer/data.ACTIVE_SCORER_DIR",
+      "population": "NO committed eval instrument exists for this head — the query records and images its labels key into are gone from disk (durability_map.py, 'the PREF-HEAD JOIN'). The draw is therefore the 47 committed library records' OWN production candidate sets: every palette_candidates[] entry (12 per location, 564 frames), recolored off each location's cached field under the entry's durable coloring recipe. This is a within-location ranking head, so every quantity is within-location.",
+      "bars": {
+        "mean_within_location_spearman_min": 0.999,
+        "min_within_location_spearman_min": 0.95,
+        "argmax_agreement_min": 0.95,
+        "top3_set_agreement_min": 0.95
+      },
+      "record_the_draw": "location_id list + variant_id list + the recorded pref_rank, written into the agreement record."
+    }
+  },
+
+  "reported_per_head_regardless_of_verdict": [
+    "artifact size before/after in bytes and MB",
+    "max relative weight error of the rung",
+    "every metric above, with its population count",
+    "sha256 of the quantized artifact",
+    "the fp32-vs-fp32 noise floor"
+  ],
+
+  "honesty_rules": [
+    "A bar is failed if the measured value is on the wrong side of it, whatever its margin; no bar is relaxed after a number is seen.",
+    "If a rung fails on one head only, the DEFAULT is the smallest rung that passes everywhere and that head takes the named exception — not a lowered bar.",
+    "Numbers carry population and basis. Agreement is reported as a count over its denominator, never as a bare percentage."
+  ]
+}

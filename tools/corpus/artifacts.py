@@ -150,6 +150,16 @@ RELOCATED_PREFIXES = (
     # safe is the record: the seed, the recipe flags and the realized counts are committed,
     # so a rebuild is checkable against what was actually rendered rather than merely
     # rerunnable.
+    #
+    # The post-training QUANTIZED weights (tools/quant/quantize_head.py). Registered BEFORE
+    # the first write, per rule 5, and as a directory literal because it is one fixed path.
+    # A quantized head is a pure function of a tracked checkpoint plus a recipe rung, both
+    # committed (`data/quant/quant_recipe_v1.json` names the rung per head and the source
+    # sha256), so re-applying the recipe reproduces the file byte-for-byte — textbook
+    # bulk(). It must not be tracked for the reason ACTIVE+PREVIOUS exists: a quantized
+    # sibling of a live weight is a SECOND copy of the same head, and the retention policy
+    # counts heads, not formats (docs/design/storage_classes.md § weights retention).
+    "data/quant/weights",
 )
 
 

@@ -262,6 +262,17 @@ __pycache__/
 /data/queries/scorer/v3_gvo/*
 !/data/queries/scorer/v3_gvo/model_best.pt
 
+# Post-training quantization (tools/quant/). Two RECORDS are durable — the bars, committed
+# before any number, and the dated decision. The WEIGHTS are not: `data/quant/weights` is a
+# registered bulk prefix (tools/corpus/artifacts.RELOCATED_PREFIXES), so a quantized head is
+# born out of the tree and never becomes a second tracked copy of a live weight. Exact paths,
+# never the directory, for the same reason the v3_gvo rules above are exact.
+!/data/quant/
+/data/quant/*
+!/data/quant/prereg_quant_v1.json
+!/data/quant/quant_recipe_v1.json
+!/data/quant/agreement_quant_v1.json
+
 # Mandelbrot seed atlas (tools/atlas/build_atlas.py): the fitted theta_hat/conf
 # artifact is a tiny (~12KB) load-bearing object the proposer reloads (atlas.py) --
 # commit it like the calibration artifacts. Its round0 viz PNGs stay in scratch/.
