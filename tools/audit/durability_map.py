@@ -180,6 +180,19 @@ REGISTRY = [
      "weight de-tracked the same day under ACTIVE+PREVIOUS — what stays is the record of "
      "what was staged. NOT re-included, deliberately: v4's weight, its five per-seed dirs, "
      "eval_scores.jsonl, the eval montage and train.log."),
+    ("data/quant/{prereg_quant_v1,agreement_quant_v1,quant_recipe_v1}.json",
+     "tools/quant/{eval_quant,quantize_head}.py", DUR,
+     "the prereg: nothing (it is a record of what was declared BEFORE the numbers, and a "
+     "regenerated one would be a different claim). The agreement + decision records: yes, "
+     "re-runnable from the four pinned weights plus the committed eval material — but only "
+     "while those pins hold, and they are the things a flip moves", Y,
+     "OK, and NEW 2026-08-14 (prompts/quant_recipe_v1.md). POPULATION-DEFINING: the recipe "
+     "record is what a future ship step reads to decide which rung a newly-trained head "
+     "gets, and its agreement table is quoted against these exact four weights. The "
+     "QUANTIZED WEIGHTS THEMSELVES ARE NOT HERE and that is the point — `data/quant/weights` "
+     "is a registered bulk prefix (RELOCATED_PREFIXES), so a quantized head is born "
+     "out-of-tree rather than becoming a second tracked copy of a live weight under a "
+     "retention policy that counts heads, not formats."),
     ("data/queries/scorer/v3_gvo/model_best.pt", "tools/queries/scorer/*", DUR,
      "NOTHING, and this row used to say otherwise. 'A retrain from the committed query "
      "labels' is false: the labels ARE tracked but they key their tiers by candidate id "

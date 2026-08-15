@@ -1,0 +1,321 @@
+{
+ "study": "quant_recipe_v1",
+ "decided": "2026-08-14",
+ "prereg": "data/quant/prereg_quant_v1.json",
+ "agreement_record": "data/quant/agreement_quant_v1.json",
+ "recipe_version": "quant_v1",
+ "artifact_format": "fractal-quant-1",
+ "tool": "tools/quant/quantize_head.py",
+ "command": "uv run python tools/quant/eval_quant.py decide",
+ "default_rung": "fp16",
+ "default_passes_everywhere": false,
+ "default_covers": [
+  "location",
+  "wallpaper",
+  "mining"
+ ],
+ "per_head_exceptions": {
+  "pref": "fp32 (unquantized)"
+ },
+ "rung_pass_by_head": {
+  "fp16": [
+   "location",
+   "wallpaper",
+   "mining"
+  ],
+  "int8": [],
+  "hybrid": [
+   "wallpaper"
+  ]
+ },
+ "rung_spec": {
+  "fp16": "every floating-point tensor of the state_dict stored as float16; integer buffers (num_batches_tracked) stored verbatim. Dequantized to the source dtype at load.",
+  "int8": "weight-only, per-output-channel (dim 0) SYMMETRIC int8 for every floating tensor with ndim >= 2 (conv + linear weights, 98.0-98.4% of float params on these four heads); scale_c = max|W_c|/127 stored fp32; every other floating tensor (BN affine, biases, 1-D) stored fp16. Dequantized to fp32 at load; compute is unchanged fp32. NO activation quantization and NO backend engine (fbgemm/qnnpack/TensorRT) so the recipe re-applies in a clean-room repo with standard torch on any platform.",
+  "hybrid": "int8 as above EXCEPT named layer groups kept at fp16, chosen by a per-group sensitivity sweep (quantize one group at a time against the fp32 reference scores). Only reached if int8 fails a head's bar; the sweep is reported so the exception is attributable."
+ },
+ "hybrid_exception_groups": [
+  "blocks.1",
+  "blocks.2",
+  "conv_head"
+ ],
+ "sensitivity_sweep": "scratch/quant/sweep_<head>.json (uv run python tools/quant/quantize_head.py sweep --head <head>)",
+ "per_head": {
+  "location": {
+   "pin": "tools/scoring/production_pins.ACTIVE_CKPT",
+   "ckpt": "data/classifier/v11/model_best.pt",
+   "material": "PRIMARY: 2,190 v11 eval locations at the deploy-canonical render",
+   "n": 2190,
+   "smallest_passing_rung": "fp16",
+   "adopted_rung": "fp16",
+   "verdict_by_rung": {
+    "fp16": "PASS",
+    "int8": "FAIL",
+    "hybrid": "FAIL"
+   },
+   "sizes_mb": {
+    "fp16": 17.2,
+    "int8": 8.99,
+    "hybrid": 11.71
+   },
+   "size_ratio": {
+    "fp16": 0.5033,
+    "int8": 0.263,
+    "hybrid": 0.3428
+   },
+   "mb_before": 34.17,
+   "source_sha256": "ab552dcd68970de781a55f1edb11863e4226bef3adc71dc1d349befc4d54d360",
+   "sha256_by_rung": {
+    "fp16": "0396320d70d51260ad0c313932299579345639450d0f89893accb605f31fa5d3",
+    "int8": "3bd3b7473e4e1e174eeac29614ea6c814d5dc484387829c34855cb450c4f598d",
+    "hybrid": "d269ddad6bf6eb97658369b4922e32d96cd37cb12afd7e53cc03e1aac393242e"
+   },
+   "failed_bars_by_rung": {
+    "fp16": {},
+    "int8": {
+     "abs_delta_auc_ge4_max": {
+      "value": 0.011701525734576834,
+      "bar": 0.0016,
+      "cmp": "<="
+     },
+     "decoded_tier_agreement_min": {
+      "value": 0.9525114155251142,
+      "bar": 0.99,
+      "cmp": ">="
+     },
+     "mean_abs_delta_p_max": {
+      "value": 0.014788144075452954,
+      "bar": 0.005,
+      "cmp": "<="
+     },
+     "max_abs_delta_p_max": {
+      "value": 0.26892228480683367,
+      "bar": 0.05,
+      "cmp": "<="
+     }
+    },
+    "hybrid": {
+     "max_abs_delta_p_max": {
+      "value": 0.0866876524685273,
+      "bar": 0.05,
+      "cmp": "<="
+     }
+    }
+   },
+   "noise_floor_fp32_vs_fp32": {
+    "max_abs_delta_p": 0.0,
+    "mean_abs_delta_p": 0.0,
+    "max_abs_delta_rank": 0.0,
+    "bit_identical": true
+   }
+  },
+  "wallpaper": {
+   "pin": "tools/wallpaper/wallpaper_pins.HEAD_CKPT_REL",
+   "ckpt": "data/wallpaper_head/v4b/seed_1/model_best.pt",
+   "material": "sheet D \u2014 2026-08-11_wallpaper_blind_minibrot_v1, blind, eval-only",
+   "n": 197,
+   "smallest_passing_rung": "fp16",
+   "adopted_rung": "fp16",
+   "verdict_by_rung": {
+    "fp16": "PASS",
+    "int8": "FAIL",
+    "hybrid": "PASS"
+   },
+   "sizes_mb": {
+    "fp16": 17.2,
+    "int8": 8.99,
+    "hybrid": 11.71
+   },
+   "size_ratio": {
+    "fp16": 0.5033,
+    "int8": 0.263,
+    "hybrid": 0.3428
+   },
+   "mb_before": 34.17,
+   "source_sha256": "1c8a016071eefeb9fab664281947236237ee0cb07ca7f709ba3d15f6bc1a96f8",
+   "sha256_by_rung": {
+    "fp16": "1cfb1ec12b800cf5c4f3c78ea12b5b1b589d8caf5b8ec24123b9502e49c7f7e4",
+    "int8": "f19719bd6a6b465fe4915471150e1301dc2ceb288c1a39b4860023e41d5978c1",
+    "hybrid": "988bd52c4612886d7d6b7be36739ce709bdc92e6ecdd1eda24cdaad675763e6f"
+   },
+   "failed_bars_by_rung": {
+    "fp16": {},
+    "int8": {
+     "gate_verdict_agreement_min": {
+      "value": 0.9746192893401016,
+      "bar": 0.98,
+      "cmp": ">="
+     },
+     "decoded_tier_agreement_min": {
+      "value": 0.9695431472081218,
+      "bar": 0.98,
+      "cmp": ">="
+     }
+    },
+    "hybrid": {}
+   },
+   "noise_floor_fp32_vs_fp32": {
+    "max_abs_delta_p": 0.0,
+    "mean_abs_delta_p": 0.0,
+    "max_abs_delta_rank": 0.0,
+    "bit_identical": true
+   }
+  },
+  "mining": {
+   "pin": "tools/mining/mining_pins.ACTIVE_MINING_CKPT",
+   "ckpt": "data/render_mode_head/v3/model_best.pt",
+   "material": "sheet E \u2014 2026-08-11_render_mode_blind_v1, blind, eval-only",
+   "n": 150,
+   "smallest_passing_rung": "fp16",
+   "adopted_rung": "fp16",
+   "verdict_by_rung": {
+    "fp16": "PASS",
+    "int8": "FAIL",
+    "hybrid": "FAIL"
+   },
+   "sizes_mb": {
+    "fp16": 5.15,
+    "int8": 2.75,
+    "hybrid": 4.25
+   },
+   "size_ratio": {
+    "fp16": 0.5066,
+    "int8": 0.27,
+    "hybrid": 0.418
+   },
+   "mb_before": 10.17,
+   "source_sha256": "1ba1839ed436a340f465ef8a6f949ff415dd2055e96cca132f672f7831a1a421",
+   "sha256_by_rung": {
+    "fp16": "7b4170d46fdc2a5e52cfa689161d2ee8a65905d66f1b454bf58ebfe5a0efafb4",
+    "int8": "4f7d8d827f11fdc8aa07cd63b8395b20989292978847639c82ad4b16c1d623e9",
+    "hybrid": "c7f1226ba5dba17ad8bd1eabc80645f3bd0fadb717d6d533d06a31627fc25579"
+   },
+   "failed_bars_by_rung": {
+    "fp16": {},
+    "int8": {
+     "decoded_tier_agreement_min": {
+      "value": 0.96,
+      "bar": 0.98,
+      "cmp": ">="
+     },
+     "spearman_p_ge3_min": {
+      "value": 0.9940157340326238,
+      "bar": 0.999,
+      "cmp": ">="
+     }
+    },
+    "hybrid": {
+     "spearman_p_ge3_min": {
+      "value": 0.9986488288368374,
+      "bar": 0.999,
+      "cmp": ">="
+     }
+    }
+   },
+   "noise_floor_fp32_vs_fp32": {
+    "max_abs_delta_p": 0.0,
+    "mean_abs_delta_p": 0.0,
+    "max_abs_delta_rank": 0.0,
+    "bit_identical": true
+   }
+  },
+  "pref": {
+   "pin": "tools/queries/scorer/data.ACTIVE_SCORER_DIR",
+   "ckpt": "data/queries/scorer/v3_gvo/model_best.pt",
+   "material": "47 library locations x 12 production palette_candidates (564 frames)",
+   "n": 564,
+   "smallest_passing_rung": null,
+   "adopted_rung": "fp32 (unquantized)",
+   "verdict_by_rung": {
+    "fp16": "FAIL",
+    "int8": "FAIL",
+    "hybrid": "FAIL"
+   },
+   "sizes_mb": {
+    "fp16": 5.15,
+    "int8": 2.74,
+    "hybrid": 4.25
+   },
+   "size_ratio": {
+    "fp16": 0.5056,
+    "int8": 0.2693,
+    "hybrid": 0.4172
+   },
+   "mb_before": 10.18,
+   "source_sha256": "745cab2794da554765358c8c874e38623917f37ba2fa20e77d20594ecfe64bf8",
+   "sha256_by_rung": {
+    "fp16": "968aea702d3d22f1b37d4314f6775f50699b3f4919b8169add39f4926a253dc7",
+    "int8": "051e8a216c279614688fdc325819ce7ceb310272d3bbeae13a4f9f7654f12634",
+    "hybrid": "69cc26194cffafa5330683185639c0c129a3409c06f38d67f63bf7163bd72ce9"
+   },
+   "failed_bars_by_rung": {
+    "fp16": {
+     "mean_within_location_spearman_min": {
+      "value": 0.9974706144918912,
+      "bar": 0.999,
+      "cmp": ">="
+     }
+    },
+    "int8": {
+     "mean_within_location_spearman_min": {
+      "value": 0.9489659276893322,
+      "bar": 0.999,
+      "cmp": ">="
+     },
+     "min_within_location_spearman_min": {
+      "value": 0.7832167832167832,
+      "bar": 0.95,
+      "cmp": ">="
+     },
+     "argmax_agreement_min": {
+      "value": 0.851063829787234,
+      "bar": 0.95,
+      "cmp": ">="
+     },
+     "top3_set_agreement_min": {
+      "value": 0.7021276595744681,
+      "bar": 0.95,
+      "cmp": ">="
+     }
+    },
+    "hybrid": {
+     "mean_within_location_spearman_min": {
+      "value": 0.9638446659723257,
+      "bar": 0.999,
+      "cmp": ">="
+     },
+     "min_within_location_spearman_min": {
+      "value": 0.8251748251748254,
+      "bar": 0.95,
+      "cmp": ">="
+     },
+     "argmax_agreement_min": {
+      "value": 0.8936170212765957,
+      "bar": 0.95,
+      "cmp": ">="
+     },
+     "top3_set_agreement_min": {
+      "value": 0.6808510638297872,
+      "bar": 0.95,
+      "cmp": ">="
+     }
+    }
+   },
+   "noise_floor_fp32_vs_fp32": {
+    "max_abs_delta_p": 0.0,
+    "mean_abs_delta_p": 0.0,
+    "max_abs_delta_rank": 0.0,
+    "bit_identical": true
+   }
+  }
+ },
+ "notes": {
+  "why_not_speed": "The objective was stored bytes, never latency. backbone_search_v1 measured the backbone at 5-17% of end-to-end score time, so the deploy path is decode-bound and no rung here would be visible in throughput.",
+  "why_weight_only": "No activation quantization and no backend engine (fbgemm / qnnpack / TensorRT). The recipe must re-apply in a clean-room repo with standard torch on any platform, and a weight-only rung dequantized at load is the only form of that which leaves the compute graph untouched.",
+  "why_per_channel": "These are MobileNetV4 backbones. Their depthwise convolutions have per-channel weight ranges spanning orders of magnitude, so one scale per tensor quantizes the small channels into noise.",
+  "int8_verdict": "int8 weight-only is NOT near-free on any of the four heads, and on the location head it is not close: it moves AUC(>=4) by more than the entire control 3-seed retrain band the bars were calibrated against.",
+  "hybrid_verdict": "The per-group sweep found ONE dominant group per backbone family \u2014 conv_head on mnv4_conv_medium, blocks.2 on mnv4_conv_small \u2014 and exempting the top three recovers most of the loss. It is still not enough on three of four heads, and it cannot be pushed further: the group carrying the residual error on the location head is blocks.3, which is 63% of that backbone's parameters, so exempting it would collapse hybrid back into fp16 at a worse size.",
+  "pref_exception": "The pref ranker is the one head where NO rung passes. fp16 keeps its top-1 palette on every location and its top-3 set on all but two, but misses the declared mean within-location rank agreement. A single-tower margin head scores a location's candidates within a fraction of a point of each other, so full-order rank agreement is the strictest read any of the four heads is held to, and it is the read that decides this head.",
+  "what_this_does_not_do": "No production pin moves. Every ACTIVE checkpoint is untouched and the big-repo deploy path stays fp32. This record says what a FUTURE ship step should do with a newly-trained head."
+ },
+ "quantized_weights_are_not_tracked": "data/quant/weights is a registered bulk prefix; a quantized head is born out-of-tree and is reproducible from its source sha256 plus its rung"
+}
